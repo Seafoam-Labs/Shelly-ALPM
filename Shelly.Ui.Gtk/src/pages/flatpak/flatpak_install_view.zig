@@ -128,8 +128,10 @@ pub const FlatpakInstallView = extern struct {
         app_id: [:0]u8,
         download_size: i64 = 0,
         installed_size: i64 = 0,
-        permissions: []const []const u8 = &.{},
-        permissions_alloc: ?[][]const u8 = null,
+        /// Null when the CLI reported no readable permissions for the hit.
+        /// Owned by this load until `cleanupRemoteInfoLoad` releases it; the
+        /// object keeps its own arena copy.
+        permissions: ?[]const flatpak.PermissionRow = null,
         app: *AppstreamAppObject,
         failed: bool = false,
     };
@@ -776,18 +778,18 @@ pub const FlatpakInstallView = extern struct {
         gtk.Label.setLabel(p.overlay_size_label, translations._("Size: Loading..."));
 
         const load = std.heap.c_allocator.create(RemoteInfoLoad) catch {
-            gtk.Label.setLabel(p.overlay_size_label, translations._("Size: Unavailable"));
+            self.markRemoteInfoUnavailable(app);
             return;
         };
         const owned_remote = std.heap.c_allocator.dupeZ(u8, remote) catch {
             std.heap.c_allocator.destroy(load);
-            gtk.Label.setLabel(p.overlay_size_label, translations._("Size: Unavailable"));
+            self.markRemoteInfoUnavailable(app);
             return;
         };
         const owned_app_id = std.heap.c_allocator.dupeZ(u8, app.getId()) catch {
             std.heap.c_allocator.free(owned_remote);
             std.heap.c_allocator.destroy(load);
-            gtk.Label.setLabel(p.overlay_size_label, translations._("Size: Unavailable"));
+            self.markRemoteInfoUnavailable(app);
             return;
         };
         load.* = .{
@@ -801,10 +803,20 @@ pub const FlatpakInstallView = extern struct {
         _ = self.as(gobject.Object).ref();
         const thread = std.Thread.spawn(.{}, remoteInfoWorker, .{load}) catch {
             cleanupRemoteInfoLoad(load);
-            gtk.Label.setLabel(p.overlay_size_label, translations._("Size: Unavailable"));
+            self.markRemoteInfoUnavailable(app);
             return;
         };
         thread.detach();
+    }
+
+    /// Records that the remote reference could not be read at all, so the
+    /// permissions button opens an explicit unavailable state instead of
+    /// staying disabled with only the size label to explain why.
+    fn markRemoteInfoUnavailable(self: *Self, app: *AppstreamAppObject) void {
+        const p = self.priv();
+        gtk.Label.setLabel(p.overlay_size_label, translations._("Size: Unavailable"));
+        app.setPermissions(null);
+        gtk.Widget.setSensitive(p.overlay_permissions_button.as(gtk.Widget), 1);
     }
 
     fn remoteInfoWorker(load: *RemoteInfoLoad) void {
@@ -827,21 +839,14 @@ pub const FlatpakInstallView = extern struct {
         load.download_size = hit.download_size;
         load.installed_size = hit.installed_size;
 
-        const perms = hit.permissions;
-        if (perms.len > 0) {
-            const owned_perms_slices = std.heap.c_allocator.alloc([]const u8, perms.len) catch {
+        // An empty list is cloned rather than aliased to a static literal, so
+        // `cleanupRemoteInfoLoad` can free every row it holds.
+        if (hit.permission_rows) |rows| {
+            load.permissions = flatpak.Hit.cloneRows(std.heap.c_allocator, rows) catch {
                 load.failed = true;
                 _ = glib.idleAdd(&remoteInfoComplete, load);
                 return;
             };
-            for (perms, 0..) |perm, i| {
-                owned_perms_slices[i] = std.heap.c_allocator.dupeZ(u8, perm) catch "";
-            }
-            load.permissions = @as([]const []const u8, @ptrCast(owned_perms_slices));
-            load.permissions_alloc = owned_perms_slices;
-        } else {
-            load.permissions = &.{};
-            load.permissions_alloc = null;
         }
 
         _ = glib.idleAdd(&remoteInfoComplete, load);
@@ -856,6 +861,7 @@ pub const FlatpakInstallView = extern struct {
         {
             if (load.failed) {
                 gtk.Label.setLabel(p.overlay_size_label, translations._("Size: Unavailable"));
+                load.app.setPermissions(null);
             } else {
                 var download_buffer: [64]u8 = undefined;
                 var installed_buffer: [64]u8 = undefined;
@@ -867,10 +873,10 @@ pub const FlatpakInstallView = extern struct {
                     "{s}: {s}  •  {s}: {s}",
                     .{ translations._("Download"), download, translations._("Installed"), installed },
                 ) catch translations._("Size: Unavailable");
-                gtk.Widget.setSensitive(p.overlay_permissions_button.as(gtk.Widget), 1);
                 gtk.Label.setLabel(p.overlay_size_label, label);
                 load.app.setPermissions(load.permissions);
             }
+            gtk.Widget.setSensitive(p.overlay_permissions_button.as(gtk.Widget), 1);
         }
         cleanupRemoteInfoLoad(load);
         return 0;
@@ -880,13 +886,17 @@ pub const FlatpakInstallView = extern struct {
         load.page.as(gobject.Object).unref();
         std.heap.c_allocator.free(load.remote);
         std.heap.c_allocator.free(load.app_id);
-        if (load.permissions_alloc) |slices| {
-            for (slices) |s| {
-                if (s.len > 0) {
-                    std.heap.c_allocator.free(s);
-                }
+        if (load.permissions) |rows| {
+            for (rows) |row| {
+                // The display copy made in `setPermissions` owns its own strings,
+                // so every c_allocator dupe `cloneRows` took is released here.
+                std.heap.c_allocator.free(row.concern);
+                std.heap.c_allocator.free(row.tier);
+                std.heap.c_allocator.free(row.state);
+                for (row.items) |item| std.heap.c_allocator.free(item);
+                std.heap.c_allocator.free(row.items);
             }
-            std.heap.c_allocator.free(slices);
+            std.heap.c_allocator.free(rows);
         }
         std.heap.c_allocator.destroy(load);
     }

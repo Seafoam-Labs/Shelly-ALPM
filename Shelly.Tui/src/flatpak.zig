@@ -51,7 +51,9 @@ pub const Hit = struct {
     remote: []const u8 = "",
     download_size: i64 = 0,
     installed_size: i64 = 0,
-    permissions: []const []const u8 = &.{},
+    /// Null when the CLI could not read the remote reference, which is not the
+    /// same as an app that declares no permissions.
+    permissions: ?[]const []const u8 = null,
 };
 
 pub const AppstreamIcon = struct {

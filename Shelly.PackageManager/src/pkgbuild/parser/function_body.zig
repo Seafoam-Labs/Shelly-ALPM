@@ -144,11 +144,14 @@ const function_header = struct {
 };
 
 /// Finds the closing brace of a Bash brace-group function body. Braces only
-/// affect the nesting depth when they are shell reserved words; quoted text,
-/// comments, heredocs, expansions, and substitutions are skipped as opaque
-/// regions so data such as a sed expression cannot consume later functions.
+/// affect the nesting depth when they are shell reserved words, which needs
+/// command position as well as a following delimiter; word-initial braces
+/// anywhere else are brace expansion. Quoted text, comments, heredocs,
+/// expansions, and substitutions are skipped as opaque regions so data such as
+/// a sed expression cannot consume later functions.
 fn find_brace_body_end(content: []const u8, start: usize) function_scan_error!usize {
     var depth: usize = 1;
+    var command_start = true;
     var word_start = true;
     var pending: [max_pending_heredocs]pending_heredoc = undefined;
     var pending_count: usize = 0;
@@ -159,6 +162,7 @@ fn find_brace_body_end(content: []const u8, start: usize) function_scan_error!us
 
         if (c == '\n') {
             i += 1;
+            command_start = true;
             word_start = true;
             if (pending_count > 0) {
                 i = skip_heredoc_bodies(content, i, pending[0..pending_count]);
@@ -178,43 +182,53 @@ fn find_brace_body_end(content: []const u8, start: usize) function_scan_error!us
         if (c == '\\' and i + 1 < content.len) {
             const escaped_newline = content[i + 1] == '\n';
             i += 2;
-            if (!escaped_newline) word_start = false;
+            if (!escaped_newline) {
+                command_start = false;
+                word_start = false;
+            }
             continue;
         }
         if (c == '\'') {
             i = skip_single_quote(content, i + 1);
+            command_start = false;
             word_start = false;
             continue;
         }
         if (c == '"') {
             i = try skip_double_quote(content, i + 1);
+            command_start = false;
             word_start = false;
             continue;
         }
         if (c == '`') {
             i = skip_backtick(content, i + 1);
+            command_start = false;
             word_start = false;
             continue;
         }
 
         if (c == '$' and i + 2 < content.len and content[i + 1] == '(' and content[i + 2] == '(') {
             i = try skip_arithmetic(content, i + 3, 2);
+            command_start = false;
             word_start = false;
             continue;
         }
         if (c == '(' and i + 1 < content.len and content[i + 1] == '(') {
             i = try skip_arithmetic(content, i + 2, 2);
+            command_start = false;
             word_start = false;
             continue;
         }
         if (c == '$' and i + 1 < content.len and content[i + 1] == '(') {
             const close = try find_subshell_body_end(content, i + 2);
             i = if (close < content.len) close + 1 else close;
+            command_start = false;
             word_start = false;
             continue;
         }
         if (c == '$' and i + 1 < content.len and content[i + 1] == '{') {
             i = try skip_parameter_expansion(content, i + 2);
+            command_start = false;
             word_start = false;
             continue;
         }
@@ -230,12 +244,13 @@ fn find_brace_body_end(content: []const u8, start: usize) function_scan_error!us
                 pending[pending_count] = declaration;
                 pending_count += 1;
                 i = declaration.end;
+                command_start = false;
                 word_start = false;
                 continue;
             }
         }
 
-        if ((c == '{' or c == '}') and is_structural_brace(content, i, word_start)) {
+        if ((c == '{' or c == '}') and is_structural_brace(content, i, command_start)) {
             if (c == '{') {
                 depth += 1;
             } else {
@@ -243,28 +258,59 @@ fn find_brace_body_end(content: []const u8, start: usize) function_scan_error!us
                 if (depth == 0) return i;
             }
             i += 1;
+            command_start = true;
             word_start = true;
             continue;
         }
 
-        if (std.mem.indexOfScalar(u8, ";&|()<>", c) != null) {
+        if (std.mem.indexOfScalar(u8, ";&|()", c) != null) {
+            i += 1;
+            command_start = true;
+            word_start = true;
+            continue;
+        }
+        if (c == '<' or c == '>') {
             i += 1;
             word_start = true;
             continue;
         }
 
-        i += 1;
+        const token_start = i;
+        while (i < content.len and !is_shell_token_delimiter(content[i])) {
+            if (content[i] == '\\' and i + 1 < content.len) i += 1;
+            i += 1;
+        }
+        if (i == token_start) {
+            i += 1;
+            command_start = false;
+            word_start = false;
+            continue;
+        }
+
+        const token = content[token_start..i];
+        if (command_start and is_assignment_word(token)) {
+            // Assignment prefixes do not consume command position.
+        } else if (is_command_prefix_keyword(token)) {
+            command_start = true;
+        } else {
+            command_start = false;
+        }
         word_start = false;
     }
 
     return content.len;
 }
 
-fn is_structural_brace(content: []const u8, index: usize, word_start: bool) bool {
-    if (!word_start or index + 1 == content.len) return word_start;
+/// A brace is a reserved word only in command position, and only when a byte
+/// that may follow it comes next. The two sets differ: Bash accepts `{(`,
+/// `{<in cat` and `}>out`, but rejects `{{`, `{}`, `{;` and `}}`.
+fn is_structural_brace(content: []const u8, index: usize, command_position: bool) bool {
+    if (!command_position) return false;
+    if (index + 1 == content.len) return true;
+    const followers = if (content[index] == '{') "(<>" else ";&|)<>";
     const next = content[index + 1];
     return std.ascii.isWhitespace(next) or
-        std.mem.indexOfScalar(u8, ";&|(){}<>", next) != null;
+        std.mem.indexOfScalar(u8, followers, next) != null;
 }
 
 const max_pending_heredocs = 16;
@@ -758,6 +804,50 @@ test "extract_function_body: nested braces are balanced correctly" {
         "if (x) {\n    doThing();\n  }\n  return 1;",
         result.?,
     );
+}
+
+test "extract_function_body: brace expansion does not leak depth past the closing brace" {
+    const content =
+        \\package() {
+        \\  install -vDm 644 {{CHANGES,RELEASE}.txt,README.rst} -t "$pkgdir/usr/share/doc/$pkgname/"
+        \\  find "$pkgdir" -name 'docbook' -type d -exec rm -frv {} +
+        \\}
+        \\build() { echo build; }
+    ;
+    const result = (try extract_function_body(content, "package")).?;
+    try std.testing.expectEqualStrings(
+        \\install -vDm 644 {{CHANGES,RELEASE}.txt,README.rst} -t "$pkgdir/usr/share/doc/$pkgname/"
+        \\  find "$pkgdir" -name 'docbook' -type d -exec rm -frv {} +
+    , result);
+    try std.testing.expect(std.mem.indexOf(u8, result, "build()") == null);
+}
+
+test "extract_function_body: brace expansion in an assignment prefix is not a group" {
+    const content =
+        \\package() {
+        \\  VAR={{CHANGES,RELEASE}.txt} env -i make install
+        \\}
+        \\build() { echo build; }
+    ;
+    const result = (try extract_function_body(content, "package")).?;
+    try std.testing.expectEqualStrings(
+        \\VAR={{CHANGES,RELEASE}.txt} env -i make install
+    , result);
+    try std.testing.expect(std.mem.indexOf(u8, result, "build()") == null);
+}
+
+test "extract_function_body: brace words outside command position are not groups" {
+    const content =
+        \\package() {
+        \\  printf '%s\n' NOTES{ END }
+        \\}
+        \\build() { echo build; }
+    ;
+    const result = (try extract_function_body(content, "package")).?;
+    try std.testing.expectEqualStrings(
+        \\printf '%s\n' NOTES{ END }
+    , result);
+    try std.testing.expect(std.mem.indexOf(u8, result, "build()") == null);
 }
 
 test "extract_function_body: Equicord sed expressions do not consume later functions" {

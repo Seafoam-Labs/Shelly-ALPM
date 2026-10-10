@@ -725,7 +725,7 @@
                     <child>
                       <object class="GtkLinkButton" id="sponsor_link">
                         <property name="label" translatable="yes">Sponsor</property>
-                        <property name="uri">https://buymeacoffee.com/zoeyerinba3</property>
+                        <property name="uri">https://www.patreon.com/cw/SeafoamLabs</property>
                       </object>
                     </child>
                   </object>

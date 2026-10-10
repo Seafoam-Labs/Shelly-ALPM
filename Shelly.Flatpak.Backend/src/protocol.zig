@@ -408,7 +408,7 @@ test "backend-neutral result records round-trip without native pointers" {
         .installed_size = 42,
         .kind = .app,
         .scope = .system,
-        .permissions = &.{ "network", "wayland" },
+        .permissions = &.{ "Context=shared:network", "Context=sockets:wayland" },
         .eol = "Deprecated.",
         .eol_rebase = "org.example.NewApp",
     });

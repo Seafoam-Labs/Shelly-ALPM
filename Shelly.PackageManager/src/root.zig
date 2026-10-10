@@ -27,6 +27,7 @@ pub const flatpak = struct {
     pub const types = @import("flatpak/types.zig");
     pub const errors = @import("flatpak/errors.zig");
     pub const eol = @import("flatpak/eol.zig");
+    pub const permissions = @import("flatpak/permissions.zig");
 
     pub const Manager = manager.Manager;
     pub const Scope = types.Scope;
@@ -269,6 +270,7 @@ test "public library surface exposes package manager APIs" {
     _ = flatpak.EolRebase;
     _ = flatpak.EolDetection;
     _ = flatpak.eol;
+    _ = flatpak.permissions;
     _ = FlatpakManager.rebase_flatpak;
     _ = FlatpakManager.list_eol_flatpak;
     _ = FlatpakManager.detect_eol_flatpak;
@@ -466,6 +468,7 @@ test {
     _ = @import("flatpak/remote_manager.zig");
     _ = @import("flatpak/manager.zig");
     _ = @import("flatpak/eol.zig");
+    _ = @import("flatpak/permissions.zig");
     _ = @import("flatpak/appstream_manager.zig");
     _ = @import("flatpak/appstream_parser.zig");
     _ = @import("flatpak/events.zig");

@@ -698,6 +698,13 @@ pub fn build(b: *std.Build) void {
             "Flatpak remote operation-hooked public APIs compile",
             "Flatpak AppStream operations honor shared cancellation",
             "Flatpak AppStream operation-hooked public APIs compile",
+            "flatpak permission classifier groups tokens into one row per concern",
+            "flatpak permission classifier names a capability once when two tokens spell it",
+            "flatpak permission classifier reads the policy groups on their own axis",
+            "flatpak permission classifier interprets denials and conditions",
+            "flatpak permission classifier rates a folder below the tree it sits in",
+            "flatpak permission classifier keeps an unread request separate from none",
+            "flatpak permission classifier keeps unknown vocabulary visible",
         },
     });
     const run_flatpak_tests = b.addRunArtifact(flatpak_tests);
