@@ -129,8 +129,9 @@ pub const FlatpakInstallView = extern struct {
         download_size: i64 = 0,
         installed_size: i64 = 0,
         /// Null when the CLI reported no readable permissions for the hit.
-        permissions: ?[]const []const u8 = null,
-        permissions_alloc: ?[][]const u8 = null,
+        /// Owned by this load until `cleanupRemoteInfoLoad` releases it; the
+        /// object keeps its own arena copy.
+        permissions: ?[]const flatpak.PermissionRow = null,
         app: *AppstreamAppObject,
         failed: bool = false,
     };
@@ -838,21 +839,14 @@ pub const FlatpakInstallView = extern struct {
         load.download_size = hit.download_size;
         load.installed_size = hit.installed_size;
 
-        if (hit.permissions) |perms| {
-            if (perms.len == 0) {
-                load.permissions = &.{};
-            } else {
-                const owned_perms_slices = std.heap.c_allocator.alloc([]const u8, perms.len) catch {
-                    load.failed = true;
-                    _ = glib.idleAdd(&remoteInfoComplete, load);
-                    return;
-                };
-                for (perms, 0..) |perm, i| {
-                    owned_perms_slices[i] = std.heap.c_allocator.dupeZ(u8, perm) catch "";
-                }
-                load.permissions = @as([]const []const u8, @ptrCast(owned_perms_slices));
-                load.permissions_alloc = owned_perms_slices;
-            }
+        // An empty list is cloned rather than aliased to a static literal, so
+        // `cleanupRemoteInfoLoad` can free every row it holds.
+        if (hit.permission_rows) |rows| {
+            load.permissions = flatpak.Hit.cloneRows(std.heap.c_allocator, rows) catch {
+                load.failed = true;
+                _ = glib.idleAdd(&remoteInfoComplete, load);
+                return;
+            };
         }
 
         _ = glib.idleAdd(&remoteInfoComplete, load);
@@ -892,13 +886,12 @@ pub const FlatpakInstallView = extern struct {
         load.page.as(gobject.Object).unref();
         std.heap.c_allocator.free(load.remote);
         std.heap.c_allocator.free(load.app_id);
-        if (load.permissions_alloc) |slices| {
-            for (slices) |s| {
-                if (s.len > 0) {
-                    std.heap.c_allocator.free(s);
-                }
+        if (load.permissions) |rows| {
+            for (rows) |row| {
+                for (row.items) |item| std.heap.c_allocator.free(item);
+                std.heap.c_allocator.free(row.items);
             }
-            std.heap.c_allocator.free(slices);
+            std.heap.c_allocator.free(rows);
         }
         std.heap.c_allocator.destroy(load);
     }
