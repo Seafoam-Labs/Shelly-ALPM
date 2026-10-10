@@ -67,6 +67,87 @@ pub const FlatpakSearchResponse = struct {
     totalHits: u32 = 0,
 };
 
+/// One grouped permission row, as `Shelly.PackageManager` classified it and the
+/// CLI serialised it. `concern`, `tier` and `state` are tag names kept as
+/// strings on purpose: a concern this build has never seen still renders, as
+/// `Other`, instead of failing the whole frame.
+pub const PermissionRow = struct {
+    concern: []const u8 = "",
+    tier: []const u8 = "low",
+    state: []const u8 = "granted",
+    items: []const []const u8 = &.{},
+
+    pub fn absent(self: PermissionRow) bool {
+        return std.mem.eql(u8, self.state, "absent");
+    }
+
+    pub fn elevated(self: PermissionRow) bool {
+        return std.mem.eql(u8, self.tier, "high");
+    }
+
+    pub fn middling(self: PermissionRow) bool {
+        return std.mem.eql(u8, self.tier, "medium");
+    }
+};
+
+/// A permission row shaped for the dialog. The title and the icon come from
+/// `concern`, which is translated at render time; `detail` is the row's one
+/// variable-length line, joined and null-terminated here so the widget code
+/// never allocates and nothing is silently truncated.
+pub const PermissionDisplay = struct {
+    concern: []const u8 = "",
+    tier: []const u8 = "low",
+    absent: bool = false,
+    detail: [:0]const u8 = "",
+
+    pub fn elevated(self: PermissionDisplay) bool {
+        return std.mem.eql(u8, self.tier, "high");
+    }
+
+    pub fn middling(self: PermissionDisplay) bool {
+        return std.mem.eql(u8, self.tier, "medium");
+    }
+};
+
+/// Copies the rows into `allocator`, joining each one's items into its detail
+/// line, so the result owns every string and the caller may free the rows as
+/// soon as this returns. `allocator` is expected to be an arena that outlives
+/// every widget reading the result.
+pub fn displayRows(
+    allocator: std.mem.Allocator,
+    rows: []const PermissionRow,
+) ![]const PermissionDisplay {
+    const result = try allocator.alloc(PermissionDisplay, rows.len);
+    for (rows, result) |row, *target| {
+        target.* = .{
+            .concern = try allocator.dupe(u8, row.concern),
+            .tier = try allocator.dupe(u8, row.tier),
+            .absent = row.absent(),
+            .detail = try joinZ(allocator, row.items, ", "),
+        };
+    }
+    return result;
+}
+
+fn joinZ(allocator: std.mem.Allocator, values: []const []const u8, separator: []const u8) ![:0]const u8 {
+    var total: usize = 0;
+    for (values) |value| total += value.len;
+    total += separator.len *| (if (values.len > 0) values.len - 1 else 0);
+
+    const buffer = try allocator.alloc(u8, total + 1);
+    var filled: usize = 0;
+    for (values, 0..) |value, index| {
+        if (index > 0) {
+            @memcpy(buffer[filled .. filled + separator.len], separator);
+            filled += separator.len;
+        }
+        @memcpy(buffer[filled .. filled + value.len], value);
+        filled += value.len;
+    }
+    buffer[buffer.len - 1] = 0;
+    return buffer[0..filled :0];
+}
+
 pub const Hit = struct {
     name: []const u8 = "",
     keywords: []const []const u8 = &.{},
@@ -83,7 +164,12 @@ pub const Hit = struct {
     remote: []const u8 = "",
     download_size: i64 = 0,
     installed_size: i64 = 0,
-    permissions: []const []const u8 = &.{},
+    /// Null when the CLI could not read the remote reference, which is not the
+    /// same as an app that declares no permissions.
+    permissions: ?[]const []const u8 = null,
+    /// The same permissions grouped into rows. Null exactly when `permissions`
+    /// is unusable, so the dialog can tell "none requested" from "not read".
+    permission_rows: ?[]const PermissionRow = null,
 
     pub fn clone(allocator: std.mem.Allocator, source: Hit) !Hit {
         return .{
@@ -102,8 +188,31 @@ pub const Hit = struct {
             .remote = try allocator.dupe(u8, source.remote),
             .download_size = source.download_size,
             .installed_size = source.installed_size,
-            .permissions = try cloneStrings(allocator, source.permissions),
+            .permissions = if (source.permissions) |permissions| try cloneStrings(allocator, permissions) else null,
+            .permission_rows = if (source.permission_rows) |rows| try cloneRows(allocator, rows) else null,
         };
+    }
+
+    pub fn cloneRows(allocator: std.mem.Allocator, source: []const PermissionRow) ![]const PermissionRow {
+        const result = try allocator.alloc(PermissionRow, source.len);
+        var prepared: usize = 0;
+        errdefer {
+            for (result[0..prepared]) |row| {
+                for (row.items) |item| allocator.free(item);
+                allocator.free(row.items);
+            }
+            allocator.free(result);
+        }
+        for (source, result) |row, *target| {
+            target.* = .{
+                .concern = try allocator.dupe(u8, row.concern),
+                .tier = try allocator.dupe(u8, row.tier),
+                .state = try allocator.dupe(u8, row.state),
+                .items = try cloneStrings(allocator, row.items),
+            };
+            prepared += 1;
+        }
+        return result;
     }
 
     fn cloneStrings(
@@ -198,4 +307,74 @@ test "AppStream app metadata defaults missing optional fields" {
     try std.testing.expectEqual(@as(usize, 0), parsed.value.Urls.map.count());
     try std.testing.expect(!parsed.value.IsVerified);
     try std.testing.expect(parsed.value.Extends == null);
+}
+
+test "parse grouped Flatpak permission rows" {
+    const options = std.json.ParseOptions{ .ignore_unknown_fields = true, .allocate = .alloc_always };
+
+    // The frame the CLI's `search flatpak --json` writes for one app that
+    // grants X11 and Wayland and asks for nothing else.
+    const granted =
+        \\{"hits":[{"name":"Editor","permission_rows":[{"concern":"display","tier":"high","state":"granted","items":["X11","Wayland"]},{"concern":"network","tier":"low","state":"absent","items":[]}]}],"query":"editor"}
+    ;
+    const parsed = try std.json.parseFromSlice(FlatpakSearchResponse, std.testing.allocator, granted, options);
+    defer parsed.deinit();
+
+    const rows = parsed.value.hits[0].permission_rows.?;
+    try std.testing.expectEqual(@as(usize, 2), rows.len);
+    try std.testing.expectEqualStrings("display", rows[0].concern);
+    try std.testing.expect(rows[0].elevated());
+    try std.testing.expect(!rows[0].middling());
+    try std.testing.expectEqualStrings("Wayland", rows[0].items[1]);
+    try std.testing.expect(rows[1].absent());
+    try std.testing.expectEqual(@as(usize, 0), rows[1].items.len);
+
+    // A clone owns its strings, because the parsed frame is released as soon as
+    // the worker's idle callback returns.
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const copy = try Hit.clone(arena.allocator(), parsed.value.hits[0]);
+    try std.testing.expectEqualStrings("X11", copy.permission_rows.?[0].items[0]);
+
+    const unread =
+        \\{"hits":[{"name":"Editor","permission_rows":null}]}
+    ;
+    const unread_parsed = try std.json.parseFromSlice(FlatpakSearchResponse, std.testing.allocator, unread, options);
+    defer unread_parsed.deinit();
+    // Not read at all, which the dialog must not present as "requests nothing".
+    try std.testing.expectEqual(null, unread_parsed.value.hits[0].permission_rows);
+
+    const none =
+        \\{"hits":[{"name":"Editor","permission_rows":[]}]}
+    ;
+    const none_parsed = try std.json.parseFromSlice(FlatpakSearchResponse, std.testing.allocator, none, options);
+    defer none_parsed.deinit();
+    try std.testing.expectEqual(@as(usize, 0), none_parsed.value.hits[0].permission_rows.?.len);
+}
+
+test "permission rows join their items into one selectable line" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const rows = [_]PermissionRow{
+        .{
+            .concern = "files_user_dirs",
+            .tier = "medium",
+            .state = "granted",
+            .items = &.{ "Downloads (read/write)", "Music (read-only)", "/mnt/data" },
+        },
+        .{ .concern = "network", .tier = "medium", .state = "granted", .items = &.{} },
+        .{ .concern = "devices", .tier = "low", .state = "absent", .items = &.{} },
+    };
+    const display = try displayRows(allocator, &rows);
+    try std.testing.expectEqualStrings(
+        "Downloads (read/write), Music (read-only), /mnt/data",
+        display[0].detail,
+    );
+    try std.testing.expectEqualStrings("", display[1].detail);
+    try std.testing.expect(display[2].absent);
+    try std.testing.expectEqualStrings("files_user_dirs", display[0].concern);
+    try std.testing.expect(display[0].middling());
+    try std.testing.expect(!display[1].elevated());
 }

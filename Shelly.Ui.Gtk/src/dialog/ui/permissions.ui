@@ -74,6 +74,47 @@
                 </child>
                 <child>
                   <object class="GtkStackPage">
+                    <property name="name">unavailable</property>
+                    <property name="child">
+                      <object class="GtkBox">
+                        <property name="orientation">vertical</property>
+                        <property name="spacing">10</property>
+                        <property name="halign">center</property>
+                        <property name="valign">center</property>
+                        <property name="margin-top">24</property>
+                        <property name="margin-bottom">24</property>
+                        <child>
+                          <object class="GtkImage">
+                            <property name="accessible-role">presentation</property>
+                            <property name="icon-name">dialog-warning-symbolic</property>
+                            <property name="pixel-size">48</property>
+                            <style><class name="dim-label"/></style>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkLabel" id="unavailable_label">
+                            <property name="label" translatable="yes">Permissions unavailable</property>
+                            <property name="wrap">true</property>
+                            <property name="justify">center</property>
+                            <property name="max-width-chars">40</property>
+                            <style><class name="title-3"/></style>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkLabel" id="unavailable_detail_label">
+                            <property name="label" translatable="yes">Shelly could not read the permissions for this app.</property>
+                            <property name="wrap">true</property>
+                            <property name="justify">center</property>
+                            <property name="max-width-chars">40</property>
+                            <style><class name="dim-label"/></style>
+                          </object>
+                        </child>
+                      </object>
+                    </property>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkStackPage">
                     <property name="name">empty</property>
                     <property name="child">
                       <object class="GtkBox">

@@ -13,7 +13,9 @@ pub const AppstreamAppObject = extern struct {
         arena: ?*std.heap.ArenaAllocator,
         app: flatpak.AppstreamApp,
         membership: Membership = .{},
-        permissions: []const [:0]const u8,
+        /// Null until the remote reference has been read, and stays null when
+        /// reading it failed. An empty list means the app declares none.
+        permissions: ?[]const flatpak.PermissionDisplay,
         var offset: c_int = 0;
     };
 
@@ -35,7 +37,7 @@ pub const AppstreamAppObject = extern struct {
     fn init(self: *Self, _: *Class) callconv(.c) void {
         const p = self.priv();
         p.arena = null;
-        p.permissions = &.{};
+        p.permissions = null;
         p.membership = .{};
         p.app = .{};
     }
@@ -139,7 +141,7 @@ pub const AppstreamAppObject = extern struct {
         self.priv().membership = membership;
     }
 
-    pub fn getPermissions(self: *Self) []const [:0]const u8 {
+    pub fn getPermissions(self: *Self) ?[]const flatpak.PermissionDisplay {
         const p = self.priv();
 
         return p.permissions;
@@ -153,17 +155,18 @@ pub const AppstreamAppObject = extern struct {
         self.getApp().Installed = installed;
     }
 
-    pub fn setPermissions(self: *Self, permissions: []const []const u8) void {
+    /// Copies the rows into the object's arena, so the caller may release the
+    /// parsed CLI frame as soon as this returns. Null records that they could
+    /// not be read; an empty list is an app that asks for nothing.
+    pub fn setPermissions(self: *Self, rows: ?[]const flatpak.PermissionRow) void {
         const p = self.priv();
+
+        const values = rows orelse {
+            p.permissions = null;
+            return;
+        };
         const arena = p.arena orelse return;
-        const alloc = arena.allocator();
-
-        const owned_perms = alloc.alloc([:0]const u8, permissions.len) catch return;
-        for (permissions, 0..) |perm, i| {
-            owned_perms[i] = alloc.dupeZ(u8, perm) catch "";
-        }
-
-        p.permissions = owned_perms;
+        p.permissions = flatpak.displayRows(arena.allocator(), values) catch return;
     }
 
     pub fn as(self: *Self, comptime T: type) *T {

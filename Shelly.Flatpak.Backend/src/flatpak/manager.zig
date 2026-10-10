@@ -1198,11 +1198,18 @@ pub const Manager = struct {
     }
 
     fn get_permissions_from_key_file(self: Manager, key_file_ptr: ?*rawflatpak.GKeyFile, permissions: *std.ArrayList([:0]u8)) ![]const [:0]u8 {
-        const groups = [_][:0]const u8{ "Context", "ExtensionBus", "Shared", "Sockets", "Filesystems", "SessionBus", "SystemBus" };
+        // Only [Context] holds semicolon-separated lists. Reading a bus policy or
+        // environment value as a list would split it on every ';' it contains.
+        const groups = [_]struct { name: [:0]const u8, list: bool }{
+            .{ .name = "Context", .list = true },
+            .{ .name = "Session Bus Policy", .list = false },
+            .{ .name = "System Bus Policy", .list = false },
+            .{ .name = "Environment", .list = false },
+        };
 
         for (groups) |group| {
             var num_keys: usize = 0;
-            const keys_ptr = rawflatpak.g_key_file_get_keys(key_file_ptr, group.ptr, &num_keys, null);
+            const keys_ptr = rawflatpak.g_key_file_get_keys(key_file_ptr, group.name.ptr, &num_keys, null);
             if (keys_ptr == null) continue;
             defer rawflatpak.g_strfreev(keys_ptr);
 
@@ -1210,40 +1217,46 @@ pub const Manager = struct {
             while (keys_ptr[i] != null) : (i += 1) {
                 const key = keys_ptr[i];
                 if (key == null or std.mem.len(key) == 0) continue;
+                const key_span = std.mem.span(key);
 
-                var list_len: usize = 0;
-                const list_ptr = rawflatpak.g_key_file_get_string_list(key_file_ptr, group.ptr, key, &list_len, null);
-                if (list_ptr != null) {
-                    defer rawflatpak.g_strfreev(list_ptr);
-                    var j: usize = 0;
-                    while (list_ptr[j] != null) : (j += 1) {
-                        const val = list_ptr[j];
-                        if (val == null or std.mem.len(val) == 0) continue;
-                        const entry = try std.fmt.allocPrintSentinel(
-                            self.allocator,
-                            "{s}={s}:{s}",
-                            .{ group, std.mem.span(key), std.mem.span(val) },
-                            0,
-                        );
-                        try permissions.append(self.allocator, entry);
+                if (group.list) {
+                    const list_ptr = rawflatpak.g_key_file_get_string_list(key_file_ptr, group.name.ptr, key, null, null);
+                    if (list_ptr != null) {
+                        defer rawflatpak.g_strfreev(list_ptr);
+                        var j: usize = 0;
+                        while (list_ptr[j] != null) : (j += 1) {
+                            const val = list_ptr[j];
+                            if (val == null or std.mem.len(val) == 0) continue;
+                            try appendPermission(self.allocator, permissions, group.name, key_span, std.mem.span(val));
+                        }
+                        continue;
                     }
-                } else {
-                    const val_ptr = rawflatpak.g_key_file_get_string(key_file_ptr, group.ptr, key, null);
-                    if (val_ptr == null) continue;
-                    defer rawflatpak.g_free(val_ptr);
-                    if (std.mem.len(val_ptr) == 0) continue;
-                    const entry = try std.fmt.allocPrintSentinel(
-                        self.allocator,
-                        "{s}={s}:{s}",
-                        .{ group, std.mem.span(key), std.mem.span(val_ptr) },
-                        0,
-                    );
-                    try permissions.append(self.allocator, entry);
                 }
+
+                const val_ptr = rawflatpak.g_key_file_get_string(key_file_ptr, group.name.ptr, key, null);
+                if (val_ptr == null) continue;
+                defer rawflatpak.g_free(val_ptr);
+                if (std.mem.len(val_ptr) == 0) continue;
+                try appendPermission(self.allocator, permissions, group.name, key_span, std.mem.span(val_ptr));
             }
         }
 
         return permissions.toOwnedSlice(self.allocator);
+    }
+
+    /// Emits one flattened permission entry as `{group}={key}:{value}`. The value
+    /// runs to the end of the string, so a mode suffix, an absolute path or a
+    /// conditional keeps its own colons intact.
+    fn appendPermission(
+        allocator: std.mem.Allocator,
+        permissions: *std.ArrayList([:0]u8),
+        group: []const u8,
+        key: []const u8,
+        value: []const u8,
+    ) !void {
+        const entry = try std.fmt.allocPrintSentinel(allocator, "{s}={s}:{s}", .{ group, key, value }, 0);
+        errdefer allocator.free(entry);
+        try permissions.append(allocator, entry);
     }
 
     fn resolve_remote_branch(
@@ -2236,6 +2249,224 @@ test "shared cancellation propagates to GLib cancellables" {
 
     context.cancel();
     try std.testing.expect(rawflatpak.g_cancellable_is_cancelled(cancellable) != 0);
+}
+
+/// A metadata key file shaped like a real Flathub app, covering every permission
+/// group flatpak documents plus the structural forms inside a value: access
+/// modes, a conditional grant, a denial, a wildcard D-Bus name, and environment
+/// values holding a colon or a semicolon.
+const permissions_metadata_fixture =
+    \\[Application]
+    \\name=org.example.Permissions
+    \\runtime=org.freedesktop.Platform/x86_64/24.08
+    \\
+    \\[Extension org.example.Permissions.Locale]
+    \\directory=share/runtime/locale
+    \\autodelete=true
+    \\
+    \\[Context]
+    \\shared=ipc;network;
+    \\sockets=wayland;fallback-x11;pulseaudio;!x11;if:x11:!has-wayland;
+    \\devices=all;dri;
+    \\filesystems=host:ro;xdg-download;xdg-run/keyring;~/.config/example:create;/srv/data;
+    \\persistent=cache;
+    \\features=devel;!bluetooth;
+    \\unset-environment=LD_PRELOAD;
+    \\
+    \\[Session Bus Policy]
+    \\org.gtk.vfs.*=talk
+    \\org.freedesktop.secrets=talk
+    \\
+    \\[System Bus Policy]
+    \\org.freedesktop.NetworkManager=see
+    \\
+    \\[Environment]
+    \\TMPDIR=/var/tmp
+    \\PATH=/app/bin:/usr/bin
+    \\GST_PLUGIN_PATH=/app/lib/gstreamer-1.0;/app/lib/gst
+;
+
+/// The documented permission vocabulary as `<key>:<value>` pairs, grouped by key
+/// and one entry per individual list item the backend is expected to emit as
+/// `Context=<key>:<value>`.
+const permissions_vocabulary = [_][]const u8{
+    "shared:network",
+    "shared:ipc",
+    "shared:if:network:true",
+    "sockets:x11",
+    "sockets:wayland",
+    "sockets:fallback-x11",
+    "sockets:pulseaudio",
+    "sockets:session-bus",
+    "sockets:system-bus",
+    "sockets:ssh-auth",
+    "sockets:pcsc",
+    "sockets:cups",
+    "sockets:gpg-agent",
+    "sockets:inherit-wayland-socket",
+    "sockets:!x11",
+    "sockets:if:x11:!has-wayland",
+    "devices:dri",
+    "devices:input",
+    "devices:usb",
+    "devices:kvm",
+    "devices:all",
+    "devices:shm",
+    "devices:if:usb:has-usb-device",
+    "filesystems:home",
+    "filesystems:host",
+    "filesystems:host-os",
+    "filesystems:host-etc",
+    "filesystems:host-root",
+    "filesystems:xdg-desktop",
+    "filesystems:xdg-documents",
+    "filesystems:xdg-download",
+    "filesystems:xdg-music",
+    "filesystems:xdg-pictures",
+    "filesystems:xdg-public-share",
+    "filesystems:xdg-videos",
+    "filesystems:xdg-templates",
+    "filesystems:xdg-cache",
+    "filesystems:xdg-config",
+    "filesystems:xdg-data",
+    "filesystems:xdg-run/keyring",
+    "filesystems:xdg-download/sub:ro",
+    "filesystems:~/projects:rw",
+    "filesystems:~",
+    "filesystems:/srv/data:create",
+    "persistent:cache",
+    "persistent:data/example",
+    "features:devel",
+    "features:multiarch",
+    "features:bluetooth",
+    "features:canbus",
+    "features:per-app-dev-shm",
+    "features:!bluetooth",
+    "features:if:devel:true",
+    "unset-environment:LD_PRELOAD",
+};
+
+fn loadPermissionsFixture(data: []const u8) !*rawflatpak.GKeyFile {
+    const key_file = rawflatpak.g_key_file_new() orelse return error.OutOfMemory;
+    errdefer rawflatpak.g_key_file_free(key_file);
+    var g_error: ?*rawflatpak.GError = null;
+    defer if (g_error) |e| rawflatpak.g_error_free(e);
+    if (rawflatpak.g_key_file_load_from_data(key_file, data.ptr, data.len, 0, &g_error) == 0) {
+        return error.KeyFileRejected;
+    }
+    return key_file;
+}
+
+fn flattenPermissionsFixture(data: []const u8) ![]const [:0]u8 {
+    const manager = Manager{ .allocator = std.testing.allocator, .io = std.testing.io };
+    const key_file = try loadPermissionsFixture(data);
+    defer rawflatpak.g_key_file_free(key_file);
+    var permissions: std.ArrayList([:0]u8) = .empty;
+    return manager.get_permissions_from_key_file(key_file, &permissions);
+}
+
+fn freeFlattenedPermissions(permissions: []const [:0]u8) void {
+    for (permissions) |permission| std.testing.allocator.free(permission);
+    std.testing.allocator.free(permissions);
+}
+
+fn expectFlattenedPermissions(expected: []const []const u8, actual: []const [:0]u8) !void {
+    try std.testing.expectEqual(expected.len, actual.len);
+    for (expected, actual) |want, got| try std.testing.expectEqualStrings(want, got);
+}
+
+test "permission metadata flattens to group=key:value strings" {
+    const permissions = try flattenPermissionsFixture(permissions_metadata_fixture);
+    defer freeFlattenedPermissions(permissions);
+
+    // One string per individual list item, in group order and then file order.
+    // Conditional grants and denials are passed through unparsed, and a mode
+    // suffix stays glued to its path: consumers must split on the first colon
+    // after the key to recover them.
+    try expectFlattenedPermissions(&.{
+        "Context=shared:ipc",
+        "Context=shared:network",
+        "Context=sockets:wayland",
+        "Context=sockets:fallback-x11",
+        "Context=sockets:pulseaudio",
+        "Context=sockets:!x11",
+        "Context=sockets:if:x11:!has-wayland",
+        "Context=devices:all",
+        "Context=devices:dri",
+        "Context=filesystems:host:ro",
+        "Context=filesystems:xdg-download",
+        "Context=filesystems:xdg-run/keyring",
+        "Context=filesystems:~/.config/example:create",
+        "Context=filesystems:/srv/data",
+        "Context=persistent:cache",
+        "Context=features:devel",
+        "Context=features:!bluetooth",
+        "Context=unset-environment:LD_PRELOAD",
+        "Session Bus Policy=org.gtk.vfs.*:talk",
+        "Session Bus Policy=org.freedesktop.secrets:talk",
+        "System Bus Policy=org.freedesktop.NetworkManager:see",
+        "Environment=TMPDIR:/var/tmp",
+        "Environment=PATH:/app/bin:/usr/bin",
+        "Environment=GST_PLUGIN_PATH:/app/lib/gstreamer-1.0;/app/lib/gst",
+    }, permissions);
+}
+
+test "permission metadata flattening survives the documented vocabulary" {
+    var metadata = try std.ArrayList(u8).initCapacity(std.testing.allocator, permissions_vocabulary.len * 32);
+    defer metadata.deinit(std.testing.allocator);
+
+    var expected = try std.ArrayList([]const u8).initCapacity(std.testing.allocator, permissions_vocabulary.len);
+    defer expected.deinit(std.testing.allocator);
+
+    try metadata.appendSlice(std.testing.allocator, "[Context]\n");
+    var current_key: ?[]const u8 = null;
+    inline for (permissions_vocabulary) |entry| {
+        const separator = std.mem.indexOfScalar(u8, entry, ':') orelse return error.MalformedFixture;
+        const key = entry[0..separator];
+        const value = entry[separator + 1 ..];
+        if (current_key == null or !std.mem.eql(u8, current_key.?, key)) {
+            try metadata.appendSlice(std.testing.allocator, "\n");
+            try metadata.appendSlice(std.testing.allocator, key);
+            try metadata.appendSlice(std.testing.allocator, "=");
+            current_key = key;
+        }
+        try metadata.appendSlice(std.testing.allocator, value);
+        try metadata.appendSlice(std.testing.allocator, ";");
+        try expected.append(std.testing.allocator, "Context=" ++ entry);
+    }
+
+    const permissions = try flattenPermissionsFixture(metadata.items);
+    defer freeFlattenedPermissions(permissions);
+    try expectFlattenedPermissions(expected.items, permissions);
+}
+
+test "permission metadata reads the D-Bus policy and environment groups" {
+    const permissions = try flattenPermissionsFixture(
+        \\[Context]
+        \\shared=network;
+        \\
+        \\[Session Bus Policy]
+        \\org.gtk.vfs.*=talk
+        \\org.freedesktop.secrets=talk
+        \\
+        \\[System Bus Policy]
+        \\org.freedesktop.NetworkManager=see
+        \\
+        \\[Environment]
+        \\TMPDIR=/var/tmp
+    );
+    defer freeFlattenedPermissions(permissions);
+
+    // These groups key on a name, not a fixed vocabulary, so what follows the
+    // colon is an access level or a value rather than a permission token. The
+    // value runs to the end of the string, keeping wildcards and paths intact.
+    try expectFlattenedPermissions(&.{
+        "Context=shared:network",
+        "Session Bus Policy=org.gtk.vfs.*:talk",
+        "Session Bus Policy=org.freedesktop.secrets:talk",
+        "System Bus Policy=org.freedesktop.NetworkManager:see",
+        "Environment=TMPDIR:/var/tmp",
+    }, permissions);
 }
 
 //disabled until uninstall is added.

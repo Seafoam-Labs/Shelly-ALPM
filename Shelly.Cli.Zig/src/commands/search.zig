@@ -12,7 +12,6 @@ const runtime = @import("../runtime/context.zig");
 const spec = @import("../cli/spec.zig");
 const aur_url = @import("../config/aur_url.zig");
 
-const joined = format.joined;
 const nonNegative = format.nonNegative;
 const loadSizeDisplay = format.loadSizeDisplay;
 const formatSize = format.formatSize;
@@ -100,7 +99,9 @@ const FlatpakPackage = struct {
     verification_method: ?[]const u8 = null,
     download_size: u64 = 0,
     installed_size: u64 = 0,
-    permissions: []const []const u8 = &.{},
+    /// Null when the remote reference could not be read, which is not the same
+    /// as an app that declares no permissions.
+    permissions: ?[]const []const u8 = null,
     scope: PackageManager.flatpak.Scope = .unknown,
 };
 
@@ -791,6 +792,26 @@ fn renderPkgbuilds(
     }
 }
 
+/// The grouped rows a surface should render for one hit, or null when tokens
+/// arrived but none of them could be read. An empty slice is a real answer: the
+/// app declares nothing.
+///
+/// The caller owns the result; free it with
+/// `PackageManager.flatpak.permissions.freeRows`.
+fn flatpakPermissionRows(
+    allocator: std.mem.Allocator,
+    entries: ?[]const []const u8,
+) !?[]const PackageManager.flatpak.permissions.Row {
+    const tokens = entries orelse return null;
+    var summary = try PackageManager.flatpak.permissions.classify(allocator, tokens);
+    errdefer summary.deinit(allocator);
+    if (summary.rows.len == 0 and summary.malformed > 0) {
+        summary.deinit(allocator);
+        return null;
+    }
+    return summary.rows;
+}
+
 fn renderFlatpak(
     context: *runtime.RuntimeContext,
     invocation: *const parser.Invocation,
@@ -799,7 +820,7 @@ fn renderFlatpak(
     if (invocation.globals.ui_mode or invocation.globals.json) {
         var payload = std.Io.Writer.Allocating.init(context.allocator);
         defer payload.deinit();
-        try writeFlatpakResponseJson(&payload.writer, result);
+        try writeFlatpakResponseJson(context.allocator, &payload.writer, result);
         if (invocation.globals.ui_mode) {
             try output.writeFrame(context, payload.writer.buffered());
             const message = try std.fmt.allocPrint(
@@ -817,15 +838,24 @@ fn renderFlatpak(
 
     var rows: std.ArrayList([]const []const u8) = .empty;
     const size_display = try loadSizeDisplay(context);
-    for (result.packages) |package| try rows.append(context.allocator, try row(context.allocator, &.{
-        package.name,
-        package.id,
-        truncate(package.summary, 70),
-        package.remote,
-        try formatSize(context.allocator, size_display, package.download_size),
-        try formatSize(context.allocator, size_display, package.installed_size),
-        try joined(context.allocator, package.permissions),
-    }));
+    for (result.packages) |package| {
+        // Grouped wording rather than the raw token list: sixteen tokens that
+        // differ only by folder name read as noise.
+        const groups = try flatpakPermissionRows(context.allocator, package.permissions);
+        defer if (groups) |grouped| PackageManager.flatpak.permissions.freeRows(context.allocator, grouped);
+        try rows.append(context.allocator, try row(context.allocator, &.{
+            package.name,
+            package.id,
+            truncate(package.summary, 70),
+            package.remote,
+            try formatSize(context.allocator, size_display, package.download_size),
+            try formatSize(context.allocator, size_display, package.installed_size),
+            if (groups) |grouped|
+                try PackageManager.flatpak.permissions.describe(context.allocator, grouped)
+            else
+                "Unknown",
+        }));
+    }
     try table.write(
         context,
         &.{ "Name", "AppId", "Summary", "Remote", "Download Size", "Installed Size", "Permissions" },
@@ -988,7 +1018,7 @@ fn writePkgbuildsJson(writer: *std.Io.Writer, builds: []const PackageBuild) !voi
     try json.endArray();
 }
 
-fn writeFlatpakResponseJson(writer: *std.Io.Writer, result: FlatpakResult) !void {
+fn writeFlatpakResponseJson(allocator: std.mem.Allocator, writer: *std.Io.Writer, result: FlatpakResult) !void {
     var json: std.json.Stringify = .{ .writer = writer };
     try json.beginObject();
     try json.objectField("hits");
@@ -1011,6 +1041,12 @@ fn writeFlatpakResponseJson(writer: *std.Io.Writer, result: FlatpakResult) !void
         try field(&json, "download_size", package.download_size);
         try field(&json, "installed_size", package.installed_size);
         try field(&json, "permissions", package.permissions);
+        // The grouped rows a surface renders. `permissions` stays the raw
+        // record: it is what the machine-readable contract has always carried,
+        // and these rows are how it reads to a person.
+        const groups = try flatpakPermissionRows(allocator, package.permissions);
+        defer if (groups) |grouped| PackageManager.flatpak.permissions.freeRows(allocator, grouped);
+        try field(&json, "permission_rows", groups);
         try json.endObject();
     }
     try json.endArray();
@@ -1481,7 +1517,7 @@ test "AUR standard merge and Flatpak paging are serialized without subprocesses"
                     .remote = "flathub",
                     .download_size = 1048576,
                     .installed_size = 2097152,
-                    .permissions = &.{ "shared=network", "sockets=wayland" },
+                    .permissions = &.{ "Context=shared:network", "Context=sockets:wayland" },
                 }},
                 .page = 2,
                 .limit = 1,
@@ -1495,15 +1531,60 @@ test "AUR standard merge and Flatpak paging are serialized without subprocesses"
     try std.testing.expect(std.mem.indexOf(u8, tc.stdout.writer.buffered(), "org.example.Editor") != null);
     try std.testing.expect(std.mem.indexOf(u8, tc.stdout.writer.buffered(), "\"download_size\":1048576") != null);
     try std.testing.expect(std.mem.indexOf(u8, tc.stdout.writer.buffered(), "\"installed_size\":2097152") != null);
-    try std.testing.expect(std.mem.indexOf(u8, tc.stdout.writer.buffered(), "\"permissions\":[\"shared=network\",\"sockets=wayland\"]") != null);
+    try std.testing.expect(std.mem.indexOf(u8, tc.stdout.writer.buffered(), "\"permissions\":[\"Context=shared:network\",\"Context=sockets:wayland\"]") != null);
+    // The raw record stays, and the grouped rows a surface renders ride with it.
+    try std.testing.expect(std.mem.indexOf(u8, tc.stdout.writer.buffered(),
+        "\"permission_rows\":[{\"concern\":\"network\",\"tier\":\"medium\",\"state\":\"granted\",\"items\":[]}," ++
+            "{\"concern\":\"display\",\"tier\":\"medium\",\"state\":\"granted\",\"items\":[\"Wayland\"]}," ++
+            "{\"concern\":\"files_system\",\"tier\":\"low\",\"state\":\"absent\",\"items\":[]}," ++
+            "{\"concern\":\"devices\",\"tier\":\"low\",\"state\":\"absent\",\"items\":[]}]") != null);
 
     tc.stdout.writer.end = 0;
     const flatpak_plain = try parser.parse(tc.arena.allocator(), &manifest, &.{ "search", "flatpak", "editor" });
     try std.testing.expectEqual(@as(u8, 0), try executeWithRunner(&tc.context, &flatpak_plain.dispatch, FlatpakFixture{}));
     try std.testing.expect(std.mem.indexOf(u8, tc.stdout.writer.buffered(), "Download Size") != null);
     try std.testing.expect(std.mem.indexOf(u8, tc.stdout.writer.buffered(), "Installed Size") != null);
-    try std.testing.expect(std.mem.indexOf(u8, tc.stdout.writer.buffered(), "shared=network") != null);
-    try std.testing.expect(std.mem.indexOf(u8, tc.stdout.writer.buffered(), "sockets=wayland") != null);
+    try std.testing.expect(std.mem.indexOf(u8, tc.stdout.writer.buffered(), "Network access; Display server: Wayland; No access to system files; No device access") != null);
+    // The cell reads as concerns, not as the tokens the backend flattened.
+    try std.testing.expect(std.mem.indexOf(u8, tc.stdout.writer.buffered(), "Context=shared:network") == null);
+}
+
+test "flatpak search reports unreadable permissions distinctly from no permissions" {
+    var tc: test_support.TestContext = .{};
+    tc.init();
+    defer tc.deinit();
+    const manifest = try spec.Manifest.load(tc.arena.allocator());
+
+    const Fixture = struct {
+        fn search(_: @This(), _: *runtime.RuntimeContext, _: *const parser.Invocation) !Result {
+            return .{ .flatpak = .{
+                .query = "editor",
+                .packages = &.{
+                    .{ .name = "Editor", .id = "org.example.Editor", .summary = "Edit", .remote = "flathub", .permissions = null },
+                    .{ .name = "Notes", .id = "org.example.Notes", .summary = "Write", .remote = "flathub", .permissions = &.{} },
+                },
+                .page = 1,
+                .limit = 10,
+                .total_pages = 1,
+                .total_hits = 2,
+            } };
+        }
+    };
+
+    const as_json = try parser.parse(tc.arena.allocator(), &manifest, &.{ "search", "flatpak", "editor", "--json" });
+    try std.testing.expectEqual(@as(u8, 0), try executeWithRunner(&tc.context, &as_json.dispatch, Fixture{}));
+    const rendered = tc.stdout.writer.buffered();
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "\"permissions\":null") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "\"permissions\":[]") != null);
+    // The grouped rows carry the same three-way distinction, so a surface that
+    // renders rows cannot fall back to claiming nothing is requested.
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "\"permission_rows\":null") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "\"permission_rows\":[]") != null);
+
+    tc.stdout.writer.end = 0;
+    const as_table = try parser.parse(tc.arena.allocator(), &manifest, &.{ "search", "flatpak", "editor" });
+    try std.testing.expectEqual(@as(u8, 0), try executeWithRunner(&tc.context, &as_table.dispatch, Fixture{}));
+    try std.testing.expect(std.mem.indexOf(u8, tc.stdout.writer.buffered(), "Unknown") != null);
 }
 
 test "interactive AUR search table stays within terminal width" {

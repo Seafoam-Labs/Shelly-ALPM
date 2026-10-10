@@ -284,7 +284,13 @@ pub fn runStep(
             runtime_pkgdir,
         ) catch |err| switch (err) {
             error.OutOfMemory => return error.OutOfMemory,
-            else => return error.PrivilegedPackageOperationUnsupported,
+            else => {
+                const message = try std.fmt.allocPrint(self.allocator, "Cannot read package ownership journal for {f}: {s}.", .{ diagnostics.safe(package_name), @errorName(err) });
+                defer self.allocator.free(message);
+                if (self.active_log) |log| try log.writeRecord("error", message);
+                operation.reportError(error.PrivilegedPackageOperationUnsupported, message, "build", null, false);
+                return error.PrivilegedPackageOperationUnsupported;
+            },
         };
     }
     operation.status(.information, step_name, "aur_build_output", @intFromEnum(events.EventType.aur_build_output));
@@ -1299,10 +1305,11 @@ const virtualMetadataShellPrelude =
     \\    "$__shelly_root"|"$__shelly_root"/*) ;;
     \\    *) __shelly_metadata_reject 'ownership target outside package' "$__shelly_canonical"; return $? ;;
     \\  esac
+    \\  # Journal timestamps use a decimal point regardless of the package locale.
     \\  if [ "$__shelly_follow" -eq 1 ]; then
-    \\    __shelly_identity=$(/usr/bin/stat -Lc '%Hd:%Ld:%i:%.9W' -- "$__shelly_canonical") || { __shelly_metadata_reject; return $?; }
+    \\    __shelly_identity=$(LC_ALL=C /usr/bin/stat -Lc '%Hd:%Ld:%i:%.9W' -- "$__shelly_canonical") || { __shelly_metadata_reject; return $?; }
     \\  else
-    \\    __shelly_identity=$(/usr/bin/stat -c '%Hd:%Ld:%i:%.9W' -- "$__shelly_canonical") || { __shelly_metadata_reject; return $?; }
+    \\    __shelly_identity=$(LC_ALL=C /usr/bin/stat -c '%Hd:%Ld:%i:%.9W' -- "$__shelly_canonical") || { __shelly_metadata_reject; return $?; }
     \\  fi
     \\  __shelly_birth=${__shelly_identity##*:}
     \\  [ "$__shelly_birth" != '0.000000000' ] || { __shelly_metadata_reject; return $?; }
