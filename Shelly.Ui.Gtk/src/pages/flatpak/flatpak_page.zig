@@ -150,6 +150,8 @@ pub const FlatpakPage = extern struct {
 
         const install = FlatpakInstallView.new();
         p.install_view = install;
+        // The view owns the empty-result text but not the entry that holds focus.
+        install.setSearchEntry(p.search_entry);
         _ = gtk.Stack.addNamed(p.main_content_stack, install.as(gtk.Widget), "install");
 
         const remove = FlatpakRemoveView.new();

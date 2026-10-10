@@ -13,6 +13,7 @@ const ShellyWindow = @import("../shelly_window.zig").ShellyWindow;
 const Option = @import("../services/shelly_operation.zig").Option;
 const MultiSelectDialog = @import("../dialog/page/multiselect.zig").MultiSelectDialog;
 const translations = @import("../helpers/translations.zig");
+const a11y = @import("../helpers/a11y.zig");
 
 pub const PackageDetail = extern struct {
     parent_instance: Parent,
@@ -424,6 +425,7 @@ pub const PackageDetail = extern struct {
         if (!installed) return;
         const icon = gtk.Image.newFromIconName("object-select-symbolic");
         gtk.Widget.setTooltipText(icon.as(gtk.Widget), translations._("Installed"));
+        a11y.setName(icon.as(gtk.Widget), translations._("Installed"));
         gtk.Box.append(row, icon.as(gtk.Widget));
     }
 

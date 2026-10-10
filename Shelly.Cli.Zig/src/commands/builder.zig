@@ -15,6 +15,8 @@ const source_pgp_transport = @import("source_pgp_transport.zig");
 const signals = @import("../runtime/signals.zig");
 const install_command = @import("install.zig");
 
+const build_plan = PackageManager.Manager.build_plan;
+
 const command_path = "shelly build build";
 const compression_policy = PackageManager.shared.archive.compression_policy;
 
@@ -41,6 +43,7 @@ pub const BuildCommandError = struct {
 pub const BuildCommandResult = struct {
     package_base: []u8,
     review_digest: ?[std.crypto.hash.sha2.Sha256.digest_length]u8,
+    dependency_plan_digest: ?[32]u8 = null,
     isolated: bool,
     artifacts: []BuildCommandArtifact,
     failure: ?BuildCommandError = null,
@@ -70,6 +73,16 @@ pub fn dispatch(
     _ = compressionOverride(invocation) catch |err|
         return try reportConfigurationError(context, invocation, err);
 
+    if (optionEnabled(invocation, "--resolve-dependencies")) {
+        if (!optionEnabled(invocation, "--isolated") or !invocation.globals.json or installRequested(invocation) or
+            optionEnabled(invocation, "--sync-deps") or optionValue(invocation, "--review-digest") != null or
+            optionEnabled(invocation, "--review-only") or optionEnabled(invocation, "--makesrcinfo") or
+            optionValue(invocation, "--dependency-plan") != null)
+            return try reportConfigurationError(context, invocation, error.InvalidDependencyPlanOptions);
+        return try executeReviewOnly(context, invocation);
+    }
+    if (optionValue(invocation, "--dependency-plan") != null and !optionEnabled(invocation, "--isolated"))
+        return try reportConfigurationError(context, invocation, error.InvalidDependencyPlanOptions);
     if (installRequested(invocation)) {
         if (installOutputModeConflict(invocation)) |conflict| {
             try context.stderr.print("Cannot combine --install with {s}.\n", .{conflict});
@@ -347,6 +360,7 @@ const ReviewOnlyResult = struct {
     package_names: [][]u8,
     review: PackageManager.builder.PreparedPkgbuildReview,
     dependency_plan: ?SyncDependencyPlan = null,
+    environment_plan: ?build_plan.Plan = null,
     // Owned by the review arena; used only by the internal key-preparation child.
     source_pgp_fingerprints: []const []const u8 = &.{},
 
@@ -516,11 +530,11 @@ fn executeReviewOnly(
     invocation: *const parser.Invocation,
 ) !u8 {
     if (!invocation.globals.json) {
-        try context.stderr.writeAll("--review-only requires --json.\n");
+        try context.stderr.writeAll("Review and dependency resolution require --json.\n");
         try context.stderr.flush();
         return 2;
     }
-    if (optionEnabled(invocation, "--isolated") or
+    if ((optionEnabled(invocation, "--isolated") and !optionEnabled(invocation, "--resolve-dependencies")) or
         optionEnabled(invocation, "--sync-deps") or
         optionValue(invocation, "--review-digest") != null)
     {
@@ -558,7 +572,10 @@ fn executeReviewOnly(
         try renderer.reportError(detail);
         try renderer.finishWithMessage(false, "Could not review the PKGBUILD for the requested package.");
         context.stdout = stdout;
-        try writeBuildJsonWithDiagnostic(context.stdout, null, err, false, contextDiagnostic(context), contextLogPath(context));
+        if (optionEnabled(invocation, "--resolve-dependencies"))
+            try writeDependencyResolutionError(context.stdout, err)
+        else
+            try writeBuildJsonWithDiagnostic(context.stdout, null, err, false, contextDiagnostic(context), contextLogPath(context));
         try context.stdout.writeByte('\n');
         try context.stdout.flush();
         context.stdout = context.stderr;
@@ -567,11 +584,14 @@ fn executeReviewOnly(
     defer result.deinit(context.allocator);
     try renderer.finishWithMessage(true, "PKGBUILD review completed.");
     context.stdout = stdout;
-    try writeReviewOnlyJson(context.stdout, &result);
+    if (optionEnabled(invocation, "--resolve-dependencies")) {
+        var json: std.json.Stringify = .{ .writer = context.stdout };
+        try json.write(result.environment_plan.?);
+    } else try writeReviewOnlyJson(context.stdout, &result);
     try context.stdout.writeByte('\n');
     try context.stdout.flush();
     context.stdout = context.stderr;
-    return 0;
+    return if (optionEnabled(invocation, "--resolve-dependencies") and !result.environment_plan.?.complete) 1 else 0;
 }
 
 fn prepareReviewOnly(
@@ -650,7 +670,7 @@ fn prepareReviewOnly(
     );
     var dependency_plan: ?SyncDependencyPlan = null;
     errdefer if (dependency_plan) |*plan| plan.deinit(context.allocator);
-    if (optionEnabled(invocation, "--review-dependencies")) {
+    if (optionEnabled(invocation, "--review-dependencies") and !optionEnabled(invocation, "--review-build-environment")) {
         var repositories = try ReviewRepositories.init(
             context,
             operation_context,
@@ -677,6 +697,10 @@ fn prepareReviewOnly(
             );
         }
     }
+    const environment_plan = if (optionEnabled(invocation, "--resolve-dependencies") or optionEnabled(invocation, "--review-build-environment"))
+        try prepareEnvironmentPlan(context, invocation, &request, builder.package_builds, final_review.digest, final_review.arena.allocator())
+    else
+        null;
     const package_names = try context.allocator.alloc([]u8, builder.package_builds.len);
     var copied_names: usize = 0;
     errdefer {
@@ -708,8 +732,63 @@ fn prepareReviewOnly(
         .package_names = package_names,
         .review = final_review,
         .dependency_plan = dependency_plan,
+        .environment_plan = environment_plan,
         .source_pgp_fingerprints = try source_pgp_fingerprints.toOwnedSlice(review_allocator),
     };
+}
+
+fn buildPolicyDigest(allocator: std.mem.Allocator, configuration: *const ShellyBuildConfiguration) ![]const u8 {
+    const bytes = try std.json.Stringify.valueAlloc(allocator, .{
+        .build = configuration.build,
+        .package = configuration.package,
+        .sandbox = configuration.sandbox,
+    }, .{});
+    defer allocator.free(bytes);
+    return build_plan.hashBytes(allocator, bytes);
+}
+
+fn prepareEnvironmentPlan(
+    context: *runtime.RuntimeContext,
+    invocation: *const parser.Invocation,
+    request: *const BuildRequest,
+    builds: []const PackageManager.pkgbuild.parser.Pkgbuild,
+    review_digest: [32]u8,
+    allocator: std.mem.Allocator,
+) !build_plan.Plan {
+    const policy_digest = try buildPolicyDigest(allocator, request.shellybuild);
+    var requirements: std.ArrayList(build_plan.Requirement) = .empty;
+    for (PackageManager.Manager.bootstrap.build_root.packages) |target|
+        try requirements.append(allocator, .{ .requirement = target, .role = .bootstrap });
+    const resolver = PackageManager.aur.dependency_resolver;
+    for (builds) |build| {
+        for (build.parsed_global_depends orelse &.{}) |dep|
+            try requirements.append(allocator, .{ .requirement = try resolver.formatDependency(allocator, dep), .role = .runtime });
+        for (build.parsed_make_depends orelse &.{}) |dep|
+            try requirements.append(allocator, .{ .requirement = try resolver.formatDependency(allocator, dep), .role = .build });
+        if (!request.no_check) for (build.parsed_check_depends orelse &.{}) |dep|
+            try requirements.append(allocator, .{ .requirement = try resolver.formatDependency(allocator, dep), .role = .check });
+    }
+    // No operation/UI handlers: the isolated provider policy is deterministic
+    // native repository order, with no optional dependency selection.
+    var planner_operations = PackageManager.OperationContext.init(context.allocator, context.io);
+    defer planner_operations.deinit();
+    var watcher: signals.CancellationWatcher = .{};
+    try watcher.start(context.io, &planner_operations);
+    defer watcher.deinit();
+    var repositories = try ReviewRepositories.init(context, &planner_operations, false, null);
+    defer repositories.deinit(context);
+    _ = invocation;
+    return build_plan.resolve(allocator, context.io, repositories.manager, .{
+        .reviewDigest = try allocator.dupe(u8, &std.fmt.bytesToHex(review_digest, .lower)),
+        .configurationDigest = try allocator.dupe(u8, &repositories.configuration_digest),
+        .buildPolicyDigest = policy_digest,
+        .backend = @tagName(repositories.manager.backend()),
+        .bootstrapProfile = if (PackageManager.Manager.bootstrap.build_root.rlpm_only) "rlpm-only" else "libalpm-enabled",
+        .architectures = try build_plan.targetArchitectures(allocator, repositories.manager.config),
+        .check = !request.no_check,
+        .repositories = &.{},
+        .requirements = try requirements.toOwnedSlice(allocator),
+    });
 }
 
 /// `--sync-deps` installs missing dependencies before the build. Dependency
@@ -934,7 +1013,7 @@ const SrcinfoReal = struct {
         if (!optionEnabled(invocation, "--reviewed") and reviewed_digest == null) {
             var answer = try operation.ask(.{
                 .kind = .review_changes,
-                .prompt = "Generate SRCINFO from this PKGBUILD?",
+                .prompt = "Generate SRCINFO?",
                 .review = .{
                     .subject = request.pkgbuild_path,
                     .findings = review.findings,
@@ -963,20 +1042,17 @@ const SrcinfoReal = struct {
             name.* = package_build.pkg_name orelse return error.MissingPackageName;
         const package_base = request.package_builds[0].variables.get("pkgbase") orelse
             requested_names[0];
-        const work_directory = if (request.shellybuild.destinations.build) |build_root|
-            try PackageManager.builder.uniqueWorkDirectory(
-                context.allocator,
-                context.io,
-                build_root,
-                package_base,
-            )
-        else
-            try context.allocator.dupe(u8, request.build_directory);
+        // Source preparation replaces src/: always isolate metadata work from
+        // any existing build tree, even without a configured build root.
+        const work_directory = try PackageManager.builder.uniqueWorkDirectory(
+            context.allocator,
+            context.io,
+            request.shellybuild.destinations.build orelse request.build_directory,
+            package_base,
+        );
         defer context.allocator.free(work_directory);
-        const ephemeral_work_directory = request.shellybuild.destinations.build != null;
-        try ensureConfiguredWorkDirectory(context.io, ephemeral_work_directory, work_directory);
-        defer if (ephemeral_work_directory)
-            std.Io.Dir.cwd().deleteTree(context.io, work_directory) catch {};
+        try std.Io.Dir.cwd().createDirPath(context.io, work_directory);
+        defer std.Io.Dir.cwd().deleteTree(context.io, work_directory) catch {};
 
         const builder = try PackageBuilder.init(
             context.allocator,
@@ -988,13 +1064,13 @@ const SrcinfoReal = struct {
                 .start_directory = request.build_directory,
                 .work_directory = work_directory,
                 .package_destination = request.build_directory,
-                .source_destination = request.build_directory,
+                .source_destination = request.shellybuild.destinations.sources orelse request.build_directory,
                 .log_destination = request.build_directory,
                 .pkgbuild_path = request.pkgbuild_path,
                 .clean_after_success = true,
                 .overwrite = false,
                 .run_check = false,
-                .run_verify = false,
+                .run_verify = !optionEnabled(invocation, "--noverify"),
                 .reviewed_pkgbuild_digest = review.digest,
                 .review_digest_is_automation = reviewed_digest != null,
                 .install_scripts = review.install_scripts,
@@ -1685,15 +1761,24 @@ fn runIsolatedCoordinator(
         }
     }
 
-    var bootstrap_packages: std.ArrayList([]const u8) = .empty;
-    defer bootstrap_packages.deinit(context.allocator);
-    if (optionEnabled(invocation, "--sync-deps")) {
-        if (review.aur_dependencies.len != 0) {
-            for (review.aur_dependencies) |name|
-                operation.status(.warning, name, "build.isolation.aur-dependency", null);
-            return error.IsolatedAurDependencyUnsupported;
-        }
-        try bootstrap_packages.appendSlice(context.allocator, review.repository_dependencies);
+    const environment_value = review.parsed.value.object.get("dependencyPlan") orelse return error.InvalidReviewResult;
+    const environment_json = try std.json.Stringify.valueAlloc(context.allocator, environment_value, .{});
+    defer context.allocator.free(environment_json);
+    var environment = try std.json.parseFromSlice(build_plan.Plan, context.allocator, environment_json, .{});
+    defer environment.deinit();
+    try validateBuildDependencyPlan(context, &operation, environment.value, review.package_base, request.pkgbuild_path);
+    runner.result.?.dependency_plan_digest = try parseReviewDigest(environment.value.planDigest);
+    const actual_policy = try buildPolicyDigest(context.allocator, request.shellybuild);
+    defer context.allocator.free(actual_policy);
+    if (!std.mem.eql(u8, actual_policy, environment.value.buildPolicyDigest) or environment.value.check == request.no_check)
+        return error.DependencyPlanMismatch;
+    if (optionValue(invocation, "--dependency-plan")) |path| {
+        const accepted_json = try std.Io.Dir.cwd().readFileAlloc(context.io, path, context.allocator, .limited(64 * 1024 * 1024));
+        defer context.allocator.free(accepted_json);
+        var accepted = try std.json.parseFromSlice(build_plan.Plan, context.allocator, accepted_json, .{});
+        defer accepted.deinit();
+        try validateBuildDependencyPlan(context, &operation, accepted.value, review.package_base, request.pkgbuild_path);
+        if (!std.mem.eql(u8, accepted.value.planDigest, environment.value.planDigest)) return error.DependencyPlanMismatch;
     }
 
     const source_keys = if (optionEnabled(invocation, "--skip-source-pgp-verification"))
@@ -1708,7 +1793,7 @@ fn runIsolatedCoordinator(
     defer context.allocator.free(executable_allocated);
     const executable = std.mem.trimEnd(u8, executable_allocated, " (deleted)");
     operation.status(.information, "Provisioning clean build root", "build.isolation.provision", null);
-    try root.bootstrap(context.environ, executable, bootstrap_packages.items, context.config_path, &operation);
+    try root.bootstrapPlanned(context.environ, executable, context.config_path, environment_json, &operation);
     try root.stageReviewedInputs(context.environ, pkgbuild_content, review.reviewed_files, &operation);
 
     try root.stageExecutable(executable);
@@ -1784,6 +1869,7 @@ fn runIsolatedCoordinator(
     return .{
         .package_base = try context.allocator.dupe(u8, review.package_base),
         .review_digest = review.digest,
+        .dependency_plan_digest = try parseReviewDigest(environment.value.planDigest),
         .isolated = true,
         .artifacts = command_artifacts,
     };
@@ -1867,6 +1953,12 @@ fn buildIsolatedChildArguments(
             std.mem.startsWith(u8, argument, "--json=") or
             std.mem.eql(u8, argument, "-j") or
             std.mem.eql(u8, argument, "--")) continue;
+        if (std.mem.eql(u8, argument, "--dependency-plan")) {
+            if (index + 1 >= arguments.len) return error.InvalidDependencyPlanOptions;
+            index += 1;
+            continue;
+        }
+        if (std.mem.startsWith(u8, argument, "--dependency-plan=")) continue;
         if (std.mem.eql(u8, argument, "--package-destination")) {
             if (index + 1 >= arguments.len) return error.MissingPackageDestination;
             index += 1;
@@ -2198,6 +2290,7 @@ const AlpmResolverContext = struct {
 const ReviewRepositories = struct {
     manager: *PackageManager.Manager,
     database_path: ?[]u8,
+    configuration_digest: [64]u8,
 
     fn init(
         context: *runtime.RuntimeContext,
@@ -2224,18 +2317,21 @@ const ReviewRepositories = struct {
         else
             null;
         defer if (log_path) |path| context.allocator.free(path);
+        var configuration_digest: [64]u8 = undefined;
         const manager = try PackageManager.Manager.init(context.allocator, context.environ, .{
             .config_path = config_path orelse context.config_path,
+            .configuration_digest = &configuration_digest,
             .use_root = false,
             .operation_context = operation_context,
             .database_path = database_path,
+            .cache_directory = database_path,
             .log_file = log_path,
         });
         errdefer manager.deinit();
         // Like an unprivileged upgrade preview, defer signature enforcement
         // to the provisioning transaction, which uses the host trust policy.
         if (database_path != null) try manager.sync_for_update_check(false);
-        return .{ .manager = manager, .database_path = database_path };
+        return .{ .manager = manager, .database_path = database_path, .configuration_digest = configuration_digest };
     }
 
     fn deinit(self: *ReviewRepositories, context: *runtime.RuntimeContext) void {
@@ -2704,11 +2800,25 @@ fn loadBuildConfiguration(context: *runtime.RuntimeContext, invocation: *const p
     return configuration;
 }
 
+fn writeDependencyResolutionError(writer: *std.Io.Writer, err: anyerror) !void {
+    var json: std.json.Stringify = .{ .writer = writer };
+    try json.write(.{
+        .schemaVersion = @as(u32, 1),
+        .capability = "build.resolve-dependencies",
+        .isolated = true,
+        .complete = false,
+        .@"error" = .{ .code = @errorName(err), .message = buildErrorMessage(err) },
+    });
+}
+
 fn reportConfigurationError(context: *runtime.RuntimeContext, invocation: *const parser.Invocation, err: anyerror) !u8 {
     try context.stderr.print("{s}\n", .{buildErrorMessage(err)});
     try context.stderr.flush();
     if (invocation.globals.json) {
-        try writeBuildJson(context.stdout, null, err, isolatedRequested(invocation));
+        if (optionEnabled(invocation, "--resolve-dependencies"))
+            try writeDependencyResolutionError(context.stdout, err)
+        else
+            try writeBuildJson(context.stdout, null, err, isolatedRequested(invocation));
         try context.stdout.writeByte('\n');
         try context.stdout.flush();
     }
@@ -2760,6 +2870,8 @@ fn exitCodeForBuildError(err: anyerror) u8 {
         error.ReviewOnlyRequiresJson,
         error.InvalidPkgbuildPath,
         error.MissingPackageName,
+        error.InvalidDependencyPlanOptions,
+        error.UnsupportedDependencyPlan,
         error.InvalidCompressionLevel,
         error.UnsupportedCompressionPresetFormat,
         => 2,
@@ -2767,8 +2879,78 @@ fn exitCodeForBuildError(err: anyerror) u8 {
     };
 }
 
+/// Keep the plan's diagnostics alive after the review/plan arenas are released.
+/// The failure event reaches both the renderer and transaction log; the owned
+/// preparation diagnostic also survives into the coordinator's JSON response.
+fn validateBuildDependencyPlan(
+    context: *runtime.RuntimeContext,
+    operation: *const PackageManager.Operation,
+    plan: build_plan.Plan,
+    package_name: []const u8,
+    pkgbuild_path: []const u8,
+) !void {
+    plan.validate(context.allocator) catch |err| {
+        if (err != error.IncompleteDependencyPlan and err != error.MissingArtifactHash) return err;
+        var message: std.Io.Writer.Allocating = .init(context.allocator);
+        defer message.deinit();
+        try message.writer.writeAll(buildErrorMessage(err));
+        for (plan.unresolved) |issue| {
+            const reason = if (std.mem.eql(u8, issue.code, "not_in_repositories"))
+                "not found in configured repositories"
+            else if (std.mem.eql(u8, issue.code, "unsatisfied_dependency"))
+                "no package satisfies the dependency"
+            else if (std.mem.eql(u8, issue.code, "not_in_environment"))
+                "missing from the resolved build environment"
+            else if (std.mem.eql(u8, issue.code, "missing_artifact_sha256"))
+                "repository metadata has no valid SHA-256 archive hash"
+            else
+                "dependency resolution failed";
+            try message.writer.print("\n- {f} (required by {f}): {s} [{f}]", .{
+                diagnostics.safe(issue.requirement), diagnostics.safe(issue.requiredBy), reason, diagnostics.safe(issue.code),
+            });
+        }
+        for (plan.choices) |choice| {
+            try message.writer.print("\n- {f}: a provider must be selected; candidates:", .{diagnostics.safe(choice.requirement)});
+            for (choice.candidates) |candidate| try message.writer.print(" {f}", .{diagnostics.safe(candidate)});
+        }
+        // An externally supplied plan can claim completeness despite bad hashes.
+        // Report every invalid hash, including those not listed in unresolved.
+        for (plan.packages) |package| {
+            if (PackageManager.Manager.build_transaction.validHash(package.sha256 orelse "")) continue;
+            var already_reported = false;
+            for (plan.unresolved) |issue| {
+                if (std.mem.eql(u8, issue.code, "missing_artifact_sha256") and std.mem.eql(u8, issue.requirement, package.name)) {
+                    already_reported = true;
+                    break;
+                }
+            }
+            if (!already_reported) try message.writer.print("\n- {f} (repository {f}): repository metadata has no valid SHA-256 archive hash [missing_artifact_sha256]", .{
+                diagnostics.safe(package.name), diagnostics.safe(package.repository),
+            });
+        }
+        if (plan.packages.len == 0) try message.writer.writeAll("\n- No packages were selected for the build environment.");
+        if (plan.architectures.len == 0) try message.writer.writeAll("\n- No target architecture was recorded in the dependency plan.");
+        if (!plan.isolated) try message.writer.writeAll("\n- The dependency plan does not describe an isolated build environment.");
+
+        if (context.preparation_diagnostic) |destination| {
+            var diagnostic = try PackageManager.pkgbuild.parser.Diagnostic.init(context.allocator, "", pkgbuild_path, package_name, "dependencies", null, err);
+            errdefer diagnostic.deinit();
+            diagnostic.message = try diagnostic.arena.allocator().dupe(u8, message.written());
+            if (destination.*) |*previous| previous.deinit();
+            destination.* = diagnostic;
+        }
+        operation.reportError(err, message.written(), "build.dependencies", null, false);
+        return err;
+    };
+}
+
 fn buildErrorMessage(err: anyerror) []const u8 {
     return switch (err) {
+        error.DependencyPlanMismatch => "The dependency plan no longer matches the reviewed inputs, build policy, repositories, or selected packages. Resolve and review a new plan before building.",
+        error.IncompleteDependencyPlan => "The dependency plan is incomplete. Resolve the dependency or repository metadata issues listed below before building.",
+        error.UnsupportedDependencyPlan => "This dependency plan schema is unsupported. Resolve a new plan with this version of Shelly.",
+        error.InvalidDependencyPlanOptions => "Dependency resolution requires --isolated and --json, and cannot be combined with installation, review-only, or a supplied plan. A supplied plan requires an isolated build.",
+        error.MissingArtifactHash => "A selected package has no valid SHA-256 archive hash. Publish repository metadata containing artifact hashes before building.",
         error.ReviewedPkgbuildChanged => "The reviewed PKGBUILD inputs changed before the build started. Review the current PKGBUILD and source files again, then restart the build.",
         error.InvalidReviewDigest => "The review digest must be 64 hexadecimal characters.",
         error.MissingReviewDigest => "Could not start the build because the coordinator did not provide a review digest. Review the PKGBUILD again and restart the build.",
@@ -2834,6 +3016,13 @@ fn writeBuildJsonWithDiagnostic(
     try json.objectField("reviewDigest");
     if (result) |value| {
         if (value.review_digest) |digest| {
+            const encoded = std.fmt.bytesToHex(digest, .lower);
+            try json.write(&encoded);
+        } else try json.write(null);
+    } else try json.write(null);
+    try json.objectField("dependencyPlanDigest");
+    if (result) |value| {
+        if (value.dependency_plan_digest) |digest| {
             const encoded = std.fmt.bytesToHex(digest, .lower);
             try json.write(&encoded);
         } else try json.write(null);
@@ -2924,6 +3113,16 @@ fn writeReviewOnlyJson(writer: *std.Io.Writer, result: *ReviewOnlyResult) !void 
         try json.endObject();
     }
     try json.endArray();
+    if (result.environment_plan) |plan| {
+        try json.objectField("dependencyPlan");
+        try json.write(plan);
+        // Preserve private review transport fields while isolated coordinators
+        // consume only dependencyPlan. Host builds retain their existing path.
+        try json.objectField("repositoryDependencies");
+        try json.write(@as([]const []const u8, &.{}));
+        try json.objectField("aurDependencies");
+        try json.write(@as([]const []const u8, &.{}));
+    }
     if (result.dependency_plan) |plan| {
         try json.objectField("repositoryDependencies");
         try json.beginArray();
@@ -2949,8 +3148,14 @@ fn coordinatorReviewArguments(
     var arguments: std.ArrayList([]const u8) = .empty;
     defer arguments.deinit(allocator);
     try arguments.appendSlice(allocator, &.{ "build", "--review-only", "--review-dependencies", "--json", "--no-confirm" });
-    if (dependency_mode == .host)
+    if (dependency_mode == .host) {
         try arguments.append(allocator, "--review-host-dependencies");
+    } else {
+        try arguments.append(allocator, "--review-build-environment");
+    }
+    if (optionEnabled(invocation, "--no-check")) try arguments.append(allocator, "--no-check");
+    if (optionEnabled(invocation, "--check")) try arguments.append(allocator, "--check");
+    if (optionValue(invocation, "--compression-level")) |level| try arguments.appendSlice(allocator, &.{ "--compression-level", level });
     for (invocation.options) |option| {
         if (!std.mem.eql(u8, option.name, "--package")) continue;
         try arguments.append(allocator, "--package");
@@ -3292,7 +3497,7 @@ test "package selection intent distinguishes implicit all from explicit members"
     try std.testing.expect(hasPackageSelection(&selected.dispatch));
 }
 
-test "makesrcinfo emits clean stdout and never runs lifecycle functions" {
+test "makesrcinfo updates pkgver with clean stdout and preserves existing sources" {
     const spec = @import("../cli/spec.zig");
     var test_context: test_support.TestContext = .{};
     test_context.init();
@@ -3312,7 +3517,10 @@ test "makesrcinfo emits clean stdout and never runs lifecycle functions" {
             "_enable_plasmoid=${{SYNCTHING_TRAY_ENABLE_PLASMOID:-1}}\n" ++
             "makedepends=('cmake')\n" ++
             "[[ $_enable_plasmoid ]] && makedepends+=('libplasma' 'extra-cmake-modules')\n" ++
-            "pkgver() {{ touch '{s}'; printf 2; }}\n" ++
+            "verify() {{ echo verify-output; printf verified > \"$SRCDEST/verified\"; }}\n" ++
+            "prepare() {{ echo prepare-output; touch prepared; }}\n" ++
+            "pkgver() {{ test -f prepared; printf 2; }}\n" ++
+            "check() {{ touch '{s}'; }}\n" ++
             "build() {{ touch '{s}'; }}\n" ++
             "package() {{ touch '{s}'; }}\n",
         .{ marker_path, marker_path, marker_path },
@@ -3322,10 +3530,14 @@ test "makesrcinfo emits clean stdout and never runs lifecycle functions" {
     pkgbuild.close(std.testing.io);
 
     try temporary.dir.createDirPath(std.testing.io, ".config/shelly");
+    const source_cache = try std.fs.path.join(test_context.arena.allocator(), &.{ directory_path, "source-cache" });
+    const configuration = try std.fmt.allocPrint(test_context.arena.allocator(), "[build.env]\nBUILD_ENV_DESCRIPTION = 'Dynamic description'\n[destinations]\nsources = '{s}'\n", .{source_cache});
     try temporary.dir.writeFile(std.testing.io, .{
         .sub_path = ".config/shelly/shellybuild.conf",
-        .data = "[build.env]\nBUILD_ENV_DESCRIPTION = 'Dynamic description'\n",
+        .data = configuration,
     });
+    try temporary.dir.createDirPath(std.testing.io, "src");
+    try temporary.dir.writeFile(std.testing.io, .{ .sub_path = "src/keep", .data = "existing build" });
     const environ = try testEnvironWithHome(std.testing.allocator, directory_path);
     defer environ.block.deinit(std.testing.allocator);
     test_context.context.environ = environ;
@@ -3364,7 +3576,7 @@ test "makesrcinfo emits clean stdout and never runs lifecycle functions" {
         try executeMakeSrcinfo(&test_context.context, &outcome.dispatch),
     );
     try std.testing.expectEqualStrings(
-        "pkgbase = demo\n\tpkgdesc = Dynamic description\n\tpkgver = 1\n\tpkgrel = 1\n" ++
+        "pkgbase = demo\n\tpkgdesc = Dynamic description\n\tpkgver = 2\n\tpkgrel = 1\n" ++
             "\tarch = any\n\tmakedepends = cmake\n\tmakedepends = libplasma\n" ++
             "\tmakedepends = extra-cmake-modules\n\npkgname = demo\n",
         test_context.stdout.writer.buffered(),
@@ -3378,6 +3590,55 @@ test "makesrcinfo emits clean stdout and never runs lifecycle functions" {
         error.FileNotFound,
         std.Io.Dir.cwd().access(std.testing.io, marker_path, .{}),
     );
+    try temporary.dir.access(std.testing.io, "source-cache/verified", .{});
+    const kept = try temporary.dir.readFileAlloc(std.testing.io, "src/keep", std.testing.allocator, .unlimited);
+    defer std.testing.allocator.free(kept);
+    try std.testing.expectEqualStrings("existing build", kept);
+    const updated = try temporary.dir.readFileAlloc(std.testing.io, "PKGBUILD", std.testing.allocator, .unlimited);
+    defer std.testing.allocator.free(updated);
+    try std.testing.expect(std.mem.indexOf(u8, updated, "pkgver='2'\n") != null);
+}
+
+test "makesrcinfo honors noverify and emits no stdout on preparation failure" {
+    const spec = @import("../cli/spec.zig");
+    for ([_]bool{ false, true }) |noverify| {
+        var test_context: test_support.TestContext = .{};
+        test_context.init();
+        defer test_context.deinit();
+        var temporary = std.testing.tmpDir(.{ .iterate = true });
+        defer temporary.cleanup();
+        const allocator = test_context.arena.allocator();
+        const directory = try temporary.dir.realPathFileAlloc(std.testing.io, ".", allocator);
+        const path = try std.fs.path.join(allocator, &.{ directory, "PKGBUILD" });
+        try temporary.dir.writeFile(std.testing.io, .{ .sub_path = "PKGBUILD", .data =
+            \\pkgname=demo
+            \\pkgver=1
+            \\pkgrel=7
+            \\arch=('any')
+            \\verify() { echo verification-failed; exit 42; }
+            \\pkgver() { printf r42.gabcdef0; }
+            \\package() { exit 42; }
+        });
+        const environ = try testEnvironWithHome(std.testing.allocator, directory);
+        defer environ.block.deinit(std.testing.allocator);
+        test_context.context.environ = environ;
+        const manifest = try spec.Manifest.load(allocator);
+        var args: std.ArrayList([]const u8) = .empty;
+        try args.appendSlice(allocator, &.{ "build", "--makesrcinfo", "--reviewed", "--no-confirm", path });
+        if (noverify) try args.append(allocator, "--noverify");
+        const outcome = try parser.parse(allocator, &manifest, args.items);
+        const code = try executeMakeSrcinfo(&test_context.context, &outcome.dispatch);
+        if (noverify) {
+            try std.testing.expectEqual(@as(u8, 0), code);
+            try std.testing.expect(std.mem.indexOf(u8, test_context.stdout.writer.buffered(), "pkgver = r42.gabcdef0\n\tpkgrel = 1\n") != null);
+        } else {
+            try std.testing.expect(code != 0);
+            try std.testing.expectEqualStrings("", test_context.stdout.writer.buffered());
+        }
+        var entries = temporary.dir.iterate();
+        while (try entries.next(std.testing.io)) |entry|
+            try std.testing.expect(!std.mem.startsWith(u8, entry.name, "demo-"));
+    }
 }
 
 test "sync deps options parse under both spellings" {
@@ -4741,4 +5002,257 @@ test "sync deps keeps versioned global inputs even when a sibling will provide t
     try std.testing.expectEqualStrings("compiler", plan.repo_dependencies[0].name);
     try std.testing.expectEqual(PackageManager.aur.dependency_resolver.Role.runtime, plan.repo_dependencies[0].role);
     try std.testing.expectEqualStrings("native-lib", plan.repo_dependencies[1].name);
+}
+
+test "dependency plan CLI resolves bootstrap and checks with either native configuration filename" {
+    const allocator = std.testing.allocator;
+    const io = std.testing.io;
+    var temporary = std.testing.tmpDir(.{});
+    defer temporary.cleanup();
+    const directory = try temporary.dir.realPathFileAlloc(io, ".", allocator);
+    defer allocator.free(directory);
+    try temporary.dir.createDir(io, "mirror", .default_dir);
+    {
+        var file = try temporary.dir.createFile(io, "mirror/planning.db", .{});
+        defer file.close(io);
+        var buffer: [4096]u8 = undefined;
+        var writer = file.writer(io, &buffer);
+        var tar: std.tar.Writer = .{ .underlying_writer = &writer.interface };
+        var targets: std.ArrayList([]const u8) = .empty;
+        defer targets.deinit(allocator);
+        try targets.appendSlice(allocator, PackageManager.Manager.bootstrap.build_root.packages);
+        try targets.appendSlice(allocator, &.{ "recipe-tool", "check-tool" });
+        for (targets.items) |name| {
+            const desc = try std.fmt.allocPrint(allocator, "%NAME%\n{s}\n\n%VERSION%\n1-1\n\n%ARCH%\nany\n\n%FILENAME%\n{s}-1-1-any.pkg.tar\n\n%SHA256SUM%\n{s}\n\n", .{ name, name, "ab" ** 32 });
+            defer allocator.free(desc);
+            const entry = try std.fmt.allocPrint(allocator, "{s}-1-1/desc", .{name});
+            defer allocator.free(entry);
+            try tar.writeFileBytes(entry, desc, .{ .mode = 0o644 });
+        }
+        try tar.finishPedantically();
+        try writer.interface.flush();
+    }
+    const configuration = try std.fmt.allocPrint(allocator, "[options]\nArchitecture = x86_64\nDBPath = {s}/host-db\nCacheDir = {s}/host-cache\nLogFile = {s}/host.log\nSigLevel = Never\nInclude = {s}/repositories.conf\n", .{ directory, directory, directory, directory });
+    defer allocator.free(configuration);
+    const repos = try std.fmt.allocPrint(allocator, "[planning]\nServer = file://{s}/mirror\n", .{directory});
+    defer allocator.free(repos);
+    try temporary.dir.writeFile(io, .{ .sub_path = "repositories.conf", .data = repos });
+    try temporary.dir.writeFile(io, .{ .sub_path = "pacman.conf", .data = configuration });
+    try temporary.dir.writeFile(io, .{ .sub_path = "shelly.conf", .data = configuration });
+    try temporary.dir.writeFile(io, .{ .sub_path = "PKGBUILD", .data = "pkgname=plan-demo\npkgver=1\npkgrel=1\narch=('any')\nmakedepends=('recipe-tool')\ncheckdepends=('check-tool')\nbuild() { touch SHOULD_NOT_EXIST; }\ncheck() { touch SHOULD_NOT_EXIST; }\npackage() { depends=('output-only'); touch SHOULD_NOT_EXIST; }\n" });
+    const original_backend = PackageManager.Manager.defaultBackend();
+    defer PackageManager.Manager.setDefaultBackend(original_backend) catch unreachable;
+    for ([_]PackageManager.Manager.Backend{ .libalpm, .rlpm }) |backend| {
+        if (!backend.available()) continue;
+        try PackageManager.Manager.setDefaultBackend(backend);
+        var previous_digest: ?[]u8 = null;
+        defer if (previous_digest) |digest| allocator.free(digest);
+        for ([_][]const u8{ "pacman.conf", "shelly.conf" }) |filename| {
+            var context: test_support.TestContext = .{};
+            context.init();
+            defer context.deinit();
+            const a = context.arena.allocator();
+            context.context.environ = std.testing.environ;
+            context.context.config_path = try std.fs.path.join(a, &.{ directory, filename });
+            const path = try std.fs.path.join(a, &.{ directory, "PKGBUILD" });
+            const manifest = try @import("../cli/spec.zig").Manifest.load(a);
+            const parsed = try parser.parse(a, &manifest, &.{ "build", "--resolve-dependencies", "--isolated", "--json", "--check", path });
+            try std.testing.expectEqual(@as(?u8, 0), try dispatch(&context.context, &parsed.dispatch));
+            var report = try std.json.parseFromSlice(build_plan.Plan, a, context.stdout.written(), .{ .allocate = .alloc_always });
+            defer report.deinit();
+            try report.value.validate(a);
+            try std.testing.expect(report.value.check);
+            try std.testing.expectEqual(PackageManager.Manager.bootstrap.build_root.packages.len + 2, report.value.packages.len);
+            if (previous_digest) |digest| try std.testing.expectEqualStrings(digest, report.value.planDigest) else previous_digest = try allocator.dupe(u8, report.value.planDigest);
+            context.stdout.clearRetainingCapacity();
+            const unchecked = try parser.parse(a, &manifest, &.{ "build", "--resolve-dependencies", "--isolated", "--json", "--no-check", path });
+            try std.testing.expectEqual(@as(?u8, 0), try dispatch(&context.context, &unchecked.dispatch));
+            var without_checks = try std.json.parseFromSlice(build_plan.Plan, a, context.stdout.written(), .{ .allocate = .alloc_always });
+            defer without_checks.deinit();
+            try without_checks.value.validate(a);
+            try std.testing.expectEqual(report.value.packages.len - 1, without_checks.value.packages.len);
+            try std.testing.expect(!std.mem.eql(u8, report.value.planDigest, without_checks.value.planDigest));
+        }
+    }
+    for ([_][]const u8{ "SHOULD_NOT_EXIST", "host-db", "host-cache", "host.log" }) |path|
+        try std.testing.expectError(error.FileNotFound, temporary.dir.access(io, path, .{}));
+}
+
+test "dependency plan configuration digest covers included policy and strict read errors" {
+    var temporary = std.testing.tmpDir(.{});
+    defer temporary.cleanup();
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    const io = std.testing.io;
+    const path = try temporary.dir.realPathFileAlloc(io, ".", a);
+    const config_path = try std.fs.path.join(a, &.{ path, "shelly.conf" });
+    try temporary.dir.writeFile(io, .{ .sub_path = "shelly.conf", .data = try std.fmt.allocPrint(a, "[options]\nInclude = {s}/policy.conf\n", .{path}) });
+    try temporary.dir.writeFile(io, .{ .sub_path = "policy.conf", .data = "Architecture = x86_64\nSigLevel = Never\n[local]\nServer = file:///repo-one\n" });
+    const Configuration = PackageManager.Manager.configuration.Configuration;
+    var config = try Configuration.parseStrict(a, io, config_path);
+    defer config.deinitialize();
+    const original = try build_plan.configurationDigest(a, &config);
+    try temporary.dir.writeFile(io, .{ .sub_path = "policy.conf", .data = "Architecture = x86_64\nSigLevel = Required\n[local]\nServer = file:///repo-two\n" });
+    var changed = try Configuration.parseStrict(a, io, config_path);
+    defer changed.deinitialize();
+    try std.testing.expect(!std.mem.eql(u8, original, try build_plan.configurationDigest(a, &changed)));
+    try temporary.dir.deleteFile(io, "policy.conf");
+    try std.testing.expectError(error.ConfigReadFailed, Configuration.parseStrict(a, io, config_path));
+}
+
+test "dependency plan flags reject host installation and stay out of the guest" {
+    var context: test_support.TestContext = .{};
+    context.init();
+    defer context.deinit();
+    const a = context.arena.allocator();
+    const manifest = try @import("../cli/spec.zig").Manifest.load(a);
+    const invalid = try parser.parse(a, &manifest, &.{ "build", "--resolve-dependencies", "--isolated", "--install", "--json", "/missing/PKGBUILD" });
+    try std.testing.expectEqual(@as(?u8, 2), try dispatch(&context.context, &invalid.dispatch));
+    for ([_][]const []const u8{
+        &.{ "build", "--isolated", "--dependency-plan", "/host/plan.json", "/host/PKGBUILD" },
+        &.{ "build", "--isolated", "--dependency-plan=/host/plan.json", "/host/PKGBUILD" },
+    }) |args| {
+        const guest = try buildIsolatedChildArguments(a, args, "/host/PKGBUILD", "ab" ** 32, false);
+        for (guest) |arg| try std.testing.expect(std.mem.indexOf(u8, arg, "dependency-plan") == null);
+    }
+}
+
+test "dependency plan failures retain every issue in stderr transaction log and build JSON" {
+    const Runner = struct {
+        result: ?BuildCommandResult = null,
+        child_json: ?[]const u8 = null,
+        child_exit_code: u8 = 1,
+
+        fn run(_: *@This(), context: *runtime.RuntimeContext, operations: *PackageManager.OperationContext, _: *const parser.Invocation) !void {
+            var operation = operations.begin(.{ .backend = .aur, .kind = .build, .subject = "python-virtualenv" });
+            defer operation.finish(.failed);
+            // Match the coordinator's short-lived parsed review/plan storage.
+            var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+            defer arena.deinit();
+            const issues = try arena.allocator().dupe(build_plan.Unresolved, &.{
+                .{ .requirement = "python-hatchling>=1", .requiredBy = "PKGBUILD", .code = "not_in_repositories" },
+                .{ .requirement = "python-platformdirs>=4", .requiredBy = "python-virtualenv", .code = "unsatisfied_dependency" },
+                .{ .requirement = "python-filelock", .requiredBy = "python-virtualenv", .code = "not_in_environment" },
+                .{ .requirement = "python-distlib", .requiredBy = "devario-libs", .code = "missing_artifact_sha256" },
+                .{ .requirement = "transaction", .requiredBy = "environment", .code = "ConflictingDependencies" },
+            });
+            for (issues) |*issue| {
+                issue.requirement = try arena.allocator().dupe(u8, issue.requirement);
+                issue.requiredBy = try arena.allocator().dupe(u8, issue.requiredBy);
+                issue.code = try arena.allocator().dupe(u8, issue.code);
+            }
+            try validateBuildDependencyPlan(context, &operation, .{
+                .reviewDigest = "",
+                .configurationDigest = "",
+                .buildPolicyDigest = "",
+                .backend = "rlpm",
+                .bootstrapProfile = "rlpm-only",
+                .architectures = &.{"x86_64"},
+                .check = false,
+                .repositories = &.{},
+                .requirements = &.{},
+                .unresolved = issues,
+            }, "python-virtualenv", "/build/PKGBUILD");
+        }
+
+        fn setFailure(_: *@This(), _: std.mem.Allocator, _: anyerror) !void {}
+    };
+    const allocator = std.testing.allocator;
+    const io = std.testing.io;
+    var temporary = std.testing.tmpDir(.{});
+    defer temporary.cleanup();
+    const directory = try temporary.dir.realPathFileAlloc(io, ".", allocator);
+    defer allocator.free(directory);
+    const log_path = try std.fs.path.join(allocator, &.{ directory, "shelly.log" });
+    defer allocator.free(log_path);
+    const rotated_path = try std.fmt.allocPrint(allocator, "{s}.1", .{log_path});
+    defer allocator.free(rotated_path);
+    const log = @import("../runtime/log.zig");
+    var session = log.SessionLog.tryOpenAt(io, log_path, rotated_path) orelse return error.CouldNotOpenTestLog;
+    defer session.close();
+    var transaction_log = log.TransactionLog.init(&session, allocator);
+    var context: test_support.TestContext = .{};
+    context.init();
+    defer context.deinit();
+    context.context.transaction_log = &transaction_log;
+    var diagnostic: ?PackageManager.pkgbuild.parser.Diagnostic = null;
+    defer if (diagnostic) |*value| value.deinit();
+    context.context.preparation_diagnostic = &diagnostic;
+    const a = context.arena.allocator();
+    const manifest = try @import("../cli/spec.zig").Manifest.load(a);
+    const parsed = try parser.parse(a, &manifest, &.{ "build", "--isolated", "--json", "--no-confirm", "/build/PKGBUILD" });
+    var runner: Runner = .{};
+    try std.testing.expectEqual(@as(u8, 1), try executeJson(&context.context, &parsed.dispatch, &runner));
+
+    const contents = try temporary.dir.readFileAlloc(io, "shelly.log", allocator, .limited(64 * 1024));
+    defer allocator.free(contents);
+    var document = try std.json.parseFromSlice(std.json.Value, allocator, context.stdout.written(), .{});
+    defer document.deinit();
+    try std.testing.expect(!document.value.object.get("success").?.bool);
+    const failure = document.value.object.get("error").?.object;
+    try std.testing.expectEqualStrings("IncompleteDependencyPlan", failure.get("code").?.string);
+    const message = failure.get("message").?.string;
+    for ([_][]const u8{
+        "python-hatchling>=1 (required by PKGBUILD): not found in configured repositories [not_in_repositories]",
+        "python-platformdirs>=4 (required by python-virtualenv): no package satisfies the dependency [unsatisfied_dependency]",
+        "python-filelock (required by python-virtualenv): missing from the resolved build environment [not_in_environment]",
+        "python-distlib (required by devario-libs): repository metadata has no valid SHA-256 archive hash [missing_artifact_sha256]",
+        "transaction (required by environment): dependency resolution failed [ConflictingDependencies]",
+    }) |expected| {
+        try std.testing.expect(std.mem.indexOf(u8, context.stderr.written(), expected) != null);
+        try std.testing.expect(std.mem.indexOf(u8, contents, expected) != null);
+        try std.testing.expect(std.mem.indexOf(u8, message, expected) != null);
+    }
+    try std.testing.expectEqual(@as(usize, 1), std.mem.count(u8, context.stderr.written(), "python-hatchling>=1"));
+    try std.testing.expectEqualStrings("dependencies", failure.get("context").?.object.get("field").?.string);
+    try std.testing.expectEqualStrings(log_path, failure.get("context").?.object.get("logPath").?.string);
+}
+
+test "dependency plan validation reports all bad hashes and accepts complete plans quietly" {
+    const allocator = std.testing.allocator;
+    var context: test_support.TestContext = .{};
+    context.init();
+    defer context.deinit();
+    context.context.allocator = allocator;
+    var diagnostic: ?PackageManager.pkgbuild.parser.Diagnostic = null;
+    defer if (diagnostic) |*value| value.deinit();
+    context.context.preparation_diagnostic = &diagnostic;
+    var operations = PackageManager.OperationContext.init(allocator, std.testing.io);
+    defer operations.deinit();
+    var operation = operations.begin(.{ .backend = .aur, .kind = .build });
+    defer operation.finish(.failed);
+    var packages = [_]PackageManager.Manager.build_transaction.Package{
+        .{ .name = "first", .repository = "fixture", .version = "1-1", .architecture = "any", .filename = "first.pkg.tar", .sha256 = null, .depends = &.{}, .provides = &.{}, .groups = &.{} },
+        .{ .name = "second", .repository = "fixture", .version = "1-1", .architecture = "any", .filename = "second.pkg.tar", .sha256 = "bad", .depends = &.{}, .provides = &.{}, .groups = &.{} },
+    };
+    var plan: build_plan.Plan = .{
+        .complete = true,
+        .reviewDigest = "",
+        .configurationDigest = "",
+        .buildPolicyDigest = "",
+        .backend = "rlpm",
+        .bootstrapProfile = "rlpm-only",
+        .architectures = &.{"x86_64"},
+        .check = false,
+        .repositories = &.{},
+        .requirements = &.{},
+        .packages = &packages,
+    };
+    {
+        const digest = try plan.digest(allocator);
+        defer allocator.free(digest);
+        plan.planDigest = digest;
+        try std.testing.expectError(error.MissingArtifactHash, validateBuildDependencyPlan(&context.context, &operation, plan, "demo", "/PKGBUILD"));
+        try std.testing.expect(std.mem.indexOf(u8, diagnostic.?.message, "first (repository fixture)") != null);
+        try std.testing.expect(std.mem.indexOf(u8, diagnostic.?.message, "second (repository fixture)") != null);
+    }
+    diagnostic.?.deinit();
+    diagnostic = null;
+    for (&packages) |*package| package.sha256 = "ab" ** 32;
+    const digest = try plan.digest(allocator);
+    defer allocator.free(digest);
+    plan.planDigest = digest;
+    try validateBuildDependencyPlan(&context.context, &operation, plan, "demo", "/PKGBUILD");
+    try std.testing.expect(diagnostic == null);
 }

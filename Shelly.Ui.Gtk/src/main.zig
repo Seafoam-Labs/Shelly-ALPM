@@ -21,6 +21,8 @@ var app_id_buffer: [deep_link.max_app_id_len + 1]u8 = undefined;
 var requested_app_id: ?[:0]const u8 = null;
 var app_path_buffer: [deep_link.max_file_path_len + 1]u8 = undefined;
 var requested_app_path: ?[:0]const u8 = null;
+var appimage_path_buffer: [deep_link.max_file_path_len + 1]u8 = undefined;
+var requested_appimage_path: ?[:0]const u8 = null;
 
 pub fn main(init: std.process.Init) void {
     runtime.io = init.io;
@@ -63,6 +65,10 @@ fn commandLine(
     cmdline: *gio.ApplicationCommandLine,
     _: ?*anyopaque,
 ) callconv(.c) c_int {
+    requested_page = null;
+    requested_app_id = null;
+    requested_app_path = null;
+    requested_appimage_path = null;
     var argc: c_int = 0;
     const argv = gio.ApplicationCommandLine.getArguments(cmdline, &argc);
     const argc_usize = @as(usize, @intCast(argc));
@@ -95,10 +101,16 @@ fn commandLine(
         if (deep_link.extractLocalFlatpakFile(arg, &app_path_buffer)) |app_path| {
             requested_app_path = app_path;
         }
+
+        if (deep_link.extractLocalAppImageFile(arg, &appimage_path_buffer)) |appimage_path| {
+            requested_appimage_path = appimage_path;
+        }
     }
 
     if (requested_app_path) |app_path| {
         runtime.queueLocalFlatpakPath(app_path);
+    } else if (requested_appimage_path) |appimage_path| {
+        runtime.queueLocalAppImagePath(appimage_path);
     } else if (requested_app_id) |id| {
         runtime.queueFlatpakApp(id);
     } else if (requested_page) |page| {
@@ -117,6 +129,7 @@ fn dispatchPendingNavigation(window: *ShellyWindow) void {
         .page => |target| window.navigateTo(target),
         .flatpak_app => |app| window.openFlatpakApp(app.id()),
         .local_flatpak_file => |file| window.openFlatpakLocalFile(file.path()),
+        .local_appimage_file => |file| window.openAppImageLocalFile(file.path()),
     };
 
     if (!navigated) {
@@ -253,6 +266,7 @@ test {
     _ = @import("services/ui_config_resolver.zig");
     _ = @import("services/shelly_cli.zig");
     _ = @import("services/tray_service.zig");
+    _ = @import("helpers/a11y.zig");
     _ = @import("g_objects/appstream_app_object.zig");
     _ = @import("helpers/custom_ui_comps/carousel.zig");
     _ = @import("helpers/custom_ui_comps/carousel_indicator_dots.zig");

@@ -21,6 +21,10 @@
           <property name="vexpand">true</property>
           <property name="halign">fill</property>
           <property name="valign">fill</property>
+          <property name="accessible-role">dialog</property>
+          <accessibility>
+            <property name="modal">true</property>
+          </accessibility>
           <style>
             <class name="lockout-scrim"/>
           </style>

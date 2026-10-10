@@ -1,5 +1,6 @@
 //! RLPM implementation of the native package facade. No libalpm imports.
 const std = @import("std");
+const build_transaction = @import("../alpm/build_transaction.zig");
 const os_utilities = @import("../alpm/distribution-hooks/os_utilities.zig");
 const update_notice = @import("../alpm/distribution-hooks/CachyOS/update_notice.zig");
 const restart_checks = @import("../alpm/restarts.zig");
@@ -367,6 +368,9 @@ pub const Manager = struct {
     }
     const Mode = enum { install, archive, remove, upgrade };
     fn execute(self: *Manager, mode: Mode, targets: []const []const u8, flags: types.TransFlag, confirmation: contract.RemovalConfirmation) !void {
+        return self.executeBuild(mode, targets, flags, confirmation, null);
+    }
+    fn executeBuild(self: *Manager, mode: Mode, targets: []const []const u8, flags: types.TransFlag, confirmation: contract.RemovalConfirmation, build_request: ?build_transaction.Request) anyerror!void {
         const error_generation = self.dispatcher.errorGeneration();
         // Failures before a transaction exists also need their original cause
         // delivered before the facade maps it to its compatibility error set.
@@ -419,12 +423,51 @@ pub const Manager = struct {
             .upgrade => unreachable,
         };
         if (mode == .upgrade) try tx.systemUpgrade(false);
-        if (mode == .install) try self.selectOptional(tx, targets, flags, &optional_names);
-        try tx.prepare();
+        if (mode == .install and build_request == null) try self.selectOptional(tx, targets, flags, &optional_names);
+        tx.prepare() catch |err| {
+            if (build_request) |request| if (request.issues) |output| {
+                if (tx.plan()) |failed| {
+                    var issues: std.ArrayList(build_transaction.Issue) = .empty;
+                    for (failed.issues) |issue| switch (issue) {
+                        .missing => |missing| try issues.append(request.allocator, .{
+                            .requirement = try missing.dependency.formatAlloc(request.allocator),
+                            .requiredBy = try request.allocator.dupe(u8, failed.package(missing.requiring).name),
+                            .code = "unsatisfied_dependency",
+                        }),
+                        .target => |target| try issues.append(request.allocator, .{
+                            .requirement = try request.allocator.dupe(u8, target),
+                            .requiredBy = "environment",
+                            .code = "not_in_repositories",
+                        }),
+                        .conflict => |conflict| try issues.append(request.allocator, .{
+                            .requirement = try conflict.reason.formatAlloc(request.allocator),
+                            .requiredBy = try request.allocator.dupe(u8, failed.package(conflict.first).name),
+                            .code = "conflicting_dependencies",
+                        }),
+                        else => {},
+                    };
+                    output.* = try issues.toOwnedSlice(request.allocator);
+                }
+            };
+            return @as(anyerror!void, err);
+        };
         const plan = tx.plan() orelse {
             operation.finish(.success);
             return;
         };
+        if (build_request) |request| {
+            if (plan.removals.len != 0) return error.DependencyPlanMismatch;
+            var snapshots: std.ArrayList(build_transaction.Package) = .empty;
+            for (plan.additions) |addition| {
+                const package = plan.package(addition.package);
+                try snapshots.append(request.allocator, try build_transaction.fromOwned(request.allocator, try owned(request.allocator, package), package.sha256_sum));
+            }
+            try request.finish(try snapshots.toOwnedSlice(request.allocator));
+            if (request.output != null) {
+                operation.finish(.success);
+                return;
+            }
+        }
         if (mode == .remove) for (plan.removals) |id| {
             const name = plan.package(id).name;
             for (self.config.hold_packages.items) |held| if (std.mem.eql(u8, held, name)) {
@@ -530,6 +573,11 @@ pub const Manager = struct {
         const names = try self.allocator.alloc([]const u8, values.len);
         for (values, names) |value, *name| name.* = value;
         return names;
+    }
+    pub fn installBuildTransaction(self: *Manager, values: [][:0]const u8, flags: types.TransFlag, request: build_transaction.Request) !void {
+        const names = try self.namesSlice(values);
+        defer self.allocator.free(names);
+        try self.executeBuild(.install, names, flags, .already_approved, request);
     }
     pub fn install_packages(self: *Manager, values: [][:0]const u8, flags: types.TransFlag) !void {
         const names = try self.namesSlice(values);

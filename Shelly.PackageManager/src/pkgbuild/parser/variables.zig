@@ -4,6 +4,7 @@ const types = @import("types.zig");
 const shell_scan = @import("shell_scan.zig");
 const expansion = @import("expansion.zig");
 const arrays = @import("arrays.zig");
+const parser_diagnostic = @import("diagnostic.zig");
 const PkgbuildParser = @import("parser.zig").PkgbuildParser;
 
 const kvp = types.kvp;
@@ -41,6 +42,14 @@ pub fn apply_assignments(self: PkgbuildParser, content: []const u8, vars: *std.S
     var assignments = word.Assignments{ .input = content };
     while (try assignments.next(self.allocator)) |assignment| {
         if (dynamicOverride(self, assignment.name) != null or dynamicallyUnset(self, assignment.name)) continue;
+        // Package-local assignments can also see the enclosing global arrays.
+        const prefix = if (self.array_reference_content) |global|
+            try std.mem.concat(self.allocator, u8, &.{ global, "\n", content[0..assignment.offset] })
+        else
+            null;
+        defer if (prefix) |owned| self.allocator.free(owned);
+        var at_assignment = self;
+        at_assignment.array_reference_content = prefix orelse content[0..assignment.offset];
         if (std.mem.startsWith(u8, assignment.raw, "(")) {
             if (self.dynamic_array_overrides) |overrides| if (overrides.contains(assignment.name)) continue;
             if (self.dynamic_array_unsets) |unsets| if (unsets.contains(assignment.name)) continue;
@@ -49,7 +58,7 @@ pub fn apply_assignments(self: PkgbuildParser, content: []const u8, vars: *std.S
                 const items = try arrays.parse_array_body_syntax(self.allocator, assignment.raw[1 .. assignment.raw.len - 1]);
                 defer freeStringSlice(self.allocator, items);
                 if (items.len > 0) {
-                    const value = try expansion.resolve_word(self, items[0], vars);
+                    const value = try expansion.resolve_word(at_assignment, items[0], vars);
                     defer self.allocator.free(value.value);
                     try putValue(self, vars, assignment.name, value.value);
                     if (self.unresolved_variables) |unresolved| {
@@ -69,7 +78,20 @@ pub fn apply_assignments(self: PkgbuildParser, content: []const u8, vars: *std.S
             }
             continue;
         }
-        const value = try expansion.resolve_word(self, assignment.raw, vars);
+        const value = expansion.resolve_word(at_assignment, assignment.raw, vars) catch |err| {
+            if (self.diagnostic) |destination| if (destination.* == null) {
+                destination.* = parser_diagnostic.Diagnostic.init(
+                    self.allocator,
+                    content[0 .. @intFromPtr(assignment.raw.ptr) - @intFromPtr(content.ptr) + assignment.raw.len],
+                    self.pkgbuild_path,
+                    self.selected_package_name orelse vars.get("pkgname") orelse "unknown",
+                    assignment.name,
+                    null,
+                    err,
+                ) catch null;
+            };
+            return err;
+        };
         defer self.allocator.free(value.value);
         const was_unresolved = if (self.unresolved_variables) |unresolved| unresolved.contains(assignment.name) else false;
         const joined = if (assignment.append)
@@ -91,6 +113,7 @@ pub fn build_var_hashmap(context: PkgbuildParser, content: []const u8) !std.Stri
     var unresolved = std.StringHashMap(void).init(context.allocator);
     defer unresolved.deinit();
     var self = context;
+    self.array_reference_content = null;
     if (self.unresolved_variables == null) self.unresolved_variables = &unresolved;
     var vars = std.StringHashMap([]const u8).init(self.allocator);
     errdefer free_vars(self.allocator, &vars);

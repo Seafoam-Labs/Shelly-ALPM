@@ -61,6 +61,9 @@ source directory. Devario keyring packages must install their bundles under
 `/usr/share/shelly/keyrings`; the Devario profile does not fall back to the pacman
 bundle directory.
 
+[Isolated dependency plans](build-dependency-plans.md) use these same profiles and
+configuration rules for both resolution and pinned provisioning.
+
 Select another native package configuration for an invocation with the global
 `--config` option, before or after the command:
 

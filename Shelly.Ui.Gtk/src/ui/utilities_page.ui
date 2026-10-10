@@ -22,6 +22,10 @@
                 <child>
                   <object class="GtkLabel">
                     <property name="label" translatable="yes">Utilities</property>
+                    <property name="accessible-role">heading</property>
+                    <accessibility>
+                      <property name="level">2</property>
+                    </accessibility>
                     <style>
                       <class name="title-2"/>
                     </style>

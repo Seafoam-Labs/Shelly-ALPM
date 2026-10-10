@@ -68,6 +68,7 @@ const AutomationCapability = struct {
 const automation_capabilities = [_]AutomationCapability{
     .{ .name = "remora.build-backend", .version = 1 },
     .{ .name = "build.review", .version = 1 },
+    .{ .name = "build.resolve-dependencies", .version = 1 },
     .{ .name = "build.result", .version = 1 },
     .{ .name = "build.isolated", .version = 1 },
     .{ .name = "build.package-destination", .version = 1 },

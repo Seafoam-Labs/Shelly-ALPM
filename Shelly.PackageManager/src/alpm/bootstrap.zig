@@ -16,6 +16,7 @@ const process_runner = @import("../aur/builder.zig");
 pub const build_root = @import("build_root.zig");
 
 pub const wrapper_argument = "__shellystrap";
+pub const plan_mismatch_exit_code: u8 = 4;
 pub const marker_name = ".shelly-bootstrap-root";
 
 pub const Options = struct {
@@ -24,6 +25,7 @@ pub const Options = struct {
     config_path: []const u8 = paths.config_file,
     host_gpg_directory: []const u8 = paths.keyring,
     packages: []const []const u8,
+    dependency_plan: ?[]const u8 = null,
 };
 
 pub const Result = struct {
@@ -45,7 +47,7 @@ pub fn runInternal(
     };
     _ = bootstrapReporting(allocator, io, environ, options, stderr) catch |err| {
         stderr.print("Could not provision the isolated build root. {0s}\n\nTechnical details: {1s}\n", .{ diagnostics_module.cause(err), @errorName(err) }) catch {};
-        return 1;
+        return if (err == error.DependencyPlanMismatch) plan_mismatch_exit_code else 1;
     };
     return 0;
 }
@@ -55,6 +57,7 @@ pub fn parseArguments(arguments: []const []const u8) !Options {
     var backend: ?backend_selection.Backend = null;
     var config_path: []const u8 = paths.config_file;
     var gpg_directory: []const u8 = paths.keyring;
+    var dependency_plan: ?[]const u8 = null;
     var index: usize = 0;
     while (index < arguments.len) : (index += 1) {
         const argument = arguments[index];
@@ -67,6 +70,7 @@ pub fn parseArguments(arguments: []const []const u8) !Options {
                 .config_path = config_path,
                 .host_gpg_directory = gpg_directory,
                 .packages = packages,
+                .dependency_plan = dependency_plan,
             };
         }
         if (std.mem.eql(u8, argument, "--root")) {
@@ -82,6 +86,10 @@ pub fn parseArguments(arguments: []const []const u8) !Options {
             index += 1;
             if (index >= arguments.len) return error.InvalidBootstrapArguments;
             config_path = arguments[index];
+        } else if (std.mem.eql(u8, argument, "--dependency-plan")) {
+            index += 1;
+            if (index >= arguments.len or dependency_plan != null) return error.InvalidBootstrapArguments;
+            dependency_plan = arguments[index];
         } else if (std.mem.eql(u8, argument, "--gpgdir")) {
             index += 1;
             if (index >= arguments.len) return error.InvalidBootstrapArguments;
@@ -465,9 +473,11 @@ fn bootstrapReporting(
     defer mounts.deinit();
     try mounts.setup();
 
+    var configuration_digest: [64]u8 = undefined;
     const manager = try manager_module.Manager.init(allocator, environ, .{
         .backend = options.backend,
         .config_path = options.config_path,
+        .configuration_digest = &configuration_digest,
         .use_root = true,
         .root_directory = options.root_path,
         .database_path = database_path,
@@ -516,7 +526,23 @@ fn bootstrapReporting(
         owned_name.* = try allocator.dupeZ(u8, name);
         initialized += 1;
     }
-    try manager.install_packages(package_names, .{ .needed = true });
+    if (options.dependency_plan) |path| {
+        const plans = manager_module.Manager.build_plan;
+        const bytes = try std.Io.Dir.cwd().readFileAlloc(io, path, allocator, .limited(64 * 1024 * 1024));
+        defer allocator.free(bytes);
+        var parsed = try std.json.parseFromSlice(plans.Plan, allocator, bytes, .{});
+        defer parsed.deinit();
+        try parsed.value.validate(allocator);
+        if (!std.mem.eql(u8, parsed.value.backend, @tagName(manager.backend()))) return error.DependencyPlanMismatch;
+        var arena = std.heap.ArenaAllocator.init(allocator);
+        defer arena.deinit();
+        const a = arena.allocator();
+        if (!std.mem.eql(u8, &configuration_digest, parsed.value.configurationDigest)) return error.DependencyPlanMismatch;
+        const targets = try a.alloc([:0]const u8, parsed.value.packages.len);
+        for (parsed.value.packages, targets) |package, *target|
+            target.* = try std.fmt.allocPrintSentinel(a, "{s}/{s}", .{ package.repository, package.name }, 0);
+        try manager.install_build_packages(targets, parsed.value.packages);
+    } else try manager.install_packages(package_names, .{ .needed = true });
     if (manager.packageSetupFailed()) return error.BootstrapPackageSetupFailed;
 
     const installed = try manager.get_installed_packages();

@@ -1,4 +1,5 @@
 const std = @import("std");
+const build_transaction = @import("build_transaction.zig");
 const diagnostics = @import("diagnostics");
 const restart_checks = @import("restarts.zig");
 const architecture_utils = @import("architectures.zig");
@@ -654,6 +655,10 @@ pub const Manager = struct {
         package_names: [][:0]const u8,
         trans_flags_arg: TransFlag,
     ) TransactionError!void {
+        return self.installBuildTransaction(package_names, trans_flags_arg, null);
+    }
+
+    pub fn installBuildTransaction(self: *Manager, package_names: [][:0]const u8, trans_flags_arg: TransFlag, build_request: ?build_transaction.Request) TransactionError!void {
         if (self.handle == null) return TransactionError.NoHandle;
         var operation_scope = OperationScope.init(self, .install, if (package_names.len == 0) null else package_names[0]);
         operation_scope.attach();
@@ -667,6 +672,7 @@ pub const Manager = struct {
         defer optional_names.deinit(self.allocator);
 
         for (package_names) |target| {
+            const before = packages.items.len;
             const slash = std.mem.indexOfScalar(u8, target, '/');
             if (slash) |i| {
                 if (i == 0 or i + 1 >= target.len) return TransactionError.PackageFetchFailed;
@@ -716,13 +722,21 @@ pub const Manager = struct {
                     packages.append(self.allocator, pkg) catch return TransactionError.OutOfMemory;
                 }
             }
+            if (build_request) |request| if (packages.items.len == before) {
+                if (request.issues) |output| {
+                    const issues = try request.allocator.alloc(build_transaction.Issue, 1);
+                    issues[0] = .{ .requirement = try request.allocator.dupe(u8, target), .requiredBy = "environment", .code = "not_in_repositories" };
+                    output.* = issues;
+                }
+                return error.NoPackageFound;
+            };
         }
         if (packages.items.len == 0) return TransactionError.PackageFetchFailed;
 
         // Ask once per package. Shared callers return every selected option index;
         // legacy handlers may still return a single package name in `pkg`.
         const initial_count = packages.items.len;
-        for (packages.items[0..initial_count]) |pkg| {
+        for (packages.items[0..if (build_request == null) initial_count else 0]) |pkg| {
             // libalpm will skip these targets when adding them to the
             // transaction. Do not prompt for their optional dependencies.
             if (trans_flags_arg.needed) {
@@ -816,8 +830,52 @@ pub const Manager = struct {
         }
         var data: [*c]rawLibalpm.alpm_list_t = null;
         if (rawLibalpm.alpm_trans_prepare(self.handle, &data) != 0) {
+            if (build_request) |request| if (request.issues) |output| {
+                if (rawLibalpm.alpm_errno(self.handle) == rawLibalpm.ALPM_ERR_UNSATISFIED_DEPS) {
+                    var issues: std.ArrayList(build_transaction.Issue) = .empty;
+                    var node = data;
+                    while (node != null) : (node = node.*.next) {
+                        const missing: *rawLibalpm.alpm_depmissing_t = @ptrCast(@alignCast(node.*.data orelse continue));
+                        const text = rawLibalpm.alpm_dep_compute_string(missing.depend);
+                        defer if (text != null) std.c.free(text);
+                        try issues.append(request.allocator, .{
+                            .requirement = try request.allocator.dupe(u8, spanC(text) orelse "unknown"),
+                            .requiredBy = try request.allocator.dupe(u8, spanC(missing.target) orelse "unknown"),
+                            .code = "unsatisfied_dependency",
+                        });
+                    }
+                    output.* = try issues.toOwnedSlice(request.allocator);
+                } else if (rawLibalpm.alpm_errno(self.handle) == rawLibalpm.ALPM_ERR_CONFLICTING_DEPS) {
+                    var issues: std.ArrayList(build_transaction.Issue) = .empty;
+                    var node = data;
+                    while (node != null) : (node = node.*.next) {
+                        const conflict = libalpm.PackageConflict.from(node.*.data orelse continue) orelse continue;
+                        const text = rawLibalpm.alpm_dep_compute_string(conflict.ptr.reason);
+                        defer if (text != null) std.c.free(text);
+                        try issues.append(request.allocator, .{
+                            .requirement = try request.allocator.dupe(u8, spanC(text) orelse "unknown"),
+                            .requiredBy = try request.allocator.dupe(u8, conflict.packageOne().name() orelse "unknown"),
+                            .code = "conflicting_dependencies",
+                        });
+                    }
+                    output.* = try issues.toOwnedSlice(request.allocator);
+                }
+            };
+
             self.handleErrorMessage(@intCast(rawLibalpm.alpm_errno(self.handle)), data) catch {};
             return TransactionError.PrepareFailed;
+        }
+        if (build_request) |request| {
+            if (rawLibalpm.alpm_trans_get_remove(self.handle) != null) return error.DependencyPlanMismatch;
+            var snapshots: std.ArrayList(build_transaction.Package) = .empty;
+            var node = rawLibalpm.alpm_trans_get_add(self.handle);
+            while (node != null) : (node = node.*.next) {
+                const ptr: *rawLibalpm.alpm_pkg_t = @ptrCast(@alignCast(node.*.data orelse continue));
+                const package = libalpm.Package{ .ptr = ptr };
+                try snapshots.append(request.allocator, try build_transaction.fromOwned(request.allocator, try package.toOwned(request.allocator, .{}), libalpm.str(rawLibalpm.alpm_pkg_get_sha256sum(ptr))));
+            }
+            try request.finish(try snapshots.toOwnedSlice(request.allocator));
+            if (request.output != null) return;
         }
         if (self.preparedInstallIsEmpty()) return;
         try self.confirmPreparedInstall(packages.items, optional_names.items, trans_flags);
@@ -2397,10 +2455,6 @@ pub const Manager = struct {
         }
         self.parallel_download_count = config.parallel_downloads orelse self.parallel_download_count;
         self.check("parallel_downloads", rawLibalpm.alpm_option_set_parallel_downloads(h, self.parallel_download_count));
-        if (config.sandbox_user) |user| self.check("sandboxuser", rawLibalpm.alpm_option_set_sandboxuser(h, user.ptr));
-        self.check("sandbox_filesystem", rawLibalpm.alpm_option_set_disable_sandbox_filesystem(h, @intFromBool(config.disable_sandbox or config.disable_sandbox_filesystem)));
-        self.check("sandbox_syscalls", rawLibalpm.alpm_option_set_disable_sandbox_syscalls(h, @intFromBool(config.disable_sandbox or config.disable_sandbox_syscalls)));
-        if (@hasDecl(rawLibalpm, "alpm_option_set_disable_sandbox_network")) self.check("sandbox_network", rawLibalpm.alpm_option_set_disable_sandbox_network(h, @intFromBool(config.disable_sandbox or config.disable_sandbox_network)));
         self.check("download_timeout", rawLibalpm.alpm_option_set_disable_dl_timeout(h, @intFromBool(config.disable_download_timeout)));
         self.check("syslog", rawLibalpm.alpm_option_set_usesyslog(h, @intFromBool(config.use_system_log)));
 

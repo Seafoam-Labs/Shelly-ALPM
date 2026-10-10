@@ -408,7 +408,7 @@ pub fn validateEnvironmentAssignment(assignment: EnvironmentAssignment) !void {
         "PATH",     "HOME",         "USER",              "LOGNAME", "SHELL",    "PWD",       "OLDPWD",
         "CPPFLAGS", "CFLAGS",       "CXXFLAGS",          "LDFLAGS", "LTOFLAGS", "MAKEFLAGS", "CHOST",
         "CARCH",    "DISTCC_HOSTS", "SOURCE_DATE_EPOCH", "ENV",     "BASHOPTS", "SHELLOPTS", "IFS",
-        "CDPATH",   "GCONV_PATH",   "LOCPATH",
+        "CDPATH",   "GCONV_PATH",   "LOCPATH",           "SRCDEST",
     }, name)) return error.ReservedBuildEnvironmentVariable;
     for ([_][]const u8{ "SHELLY_", "SUDO_", "DOAS_", "PKEXEC_", "XDG_", "DBUS_", "BASH_", "LD_", "DYLD_" }) |prefix| {
         if (std.mem.startsWith(u8, name, prefix)) return error.ReservedBuildEnvironmentVariable;
@@ -417,7 +417,7 @@ pub fn validateEnvironmentAssignment(assignment: EnvironmentAssignment) !void {
 
 pub fn environmentErrorReason(err: anyerror) []const u8 {
     return switch (err) {
-        error.ReservedBuildEnvironmentVariable => "reserved for Shelly or process startup; use build.extra_path for PATH and the dedicated build settings for compiler flags",
+        error.ReservedBuildEnvironmentVariable => "reserved for Shelly or process startup; use build.extra_path for PATH, destinations.sources for SRCDEST, and the dedicated build settings for compiler flags",
         else => "names must match [A-Za-z_][A-Za-z0-9_]* and values must not contain NUL",
     };
 }
@@ -788,6 +788,7 @@ test "shellybuild env rejects invalid tables names values and reserved variables
         "CARCH",                 "DISTCC_HOSTS", "SOURCE_DATE_EPOCH", "ENV",        "BASH_ENV",        "BASHOPTS",                 "SHELLOPTS",
         "IFS",                   "CDPATH",       "GCONV_PATH",        "LOCPATH",    "LD_PRELOAD",      "LD_LIBRARY_PATH",          "LD_AUDIT",
         "DYLD_INSERT_LIBRARIES", "SUDO_USER",    "DOAS_USER",         "PKEXEC_UID", "XDG_CONFIG_HOME", "DBUS_SESSION_BUS_ADDRESS", "SHELLY_ELEVATOR",
+        "SRCDEST",
     }) |name| {
         const content = try std.fmt.allocPrint(allocator, "[build.env]\n{s} = 'private-value'\n", .{name});
         defer allocator.free(content);

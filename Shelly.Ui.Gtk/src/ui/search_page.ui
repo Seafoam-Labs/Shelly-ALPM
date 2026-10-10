@@ -32,6 +32,9 @@
                     </child>
                 </object>
             </child>
+            <accessibility>
+              <property name="label" translatable="yes">Search standard repositories, AUR and Flatpak</property>
+            </accessibility>
           </object>
         </child>
         <child>
@@ -105,7 +108,7 @@
                     <property name="show-row-separators">false</property>
                     <child>
                       <object class="GtkColumnViewColumn" id="check_column">
-                        <property name="title"></property>
+                        <property name="title" translatable="yes">Select</property>
                       </object>
                     </child>
                     <child>
@@ -154,6 +157,7 @@
                 <property name="margin-end">40</property>
                 <child>
                   <object class="GtkImage" id="placeholder_icon">
+                    <property name="accessible-role">presentation</property>
                     <property name="icon-name">system-search-symbolic</property>
                     <property name="pixel-size">48</property>
                     <style><class name="dim-label"/></style>

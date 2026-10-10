@@ -67,6 +67,20 @@ Supported package options are `strip`, `docs`, `libtool`, `staticlibs`, `emptydi
 
 `purge` is enabled by default. Before writing package metadata and the archive, it removes `usr/info/dir` and `usr/share/info/dir` relative to `$pkgdir`, plus non-directory entries named `.packlist` or matching `*.pod` anywhere in that package tree. Directories are preserved, and cleanup does not follow symlinks. PKGBUILD `options=('!purge')` disables this cleanup, including when set inside a split-package function. Purge runs independently of `strip`, so `!strip` does not disable it. Custom `PURGE_TARGETS` and makepkg shell configuration are not read by the native builder. This behavior also applies to `shelly build --isolated`.
 
+## Source cache
+
+`destinations.sources` selects the native builder's source cache. When unset,
+the cache defaults to the directory containing PKGBUILD (the AUR checkout for
+AUR installs). Shelly exports this resolved path as `SRCDEST` during PKGBUILD
+metadata/SRCINFO evaluation and every lifecycle step, including child tools.
+An inherited `SRCDEST` is replaced with this path; configure
+`destinations.sources` rather than `build.env.SRCDEST`.
+
+With the sandbox enabled, Shelly creates the configured source cache if needed
+and grants it read/write access, including when it is outside the build tree.
+Packages downloading auxiliary sources should use `SRCDEST` consistently when
+building and packaging instead of assuming those files are in `$PWD`.
+
 ## Package compression
 
 Set `package.compression_level` to an integer from 1 to 5, or override it for
@@ -223,6 +237,7 @@ retain their existing environment policy.
 The following names are reserved and cause a configuration error:
 
 - `PATH`: use `build.extra_path`.
+- `SRCDEST`: use `destinations.sources`.
 - `CPPFLAGS`, `CFLAGS`, `CXXFLAGS`, `LDFLAGS`, `LTOFLAGS`, `MAKEFLAGS`, `CHOST`,
   `CARCH`, and `DISTCC_HOSTS`: use the dedicated `[build]` fields. Package options
   such as `!buildflags` and `!makeflags` remain authoritative.

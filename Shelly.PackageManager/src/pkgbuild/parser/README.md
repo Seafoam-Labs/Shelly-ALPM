@@ -65,7 +65,7 @@ validation──> types, shell_scan, function_body, fields, package_metadata
 dependencies ──> shell_scan, expansion, fields, variables, word
 variables ──> shell_scan, expansion, arrays
 sources   ──> types, file_inspector
-expansion ──> shell_scan, arithmetic
+expansion ──> shell_scan, arithmetic, fields, word
 arrays    ──> shell_scan
 types, shell_scan, function_body, arithmetic ──> (leaves)
 ```
@@ -126,7 +126,23 @@ snapshots and supplemental review remain authoritative for dynamic metadata.
 Malformed words produce `UnsupportedShellWord`; original command substitutions
 are retained intact for reviewed evaluation, including their inner quoting.
 
-## Indexed-array trimming
+## Indexed-array elements and trimming
+
+Single element references such as `${arch[0]}` and `${_barch[1]}` resolve inside
+scalar assignments and double-quoted array words, including compound source
+URLs like `"${name}-${arch[0]}.tgz::${url}/${_barch[0]}.tar.gz"`. Indices must be
+canonical nonnegative decimal integers (`0`, `1`, etc., without leading zeros).
+Elements are selected from dense arrays at the referencing assignment; appends,
+self-references, and scalar aliases preserve declaration order. Empty and
+out-of-range elements of known arrays produce an empty string. Unknown or
+conditional values remain unresolved, and command-dependent values remain
+deferred for reviewed evaluation. Substituted dollars, quotes, and backslashes
+are literal data, never new expansion syntax.
+
+Arithmetic or variable subscripts, negative indices, indexed trimming, explicit
+subscript assignments (including sparse initializers), and scalar/array mutation
+forms outside the dense resolver are unsupported. Unquoted element references
+inside arrays are rejected because they would require word splitting and globbing.
 
 Standalone double-quoted indexed-array references support elementwise prefix
 and suffix removal: `"${items[@]#pattern}"`, `"${items[@]##pattern}"`,

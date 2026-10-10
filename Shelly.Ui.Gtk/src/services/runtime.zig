@@ -32,6 +32,7 @@ pub const PendingNavigation = union(enum) {
     page: deep_link.PageTarget,
     flatpak_app: PendingApp,
     local_flatpak_file: PendingLocalFile,
+    local_appimage_file: PendingLocalFile,
 };
 
 pub var pending_navigation: ?PendingNavigation = null;
@@ -58,6 +59,16 @@ pub fn queueLocalFlatpakPath(path: []const u8) void {
     pending.len = path.len;
     pending_navigation = .{ .local_flatpak_file = pending };
 }
+
+pub fn queueLocalAppImagePath(path: []const u8) void {
+    if (path.len == 0 or path.len > deep_link.max_file_path_len) return;
+    var pending: PendingLocalFile = undefined;
+    @memcpy(pending.buffer[0..path.len], path);
+    pending.buffer[path.len] = 0;
+    pending.len = path.len;
+    pending_navigation = .{ .local_appimage_file = pending };
+}
+
 
 pub fn takePendingNavigation() ?PendingNavigation {
     const pending = pending_navigation;

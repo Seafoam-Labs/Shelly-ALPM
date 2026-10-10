@@ -85,6 +85,7 @@
                         <property name="margin-bottom">24</property>
                         <child>
                           <object class="GtkImage">
+                            <property name="accessible-role">presentation</property>
                             <property name="icon-name">package-x-generic-symbolic</property>
                             <property name="pixel-size">48</property>
                             <style><class name="dim-label"/></style>

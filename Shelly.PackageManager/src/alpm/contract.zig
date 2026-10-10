@@ -18,6 +18,7 @@ pub const InitError = error{
     InvalidLocalDatabaseEntry,
 };
 pub const TransactionError = error{
+    DependencyPlanMismatch,
     NoHandle,
     TransInitFailed,
     PrepareFailed,
@@ -147,6 +148,9 @@ pub const RestartCheckOptions = struct {
 pub const InitOptions = struct {
     backend: ?backend_selection.Backend = null,
     config_path: ?[]const u8 = null,
+    /// Captures the effective source configuration before private path overrides.
+    /// The fingerprint is taken from the same parsed object used by this manager.
+    configuration_digest: ?*[64]u8 = null,
     /// Replaces the configured list. Empty disables hook discovery; null uses configuration.
     hook_directories: ?[]const []const u8 = null,
     use_root: bool = false,
@@ -172,6 +176,10 @@ pub fn applyInitPathOverrides(
     options: InitOptions,
 ) std.mem.Allocator.Error!void {
     const allocator = config.arena.allocator();
+    if (options.configuration_digest) |destination| {
+        const digest = @import("build_plan.zig").configurationDigest(allocator, config) catch return error.OutOfMemory;
+        @memcpy(destination, digest);
+    }
     if (options.root_directory) |value|
         config.root_directory = try allocator.dupeSentinel(u8, value, 0);
     if (options.database_path) |value|

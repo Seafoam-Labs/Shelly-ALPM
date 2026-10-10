@@ -4,7 +4,7 @@ const function_body = @import("function_body.zig");
 const scan = @import("shell_scan.zig");
 
 pub const Kind = enum { literal, unquoted, parameter };
-pub const Part = struct { start: usize, end: usize, kind: Kind };
+pub const Part = struct { start: usize, end: usize, kind: Kind, quoted: bool = false };
 pub const Word = struct {
     end: usize,
     parts: []Part,
@@ -93,7 +93,7 @@ pub fn read(allocator: std.mem.Allocator, input: []const u8, start: usize) !Word
             (scan.is_word(input[i + 1]) or input[i + 1] == '{' or input[i + 1] == '('))))
         {
             const end = try expressionEnd(input, i);
-            try parts.append(allocator, .{ .start = i, .end = end, .kind = .parameter });
+            try parts.append(allocator, .{ .start = i, .end = end, .kind = .parameter, .quoted = quote == '"' });
             i = end;
             continue;
         }
@@ -113,6 +113,7 @@ pub const Assignment = struct {
     append: bool,
     offset: usize,
     deferred: bool,
+    indexed: bool = false,
 };
 
 /// Walk simple assignments in command order, excluding function/subshell bodies.
@@ -124,6 +125,9 @@ pub const Assignments = struct {
     group_depth: usize = 0,
     conditional_depth: usize = 0,
     conditional_command: bool = false,
+    /// Element writes are unsupported by the dense static array resolver.
+    /// Expose them to callers that must reject stale element selections.
+    include_indexed: bool = false,
 
     pub fn next(self: *Assignments, allocator: std.mem.Allocator) !?Assignment {
         while (self.pos < self.input.len) {
@@ -183,6 +187,35 @@ pub const Assignments = struct {
             var cursor = scan.scan_word_chars(self.input, start);
             if (cursor > start and (std.ascii.isAlphabetic(c) or c == '_') and self.command_start) {
                 const name = self.input[start..cursor];
+                var indexed = false;
+                if (self.include_indexed and cursor < self.input.len and self.input[cursor] == '[') {
+                    indexed = true;
+                    var depth: usize = 1;
+                    var quote: u8 = 0;
+                    cursor += 1;
+                    while (cursor < self.input.len and depth != 0) {
+                        const byte = self.input[cursor];
+                        if (byte == '\\' and quote != '\'') {
+                            cursor = @min(cursor + 2, self.input.len);
+                            continue;
+                        }
+                        if (quote != '\'' and (byte == '$' or byte == '`')) {
+                            cursor = try expressionEnd(self.input, cursor);
+                            continue;
+                        }
+                        if (quote != 0) {
+                            if (byte == quote) quote = 0;
+                        } else if (byte == '\'' or byte == '"') {
+                            quote = byte;
+                        } else if (byte == '[') {
+                            depth += 1;
+                        } else if (byte == ']') {
+                            depth -= 1;
+                        }
+                        cursor += 1;
+                    }
+                    if (depth != 0) return error.UnsupportedArrayExpansion;
+                }
                 const append = cursor < self.input.len and self.input[cursor] == '+';
                 if (append) cursor += 1;
                 if (cursor < self.input.len and self.input[cursor] == '=') {
@@ -227,7 +260,7 @@ pub const Assignments = struct {
                         if (name_end < self.input.len and self.input[name_end] == '+') name_end += 1;
                         temporary_scope = name_end == tail or name_end == self.input.len or self.input[name_end] != '=';
                     }
-                    return .{ .name = name, .raw = self.input[value_start..self.pos], .append = append, .offset = start, .deferred = self.conditional_depth != 0 or self.conditional_command or temporary_scope };
+                    return .{ .name = name, .raw = self.input[value_start..self.pos], .append = append, .offset = start, .deferred = self.conditional_depth != 0 or self.conditional_command or temporary_scope, .indexed = indexed };
                 }
             }
             const token = try read(allocator, self.input, start);

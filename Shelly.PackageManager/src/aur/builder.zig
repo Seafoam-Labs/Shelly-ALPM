@@ -41,6 +41,9 @@ pub const BuildEnvironment = struct {
     /// One build-scoped timestamp shared with every PKGBUILD subprocess and
     /// package metadata writer, matching makepkg's SOURCE_DATE_EPOCH model.
     source_date_epoch: ?i64 = null,
+    /// Resolved source cache, shared by metadata evaluation and lifecycle
+    /// subprocesses instead of inheriting an unrelated caller SRCDEST.
+    source_destination: ?[]const u8 = null,
     ccache: bool = false,
     distcc: bool = false,
 };
@@ -331,6 +334,8 @@ pub fn executionEnvironmentWithBuild(
         const epoch_text = try std.fmt.bufPrint(&epoch_buffer, "{d}", .{epoch});
         try environ_map.put("SOURCE_DATE_EPOCH", epoch_text);
     }
+    if (build.source_destination) |destination|
+        try environ_map.put("SRCDEST", destination);
 
     const path = try build_path.withWrappers(allocator, environ_map.get("PATH") orelse build_path.baseline, build.ccache, build.distcc);
     defer allocator.free(path);

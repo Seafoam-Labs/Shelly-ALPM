@@ -120,11 +120,12 @@ pub fn build(b: *std.Build) void {
         .name = "builder-command-test",
         .root_module = builder_test_module,
         .filters = &.{
-            "makesrcinfo emits clean stdout and never runs lifecycle functions",
+            "makesrcinfo",
             "compression presets",
             "review-only accepts Heroic array trimming",
             "review-only accepts filesystem here-strings",
             "sync deps",
+            "dependency plan",
             "isolated source key",
             "isolated source public keys",
             "isolated child arguments",
@@ -138,6 +139,8 @@ pub fn build(b: *std.Build) void {
             "host coordinator",
         },
     });
+    const dependency_plan_tests = b.addTest(.{ .root_module = builder_test_module, .filters = &.{"dependency plan"} });
+    b.step("build-plan-test", "Test dependency plan CLI and configuration contracts").dependOn(&b.addRunArtifact(dependency_plan_tests).step);
     const run_builder_tests = b.addRunArtifact(builder_tests);
     b.step("builder-command-test", "Test native build command configuration and coordinator transport").dependOn(&run_builder_tests.step);
     test_step.dependOn(&run_builder_tests.step);

@@ -87,6 +87,7 @@ fn resolve_scoped_scalar(
     // Global shell snapshots cannot override package-local assignments.
     self.dynamic_overrides = null;
     self.dynamic_unsets = null;
+    self.array_reference_content = content;
     var scoped = std.StringHashMap([]const u8).init(self.allocator);
     defer variables.free_vars(self.allocator, &scoped);
     var it = vars.iterator();
@@ -125,6 +126,69 @@ pub fn resolve_array_field(self: PkgbuildParser, content: []const u8, vars: *std
     return resolve_static_array(self, content, vars, var_name);
 }
 
+/// Return owned element data, or null when its value still needs reviewed
+/// evaluation. A known empty/out-of-range element is the empty string.
+pub fn resolve_array_element(self: PkgbuildParser, vars: *std.StringHashMap([]const u8), name: []const u8, index: usize) anyerror!?[]const u8 {
+    if (self.dynamic_array_unsets) |unsets| if (unsets.contains(name)) return try self.allocator.dupe(u8, "");
+    if (self.dynamic_unsets) |unsets| if (unsets.contains(name)) return try self.allocator.dupe(u8, "");
+    if (self.dynamic_array_overrides) |overrides| if (overrides.get(name)) |items| {
+        if (items.len > 4096) return error.ArrayExpansionTooLarge;
+        return try self.allocator.dupe(u8, if (index < items.len) items[index] else "");
+    };
+    if (self.dynamic_overrides) |overrides| if (overrides.get(name)) |value|
+        return try self.allocator.dupe(u8, if (index == 0) value else "");
+    const content = self.array_reference_content orelse return null;
+    var has_array = false;
+    var has_scalar = false;
+    var uncertain = false;
+    var assignments = shell_word.Assignments{ .input = content, .include_indexed = true };
+    while (try assignments.next(self.allocator)) |assignment| {
+        if (!std.mem.eql(u8, assignment.name, name)) continue;
+        if (assignment.indexed) return error.UnsupportedArrayExpansion;
+        if (assignment.deferred) {
+            uncertain = true;
+            continue;
+        }
+        if (!std.mem.startsWith(u8, assignment.raw, "(")) {
+            // Scalar writes to an existing array mutate element zero rather
+            // than replacing the array. Do not resolve a stale dense snapshot.
+            if (has_array) return error.UnsupportedArrayExpansion;
+            has_scalar = true;
+            continue;
+        }
+        if (assignment.append and has_scalar and !has_array) return error.UnsupportedArrayExpansion;
+        has_array = true;
+        if (!assignment.append) uncertain = false;
+        const raw = try arrays.parse_array_body_syntax(self.allocator, assignment.raw[1 .. assignment.raw.len - 1]);
+        defer variables.freeStringSlice(self.allocator, raw);
+        for (raw) |item| {
+            // Explicit subscripts can create holes; the dense array resolver
+            // cannot preserve their indices. Quoted bytes remain literal data.
+            if (std.mem.startsWith(u8, item, "[") and std.mem.indexOf(u8, item, "]=") != null)
+                return error.UnsupportedArrayExpansion;
+        }
+    }
+    if (uncertain) return null;
+    if (!has_array) {
+        if (self.unresolved_variables) |unresolved| if (unresolved.contains(name)) return null;
+        const value = vars.get(name) orelse return null;
+        return try self.allocator.dupe(u8, if (index == 0) value else "");
+    }
+    if (self.array_expansion_depth >= 32) return error.ArrayExpansionTooDeep;
+    // Track provenance even in scalar assignments, which have no outer source
+    // tracking map. Never infer unresolved state from the returned bytes.
+    var deferred = std.AutoHashMap(usize, void).init(self.allocator);
+    defer deferred.deinit();
+    var nested = self;
+    nested.array_expansion_depth += 1;
+    nested.deferred_source_words = &deferred;
+    const items = try resolve_array_field(nested, content, vars, name);
+    defer variables.freeStringSlice(self.allocator, items);
+    if (index >= items.len) return try self.allocator.dupe(u8, "");
+    if (deferred.contains(@intFromPtr(items[index].ptr))) return null;
+    return try self.allocator.dupe(u8, items[index]);
+}
+
 fn resolve_array_values(self: PkgbuildParser, content: []const u8, vars: *std.StringHashMap([]const u8), name: []const u8, items: [][]const u8) ![][]const u8 {
     // Dependency cleanup must never reinterpret generic array values as
     // version constraints (for example a literal filename ending in '=').
@@ -152,6 +216,12 @@ test "static array references bound nesting and expanded element count" {
     try large.writer.writeAll("a0=(value)\n");
     for (1..14) |index| try large.writer.print("a{d}=(\"${{a{d}[@]}}\" \"${{a{d}[@]}}\")\n", .{ index, index - 1, index - 1 });
     try std.testing.expectError(error.ArrayExpansionTooLarge, resolve_array_field(parser, large.written(), &vars, "a13"));
+
+    var indexed: std.Io.Writer.Allocating = .init(allocator);
+    defer indexed.deinit();
+    try indexed.writer.writeAll("a0=(value)\n");
+    for (1..35) |index| try indexed.writer.print("a{d}=(\"${{a{d}[0]}}\")\n", .{ index, index - 1 });
+    try std.testing.expectError(error.ArrayExpansionTooDeep, resolve_array_field(parser, indexed.written(), &vars, "a34"));
 }
 
 /// Expand each array assignment against the scalar state at that assignment,

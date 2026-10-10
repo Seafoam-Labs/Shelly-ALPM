@@ -142,6 +142,14 @@ pub const Root = struct {
         config_path: ?[]const u8,
         operation: *const PackageManager.Operation,
     ) !void {
+        return self.bootstrapImpl(environ, executable, extra_packages, config_path, null, operation);
+    }
+
+    pub fn bootstrapPlanned(self: *Root, environ: std.process.Environ, executable: []const u8, config_path: ?[]const u8, plan: []const u8, operation: *const PackageManager.Operation) !void {
+        return self.bootstrapImpl(environ, executable, &.{}, config_path, plan, operation);
+    }
+
+    fn bootstrapImpl(self: *Root, environ: std.process.Environ, executable: []const u8, extra_packages: []const []const u8, config_path: ?[]const u8, plan: ?[]const u8, operation: *const PackageManager.Operation) !void {
         try self.validateRuntimeAt(environ, operation, executable);
         const Configuration = PackageManager.Manager.configuration.Configuration;
         var config = try (if (config_path != null) &Configuration.parseStrict else &Configuration.parse)(
@@ -150,6 +158,15 @@ pub const Root = struct {
             config_path orelse PackageManager.paths.config_file,
         );
         defer config.deinitialize();
+        if (plan) |bytes| {
+            var arena = std.heap.ArenaAllocator.init(self.allocator);
+            defer arena.deinit();
+            const a = arena.allocator();
+            const parsed = try std.json.parseFromSlice(PackageManager.Manager.build_plan.Plan, a, bytes, .{});
+            try parsed.value.validate(a);
+            const digest = try PackageManager.Manager.build_plan.configurationDigest(a, &config);
+            if (!std.mem.eql(u8, digest, parsed.value.configurationDigest)) return error.DependencyPlanMismatch;
+        }
         const argv = try shellystrapArgumentsWithConfig(
             self.allocator,
             executable,
@@ -159,12 +176,23 @@ pub const Root = struct {
             config.gpg_directory,
         );
         defer self.allocator.free(argv);
+        var planned_arguments: std.ArrayList([]const u8) = .empty;
+        defer planned_arguments.deinit(self.allocator);
+        const plan_path = try std.fs.path.join(self.allocator, &.{ self.operation_path, "dependency-plan.json" });
+        defer self.allocator.free(plan_path);
+        if (plan) |bytes| {
+            try std.Io.Dir.cwd().writeFile(self.io, .{ .sub_path = plan_path, .data = bytes, .flags = .{ .permissions = .fromMode(0o600) } });
+            for (argv) |argument| {
+                if (std.mem.eql(u8, argument, "--")) try planned_arguments.appendSlice(self.allocator, &.{ "--dependency-plan", plan_path });
+                try planned_arguments.append(self.allocator, argument);
+            }
+        }
         var output_context: BootstrapOutputContext = .{ .operation = operation };
         const exit_code = try PackageManager.process_runner.runStreamingWithEnvironmentOperation(
             self.allocator,
             self.io,
             environ,
-            argv,
+            if (plan != null) planned_arguments.items else argv,
             null,
             null,
             .{ .function = BootstrapOutputContext.handle, .data = &output_context },
@@ -507,7 +535,7 @@ const IsolatedStage = enum {
 fn checkIsolatedExit(operation: *const PackageManager.Operation, stage: IsolatedStage, exit_code: u8) !void {
     if (exit_code == 0) return;
     const failure = switch (stage) {
-        .bootstrap => error.IsolatedBootstrapFailed,
+        .bootstrap => if (exit_code == PackageManager.Manager.bootstrap.plan_mismatch_exit_code) error.DependencyPlanMismatch else error.IsolatedBootstrapFailed,
         .setup => error.IsolatedCommandFailed,
         .build => error.IsolatedBuildFailed,
     };
@@ -547,6 +575,7 @@ test "isolated command failures preserve the stage and native exit code" {
     try std.testing.expectError(error.IsolatedBootstrapFailed, checkIsolatedExit(&operation, .bootstrap, 7));
     try std.testing.expectEqualStrings("build.isolation.bootstrap", capture.domain.?);
     try std.testing.expectEqual(@as(i64, 7), capture.code.?);
+    try std.testing.expectError(error.DependencyPlanMismatch, checkIsolatedExit(&operation, .bootstrap, PackageManager.Manager.bootstrap.plan_mismatch_exit_code));
     try std.testing.expectError(error.IsolatedCommandFailed, checkIsolatedExit(&operation, .setup, 2));
     try std.testing.expectEqualStrings("build.isolation.setup", capture.domain.?);
     try std.testing.expectEqual(@as(i64, 2), capture.code.?);

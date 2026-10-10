@@ -25,6 +25,15 @@ carried into the guest and applies to every selected split package. See the
 
 The stable JSON schemas, capability probe, and exit behavior for unattended
 callers are available via `shelly --version --json` before scheduling a build.
+[Dependency plans](build-dependency-plans.md) expose the complete pinned environment
+through `build --resolve-dependencies --isolated --json` and let a later build
+verify it with `--dependency-plan`. Both `shelly.conf` and `pacman.conf` are supported.
+
+If an isolated build rejects an incomplete dependency plan, stderr, the
+transaction log, and the JSON `error.message` include every recorded unresolved
+requirement, its requiring package or input, and the resolution reason. Missing
+repository packages and missing SHA-256 archive metadata are reported separately.
+This also applies to incomplete plans supplied through `--dependency-plan`.
 
 The elevated process is a coordinator only. It reviews the host PKGBUILD and
 local inputs, materializes only those byte-exact reviewed inputs in the guest,
@@ -131,14 +140,13 @@ Requirements:
 - `unshare` (provided by Arch's `util-linux` package) for private provisioning
 - an invoking-user-preserving elevator such as sudo, doas, run0, or pkexec
 
-Dependency review refreshes the repositories configured in the host's
-`/etc/pacman.conf` into a private temporary database before classifying
-dependencies. This lets newly published local repository packages participate
-without refreshing or modifying the host package database. The temporary
-database is removed after review; provisioning refreshes and verifies the
-repositories again using the configured signature policy. Local repository
-servers must be readable by the invoking user during review. A built archive
-must be published in a configured repository's database to be resolved here.
+Dependency planning refreshes the repositories selected by `--config` (or the
+compiled profile's default configuration) into a private temporary database.
+It prepares the complete bootstrap and recipe transaction without changing host
+package state. Provisioning verifies that the selected versions and hashes still
+match before installing packages into the root. Local repository servers must
+be readable by the invoking user during review. A built archive must be published
+in a configured repository database, with its SHA-256, to enter a complete plan.
 
 For a recipe that compiles against libalpm, declare the package supplying
 `alpm.h` and `libalpm.pc` in the global `makedepends` array (`pacman` on Arch,
@@ -161,10 +169,10 @@ Current limitations are deliberately fail-closed:
 
 - `--sign` is rejected because private signing keys are never copied or mounted
   into a build root. Sign exported artifacts as a separate user operation.
-- `--sync-deps` supports repository dependencies. If dependency resolution
-  finds an AUR-only dependency, the isolated build stops before executing the
-  PKGBUILD; building and installing an operation-wide AUR dependency DAG in the
-  same root remains required before that case can be enabled safely.
+- Isolated plans require repository artifacts for every build dependency.
+  Missing repository requirements make the plan incomplete and stop provisioning.
+  A repository miss is not proof that an AUR recipe exists. Source dependencies
+  must be built and published first, then Shelly must resolve a new plan.
 - Root-required integration tests must be run from a real user session because
   Shelly will not guess an artifact owner when invoked directly as root.
 - A configured package destination must already exist. Artifact files are

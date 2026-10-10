@@ -26,6 +26,8 @@ pub const RestartCheckOptions = contract.RestartCheckOptions;
 pub const InitOptions = contract.InitOptions;
 
 pub const Manager = struct {
+    pub const build_transaction = @import("build_transaction.zig");
+    pub const build_plan = @import("build_plan.zig");
     pub const bootstrap = @import("bootstrap.zig");
     pub const types = @import("types.zig");
     pub const Backend = @import("backend.zig").Backend;
@@ -268,6 +270,48 @@ pub const Manager = struct {
             .rlpm => |value| value.get_updates_available() catch |err| return mapTransaction(err),
         };
     }
+    /// Prepare using the same native transaction as installation, without committing.
+    /// Caller supplies a private, empty database and an arena for the snapshot.
+    pub fn prepare_build_packages(self: *Manager, allocator: std.mem.Allocator, targets: [][:0]const u8) ![]const build_transaction.Package {
+        var issues: []const build_transaction.Issue = &.{};
+        return self.prepare_build_packages_report(allocator, targets, &issues);
+    }
+
+    pub fn prepare_build_packages_report(self: *Manager, allocator: std.mem.Allocator, targets: [][:0]const u8, issues: *[]const build_transaction.Issue) ![]const build_transaction.Package {
+        var output: []const build_transaction.Package = &.{};
+        try self.buildTransaction(targets, .{ .nolock = true }, .{ .allocator = allocator, .output = &output, .issues = issues });
+        return output;
+    }
+
+    pub fn install_build_packages(self: *Manager, targets: [][:0]const u8, expected: []const build_transaction.Package) !void {
+        var arena = std.heap.ArenaAllocator.init(self.allocator);
+        defer arena.deinit();
+        self.buildTransaction(targets, .{}, .{ .allocator = arena.allocator(), .expected = expected }) catch |err| switch (err) {
+            error.PrepareFailed, error.NoPackageFound, error.PackageFetchFailed, error.TargetNotFound, error.UnsatisfiedDependencies, error.ConflictingDependencies => return error.DependencyPlanMismatch,
+            else => return err,
+        };
+        const installed = try self.get_installed_packages();
+        defer OwnedPackage.deinitSlice(self.allocator, installed);
+        if (installed.len != expected.len) return error.DependencyPlanMismatch;
+        for (expected) |pinned| {
+            var found = false;
+            for (installed) |actual| if (std.mem.eql(u8, actual.name_value, pinned.name)) {
+                if (!std.mem.eql(u8, actual.version_value, pinned.version) or
+                    !std.mem.eql(u8, actual.architecture_value orelse "", pinned.architecture)) return error.DependencyPlanMismatch;
+                found = true;
+                break;
+            };
+            if (!found) return error.DependencyPlanMismatch;
+        }
+    }
+
+    fn buildTransaction(self: *Manager, targets: [][:0]const u8, flags: TransFlag, request: build_transaction.Request) !void {
+        switch (self.engine.?) {
+            .libalpm => |value| if (comptime selection.libalpm_enabled) try value.installBuildTransaction(targets, flags, request) else unreachable,
+            .rlpm => |value| try value.installBuildTransaction(targets, flags, request),
+        }
+    }
+
     pub fn install_packages(
         self: *Manager,
         package_names: [][:0]const u8,

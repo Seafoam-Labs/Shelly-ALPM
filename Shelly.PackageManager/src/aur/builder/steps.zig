@@ -358,6 +358,14 @@ fn wrapStepCommand(self: *PackageBuilder, child_argv: []const []const u8) !Wrapp
     defer read_write.deinit(self.allocator);
     try read_write.append(self.allocator, self.options.work_directory);
     try read_write.append(self.allocator, self.options.start_directory);
+    // Metadata review can run before validateBuildDirectories. A configured
+    // source cache must exist before Landlock can grant lifecycle access.
+    std.Io.Dir.cwd().createDirPath(self.io, self.options.source_destination) catch {
+        reportUnwritableBuildDirectory(self, self.options.source_destination);
+        return error.BuildDirectoryNotWritable;
+    };
+    try validateWritableDirectory(self, self.options.source_destination);
+    try read_write.append(self.allocator, self.options.source_destination);
     for (sandbox_config.extra_write) |path|
         try read_write.append(self.allocator, path);
 
@@ -1101,6 +1109,7 @@ pub fn buildEnvironment(
         else
             null,
         .source_date_epoch = self.source_date_epoch,
+        .source_destination = self.options.source_destination,
         .ccache = self.shellybuild_config.build.ccache,
         .distcc = self.shellybuild_config.build.distcc,
     };

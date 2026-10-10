@@ -5,6 +5,7 @@ const shell_word = @import("word.zig");
 const diagnostics = @import("diagnostics");
 const shell_scan = @import("shell_scan.zig");
 const arithmetic = @import("arithmetic.zig");
+const fields = @import("fields.zig");
 const PkgbuildParser = @import("parser.zig").PkgbuildParser;
 
 pub fn resolve_string(self: PkgbuildParser, input: []const u8, vars: *std.StringHashMap([]const u8)) ![]const u8 {
@@ -15,6 +16,24 @@ pub const WordValue = struct {
     value: []const u8,
     unresolved: bool = false,
 };
+
+pub const ArrayElement = struct { name: []const u8, index: usize };
+
+/// A single element is a scalar word part, unlike the multiword [@] form.
+/// Deliberately exclude Bash arithmetic, negative indices and base prefixes.
+pub fn match_array_element(text: []const u8) !?ArrayElement {
+    if (!std.mem.startsWith(u8, text, "${") or !std.mem.endsWith(u8, text, "}")) return null;
+    const end = shell_scan.scan_word_chars(text, 2);
+    if (end == 2 or text[end] != '[' or std.mem.startsWith(u8, text[end..], "[@]")) return null;
+    if (!std.mem.endsWith(u8, text, "]}")) return error.UnsupportedArrayExpansion;
+    const index = text[end + 1 .. text.len - 2];
+    if (index.len == 0 or (index.len > 1 and index[0] == '0')) return error.UnsupportedArrayExpansion;
+    for (index) |c| if (!std.ascii.isDigit(c)) return error.UnsupportedArrayExpansion;
+    // Bash arithmetic uses signed integers; an overflowing positive literal
+    // must not be mistaken for an ordinary out-of-range element.
+    const number = std.fmt.parseInt(i64, index, 10) catch return error.UnsupportedArrayExpansion;
+    return .{ .name = text[2..end], .index = std.math.cast(usize, number) orelse return error.UnsupportedArrayExpansion };
+}
 
 /// Expand each original expression once. Substituted bytes are data, never a
 /// new input to another expansion pass (even if they contain dollars/quotes).
@@ -42,6 +61,11 @@ pub fn resolve_word(self: PkgbuildParser, input: []const u8, vars: *std.StringHa
 fn resolve_word_parameter(self: PkgbuildParser, text: []const u8, vars: *std.StringHashMap([]const u8)) !WordValue {
     if (std.mem.startsWith(u8, text, "$(("))
         return .{ .value = try replace_arithmetic(self, text, vars) };
+    if (try match_array_element(text)) |element| {
+        if (try fields.resolve_array_element(self, vars, element.name, element.index)) |value|
+            return .{ .value = value };
+        return .{ .value = try self.allocator.dupe(u8, text), .unresolved = true };
+    }
     const braced = std.mem.startsWith(u8, text, "${");
     const start: usize = if (braced) 2 else 1;
     const end = shell_scan.scan_word_chars(text, start);

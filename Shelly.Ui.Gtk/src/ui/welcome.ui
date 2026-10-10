@@ -22,6 +22,10 @@
 
         <child>
           <object class="GtkBox" id="page_welcome">
+            <property name="accessible-role">group</property>
+            <accessibility>
+              <property name="label" translatable="yes">Welcome to Shelly v3</property>
+            </accessibility>
             <property name="orientation">vertical</property>
             <property name="hexpand">true</property>
             <property name="vexpand">true</property>
@@ -40,6 +44,7 @@
                 <property name="valign">center</property>
                 <child>
                   <object class="GtkImage" id="welcome_image">
+                    <property name="accessible-role">presentation</property>
                     <property name="icon-name">shelly</property>
                     <property name="pixel-size">48</property>
                     <property name="valign">center</property>
@@ -53,6 +58,10 @@
                     <property name="css-classes">title-1</property>
                     <property name="wrap">true</property>
                     <property name="max-width-chars">40</property>
+                    <property name="accessible-role">heading</property>
+                    <accessibility>
+                      <property name="level">1</property>
+                    </accessibility>
                   </object>
                 </child>
               </object>
@@ -80,6 +89,10 @@
 
         <child>
           <object class="GtkBox" id="page_sources">
+            <property name="accessible-role">group</property>
+            <accessibility>
+              <property name="label" translatable="yes">Select Your Sources</property>
+            </accessibility>
             <property name="orientation">vertical</property>
             <property name="hexpand">true</property>
             <property name="vexpand">true</property>
@@ -95,6 +108,10 @@
                 <property name="label" translatable="yes">Select Your Sources</property>
                 <property name="halign">center</property>
                 <property name="css-classes">title-2</property>
+                <property name="accessible-role">heading</property>
+                <accessibility>
+                  <property name="level">2</property>
+                </accessibility>
               </object>
             </child>
 
@@ -127,6 +144,7 @@
                         <property name="margin-bottom">8</property>
                         <child>
                           <object class="GtkImage">
+                            <property name="accessible-role">presentation</property>
                             <property name="icon-name">applications-system-symbolic</property>
                           </object>
                         </child>
@@ -165,6 +183,7 @@
                         <property name="margin-bottom">8</property>
                         <child>
                           <object class="GtkImage">
+                            <property name="accessible-role">presentation</property>
                             <property name="icon-name">system-run-symbolic</property>
                           </object>
                         </child>
@@ -203,6 +222,7 @@
                         <property name="margin-bottom">8</property>
                         <child>
                           <object class="GtkImage">
+                            <property name="accessible-role">presentation</property>
                             <property name="icon-name">application-x-executable-symbolic</property>
                           </object>
                         </child>
@@ -241,6 +261,7 @@
                         <property name="margin-bottom">8</property>
                         <child>
                           <object class="GtkImage">
+                            <property name="accessible-role">presentation</property>
                             <property name="icon-name">starred-symbolic</property>
                           </object>
                         </child>
@@ -274,6 +295,10 @@
 
         <child>
           <object class="GtkBox" id="page_appearance">
+            <property name="accessible-role">group</property>
+            <accessibility>
+              <property name="label" translatable="yes">Look and Feel</property>
+            </accessibility>
             <property name="orientation">vertical</property>
             <property name="hexpand">true</property>
             <property name="vexpand">true</property>
@@ -289,6 +314,10 @@
                 <property name="label" translatable="yes">Look and Feel</property>
                 <property name="halign">center</property>
                 <property name="css-classes">title-2</property>
+                <property name="accessible-role">heading</property>
+                <accessibility>
+                  <property name="level">2</property>
+                </accessibility>
               </object>
             </child>
 
@@ -344,6 +373,7 @@
                         </child>
                         <child>
                           <object class="GtkImage">
+                            <property name="accessible-role">presentation</property>
                             <property name="icon-name">sidebar-show-symbolic</property>
                           </object>
                         </child>
@@ -384,6 +414,7 @@
                         </child>
                         <child>
                           <object class="GtkImage">
+                            <property name="accessible-role">presentation</property>
                             <property name="icon-name">go-top-symbolic</property>
                           </object>
                         </child>
@@ -434,6 +465,9 @@
                         <child>
                           <object class="GtkSwitch" id="tray_enabled">
                             <property name="active">true</property>
+                            <accessibility>
+                              <property name="label" translatable="yes">Run in system tray when minimized</property>
+                            </accessibility>
                           </object>
                         </child>
                         <child>

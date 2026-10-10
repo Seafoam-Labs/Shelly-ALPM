@@ -633,3 +633,207 @@ test "native backend hook replacements and API overrides remain authoritative af
         }
     }
 }
+
+fn addBuildPlanRepository(fixture: *Fixture, scenario: struct { missing: bool = false, hashless: bool = false, conflict: bool = false }) !void {
+    const a = fixture.arena.allocator();
+    const io = t.io;
+    try fixture.temp.dir.createDirPath(io, "db/sync");
+    try fixture.temp.dir.createDirPath(io, "mirror");
+    const directory = try fixture.temp.dir.realPathFileAlloc(io, ".", a);
+    try fixture.temp.dir.writeFile(io, .{ .sub_path = "pacman.conf", .data = try std.fmt.allocPrint(a, "[options]\nArchitecture = auto\nSigLevel = Never\nLocalFileSigLevel = Never\n[testing]\nServer = file://{s}/mirror\n", .{directory}) });
+    var file = try fixture.temp.dir.createFile(io, "db/sync/testing.db", .{});
+    defer file.close(io);
+    var buffer: [4096]u8 = undefined;
+    var writer = file.writer(io, &buffer);
+    var tar: std.tar.Writer = .{ .underlying_writer = &writer.interface };
+    for ([_]struct { name: []const u8, depends: []const u8 = "", provides: []const u8 = "" }{
+        .{ .name = "recipe-tool", .depends = if (scenario.missing) "absent-library>=2" else "libxtables.so=12-64" },
+        .{ .name = "iptables", .depends = "runtime-library>=1", .provides = "libxtables.so=12-64" },
+        .{ .name = "iptables-legacy", .depends = "runtime-library>=1", .provides = "libxtables.so=12-64" },
+        .{ .name = "runtime-library" },
+    }) |package| {
+        const filename = try std.fmt.allocPrint(a, "{s}-1-1-any.pkg.tar", .{package.name});
+        const cache_path = try std.fs.path.join(a, &.{ "cache", filename });
+        {
+            const archive = try fixture.temp.dir.createFile(io, cache_path, .{});
+            defer archive.close(io);
+            var archive_buffer: [4096]u8 = undefined;
+            var archive_writer = archive.writer(io, &archive_buffer);
+            var archive_tar: std.tar.Writer = .{ .underlying_writer = &archive_writer.interface };
+            const dependency = if (package.depends.len == 0) "" else try std.fmt.allocPrint(a, "depend = {s}\n", .{package.depends});
+            const provides = if (package.provides.len == 0) "" else try std.fmt.allocPrint(a, "provides = {s}\n", .{package.provides});
+            const metadata = try std.fmt.allocPrint(a, "pkgname = {s}\npkgver = 1-1\narch = any\n{s}{s}", .{ package.name, dependency, provides });
+            try archive_tar.writeFileBytes(".PKGINFO", metadata, .{ .mode = 0o644 });
+            try archive_tar.writeFileBytes(try std.fmt.allocPrint(a, "usr/share/{s}", .{package.name}), package.name, .{ .mode = 0o644 });
+            try archive_tar.finishPedantically();
+            try archive_writer.interface.flush();
+        }
+        const bytes = try fixture.temp.dir.readFileAlloc(io, cache_path, a, .limited(64 * 1024));
+        try fixture.temp.dir.writeFile(io, .{ .sub_path = try std.fs.path.join(a, &.{ "mirror", filename }), .data = bytes });
+        const checksum = if (scenario.hashless) "" else try pm.Manager.build_plan.hashBytes(a, bytes);
+        const conflicts = if (scenario.conflict and std.mem.eql(u8, package.name, "iptables")) "iptables-legacy" else "";
+        const desc = try std.fmt.allocPrint(a, "%NAME%\n{s}\n\n%VERSION%\n1-1\n\n%ARCH%\nany\n\n%FILENAME%\n{s}\n\n%CSIZE%\n{d}\n\n%SHA256SUM%\n{s}\n\n%DEPENDS%\n{s}\n\n%PROVIDES%\n{s}\n\n%CONFLICTS%\n{s}\n\n", .{ package.name, filename, bytes.len, checksum, package.depends, package.provides, conflicts });
+        try tar.writeFileBytes(try std.fmt.allocPrint(a, "{s}-1-1/desc", .{package.name}), desc, .{ .mode = 0o644 });
+    }
+    try tar.finishPedantically();
+    try writer.interface.flush();
+}
+
+fn resolveBuildPlan(fixture: *Fixture, manager: *pm.Manager, requirements: []const pm.Manager.build_plan.Requirement) !pm.Manager.build_plan.Plan {
+    const a = fixture.arena.allocator();
+    return pm.Manager.build_plan.resolve(a, t.io, manager, .{
+        .reviewDigest = "ab" ** 32,
+        .configurationDigest = try pm.Manager.build_plan.configurationDigest(a, manager.config),
+        .buildPolicyDigest = "cd" ** 32,
+        .backend = @tagName(manager.backend()),
+        .bootstrapProfile = "test",
+        .architectures = &.{"x86_64"},
+        .check = true,
+        .repositories = &.{},
+        .requirements = requirements,
+    });
+}
+
+test "dependency plan uses native closure and pins provisioning on both backends" {
+    for ([_]pm.Manager.Backend{ .libalpm, .rlpm }) |backend| {
+        if (!backend.available()) continue;
+        var fixture = try Fixture.init(backend);
+        defer fixture.deinit();
+        try addBuildPlanRepository(&fixture, .{});
+        const manager = try fixture.manager();
+        defer manager.deinit();
+        const a = fixture.arena.allocator();
+        const plan = try resolveBuildPlan(&fixture, manager, &.{.{ .requirement = "recipe-tool", .role = .build }});
+        try plan.validate(a);
+        try t.expectEqual(@as(usize, 3), plan.packages.len);
+        const installed_before = try manager.get_installed_packages();
+        defer pm.Manager.OwnedPackage.deinitSlice(t.allocator, installed_before);
+        try t.expectEqual(@as(usize, 0), installed_before.len);
+        try t.expectError(error.FileNotFound, fixture.temp.dir.statFile(t.io, "db/db.lck", .{}));
+        try t.expectError(error.FileNotFound, fixture.temp.dir.statFile(t.io, "root/usr/share/recipe-tool", .{}));
+        var saw_provider = false;
+        for (plan.relationships) |edge| if (std.mem.eql(u8, edge.requirement, "libxtables.so=12-64")) {
+            try t.expect(edge.viaProvides);
+            try t.expect(edge.provider != null);
+            saw_provider = true;
+        };
+        try t.expect(saw_provider);
+        const encoded = try std.json.Stringify.valueAlloc(a, plan, .{});
+        var decoded = try std.json.parseFromSlice(pm.Manager.build_plan.Plan, a, encoded, .{});
+        defer decoded.deinit();
+        try decoded.value.validate(a);
+        const again = try resolveBuildPlan(&fixture, manager, plan.requirements);
+        try t.expectEqualStrings(plan.planDigest, again.planDigest);
+        const targets = try a.alloc([:0]const u8, plan.packages.len);
+        for (plan.packages, targets) |package, *target| target.* = try std.fmt.allocPrintSentinel(a, "{s}/{s}", .{ package.repository, package.name }, 0);
+        const altered = try a.dupe(pm.Manager.build_transaction.Package, plan.packages);
+        altered[0].sha256 = "00" ** 32;
+        try t.expectError(error.DependencyPlanMismatch, manager.install_build_packages(targets, altered));
+        try t.expectError(error.FileNotFound, fixture.temp.dir.statFile(t.io, "root/usr/share/recipe-tool", .{}));
+        try manager.install_build_packages(targets, plan.packages);
+        const installed = try manager.get_installed_packages();
+        defer pm.Manager.OwnedPackage.deinitSlice(t.allocator, installed);
+        try t.expectEqual(plan.packages.len, installed.len);
+        for (plan.packages) |package| {
+            var actual = (try manager.get_single_installed_package(try a.dupeZ(u8, package.name))).?;
+            defer actual.deinit(t.allocator);
+            try t.expectEqualStrings(package.version, actual.version_value);
+        }
+    }
+}
+
+test "dependency plan reports missing transitive requirements and cannot be consumed" {
+    for ([_]pm.Manager.Backend{ .libalpm, .rlpm }) |backend| {
+        if (!backend.available()) continue;
+        var fixture = try Fixture.init(backend);
+        defer fixture.deinit();
+        try addBuildPlanRepository(&fixture, .{ .missing = true });
+        const manager = try fixture.manager();
+        defer manager.deinit();
+        const plan = try resolveBuildPlan(&fixture, manager, &.{.{ .requirement = "recipe-tool", .role = .build }});
+        try t.expect(!plan.complete);
+        try t.expect(plan.unresolved.len != 0);
+        try t.expectEqualStrings("absent-library>=2", plan.unresolved[0].requirement);
+        try t.expectEqualStrings("recipe-tool", plan.unresolved[0].requiredBy);
+        try t.expectError(error.IncompleteDependencyPlan, plan.validate(fixture.arena.allocator()));
+        const direct = try resolveBuildPlan(&fixture, manager, &.{.{ .requirement = "not-a-known-aur-package>=3", .role = .check }});
+        try t.expectEqualStrings("not_in_repositories", direct.unresolved[0].code);
+    }
+}
+
+test "dependency plan rejects altered digests missing hashes and changed archives" {
+    for ([_]pm.Manager.Backend{ .libalpm, .rlpm }) |backend| {
+        if (!backend.available()) continue;
+        var fixture = try Fixture.init(backend);
+        defer fixture.deinit();
+        try addBuildPlanRepository(&fixture, .{});
+        const manager = try fixture.manager();
+        defer manager.deinit();
+        const a = fixture.arena.allocator();
+        const plan = try resolveBuildPlan(&fixture, manager, &.{.{ .requirement = "recipe-tool", .role = .build }});
+        var tampered = plan;
+        tampered.check = false;
+        try t.expectError(error.DependencyPlanMismatch, tampered.validate(a));
+        tampered = plan;
+        const packages = try a.dupe(pm.Manager.build_transaction.Package, plan.packages);
+        packages[0].sha256 = null;
+        tampered.packages = packages;
+        tampered.planDigest = try tampered.digest(a);
+        try t.expectError(error.MissingArtifactHash, tampered.validate(a));
+        tampered = plan;
+        tampered.schemaVersion = 99;
+        try t.expectError(error.UnsupportedDependencyPlan, tampered.validate(a));
+        const targets = try a.alloc([:0]const u8, plan.packages.len);
+        for (plan.packages, targets) |package, *target| target.* = try std.fmt.allocPrintSentinel(a, "{s}/{s}", .{ package.repository, package.name }, 0);
+        // Both a cached archive and a fresh mirror response must match metadata.
+        // Corrupt both so neither backend can recover by trying the other source.
+        for ([_][]const u8{ "cache", "mirror" }) |directory| {
+            try fixture.temp.dir.writeFile(t.io, .{ .sub_path = try std.fs.path.join(a, &.{ directory, plan.packages[0].filename }), .data = "corrupt archive" });
+        }
+        if (manager.install_build_packages(targets, plan.packages)) |_| {
+            return error.CorruptArchiveWasInstalled;
+        } else |_| {}
+        const installed = try manager.get_installed_packages();
+        defer pm.Manager.OwnedPackage.deinitSlice(t.allocator, installed);
+        try t.expectEqual(@as(usize, 0), installed.len);
+    }
+}
+
+test "dependency plan rejects conflicting providers and hashless repository metadata" {
+    for ([_]pm.Manager.Backend{ .libalpm, .rlpm }) |backend| {
+        if (!backend.available()) continue;
+        for ([_]bool{ false, true }) |hashless| {
+            var fixture = try Fixture.init(backend);
+            defer fixture.deinit();
+            try addBuildPlanRepository(&fixture, .{ .hashless = hashless, .conflict = !hashless });
+            const manager = try fixture.manager();
+            defer manager.deinit();
+            const requirements: []const pm.Manager.build_plan.Requirement = if (hashless)
+                &.{.{ .requirement = "recipe-tool", .role = .build }}
+            else
+                &.{ .{ .requirement = "iptables", .role = .bootstrap }, .{ .requirement = "iptables-legacy", .role = .build } };
+            const plan = try resolveBuildPlan(&fixture, manager, requirements);
+            try t.expect(!plan.complete);
+            try t.expect(plan.unresolved.len != 0);
+            if (hashless) try t.expectEqualStrings("missing_artifact_sha256", plan.unresolved[0].code);
+        }
+    }
+}
+
+test "dependency plan captures source configuration before private path overrides" {
+    for ([_]pm.Manager.Backend{ .libalpm, .rlpm }) |backend| {
+        if (!backend.available()) continue;
+        var fixture = try Fixture.init(backend);
+        defer fixture.deinit();
+        const a = fixture.arena.allocator();
+        var config = try pm.Manager.configuration.Configuration.parseStrict(a, t.io, fixture.options.config_path.?);
+        defer config.deinitialize();
+        const original = try pm.Manager.build_plan.configurationDigest(a, &config);
+        var captured: [64]u8 = undefined;
+        fixture.options.configuration_digest = &captured;
+        const manager = try fixture.manager();
+        defer manager.deinit();
+        try t.expectEqualStrings(original, &captured);
+        try t.expect(!std.mem.eql(u8, original, try pm.Manager.build_plan.configurationDigest(a, manager.config)));
+    }
+}
