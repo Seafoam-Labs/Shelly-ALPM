@@ -117,7 +117,7 @@ fn executeWith(
             );
             return 1;
         }
-        break :blk try promptSelection(context, query, candidates);
+        break :blk try promptSelection(context, query, candidates, aur_base);
     };
     const index = selected_index orelse {
         try context.stdout.writeAll("Operation cancelled.\n");
@@ -348,6 +348,7 @@ fn promptSelection(
     context: *runtime.RuntimeContext,
     query: []const u8,
     candidates: []const Candidate,
+    aur_base: []const u8,
 ) !?usize {
     try context.stdout.print("Packages matching '{s}':\n", .{query});
     const use_color = output.supportsAnsi(context);
@@ -355,7 +356,17 @@ fn promptSelection(
         const number = candidates.len - index;
         const most_likely = index + 1 == candidates.len;
         if (most_likely and use_color) try context.stdout.writeAll(colors.colorCode(.highlight));
-        try context.stdout.print("{d}) {s} — ", .{ number, candidate.name });
+        var name_display: []const u8 = candidate.name;
+        var name_allocated = false;
+        var hyper_path: ?[]const u8 = null;
+        if (candidate.source == .aur) {
+            hyper_path = try aurHyperPath(context.allocator, aur_base, candidate.name);
+            name_display = hyperlink(context.allocator, aur_base, hyper_path.?, candidate.name, context);
+            name_allocated = name_display.ptr != candidate.name.ptr;
+        }
+        try context.stdout.print("{d}) {s} — ", .{ number, name_display });
+        if (name_allocated) context.allocator.free(name_display);
+        if (hyper_path) |path| context.allocator.free(path);
         switch (candidate.source) {
             .standard => try context.stdout.writeAll("standard"),
             .aur => try context.stdout.writeAll("AUR"),
@@ -443,6 +454,30 @@ fn truncate(value: []const u8, maximum: usize) []const u8 {
     return format.truncate(value, maximum);
 }
 
+fn aurHyperPath(allocator: std.mem.Allocator, aur_base: []const u8, name: []const u8) ![]const u8 {
+    const prefix = if (std.mem.indexOf(u8, aur_base, "atoll") != null)
+        "/package/"
+    else
+        "/packages/";
+    return std.mem.concat(allocator, u8, &.{ prefix, name, "/" });
+}
+
+fn hyperlink(
+    allocator: std.mem.Allocator,
+    aur_base: []const u8,
+    url_path: []const u8,
+    text: []const u8,
+    context: *runtime.RuntimeContext,
+) []const u8 {
+    if (!output.supportsAnsi(context)) return text;
+
+    const url = std.mem.concat(allocator, u8, &.{ aur_base, url_path }) catch return text;
+    defer allocator.free(url);
+
+    const parts = [_][]const u8{ "\x1b]8;;", url, "\x1b\\", text, "\x1b]8;;\x1b\\" };
+    return std.mem.concat(allocator, u8, &parts) catch text;
+}
+
 test "candidate preparation puts the closest standard match last" {
     const candidates = [_]Candidate{
         .{ .source = .aur, .name = "firefox-esr", .version = "1", .popularity = 20 },
@@ -477,9 +512,9 @@ test "reverse-numbered selection defaults one to the final closest match" {
         .{ .source = .standard, .name = "firefox-developer-edition", .repository = "extra" },
         .{ .source = .standard, .name = "firefox", .repository = "extra" },
     };
-    try std.testing.expectEqual(@as(?usize, 2), try promptSelection(&context, "firefox", &candidates));
+    try std.testing.expectEqual(@as(?usize, 2), try promptSelection(&context, "firefox", &candidates, aur_url.default_base));
     const rendered = stdout.writer.buffered();
-    try std.testing.expect(std.mem.indexOf(u8, rendered, "3) firefox-esr") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "firefox-esr") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "2) firefox-developer-edition") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "1) firefox — standard") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "standard/extra") == null);
@@ -487,14 +522,15 @@ test "reverse-numbered selection defaults one to the final closest match" {
     try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[32m1) firefox") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "[Most likely match]\x1b[0m") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "Select [1]:") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b]8;;https://aur.archlinux.org/packages/firefox-esr/\x1b\\firefox-esr\x1b]8;;\x1b\\") != null);
 
     var numbered_input = std.Io.Reader.fixed("3\n");
     context.stdin = &numbered_input;
-    try std.testing.expectEqual(@as(?usize, 0), try promptSelection(&context, "firefox", &candidates));
+    try std.testing.expectEqual(@as(?usize, 0), try promptSelection(&context, "firefox", &candidates, aur_url.default_base));
 
     var cancel_input = std.Io.Reader.fixed("0\n");
     context.stdin = &cancel_input;
-    try std.testing.expectEqual(@as(?usize, null), try promptSelection(&context, "firefox", &candidates));
+    try std.testing.expectEqual(@as(?usize, null), try promptSelection(&context, "firefox", &candidates, aur_url.default_base));
 }
 
 test "fuzzy score handles insertion and transposition typos" {
