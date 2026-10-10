@@ -25,10 +25,10 @@ source=("${pkgname}::git+https://github.com/Seafoam-Labs/Shelly-ALPM.git#branch=
         'shelly-flatpak-integrate')
 
 sha256sums=('SKIP'
-            'd7adb207c0073b93679ff3b8741a734ab62b48283134465b47844884bd211bb9'
-            'a4bd3c27ac9f92beeaa9bfcac2030629a9b3e221f7a9b3fc3dd33b7cbd90d953'
-            'cf0dc0a6d1865b9010054b36941e7bf4d445c3e7549219889f07ab08283c5c0f'
-            'da6ed2f71966aef9cc20f7dcd3a5aa87afd3d57d2fccebfe71be62e4d9ae64d5')
+            '69a353bf17b5a556203f9a517608532dd1eb5e167a7218dbd9ad7c1dad86580a'
+            'aa00144868ee38674a1f3eaffd329a04767309449b3260511da1cdfc09054f7e'
+            '7dd7983aab6b2e006bd17e9ced23a7b83d6fe636e611143f7c9eaddd4ffee816'
+            '3c64a1a9c6e05ac92f809bfece645a4a1f5b3363ea47386efa226b3fdb78af45')
 
 pkgver() {
   cd "${srcdir}/${pkgname}"

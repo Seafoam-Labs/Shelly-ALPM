@@ -66,6 +66,7 @@ for dir in "${FLATPAK_DIRS[@]}"; do
 Name=Manage in Shelly
 Name[ru]=Управлять в Shelly
 Name[pl]=Zarządzaj w Shelly
+Name[pt]=Gerir no Shelly
 Icon=shelly
 Exec=/usr/bin/shelly-ui --page flatpak-install
 EOF

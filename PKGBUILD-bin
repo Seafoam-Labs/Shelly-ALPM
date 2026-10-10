@@ -25,12 +25,12 @@ source=(
     'shelly-flatpak-integrate'
 )
 
-sha256sums=('8f777209c841d79aafc9cfacd7f54a12fbb5626e4ee05628261b939233bb930c'
-            '1eea0b5b5119fce8ceb4f8fb37cfc5af58ed9dcbe1fae6b89d335a9ef0189410'
-            'd7adb207c0073b93679ff3b8741a734ab62b48283134465b47844884bd211bb9'
-            'a4bd3c27ac9f92beeaa9bfcac2030629a9b3e221f7a9b3fc3dd33b7cbd90d953'
-            'cf0dc0a6d1865b9010054b36941e7bf4d445c3e7549219889f07ab08283c5c0f'
-            'da6ed2f71966aef9cc20f7dcd3a5aa87afd3d57d2fccebfe71be62e4d9ae64d5')
+sha256sums=('cd6443eb5cce22560dca583b4b935891379e8b8ce4836f3ba85eaa52adb6da47'
+            '8919be4c25f56c28c3b037c656c6a600b0f600cd9edb74fee128babecc59acfe'
+            '69a353bf17b5a556203f9a517608532dd1eb5e167a7218dbd9ad7c1dad86580a'
+            'aa00144868ee38674a1f3eaffd329a04767309449b3260511da1cdfc09054f7e'
+            '7dd7983aab6b2e006bd17e9ced23a7b83d6fe636e611143f7c9eaddd4ffee816'
+            '3c64a1a9c6e05ac92f809bfece645a4a1f5b3363ea47386efa226b3fdb78af45')
 
 package_shelly-bin() {
   pkgdesc="Shelly: A Modern Arch Package Manager (prebuilt binary)"
