@@ -699,6 +699,7 @@ pub fn build(b: *std.Build) void {
             "Flatpak AppStream operations honor shared cancellation",
             "Flatpak AppStream operation-hooked public APIs compile",
             "flatpak permission classifier groups tokens into one row per concern",
+            "flatpak permission classifier names a capability once when two tokens spell it",
             "flatpak permission classifier reads the policy groups on their own axis",
             "flatpak permission classifier interprets denials and conditions",
             "flatpak permission classifier rates a folder below the tree it sits in",

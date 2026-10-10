@@ -643,6 +643,25 @@ fn addAbsences(buckets: *Buckets) void {
     }
 }
 
+/// Collapse identical detail lines within one concern, keeping the first
+/// occurrence. `x11` and `fallback-x11` are two flatpak tokens but both read as
+/// "X11", and `home` and `~` both read as "Home folder", so an app that ships
+/// the pair would otherwise name one capability twice.
+fn dedupeItems(allocator: std.mem.Allocator, items: *std.ArrayList([]const u8)) void {
+    var i: usize = 0;
+    while (i < items.items.len) : (i += 1) {
+        var j = i + 1;
+        while (j < items.items.len) {
+            if (std.mem.eql(u8, items.items[i], items.items[j])) {
+                allocator.free(items.items[j]);
+                _ = items.orderedRemove(j);
+            } else {
+                j += 1;
+            }
+        }
+    }
+}
+
 fn collectRows(allocator: std.mem.Allocator, buckets: *Buckets) ![]Row {
     var rows: std.ArrayList(Row) = .empty;
     errdefer {
@@ -664,6 +683,7 @@ fn collectRows(allocator: std.mem.Allocator, buckets: *Buckets) ![]Row {
             });
             continue;
         }
+        dedupeItems(allocator, &b.items);
         try rows.append(allocator, .{
             .concern = @enumFromInt(index),
             .tier = if (b.granted) b.tier else .low,
@@ -814,6 +834,27 @@ test "flatpak permission classifier rates a folder below the tree it sits in" {
     defer runtime.deinit(allocator);
     try std.testing.expectEqual(Concern.files_runtime, runtime.rows[0].concern);
     try std.testing.expectEqual(Tier.high, runtime.rows[0].tier);
+}
+
+test "flatpak permission classifier names a capability once when two tokens spell it" {
+    const allocator = std.testing.allocator;
+
+    // app.authpass.AuthPass ships all three sockets; `x11` and `fallback-x11`
+    // both label "X11", so the row must name the display server once, not twice.
+    var summary = try classify(allocator, &.{
+        "Context=sockets:x11",
+        "Context=sockets:wayland",
+        "Context=sockets:fallback-x11",
+    });
+    defer summary.deinit(allocator);
+
+    var display: ?Row = null;
+    for (summary.rows) |row| {
+        if (row.concern == .display) display = row;
+    }
+    try std.testing.expectEqual(@as(usize, 2), display.?.items.len);
+    try std.testing.expectEqualStrings("X11", display.?.items[0]);
+    try std.testing.expectEqualStrings("Wayland", display.?.items[1]);
 }
 
 test "flatpak permission classifier keeps an unread request separate from none" {
