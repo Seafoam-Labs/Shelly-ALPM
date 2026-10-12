@@ -837,3 +837,50 @@ test "dependency plan captures source configuration before private path override
         try t.expect(!std.mem.eql(u8, original, try pm.Manager.build_plan.configurationDigest(a, manager.config)));
     }
 }
+
+test "AppStream resolves installed file owners with both native backends in private roots" {
+    for ([_]pm.Manager.Backend{ .libalpm, .rlpm }) |backend| {
+        if (backend == .libalpm and !pm.Manager.libalpm_enabled) continue;
+        var fixture = try Fixture.init(backend);
+        defer fixture.deinit();
+        const io = t.io;
+        const dir = fixture.temp.dir;
+        try dir.createDirPath(io, "db/local/editor-git-1-1");
+        try dir.createDirPath(io, "root/usr/share/metainfo");
+        try dir.writeFile(io, .{ .sub_path = "db/local/ALPM_DB_VERSION", .data = "9\n" });
+        try dir.writeFile(io, .{ .sub_path = "db/local/editor-git-1-1/desc", .data = "%NAME%\neditor-git\n\n%VERSION%\n1-1\n\n%DESC%\nForeign editor\n\n%ARCH%\nany\n\n" });
+        try dir.writeFile(io, .{ .sub_path = "db/local/editor-git-1-1/files", .data = "%FILES%\nusr/share/applications/unrelated.desktop\nusr/share/metainfo/editor.metainfo.xml\n\n" });
+        try dir.writeFile(io, .{ .sub_path = "root/usr/share/metainfo/editor.metainfo.xml", .data = "<component type=\"desktop-application\"><id>org.example.Editor</id><launchable type=\"desktop-id\">unrelated.desktop</launchable></component>" });
+        {
+            const manager = try fixture.manager();
+            defer manager.deinit();
+            const owners = try manager.get_file_owners(&.{ "usr/share/applications/unrelated.desktop", "usr/share/metainfo/editor.metainfo.xml" });
+            defer pm.Manager.OwnedPackage.deinitSlice(t.allocator, owners);
+            try t.expectEqual(@as(usize, 1), owners.len);
+            try t.expectEqualStrings("editor-git", owners[0].name_value);
+            const absent = try manager.get_file_owners(&.{"usr/share/applications/unrelated"});
+            defer pm.Manager.OwnedPackage.deinitSlice(t.allocator, absent);
+            try t.expectEqual(@as(usize, 0), absent.len);
+        }
+        // Resolve a reverse-domain component whose package name is entirely different.
+        // --no-flatpak behavior must not require an optional backend or any remote.
+        const resolver = pm.appstream_resolver;
+        const a = fixture.arena.allocator();
+        const result = try resolver.resolve(a, io, t.environ, fixture.options, "org.example.Editor", false);
+        try t.expectEqual(@as(usize, 1), result.candidates.len);
+        try t.expectEqual(@as(usize, 0), result.problems.len);
+        try t.expectEqualStrings("editor-git", result.candidates[0].id);
+        try t.expect(result.candidates[0].installed);
+        try t.expectEqual(.native, result.candidates[0].source);
+        try dir.deleteFile(io, "root/usr/share/metainfo/editor.metainfo.xml");
+        const fallback = try resolver.resolve(a, io, t.environ, fixture.options, "unrelated.desktop", false);
+        try t.expectEqual(@as(usize, 1), fallback.candidates.len);
+        const unknown = try resolver.resolve(a, io, t.environ, fixture.options, "org.example.Missing", false);
+        try t.expectEqual(@as(usize, 0), unknown.candidates.len);
+        try t.expectEqual(@as(usize, 0), unknown.problems.len);
+        try dir.writeFile(io, .{ .sub_path = "root/usr/share/metainfo/broken.xml", .data = "<component><id>" });
+        const broken = try resolver.resolve(a, io, t.environ, fixture.options, "org.example.Missing", false);
+        try t.expectEqual(@as(usize, 1), broken.problems.len);
+        try t.expectEqualStrings("AppstreamMetadataUnreadable", broken.problems[0].code);
+    }
+}

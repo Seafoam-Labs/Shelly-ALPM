@@ -75,6 +75,7 @@ pub const variants = [_]types.Variant{
             "Installed Flatpak application or runtime ID",
         )},
         .options = &.{
+            types.stringOption("--scope", &.{}, "Select system or user installation; requires a full app/ID/ARCH/BRANCH reference", false),
             flag("--remove-unused", &.{"-r"}, "Remove newly unused Flatpak dependencies"),
             flag("--remove-config", &.{}, "Remove configuration associated with the removed package"),
         },

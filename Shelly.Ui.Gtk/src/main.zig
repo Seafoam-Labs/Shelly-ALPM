@@ -19,6 +19,7 @@ var did_activate: bool = false;
 var requested_page: ?deep_link.PageTarget = null;
 var app_id_buffer: [deep_link.max_app_id_len + 1]u8 = undefined;
 var requested_app_id: ?[:0]const u8 = null;
+var requested_appstream: bool = false;
 var app_path_buffer: [deep_link.max_file_path_len + 1]u8 = undefined;
 var requested_app_path: ?[:0]const u8 = null;
 var appimage_path_buffer: [deep_link.max_file_path_len + 1]u8 = undefined;
@@ -67,6 +68,7 @@ fn commandLine(
 ) callconv(.c) c_int {
     requested_page = null;
     requested_app_id = null;
+    requested_appstream = false;
     requested_app_path = null;
     requested_appimage_path = null;
     var argc: c_int = 0;
@@ -96,6 +98,12 @@ fn commandLine(
 
         if (deep_link.extractFlatpakAppId(arg, &app_id_buffer)) |id| {
             requested_app_id = id;
+            requested_appstream = false;
+        }
+
+        if (deep_link.extractAppstreamId(arg, &app_id_buffer)) |id| {
+            requested_app_id = id;
+            requested_appstream = true;
         }
 
         if (deep_link.extractLocalFlatpakFile(arg, &app_path_buffer)) |app_path| {
@@ -112,7 +120,7 @@ fn commandLine(
     } else if (requested_appimage_path) |appimage_path| {
         runtime.queueLocalAppImagePath(appimage_path);
     } else if (requested_app_id) |id| {
-        runtime.queueFlatpakApp(id);
+        if (requested_appstream) runtime.queueAppstreamApp(id) else runtime.queueFlatpakApp(id);
     } else if (requested_page) |page| {
         runtime.queuePage(page);
     }
@@ -125,7 +133,9 @@ fn commandLine(
 fn dispatchPendingNavigation(window: *ShellyWindow) void {
     const request = runtime.takePendingNavigation() orelse return;
 
+    window.cancelAppstreamNavigation();
     const navigated = switch (request) {
+        .appstream_app => |app| window.openAppstreamApp(app.id()),
         .page => |target| window.navigateTo(target),
         .flatpak_app => |app| window.openFlatpakApp(app.id()),
         .local_flatpak_file => |file| window.openFlatpakLocalFile(file.path()),
@@ -262,6 +272,8 @@ fn setupGnomeThemePreference() void {
 }
 
 test {
+    _ = @import("models/appstream.zig");
+    _ = @import("pages/appstream_page.zig");
     _ = @import("services/icon_resolver.zig");
     _ = @import("services/ui_config_resolver.zig");
     _ = @import("services/shelly_cli.zig");

@@ -408,6 +408,32 @@ pub const Manager = struct {
         try self.refresh();
     }
 
+    pub fn get_file_owners(self: *Manager, paths: []const []const u8) TransactionError![]libalpm.OwnedPackage {
+        if (self.handle == null) return error.NoHandle;
+        var result: std.ArrayList(libalpm.OwnedPackage) = .empty;
+        errdefer {
+            libalpm.OwnedPackage.deinitItems(self.allocator, result.items);
+            result.deinit(self.allocator);
+        }
+        var node: libalpm.DatabaseList = rawLibalpm.alpm_db_get_pkgcache(rawLibalpm.alpm_get_localdb(self.handle));
+        while (node != null) : (node = node.?.*.next) {
+            try self.checkOperationCancelled();
+            const package = libalpm.Package.from(node.?.data orelse continue) orelse continue;
+            var files = package.files().files();
+            const matches = scan: while (files.next()) |file| {
+                const name = file.name() orelse continue;
+                for (paths) |path| if (std.mem.eql(u8, name, path)) break :scan true;
+            } else false;
+            if (!matches) continue;
+            var owned = try libalpm.OwnedPackage.init(self.allocator, package);
+            result.append(self.allocator, owned) catch |err| {
+                owned.deinit(self.allocator);
+                return err;
+            };
+        }
+        return result.toOwnedSlice(self.allocator);
+    }
+
     pub fn get_installed_packages(self: *Manager) TransactionError![]libalpm.OwnedPackage {
         return self.get_installed_packages_with_reverse_dependencies(.{});
     }

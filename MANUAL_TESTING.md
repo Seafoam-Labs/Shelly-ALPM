@@ -591,3 +591,35 @@ Document any known issues that are being tracked:
 - [ ] Repeat with Landlock enabled and with `shelly build --isolated`. Confirm
   configured values reach build steps, paths refer to the guest in isolated
   mode, and assignments grant no filesystem access or host mounts.
+
+## AppStream desktop actions (issue #1995)
+
+Build the CLI and GTK UI together. For scoped Flatpak removal, also build the
+matching optional Flatpak backend. These checks open details; do not confirm a
+removal unless using a disposable installation.
+
+- With native Chromium installed, open `shelly-ui appstream://chromium.desktop`.
+  Expect native `chromium` details and a Remove button. Repeat with
+  `appstream://com.mitchellh.ghostty` when native Ghostty is installed.
+- Repeat through KDE's application-menu **Uninstall or Manage Add-Ons** action,
+  both with Shelly closed and with an existing window. Repeat with Flatpak
+  support disabled or its optional backend absent: native details still work.
+- Install the same app natively and as Flatpak, or in both system and user Flatpak
+  installations. Open its AppStream URI and explicitly choose an installation.
+  Verify the source/scope/ref shown; no installation is selected automatically.
+- Open a Flatpak-only application's AppStream URI. Expect its details and Remove
+  button even if its remote catalog has been deleted. In a disposable setup,
+  verify removal only affects the chosen installation/branch.
+- Open an unknown component. Expect a not-found message, or a lookup failure if
+  a source could not be read, instead of navigation to the Flatpak list.
+- While lookup is running, open a second URI or navigate elsewhere. The older
+  lookup must not replace the newer page. Opening a URI during a transaction
+  must not replace the transaction view.
+- Verify existing `flatpak+https://` links, local `.flatpakref`, `.flatpak`, and
+  `.AppImage` files still use their existing handlers.
+
+For a read-only CLI check, run
+`shelly resolve appstream chromium.desktop --no-flatpak --json` and verify an
+installed native candidate named `chromium`. `--ui-mode` returns the same result
+inside the normal JSON frame. Native package-base resolution via `shelly resolve
+<package> --json` must retain its original output format.

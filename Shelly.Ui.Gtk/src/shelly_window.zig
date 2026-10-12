@@ -6,6 +6,7 @@ const glib = bindings.glib;
 const gio = bindings.gio;
 const gobject = bindings.gobject;
 const FlatpakPage = @import("pages/flatpak/flatpak_page.zig").FlatpakPage;
+const AppstreamPage = @import("pages/appstream_page.zig").AppstreamPage;
 const AppImagePage = @import("pages/appimage_page.zig").AppImagePage;
 const PackagePage = @import("pages/package_page.zig").PackagePage;
 const AurPage = @import("pages/aur_page.zig").AurPage;
@@ -62,6 +63,7 @@ pub const ShellyWindow = extern struct {
         nav_mode: NavMode,
         pending_nav: NavMode,
         flatpak_page: *FlatpakPage,
+        appstream_page: *AppstreamPage,
         appimage_page: *AppImagePage,        
         aur_slot_atoll: bool,
         var offset: c_int = 0;
@@ -599,6 +601,10 @@ pub const ShellyWindow = extern struct {
         const up_utils = UtilitiesPage.new();
         const up_utils_page = gtk.Stack.addTitled(stack, up_utils.as(gtk.Widget), "utilities", translations._("Utilities"));
         gtk.StackPage.setIconName(up_utils_page, UtilitiesPage.icon_name);
+
+        const appstream = AppstreamPage.new();
+        self.private().appstream_page = appstream;
+        _ = gtk.Stack.addNamed(stack, appstream.as(gtk.Widget), "appstream");
     }
 
     fn aurSlotWidget(self: *ShellyWindow) *gtk.Widget {
@@ -714,6 +720,21 @@ pub const ShellyWindow = extern struct {
         const tp = TransactionPage.new();
         self.showLockout(tp.as(gtk.Widget));
         tp.run(request);
+    }
+
+    pub fn navigationLocked(self: *ShellyWindow) bool {
+        return gtk.Widget.getVisible(self.private().lockout_overlay.as(gtk.Widget)) != 0;
+    }
+
+    pub fn cancelAppstreamNavigation(self: *ShellyWindow) void {
+        self.private().appstream_page.cancel();
+    }
+
+    pub fn openAppstreamApp(self: *ShellyWindow, id: [:0]const u8) bool {
+        if (self.navigationLocked()) return false;
+        if (!self.showTopLevelPage("appstream")) return false;
+        self.private().appstream_page.open(id);
+        return true;
     }
 
     pub fn openFlatpakApp(self: *ShellyWindow, app_id: [:0]const u8) bool {

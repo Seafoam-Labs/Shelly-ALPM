@@ -268,6 +268,23 @@ fn runFlatpak(
     defer manager.deinit();
     try manager.setOperationContext(operation_context);
     defer manager.setOperationContext(null) catch {};
+    for (invocation.options) |option| {
+        if (!std.mem.eql(u8, option.name, "--scope")) continue;
+        const scope = std.meta.stringToEnum(PackageManager.flatpak.Scope, option.value orelse "") orelse return error.InvalidScope;
+        if (scope == .unknown) return error.InvalidScope;
+        const apps = try manager.list_installed_applications();
+        defer PackageManager.flatpak.InstalledApplication.deinitSlice(context.allocator, apps);
+        for (apps) |app| {
+            if (app.scope != scope) continue;
+            const ref = try std.fmt.allocPrint(context.allocator, "{s}/{s}/{s}/{s}", .{ @tagName(app.kind), app.id, app.arch, app.branch });
+            defer context.allocator.free(ref);
+            if (!std.mem.eql(u8, ref, invocation.positionals[0])) continue;
+            if (!try manager.uninstall_flatpak(ref, scope, optionEnabled(invocation, "--remove-unused"))) return RemoveError.BackendFailed;
+            if (optionEnabled(invocation, "--remove-config")) cleanupFlatpakConfig(context, app.id);
+            return;
+        }
+        return RemoveError.FlatpakNotFound;
+    }
     var application = (try manager.find_installed_flatpak(invocation.positionals[0])) orelse
         return RemoveError.FlatpakNotFound;
     defer application.deinit(context.allocator);

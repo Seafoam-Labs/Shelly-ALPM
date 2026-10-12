@@ -5,6 +5,8 @@ pub const internal_workers = @import("Shelly_Rlpm").Workers;
 const Io = std.Io;
 const flatpak_backend_loader = @import("flatpak/backend_loader.zig");
 
+pub const appstream_resolver = @import("appstream_resolver.zig");
+
 pub const Manager = @import("alpm/manager.zig").Manager;
 
 pub const user_errors = @import("shared/user_errors.zig");
@@ -471,6 +473,7 @@ test {
     _ = @import("flatpak/permissions.zig");
     _ = @import("flatpak/appstream_manager.zig");
     _ = @import("flatpak/appstream_parser.zig");
+    _ = appstream_resolver;
     _ = @import("flatpak/events.zig");
     _ = @import("appimage/manager.zig");
     _ = @import("archive");

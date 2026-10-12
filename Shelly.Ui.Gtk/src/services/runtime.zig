@@ -31,6 +31,7 @@ pub const PendingApp = struct {
 pub const PendingNavigation = union(enum) {
     page: deep_link.PageTarget,
     flatpak_app: PendingApp,
+    appstream_app: PendingApp,
     local_flatpak_file: PendingLocalFile,
     local_appimage_file: PendingLocalFile,
 };
@@ -39,6 +40,15 @@ pub var pending_navigation: ?PendingNavigation = null;
 
 pub fn queuePage(target: deep_link.PageTarget) void {
     pending_navigation = .{ .page = target };
+}
+
+pub fn queueAppstreamApp(id: []const u8) void {
+    if (id.len == 0 or id.len > deep_link.max_app_id_len) return;
+    var pending: PendingApp = undefined;
+    @memcpy(pending.buffer[0..id.len], id);
+    pending.buffer[id.len] = 0;
+    pending.len = id.len;
+    pending_navigation = .{ .appstream_app = pending };
 }
 
 pub fn queueFlatpakApp(app_id: []const u8) void {
@@ -68,7 +78,6 @@ pub fn queueLocalAppImagePath(path: []const u8) void {
     pending.len = path.len;
     pending_navigation = .{ .local_appimage_file = pending };
 }
-
 
 pub fn takePendingNavigation() ?PendingNavigation {
     const pending = pending_navigation;

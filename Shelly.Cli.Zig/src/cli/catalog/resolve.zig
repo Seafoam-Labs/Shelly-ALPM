@@ -1,6 +1,6 @@
 const types = @import("types.zig");
 
-pub const variants = [_]types.Variant{.{
+pub const variants = [_]types.Variant{ .{
     .action = .resolve,
     .name = "resolve",
     .default_for_action = true,
@@ -17,4 +17,10 @@ pub const variants = [_]types.Variant{.{
         types.stringOption("--repository", &.{}, "Permits a standard repository; repeatable", false),
     },
     .arguments = &.{types.repeatedArgument("name", 1, "Exact binary package names to resolve in input order")},
-}};
+}, .{
+    .action = .resolve,
+    .name = "appstream",
+    .description = "Resolve an AppStream component to installed native packages or Flatpak applications without changing package state",
+    .arguments = &.{types.requiredArgument("component-id", "Exact AppStream component ID")},
+    .options = &.{types.flag("--no-flatpak", &.{}, "Only resolve native packages")},
+} };

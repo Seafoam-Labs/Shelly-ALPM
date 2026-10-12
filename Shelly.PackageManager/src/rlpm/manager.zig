@@ -165,6 +165,31 @@ pub const Manager = struct {
     pub fn sync_for_update_check(self: *Manager, force: bool) !void {
         try self.sync(force);
     }
+    pub fn get_file_owners(self: *Manager, paths: []const []const u8) ![]types.OwnedPackage {
+        const db = self.owner.localDatabase().?;
+        try self.owner.ensureDatabase(self.io(), db);
+        var result: std.ArrayList(types.OwnedPackage) = .empty;
+        errdefer {
+            types.OwnedPackage.deinitItems(self.allocator, result.items);
+            result.deinit(self.allocator);
+        }
+        for (try self.owner.packageIds(db)) |id| {
+            try self.checkCancelled();
+            const ref = try self.owner.packageReference(db, id);
+            const package = try self.owner.packageMetadata(self.io(), ref, .{ .files = true });
+            const matches = scan: for (paths) |path| {
+                if (package.findFile(path) != null) break :scan true;
+            } else false;
+            if (!matches) continue;
+            var value = try self.snapshot(ref, .{});
+            result.append(self.allocator, value) catch |err| {
+                value.deinit(self.allocator);
+                return err;
+            };
+        }
+        return result.toOwnedSlice(self.allocator);
+    }
+
     pub fn get_installed_packages(self: *Manager) ![]types.OwnedPackage {
         return self.get_installed_packages_with_reverse_dependencies(.{});
     }

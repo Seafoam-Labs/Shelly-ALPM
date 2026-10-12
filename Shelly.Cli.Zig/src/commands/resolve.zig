@@ -30,6 +30,7 @@ pub fn dispatch(
     context: *runtime.RuntimeContext,
     invocation: *const parser.Invocation,
 ) !?u8 {
+    if (std.mem.eql(u8, invocation.command.path, "shelly resolve appstream")) return try @import("resolve_appstream.zig").dispatch(context, invocation);
     if (!std.mem.eql(u8, invocation.command.path, command_path)) return null;
     if (!invocation.globals.json) {
         try context.stderr.writeAll("shelly resolve requires --json.\n");
@@ -344,4 +345,8 @@ test "auto resolution queries AUR only after an allowed standard miss" {
     try std.testing.expect(!needsAurLookup(.auto, standard));
     try std.testing.expect(!needsAurLookup(.standard, unresolved));
     try std.testing.expect(needsAurLookup(.aur, unresolved));
+}
+
+test {
+    _ = @import("resolve_appstream.zig");
 }

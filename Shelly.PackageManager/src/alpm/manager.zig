@@ -208,6 +208,14 @@ pub const Manager = struct {
             .rlpm => |value| value.sync_for_update_check(force) catch |err| return mapTransaction(err),
         };
     }
+    /// Exact root-relative package inventory paths. Caller owns returned packages.
+    pub fn get_file_owners(self: *Manager, paths: []const []const u8) TransactionError![]libalpm.OwnedPackage {
+        return switch (self.engine orelse return error.NoHandle) {
+            .libalpm => |value| if (comptime selection.libalpm_enabled) value.get_file_owners(paths) else unreachable,
+            .rlpm => |value| value.get_file_owners(paths) catch |err| return mapTransaction(err),
+        };
+    }
+
     pub fn get_installed_packages(self: *Manager) TransactionError![]libalpm.OwnedPackage {
         return switch (self.engine orelse {
             return error.NoHandle;

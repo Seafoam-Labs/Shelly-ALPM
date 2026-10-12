@@ -196,6 +196,13 @@ pub const ShellyCli = struct {
         return try JsonPackFrame.decode(FlatpakSearchResponse, self.allocator, result.stdout);
     }
 
+    pub fn resolve_appstream(self: ShellyCli, id: []const u8, include_flatpak: bool) !std.json.Parsed(@import("../models/appstream.zig").Result) {
+        const result = try self.run(if (include_flatpak) &.{ "resolve", "appstream", id } else &.{ "resolve", "appstream", id, "--no-flatpak" });
+        defer self.allocator.free(result.stdout);
+        defer self.allocator.free(result.stderr);
+        return JsonPackFrame.decodeLast(@import("../models/appstream.zig").Result, self.allocator, result.stdout);
+    }
+
     pub fn get_package_details(self: ShellyCli, name: []const u8) !std.json.Parsed(Package) {
         const result = try self.run(&.{ "-Ssdi", name });
         defer self.allocator.free(result.stdout);

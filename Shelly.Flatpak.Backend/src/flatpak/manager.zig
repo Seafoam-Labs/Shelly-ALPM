@@ -1605,7 +1605,9 @@ pub const Manager = struct {
             const raw: *rawflatpak.FlatpakRef = @ptrCast(@alignCast(ref_ptrs.*.pdata[j]));
             const flatpak_struct = flatpak.Flatpak.new(raw, flatpak.Scope.SYSTEM);
             const id = flatpak_struct.id() orelse return error.FlatpakError;
-            if (std.mem.eql(u8, id, flatpak_id)) {
+            const full_ref = try flatpak.refToString(self.allocator, raw);
+            defer self.allocator.free(full_ref);
+            if (matchesInstalledReference(flatpak_id, id, full_ref)) {
                 _ = rawflatpak.g_object_ref(raw);
                 return flatpak_struct;
             }
@@ -2607,3 +2609,14 @@ test "test getRemoteRefInfo resolves an empty branch from the remote" {
 //     const result = try manager.install_from_bundle_flatpak("/home/caro/Downloads/deadlock-mod-manager.flatpak", flatpak.Scope.USER);
 //     try std.testing.expect(result);
 // }
+
+fn matchesInstalledReference(request: []const u8, id: []const u8, full_ref: []const u8) bool {
+    return std.mem.eql(u8, request, id) or std.mem.eql(u8, request, full_ref);
+}
+
+test "installed Flatpak resolution matches full references without crossing branches" {
+    try std.testing.expect(matchesInstalledReference("org.example.App", "org.example.App", "app/org.example.App/x86_64/stable"));
+    try std.testing.expect(matchesInstalledReference("app/org.example.App/x86_64/beta", "org.example.App", "app/org.example.App/x86_64/beta"));
+    try std.testing.expect(!matchesInstalledReference("app/org.example.App/x86_64/stable", "org.example.App", "app/org.example.App/x86_64/beta"));
+    try std.testing.expect(!matchesInstalledReference("app/org.example.App/aarch64/stable", "org.example.App", "app/org.example.App/x86_64/stable"));
+}

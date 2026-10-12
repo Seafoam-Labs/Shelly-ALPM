@@ -17,13 +17,11 @@ pub const PageTarget = enum {
     updates,
 };
 
-
 pub fn extractLocalAppImageFile(arg: []const u8, path_buffer: *[max_file_path_len + 1]u8) ?[:0]const u8 {
     const path = resolveLocalPath(arg, path_buffer) orelse return null;
     if (!hasAppImageFileSuffix(path)) return null;
     return path;
 }
-
 
 pub fn extractLocalFlatpakFile(arg: []const u8, path_buffer: *[max_file_path_len + 1]u8) ?[:0]const u8 {
     const path = resolveLocalPath(arg, path_buffer) orelse return null;
@@ -98,22 +96,20 @@ fn hexDigit(c: u8) ?u8 {
     };
 }
 
+pub fn extractAppstreamId(arg: []const u8, buffer: *[max_app_id_len + 1]u8) ?[:0]const u8 {
+    if (!std.mem.startsWith(u8, arg, appstream_prefix)) return null;
+    const id = std.mem.trimStart(u8, stripQueryAndFragment(arg[appstream_prefix.len..]), "/");
+    if (id.len == 0 or id.len > max_app_id_len or id[0] == '.') return null;
+    for (id) |c| if (!std.ascii.isAlphanumeric(c) and c != '.' and c != '_' and c != '-') return null;
+    @memcpy(buffer[0..id.len], id);
+    buffer[id.len] = 0;
+    return buffer[0..id.len :0];
+}
+
 pub fn extractFlatpakAppId(arg: []const u8, buffer: *[max_app_id_len + 1]u8) ?[:0]const u8 {
     var app_id: []const u8 = undefined;
 
-    if (std.mem.startsWith(u8, arg, appstream_prefix)) {
-        var remainder = stripQueryAndFragment(arg[appstream_prefix.len..]);
-
-        remainder = std.mem.trimStart(u8, remainder, "/");
-
-        if (remainder.len == 0 or
-            std.mem.indexOfScalar(u8, remainder, '/') != null)
-        {
-            return null;
-        }
-
-        app_id = remainder;
-    } else if (std.mem.startsWith(u8, arg, flatpak_https_prefix)) {
+    if (std.mem.startsWith(u8, arg, flatpak_https_prefix)) {
         const remainder =
             stripQueryAndFragment(arg[flatpak_https_prefix.len..]);
 
@@ -176,7 +172,7 @@ fn stripQueryAndFragment(value: []const u8) []const u8 {
 test "extract appstream application ID" {
     var buffer: [max_app_id_len + 1]u8 = undefined;
 
-    const result = extractFlatpakAppId(
+    const result = extractAppstreamId(
         "appstream://org.example.App",
         &buffer,
     );
@@ -191,7 +187,7 @@ test "extract appstream application ID" {
 test "extract appstream application ID with three slashes" {
     var buffer: [max_app_id_len + 1]u8 = undefined;
 
-    const result = extractFlatpakAppId(
+    const result = extractAppstreamId(
         "appstream:///org.example.App",
         &buffer,
     );
@@ -206,7 +202,7 @@ test "extract appstream application ID with three slashes" {
 test "extract appstream application ID before query and fragment" {
     var buffer: [max_app_id_len + 1]u8 = undefined;
 
-    const query_result = extractFlatpakAppId(
+    const query_result = extractAppstreamId(
         "appstream://org.example.App?branch=stable",
         &buffer,
     );
@@ -217,7 +213,7 @@ test "extract appstream application ID before query and fragment" {
         query_result.?,
     );
 
-    const fragment_result = extractFlatpakAppId(
+    const fragment_result = extractAppstreamId(
         "appstream://org.example.Other#details",
         &buffer,
     );
@@ -278,13 +274,13 @@ test "reject invalid deep links" {
     var buffer: [max_app_id_len + 1]u8 = undefined;
 
     try std.testing.expect(
-        extractFlatpakAppId("appstream://", &buffer) == null,
+        extractAppstreamId("appstream://", &buffer) == null,
     );
     try std.testing.expect(
-        extractFlatpakAppId("appstream:///", &buffer) == null,
+        extractAppstreamId("appstream:///", &buffer) == null,
     );
     try std.testing.expect(
-        extractFlatpakAppId(
+        extractAppstreamId(
             "appstream://org.example.App/other",
             &buffer,
         ) == null,
@@ -318,7 +314,7 @@ test "reject overlong application ID" {
     );
 
     try std.testing.expect(
-        extractFlatpakAppId(&uri_buffer, &buffer) == null,
+        extractAppstreamId(&uri_buffer, &buffer) == null,
     );
 }
 
@@ -405,4 +401,13 @@ test "local flatpak and AppImage extractors do not overlap" {
     try std.testing.expect(extractLocalAppImageFile("https://example.com/NiceApp.AppImage", &buffer) == null);
     try std.testing.expect(extractLocalAppImageFile("file://server/share/NiceApp.AppImage", &buffer) == null);
     try std.testing.expect(extractLocalAppImageFile("file://", &buffer) == null);
+}
+
+test "native AppStream links are never explicit Flatpak requests" {
+    var buffer: [max_app_id_len + 1]u8 = undefined;
+    for ([_][]const u8{ "appstream://chromium.desktop", "appstream://com.mitchellh.ghostty" }) |uri| {
+        try std.testing.expect(extractAppstreamId(uri, &buffer) != null);
+        try std.testing.expect(extractFlatpakAppId(uri, &buffer) == null);
+    }
+    try std.testing.expect(extractAppstreamId("appstream://../etc/passwd", &buffer) == null);
 }

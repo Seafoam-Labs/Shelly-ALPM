@@ -158,6 +158,7 @@ pub fn build(b: *std.Build) void {
         .root_module = backend_module,
         .filters = &.{
             "installed Flatpak resolution matches IDs and friendly names",
+            "installed Flatpak resolution matches full references",
             "Flatpak manager exposes strict-parity operations",
             "shared cancellation propagates to GLib cancellables",
             "cancellation unsubscribe drain protects borrowed callback state",
