@@ -32,6 +32,7 @@ const Bar = struct {
     action: []const u8,
     current: f64,
     total: f64,
+    byte_counts: ?struct { current: u64, total: u64 } = null,
     percentage: u8,
 };
 
@@ -339,6 +340,7 @@ pub const Renderer = struct {
             .action = action,
             .current = current,
             .total = total,
+            .byte_counts = if (has_byte_counts) .{ .current = raw_current, .total = raw_total } else null,
             .percentage = percentage,
         });
     }
@@ -370,6 +372,7 @@ pub const Renderer = struct {
         } else if (found) |index| {
             self.bars.items[index].current = bar.current;
             self.bars.items[index].total = bar.total;
+            self.bars.items[index].byte_counts = bar.byte_counts;
             self.bars.items[index].percentage = bar.percentage;
             if (!std.mem.eql(u8, self.bars.items[index].action, bar.action)) {
                 self.bars.items[index].action = try self.owned_data.allocator().dupe(u8, bar.action);
@@ -389,6 +392,7 @@ pub const Renderer = struct {
             .action = try allocator.dupe(u8, bar.action),
             .current = bar.current,
             .total = bar.total,
+            .byte_counts = bar.byte_counts,
             .percentage = bar.percentage,
         };
     }
@@ -460,7 +464,16 @@ pub const Renderer = struct {
 
         var left_buffer = std.Io.Writer.Allocating.init(self.context.allocator);
         defer left_buffer.deinit();
-        try left_buffer.writer.print("({d:.0}/{d:.0}) {s} {s}", .{ bar.current, bar.total, bar.action, bar.name });
+        if (self.settings.size_display == .auto and bar.byte_counts != null) {
+            const counts = bar.byte_counts.?;
+            var current_buffer: [64]u8 = undefined;
+            var total_buffer: [64]u8 = undefined;
+            const current = try fmt.formatSizeInto(&current_buffer, .auto, counts.current);
+            const total = try fmt.formatSizeInto(&total_buffer, .auto, counts.total);
+            try left_buffer.writer.print("({s}/{s}) {s} {s}", .{ current, total, bar.action, bar.name });
+        } else {
+            try left_buffer.writer.print("({d:.0}/{d:.0}) {s} {s}", .{ bar.current, bar.total, bar.action, bar.name });
+        }
         const left = terminalPrefix(left_buffer.writer.buffered(), layout.label_width);
 
         try self.context.stdout.writeAll(left.bytes);
@@ -785,7 +798,7 @@ fn parseProgressStyle(value: []const u8) ProgressStyle {
 
 fn convertSize(display: SizeDisplay, bytes: u64) f64 {
     const divisor: f64 = switch (display) {
-        .bytes => 1,
+        .bytes, .auto => 1,
         .megabytes => 1024 * 1024,
         .gigabytes => 1024 * 1024 * 1024,
     };
@@ -802,11 +815,7 @@ fn transactionSizeText(
         "Resolved by standard transaction"
     else
         "Determined during build";
-    return switch (display) {
-        .bytes => std.fmt.bufPrint(buffer, "{d} B", .{value}) catch "?",
-        .megabytes => std.fmt.bufPrint(buffer, "{d:.2} MiB", .{convertSize(.megabytes, value)}) catch "?",
-        .gigabytes => std.fmt.bufPrint(buffer, "{d:.2} GiB", .{convertSize(.gigabytes, value)}) catch "?",
-    };
+    return fmt.formatSizeInto(buffer, display, value) catch "?";
 }
 
 fn transactionRoleName(role: PackageManager.OperationTransactionPackageRole) []const u8 {
@@ -1379,6 +1388,46 @@ test "single-pane no-confirm uses the shared automatic question policy" {
     try std.testing.expect(automaticResponse(.import_pgp_key) == .declined);
     try std.testing.expectEqual(@as(usize, 0), automaticResponse(.select_provider).choice);
     try std.testing.expectEqual(@as(usize, 0), automaticResponse(.select_optional_dependencies).choices.len);
+}
+
+test "Auto transaction size display scales known sizes and preserves unknowns" {
+    var buffer: [64]u8 = undefined;
+    const display = fmt.parseSizeDisplay("Auto");
+    try std.testing.expectEqualStrings("183.34 MiB", transactionSizeText(&buffer, display, 192243668, .repository));
+    try std.testing.expectEqualStrings("1.00 GiB", transactionSizeText(&buffer, display, 1073741824, .repository));
+    try std.testing.expectEqualStrings("Resolved by standard transaction", transactionSizeText(&buffer, display, null, .repository));
+    try std.testing.expectEqualStrings("Determined during build", transactionSizeText(&buffer, display, null, .aur));
+}
+
+test "Auto progress displays byte units and retains ordinary item counts" {
+    const test_support = @import("../commands/test_support.zig");
+    var tc: test_support.TestContext = .{};
+    tc.init();
+    defer tc.deinit();
+    var renderer = try Renderer.init(&tc.context, true);
+    renderer.settings.size_display = fmt.parseSizeDisplay("Auto");
+    renderer.animate = true;
+    var operation_context = PackageManager.OperationContext.init(tc.arena.allocator(), std.testing.io);
+    defer {
+        renderer.detach();
+        operation_context.deinit();
+        renderer.deinit();
+    }
+    try renderer.attach(&operation_context);
+    {
+        var operation = operation_context.begin(.{ .backend = .download, .kind = .download, .subject = "demo" });
+        defer operation.finish(.success);
+        operation.progress(.{ .bytes_completed = 1050, .bytes_total = 1073741824, .percentage = 50 });
+        try std.testing.expect(std.mem.indexOf(u8, tc.stdout.writer.buffered(), "(1.03 KiB/1.00 GiB)") != null);
+        operation.progress(.{ .bytes_completed = 1048576, .bytes_total = 1073741824, .percentage = 75 });
+        try std.testing.expect(std.mem.indexOf(u8, tc.stdout.writer.buffered(), "(1.00 MiB/1.00 GiB)") != null);
+    }
+    {
+        var install = operation_context.begin(.{ .backend = .alpm, .kind = .install, .subject = "demo" });
+        defer install.finish(.success);
+        install.progress(.{ .completed = 1, .total = 2, .percentage = 50 });
+        try std.testing.expect(std.mem.indexOf(u8, tc.stdout.writer.buffered(), "(1/2)") != null);
+    }
 }
 
 test "single-pane renders complete transaction plans and build-time unknowns" {

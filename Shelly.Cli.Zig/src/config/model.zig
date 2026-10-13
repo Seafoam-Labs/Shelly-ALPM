@@ -271,7 +271,7 @@ fn canonicalChoice(choices: []const []const u8, text: []const u8) ?[]const u8 {
 
 fn enumChoices(key: []const u8) ?[]const []const u8 {
     if (std.mem.eql(u8, key, "NativePackageBackend")) return if (PackageManager.Manager.libalpm_enabled) &.{ "libalpm", "rlpm" } else &.{"rlpm"};
-    if (std.mem.eql(u8, key, "FileSizeDisplay")) return &.{ "Bytes", "Megabytes", "Gigabytes" };
+    if (std.mem.eql(u8, key, "FileSizeDisplay")) return &.{ "Bytes", "Megabytes", "Gigabytes", "Auto" };
     if (std.mem.eql(u8, key, "DefaultExecution")) return &.{
         "UpgradeStandard",
         "UpgradeFlatpak",
@@ -350,6 +350,26 @@ test "updates typed and enumerated values case-insensitively" {
         (try config.getDisplay(arena.allocator(), "AutoConfirmCacheClean")).?,
     );
     try std.testing.expect(!try config.set(arena.allocator(), "AutoConfirmCacheClean", "yes"));
+}
+
+test "Auto file size configuration preserves fixed choices and the default" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var config = try Config.defaults(allocator);
+    try std.testing.expectEqualStrings("Megabytes", (try config.getDisplay(allocator, "FileSizeDisplay")).?);
+    try std.testing.expect(try config.set(allocator, "filesizedisplay", "aUtO"));
+    try std.testing.expectEqualStrings("Auto", (try config.getDisplay(allocator, "FileSizeDisplay")).?);
+    var saved: std.json.ObjectMap = .empty;
+    try saved.put(allocator, "FileSizeDisplay", .{ .string = "Auto" });
+    var reloaded = try Config.defaults(allocator);
+    try reloaded.overlay(saved);
+    try std.testing.expectEqualStrings("Auto", (try reloaded.getDisplay(allocator, "FileSizeDisplay")).?);
+    for ([_][]const u8{ "Bytes", "Megabytes", "Gigabytes" }) |choice| {
+        try std.testing.expect(try config.set(allocator, "FileSizeDisplay", choice));
+        try std.testing.expectEqualStrings(choice, (try config.getDisplay(allocator, "FileSizeDisplay")).?);
+    }
+    try std.testing.expect(!try config.set(allocator, "FileSizeDisplay", "invalid"));
 }
 
 test "older configs default to enabled cache cleaning" {

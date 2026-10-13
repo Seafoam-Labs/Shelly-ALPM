@@ -1963,6 +1963,36 @@ test "upgrade preview size formatting preserves negative net changes" {
     try std.testing.expectEqualStrings("-1.00 MiB", formatted);
 }
 
+test "Auto upgrade preview renders scaled totals and negative net changes" {
+    var tc: test_support.TestContext = .{};
+    tc.init();
+    defer tc.deinit();
+    var updates = [_]list_updates.StandardUpdate{.{
+        .name = "demo",
+        .current_version = "1.0",
+        .new_version = "1.1",
+        .download_size = 192243668,
+        .size_difference = -23430335,
+        .description = "fixture",
+        .url = "https://example.invalid",
+        .repository = "extra",
+        .installed_size = 0,
+        .depends = &.{},
+        .optional_depends = &.{},
+        .licenses = &.{},
+        .provides = &.{},
+        .conflicts = &.{},
+        .groups = &.{},
+    }};
+    try renderPlannedStandardUpdates(&tc.context, fmt.parseSizeDisplay("Auto"), &updates);
+    const rendered = tc.stdout.writer.buffered();
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "Total Download Size: 183.34 MiB\nNet Upgrade Size: -22.34 MiB") != null);
+    updates[0].download_size = 1073741824;
+    updates[0].size_difference = -1024;
+    try renderPlannedStandardUpdates(&tc.context, fmt.parseSizeDisplay("Auto"), &updates);
+    try std.testing.expect(std.mem.indexOf(u8, tc.stdout.writer.buffered(), "Total Download Size: 1.00 GiB\nNet Upgrade Size: -1.00 KiB") != null);
+}
+
 test "upgrade routes every action-first type through the combined handler" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();

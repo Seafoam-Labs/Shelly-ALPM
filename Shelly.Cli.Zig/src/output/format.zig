@@ -12,9 +12,10 @@ const DateTime = struct {
     second: u8,
 };
 
-pub const SizeDisplay = enum { bytes, megabytes, gigabytes };
+pub const SizeDisplay = enum { bytes, megabytes, gigabytes, auto };
 
 pub fn parseSizeDisplay(value: []const u8) SizeDisplay {
+    if (std.ascii.eqlIgnoreCase(value, "Auto")) return .auto;
     if (std.ascii.eqlIgnoreCase(value, "Bytes")) return .bytes;
     if (std.ascii.eqlIgnoreCase(value, "Gigabytes")) return .gigabytes;
     return .megabytes;
@@ -29,19 +30,47 @@ pub fn loadSizeDisplay(context: *runtime.RuntimeContext) !SizeDisplay {
 }
 
 pub fn formatSize(allocator: std.mem.Allocator, display: SizeDisplay, bytes: u64) ![]const u8 {
-    return switch (display) {
-        .bytes => std.fmt.allocPrint(allocator, "{d} B", .{bytes}),
-        .megabytes => std.fmt.allocPrint(allocator, "{d:.2} MiB", .{@as(f64, @floatFromInt(bytes)) / 1048576.0}),
-        .gigabytes => std.fmt.allocPrint(allocator, "{d:.2} GiB", .{@as(f64, @floatFromInt(bytes)) / 1073741824.0}),
-    };
+    return formatSignedSize(allocator, display, bytes);
 }
 
 /// Formats a signed byte count (e.g. a net size change, which may be negative).
 pub fn formatSignedSize(allocator: std.mem.Allocator, display: SizeDisplay, bytes: anytype) ![]const u8 {
+    // Enough for the signed i128 totals used by upgrade planning, including units.
+    var buffer: [128]u8 = undefined;
+    return allocator.dupe(u8, try formatSizeInto(&buffer, display, bytes));
+}
+
+/// Formats a byte count into caller-owned storage for allocation-free renderers.
+pub fn formatSizeInto(buffer: []u8, display: SizeDisplay, bytes: anytype) ![]const u8 {
     return switch (display) {
-        .bytes => std.fmt.allocPrint(allocator, "{d} B", .{bytes}),
-        .megabytes => std.fmt.allocPrint(allocator, "{d:.2} MiB", .{@as(f64, @floatFromInt(bytes)) / 1048576.0}),
-        .gigabytes => std.fmt.allocPrint(allocator, "{d:.2} GiB", .{@as(f64, @floatFromInt(bytes)) / 1073741824.0}),
+        .bytes => std.fmt.bufPrint(buffer, "{d} B", .{bytes}),
+        .megabytes => std.fmt.bufPrint(buffer, "{d:.2} MiB", .{@as(f64, @floatFromInt(bytes)) / 1048576.0}),
+        .gigabytes => std.fmt.bufPrint(buffer, "{d:.2} GiB", .{@as(f64, @floatFromInt(bytes)) / 1073741824.0}),
+        .auto => blk: {
+            const magnitude: u128 = @abs(bytes);
+            if (magnitude < 1024) break :blk std.fmt.bufPrint(buffer, "{d} B", .{bytes});
+            const units = [_][]const u8{ "B", "KiB", "MiB", "GiB", "TiB" };
+            var divisor: u128 = 1024;
+            var unit: usize = 1;
+            while (unit < units.len - 1 and magnitude / divisor >= 1024) {
+                divisor *= 1024;
+                unit += 1;
+            }
+            var whole = magnitude / divisor;
+            // Round the remainder without losing precision or overflowing wide totals.
+            var hundredths = ((magnitude % divisor) * 100 + divisor / 2) / divisor;
+            if (hundredths == 100) {
+                whole += 1;
+                hundredths = 0;
+            }
+            if (whole == 1024 and unit < units.len - 1) {
+                whole = 1;
+                unit += 1;
+            }
+            break :blk std.fmt.bufPrint(buffer, "{s}{d}.{d:0>2} {s}", .{
+                if (bytes < 0) "-" else "", whole, hundredths, units[unit],
+            });
+        },
     };
 }
 
@@ -230,6 +259,55 @@ test "formatSignedSize preserves the sign of the byte count" {
         const got = try formatSignedSize(allocator, .gigabytes, @as(i64, 1073741824));
         defer allocator.free(got);
         try std.testing.expectEqualStrings("1.00 GiB", got);
+    }
+}
+
+test "Auto size display parses case-insensitively" {
+    for ([_][]const u8{ "Auto", "auto", "AUTO" }) |value| {
+        try std.testing.expectEqualStrings("auto", @tagName(parseSizeDisplay(value)));
+    }
+}
+
+test "Auto size display selects binary units and rounds to two decimals" {
+    const cases = [_]struct { bytes: u64, expected: []const u8 }{
+        .{ .bytes = 0, .expected = "0 B" },
+        .{ .bytes = 1, .expected = "1 B" },
+        .{ .bytes = 1023, .expected = "1023 B" },
+        .{ .bytes = 1024, .expected = "1.00 KiB" },
+        .{ .bytes = 1536, .expected = "1.50 KiB" },
+        .{ .bytes = 1050, .expected = "1.03 KiB" },
+        .{ .bytes = 1048570, .expected = "1023.99 KiB" },
+        .{ .bytes = 1048571, .expected = "1.00 MiB" },
+        .{ .bytes = 1048576, .expected = "1.00 MiB" },
+        .{ .bytes = 192243668, .expected = "183.34 MiB" },
+        .{ .bytes = 1073741823, .expected = "1.00 GiB" },
+        .{ .bytes = 1073741824, .expected = "1.00 GiB" },
+        .{ .bytes = 1099511627776, .expected = "1.00 TiB" },
+        .{ .bytes = std.math.maxInt(u64), .expected = "16777216.00 TiB" },
+    };
+    for (cases) |case| {
+        const got = try formatSize(std.testing.allocator, parseSizeDisplay("Auto"), case.bytes);
+        defer std.testing.allocator.free(got);
+        try std.testing.expectEqualStrings(case.expected, got);
+    }
+}
+
+test "Auto signed size display preserves signs and handles wide totals" {
+    const cases = [_]struct { bytes: i128, expected: []const u8 }{
+        .{ .bytes = 0, .expected = "0 B" },
+        .{ .bytes = -1023, .expected = "-1023 B" },
+        .{ .bytes = -1024, .expected = "-1.00 KiB" },
+        .{ .bytes = -1048571, .expected = "-1.00 MiB" },
+        .{ .bytes = -23430335, .expected = "-22.34 MiB" },
+        .{ .bytes = 192243668, .expected = "183.34 MiB" },
+        .{ .bytes = std.math.minInt(i64), .expected = "-8388608.00 TiB" },
+        .{ .bytes = @as(i128, std.math.maxInt(u64)) + 1, .expected = "16777216.00 TiB" },
+        .{ .bytes = std.math.minInt(i128), .expected = "-154742504910672534362390528.00 TiB" },
+    };
+    for (cases) |case| {
+        const got = try formatSignedSize(std.testing.allocator, parseSizeDisplay("Auto"), case.bytes);
+        defer std.testing.allocator.free(got);
+        try std.testing.expectEqualStrings(case.expected, got);
     }
 }
 

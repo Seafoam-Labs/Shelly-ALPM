@@ -103,6 +103,24 @@ and package signing are not yet supported. `--isolated` cannot be combined with
 `--chroot` or dependency-only installation. See [isolated builds](docs/isolated-builds.md)
 for requirements and limitations.
 
+## CLI file size display
+
+To select units automatically in CLI size listings and transaction summaries:
+
+```bash
+shelly config set FileSizeDisplay Auto
+```
+
+`Auto` uses B, KiB, MiB, GiB, or TiB according to the magnitude. Bytes are shown
+as integers; larger units are rounded to two decimal places. Negative size
+changes retain their sign. Values that round to 1024 in a scaled unit are
+shown in the next unit, up to TiB.
+
+The existing `Bytes`, `Megabytes` (MiB), and `Gigabytes` (GiB) options remain
+available. `Megabytes` remains the default; restore it with
+`shelly config set FileSizeDisplay Megabytes`. This setting affects human-readable
+CLI output; structured output keeps numeric byte counts.
+
 ## PKGBUILD review
 
 Terminal PKGBUILD reviews show changed lines with three unchanged lines of
