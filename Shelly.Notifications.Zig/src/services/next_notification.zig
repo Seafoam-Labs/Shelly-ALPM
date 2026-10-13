@@ -4,6 +4,10 @@ const zeit = @import("zeit");
 const ShellyConfig = @import("../models/shelly_config.zig").ShellyConfig;
 const DayOfWeek = @import("../models/shelly_config.zig").DayOfWeek;
 
+const SECONDS_IN_DAY = 86400;
+const SECONDS_IN_HOUR = 3600;
+const DAYS_IN_WEEK = 7;
+
 pub const NowInfo = struct {
     weekday: i32,
     seconds_of_day: i32,
@@ -17,7 +21,7 @@ pub fn isCronMode(config: *const ShellyConfig) bool {
 }
 
 pub fn computeNextSeconds(now: NowInfo, config: *const ShellyConfig) u32 {
-    const fallback: u32 = config.TrayCheckIntervalHours * 3600;
+    const fallback: u32 = config.TrayCheckIntervalHours * SECONDS_IN_HOUR;
 
     if (!config.UseWeeklySchedule or
         config.DaysOfWeek.len == 0 or
@@ -26,30 +30,24 @@ pub fn computeNextSeconds(now: NowInfo, config: *const ShellyConfig) u32 {
         return fallback;
     }
 
-    const today = now.weekday;
-    const now_of_day = now.seconds_of_day;
-    const hour_idx = std.ascii.findIgnoreCase(config.Time, ":");
-    if (hour_idx) |hour_unwrapped| {
+    if (std.ascii.findIgnoreCase(config.Time, ":")) |hour_unwrapped| {
         const hour = std.fmt.parseInt(i32, config.Time[0..hour_unwrapped], 10) catch return fallback;
         const minute = std.fmt.parseInt(i32, config.Time[hour_unwrapped + 1 ..], 10) catch return fallback;
-        const sched_of_day: i32 = hour * 3600 + minute * 60;
+        const sched_of_day: i32 = hour * SECONDS_IN_HOUR + minute * 60;
 
         if (hour < 0 or hour > 23 or minute < 0 or minute > 59)
             return fallback;
 
-        if (dayInSchedule(today, config.DaysOfWeek)) {
-            const remaining = sched_of_day - now_of_day;
-            if (remaining > 0) return @intCast(remaining);
-        }
-
-        var i: i32 = 1;
-        while (i <= 7) : (i += 1) {
-            const candidate = @mod(today + i, 7);
+        for (0..DAYS_IN_WEEK + 1) |iday_usize| {
+            const iday: i32 = @intCast(iday_usize);
+            const candidate = @mod(now.weekday + iday, DAYS_IN_WEEK);
             if (dayInSchedule(candidate, config.DaysOfWeek)) {
-                const secs: i32 = (86400 - now_of_day) + (i - 1) * 86400 + sched_of_day;
-                return @intCast(secs);
+                const secs: i32 = iday * SECONDS_IN_DAY + sched_of_day - now.seconds_of_day;
+                if (secs > 0) return @intCast(secs);
             }
         }
+
+        return fallback;
     }
 
     return fallback;
