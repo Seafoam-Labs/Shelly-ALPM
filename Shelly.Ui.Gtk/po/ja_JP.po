@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shelly-ui 2.2.4.1\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-10-11 18:31-0300\n"
+"POT-Creation-Date: 2026-10-13 21:50+0900\n"
 "PO-Revision-Date: 2026-08-06 21:03+0900\n"
 "Last-Translator: UTUMI Hirosi <utuhiro78@yahoo.co.jp>\n"
 "Language-Team: csnyder@seafoam-labs.org\n"
@@ -63,12 +63,11 @@ msgstr "アプリのデータは完全に削除されます。"
 msgid "Confirm"
 msgstr "確認"
 
-#| msgid "No description available."
 msgid "Permissions unavailable"
-msgstr ""
+msgstr "権限を利用できません"
 
 msgid "Shelly could not read the permissions for this app."
-msgstr ""
+msgstr "Shelly はこのアプリの権限を読み取ることができませんでした。"
 
 msgid "No special permissions requested"
 msgstr "特別な権限は要求されません"
@@ -115,12 +114,11 @@ msgstr ""
 msgid "Review PKGBUILD"
 msgstr "PKGBUILD を確認"
 
-#| msgid "Review PKGBUILD"
 msgid "PKGBUILD"
-msgstr ""
+msgstr "PKGBUILD"
 
 msgid "Retry"
-msgstr ""
+msgstr "リトライ"
 
 msgid "Skip"
 msgstr "スキップ"
@@ -178,6 +176,8 @@ msgstr "例: owner/repo または https://..."
 msgid ""
 "Enter the repository as owner/repo, for example seafoam-labs/shelly-alpm."
 msgstr ""
+"owner/repo の形式でリポジトリを入力してください。例: seafoam-labs/shelly-"
+"alpm。"
 
 msgid "Allow Prerelease"
 msgstr "正式公開前のものを許可"
@@ -211,9 +211,8 @@ msgstr "削除"
 msgid "Search the AUR by name or keyword"
 msgstr "名前やキーワードで AUR を検索する"
 
-#| msgid "Search..."
 msgid "Search By"
-msgstr ""
+msgstr "次で検索"
 
 msgid "Installed Only"
 msgstr "インストール済みのみ"
@@ -222,14 +221,13 @@ msgid "Show only installed packages"
 msgstr "インストール済みパッケージのみを表示"
 
 msgid "Previous page"
-msgstr ""
+msgstr "前のページ"
 
 msgid "Page 1 of 1"
-msgstr ""
+msgstr "ページ 1 of 1"
 
-#| msgid "Default page"
 msgid "Next page"
-msgstr ""
+msgstr "次のページ"
 
 msgid "Additional Options"
 msgstr "その他のオプション"
@@ -237,9 +235,8 @@ msgstr "その他のオプション"
 msgid "Install Selected"
 msgstr "選択したものをインストール"
 
-#| msgid "Selected"
 msgid "Select"
-msgstr ""
+msgstr "選択"
 
 msgid "Name"
 msgstr "名前"
@@ -251,10 +248,10 @@ msgid "Popularity"
 msgstr "人気度"
 
 msgid "Loading the AUR index"
-msgstr ""
+msgstr "AUR インデックスを読み込み中"
 
 msgid "Powered by Atoll."
-msgstr ""
+msgstr "Atoll を利用します。"
 
 msgid "Run checks"
 msgstr "チェックを実行"
@@ -406,9 +403,8 @@ msgstr "About"
 msgid "Shelly"
 msgstr "Shelly"
 
-#| msgid "Optional Depends"
 msgid "Install Optional Deps"
-msgstr ""
+msgstr "オプションの依存をインストール"
 
 msgid "Reinstall"
 msgstr "再インストール"
@@ -657,7 +653,7 @@ msgid "Enable Shelly Search"
 msgstr "Shelly 検索を有効にする"
 
 msgid "Enable Atoll Powered AUR"
-msgstr ""
+msgstr "Atoll を利用した AUR を有効にする"
 
 msgid "AppImage Install Path"
 msgstr "AppImage のインストールパス"
@@ -711,7 +707,7 @@ msgid "Your system is up to date"
 msgstr "お使いのシステムは最新です"
 
 msgid "Could not check for updates."
-msgstr ""
+msgstr "アップデートを確認できませんでした。"
 
 msgid "Utilities"
 msgstr "ユーティリティ"
@@ -755,16 +751,21 @@ msgid "Clean Package Cache"
 msgstr "パッケージのキャッシュをクリア"
 
 msgid ""
-"Removes old cached package versions, keeping the selected number per package."
+"Keeps the selected number of repository package versions and clears the "
+"entire Shelly cache, including AUR sources and build directories."
 msgstr ""
-"選択した数のバージョンをパッケージごとに保持して、古いキャッシュを削除しま"
-"す。"
+"リポジトリパッケージのバージョンを指定した数だけ保持し、他の Shelly のキャッ"
+"シュと AUR のソース/ビルドディレクトリを消去します。"
 
 msgid "Keep"
 msgstr "保持"
 
-msgid "Number of cached versions to keep per package"
-msgstr "パッケージごとに保持するキャッシュのバージョン数"
+msgid ""
+"Number of repository package versions to keep; the Shelly cache is cleared "
+"completely"
+msgstr ""
+"保持するリポジトリパッケージのバージョン数; Shelly のキャッシュは完全にクリア"
+"されます"
 
 msgid "Welcome to Shelly v3"
 msgstr "Shelly v3 へようこそ"
@@ -841,27 +842,26 @@ msgstr "次へ"
 msgid "Start Shelly"
 msgstr "Shelly を起動"
 
-#| msgid "System bus"
 msgid "System files"
-msgstr ""
+msgstr "システムファイル"
 
 msgid "Other folders"
-msgstr ""
+msgstr "その他のフォルダー"
 
 msgid "Running services"
-msgstr ""
+msgstr "実行中のサービス"
 
 msgid "Other apps' data"
-msgstr ""
+msgstr "他のアプリのデータ"
 
 msgid "Home folder"
-msgstr ""
+msgstr "ホームフォルダー"
 
 msgid "User folders"
-msgstr ""
+msgstr "ユーザーフォルダー"
 
 msgid "Persistent files"
-msgstr ""
+msgstr "永続ファイル"
 
 msgid "Devices"
 msgstr "デバイス"
@@ -872,39 +872,38 @@ msgstr "セッションバス"
 msgid "System bus"
 msgstr "システムバス"
 
-#| msgid "Network"
 msgid "Network access"
-msgstr ""
+msgstr "ネットワークアクセス"
 
 msgid "Display server"
-msgstr ""
+msgstr "ディスプレイサーバー"
 
 msgid "Sandbox features"
-msgstr ""
+msgstr "サンドボックス機能"
 
 msgid "Environment"
 msgstr "環境"
 
 msgid "Sound"
-msgstr ""
+msgstr "サウンド"
 
 msgid "Printing"
-msgstr ""
+msgstr "印刷"
 
 msgid "Inter-process communication"
-msgstr ""
+msgstr "プロセス間通信"
 
 msgid "Other"
 msgstr "その他"
 
 msgid "No network access"
-msgstr ""
+msgstr "ネットワークに接続できません"
 
 msgid "No device access"
-msgstr ""
+msgstr "デバイスにアクセスできません"
 
 msgid "No access to system files"
-msgstr ""
+msgstr "システムファイルにアクセスできません"
 
 msgid "Review PKGBUILD changes for"
 msgstr "PKGBUILD の変更内容を確認"
@@ -949,25 +948,25 @@ msgid "net"
 msgstr "使用"
 
 msgid "Scanning PKGBUILD…"
-msgstr ""
+msgstr "PKGBUILD をスキャン中…"
 
-#| msgid "No description available."
 msgid "Security scan unavailable."
-msgstr ""
+msgstr "セキュリティスキャンは利用できません。"
 
 msgid "Could not load the PKGBUILD preview."
-msgstr ""
+msgstr "PKGBUILD のプレビューを読み込めませんでした。"
 
 msgid ""
 "PKGBUILD changed. Close and reopen the preview to scan the current version."
 msgstr ""
+"PKGBUILD が変更されました。プレビューを閉じて再度開き、最新バージョンをスキャ"
+"ンしてください。"
 
-#| msgid "Flatpak files"
 msgid "No related files."
-msgstr ""
+msgstr "関連ファイルがありません。"
 
 msgid "Previous"
-msgstr ""
+msgstr "前へ"
 
 msgid "Dismiss"
 msgstr "却下"
@@ -994,12 +993,14 @@ msgid "Version ?"
 msgstr "バージョン？"
 
 msgid "Enter a download URL beginning with http:// or https://."
-msgstr ""
+msgstr "http:// または https:// で始まるダウンロード URL を入力してください。"
 
 msgid ""
 "Enter a Forgejo repository URL as http(s)://host/owner/repo or http(s)://"
 "host/owner/repo/releases."
 msgstr ""
+"Forgejo リポジトリの URL を http(s)://host/owner/repo または http(s)://host/"
+"owner/repo/releases の形式で入力してください。"
 
 msgid "Choose an AppImage file"
 msgstr "AppImage ファイルを選択"
@@ -1008,7 +1009,7 @@ msgid "AppImage files"
 msgstr "AppImage ファイル"
 
 msgid "Only.AppImage files can be installed"
-msgstr ""
+msgstr ".AppImage ファイルのみインストール可能です"
 
 msgid "Installing AppImage"
 msgstr "AppImage をインストール中"
@@ -1054,7 +1055,7 @@ msgid "Operation completed successfully"
 msgstr "操作が正常に完了しました"
 
 msgid "Could not complete the requested operation."
-msgstr ""
+msgstr "要求された操作を完了できませんでした。"
 
 msgid "Discard environment changes?"
 msgstr "環境の変更を破棄しますか？"
@@ -1072,7 +1073,7 @@ msgid "Try a shorter or more general keyword."
 msgstr "キーワードを短くするか一般的なものを試してください。"
 
 msgid "Could not reach Atoll"
-msgstr ""
+msgstr "Atoll に接続できませんでした"
 
 msgid "Check your connection and try again."
 msgstr "接続を確認して、もう一度試してください。"
@@ -1093,7 +1094,7 @@ msgid "Package(s)"
 msgstr "個のパッケージ"
 
 msgid "Page"
-msgstr ""
+msgstr "ページ"
 
 msgid "of"
 msgstr "of"
@@ -1154,7 +1155,7 @@ msgstr ""
 "ださい。"
 
 msgid "Could not search the configured AUR service."
-msgstr ""
+msgstr "設定された AUR サービスを検索できませんでした。"
 
 msgid "Choose a Flatpak file"
 msgstr "Flatpak ファイルを選択"
@@ -1164,12 +1165,14 @@ msgstr "Flatpak ファイル"
 
 msgid "Unsupported file type. Choose a.flatpak or.flatpakref file."
 msgstr ""
+"サポートされていないファイル形式です。.flatpak または .flatpakref ファイルを"
+"選択してください。"
 
 msgid "Installing local flatpak"
 msgstr "ローカル Flatpak をインストール中"
 
 msgid "Could not install the selected packages."
-msgstr ""
+msgstr "選択したパッケージをインストールできませんでした。"
 
 msgid "Installation complete."
 msgstr "インストールが完了しました。"
@@ -1235,13 +1238,15 @@ msgid "No description available."
 msgstr "説明がありません。"
 
 msgid "Could not load this application screenshot."
-msgstr ""
+msgstr "このアプリケーションのスクリーンショットを読み込めませんでした。"
 
 msgid "Could not download this application screenshot."
 msgstr ""
+"このアプリケーションのスクリーンショットをダウンロードできませんでした。"
 
 msgid "Could not display the downloaded application screenshot."
 msgstr ""
+"ダウンロードしたアプリケーションのスクリーンショットを表示できませんでした。"
 
 msgid "Open link in browser"
 msgstr "ブラウザでリンクを開く"
@@ -1274,12 +1279,14 @@ msgid ""
 "Could not load Flatpak applications because Shelly ran out of memory. Close "
 "other applications and try again."
 msgstr ""
+"Shelly がメモリ不足になったため、Flatpak アプリケーションを読み込めませんでし"
+"た。他のアプリケーションを閉じて、もう一度試してください。"
 
 msgid "Could not start loading Flatpak applications."
-msgstr ""
+msgstr "Flatpak アプリケーションの読み込みを開始できませんでした。"
 
 msgid "Could not load Flatpak applications from the selected remote."
-msgstr ""
+msgstr "選択したリモートから Flatpak アプリケーションを読み込めませんでした。"
 
 msgid "No Flatpak applications are available."
 msgstr "利用可能な Flatpak アプリケーションはありません。"
@@ -1399,11 +1406,10 @@ msgid "Making Package Dependency"
 msgstr "依存によるパッケージに変更中"
 
 msgid "Select Optional Dependencies to Install"
-msgstr ""
+msgstr "インストールするオプションの依存を選択"
 
-#| msgid "Installing packages"
 msgid "Installing optional dependencies"
-msgstr ""
+msgstr "オプションの依存をインストール"
 
 msgid "Package is already installed"
 msgstr "パッケージは既にインストールされています"
@@ -1449,7 +1455,7 @@ msgstr ""
 "い。"
 
 msgid "Could not search the selected sources."
-msgstr ""
+msgstr "選択したソースを検索できませんでした。"
 
 msgid "Installation in progress"
 msgstr "インストールを実行中"
@@ -1470,6 +1476,8 @@ msgid ""
 "Could not save settings to the configured file. Your latest changes were not "
 "saved."
 msgstr ""
+"設定ファイルに設定を保存できませんでした。直近の変更内容は保存されませんでし"
+"た。"
 
 msgid "Settings saved"
 msgstr "設定を保存しました"
@@ -1481,16 +1489,16 @@ msgid "Installing AppImage support"
 msgstr "AppImage サポートをインストール中"
 
 msgid "Could not start installing Flatpak support."
-msgstr ""
+msgstr "Flatpak サポートのインストールを開始できませんでした。"
 
 msgid "Could not start installing AppImage support."
-msgstr ""
+msgstr "AppImage サポートのインストールを開始できませんでした。"
 
 msgid "Could not install Flatpak support."
-msgstr ""
+msgstr "Flatpak サポートをインストールできませんでした。"
 
 msgid "Could not install AppImage support."
-msgstr ""
+msgstr "AppImage サポートをインストールできませんでした。"
 
 msgid "Flatpak support enabled"
 msgstr "Flatpak サポートを有効にしました"
@@ -1505,7 +1513,7 @@ msgid "No details for this release"
 msgstr "このリリースの詳細情報はありません"
 
 msgid "Could not load the release notes."
-msgstr ""
+msgstr "リリースノートを読み込めませんでした。"
 
 msgid "Changelog"
 msgstr "変更履歴"
@@ -1529,18 +1537,20 @@ msgid ""
 "The tray is disabled, but its autostart service could not be removed. It may "
 "start again at the next login."
 msgstr ""
+"トレイは無効化されましたが、自動起動サービスは削除できませんでした。次回のロ"
+"グイン時に再び起動する可能性があります。"
 
 msgid "Tray disabled"
 msgstr "トレイを無効にしました"
 
 msgid "Could not enable the tray autostart service."
-msgstr ""
+msgstr "トレイの自動起動サービスを有効にできませんでした。"
 
 msgid "Systemd startup service added."
 msgstr "systemd 起動サービスが追加されました。"
 
 msgid "Could not disable the tray autostart service."
-msgstr ""
+msgstr "トレイの自動起動サービスを無効にできませんでした。"
 
 msgid "Systemd startup service removed."
 msgstr "systemd 起動サービスが削除されました。"
@@ -1633,7 +1643,7 @@ msgid "Cancelled"
 msgstr "キャンセル"
 
 msgid "Could not start the requested operation."
-msgstr ""
+msgstr "要求された操作を開始できませんでした。"
 
 msgid "Synchronizing databases"
 msgstr "データベースを同期中"
@@ -1684,7 +1694,7 @@ msgid "Operation failed"
 msgstr "操作に失敗しました"
 
 msgid "Operation cancelled"
-msgstr ""
+msgstr "操作がキャンセルされました"
 
 msgid "Finished"
 msgstr "完了"
@@ -1693,7 +1703,7 @@ msgid "exit"
 msgstr "終了"
 
 msgid "Operation cancelled."
-msgstr ""
+msgstr "操作がキャンセルされました。"
 
 msgid "All operations finished successfully."
 msgstr "すべての操作が正常に完了しました。"
@@ -1765,16 +1775,16 @@ msgid "Installing Flatpak and AppImage support"
 msgstr "Flatpak と AppImage サポートをインストール中"
 
 msgid "Main menu"
-msgstr ""
+msgstr "メインメニュー"
 
 msgid "Settings"
 msgstr "設定"
 
 msgid "Expand sidebar"
-msgstr ""
+msgstr "サイドバーを展開する"
 
 msgid "Collapse sidebar"
-msgstr ""
+msgstr "サイドバーを折りたたむ"
 
 msgid "Package"
 msgstr "パッケージ"
