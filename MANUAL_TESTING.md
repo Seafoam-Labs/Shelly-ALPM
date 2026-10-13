@@ -255,6 +255,27 @@ the session for the duration.
 - [ ] `shelly update` updates all packages
 - [ ] `shelly info <package>` shows package details
 
+### Empty download-directory cleanup (#1980)
+
+Use a disposable package database and cache, selecting each available native
+backend. Include a second `CacheDir` in the test pacman configuration.
+
+- [ ] `shelly -Zs --dry-run` lists empty immediate `download-XXXXXX` directories
+  in both caches, where each X is alphanumeric, without removing them.
+- [ ] Ordinary `shelly -Zs` previews these targets without requiring `--cache`;
+  declining preserves them and accepting removes them while keeping cache roots.
+- [ ] Nonempty download directories (including partial `.pkg.tar.zst.part`
+  archives), symlinks, other directory names, and nested matching directories
+  survive cleanup.
+- [ ] Populate a listed directory while confirmation is pending; accepting
+  preserves that directory and its contents. New unlisted directories survive.
+- [ ] Hold the disposable database lock before accepting; cleanup reports the
+  lock failure without removing download directories or the foreign lock.
+- [ ] JSON and GTK previews include the full paths marked as empty directories.
+
+Automated coverage: `(cd Shelly.PackageManager && zig build purify-test)` and
+`(cd Shelly.Cli.Zig && zig build purify-test)`, also with `-Dlibalpm=false`.
+
 ### Removal Confirmation (#1845)
 
 Use disposable packages in a VM/container with an unused dependency and an

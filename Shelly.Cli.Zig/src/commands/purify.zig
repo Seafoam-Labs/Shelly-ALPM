@@ -31,6 +31,7 @@ const Options = struct {
     plan_only: bool = false,
     cache_plan: ?*const PackageManager.Manager.CacheRemovalPlan = null,
     aur_cache_plans: ?[]const aur_cache.RemovalPlan = null,
+    download_cache_plan: ?*const PackageManager.Manager.DownloadCacheRemovalPlan = null,
 };
 
 const Result = struct {
@@ -38,8 +39,10 @@ const Result = struct {
     owns_targets: bool = false,
     cache_plan: ?PackageManager.Manager.CacheRemovalPlan = null,
     aur_cache_plans: []aur_cache.RemovalPlan = &.{},
+    download_cache_plan: ?PackageManager.Manager.DownloadCacheRemovalPlan = null,
 
-    fn deinit(self: *Result, allocator: std.mem.Allocator) void {
+    fn deinit(self: *Result, allocator: std.mem.Allocator, io: std.Io) void {
+        if (self.download_cache_plan) |*plan| plan.deinit(allocator, io);
         if (self.owns_targets) {
             for (self.targets) |target| allocator.free(target);
             allocator.free(self.targets);
@@ -72,6 +75,11 @@ const Real = struct {
                     defer manager.setOperationContext(null);
                     const planning = options.plan_only or options.dry_run;
 
+                    if (!planning) {
+                        const download_plan = options.download_cache_plan orelse return PurifyError.CachePlanMissing;
+                        _ = try manager.execute_download_cache_cleanup(download_plan);
+                    }
+
                     if (!planning and options.cache_versions != null) {
                         const cache_plan = options.cache_plan orelse return PurifyError.CachePlanMissing;
                         var cache_manager = PackageManager.Manager.CacheManager.init(
@@ -90,9 +98,11 @@ const Real = struct {
                         .targets = try manager.purify(planning, options.orphans, true),
                         .owns_targets = true,
                     };
-                    errdefer package_result.deinit(context.allocator);
+                    errdefer package_result.deinit(context.allocator, context.io);
 
                     if (planning) {
+                        package_result.download_cache_plan = try manager.plan_download_cache_cleanup(options.dry_run);
+                        try appendDownloadCacheTargets(context.allocator, &package_result);
                         if (options.cache_versions) |keep| {
                             var cache_manager = PackageManager.Manager.CacheManager.init(
                                 context.allocator,
@@ -119,7 +129,7 @@ const Real = struct {
                     }
                     break :packages package_result;
                 };
-                errdefer result.deinit(context.allocator);
+                errdefer result.deinit(context.allocator, context.io);
                 if (!options.plan_only and !options.dry_run and options.aur_cache) {
                     const plans = options.aur_cache_plans orelse return PurifyError.CachePlanMissing;
                     try aur_cache.execute(context, operation_context, plans);
@@ -198,7 +208,7 @@ fn dispatchWithRunner(
         try writePlanFailure(context, invocation, backend, err);
         return 1;
     };
-    defer plan.deinit(context.allocator);
+    defer plan.deinit(context.allocator, context.io);
 
     try writePlan(context, invocation, backend, options, plan.targets);
     if (plan.targets.len == 0 or options.dry_run) return 0;
@@ -213,6 +223,7 @@ fn dispatchWithRunner(
     var execution_options = options;
     if (plan.cache_plan) |*cache_plan| execution_options.cache_plan = cache_plan;
     execution_options.aur_cache_plans = plan.aur_cache_plans;
+    if (plan.download_cache_plan) |*download_plan| execution_options.download_cache_plan = download_plan;
     return try executeWithRunner(context, invocation, backend, execution_options, runner);
 }
 
@@ -332,7 +343,7 @@ fn executeStandard(
         }
     };
     var adapter: RunnerAdapter = .{ .runner = runner, .backend = backend, .options = options };
-    defer if (adapter.result) |*result| result.deinit(context.allocator);
+    defer if (adapter.result) |*result| result.deinit(context.allocator, context.io);
     const succeeded = try standard_single_pane.output(
         context,
         openingMessage(backend, options),
@@ -371,7 +382,7 @@ fn executeQuiet(
         try context.stderr.print("Could not remove unneeded packages. {0s}\n\nTechnical details: {1s}\n", .{ diagnostics.cause(err), @errorName(err) });
         return 1;
     };
-    defer result.deinit(context.allocator);
+    defer result.deinit(context.allocator, context.io);
     return 0;
 }
 
@@ -415,11 +426,37 @@ fn executeUi(
         try ui_operation.flush(context);
         return 1;
     };
-    defer result.deinit(context.allocator);
+    defer result.deinit(context.allocator, context.io);
 
     try output.writeAlpmInfoFrame(context, "TransactionDone", successMessage(backend, options));
     try ui_operation.flush(context);
     return if (reporter.failed()) 1 else 0;
+}
+
+fn appendDownloadCacheTargets(allocator: std.mem.Allocator, result: *Result) !void {
+    const plan = result.download_cache_plan orelse return;
+    if (plan.count() == 0) return;
+    std.debug.assert(result.owns_targets);
+    const combined = try allocator.alloc([:0]const u8, result.targets.len + plan.count());
+    @memcpy(combined[0..result.targets.len], result.targets);
+    var initialized = result.targets.len;
+    errdefer {
+        for (combined[result.targets.len..initialized]) |target| allocator.free(target);
+        allocator.free(combined);
+    }
+    for (plan.caches) |cache| {
+        for (cache.entries) |entry| {
+            combined[initialized] = try std.fmt.allocPrintSentinel(
+                allocator,
+                "[download-cache] {s}/{s} (empty directory)",
+                .{ cache.path, entry.name },
+                0,
+            );
+            initialized += 1;
+        }
+    }
+    allocator.free(result.targets);
+    result.targets = combined;
 }
 
 fn appendAurCacheTargets(allocator: std.mem.Allocator, result: *Result) !void {
@@ -532,11 +569,11 @@ fn writePlan(
         return;
     }
     if (targets.len == 0) {
-        try output.writeSuccess(context, "No packages found to purify!");
+        try output.writeSuccess(context, "No cleanup targets found!");
         return;
     }
 
-    try output.writeSuccess(context, if (options.dry_run) "Running would remove:" else "Packages to remove:");
+    try output.writeSuccess(context, if (options.dry_run) "Running would remove:" else "Cleanup targets:");
     var storage = std.heap.ArenaAllocator.init(context.allocator);
     defer storage.deinit();
     const rows = try storage.allocator().alloc([]const []const u8, targets.len);
@@ -544,7 +581,7 @@ fn writePlan(
         row.* = try storage.allocator().dupe([]const u8, &.{target});
     try table.write(
         context,
-        &.{"Package"},
+        &.{"Target"},
         rows,
     );
 }
@@ -558,7 +595,7 @@ fn planMessage(backend: Backend) []const u8 {
 
 fn planSummary(target_count: usize) []const u8 {
     return switch (target_count) {
-        0 => "No packages found to purify.",
+        0 => "No cleanup targets found.",
         1 => "Purify plan contains 1 target.",
         else => "Purify plan is ready for confirmation.",
     };
@@ -797,7 +834,7 @@ test "AUR cache cleanup previews files and deletes only after confirmation" {
                     .targets = try context.allocator.alloc([:0]const u8, 0),
                     .owns_targets = true,
                 };
-                errdefer result.deinit(context.allocator);
+                errdefer result.deinit(context.allocator, context.io);
                 result.aur_cache_plans = try aur_cache.plan(context, operations, try xdg.shellyCache(context, &.{}), options.dry_run);
                 try appendAurCacheTargets(context.allocator, &result);
                 return result;
@@ -952,7 +989,7 @@ test "empty purify plans skip confirmation and backend mutation" {
         try dispatchWithRunner(&tc.context, &outcome.dispatch, &capture),
     );
     try std.testing.expectEqual(@as(usize, 1), capture.calls);
-    try std.testing.expect(std.mem.indexOf(u8, tc.stdout.writer.buffered(), "No packages found") != null);
+    try std.testing.expect(std.mem.indexOf(u8, tc.stdout.writer.buffered(), "No cleanup targets found") != null);
     try std.testing.expect(std.mem.indexOf(u8, tc.stdout.writer.buffered(), "Proceed with purify?") == null);
 }
 
@@ -1180,4 +1217,62 @@ test "purify backend failures return nonzero" {
         @as(?u8, 1),
         try dispatchWithRunner(&tc.context, &outcome.dispatch, Failure{}),
     );
+}
+
+test "purify real backends preview empty download directories and require confirmation" {
+    const spec = @import("../cli/spec.zig");
+    const previous_backend = PackageManager.Manager.defaultBackend();
+    defer PackageManager.Manager.setDefaultBackend(previous_backend) catch unreachable;
+    for ([_]PackageManager.Manager.Backend{ .libalpm, .rlpm }) |backend| {
+        if (!backend.available()) continue;
+        try PackageManager.Manager.setDefaultBackend(backend);
+        var temporary = std.testing.tmpDir(.{});
+        defer temporary.cleanup();
+        var tc: test_support.TestContext = .{};
+        tc.init();
+        defer tc.deinit();
+        tc.context.environ = std.testing.environ;
+        var buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
+        const root = buffer[0..try temporary.dir.realPath(std.testing.io, &buffer)];
+        for ([_][]const u8{ "root", "db", "cache", "gpg", "hooks" }) |path|
+            try temporary.dir.createDirPath(std.testing.io, path);
+        const configuration = try std.fmt.allocPrint(
+            tc.arena.allocator(),
+            "[options]\nArchitecture = auto\nSigLevel = Never\nRootDir = {0s}/root\nDBPath = {0s}/db\nCacheDir = {0s}/cache\nGPGDir = {0s}/gpg\nLogFile = {0s}/pacman.log\nHookDir = {0s}/hooks\n",
+            .{root},
+        );
+        try temporary.dir.writeFile(std.testing.io, .{ .sub_path = "pacman.conf", .data = configuration });
+        tc.context.config_path = try std.fmt.allocPrint(tc.arena.allocator(), "{s}/pacman.conf", .{root});
+        try temporary.dir.createDirPath(std.testing.io, "cache/download-Part01");
+        try temporary.dir.writeFile(std.testing.io, .{ .sub_path = "cache/download-Part01/example.pkg.tar.zst.part", .data = "partial archive" });
+        const manifest = try spec.Manifest.load(tc.arena.allocator());
+        const cases = [_]struct { arguments: []const []const u8, response: []const u8, removes: bool }{
+            .{ .arguments = &.{ "-Zs", "--dry-run" }, .response = "yes\n", .removes = false },
+            .{ .arguments = &.{"-Zs"}, .response = "no\n", .removes = false },
+            .{ .arguments = &.{"-Zs"}, .response = "yes\n", .removes = true },
+            .{ .arguments = &.{ "-Zs", "--json", "--no-confirm" }, .response = "", .removes = true },
+        };
+        for (cases, 0..) |case, index| {
+            try temporary.dir.createDirPath(std.testing.io, "cache/download-Empty1");
+            tc.stdout.writer.end = 0;
+            var stdin = std.Io.Reader.fixed(case.response);
+            tc.context.stdin = &stdin;
+            const translated = try @import("../cli/shortcodes.zig").translate(tc.arena.allocator(), &manifest, case.arguments);
+            const invocation = try parser.parse(tc.arena.allocator(), &manifest, translated.translated);
+            try std.testing.expect(invocation == .dispatch);
+            try std.testing.expectEqual(@as(?u8, 0), try dispatchWithRunner(&tc.context, &invocation.dispatch, Real{}));
+            const preview = std.mem.indexOf(u8, tc.stdout.writer.buffered(), "[download-cache]").?;
+            try std.testing.expect(std.mem.indexOf(u8, tc.stdout.writer.buffered(), "download-Empty1 (empty directory)") != null);
+            if (index == 1 or index == 2)
+                try std.testing.expect(preview < std.mem.indexOf(u8, tc.stdout.writer.buffered(), "Proceed with purify?").?);
+            if (case.removes) {
+                try std.testing.expectError(error.FileNotFound, temporary.dir.access(std.testing.io, "cache/download-Empty1", .{}));
+            } else {
+                try temporary.dir.access(std.testing.io, "cache/download-Empty1", .{});
+            }
+            try temporary.dir.access(std.testing.io, "cache", .{});
+            try temporary.dir.access(std.testing.io, "cache/download-Part01/example.pkg.tar.zst.part", .{});
+            try std.testing.expectError(error.FileNotFound, temporary.dir.access(std.testing.io, "db/db.lck", .{}));
+        }
+    }
 }

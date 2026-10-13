@@ -200,6 +200,8 @@ pub fn build(b: *std.Build) void {
     const worker_fixture_options = b.addOptions();
     worker_fixture_options.addOptionPath("path", rlpm_dependency.namedLazyPath("worker_fixture"));
     native_backend_tests.root_module.addOptions("worker_fixture", worker_fixture_options);
+    const purify_tests = b.addTest(.{ .root_module = native_backend_tests.root_module, .filters = &.{"download cache cleanup"} });
+    b.step("purify-test", "Test empty download directory cleanup with both native backends").dependOn(&b.addRunArtifact(purify_tests).step);
     const build_plan_tests = b.addTest(.{ .root_module = native_backend_tests.root_module, .filters = &.{"dependency plan"} });
     b.step("build-plan-test", "Test native dependency planning and pinned provisioning in private roots").dependOn(&b.addRunArtifact(build_plan_tests).step);
 

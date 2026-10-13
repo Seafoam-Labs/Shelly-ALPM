@@ -836,6 +836,28 @@ pub const Manager = struct {
         return result;
     }
     pub const get_cache_directories = get_configured_cache_directories;
+    pub fn execute_download_cache_cleanup(self: *Manager, plan: *const @import("../alpm/download_cache.zig").RemovalPlan) !usize {
+        var operation = if (self.operation_context) |context|
+            context.begin(.{ .backend = .alpm, .kind = .cleanup, .subject = "empty-download-directories" })
+        else
+            null;
+        defer if (operation) |*active| active.finish(.success);
+        errdefer if (operation) |*active| active.finish(.failed);
+        if (self.operation_context) |context| if (context.isCancelled()) return error.Cancelled;
+        if (plan.dry_run or plan.count() == 0) return 0;
+        _ = self.owner.initializeTransaction(self.io(), .{}) catch |err| {
+            if (err == error.DatabaseLocked or err == error.LockExists) {
+                const message = try @import("diagnostics").databaseLocked(self.allocator, self.owner.options().database_path);
+                defer self.allocator.free(message);
+                self.dispatcher.raiseError(.{ .message = message });
+                return error.TransInitFailed;
+            }
+            return err;
+        };
+        defer self.owner.releaseTransaction() catch unreachable;
+        return @import("../alpm/download_cache.zig").execute(self.io(), plan, self.operation_context);
+    }
+
     pub fn purify(self: *Manager, dry_run: bool, shoot_orphans: bool, purge_corruption: bool) ![][:0]const u8 {
         var names: std.ArrayList([:0]const u8) = .empty;
         errdefer {
@@ -857,9 +879,15 @@ pub const Manager = struct {
         if (purge_corruption) {
             var dir = try std.Io.Dir.cwd().openDir(self.io(), self.config.cache_directory, .{ .iterate = true });
             defer dir.close(self.io());
-            var walk = try dir.walk(self.allocator);
+            var walk = try dir.walkSelectively(self.allocator);
             defer walk.deinit();
             while (try walk.next(self.io())) |entry| {
+                if (entry.kind == .directory) {
+                    // Download staging contents may be incomplete or actively written.
+                    if (entry.depth() == 1 and @import("../alpm/download_cache.zig").isDownloadDirectoryName(entry.basename)) continue;
+                    try walk.enter(self.io(), entry);
+                    continue;
+                }
                 if (entry.kind != .file or std.mem.indexOf(u8, entry.basename, ".pkg.tar") == null or std.mem.endsWith(u8, entry.basename, ".sig")) continue;
                 const path = try std.fs.path.join(self.allocator, &.{ self.config.cache_directory, entry.path });
                 defer self.allocator.free(path);

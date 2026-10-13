@@ -8,7 +8,7 @@ pub const variants = [_]types.Variant{
         .action = .purify,
         .name = "standard",
         .type_code = 's',
-        .description = "Plan corrupted archives, optional orphan cleanup, and optional cache retention cleanup; show the targets, then confirm before changing ALPM or cache state.",
+        .description = "Plan corrupted archives, empty temporary download directories, optional orphan cleanup, and optional cache retention cleanup; show the targets, then confirm before changing ALPM or cache state.",
         .implementation = "PackageManager.Manager.purify / PackageManager.Manager.CacheManager",
         .options = &.{
             flag("--dry-run", &.{"-d"}, "Show the cleanup plan without changing packages"),

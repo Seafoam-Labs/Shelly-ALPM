@@ -898,3 +898,105 @@ test "dependency plan captures source configuration before private path override
         try t.expect(!std.mem.eql(u8, original, try pm.Manager.build_plan.configurationDigest(a, manager.config)));
     }
 }
+
+test "download cache cleanup plans only empty immediate directories across configured caches" {
+    for ([_]pm.Manager.Backend{ .libalpm, .rlpm }) |backend| {
+        if (!backend.available()) continue;
+        var fixture = try Fixture.init(backend);
+        defer fixture.deinit();
+        const a = fixture.arena.allocator();
+        const cache = fixture.options.cache_directory.?;
+        const extra = try std.fmt.allocPrint(a, "{s}/../extra", .{cache});
+        const config = try std.fmt.allocPrint(a, "[options]\nArchitecture = auto\nSigLevel = Never\nCacheDir = {s}\nCacheDir = {s}\nCacheDir = {s}/missing\n", .{ cache, extra, cache });
+        try fixture.temp.dir.writeFile(t.io, .{ .sub_path = "pacman.conf", .data = config });
+        fixture.options.cache_directory = null;
+        const kept = [_][]const u8{
+            "cache/download-12345",        "cache/download-1234567", "cache/download-12345_",
+            "cache/other/download-Ab1234", "cache/download-Part01",  "cache/download-Nest01/child",
+        };
+        for (kept) |path| try fixture.temp.dir.createDirPath(t.io, path);
+        try fixture.temp.dir.writeFile(t.io, .{ .sub_path = "cache/download-Part01/package.part", .data = "partial download" });
+        try fixture.temp.dir.writeFile(t.io, .{ .sub_path = "cache/download-File01", .data = "regular file" });
+        try fixture.temp.dir.createDirPath(t.io, "outside");
+        try fixture.temp.dir.symLink(t.io, "../outside", "cache/download-Link01", .{ .is_directory = true });
+        try fixture.temp.dir.createDirPath(t.io, "cache/download-Empty1");
+        try fixture.temp.dir.createDirPath(t.io, "extra/download-Empty2");
+        const manager = try fixture.manager();
+        defer manager.deinit();
+        var dry = try manager.plan_download_cache_cleanup(true);
+        defer dry.deinit(t.allocator, t.io);
+        try t.expectEqual(@as(usize, 2), dry.count());
+        try t.expectEqual(@as(usize, 0), try manager.execute_download_cache_cleanup(&dry));
+        try fixture.temp.dir.access(t.io, "cache/download-Empty1", .{});
+        var plan = try manager.plan_download_cache_cleanup(false);
+        defer plan.deinit(t.allocator, t.io);
+        try t.expectEqual(@as(usize, 2), try manager.execute_download_cache_cleanup(&plan));
+        try t.expectEqual(@as(usize, 0), try manager.execute_download_cache_cleanup(&plan));
+        for ([_][]const u8{ "cache/download-Empty1", "extra/download-Empty2", "db/db.lck" }) |path|
+            try t.expectError(error.FileNotFound, fixture.temp.dir.access(t.io, path, .{}));
+        for (kept) |path| try fixture.temp.dir.access(t.io, path, .{});
+        for ([_][]const u8{ "cache", "extra", "outside", "cache/download-File01", "cache/download-Link01", "cache/download-Part01/package.part" }) |path|
+            try fixture.temp.dir.access(t.io, path, .{});
+    }
+}
+
+test "download cache cleanup respects locks cancellation and changes after preview" {
+    for ([_]pm.Manager.Backend{ .libalpm, .rlpm }) |backend| {
+        if (!backend.available()) continue;
+        var fixture = try Fixture.init(backend);
+        defer fixture.deinit();
+        const names = [_][]const u8{ "cache/download-Empty1", "cache/download-Filled", "cache/download-Symlnk", "cache/download-Swap01", "cache/download-Gone01" };
+        for (names) |path| try fixture.temp.dir.createDirPath(t.io, path);
+        const manager = try fixture.manager();
+        defer manager.deinit();
+        var plan = try manager.plan_download_cache_cleanup(false);
+        defer plan.deinit(t.allocator, t.io);
+        try t.expectEqual(names.len, plan.count());
+        try fixture.temp.dir.writeFile(t.io, .{ .sub_path = "db/db.lck", .data = "foreign lock" });
+        try t.expectError(error.TransInitFailed, manager.execute_download_cache_cleanup(&plan));
+        for (names) |path| try fixture.temp.dir.access(t.io, path, .{});
+        const lock = try fixture.temp.dir.readFileAlloc(t.io, "db/db.lck", t.allocator, .limited(64));
+        defer t.allocator.free(lock);
+        try t.expectEqualStrings("foreign lock", lock);
+        try fixture.temp.dir.deleteFile(t.io, "db/db.lck");
+        var operations = pm.OperationContext.init(t.allocator, t.io);
+        defer operations.deinit();
+        manager.setOperationContext(&operations);
+        operations.cancel();
+        try t.expectError(error.Cancelled, manager.execute_download_cache_cleanup(&plan));
+        try t.expectError(error.Cancelled, manager.plan_download_cache_cleanup(false));
+        manager.setOperationContext(null);
+        try t.expectError(error.FileNotFound, fixture.temp.dir.access(t.io, "db/db.lck", .{}));
+        try fixture.temp.dir.writeFile(t.io, .{ .sub_path = "cache/download-Filled/package.part", .data = "new download" });
+        try fixture.temp.dir.deleteDir(t.io, "cache/download-Symlnk");
+        try fixture.temp.dir.createDirPath(t.io, "outside");
+        try fixture.temp.dir.symLink(t.io, "../outside", "cache/download-Symlnk", .{ .is_directory = true });
+        try std.Io.Dir.rename(fixture.temp.dir, "cache/download-Swap01", fixture.temp.dir, "saved", t.io);
+        try fixture.temp.dir.createDirPath(t.io, "cache/download-Swap01");
+        try fixture.temp.dir.deleteDir(t.io, "cache/download-Gone01");
+        try fixture.temp.dir.createDirPath(t.io, "cache/download-New001");
+        try t.expectEqual(@as(usize, 1), try manager.execute_download_cache_cleanup(&plan));
+        for ([_][]const u8{ "cache/download-Filled/package.part", "cache/download-Symlnk", "cache/download-Swap01", "cache/download-New001", "outside" }) |path|
+            try fixture.temp.dir.access(t.io, path, .{});
+        try t.expectError(error.FileNotFound, fixture.temp.dir.access(t.io, "db/db.lck", .{}));
+    }
+}
+
+test "download cache cleanup pins parents when cache paths become symlinks" {
+    for ([_]pm.Manager.Backend{ .libalpm, .rlpm }) |backend| {
+        if (!backend.available()) continue;
+        var fixture = try Fixture.init(backend);
+        defer fixture.deinit();
+        try fixture.temp.dir.createDirPath(t.io, "cache/download-Empty1");
+        try fixture.temp.dir.createDirPath(t.io, "outside/download-Empty1");
+        const manager = try fixture.manager();
+        defer manager.deinit();
+        var plan = try manager.plan_download_cache_cleanup(false);
+        defer plan.deinit(t.allocator, t.io);
+        try std.Io.Dir.rename(fixture.temp.dir, "cache", fixture.temp.dir, "old-cache", t.io);
+        try fixture.temp.dir.symLink(t.io, "outside", "cache", .{ .is_directory = true });
+        try t.expectEqual(@as(usize, 1), try manager.execute_download_cache_cleanup(&plan));
+        try fixture.temp.dir.access(t.io, "outside/download-Empty1", .{});
+        try t.expectError(error.FileNotFound, fixture.temp.dir.access(t.io, "old-cache/download-Empty1", .{}));
+    }
+}

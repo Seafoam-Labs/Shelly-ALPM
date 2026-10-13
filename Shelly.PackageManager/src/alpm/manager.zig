@@ -36,6 +36,8 @@ pub const Manager = struct {
     pub const events = @import("events.zig");
     pub const configuration = @import("configuration.zig");
     pub const cache_manager = @import("cache_manager.zig");
+    pub const download_cache = @import("download_cache.zig");
+    pub const DownloadCacheRemovalPlan = download_cache.RemovalPlan;
     pub const archive_manager = @import("archive_manager.zig");
     pub const pacfile_manager = @import("pacfile_manager.zig");
 
@@ -423,6 +425,24 @@ pub const Manager = struct {
             .rlpm => |value| value.update_packages(package_list, flags) catch |err| return mapTransaction(err),
         };
     }
+    pub fn plan_download_cache_cleanup(self: *Manager, dry_run: bool) !DownloadCacheRemovalPlan {
+        var directories = try self.get_configured_cache_directories();
+        defer directories.deinit(self.allocator);
+        const context = switch (self.engine orelse return error.NoHandle) {
+            .libalpm => |value| if (comptime selection.libalpm_enabled) value.operation_context else unreachable,
+            .rlpm => |value| value.operation_context,
+        };
+        return download_cache.plan(self.allocator, self.io(), directories.items, dry_run, context);
+    }
+
+    /// Execute the approved directory plan under the selected backend's lock.
+    pub fn execute_download_cache_cleanup(self: *Manager, plan: *const DownloadCacheRemovalPlan) !usize {
+        return switch (self.engine orelse return error.NoHandle) {
+            .libalpm => |value| if (comptime selection.libalpm_enabled) value.execute_download_cache_cleanup(plan) else unreachable,
+            .rlpm => |value| value.execute_download_cache_cleanup(plan),
+        };
+    }
+
     pub fn purify(self: *Manager, dry_run: bool, shoot_orphans: bool, purge_corruption: bool) TransactionError![][:0]const u8 {
         return switch (self.engine orelse {
             return error.NoHandle;

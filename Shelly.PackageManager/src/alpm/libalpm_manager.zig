@@ -1482,6 +1482,22 @@ pub const Manager = struct {
         }
     }
 
+    pub fn execute_download_cache_cleanup(self: *Manager, plan: *const @import("download_cache.zig").RemovalPlan) !usize {
+        if (self.handle == null) return error.NoHandle;
+        var scope = OperationScope.init(self, .cleanup, "empty-download-directories");
+        scope.attach();
+        defer scope.finish(.success);
+        errdefer scope.fail();
+        try self.checkOperationCancelled();
+        if (plan.dry_run or plan.count() == 0) return 0;
+        if (rawLibalpm.alpm_trans_init(self.handle, 0) != 0) {
+            self.handleErrorMessage(@intCast(rawLibalpm.alpm_errno(self.handle)), null) catch {};
+            return error.TransInitFailed;
+        }
+        defer _ = rawLibalpm.alpm_trans_release(self.handle);
+        return @import("download_cache.zig").execute(self.io(), plan, self.operation_context);
+    }
+
     pub fn purify(self: *Manager, dry_run: bool, shoot_orphans: bool, purge_corruption: bool) TransactionError![][:0]const u8 {
         if (self.handle == null) return TransactionError.NoHandle;
         var operation_scope = OperationScope.init(self, .cleanup, null);
@@ -1519,9 +1535,15 @@ pub const Manager = struct {
         if (purge_corruption) {
             var dir = std.Io.Dir.cwd().openDir(self.io(), self.config.cache_directory, .{ .iterate = true }) catch return TransactionError.DirectoryReadFailed;
             defer dir.close(self.io());
-            var file_walker = dir.walk(self.allocator) catch return TransactionError.DirectoryReadFailed;
+            var file_walker = dir.walkSelectively(self.allocator) catch return TransactionError.DirectoryReadFailed;
             defer file_walker.deinit();
             while (file_walker.next(self.io()) catch return TransactionError.DatabaseReadFailed) |entry| {
+                if (entry.kind == .directory) {
+                    // Download staging contents may be incomplete or actively written.
+                    if (entry.depth() == 1 and @import("download_cache.zig").isDownloadDirectoryName(entry.basename)) continue;
+                    file_walker.enter(self.io(), entry) catch return TransactionError.DirectoryReadFailed;
+                    continue;
+                }
                 if (entry.kind != .file) continue;
                 if (std.mem.indexOf(u8, entry.basename, ".pkg.tar") == null) continue;
                 if (std.mem.endsWith(u8, entry.basename, ".sig")) continue;
