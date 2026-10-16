@@ -55,7 +55,7 @@ backup=('etc/shellybuild.conf')
 # Pin the published RLPM implementation; the v3.1.6 release lacks this variant.
 # Git verifies the pinned object ID; SKIP is the standard VCS checksum marker.
 source=("shelly::git+https://github.com/Seafoam-Labs/Shelly-ALPM.git#commit=${_commit}")
-sha256sums=('SKIP')
+sha256sums=('cc9d760bbb848242105d07bb21288239807a8fcace1af65bb264625208ffdf7a')
 _source_dir=shelly
 
 build() {
