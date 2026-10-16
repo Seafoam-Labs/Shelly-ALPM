@@ -1,9 +1,3 @@
-//! The two tray icon names.
-//!
-//! The tray wants `[:0]const u8` names that outlive the tray object, and the
-//! worker thread replaces them after a config change, so both live in fixed
-//! buffers here rather than in reallocated memory. Readers get a snapshot via
-//! `normal`, `attention`, or `forCount`.
 const std = @import("std");
 
 const ConfigResolver = @import("config.zig").ConfigResolver;
@@ -11,10 +5,10 @@ const ConfigResolver = @import("config.zig").ConfigResolver;
 pub const default = "shelly-tray";
 pub const default_attention = "shelly-update";
 
-const max_name_len = 256;
+const MAX_NAME_LEN = 256;
 
-var name_buf: [max_name_len:0]u8 = undefined;
-var attention_buf: [max_name_len:0]u8 = undefined;
+var name_buf: [MAX_NAME_LEN:0]u8 = undefined;
+var attention_buf: [MAX_NAME_LEN:0]u8 = undefined;
 
 var normal_name: [:0]const u8 = default;
 var attention_name: [:0]const u8 = default_attention;
@@ -32,13 +26,10 @@ pub fn attention() [:0]const u8 {
     return attention_name;
 }
 
-/// The icon to show for `update_count` pending updates.
 pub fn forCount(update_count: usize) [:0]const u8 {
     return if (update_count > 0) attention_name else normal_name;
 }
 
-/// Reads the configured names and swaps them in. Returns false, leaving the
-/// previous names in place, if either name is too long for its buffer.
 pub fn loadFromConfig(config: *ConfigResolver) bool {
     const icons = fromConfig(config);
 
@@ -56,7 +47,6 @@ pub fn loadFromConfig(config: *ConfigResolver) bool {
     return true;
 }
 
-/// Explicit paths win, then the symbolic setting, then the bundled defaults.
 fn fromConfig(config: *ConfigResolver) IconsToUse {
     const conf = config.get() catch return defaults();
 

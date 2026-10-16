@@ -12,8 +12,7 @@ const trans = translations._;
 
 const log_worker = std.log.scoped(.worker);
 
-/// Used when the interval cannot be read or computed.
-const fallback_interval_secs: u32 = 36_000; // 10 hours
+const FALLBACK_INTERVAL_SECS: u32 = 36_000;
 
 pub const Worker = struct {
     updates: *Updates,
@@ -71,12 +70,12 @@ pub const Worker = struct {
 
         const cfg = self.config.get() catch |e| {
             log_worker.warn("Could not read the update-check interval. {0s} Using a 10-hour interval.\n\nTechnical details: {1s}", .{ diagnostics.cause(e), @errorName(e) });
-            return fallback_interval_secs;
+            return FALLBACK_INTERVAL_SECS;
         };
 
         return next_notification.getNextSeconds(self.gpa, self.io, cfg) catch |e| {
             log_worker.warn("Could not calculate the next update-check time. {0s} Using a 10-hour interval.\n\nTechnical details: {1s}", .{ diagnostics.cause(e), @errorName(e) });
-            return fallback_interval_secs;
+            return FALLBACK_INTERVAL_SECS;
         };
     }
 
