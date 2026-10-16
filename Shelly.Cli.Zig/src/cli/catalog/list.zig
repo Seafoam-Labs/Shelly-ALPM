@@ -17,6 +17,7 @@ pub const variants = [_]types.Variant{
             flag("--dependencyOnly", &.{"-d"}, "List dependency-installed packages only"),
             flag("--required-by", &.{}, "Include packages that directly require each listed package"),
             flag("--optional-for", &.{}, "Include packages that directly use each listed package optionally"),
+            flag("--names-only", &.{}, "Print package names only, one per line"),
         },
     },
     .{
@@ -40,6 +41,7 @@ pub const variants = [_]types.Variant{
             flag("--dependencyOnly", &.{"-d"}, "List dependency-installed packages only"),
             flag("--required-by", &.{}, "Include packages that directly require each listed package"),
             flag("--optional-for", &.{}, "Include packages that directly use each listed package optionally"),
+            flag("--names-only", &.{}, "Print package names only, one per line"),
         },
     },
     .{
