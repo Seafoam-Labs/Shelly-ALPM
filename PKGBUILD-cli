@@ -31,7 +31,7 @@ makedepends+=('binutils' "${_shelly_native_depends[@]}")
 source=("${pkgname}::git+https://github.com/Seafoam-Labs/Shelly-ALPM.git#branch=development"
         'shellybuild.conf')
 sha256sums=('SKIP'
-            'd7adb207c0073b93679ff3b8741a734ab62b48283134465b47844884bd211bb9')
+            '9f551f28d79748c7e255a35cb577081b3263e65d290b4809e10066ed17ce30e5')
 conflicts=('shelly' 'shelly-git' 'shelly-bin')
 
 pkgver() {
