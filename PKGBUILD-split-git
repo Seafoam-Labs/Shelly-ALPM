@@ -10,30 +10,19 @@ pkgname=(
   'shelly-notify-git'
   'shelly-notify-none-git'
 )
-pkgver=3.1.7
-pkgrel=1
+pkgver=3.1.7.r1.ga56b874c
+pkgrel=2
 arch=('x86_64' 'aarch64')
 url='https://github.com/Seafoam-Labs/Shelly-ALPM'
 license=('GPL-3.0-only')
 
-# Native package backend. true builds libalpm alongside RLPM and needs pacman;
-# false builds the RLPM-only CLI (as in PKGBUILD-devario), which works without
-# libalpm. Override with SHELLY_LIBALPM=false makepkg.
-_shelly_libalpm=${SHELLY_LIBALPM:-true}
-case ${_shelly_libalpm} in
-  true)
-    _shelly_native_depends=('pacman>=7')
-    _shelly_native_optdepends=()
-    ;;
-  false)
-    _shelly_native_depends=()
-    _shelly_native_optdepends=('pacman: package-owner lookup for pacfile merging')
-    ;;
-  *)
-    printf 'SHELLY_LIBALPM must be true or false\n' >&2
-    return 1
-    ;;
-esac
+# Use the RLPM-only native backend with Arch runtime paths.
+# The pacman path profile selects /etc/pacman.conf and /var/lib/pacman;
+# it does not enable libalpm.
+_shelly_libalpm=false
+_shelly_path_profile=pacman
+_shelly_native_depends=()
+_shelly_native_optdepends=('pacman: package-owner lookup for pacfile merging')
 
 makedepends=(
   'binutils'
@@ -81,7 +70,8 @@ pkgver() {
 prepare() {
   cd "${_srcdir}"
 
-  # Fetch Zig dependencies up front so build() and check() work offline.
+  # Fetch Zig dependencies after backports and patches, so changes to any
+  # build.zig.zon are picked up and build() and check() work offline.
   local dir
   for dir in "${_components[@]}"; do
     (cd "${dir}" && _zig_build --fetch)
@@ -98,10 +88,12 @@ build() {
   (cd Shelly.Cli.Zig && _zig_build \
     --prefix "${srcdir}/out-cli" \
     -Dlibalpm="${_shelly_libalpm}" \
+    -Dpath-profile="${_shelly_path_profile}" \
     -Doptimize=ReleaseSmall)
 
   (cd Shelly.Key && _zig_build \
     --prefix "${srcdir}/out-key" \
+    -Dpath-profile="${_shelly_path_profile}" \
     -Doptimize=ReleaseSmall)
 
   (cd Shelly.Notifications.Zig && _zig_build \
@@ -145,13 +137,15 @@ build() {
 check() {
   cd "${_srcdir}"
 
-  # Test the same native backend variant as the shipped CLI.
+  # Test the same native backend and path profile as the shipped CLI.
   (cd Shelly.Flatpak.Backend && _zig_build test abi-test integration-test)
   (cd Shelly.PackageManager && _zig_build -Dlibalpm="${_shelly_libalpm}" \
+    -Dpath-profile="${_shelly_path_profile}" \
     flatpak-test native-backend-test rlpm-adapter-test bootstrap-test)
-  (cd Shelly.Rlpm && _zig_build test)
-  (cd Shelly.Key && _zig_build test)
-  (cd Shelly.Cli.Zig && _zig_build test -Dlibalpm="${_shelly_libalpm}")
+  (cd Shelly.Rlpm && _zig_build test -Dpath-profile="${_shelly_path_profile}")
+  (cd Shelly.Key && _zig_build test -Dpath-profile="${_shelly_path_profile}")
+  (cd Shelly.Cli.Zig && _zig_build test -Dlibalpm="${_shelly_libalpm}" \
+    -Dpath-profile="${_shelly_path_profile}")
 
   scripts/check-flatpak-separation.sh \
     "${srcdir}/out-cli/bin/shelly" \
@@ -159,7 +153,7 @@ check() {
 }
 
 package_shelly-git() {
-  pkgdesc='Shelly: A Modern Arch Package Manager (git version)'
+  pkgdesc='Shelly: A Modern Arch Package Manager (Arch RLPM git version)'
   depends=(
     "shelly-cli-git=${pkgver}-${pkgrel}"
     "shelly-flatpak-backend-git=${pkgver}-${pkgrel}"
@@ -193,7 +187,7 @@ package_shelly-git() {
 }
 
 package_shelly-cli-git() {
-  pkgdesc='Native Shelly package-manager CLI (git version)'
+  pkgdesc='Native Shelly package-manager CLI (Arch RLPM git version)'
   depends=(
     'curl'
     'diffutils'
@@ -271,7 +265,7 @@ EOF
 }
 
 package_shelly-flatpak-backend-git() {
-  pkgdesc='Optional native Flatpak backend for Shelly (git version)'
+  pkgdesc='Optional native Flatpak backend for Shelly (Arch RLPM git version)'
   depends=("shelly-cli-git=${pkgver}-${pkgrel}" 'flatpak' 'glib2' 'glibc')
   provides=("shelly-flatpak-backend=${pkgver}")
   conflicts=(
@@ -289,7 +283,7 @@ package_shelly-flatpak-backend-git() {
 }
 
 package_shelly-notify-git() {
-  pkgdesc='Notification tray for Shelly (git version)'
+  pkgdesc='Notification tray for Shelly (Arch RLPM git version)'
   depends=("shelly-git=${pkgver}-${pkgrel}" 'glibc')
   provides=("shelly-notify=${pkgver}")
   conflicts=('shelly-notify')
@@ -313,8 +307,8 @@ package_shelly-notify-git() {
 }
 
 package_shelly-notify-none-git() {
-  pkgdesc='Placeholder that satisfies Shelly (git version) without the notification tray'
+  pkgdesc='Placeholder that satisfies Shelly (Arch RLPM git version) without the notification tray'
   arch=('any')
-  provides=('shelly-notify-git')
-  conflicts=('shelly-notify-git')
+  provides=('shelly-notify' 'shelly-notify-git')
+  conflicts=('shelly-notify' 'shelly-notify-git' 'shelly-notify-none')
 }
