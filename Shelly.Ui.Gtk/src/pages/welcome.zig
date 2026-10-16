@@ -6,6 +6,7 @@ const glib = bindings.glib;
 const gio = bindings.gio;
 const gobject = bindings.gobject;
 const support = @import("support.zig");
+const features = @import("../services/build_features.zig");
 const translations = @import("../helpers/translations.zig");
 const a11y = @import("../helpers/a11y.zig");
 const ConfirmDialog = @import("../dialog/page/yn_dialog.zig").ConfirmDialog;
@@ -103,6 +104,10 @@ pub const WelcomePage = extern struct {
         p.welcome_dialog_host = null;
 
         buildInternalOverlay(self);
+
+        if (!features.builtWithBuiltinAur) {
+            gtk.Widget.setVisible(p.source_aur.as(gtk.Widget), 0);
+        }
 
         _ = gobject.Object.signals.notify.connect(
             p.source_aur.as(gobject.Object),
@@ -269,7 +274,7 @@ pub const WelcomePage = extern struct {
         const appimage_selected = gtk.CheckButton.getActive(p.source_appimage) != 0;
 
         var updated = cfg.*;
-        updated.AurEnabled = gtk.CheckButton.getActive(p.source_aur) != 0;
+        updated.AurEnabled = features.builtWithAtollOnly or gtk.CheckButton.getActive(p.source_aur) != 0;
         updated.AurWarningConfirmed = updated.AurEnabled;
         updated.FlatPackEnabled = false;
         updated.AppImageEnabled = false;

@@ -4,6 +4,8 @@ const versionString = @import("build.zig.zon").version;
 
 const version = std.SemanticVersion.parse(versionString) catch @panic("Bad version");
 
+pub const AurBackend = enum { aur, atoll, both, none };
+
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
@@ -64,13 +66,13 @@ pub fn build(b: *std.Build) void {
         ) orelse false,
     );
     options.addOption(
-        bool,
-        "exclude_aur",
+        AurBackend,
+        "aur_backend",
         b.option(
-            bool,
-            "exclude-aur",
-            "Compile out the AUR pages (including Atoll) and their settings rows",
-        ) orelse false,
+            AurBackend,
+            "aur-backend",
+            "Which AUR provider to build: aur, atoll, both, or none",
+        ) orelse .both,
     );
     options.addOption(
         bool,
@@ -138,6 +140,7 @@ pub fn build(b: *std.Build) void {
     gresource.addFileInput(b.path("src/style.css"));
     gresource.addFileInput(b.path("src/assets/icons/flatpak-symbolic.svg"));
     gresource.addFileInput(b.path("src/assets/icons/arch-symbolic.svg"));
+    gresource.addFileInput(b.path("src/assets/icons/atoll-shark-symbolic.svg"));
     gresource.addFileInput(b.path("src/assets/icons/update-symbolic.svg"));
     gresource.addFileInput(b.path("src/assets/icons/star-filled-rounded-symbolic.svg"));
     gresource.addFileInput(b.path("src/assets/icons/package-x-generic-symbolic.svg"));

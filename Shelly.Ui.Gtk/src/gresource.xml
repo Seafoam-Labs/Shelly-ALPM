@@ -3,6 +3,7 @@
   <gresource prefix="/com/shellyorg/shelly/icons/scalable/actions">
     <file alias="flatpak-symbolic.svg" preprocess="xml-stripblanks">assets/icons/flatpak-symbolic.svg</file>
     <file alias="arch-symbolic.svg" preprocess="xml-stripblanks">assets/icons/arch-symbolic.svg</file>
+    <file alias="atoll-shark-symbolic.svg" preprocess="xml-stripblanks">assets/icons/atoll-shark-symbolic.svg</file>
     <file alias="update-symbolic.svg" preprocess="xml-stripblanks">assets/icons/update-symbolic.svg</file>
     <file alias="star-filled-rounded-symbolic.svg" preprocess="xml-stripblanks">assets/icons/star-filled-rounded-symbolic.svg</file>
     <file alias="package-x-generic-symbolic.svg" preprocess="xml-stripblanks">assets/icons/package-x-generic-symbolic.svg</file>

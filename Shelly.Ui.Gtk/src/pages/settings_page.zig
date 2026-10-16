@@ -26,6 +26,7 @@ const VersionHistoryDialog = @import("../dialog/page/version_history.zig").Versi
 const HistoryEntry = @import("../dialog/page/version_history.zig").Entry;
 const AurWarningDialog = @import("../dialog/page/aur_warning.zig").AurWarningDialog;
 const translations = @import("../helpers/translations.zig");
+const a11y = @import("../helpers/a11y.zig");
 const features = @import("../services/build_features.zig");
 
 pub const SettingsPage = ShellySettingsPage;
@@ -52,6 +53,7 @@ pub const ShellySettingsPage = extern struct {
 
         // General
         aur_switch: *gtk.Switch,
+        aur_row_label: *gtk.Label,
         language_drop: *gtk.DropDown,
         flatpak_switch: *gtk.Switch,
         recommended_switch: *gtk.Switch,
@@ -190,6 +192,11 @@ pub const ShellySettingsPage = extern struct {
             self,
             .{ .detail = "active" },
         );
+        if (features.builtWithAtollOnly) {
+            const aur_row_text = translations._("Enable Atoll");
+            gtk.Label.setLabel(p.aur_row_label, aur_row_text);
+            a11y.setName(p.aur_switch.as(gtk.Widget), aur_row_text);
+        }
         hideUnbuiltRows(p);
 
         _ = gobject.Object.signals.notify.connect(
@@ -1082,6 +1089,7 @@ pub const ShellySettingsPage = extern struct {
 
         // General
         .{ "aur_switch", @offsetOf(Private, "aur_switch") },
+        .{ "aur_row_label", @offsetOf(Private, "aur_row_label") },
         .{ "language_drop", @offsetOf(Private, "language_drop") },
         .{ "flatpak_switch", @offsetOf(Private, "flatpak_switch") },
         .{ "recommended_switch", @offsetOf(Private, "recommended_switch") },
@@ -1263,6 +1271,7 @@ fn hideUnbuiltRows(p: *ShellySettingsPage.Private) void {
         hideSettingsRow(p.aur_switch);
         hideSettingsRow(p.atoll_aur_switch);
     }
+    if (!features.builtWithAtoll) hideSettingsRow(p.atoll_aur_switch);
     if (!features.builtWithFlatpak) hideSettingsRow(p.flatpak_switch);
     if (!features.builtWithRecommend) hideSettingsRow(p.recommended_switch);
     if (!features.builtWithAppImage) {
@@ -1385,7 +1394,7 @@ fn applyConfig(p: *ShellySettingsPage.Private, cfg: *ShellyConfig) void {
     // Advanced
     setSwitch(p.no_confirm_switch, cfg.NoConfirm);
     setSwitch(p.shelly_search_switch, cfg.ShellySearchEnabled);
-    setSwitch(p.atoll_aur_switch, cfg.AtollAurEnabled);
+    setSwitch(p.atoll_aur_switch, cfg.AtollAurEnabled or features.builtWithAtollOnly);
     setSwitch(p.remove_cache_switch, cfg.PackageManagementRemoveConfigs);
 
     applyAppImageInstallPath(p);
