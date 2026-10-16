@@ -11,11 +11,21 @@ pkgname=(
   'shelly-notify-none'
 )
 pkgver=3.1.7
-pkgrel=1
+pkgrel=2
 arch=('x86_64' 'aarch64')
 url='https://github.com/Seafoam-Labs/Shelly-ALPM'
 license=('GPL-3.0-only')
+
+# Use the RLPM-only native backend with Arch runtime paths.
+# The pacman path profile selects /etc/pacman.conf and /var/lib/pacman;
+# it does not enable libalpm.
+_shelly_libalpm=false
+_shelly_path_profile=pacman
+_shelly_native_depends=()
+_shelly_native_optdepends=('pacman: package-owner lookup for pacfile merging')
+
 makedepends=(
+  'binutils'
   'curl'
   'flatpak'
   'gettext'
@@ -25,8 +35,9 @@ makedepends=(
   'pkgconf'
   'sqlite'
   'zig>=0.16.0'
+  "${_shelly_native_depends[@]}"
 )
-checkdepends=('binutils' 'ripgrep')
+checkdepends=('ripgrep')
 source=("${pkgbase}-${pkgver}.tar.gz::${url}/archive/v${pkgver}.tar.gz")
 sha256sums=('c69be6dbfb391100c28f327ac4a4ead4d35681bd4e6a3f348be0109c4156e36b')
 
@@ -36,8 +47,8 @@ _srcdir="Shelly-ALPM-${pkgver//+/-}"
 # Components with their own build.zig, in build order.
 _components=(
   Shelly.Flatpak.Backend
-  Shelly.PackageManager
   Shelly.Rlpm
+  Shelly.PackageManager
   Shelly.Cli.Zig
   Shelly.Key
   Shelly.Notifications.Zig
@@ -71,10 +82,13 @@ build() {
 
   (cd Shelly.Cli.Zig && _zig_build \
     --prefix "${srcdir}/out-cli" \
+    -Dlibalpm="${_shelly_libalpm}" \
+    -Dpath-profile="${_shelly_path_profile}" \
     -Doptimize=ReleaseSmall)
 
   (cd Shelly.Key && _zig_build \
     --prefix "${srcdir}/out-key" \
+    -Dpath-profile="${_shelly_path_profile}" \
     -Doptimize=ReleaseSmall)
 
   (cd Shelly.Notifications.Zig && _zig_build \
@@ -86,13 +100,19 @@ build() {
     -Dflatpak-backend-package=shelly-flatpak-backend \
     -Doptimize=ReleaseSafe)
 
-  local shelly="${srcdir}/out-cli/bin/shelly"
-
-  for shell in bash fish zsh; do
-    "${shelly}" utility --completions "${shell}" > "${srcdir}/shelly.${shell}"
-  done
-
-  "${shelly}" utility --docs | go-md2man > "${srcdir}/shelly.1"
+  # Generate documentation with a fresh configuration, independent of the
+  # builder's own Shelly settings.
+  (
+    export XDG_CONFIG_HOME="${srcdir}/doc-config"
+    export XDG_CACHE_HOME="${srcdir}/doc-cache"
+    export XDG_DATA_HOME="${srcdir}/doc-data"
+    export XDG_STATE_HOME="${srcdir}/doc-state"
+    local shelly="${srcdir}/out-cli/bin/shelly" shell
+    for shell in bash fish zsh; do
+      "${shelly}" utility --completions "${shell}" > "${srcdir}/shelly.${shell}"
+    done
+    "${shelly}" utility --docs | go-md2man > "${srcdir}/shelly.1"
+  )
   sed -i "s|^\\.TH .*|.TH \"SHELLY\" \"1\" \"\" \"Shelly ${pkgver}\" \"Shelly CLI Manual\"|" \
     "${srcdir}/shelly.1"
   printf '\n.SH AUTHORS\nSeafoam Labs.\n' >> "${srcdir}/shelly.1"
@@ -112,11 +132,15 @@ build() {
 check() {
   cd "${_srcdir}"
 
+  # Test the same native backend and path profile as the shipped CLI.
   (cd Shelly.Flatpak.Backend && _zig_build test abi-test integration-test)
-  (cd Shelly.PackageManager && _zig_build flatpak-test)
-  (cd Shelly.Rlpm && _zig_build test)
-  (cd Shelly.Key && _zig_build test)
-  (cd Shelly.Cli.Zig && _zig_build test)
+  (cd Shelly.PackageManager && _zig_build -Dlibalpm="${_shelly_libalpm}" \
+    -Dpath-profile="${_shelly_path_profile}" \
+    flatpak-test native-backend-test rlpm-adapter-test bootstrap-test)
+  (cd Shelly.Rlpm && _zig_build test -Dpath-profile="${_shelly_path_profile}")
+  (cd Shelly.Key && _zig_build test -Dpath-profile="${_shelly_path_profile}")
+  (cd Shelly.Cli.Zig && _zig_build test -Dlibalpm="${_shelly_libalpm}" \
+    -Dpath-profile="${_shelly_path_profile}")
 
   scripts/check-flatpak-separation.sh \
     "${srcdir}/out-cli/bin/shelly" \
@@ -165,12 +189,13 @@ package_shelly-cli() {
     'glibc'
     'gnupg'
     'libarchive'
-    'pacman>=7'
     'sqlite'
     'sudo'
     'tar'
+    "${_shelly_native_depends[@]}"
   )
   optdepends=(
+    "${_shelly_native_optdepends[@]}"
     'base-devel: build and install AUR packages'
     'desktop-file-utils: update AppImage desktop entries'
     'devtools: build AUR packages in a clean chroot'
@@ -191,6 +216,16 @@ package_shelly-cli() {
   cd "${_srcdir}"
 
   install -Dm755 "${srcdir}/out-cli/bin/shelly" -t "${pkgdir}/usr/bin"
+
+  # The package metadata must match the compiled native backend variant.
+  local dynamic
+  dynamic=$(LC_ALL=C readelf -d "${pkgdir}/usr/bin/shelly") || return 1
+  if [[ ${_shelly_libalpm} == true && ${dynamic} != *libalpm.so* ]] ||
+     [[ ${_shelly_libalpm} == false && ${dynamic} == *libalpm.so* ]]; then
+    printf 'shelly does not match SHELLY_LIBALPM=%s\n' "${_shelly_libalpm}" >&2
+    return 1
+  fi
+
   install -Dm755 "${srcdir}/out-key/bin/shelly-key" -t "${pkgdir}/usr/bin"
   install -Dm644 shellybuild.conf -t "${pkgdir}/etc"
 
@@ -260,5 +295,5 @@ package_shelly-notify-none() {
   pkgdesc='Placeholder that satisfies Shelly without the notification tray'
   arch=('any')
   provides=('shelly-notify')
-  conflicts=('shelly-notify')
+  conflicts=('shelly-notify' 'shelly-notify-git' 'shelly-notify-none-git')
 }
