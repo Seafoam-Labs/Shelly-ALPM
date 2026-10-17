@@ -32,15 +32,15 @@ fn renderBash(manifest: *const spec.Manifest, writer: *std.Io.Writer) !void {
         \\# Bash completions for shelly
         \\# Auto-generated from the native Shelly CLI catalog. Do not edit.
         \\_shelly_packages_standard_sync() {
-        \\    pacman -Slq 2>/dev/null
+        \\    shelly search standard --names-only --show-hidden 2>/dev/null
         \\}
         \\
         \\_shelly_packages_standard_local() {
-        \\    pacman -Qq 2>/dev/null
+        \\    shelly list standard --names-only 2>/dev/null
         \\}
         \\
         \\_shelly_packages_aur_local() {
-        \\    pacman -Qqm 2>/dev/null
+        \\    shelly list aur --names-only --show-hidden 2>/dev/null
         \\}
         \\
         \\_shelly_packages_flatpak_remote() {
@@ -188,15 +188,15 @@ fn renderFish(manifest: *const spec.Manifest, writer: *std.Io.Writer) !void {
         \\# Fish completions for shelly
         \\# Auto-generated from the native Shelly CLI catalog. Do not edit.
         \\function __shelly_packages_standard_sync
-        \\    pacman -Slq 2>/dev/null
+        \\    shelly search standard --names-only --show-hidden 2>/dev/null
         \\end
         \\
         \\function __shelly_packages_standard_local
-        \\    pacman -Qq 2>/dev/null
+        \\    shelly list standard --names-only 2>/dev/null
         \\end
         \\
         \\function __shelly_packages_aur_local
-        \\    pacman -Qqm 2>/dev/null
+        \\    shelly list aur --names-only --show-hidden 2>/dev/null
         \\end
         \\
         \\function __shelly_packages_flatpak_remote
@@ -457,20 +457,20 @@ fn renderZsh(manifest: *const spec.Manifest, writer: *std.Io.Writer) !void {
         \\
         \\_shelly_packages_standard_sync() {
         \\    if (( ${#_shelly_repo_packages} == 0 )); then
-        \\        _shelly_repo_packages=(${(f)"$(pacman -Slq 2>/dev/null)"})
+        \\        _shelly_repo_packages=(${(f)"$(shelly search standard --names-only --show-hidden 2>/dev/null)"})
         \\    fi
         \\    _describe -t packages 'package' _shelly_repo_packages
         \\}
         \\
         \\_shelly_packages_standard_local() {
         \\    local -a packages
-        \\    packages=(${(f)"$(pacman -Qq 2>/dev/null)"})
+        \\    packages=(${(f)"$(shelly list standard --names-only 2>/dev/null)"})
         \\    _describe -t packages 'package' packages
         \\}
         \\
         \\_shelly_packages_aur_local() {
         \\    local -a packages
-        \\    packages=(${(f)"$(pacman -Qqm 2>/dev/null)"})
+        \\    packages=(${(f)"$(shelly list aur --names-only --show-hidden 2>/dev/null)"})
         \\    _describe -t packages 'package' packages
         \\}
         \\
@@ -1071,6 +1071,10 @@ test "renders Bash Fish and Zsh scripts from the native catalog" {
         try std.testing.expect(std.mem.indexOf(u8, script, "pacfiles") != null);
         try std.testing.expect(std.mem.indexOf(u8, script, "threeway") != null);
         try std.testing.expect(std.mem.indexOf(u8, script, "bash fish zsh") != null);
+        try std.testing.expect(std.mem.indexOf(u8, script, "pacman -") == null);
+        try std.testing.expect(std.mem.indexOf(u8, script, "shelly search standard --names-only --show-hidden") != null);
+        try std.testing.expect(std.mem.indexOf(u8, script, "shelly list standard --names-only") != null);
+        try std.testing.expect(std.mem.indexOf(u8, script, "shelly list aur --names-only --show-hidden") != null);
         if (expected.shell == .bash) {
             try std.testing.expect(std.mem.indexOf(u8, script, "_shelly_packages_standard_sync") != null);
             try std.testing.expect(std.mem.indexOf(u8, script, "_shelly_packages_flatpak_local") != null);

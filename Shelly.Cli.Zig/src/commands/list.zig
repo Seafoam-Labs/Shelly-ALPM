@@ -757,6 +757,10 @@ fn writeStandardPlain(
     defer storage.deinit();
     const allocator = storage.allocator();
     const selected = try selectedStandard(allocator, invocation, items);
+    if (optionEnabled(invocation, "--names-only")) {
+        for (selected) |item| try context.stdout.print("{s}\n", .{item.name});
+        return;
+    }
     const rows = try allocator.alloc([]const []const u8, selected.len);
     const size_display = try loadSizeDisplay(context);
     const include_required_by = optionEnabled(invocation, "--required-by");
@@ -824,6 +828,10 @@ fn writeAurPlain(
     defer storage.deinit();
     const allocator = storage.allocator();
     const selected = try selectedAur(allocator, invocation, items);
+    if (optionEnabled(invocation, "--names-only")) {
+        for (selected) |item| try context.stdout.print("{s}\n", .{item.name});
+        return;
+    }
     const rows = try allocator.alloc([]const []const u8, selected.len);
     const include_required_by = optionEnabled(invocation, "--required-by");
     const include_optional_for = optionEnabled(invocation, "--optional-for");
@@ -1782,4 +1790,21 @@ test "Flatpak named-remote AppStream JSON uses UI framing" {
     const payload = try decodeFirstTestFrame(tc.arena.allocator(), tc.stdout.writer.buffered());
     try std.testing.expect(std.mem.indexOf(u8, payload, "\"Id\":\"org.example.App\"") != null);
     try std.testing.expect(std.mem.indexOf(u8, payload, "\"Remotes\":[]") != null);
+}
+
+test "package lists render names only for shell completion" {
+    var tc: test_support.TestContext = .{};
+    tc.init();
+    defer tc.deinit();
+    const manifest = try spec.Manifest.load(tc.arena.allocator());
+    for ([_][]const u8{ "standard", "aur" }) |backend| {
+        tc.stdout.writer.end = 0;
+        const outcome = try parseTestArguments(tc.arena.allocator(), &manifest, &.{ "list", backend, "--names-only" });
+        if (std.mem.eql(u8, backend, "standard")) {
+            try writeStandardPlain(&tc.context, &outcome.dispatch, &.{ .{ .name = "alpha" }, .{ .name = "beta" } });
+        } else {
+            try writeAurPlain(&tc.context, &outcome.dispatch, &.{ .{ .name = "alpha" }, .{ .name = "beta" } });
+        }
+        try std.testing.expectEqualStrings("alpha\nbeta\n", tc.stdout.writer.buffered());
+    }
 }
