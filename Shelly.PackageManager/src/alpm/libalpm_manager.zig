@@ -68,6 +68,7 @@ pub const Manager = struct {
     local_db: ?bindings.libalpm.Database = null,
     sync_dbs: std.ArrayList(bindings.libalpm.Database) = .empty,
     package_download: bool = false,
+    databases_synced: bool = false,
     is_root: bool = false,
     temp_root_path: []const u8,
     show_hidden_packages: bool = false,
@@ -257,7 +258,8 @@ pub const Manager = struct {
     }
 
     pub fn sync(self: *Manager, force: bool) TransactionError!void {
-        return self.syncDatabases(force, true);
+        try self.syncDatabases(force, true);
+        self.databases_synced = true;
     }
 
     /// Synchronizes repository databases for a non-root update preview. This
@@ -1091,7 +1093,7 @@ pub const Manager = struct {
             const update_notice = cachyos.UpdateNotice.init(self.allocator, self.io());
             if (!update_notice.check(self.environ, &self.dispatcher)) return RestartReport.empty(self.allocator);
         }
-        self.sync(true) catch return TransactionError.SyncDbFailed;
+        if (!self.databases_synced) self.sync(true) catch return TransactionError.SyncDbFailed;
 
         self.package_download = true;
 

@@ -3360,6 +3360,37 @@ test "valid managers without sync databases report SyncDbFailed for sync update 
     );
 }
 
+test "sync_system_update reuses databases refreshed by sync (issue 2060)" {
+    const DownloadCounter = struct {
+        updates: usize = 0,
+        fn receive(data: ?*anyopaque, _: events.DownloadUpdate) void {
+            const self: *@This() = @ptrCast(@alignCast(data.?));
+            self.updates += 1;
+        }
+    };
+    const allocator = testing.allocator;
+    var threaded: std.Io.Threaded = .init(allocator, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var workspace = try SignatureSyncWorkspace.create(allocator, io, "Never", false);
+    defer workspace.cleanup(allocator);
+
+    const mgr = try Manager.init(allocator, testing.environ, .{ .config_path = workspace.config_path });
+    defer mgr.deinit();
+    mgr.detected_cachyos = false;
+    try mgr.sync(true);
+
+    var counter: DownloadCounter = .{};
+    _ = try mgr.dispatcher.addDownloadHandler(.{ .function = DownloadCounter.receive, .data = &counter });
+    // Nothing needs upgrading here, so libalpm refuses the empty commit. Only
+    // the database refresh before it matters.
+    if (mgr.sync_system_update(.{ .dbonly = true })) |result| {
+        var report = result;
+        report.deinit();
+    } else |_| {}
+    try testing.expectEqual(@as(usize, 0), counter.updates);
+}
+
 test "update_package_reason reports PackageFetchFailed for a missing package" {
     const allocator = testing.allocator;
 
