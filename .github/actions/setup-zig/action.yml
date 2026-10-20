@@ -1,0 +1,14 @@
+name: Set up project Zig
+description: Install the Zig release supported by Shelly and its dependencies
+runs:
+  using: composite
+  steps:
+    # Rolling distro packages can move to an incompatible Zig build API.
+    # Keep this aligned with the supported version documented in README.md.
+    - uses: mlugg/setup-zig@v2
+      with:
+        version: '0.16.0'
+        use-cache: false
+    - name: Report Zig version
+      shell: bash
+      run: zig version
