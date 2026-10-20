@@ -267,7 +267,7 @@ jobs:
       fail-fast: false
       matrix:
         libalpm: ['true', 'false']
-        optimize: [Debug, ReleaseSafe]
+        optimize: [Debug, ReleaseSafe, ReleaseSmall]
     steps:
       - run: |
           pacman -Syu --noconfirm

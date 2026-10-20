@@ -53,7 +53,10 @@ pub fn build(b: *std.Build) void {
     worker_fixture_options.addOptionPath("path", worker_fixture.getEmittedBin());
     mod.addImport("Shelly_Key", shelly_key.module("Shelly_Key"));
     mod.linkSystemLibrary("archive", .{});
-    mod.linkSystemLibrary("sqlite3", .{});
+    // SQLite is a direct RLPM dependency, including in libalpm-enabled CLIs.
+    // Keep its DT_NEEDED entry instead of relying on transitive libraries (#2059).
+    // Zig 0.16's pkg-config path bypasses `needed`, so link by name explicitly.
+    mod.linkSystemLibrary("sqlite3", .{ .needed = true, .use_pkg_config = .no });
     mod.addCSourceFile(.{ .file = b.path("src/native/regex.c"), .flags = &.{"-std=c11"} });
     mod.addCSourceFile(.{ .file = b.path("src/native/publication.c"), .flags = &.{"-std=c11"} });
     mod.addCSourceFile(.{ .file = b.path("src/native/lock.c"), .flags = &.{"-std=c11"} });
@@ -392,7 +395,7 @@ pub fn build(b: *std.Build) void {
     });
     host_mod.addCSourceFile(.{ .file = b.path("src/native/publication.c"), .flags = &.{"-std=c11"} });
     host_mod.linkSystemLibrary("archive", .{});
-    host_mod.linkSystemLibrary("sqlite3", .{});
+    host_mod.linkSystemLibrary("sqlite3", .{ .needed = true, .use_pkg_config = .no });
     const host_tests = b.addTest(.{
         .root_module = host_mod,
         .filters = &.{"host-readonly:"},

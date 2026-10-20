@@ -3,6 +3,8 @@ const bindings = @import("Shelly_Ui_Gtk");
 const gtk = bindings.gtk;
 const gobject = bindings.gobject;
 const support = @import("../../pages/support.zig");
+const features = @import("../../services/build_features.zig");
+const translations = @import("../../helpers/translations.zig");
 
 pub const AurWarningDialog = extern struct {
     parent_instance: Parent,
@@ -43,6 +45,11 @@ pub const AurWarningDialog = extern struct {
         const p = self.priv();
         p.on_response = null;
         p.ctx = null;
+        if (features.builtWithAtollOnly) {
+            gtk.Label.setLabel(p.title_label, translations._("Enable Atoll?"));
+            gtk.Label.setLabel(p.message_label, translations._("Atoll contains build scripts that are known as PKGBUILDs. Those scripts are uploaded by users, and are not verified or vetted in any way. Only enable this feature if you are comfortable in verifying the build scripts."));
+            gtk.Label.setLabel(p.link_label, translations._("<a href=\"https://www.seafoam-labs.org/shelly-alpm/docs/aur-safety/\">Atoll Safety Guide</a>"));
+        }
         _ = gobject.signalConnectData(
             p.link_label.as(gobject.Object),
             "activate-link",

@@ -1,6 +1,6 @@
 pkgbase = shelly
-	pkgver = 3.1.6.r7.g66dd2891
-	pkgrel = 2
+	pkgver = 3.1.8
+	pkgrel = 1
 	url = https://github.com/Seafoam-Labs/Shelly-ALPM
 	arch = x86_64
 	arch = aarch64
@@ -17,13 +17,13 @@ pkgbase = shelly
 	makedepends = pkgconf
 	makedepends = sqlite
 	makedepends = zig>=0.16.0
-	source = Shelly-ALPM::git+https://github.com/Seafoam-Labs/Shelly-ALPM.git#branch=development
+	source = Shelly-ALPM::git+https://github.com/Seafoam-Labs/Shelly-ALPM.git#tag=v3.1.8
 	sha256sums = SKIP
 
 pkgname = shelly
-	pkgdesc = Shelly: A Modern Arch Package Manager (Devario development build)
-	depends = shelly-cli=3.1.6.r7.g66dd2891-2
-	depends = shelly-flatpak-backend=3.1.6.r7.g66dd2891-2
+	pkgdesc = Shelly: A Modern Arch Package Manager (Devario release build)
+	depends = shelly-cli=3.1.8-1
+	depends = shelly-flatpak-backend=3.1.8-1
 	depends = shelly-notify
 	depends = glib2
 	depends = glibc
@@ -35,7 +35,7 @@ pkgname = shelly
 	conflicts = shelly-bin
 
 pkgname = shelly-cli
-	pkgdesc = Native Shelly package-manager CLI (Devario development build)
+	pkgdesc = Native Shelly package-manager CLI (Devario release build)
 	depends = curl
 	depends = diffutils
 	depends = git
@@ -62,8 +62,8 @@ pkgname = shelly-cli
 	backup = etc/shellybuild.conf
 
 pkgname = shelly-flatpak-backend
-	pkgdesc = Optional native Flatpak backend for Shelly (Devario development build)
-	depends = shelly-cli=3.1.6.r7.g66dd2891-2
+	pkgdesc = Optional native Flatpak backend for Shelly (Devario release build)
+	depends = shelly-cli=3.1.8-1
 	depends = flatpak
 	depends = glib2
 	depends = glibc
@@ -73,8 +73,8 @@ pkgname = shelly-flatpak-backend
 	replaces = shelly-cli-flatpak-backend-git
 
 pkgname = shelly-notify
-	pkgdesc = Notification tray for Shelly (Devario development build)
-	depends = shelly=3.1.6.r7.g66dd2891-2
+	pkgdesc = Notification tray for Shelly (Devario release build)
+	depends = shelly=3.1.8-1
 	depends = glibc
 	conflicts = shelly-notify-git
 

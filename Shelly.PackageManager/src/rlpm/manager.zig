@@ -131,7 +131,8 @@ pub const Manager = struct {
         defer if (output_subscription) |subscription| {
             _ = context.unsubscribe(subscription);
         };
-        var operation = context.begin(.{ .backend = .alpm, .kind = .sync, .subject = "rlpm" });
+        const descriptor: op.OperationDescriptor = .{ .backend = .alpm, .kind = .sync, .subject = "rlpm" };
+        var operation = if (self.dispatcher.operation) |parent| parent.child(descriptor) else context.begin(descriptor);
         var status: op.CompletionStatus = .failed;
         defer operation.finish(status);
         var adapter: Adapter = undefined;
@@ -391,14 +392,16 @@ pub const Manager = struct {
         defer if (output_subscription) |subscription| {
             _ = context.unsubscribe(subscription);
         };
-        var operation = context.begin(.{ .backend = .alpm, .kind = switch (mode) {
+        const descriptor: op.OperationDescriptor = .{ .backend = .alpm, .kind = switch (mode) {
             .remove => .remove,
             .upgrade => .update,
             else => .install,
-        }, .subject = "rlpm" });
+        }, .subject = "rlpm" };
+        const previous_operation = self.dispatcher.operation;
+        var operation = if (previous_operation) |parent| parent.child(descriptor) else context.begin(descriptor);
         defer operation.finish(.failed);
         self.dispatcher.setOperation(&operation);
-        defer self.dispatcher.setOperation(null);
+        defer self.dispatcher.setOperation(previous_operation);
         var adapter: Adapter = undefined;
         try adapter.init(&self.owner, &operation);
         adapter.failure_handler = .{ .function = forwardTransactionFailure, .data = self };

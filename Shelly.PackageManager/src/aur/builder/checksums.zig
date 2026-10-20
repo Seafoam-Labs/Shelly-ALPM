@@ -53,6 +53,11 @@ pub fn hasVerifiableChecksum(package_build: *const PackageBuild, index: usize) b
 pub fn verifyFileHash(comptime Hash: type, io: std.Io, path: []const u8, expected: []const u8) !void {
     if (std.ascii.eqlIgnoreCase(expected, "SKIP")) return;
     if (expected.len != Hash.digest_length * 2) return error.InvalidSourceChecksum;
+    const actual = try hashFile(Hash, io, path);
+    if (!std.ascii.eqlIgnoreCase(&actual, expected)) return error.SourceChecksumMismatch;
+}
+
+pub fn hashFile(comptime Hash: type, io: std.Io, path: []const u8) ![Hash.digest_length * 2]u8 {
     var file = try std.Io.Dir.cwd().openFile(io, path, .{});
     defer file.close(io);
     const stat = try file.stat(io);
@@ -68,8 +73,7 @@ pub fn verifyFileHash(comptime Hash: type, io: std.Io, path: []const u8, expecte
     }
     var digest: [Hash.digest_length]u8 = undefined;
     hasher.final(&digest);
-    const actual = std.fmt.bytesToHex(digest, .lower);
-    if (!std.ascii.eqlIgnoreCase(&actual, expected)) return error.SourceChecksumMismatch;
+    return std.fmt.bytesToHex(digest, .lower);
 }
 
 test "validateChecksumCount accepts matching, empty, and missing tables" {
@@ -122,4 +126,17 @@ test "verifyFileHash matches sha256, honors SKIP, and rejects mismatches" {
     try verifyFileHash(std.crypto.hash.sha2.Sha256, std.testing.io, path, "SKIP");
     try std.testing.expectError(error.SourceChecksumMismatch, verifyFileHash(std.crypto.hash.sha2.Sha256, std.testing.io, path, "0" ** 64));
     try std.testing.expectError(error.InvalidSourceChecksum, verifyFileHash(std.crypto.hash.sha2.Sha256, std.testing.io, path, "abc"));
+}
+
+/// Owned lowercase digest, shared by checksum generation and verification.
+pub fn generateFileHash(allocator: std.mem.Allocator, io: std.Io, path: []const u8, algorithm: ChecksumAlgorithm) ![]u8 {
+    return switch (algorithm) {
+        .sha512 => allocator.dupe(u8, &try hashFile(std.crypto.hash.sha2.Sha512, io, path)),
+        .sha384 => allocator.dupe(u8, &try hashFile(std.crypto.hash.sha2.Sha384, io, path)),
+        .sha256 => allocator.dupe(u8, &try hashFile(std.crypto.hash.sha2.Sha256, io, path)),
+        .sha224 => allocator.dupe(u8, &try hashFile(std.crypto.hash.sha2.Sha224, io, path)),
+        .sha1 => allocator.dupe(u8, &try hashFile(std.crypto.hash.Sha1, io, path)),
+        .md5 => allocator.dupe(u8, &try hashFile(std.crypto.hash.Md5, io, path)),
+        .b2 => allocator.dupe(u8, &try hashFile(std.crypto.hash.blake2.Blake2b512, io, path)),
+    };
 }

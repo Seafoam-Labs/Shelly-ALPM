@@ -441,7 +441,9 @@ fn packageArchitecture(self: *const PackageBuilder, package_build: *const Packag
             if (std.mem.eql(u8, architecture, "any")) return "any";
         }
     }
-    return self.shellybuild_config.build.carch;
+    // PACKAGECARCH equivalent: only the artifact is relabelled; the PKGBUILD
+    // was evaluated and checked against build.carch.
+    return self.shellybuild_config.packageCarch();
 }
 
 pub fn packageSupportsArchitecture(
@@ -548,7 +550,7 @@ fn writeBuildInfo(
     if (self.options.installed_packages) |installed| {
         for (installed) |value| try writeKeyValue(writer, "installed", value);
     } else {
-        const installed = try collectInstalledPackages(self.allocator, self.environ);
+        const installed = try collectInstalledPackages(self.allocator, self.environ, self.options.native_database);
         defer metadata.freeOwnedStrings(self.allocator, installed);
         for (installed) |value| try writeKeyValue(writer, "installed", value);
     }
@@ -577,8 +579,12 @@ fn stripKind(io: std.Io, path: []const u8) !?StripKind {
     };
 }
 
-fn collectInstalledPackages(allocator: std.mem.Allocator, environ: std.process.Environ) ![][]u8 {
-    const manager = try PackageManager.init(allocator, environ, .{});
+fn collectInstalledPackages(
+    allocator: std.mem.Allocator,
+    environ: std.process.Environ,
+    database: @import("builder.zig").BuildDatabase,
+) ![][]u8 {
+    const manager = try PackageManager.init(allocator, environ, database.initOptions());
     defer manager.deinit();
     const packages = try manager.get_installed_packages();
     defer package_types.OwnedPackage.deinitSlice(allocator, packages);
@@ -658,4 +664,69 @@ fn writeKeyValues(
     values: ?[][]const u8,
 ) !void {
     for (values orelse return) |value| try writeKeyValue(writer, key, value);
+}
+
+test "BUILDINFO reads selected configuration and database overrides" {
+    const t = std.testing;
+    var arena = std.heap.ArenaAllocator.init(t.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var temporary = t.tmpDir(.{});
+    defer temporary.cleanup();
+    const root = try temporary.dir.realPathFileAlloc(t.io, ".", allocator);
+    try temporary.dir.createDirPath(t.io, "selected/local/example-2.0-1");
+    try temporary.dir.createDirPath(t.io, "override/local");
+    for ([_][]const u8{ "selected", "override" }) |name| {
+        const version_file = try std.fmt.allocPrint(allocator, "{s}/local/ALPM_DB_VERSION", .{name});
+        try temporary.dir.writeFile(t.io, .{ .sub_path = version_file, .data = "9\n" });
+    }
+    try temporary.dir.writeFile(t.io, .{
+        .sub_path = "selected/local/example-2.0-1/desc",
+        .data = "%NAME%\nexample\n\n%VERSION%\n2.0-1\n\n%ARCH%\nany\n\n%REASON%\n0\n\n%VALIDATION%\nnone\n\n",
+    });
+    try temporary.dir.writeFile(t.io, .{ .sub_path = "selected/local/example-2.0-1/files", .data = "%FILES%\n\n" });
+    const config = try std.fmt.allocPrint(allocator, "[options]\nDBPath = {s}/selected\nCacheDir = {s}/cache\nGPGDir = {s}/gnupg\nLogFile = {s}/shelly.log\n", .{ root, root, root, root });
+    try temporary.dir.writeFile(t.io, .{ .sub_path = "shelly.conf", .data = config });
+    const config_path = try std.fs.path.join(allocator, &.{ root, "shelly.conf" });
+    const installed = try collectInstalledPackages(t.allocator, t.environ, .{ .backend = .rlpm, .config_path = config_path });
+    defer metadata.freeOwnedStrings(t.allocator, installed);
+    try t.expectEqual(@as(usize, 1), installed.len);
+    try t.expectEqualStrings("example-2.0-1-any", installed[0]);
+    const database_path = try std.fs.path.join(allocator, &.{ root, "override" });
+    const overridden = try collectInstalledPackages(t.allocator, t.environ, .{ .backend = .rlpm, .config_path = config_path, .database_path = database_path, .root_directory = root });
+    defer metadata.freeOwnedStrings(t.allocator, overridden);
+    try t.expectEqual(@as(usize, 0), overridden.len);
+
+    const active = try PackageManager.init(t.allocator, t.environ, .{
+        .backend = .rlpm,
+        .config_path = config_path,
+        .database_path = database_path,
+        .root_directory = root,
+    });
+    defer active.deinit();
+    const selection = @import("builder.zig").BuildDatabase.fromManager(active, config_path);
+    try t.expectEqual(PackageManager.Backend.rlpm, selection.backend.?);
+    try t.expectEqualStrings(root, selection.root_directory.?);
+    // A dependency appears after selecting the build database. The later
+    // BUILDINFO read must see it without including packages from the other DB.
+    try temporary.dir.createDirPath(t.io, "override/local/build-dep-1-1");
+    try temporary.dir.writeFile(t.io, .{
+        .sub_path = "override/local/build-dep-1-1/desc",
+        .data = "%NAME%\nbuild-dep\n\n%VERSION%\n1-1\n\n%ARCH%\nany\n\n%REASON%\n1\n\n%VALIDATION%\nnone\n\n",
+    });
+    try temporary.dir.writeFile(t.io, .{ .sub_path = "override/local/build-dep-1-1/files", .data = "%FILES%\n\n" });
+    const late = try collectInstalledPackages(t.allocator, t.environ, selection);
+    defer metadata.freeOwnedStrings(t.allocator, late);
+    try t.expectEqual(@as(usize, 1), late.len);
+    try t.expectEqualStrings("build-dep-1-1-any", late[0]);
+
+    // A guest chooses its own configuration; its metadata must not include
+    // packages from the host configuration used for provisioning.
+    const guest_config = try std.fmt.allocPrint(allocator, "[options]\nDBPath = {s}/override\nCacheDir = {s}/cache\nGPGDir = {s}/gnupg\nLogFile = {s}/guest.log\n", .{ root, root, root, root });
+    try temporary.dir.writeFile(t.io, .{ .sub_path = "guest.conf", .data = guest_config });
+    const guest_config_path = try std.fs.path.join(allocator, &.{ root, "guest.conf" });
+    const guest = try collectInstalledPackages(t.allocator, t.environ, .{ .backend = .rlpm, .config_path = guest_config_path });
+    defer metadata.freeOwnedStrings(t.allocator, guest);
+    try t.expectEqual(@as(usize, 1), guest.len);
+    try t.expectEqualStrings("build-dep-1-1-any", guest[0]);
 }

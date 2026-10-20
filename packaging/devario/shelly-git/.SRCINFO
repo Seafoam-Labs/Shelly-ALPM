@@ -1,5 +1,5 @@
 pkgbase = shelly-git
-	pkgver = 3.1.6.r181.g11a07eaf
+	pkgver = 3.1.7
 	pkgrel = 1
 	url = https://github.com/Seafoam-Labs/Shelly-ALPM
 	arch = x86_64
@@ -22,8 +22,8 @@ pkgbase = shelly-git
 
 pkgname = shelly-git
 	pkgdesc = Shelly: A Modern Arch Package Manager (Devario git version)
-	depends = shelly-cli-git=3.1.6.r181.g11a07eaf-1
-	depends = shelly-flatpak-backend-git=3.1.6.r181.g11a07eaf-1
+	depends = shelly-cli-git=3.1.7-1
+	depends = shelly-flatpak-backend-git=3.1.7-1
 	depends = shelly-notify-git
 	depends = glib2
 	depends = glibc
@@ -31,7 +31,7 @@ pkgname = shelly-git
 	depends = hicolor-icon-theme
 	optdepends = fuse2: run AppImages that require FUSE 2
 	optdepends = libstarfish: dependency viewer for arch packages
-	provides = shelly=3.1.6.r181.g11a07eaf
+	provides = shelly=3.1.7
 	conflicts = shelly
 	conflicts = shelly-bin
 
@@ -56,7 +56,7 @@ pkgname = shelly-cli-git
 	optdepends = systemd: run isolated build containers with systemd-nspawn
 	optdepends = util-linux: isolate fresh-root provisioning for --isolated builds
 	optdepends = vim: default visual pacfile diff viewer
-	provides = shelly-cli=3.1.6.r181.g11a07eaf
+	provides = shelly-cli=3.1.7
 	conflicts = shelly<3.1.6-2
 	conflicts = shelly-git<3.1.6.r0
 	conflicts = shelly-bin
@@ -65,11 +65,11 @@ pkgname = shelly-cli-git
 
 pkgname = shelly-flatpak-backend-git
 	pkgdesc = Optional native Flatpak backend for Shelly (Devario git version)
-	depends = shelly-cli-git=3.1.6.r181.g11a07eaf-1
+	depends = shelly-cli-git=3.1.7-1
 	depends = flatpak
 	depends = glib2
 	depends = glibc
-	provides = shelly-flatpak-backend=3.1.6.r181.g11a07eaf
+	provides = shelly-flatpak-backend=3.1.7
 	conflicts = shelly-flatpak-backend
 	conflicts = shelly-flatpak-backend-bin
 	conflicts = shelly-cli-flatpak-backend-git
@@ -77,9 +77,9 @@ pkgname = shelly-flatpak-backend-git
 
 pkgname = shelly-notify-git
 	pkgdesc = Notification tray for Shelly (Devario git version)
-	depends = shelly-git=3.1.6.r181.g11a07eaf-1
+	depends = shelly-git=3.1.7-1
 	depends = glibc
-	provides = shelly-notify=3.1.6.r181.g11a07eaf
+	provides = shelly-notify=3.1.7
 	conflicts = shelly-notify
 
 pkgname = shelly-notify-none-git

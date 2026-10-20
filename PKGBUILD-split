@@ -10,22 +10,24 @@ pkgname=(
   'shelly-notify'
   'shelly-notify-none'
 )
-pkgver=3.1.6
-pkgrel=4
+pkgver=3.1.8
+pkgrel=1
 arch=('x86_64' 'aarch64')
 url='https://github.com/Seafoam-Labs/Shelly-ALPM'
 license=('GPL-3.0-only')
 makedepends=(
+  'binutils'
   'flatpak'
   'gettext'
   'go-md2man'
   'gtk4'
   'pkgconf'
+  'sqlite'
   'zig>=0.16.0'
 )
 checkdepends=('ripgrep')
 source=("${pkgbase}-${pkgver}.tar.gz::${url}/archive/v${pkgver}.tar.gz")
-sha256sums=('fa1e587a69b9d6e63e6835696e2d696f880d6120a023f5c922e260fc023e70af')
+sha256sums=('6d00d0570b3b142a5c8eca9c2dfd7ca1275e2e482a3b09b9896863ddec8374c1')
 
 # GitHub replaces "+" with "-" in archive top-level directory names.
 _srcdir="Shelly-ALPM-${pkgver//+/-}"
@@ -159,6 +161,7 @@ package_shelly-cli() {
     'gnupg'
     'libarchive'
     'pacman>=7'
+    'sqlite'
     'sudo'
     'tar'
   )
@@ -182,6 +185,12 @@ package_shelly-cli() {
   cd "${_srcdir}"
 
   install -Dm755 "${srcdir}/out-cli/bin/shelly" -t "${pkgdir}/usr/bin"
+  local shelly_dynamic
+  shelly_dynamic=$(LC_ALL=C readelf -d "${pkgdir}/usr/bin/shelly") || return 1
+  if [[ $shelly_dynamic != *'Shared library: [libsqlite3.so.0]'* ]]; then
+    printf 'Shelly CLI must directly depend on libsqlite3.so.0 (#2059)\n' >&2
+    return 1
+  fi
   install -Dm755 "${srcdir}/out-key/bin/shelly-key" -t "${pkgdir}/usr/bin"
   install -Dm644 shellybuild.conf -t "${pkgdir}/etc"
 

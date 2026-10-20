@@ -2,7 +2,7 @@
 # Maintainer: Caroline Snyder <hirpeng@gmail.com>
 pkgbase=shelly-bin
 pkgname=('shelly-bin' 'shelly-flatpak-backend-bin')
-pkgver=3.1.6
+pkgver=3.1.8
 pkgrel=1
 arch=('x86_64')
 url="https://github.com/Seafoam-Labs/Shelly-ALPM"
@@ -25,12 +25,12 @@ source=(
     'shelly-flatpak-integrate'
 )
 
-sha256sums=('8f777209c841d79aafc9cfacd7f54a12fbb5626e4ee05628261b939233bb930c'
-            '1eea0b5b5119fce8ceb4f8fb37cfc5af58ed9dcbe1fae6b89d335a9ef0189410'
-            'd7adb207c0073b93679ff3b8741a734ab62b48283134465b47844884bd211bb9'
-            'a4bd3c27ac9f92beeaa9bfcac2030629a9b3e221f7a9b3fc3dd33b7cbd90d953'
+sha256sums=('366e2ea9dd2548005b6d0bb80151551531673869ba2613625ca8572336a5c914'
+            '38b32c59b4a9549df276de1c7938b14c68139ff7dfbd2186da34d1115af13a3d'
+            '9f551f28d79748c7e255a35cb577081b3263e65d290b4809e10066ed17ce30e5'
+            '4b7cb0e42eb322de9eb616d22ca05823f91d178db5b8b67497d497ed495aca9c'
             'cf0dc0a6d1865b9010054b36941e7bf4d445c3e7549219889f07ab08283c5c0f'
-            'da6ed2f71966aef9cc20f7dcd3a5aa87afd3d57d2fccebfe71be62e4d9ae64d5')
+            '07bca40395c180578450c523ea052b036aa8197d8a871efcce55f937c101c323')
 
 package_shelly-bin() {
   pkgdesc="Shelly: A Modern Arch Package Manager (prebuilt binary)"
@@ -68,6 +68,10 @@ package_shelly-bin() {
 
   local shelly_dynamic
   shelly_dynamic=$(LC_ALL=C readelf -d "$srcdir/shelly") || return 1
+  if [[ $shelly_dynamic != *'Shared library: [libsqlite3.so.0]'* ]]; then
+    printf 'Shelly CLI must directly depend on libsqlite3.so.0 (#2059)\n' >&2
+    return 1
+  fi
   if [[ $_shelly_libalpm == true && $shelly_dynamic != *libalpm.so* ]] ||
      [[ $_shelly_libalpm == false && $shelly_dynamic == *libalpm.so* ]]; then
     printf 'Shelly binary does not match SHELLY_LIBALPM package metadata\n' >&2

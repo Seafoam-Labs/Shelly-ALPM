@@ -554,6 +554,62 @@ test "PackageBuilder signs published packages with the configured signing key" {
     defer kill.deinit(allocator);
 }
 
+test "PackageBuilder signs the package carch artifact under its relabelled name" {
+    const allocator = testing.allocator;
+    const io = testing.io;
+    var fixture = try Fixture.create(allocator,
+        \\pkgname=signing-carch-demo
+        \\pkgver=1
+        \\pkgrel=1
+        \\arch=('x86_64')
+        \\package() {
+        \\  mkdir -p "$pkgdir/usr/share/signing-carch-demo"
+        \\  printf 'signed v3 payload\n' > "$pkgdir/usr/share/signing-carch-demo/data"
+        \\}
+    , null, null);
+    defer fixture.destroy();
+    const gnupg_home = try prepareSigningPgpHome(&fixture);
+    defer allocator.free(gnupg_home);
+    fixture.builder.options.sign = true;
+    fixture.builder.options.sign_key = signing_pgp_fingerprint;
+    fixture.builder.options.sign_gnupg_home = gnupg_home;
+    fixture.builder.shellybuild_config.package.carch = "x86_64_v3";
+
+    const artifacts = try fixture.builder.BuildPackage();
+    defer builder_mod.deinitArtifacts(allocator, artifacts);
+    try testing.expectEqual(@as(usize, 1), artifacts.len);
+    try expectPackageArchitecture(allocator, artifacts[0], "/signing-carch-demo-1-1-x86_64_v3.pkg.tar.zst", "x86_64_v3");
+
+    // The detached signature sits next to, and verifies, the v3 archive; no
+    // archive or signature under the build.carch name is published.
+    const signature_path = try std.fmt.allocPrint(allocator, "{s}.sig", .{artifacts[0].path});
+    defer allocator.free(signature_path);
+    try std.Io.Dir.cwd().access(io, signature_path, .{});
+    for ([_][]const u8{ "signing-carch-demo-1-1-x86_64.pkg.tar.zst", "signing-carch-demo-1-1-x86_64.pkg.tar.zst.sig" }) |name| {
+        const stale = try std.fs.path.join(allocator, &.{ fixture.build_dir, name });
+        defer allocator.free(stale);
+        try testing.expectError(error.FileNotFound, std.Io.Dir.cwd().access(io, stale, .{}));
+    }
+
+    const verifier = source_pgp_verifier.Verifier{
+        .allocator = allocator,
+        .io = io,
+        .environ = testing.environ,
+        .gnupg_home = gnupg_home,
+    };
+    var verification = try verifier.verifyDetached(
+        signature_path,
+        artifacts[0].path,
+        &.{signing_pgp_fingerprint},
+    );
+    defer verification.deinit(allocator);
+    try testing.expectEqualStrings(signing_pgp_fingerprint, verification.primary_fingerprint);
+    try testing.expectEqual(source_pgp_verifier.Warning.none, verification.warning);
+
+    var kill = try process_runner.run(allocator, io, &.{ "/usr/bin/gpgconf", "--homedir", gnupg_home, "--kill", "gpg-agent" }, null, null);
+    defer kill.deinit(allocator);
+}
+
 test "PackageBuilder compression presets apply to every split package" {
     const allocator = testing.allocator;
     const content =
@@ -2675,6 +2731,184 @@ test "PackageBuilder emits makepkg-compatible BUILDINFO and MTREE metadata" {
     const payload_hex = std.fmt.bytesToHex(payload_digest, .lower);
     try testing.expect(std.mem.indexOf(u8, gzip.stdout, &payload_hex) != null);
     try testing.expect(std.mem.indexOf(u8, gzip.stdout, "sha256digest=") != null);
+}
+
+test "PackageBuilder BUILDINFO contains packages from the selected native database" {
+    const allocator = testing.allocator;
+    const io = testing.io;
+    var fixture = try Fixture.create(allocator,
+        \\pkgname=native-metadata-demo
+        \\pkgver=1
+        \\pkgrel=1
+        \\arch=('any')
+        \\package() {
+        \\  mkdir -p "$pkgdir/usr/share/native-metadata-demo"
+        \\  printf 'payload\n' > "$pkgdir/usr/share/native-metadata-demo/data"
+        \\}
+    , null, null);
+    defer fixture.destroy();
+    const database = try std.fs.path.join(allocator, &.{ fixture.build_dir, "metadata-db" });
+    defer allocator.free(database);
+    const local = try std.fs.path.join(allocator, &.{ database, "local/build-dep-1-1" });
+    defer allocator.free(local);
+    try std.Io.Dir.cwd().createDirPath(io, local);
+    const version_path = try std.fs.path.join(allocator, &.{ database, "local/ALPM_DB_VERSION" });
+    defer allocator.free(version_path);
+    try std.Io.Dir.cwd().writeFile(io, .{ .sub_path = version_path, .data = "9\n" });
+    var directory = try std.Io.Dir.cwd().openDir(io, local, .{});
+    defer directory.close(io);
+    try directory.writeFile(io, .{ .sub_path = "desc", .data = "%NAME%\nbuild-dep\n\n%VERSION%\n1-1\n\n%ARCH%\nany\n\n%REASON%\n1\n\n%VALIDATION%\nnone\n\n" });
+    try directory.writeFile(io, .{ .sub_path = "files", .data = "%FILES%\n\n" });
+    const config_path = try std.fs.path.join(allocator, &.{ fixture.build_dir, "metadata.conf" });
+    defer allocator.free(config_path);
+    const config = try std.fmt.allocPrint(allocator, "[options]\nDBPath = {s}\nCacheDir = {s}/cache\nGPGDir = {s}/gnupg\nLogFile = {s}/log\n", .{ database, fixture.build_dir, fixture.build_dir, fixture.build_dir });
+    defer allocator.free(config);
+    try std.Io.Dir.cwd().writeFile(io, .{ .sub_path = config_path, .data = config });
+    fixture.builder.options.installed_packages = null;
+    fixture.builder.options.native_database = .{ .backend = .rlpm, .config_path = config_path };
+    const artifacts = try fixture.builder.BuildPackage();
+    defer builder_mod.deinitArtifacts(allocator, artifacts);
+    const build_info = try readPackageEntry(allocator, artifacts[0].path, ".BUILDINFO");
+    defer allocator.free(build_info);
+    try testing.expect(std.mem.indexOf(u8, build_info, "installed = build-dep-1-1-any\n") != null);
+    try testing.expectEqual(@as(usize, 1), std.mem.count(u8, build_info, "installed = "));
+}
+
+test "PackageBuilder package carch relabels artifacts while PKGBUILD evaluation keeps build carch" {
+    const allocator = testing.allocator;
+    var fixture = try Fixture.create(allocator,
+        \\pkgname=package-carch-demo
+        \\pkgver=1
+        \\pkgrel=1
+        \\arch=('x86_64')
+        \\depends_x86_64=('carch-dependency')
+        \\package() {
+        \\  mkdir -p "$pkgdir/usr/share/package-carch-demo"
+        \\  printf '%s\n' "$CARCH" > "$pkgdir/usr/share/package-carch-demo/carch"
+        \\}
+    , null, null);
+    defer fixture.destroy();
+    fixture.builder.shellybuild_config.package.carch = "x86_64_v3";
+
+    const artifacts = try fixture.builder.BuildPackage();
+    defer builder_mod.deinitArtifacts(allocator, artifacts);
+    try testing.expectEqual(@as(usize, 1), artifacts.len);
+    try testing.expect(std.mem.endsWith(u8, artifacts[0].path, "/package-carch-demo-1-1-x86_64_v3.pkg.tar.zst"));
+
+    const pkg_info = try readPkgInfo(allocator, artifacts[0].path);
+    defer allocator.free(pkg_info);
+    try testing.expect(std.mem.indexOf(u8, pkg_info, "arch = x86_64_v3\n") != null);
+    try testing.expect(std.mem.indexOf(u8, pkg_info, "depend = carch-dependency\n") != null);
+    const build_info = try readPackageEntry(allocator, artifacts[0].path, ".BUILDINFO");
+    defer allocator.free(build_info);
+    try testing.expect(std.mem.indexOf(u8, build_info, "pkgarch = x86_64_v3\n") != null);
+    const evaluated_carch = try readPackageEntry(allocator, artifacts[0].path, "usr/share/package-carch-demo/carch");
+    defer allocator.free(evaluated_carch);
+    try testing.expectEqualStrings("x86_64\n", evaluated_carch);
+}
+
+test "PackageBuilder package carch leaves arch any packages untouched" {
+    const allocator = testing.allocator;
+    var fixture = try Fixture.create(allocator,
+        \\pkgname=package-carch-any-demo
+        \\pkgver=1
+        \\pkgrel=1
+        \\arch=('any')
+        \\package() {
+        \\  mkdir -p "$pkgdir/usr/share/package-carch-any-demo"
+        \\}
+    , null, null);
+    defer fixture.destroy();
+    fixture.builder.shellybuild_config.package.carch = "x86_64_v3";
+
+    const artifacts = try fixture.builder.BuildPackage();
+    defer builder_mod.deinitArtifacts(allocator, artifacts);
+    try testing.expect(std.mem.endsWith(u8, artifacts[0].path, "/package-carch-any-demo-1-1-any.pkg.tar.zst"));
+    const pkg_info = try readPkgInfo(allocator, artifacts[0].path);
+    defer allocator.free(pkg_info);
+    try testing.expect(std.mem.indexOf(u8, pkg_info, "arch = any\n") != null);
+}
+
+fn expectPackageArchitecture(allocator: std.mem.Allocator, artifact: builder_mod.BuildArtifact, file_name: []const u8, architecture: []const u8) !void {
+    try testing.expect(std.mem.endsWith(u8, artifact.path, file_name));
+    const pkg_info = try readPkgInfo(allocator, artifact.path);
+    defer allocator.free(pkg_info);
+    const arch_line = try std.fmt.allocPrint(allocator, "arch = {s}\n", .{architecture});
+    defer allocator.free(arch_line);
+    try testing.expect(std.mem.indexOf(u8, pkg_info, arch_line) != null);
+    const build_info = try readPackageEntry(allocator, artifact.path, ".BUILDINFO");
+    defer allocator.free(build_info);
+    const pkgarch_line = try std.fmt.allocPrint(allocator, "pkgarch = {s}\n", .{architecture});
+    defer allocator.free(pkgarch_line);
+    try testing.expect(std.mem.indexOf(u8, build_info, pkgarch_line) != null);
+}
+
+test "PackageBuilder package carch labels each split member independently" {
+    const allocator = testing.allocator;
+    const content =
+        \\pkgbase=package-carch-split
+        \\pkgname=('package-carch-split-bin' 'package-carch-split-data')
+        \\pkgver=1
+        \\pkgrel=1
+        \\arch=('x86_64')
+        \\package_package-carch-split-bin() {
+        \\  mkdir -p "$pkgdir/usr/bin"
+        \\  printf bin > "$pkgdir/usr/bin/package-carch-split"
+        \\}
+        \\package_package-carch-split-data() {
+        \\  arch=('any')
+        \\  mkdir -p "$pkgdir/usr/share/package-carch-split"
+        \\  printf data > "$pkgdir/usr/share/package-carch-split/data"
+        \\}
+    ;
+    const requested = [_][]const u8{ "package-carch-split-bin", "package-carch-split-data" };
+    var fixture = try Fixture.createMany(allocator, content, &requested, null);
+    defer fixture.destroy();
+    fixture.builder.shellybuild_config.package.carch = "x86_64_v3";
+
+    const artifacts = try fixture.builder.BuildPackage();
+    defer builder_mod.deinitArtifacts(allocator, artifacts);
+    try testing.expectEqual(@as(usize, 2), artifacts.len);
+    for (artifacts) |artifact| {
+        if (std.mem.eql(u8, artifact.package_name, "package-carch-split-bin")) {
+            try expectPackageArchitecture(allocator, artifact, "/package-carch-split-bin-1-1-x86_64_v3.pkg.tar.zst", "x86_64_v3");
+        } else {
+            try testing.expectEqualStrings("package-carch-split-data", artifact.package_name);
+            try expectPackageArchitecture(allocator, artifact, "/package-carch-split-data-1-1-any.pkg.tar.zst", "any");
+        }
+    }
+}
+
+test "PackageBuilder arch support check keeps build carch when package carch is set" {
+    // Contract: package.carch only relabels artifacts. A member that declares
+    // only the package architecture is unsupported for build.carch and skipped;
+    // if the support check ever used packageCarch(), it would be built too.
+    const allocator = testing.allocator;
+    const content =
+        \\pkgbase=package-carch-contract
+        \\pkgname=('package-carch-contract-native' 'package-carch-contract-v3-only')
+        \\pkgver=1
+        \\pkgrel=1
+        \\arch=('x86_64' 'x86_64_v3')
+        \\package_package-carch-contract-native() {
+        \\  mkdir -p "$pkgdir/usr/share/native"
+        \\}
+        \\package_package-carch-contract-v3-only() {
+        \\  arch=('x86_64_v3')
+        \\  mkdir -p "$pkgdir/usr/share/v3-only"
+        \\}
+    ;
+    const requested = [_][]const u8{ "package-carch-contract-native", "package-carch-contract-v3-only" };
+    var fixture = try Fixture.createMany(allocator, content, &requested, null);
+    defer fixture.destroy();
+    try testing.expectEqualStrings("x86_64", fixture.builder.shellybuild_config.build.carch);
+    fixture.builder.shellybuild_config.package.carch = "x86_64_v3";
+
+    const artifacts = try fixture.builder.BuildPackage();
+    defer builder_mod.deinitArtifacts(allocator, artifacts);
+    try testing.expectEqual(@as(usize, 1), artifacts.len);
+    try testing.expectEqualStrings("package-carch-contract-native", artifacts[0].package_name);
+    try expectPackageArchitecture(allocator, artifacts[0], "/package-carch-contract-native-1-1-x86_64_v3.pkg.tar.zst", "x86_64_v3");
 }
 
 test "PackageBuilder SRCDEST keeps auxiliary downloads visible during make install issue 2017" {
@@ -7413,18 +7647,26 @@ test "sandbox policy denies paths outside the allow-list" {
     const allocator = testing.allocator;
     const io = testing.io;
 
-    var allowed_dir = std.testing.tmpDir(.{});
-    defer allowed_dir.cleanup();
-    try allowed_dir.dir.writeFile(io, .{ .sub_path = "allowed-file", .data = "inside\n" });
-    var denied_dir = std.testing.tmpDir(.{});
-    defer denied_dir.cleanup();
-    try denied_dir.dir.writeFile(io, .{ .sub_path = "denied-file", .data = "outside\n" });
-
-    const allowed_root = try allowed_dir.dir.realPathFileAlloc(io, ".", allocator);
+    // Put both fixtures under /tmp so a blanket /tmp allowance would make
+    // the negative assertion fail regardless of the checkout/cache location.
+    var random: [16]u8 = undefined;
+    try std.Io.randomSecure(io, &random);
+    const suffix = std.fmt.bytesToHex(random, .lower);
+    const fixture_root = try std.fmt.allocPrint(allocator, "/tmp/shelly-sandbox-{s}", .{suffix});
+    defer allocator.free(fixture_root);
+    try std.Io.Dir.createDirAbsolute(io, fixture_root, .fromMode(0o700));
+    defer std.Io.Dir.cwd().deleteTree(io, fixture_root) catch {};
+    var fixture = try std.Io.Dir.openDirAbsolute(io, fixture_root, .{});
+    defer fixture.close(io);
+    try fixture.createDir(io, "allowed", .default_dir);
+    try fixture.createDir(io, "denied", .default_dir);
+    try fixture.writeFile(io, .{ .sub_path = "allowed/file", .data = "inside\n" });
+    try fixture.writeFile(io, .{ .sub_path = "denied/file", .data = "outside\n" });
+    const allowed_root = try fixture.realPathFileAlloc(io, "allowed", allocator);
     defer allocator.free(allowed_root);
-    const allowed_path = try allowed_dir.dir.realPathFileAlloc(io, "allowed-file", allocator);
+    const allowed_path = try fixture.realPathFileAlloc(io, "allowed/file", allocator);
     defer allocator.free(allowed_path);
-    const denied_path = try denied_dir.dir.realPathFileAlloc(io, "denied-file", allocator);
+    const denied_path = try fixture.realPathFileAlloc(io, "denied/file", allocator);
     defer allocator.free(denied_path);
 
     // Landlock is irreversible, so the probe runs in a forked child to keep
@@ -7451,7 +7693,7 @@ fn probeSandboxPolicy(
 ) u8 {
     builder_mod.setNoNewPrivs() catch return 10;
     builder_mod.sandbox.applyPolicy(allocator, .{
-        .read_write_paths = &.{ allowed_root, "/tmp" },
+        .read_write_paths = &.{allowed_root},
         .read_only_paths = &.{},
     }) catch return 11;
     if (!probePathReadable(allocator, allowed_path)) return 12;

@@ -11,6 +11,7 @@ const support = @import("../../pages/support.zig");
 const ShellyCli = @import("../../services/shelly_cli.zig").ShellyCli;
 const PkgBuild = @import("../../models/pkgbuild.zig").PkgBuild;
 const runtime = @import("../../services/runtime.zig");
+const features = @import("../../services/build_features.zig");
 const InstallReview = @import("pkg_build.zig").PkgbuildReviewDialog;
 
 pub const PkgbuildReviewDialog = extern struct {
@@ -149,6 +150,8 @@ pub const PkgbuildReviewDialog = extern struct {
     };
 
     fn atoll_enabled() bool {
+        if (features.builtWithAtollOnly) return true;
+        if (!features.builtWithAtoll) return false;
         const svc = runtime.config orelse return false;
         const cfg = svc.get() catch return false;
         return cfg.AtollAurEnabled;

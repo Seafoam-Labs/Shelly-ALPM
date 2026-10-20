@@ -1,5 +1,6 @@
 const std = @import("std");
 const diagnostics = @import("diagnostics");
+const HttpClient = @import("ShellyHttp");
 const Io = std.Io;
 const flate = std.compress.flate;
 const runtime = @import("runtime.zig");
@@ -48,7 +49,9 @@ pub const IconDownloadService = struct {
         var dir = try Io.Dir.cwd().createDirPathOpen(io, icon_folder, .{});
         defer dir.close(io);
 
-        const release_json = try self.http_get(RELEASE_URL);
+        const release_json = try self.http_get(RELEASE_URL, &.{
+            .{ .name = "Accept", .value = "application/vnd.github+json" },
+        });
         defer a.free(release_json);
 
         const parsed = try std.json.parseFromSlice(Release, a, release_json, .{
@@ -87,7 +90,7 @@ pub const IconDownloadService = struct {
             release.tarball_url;
         if (download_url.len == 0) return false;
 
-        const tar_gz = try self.http_get(download_url);
+        const tar_gz = try self.http_get(download_url, &.{});
         defer a.free(tar_gz);
 
         try unpack(io, dir, tar_gz);
@@ -101,28 +104,31 @@ pub const IconDownloadService = struct {
         return true;
     }
 
-    fn http_get(self: *IconDownloadService, url: []const u8) ![]u8 {
-        const a = self.allocator;
-        var client = std.http.Client{ .allocator = a, .io = self.io };
+    fn http_get(self: *IconDownloadService, url: []const u8, extra_headers: []const std.http.Header) ![]u8 {
+        var client: HttpClient = .{ .allocator = self.allocator, .io = self.io };
         defer client.deinit();
 
-        var aw = std.Io.Writer.Allocating.init(a);
+        var aw = std.Io.Writer.Allocating.init(self.allocator);
         defer aw.deinit();
 
         const result = try client.fetch(.{
             .location = .{ .url = url },
             .method = .GET,
-            .extra_headers = &.{
-                .{ .name = "User-Agent", .value = USER_AGENT },
-                .{ .name = "Accept", .value = "application/vnd.github+json" },
-            },
+            .headers = .{ .user_agent = .{ .override = USER_AGENT } },
+            .extra_headers = extra_headers,
             .response_writer = &aw.writer,
         });
-        if (result.status != .ok) {
-            std.debug.print("Could not download application icons from {0f}: the server returned HTTP {1d}.\n", .{ diagnostics.safe(url), @intFromEnum(result.status) });
-            return error.HttpError;
+
+        switch (result.status) {
+            .ok => {
+                std.log.info("Downloaded application icons from {0f}.", .{diagnostics.safe(url)});
+                return aw.toOwnedSlice();
+            },
+            else => {
+                std.debug.print("Could not download application icons from {0f}: the server returned HTTP {1d}.\n", .{ diagnostics.safe(url), @intFromEnum(result.status) });
+                return error.HttpError;
+            },
         }
-        return aw.toOwnedSlice();
     }
 };
 

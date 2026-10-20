@@ -8,6 +8,7 @@ const gdk = bindings.gdk;
 const c_string = @import("../helpers/c_string.zig");
 const translations = @import("../helpers/translations.zig");
 const support = @import("support.zig");
+const features = @import("../services/build_features.zig");
 const ShellyCli = @import("../services/shelly_cli.zig").ShellyCli;
 const AurPackage = @import("../models/aur_package.zig").AurPackage;
 const SizeConverter = @import("../helpers/size_converts.zig").SizeConverter;
@@ -131,7 +132,7 @@ pub const PackageDetail = extern struct {
         const allocator = (p.arena orelse return).allocator();
 
         const combined = std.mem.concat(allocator, u8, &.{ p.link_base[0..p.link_base_len], package.Name }) catch "";
-        addUrlSpecRow(p.spec_box, translations._("AUR"), c_string.cstr(&buf, combined));
+        addUrlSpecRow(p.spec_box, features.aur_source_name, c_string.cstr(&buf, combined));
 
         const alloc = (p.arena orelse return).allocator();
         addSpecList(p.spec_box, alloc, translations._("Licenses"), if (package.License) |license| license else &.{});

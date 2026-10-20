@@ -48,6 +48,29 @@ success or failure. Progress goes to stderr; stdout contains only complete
 SRCINFO after successful preparation. Invalid versions or failed writeback
 produce no SRCINFO; an unwritable PKGBUILD is an error in this mode.
 
+`shelly build --updpkgsums` stages a copy of the PKGBUILD, updates checksums,
+and invokes the same native metadata path used by `--makesrcinfo`. It retains
+architecture-specific source arrays, existing algorithms, and explicit `SKIP`
+entries, with SHA-256 as the default. Checksum acquisition skips old integrity
+checks and extraction. If `pkgver()` exists, normal source verification and
+preparation run against the updated sums, followed by a second checksum update
+for the final version's sources. `build()`, `check()`, and package functions do
+not run. Newly selected local sources can be hashed after a version change;
+automation using `--review-digest` still rejects changes to the reviewed file set.
+
+`checksum_update.zig` edits standalone top-level checksum arrays, including
+multiline and appended declarations. It preserves unrelated shell text and
+rejects conditional or otherwise ambiguous assignments. Supported algorithms
+are MD5, SHA-1, SHA-224/256/384/512, and BLAKE2b-512; `cksums` is rejected.
+Sources with different locations must use distinct cache filenames, including
+across architecture groups, to avoid hashing another architecture's payload.
+`metadata_update.zig` snapshots both destinations, verifies them before
+publication, and preserves file modes and symlink targets. Each replacement
+uses a same-directory temporary file and rename. Failure to publish SRCINFO
+rolls back PKGBUILD; a rollback failure retains and reports a recovery file.
+Two renames are not a single filesystem transaction: abrupt process termination
+between them can leave a mismatched pair. Rerunning the command repairs it.
+
 Single-package PKGBUILDs without lifecycle functions are valid metapackages.
 They still undergo reviewed, sandboxed metadata evaluation and produce an
 archive containing package metadata and dependencies with an empty payload.

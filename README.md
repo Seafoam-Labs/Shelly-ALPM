@@ -20,7 +20,7 @@ Default builds include both engines. Select RLPM with
 `shelly config set NativePackageBackend rlpm`, or restore libalpm with
 `shelly config set NativePackageBackend libalpm`. Build the CLI with
 `zig build -Dlibalpm=false` for an RLPM-only binary. See the
-[backend guide](docs/native-package-backends.md) for defaults, packaging,
+[backend guide](https://seafoam-labs.org/shelly-alpm/docs/rlpm/) for defaults, packaging,
 verification and the remaining release acceptance gates.
 
 ## Quick Install
@@ -100,7 +100,7 @@ Repository build dependencies stay in the guest; the exported package and its
 runtime dependencies are installed on the host. This also supports `--needed`
 and `--version`. As with `shelly build --isolated`, AUR-only build dependencies
 and package signing are not yet supported. `--isolated` cannot be combined with
-`--chroot` or dependency-only installation. See [isolated builds](docs/isolated-builds.md)
+`--chroot` or dependency-only installation. See [isolated builds](https://seafoam-labs.org/shelly-alpm/docs/build/#isolated-container-builds--i---isolated)
 for requirements and limitations.
 
 ## CLI file size display
@@ -288,7 +288,7 @@ CLI provides the same core functionality as the UI but in a scriptable, terminal
 
 ### CLI Commands
 
-Full documentation can be viewed on the [Shelly CLI Reference](https://www.seafoam-labs.org/shelly-alpm/docs/cli-reference/) page.
+Full documentation can be viewed on the [Shelly CLI Reference](https://seafoam-labs.org/shelly-alpm/docs/cli-reference/) page.
 
 Standard searches show available repository packages by default, with ranked
 matches for a query or a paginated listing when no query is supplied:
@@ -363,6 +363,26 @@ its build lifecycle:
 shelly build --makesrcinfo --reviewed PKGBUILD > .SRCINFO
 ```
 
+Update source checksums and the adjacent `.SRCINFO` together:
+
+```bash
+shelly build PKGBUILD --updpkgsums --reviewed
+```
+
+The path defaults to `./PKGBUILD`. Shelly downloads missing sources, preserves
+existing checksum algorithms and `SKIP` entries, and updates generic and
+architecture-specific arrays. Recipes without checksum arrays get SHA-256.
+Pinned Git tags/commits use deterministic archive checksums; moving references
+use `SKIP`. Existing cached downloads are reused; remove a cached file first
+when intentionally refreshing a URL whose contents changed.
+
+Both files are staged before publication. Metadata uses the same native
+generator as `--makesrcinfo`, including `prepare()` and `pkgver()` when a version
+function exists; checksums are refreshed for the resulting sources. Generation
+failures leave the original files intact. Progress goes to stderr, and `--json`
+reports success. This mode runs as a regular user and cannot be combined with
+building, installation, or `--makesrcinfo`.
+
 The AUR builder extracts source archives and decompresses standalone gzip/Unix
 compress (`.gz`, `.z`, `.Z`), bzip2 (`.bz2`, `.bz`), xz (`.xz`), and zstd (`.zst`)
 files before running `prepare()`. Standalone files must have matching compression
@@ -381,7 +401,7 @@ default configuration file at:
 
 #### Configuration Options
 
-These are listed on the [Shelly Configuration](https://www.seafoam-labs.org/shelly-alpm/docs/config/) page.
+These are listed on the [Shelly Configuration](https://seafoam-labs.org/shelly-alpm/docs/config/) page.
 
 ## Development
 

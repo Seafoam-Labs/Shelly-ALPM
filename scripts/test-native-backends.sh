@@ -1,12 +1,42 @@
 #!/usr/bin/env bash
 # Private-root transactions, runtime selection, and installed ELF boundary.
 set -euo pipefail
+unset LD_PRELOAD LD_LIBRARY_PATH LD_AUDIT
 cd "$(dirname "$0")/.."
-enabled=${1:-true}
+enabled=${1:-auto}
 optimize=${2:-Debug}
-case "$enabled" in true|false) ;; *) echo 'Expected true or false' >&2; exit 2;; esac
+case "$enabled" in auto|true|false) ;; *) echo 'Expected auto, true, or false' >&2; exit 2;; esac
 stage=$(mktemp -d)
 trap 'rm -rf "$stage"' EXIT
+# Probe native headers, linking, and runtime loading before choosing a variant.
+# Explicit false needs no libalpm tooling; explicit true remains a CI requirement.
+if [[ "$enabled" != false ]]; then
+    available=false
+    pkg_config=$(command -v pkg-config || command -v pkgconf || true)
+    if [[ -n "$pkg_config" ]] && "$pkg_config" --exists libalpm; then
+        cat > "$stage/alpm-probe.c" <<'PROBE'
+#include <alpm.h>
+#include <alpm_list.h>
+int main(void) { return alpm_version() == 0; }
+PROBE
+        # pkg-config returns compiler flags separated by shell whitespace.
+        read -r -a alpm_flags <<< "$("$pkg_config" --cflags --libs libalpm)"
+        if zig cc "$stage/alpm-probe.c" "${alpm_flags[@]}" -o "$stage/alpm-probe" > "$stage/alpm-probe.log" 2>&1 &&
+            "$stage/alpm-probe" >> "$stage/alpm-probe.log" 2>&1; then
+            available=true
+        fi
+    fi
+    if [[ "$enabled" == auto ]]; then
+        enabled=$available
+        if [[ "$enabled" == false ]]; then
+            echo 'SKIP: libalpm-specific tests (native headers/library unavailable); running RLPM-only tests.' >&2
+        fi
+    elif [[ "$available" == false ]]; then
+        echo 'libalpm=true was requested, but its native headers/library are unavailable. Use auto to skip or false for RLPM-only tests.' >&2
+        [[ ! -f "$stage/alpm-probe.log" ]] || cat "$stage/alpm-probe.log" >&2
+        exit 1
+    fi
+fi
 build_args=(-Dlibalpm="$enabled" -Doptimize="$optimize" --summary all)
 (cd Shelly.PackageManager && zig build native-backend-test "${build_args[@]}")
 (cd Shelly.Cli.Zig && zig build test "${build_args[@]}")

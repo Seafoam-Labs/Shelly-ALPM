@@ -77,11 +77,7 @@ pub fn prepareSources(self: *PackageBuilder, operation: *op_context.Operation) !
         prepared_count += 1;
 
         raiseSourceMessage(self, package_build, source.name);
-        switch (source.kind) {
-            .local => try copyLocalSource(self, source.location, destination),
-            .http => try acquireHttpSource(self, operation, source, destination, false),
-            .git => try cloneGitSource(self, operation, source, destination),
-        }
+        try acquireSource(self, operation, source, destination);
     }
 
     // Match makepkg's integrity ordering: acquire every source, then check
@@ -212,6 +208,16 @@ fn verifyGitSourceChecksums(
         return checksums.requireSkippedVcsChecksums(package_build, prepared.index);
     if (!checksums.hasVerifiableChecksum(package_build, prepared.index)) return;
 
+    const archive_path = try gitChecksumArchive(self, operation, prepared);
+    defer self.allocator.free(archive_path);
+    defer std.Io.Dir.cwd().deleteFile(self.io, archive_path) catch {};
+    try verifySourceChecksums(self, package_build, prepared.index, archive_path);
+}
+
+/// Deterministic archive used by both verification and checksum updating.
+pub fn gitChecksumArchive(self: *PackageBuilder, operation: *op_context.Operation, prepared: *const source_spec.PreparedSource) ![]u8 {
+    const reference = prepared.source.reference orelse return error.UnsupportedVcsChecksum;
+    if (reference.kind == .branch) return error.UnsupportedVcsChecksum;
     var random_suffix: [8]u8 = undefined;
     self.io.random(&random_suffix);
     const suffix = std.fmt.bytesToHex(random_suffix, .lower);
@@ -220,8 +226,8 @@ fn verifyGitSourceChecksums(
         "{s}.shelly-archive-{s}.tmp",
         .{ prepared.destination, suffix },
     );
-    defer self.allocator.free(archive_path);
-    defer std.Io.Dir.cwd().deleteFile(self.io, archive_path) catch {};
+    errdefer self.allocator.free(archive_path);
+    errdefer std.Io.Dir.cwd().deleteFile(self.io, archive_path) catch {};
 
     // makepkg neutralizes export-subst/export-ignore when it archives the
     // acquisition mirror. Apply the same highest-precedence Git attributes
@@ -263,7 +269,7 @@ fn verifyGitSourceChecksums(
         "--",
         reference.value,
     });
-    try verifySourceChecksums(self, package_build, prepared.index, archive_path);
+    return archive_path;
 }
 
 fn copyLocalSource(self: *PackageBuilder, source_name: []const u8, destination: []const u8) !void {
@@ -1122,4 +1128,14 @@ fn rejectExistingDestination(io: std.Io, path: []const u8) !void {
         else => return err,
     };
     return error.UnsafeSourceArchivePath;
+}
+
+/// Acquisition only: callers choose whether to verify, hash, or extract.
+pub fn acquireSource(self: *PackageBuilder, operation: *op_context.Operation, source: source_spec.ParsedSource, destination: []const u8) !void {
+    try operation.checkCancelled();
+    switch (source.kind) {
+        .local => try copyLocalSource(self, source.location, destination),
+        .http => try acquireHttpSource(self, operation, source, destination, false),
+        .git => try cloneGitSource(self, operation, source, destination),
+    }
 }

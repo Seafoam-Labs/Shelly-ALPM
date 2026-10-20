@@ -14,7 +14,7 @@ The later user layer overrides individual system fields without replacing unrela
 
 Both files, every section, and every individual key are optional. The packaged `/etc/shellybuild.conf` is a commented template and therefore changes no compiled default until an administrator uncomments a value. An empty or comment-only file is valid.
 
-Malformed TOML, unknown sections or keys, unsupported package option names, invalid package extensions, and non-absolute destination paths fail before PKGBUILD execution. Missing files are allowed. The format does not evaluate shell code or source fragments.
+Malformed TOML, unknown sections or keys, unsupported package option names, invalid package extensions, invalid package architectures, and non-absolute destination paths fail before PKGBUILD execution. Missing files are allowed. The format does not evaluate shell code or source fragments.
 
 ## Schema
 
@@ -40,6 +40,8 @@ env = {}
 [package]
 packager = "Unknown Packager"
 extension = ".pkg.tar.zst"
+# Optional; omission labels packages with build.carch.
+# carch = "x86_64_v3"
 # Optional; omission preserves the compression library's defaults.
 # compression_level = 3
 options = ["strip", "docs", "emptydirs", "zipman", "purge", "lto"]
@@ -80,6 +82,31 @@ With the sandbox enabled, Shelly creates the configured source cache if needed
 and grants it read/write access, including when it is outside the build tree.
 Packages downloading auxiliary sources should use `SRCDEST` consistently when
 building and packaging instead of assuming those files are in `$PWD`.
+
+## Package architecture
+
+`package.carch` is Shelly's equivalent of makepkg's `PACKAGECARCH` (as carried
+by CachyOS pacman). It changes only the architecture recorded in the assembled
+package: the `.PKGINFO` `arch` field, the `.BUILDINFO` `pkgarch` field, and the
+`name-version-release-arch` file name.
+
+Everything that happens before packaging keeps using `build.carch`: `$CARCH`
+inside the PKGBUILD, `source_*`/`depends_*` and other architecture-suffixed
+arrays, and the `arch=()` support check. A PKGBUILD that declares
+`arch=('x86_64')` therefore builds unchanged and, with
+`carch = "x86_64_v3"`, produces `name-1-1-x86_64_v3.pkg.tar.zst`. Packages
+declaring `arch=('any')` remain `any`. Omitting the key everywhere labels
+packages with `build.carch`, which is the previous behavior.
+
+The value must match `[A-Za-z0-9_]+` and must not be `any`, because it becomes
+part of the package file name. User configuration overrides system
+configuration, and the resolved value is carried into `--isolated` builds.
+Installing such a package requires the package manager to accept that
+architecture. Pacman builds with extended-architecture detection, such as
+CachyOS's, and Shelly's own backends expand `Architecture = auto` to the
+supported x86-64-v2/v3/v4 levels. Stock Arch pacman resolves `auto` to
+`uname -m` (`x86_64`) only, so there the level has to be listed explicitly,
+for example `Architecture = x86_64 x86_64_v3`.
 
 ## Package compression
 

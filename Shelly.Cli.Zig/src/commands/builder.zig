@@ -70,6 +70,15 @@ pub fn dispatch(
         if (diagnostic) |*value| value.deinit();
     }
 
+    if (optionEnabled(invocation, "--updpkgsums")) {
+        if (checksumUpdateConflict(invocation)) |conflict| {
+            try context.stderr.print("Cannot combine --updpkgsums with {s}.\n", .{conflict});
+            try context.stderr.flush();
+            return 2;
+        }
+        return try executeMakeSrcinfo(context, invocation);
+    }
+
     _ = compressionOverride(invocation) catch |err|
         return try reportConfigurationError(context, invocation, err);
 
@@ -647,6 +656,7 @@ fn prepareReviewOnly(
             .source_destination = request.build_directory,
             .log_destination = request.build_directory,
             .pkgbuild_path = request.pkgbuild_path,
+            .native_database = .{ .config_path = context.config_path, .backend = PackageManager.Manager.defaultBackend() },
             .clean_after_success = true,
             .overwrite = false,
             .run_check = false,
@@ -828,6 +838,7 @@ fn installOutputModeConflict(invocation: *const parser.Invocation) ?[]const u8 {
     if (invocation.globals.ui_mode) return "--ui-mode";
     if (optionEnabled(invocation, "--review-only")) return "--review-only";
     if (optionEnabled(invocation, "--makesrcinfo")) return "--makesrcinfo";
+    if (optionEnabled(invocation, "--updpkgsums")) return "--updpkgsums";
     return null;
 }
 
@@ -932,6 +943,20 @@ fn executeJson(
     return 0;
 }
 
+fn checksumUpdateConflict(invocation: *const parser.Invocation) ?[]const u8 {
+    for (invocation.options) |option| {
+        for (@import("../cli/catalog/builder.zig").variants[0].options) |build_option| {
+            if (std.mem.eql(u8, option.name, build_option.name)) break;
+        } else continue; // Global configuration and output options are valid.
+        for ([_][]const u8{
+            "--updpkgsums", "--reviewed", "--review-digest", "--noverify",
+        }) |allowed| {
+            if (std.mem.eql(u8, option.name, allowed)) break;
+        } else return option.name;
+    }
+    return null;
+}
+
 fn executeMakeSrcinfo(
     context: *runtime.RuntimeContext,
     invocation: *const parser.Invocation,
@@ -944,23 +969,31 @@ fn executeMakeSrcinfo(
 
     var generated: std.Io.Writer.Allocating = .init(context.allocator);
     defer generated.deinit();
-    var runner: SrcinfoReal = .{ .writer = &generated.writer };
+    const update_checksums = optionEnabled(invocation, "--updpkgsums");
+    var runner: SrcinfoReal = .{ .writer = &generated.writer, .update_checksums = update_checksums };
 
     const stdout = context.stdout;
     context.stdout = context.stderr;
     const succeeded = standard_single_pane.output(
         context,
-        "Preparing PKGBUILD metadata...",
+        if (update_checksums) "Updating checksums and SRCINFO..." else "Preparing PKGBUILD metadata...",
         invocation.globals.no_confirm,
         &runner,
         invocation,
-        "SRCINFO generated.",
-        "Could not generate .SRCINFO for the selected package base.",
+        if (update_checksums) "PKGBUILD checksums and .SRCINFO updated." else "SRCINFO generated.",
+        if (update_checksums) "Could not update PKGBUILD checksums and .SRCINFO." else "Could not generate .SRCINFO for the selected package base.",
     ) catch |err| {
         context.stdout = stdout;
         return err;
     };
     context.stdout = stdout;
+    if (update_checksums) {
+        if (invocation.globals.json) {
+            try context.stdout.print("{{\"operation\":\"updpkgsums\",\"success\":{s}}}\n", .{if (succeeded) "true" else "false"});
+            try context.stdout.flush();
+        }
+        return if (succeeded) 0 else 1;
+    }
     if (!succeeded) return 1;
     try context.stdout.writeAll(generated.writer.buffered());
     try context.stdout.flush();
@@ -969,6 +1002,7 @@ fn executeMakeSrcinfo(
 
 const SrcinfoReal = struct {
     writer: *std.Io.Writer,
+    update_checksums: bool = false,
 
     pub fn run(
         self: *SrcinfoReal,
@@ -978,6 +1012,13 @@ const SrcinfoReal = struct {
     ) !void {
         var request = try parseBuildRequest(context, invocation);
         defer request.deinit(context);
+
+        var transaction: ?PackageManager.builder.metadata_update.Transaction = if (self.update_checksums)
+            try .init(context.allocator, context.io, if (invocation.positionals.len == 0) "PKGBUILD" else invocation.positionals[0])
+        else
+            null;
+        defer if (transaction) |*value| value.deinit();
+        if (transaction) |value| if (!std.mem.eql(u8, value.pkgbuild.path, request.pkgbuild_path)) return error.ReviewedPkgbuildChanged;
 
         const pkgbuild_content = try std.Io.Dir.cwd().readFileAlloc(
             context.io,
@@ -1013,7 +1054,7 @@ const SrcinfoReal = struct {
         if (!optionEnabled(invocation, "--reviewed") and reviewed_digest == null) {
             var answer = try operation.ask(.{
                 .kind = .review_changes,
-                .prompt = "Generate SRCINFO?",
+                .prompt = if (self.update_checksums) "Update PKGBUILD checksums and .SRCINFO?" else "Generate SRCINFO?",
                 .review = .{
                     .subject = request.pkgbuild_path,
                     .findings = review.findings,
@@ -1054,6 +1095,13 @@ const SrcinfoReal = struct {
         try std.Io.Dir.cwd().createDirPath(context.io, work_directory);
         defer std.Io.Dir.cwd().deleteTree(context.io, work_directory) catch {};
 
+        const staged_path = if (self.update_checksums)
+            try std.fs.path.join(context.allocator, &.{ work_directory, "PKGBUILD" })
+        else
+            null;
+        defer if (staged_path) |path| context.allocator.free(path);
+        if (staged_path) |path| try std.Io.Dir.cwd().writeFile(context.io, .{ .sub_path = path, .data = pkgbuild_content });
+
         const builder = try PackageBuilder.init(
             context.allocator,
             request.package_builds,
@@ -1066,7 +1114,8 @@ const SrcinfoReal = struct {
                 .package_destination = request.build_directory,
                 .source_destination = request.shellybuild.destinations.sources orelse request.build_directory,
                 .log_destination = request.build_directory,
-                .pkgbuild_path = request.pkgbuild_path,
+                .pkgbuild_path = staged_path orelse request.pkgbuild_path,
+                .native_database = .{ .config_path = context.config_path, .backend = PackageManager.Manager.defaultBackend() },
                 .clean_after_success = true,
                 .overwrite = false,
                 .run_check = false,
@@ -1082,7 +1131,15 @@ const SrcinfoReal = struct {
             context.io,
         );
         defer builder.deinit();
-        try builder.writeSrcinfoWithOperation(&operation, self.writer);
+        if (self.update_checksums) {
+            var generated: std.Io.Writer.Allocating = .init(context.allocator);
+            defer generated.deinit();
+            try builder.updateChecksumsWithOperation(&operation, &generated.writer);
+            const updated = try std.Io.Dir.cwd().readFileAlloc(context.io, staged_path.?, context.allocator, .limited(32 * 1024 * 1024));
+            defer context.allocator.free(updated);
+            try operation.checkCancelled();
+            try transaction.?.commit(updated, generated.written());
+        } else try builder.writeSrcinfoWithOperation(&operation, self.writer);
         completion = .success;
     }
 };
@@ -1343,6 +1400,7 @@ const Real = struct {
                 .source_destination = shellybuild.destinations.sources orelse build_directory,
                 .log_destination = shellybuild.destinations.logs orelse build_directory,
                 .pkgbuild_path = pkgbuild_path,
+                .native_database = .{ .config_path = context.config_path, .backend = PackageManager.Manager.defaultBackend() },
                 .clean_after_success = !optionEnabled(invocation, "--keep-workdirs"),
                 .overwrite = !optionEnabled(invocation, "--no-overwrite"),
                 .run_check = if (optionEnabled(invocation, "--no-check"))
@@ -2014,6 +2072,7 @@ fn renderIsolatedConfiguration(
     try writer.writeAll("[package]\n");
     try writeTomlString(writer, "packager", configuration.package.packager);
     try writeTomlString(writer, "extension", configuration.package.extension);
+    if (configuration.package.carch) |carch| try writeTomlString(writer, "carch", carch);
     if (configuration.package.compression_level) |preset|
         try writer.print("compression_level = {d}\n", .{@intFromEnum(preset)});
     try writeTomlArray(writer, "options", configuration.package.options);
@@ -4141,6 +4200,7 @@ test "isolated configuration preserves build policy and forces guest-local desti
     defer configuration.deinit();
     configuration.build.extra_path = &.{"/opt/guest-toolchain/bin"};
     configuration.package.compression_level = .compact;
+    configuration.package.carch = "x86_64_v3";
     configuration.build.env = &.{
         .{ .name = "JAVA_HOME", .value = "/opt/guest-java" },
         .{ .name = "BUILD_ENV_LITERAL", .value = "$HOME/~/\"quoted\"\\path\n\t∂" },
@@ -4157,6 +4217,8 @@ test "isolated configuration preserves build policy and forces guest-local desti
     defer parsed.deinit();
     try std.testing.expectEqualStrings(configuration.build.carch, parsed.build.carch);
     try std.testing.expectEqual(configuration.package.compression_level, parsed.package.compression_level);
+    try std.testing.expectEqualStrings("x86_64_v3", parsed.package.carch.?);
+    try std.testing.expectEqualStrings("x86_64_v3", parsed.packageCarch());
     try std.testing.expectEqualStrings("/opt/guest-toolchain/bin", parsed.build.extra_path[0]);
     try std.testing.expectEqualStrings(configuration.build.cflags[0], parsed.build.cflags[0]);
     try std.testing.expectEqual(configuration.build.env.len, parsed.build.env.len);
@@ -5061,6 +5123,13 @@ test "dependency plan CLI resolves bootstrap and checks with either native confi
     defer temporary.cleanup();
     const directory = try temporary.dir.realPathFileAlloc(io, ".", allocator);
     defer allocator.free(directory);
+    // Keep the caller's build policy out of this fixture. The Zig test runner
+    // cannot dispatch the CLI's __sandbox-exec mode; an outer build sandbox
+    // still applies when these tests run from a PKGBUILD check().
+    try temporary.dir.createDirPath(io, ".config/shelly");
+    try temporary.dir.writeFile(io, .{ .sub_path = ".config/shelly/shellybuild.conf", .data = "[sandbox]\nenabled = false\n" });
+    const environ = try testEnvironWithHome(allocator, directory);
+    defer environ.block.deinit(allocator);
     try temporary.dir.createDir(io, "mirror", .default_dir);
     {
         var file = try temporary.dir.createFile(io, "mirror/planning.db", .{});
@@ -5102,12 +5171,14 @@ test "dependency plan CLI resolves bootstrap and checks with either native confi
             context.init();
             defer context.deinit();
             const a = context.arena.allocator();
-            context.context.environ = std.testing.environ;
+            context.context.environ = environ;
             context.context.config_path = try std.fs.path.join(a, &.{ directory, filename });
             const path = try std.fs.path.join(a, &.{ directory, "PKGBUILD" });
             const manifest = try @import("../cli/spec.zig").Manifest.load(a);
             const parsed = try parser.parse(a, &manifest, &.{ "build", "--resolve-dependencies", "--isolated", "--json", "--check", path });
-            try std.testing.expectEqual(@as(?u8, 0), try dispatch(&context.context, &parsed.dispatch));
+            const result = try dispatch(&context.context, &parsed.dispatch);
+            if (result != 0) std.debug.print("dependency plan failed:\n{s}\n{s}\n", .{ context.stdout.written(), context.stderr.written() });
+            try std.testing.expectEqual(@as(?u8, 0), result);
             var report = try std.json.parseFromSlice(build_plan.Plan, a, context.stdout.written(), .{ .allocate = .alloc_always });
             defer report.deinit();
             try report.value.validate(a);
@@ -5305,4 +5376,191 @@ test "dependency plan validation reports all bad hashes and accepts complete pla
     plan.planDigest = digest;
     try validateBuildDependencyPlan(&context.context, &operation, plan, "demo", "/PKGBUILD");
     try std.testing.expect(diagnostic == null);
+}
+
+test "updpkgsums updates all architecture arrays and adjacent SRCINFO" {
+    const spec = @import("../cli/spec.zig");
+    var context: test_support.TestContext = .{};
+    context.init();
+    defer context.deinit();
+    var temporary = std.testing.tmpDir(.{});
+    defer temporary.cleanup();
+    const allocator = context.arena.allocator();
+    const directory = try temporary.dir.realPathFileAlloc(std.testing.io, ".", allocator);
+    const path = try std.fs.path.join(allocator, &.{ directory, "CustomBuild" });
+    const environ = try testEnvironWithHome(std.testing.allocator, directory);
+    defer environ.block.deinit(std.testing.allocator);
+    context.context.environ = environ;
+    const content =
+        "pkgname=demo\npkgver=1\npkgrel=1\narch=(x86_64 aarch64)\n" ++
+        "source=('renamed::one' 'skip')\nsha256sums=('old' 'SKIP')\nmd5sums=('old' 'SKIP')\n" ++
+        "source_x86_64=('two')\nsha256sums_x86_64=('old')\n" ++
+        "source_aarch64=('three')\nsha256sums_aarch64=('old')\n" ++
+        "verify() { return 42; }\nprepare() { return 42; }\nbuild() { return 42; }\ncheck() { return 42; }\npackage() { return 42; }\n";
+    try temporary.dir.writeFile(std.testing.io, .{ .sub_path = "CustomBuild", .data = content });
+    for ([_][]const u8{ "one", "skip", "two", "three" }) |file| try temporary.dir.writeFile(std.testing.io, .{ .sub_path = file, .data = "hello" });
+    const manifest = try spec.Manifest.load(allocator);
+    const outcome = try parser.parse(allocator, &manifest, &.{ "build", path, "--updpkgsums", "--reviewed", "--no-confirm", "--json" });
+    const exit_code = try dispatch(&context.context, &outcome.dispatch);
+    if (exit_code != 0) std.debug.print("{s}\n", .{context.stderr.written()});
+    try std.testing.expectEqual(@as(?u8, 0), exit_code);
+    const updated = try temporary.dir.readFileAlloc(std.testing.io, "CustomBuild", allocator, .unlimited);
+    const srcinfo = try temporary.dir.readFileAlloc(std.testing.io, ".SRCINFO", allocator, .unlimited);
+    const sha = "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824";
+    try std.testing.expect(std.mem.indexOf(u8, updated, sha) != null);
+    try std.testing.expect(std.mem.indexOf(u8, updated, "5d41402abc4b2a76b9719d911017c592") != null);
+    try std.testing.expect(std.mem.indexOf(u8, srcinfo, "sha256sums_aarch64 = " ++ sha) != null);
+    try std.testing.expect(std.mem.indexOf(u8, srcinfo, "sha256sums_x86_64 = " ++ sha) != null);
+    try std.testing.expect(std.mem.indexOf(u8, srcinfo, "sha256sums = SKIP") != null);
+    try std.testing.expectEqualStrings("{\"operation\":\"updpkgsums\",\"success\":true}\n", context.stdout.written());
+    try std.testing.expectEqual(@as(?u8, 0), try dispatch(&context.context, &outcome.dispatch));
+    try std.testing.expectEqualStrings(updated, try temporary.dir.readFileAlloc(std.testing.io, "CustomBuild", allocator, .unlimited));
+    try std.testing.expectEqualStrings(srcinfo, try temporary.dir.readFileAlloc(std.testing.io, ".SRCINFO", allocator, .unlimited));
+}
+
+test "updpkgsums pkgver refresh keeps checksums and SRCINFO consistent" {
+    const spec = @import("../cli/spec.zig");
+    var context: test_support.TestContext = .{};
+    context.init();
+    defer context.deinit();
+    var temporary = std.testing.tmpDir(.{});
+    defer temporary.cleanup();
+    const allocator = context.arena.allocator();
+    const directory = try temporary.dir.realPathFileAlloc(std.testing.io, ".", allocator);
+    const path = try std.fs.path.join(allocator, &.{ directory, "PKGBUILD" });
+    const environ = try testEnvironWithHome(std.testing.allocator, directory);
+    defer environ.block.deinit(std.testing.allocator);
+    context.context.environ = environ;
+    try temporary.dir.writeFile(std.testing.io, .{ .sub_path = "PKGBUILD", .data = "pkgname=demo\npkgver=1\npkgrel=7\narch=(any)\nsource=(\"payload-$pkgver\")\n" ++
+        "pkgver() { printf 2; }\npackage() { return 42; }\n" });
+    try temporary.dir.writeFile(std.testing.io, .{ .sub_path = "payload-1", .data = "before" });
+    try temporary.dir.writeFile(std.testing.io, .{ .sub_path = "payload-2", .data = "hello" });
+    const manifest = try spec.Manifest.load(allocator);
+    const outcome = try parser.parse(allocator, &manifest, &.{ "build", path, "--updpkgsums", "--reviewed", "--no-confirm" });
+    const exit_code = try dispatch(&context.context, &outcome.dispatch);
+    if (exit_code != 0) std.debug.print("{s}\n", .{context.stderr.written()});
+    try std.testing.expectEqual(@as(?u8, 0), exit_code);
+    const updated = try temporary.dir.readFileAlloc(std.testing.io, "PKGBUILD", allocator, .unlimited);
+    const srcinfo = try temporary.dir.readFileAlloc(std.testing.io, ".SRCINFO", allocator, .unlimited);
+    try std.testing.expect(std.mem.indexOf(u8, updated, "pkgver='2'\npkgrel=1") != null);
+    try std.testing.expect(std.mem.indexOf(u8, updated, "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824") != null);
+    try std.testing.expect(std.mem.indexOf(u8, srcinfo, "source = payload-2") != null);
+    try std.testing.expect(std.mem.indexOf(u8, srcinfo, "pkgver = 2") != null);
+}
+
+test "updpkgsums failure leaves both original files untouched" {
+    const spec = @import("../cli/spec.zig");
+    var context: test_support.TestContext = .{};
+    context.init();
+    defer context.deinit();
+    var temporary = std.testing.tmpDir(.{});
+    defer temporary.cleanup();
+    const allocator = context.arena.allocator();
+    const directory = try temporary.dir.realPathFileAlloc(std.testing.io, ".", allocator);
+    const path = try std.fs.path.join(allocator, &.{ directory, "PKGBUILD" });
+    const environ = try testEnvironWithHome(std.testing.allocator, directory);
+    defer environ.block.deinit(std.testing.allocator);
+    context.context.environ = environ;
+    const manifest = try spec.Manifest.load(allocator);
+    const outcome = try parser.parse(allocator, &manifest, &.{ "build", path, "--updpkgsums", "--reviewed", "--no-confirm" });
+    for ([_][]const u8{
+        "source=(missing)\n",
+        "source=(payload)\nsha256sums=(old)\npkgver() { return 42; }\n",
+        "source=(payload)\nif true; then\nsha256sums=(old)\nfi\n",
+        "",
+    }) |extra| {
+        const content = try std.mem.concat(allocator, u8, &.{ "pkgname=demo\npkgver=1\npkgrel=1\narch=(any)\npackage() { :; }\n", extra });
+        try temporary.dir.writeFile(std.testing.io, .{ .sub_path = "PKGBUILD", .data = content });
+        try temporary.dir.writeFile(std.testing.io, .{ .sub_path = ".SRCINFO", .data = "original metadata\n" });
+        try temporary.dir.writeFile(std.testing.io, .{ .sub_path = "payload", .data = "hello" });
+        try std.testing.expectEqual(@as(?u8, 1), try dispatch(&context.context, &outcome.dispatch));
+        try std.testing.expectEqualStrings(content, try temporary.dir.readFileAlloc(std.testing.io, "PKGBUILD", allocator, .unlimited));
+        try std.testing.expectEqualStrings("original metadata\n", try temporary.dir.readFileAlloc(std.testing.io, ".SRCINFO", allocator, .unlimited));
+    }
+}
+
+test "updpkgsums rejects incompatible modes before reading PKGBUILD" {
+    const spec = @import("../cli/spec.zig");
+    var context: test_support.TestContext = .{};
+    context.init();
+    defer context.deinit();
+    const manifest = try spec.Manifest.load(context.arena.allocator());
+    for ([_][]const u8{ "--makesrcinfo", "--install", "--isolated", "--sync-deps", "--review-only", "--resolve-dependencies", "--check" }) |flag| {
+        const outcome = try parser.parse(context.arena.allocator(), &manifest, &.{ "build", "absent", "--updpkgsums", flag });
+        try std.testing.expectEqual(@as(?u8, 2), try dispatch(&context.context, &outcome.dispatch));
+    }
+}
+
+test "updpkgsums generates pinned Git sums and skips moving references" {
+    const spec = @import("../cli/spec.zig");
+    var context: test_support.TestContext = .{};
+    context.init();
+    defer context.deinit();
+    var temporary = std.testing.tmpDir(.{});
+    defer temporary.cleanup();
+    const allocator = context.arena.allocator();
+    const directory = try temporary.dir.realPathFileAlloc(std.testing.io, ".", allocator);
+    const path = try std.fs.path.join(allocator, &.{ directory, "PKGBUILD" });
+    const environ = try testEnvironWithHome(std.testing.allocator, directory);
+    defer environ.block.deinit(std.testing.allocator);
+    context.context.environ = environ;
+    try temporary.dir.createDir(std.testing.io, "upstream", .default_dir);
+    const upstream = try std.fs.path.join(allocator, &.{ directory, "upstream" });
+    try temporary.dir.writeFile(std.testing.io, .{ .sub_path = "upstream/payload", .data = "hello" });
+    for ([_][]const []const u8{
+        &.{ "git", "init", "-b", "main" },
+        &.{ "git", "add", "payload" },
+        &.{ "git", "-c", "user.name=Shelly Test", "-c", "user.email=test@example.invalid", "-c", "commit.gpgsign=false", "commit", "-m", "fixture" },
+        &.{ "git", "-c", "tag.gpgsign=false", "tag", "v1" },
+        &.{ "git", "archive", "--format=tar", "--output=expected.tar", "v1" },
+    }) |argv| {
+        var result = try PackageManager.process_runner.run(allocator, std.testing.io, argv, upstream, null);
+        defer result.deinit(allocator);
+        try std.testing.expectEqual(@as(u8, 0), result.exit_code);
+    }
+    const archive_data = try temporary.dir.readFileAlloc(std.testing.io, "upstream/expected.tar", allocator, .unlimited);
+    var digest: [32]u8 = undefined;
+    std.crypto.hash.sha2.Sha256.hash(archive_data, &digest, .{});
+    const content = try std.fmt.allocPrint(allocator, "pkgname=demo\npkgver=1\npkgrel=1\narch=(any)\n" ++
+        "source=('pinned::git+file://{s}#tag=v1' 'moving::git+file://{s}#branch=main')\n" ++
+        "package() {{ :; }}\n", .{ upstream, upstream });
+    try temporary.dir.writeFile(std.testing.io, .{ .sub_path = "PKGBUILD", .data = content });
+    const manifest = try spec.Manifest.load(allocator);
+    const outcome = try parser.parse(allocator, &manifest, &.{ "build", path, "--updpkgsums", "--reviewed", "--no-confirm" });
+    const exit_code = try dispatch(&context.context, &outcome.dispatch);
+    if (exit_code != 0) std.debug.print("{s}\n", .{context.stderr.written()});
+    try std.testing.expectEqual(@as(?u8, 0), exit_code);
+    const srcinfo = try temporary.dir.readFileAlloc(std.testing.io, ".SRCINFO", allocator, .unlimited);
+    try std.testing.expect(std.mem.indexOf(u8, srcinfo, &std.fmt.bytesToHex(digest, .lower)) != null);
+    try std.testing.expect(std.mem.indexOf(u8, srcinfo, "sha256sums = SKIP") != null);
+}
+
+test "updpkgsums cancellation leaves both original files untouched" {
+    const spec = @import("../cli/spec.zig");
+    var context: test_support.TestContext = .{};
+    context.init();
+    defer context.deinit();
+    var temporary = std.testing.tmpDir(.{});
+    defer temporary.cleanup();
+    const allocator = context.arena.allocator();
+    const directory = try temporary.dir.realPathFileAlloc(std.testing.io, ".", allocator);
+    const path = try std.fs.path.join(allocator, &.{ directory, "PKGBUILD" });
+    const environ = try testEnvironWithHome(std.testing.allocator, directory);
+    defer environ.block.deinit(std.testing.allocator);
+    context.context.environ = environ;
+    const content = "pkgname=demo\npkgver=1\npkgrel=1\narch=(any)\nsource=(payload)\n";
+    try temporary.dir.writeFile(std.testing.io, .{ .sub_path = "PKGBUILD", .data = content });
+    try temporary.dir.writeFile(std.testing.io, .{ .sub_path = "payload", .data = "hello" });
+    try temporary.dir.writeFile(std.testing.io, .{ .sub_path = ".SRCINFO", .data = "old" });
+    const manifest = try spec.Manifest.load(allocator);
+    const outcome = try parser.parse(allocator, &manifest, &.{ "build", path, "--updpkgsums", "--reviewed", "--no-confirm" });
+    var operations = PackageManager.OperationContext.init(allocator, std.testing.io);
+    defer operations.deinit();
+    operations.cancel();
+    var output: std.Io.Writer.Allocating = .init(allocator);
+    defer output.deinit();
+    var runner = SrcinfoReal{ .writer = &output.writer, .update_checksums = true };
+    try std.testing.expectError(error.Cancelled, runner.run(&context.context, &operations, &outcome.dispatch));
+    try std.testing.expectEqualStrings(content, try temporary.dir.readFileAlloc(std.testing.io, "PKGBUILD", allocator, .unlimited));
+    try std.testing.expectEqualStrings("old", try temporary.dir.readFileAlloc(std.testing.io, ".SRCINFO", allocator, .unlimited));
 }

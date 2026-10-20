@@ -104,7 +104,7 @@ pub const PreparedPackage = struct {
 };
 
 pub const Options = struct {
-    cache_directory_fallback: []const u8 = "/var/cache/pacman/pkg",
+    cache_directory_fallback: []const u8 = @import("paths").cache,
     temporary_directory: []const u8 = "/tmp",
     arch_linux_base_url: []const u8 = arch_linux_archive,
     cachyos_base_url: []const u8 = cachyos_archive,

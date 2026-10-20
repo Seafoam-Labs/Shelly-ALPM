@@ -18,7 +18,7 @@ pub const InstalledFilter = enum {
 };
 
 pub const Options = struct {
-    cache_directory: []const u8 = "/var/cache/pacman/pkg",
+    cache_directory: []const u8 = @import("paths").cache,
     manager: ?*PackageManager = null,
 };
 

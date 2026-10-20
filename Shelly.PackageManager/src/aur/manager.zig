@@ -1195,6 +1195,7 @@ pub const Manager = struct {
                 self.updateVcsStoreForPackage(requested_name, prepared.pkgbuild_path) catch |err|
                     self.raiseBestEffortFailure(requested_name, "The package operation completed, but VCS version metadata could not be updated for the requested package. Future update checks may be incomplete.", err);
             self.installSelectedOptionalDependencies(package_name, selected_optional) catch |err| {
+                if (err == error.Cancelled or err == error.OutOfMemory) return err;
                 try self.checkCancelled();
                 self.raiseBestEffortFailure(package_name, "Some optional dependencies could not be installed. Review the transaction results to see which dependencies were installed.", err);
             };
@@ -1613,7 +1614,7 @@ pub const Manager = struct {
                         return lookup_err;
                     };
                     defer rpc.deinitStrings(self.allocator, providers);
-                    const chosen = self.chooseProvider(preferred.name, providers) orelse {
+                    const chosen = try self.chooseProvider(preferred.name, providers) orelse {
                         self.reportAvailabilityFailure(preferred.name, err);
                         return err;
                     };
@@ -1814,13 +1815,17 @@ pub const Manager = struct {
         var aur_names: std.ArrayList([]const u8) = .empty;
         defer aur_names.deinit(self.allocator);
         for (selected) |raw| {
+            try self.checkCancelled();
             const parsed = dependency_resolver.parseOptionalDependency(raw);
             if (self.isDeclinedPackage(parsed.name)) continue;
             const name_z = try self.allocator.dupeZ(u8, parsed.name);
             defer self.allocator.free(name_z);
             if (self.alpm.find_remote_satisfier_for_dependency(name_z)) |satisfier| {
                 if (!containsConst(repo_names.items, satisfier)) try repo_names.append(self.allocator, satisfier);
-            } else |_| if (!containsConst(aur_names.items, parsed.name)) try aur_names.append(self.allocator, parsed.name);
+            } else |err| switch (err) {
+                error.Cancelled, error.OutOfMemory => return err,
+                else => if (!containsConst(aur_names.items, parsed.name)) try aur_names.append(self.allocator, parsed.name),
+            }
         }
         if (repo_names.items.len > 0) {
             self.raiseBuildLine(parent, "Installing optional dependencies from repositories", false);
@@ -1830,45 +1835,70 @@ pub const Manager = struct {
                 for (repo_names.items) |name| {
                     const name_z = try self.allocator.dupeZ(u8, name);
                     defer self.allocator.free(name_z);
-                    self.alpm.update_package_reason(name_z, .Dependency) catch {};
+                    self.alpm.update_package_reason(name_z, .Dependency) catch |err| switch (err) {
+                        error.Cancelled, error.OutOfMemory => return err,
+                        else => {},
+                    };
                 }
-            } else |_| {}
+            } else |err| switch (err) {
+                error.Cancelled, error.OutOfMemory => return err,
+                else => {},
+            }
         }
         const previous = self.skip_optional_dependency_prompt;
         self.skip_optional_dependency_prompt = true;
         defer self.skip_optional_dependency_prompt = previous;
         for (aur_names.items) |name| {
-            const providers = self.aur_client.findProviders(name) catch continue;
-            defer rpc.deinitStrings(self.allocator, providers);
-            const chosen = self.chooseProvider(name, providers) orelse {
-                const message = try std.fmt.allocPrint(self.allocator, "Optional dependency '{0f}' has no selected AUR provider. Select a provider or deselect this optional dependency.", .{diagnostics.safe(name)});
-                defer self.allocator.free(message);
-                self.dispatcher.raiseError(.{ .message = message });
-                continue;
+            try self.checkCancelled();
+            self.installOptionalAurDependency(parent, name) catch |err| switch (err) {
+                error.Cancelled, error.OutOfMemory => return err,
+                else => continue,
             };
-            if (self.isDeclinedPackage(chosen)) continue;
-            var recoverable_errors = self.alpm.dispatcher.beginRecoverableErrors("Could not configure an optional AUR dependency.");
-            defer recoverable_errors.deinit();
-            self.installPackages(&.{chosen}) catch continue;
-            const chosen_z = try self.allocator.dupeZ(u8, chosen);
-            defer self.allocator.free(chosen_z);
-            self.alpm.update_package_reason(chosen_z, .Dependency) catch {};
         }
     }
 
-    fn chooseProvider(self: *Self, dependency: []const u8, provider_names: []const []u8) ?[]const u8 {
+    fn installOptionalAurDependency(self: *Self, parent: []const u8, name: []const u8) anyerror!void {
+        const message = try std.fmt.allocPrint(self.allocator, "Could not install optional dependency '{0f}' for '{1f}'. The primary package is installed. Retry this dependency separately if needed.", .{ diagnostics.safe(name), diagnostics.safe(parent) });
+        defer self.allocator.free(message);
+        var recovery: operation_api.RecoverableErrors = .{ .message = message };
+        var scope = OperationScope.init(self, .install, name);
+        // The child owns the recovery policy; restoring the parent in finish()
+        // leaves subsequent required work fatal. All nested backends inherit it.
+        if (scope.operation) |*operation| operation.recoverable_errors = &recovery;
+        scope.attach();
+        defer scope.finish(.success);
+        errdefer |err| {
+            if (scope.operation) |*operation| {
+                operation.reportError(err, diagnostics.cause(err), "aur", null, false);
+            } else if (err != error.Cancelled and err != error.OutOfMemory) {
+                self.raiseBestEffortFailure(parent, message, err);
+            }
+            scope.finish(if (err == error.Cancelled) .cancelled else .failed);
+        }
+        const providers = try self.aur_client.findProviders(name);
+        defer rpc.deinitStrings(self.allocator, providers);
+        const chosen = try self.chooseProvider(name, providers) orelse return error.OptionalDependencyProviderNotSelected;
+        try self.checkCancelled();
+        if (self.isDeclinedPackage(chosen)) return;
+        try self.installPackages(&.{chosen});
+        const chosen_z = try self.allocator.dupeZ(u8, chosen);
+        defer self.allocator.free(chosen_z);
+        try self.alpm.update_package_reason(chosen_z, .Dependency);
+    }
+
+    fn chooseProvider(self: *Self, dependency: []const u8, provider_names: []const []u8) !?[]const u8 {
         if (provider_names.len == 0) return null;
         if (provider_names.len == 1) return provider_names[0];
         var options: std.ArrayList(events.ProviderOption) = .empty;
         defer options.deinit(self.allocator);
         for (provider_names) |name| {
-            const name_z = self.allocator.dupeZ(u8, name) catch continue;
+            const name_z = try self.allocator.dupeZ(u8, name);
             defer self.allocator.free(name_z);
-            options.append(self.allocator, .{
+            try options.append(self.allocator, .{
                 .name = name,
                 .description = "No Description",
                 .is_installed = self.alpm.is_package_installed(name_z),
-            }) catch continue;
+            });
         }
         const response = self.dispatcher.ask(.{
             .question_type = .select_provider,
@@ -1876,6 +1906,7 @@ pub const Manager = struct {
             .options = options.items,
             .dependency_name = dependency,
         });
+        try self.checkCancelled();
         const index = if (response.selected_indices.len > 0) response.selected_indices[0] else 0;
         return if (index < provider_names.len) provider_names[index] else provider_names[0];
     }
@@ -2210,6 +2241,7 @@ pub const Manager = struct {
                 .source_destination = self.shellybuild_config.destinations.sources orelse prepared.cache_path,
                 .log_destination = self.shellybuild_config.destinations.logs orelse prepared.cache_path,
                 .pkgbuild_path = prepared.pkgbuild_path,
+                .native_database = package_builder.BuildDatabase.fromManager(self.alpm, self.config_path),
                 .reviewed_pkgbuild_digest = build_review.digest,
                 .install_scripts = build_review.install_scripts,
                 .reviewed_files = build_review.reviewed_files,
@@ -2538,6 +2570,7 @@ pub const Manager = struct {
                 .source_destination = prepared.cache_path,
                 .log_destination = prepared.cache_path,
                 .pkgbuild_path = prepared.pkgbuild_path,
+                .native_database = package_builder.BuildDatabase.fromManager(self.alpm, self.config_path),
                 .reviewed_pkgbuild_digest = review.digest,
                 .install_scripts = review.install_scripts,
                 .reviewed_files = review.reviewed_files,
@@ -3982,8 +4015,8 @@ fn createAurManagerFixturePaths(allocator: std.mem.Allocator, io: std.Io) !AurMa
     try std.Io.Dir.cwd().createDirPath(io, package_cache);
     const config = try std.fmt.allocPrint(
         allocator,
-        "[options]\nArchitecture = auto\nSigLevel = Never\nRootDir = {s}\nDBPath = {s}\nCacheDir = {s}\n",
-        .{ alpm_root, db_path, package_cache },
+        "[options]\nArchitecture = auto\nSigLevel = Never\nRootDir = {s}\nDBPath = {s}\nCacheDir = {s}\nLogFile = {s}/transaction.log\n",
+        .{ alpm_root, db_path, package_cache, root },
     );
     defer allocator.free(config);
     try writeFixtureFile(io, config_path, config, false);
@@ -4759,6 +4792,199 @@ test "helper cache identity recognizes installed split-package members" {
     try std.testing.expect(cloneIdentityMatches("demo-suite", &package_names, "demo-ui"));
     try std.testing.expect(cloneIdentityMatches("demo-suite", &package_names, "demo-suite"));
     try std.testing.expect(!cloneIdentityMatches("demo-suite", &package_names, "unrelated"));
+}
+
+test "AUR optional dependency failures warn once and restore required reporting" {
+    const allocator = std.testing.allocator;
+    const io = std.testing.io;
+    const cases = [_]struct { failure: ?anyerror = null, payload: ?[]const u8 = null, expected_calls: usize }{
+        .{ .failure = error.Timeout, .expected_calls = 2 },
+        .{ .failure = error.AurHttpStatus, .expected_calls = 2 },
+        .{ .payload = "invalid json", .expected_calls = 2 },
+        .{ .expected_calls = 4 }, // Valid empty results: no provider.
+        .{ .failure = error.Cancelled, .expected_calls = 1 },
+        .{ .failure = error.OutOfMemory, .expected_calls = 1 },
+    };
+    for (cases) |case| {
+        var fixture = try createAurManagerFixturePaths(allocator, io);
+        defer fixture.deinit(allocator);
+        var manager = try initFixtureAurManager(allocator, &fixture, fixture.remote_root);
+        defer manager.deinit();
+        var service = rpc.TestService{ .failure = case.failure, .payload = case.payload };
+        service.install(&manager.aur_client);
+        var context = operation_api.OperationContext.init(allocator, io);
+        defer context.deinit();
+        manager.setOperationContext(&context);
+        defer manager.setOperationContext(null);
+        const Capture = struct {
+            warnings: usize = 0,
+            fatal: usize = 0,
+            named: bool = true,
+            fn event(data: ?*anyopaque, value: operation_api.Event) void {
+                const self: *@This() = @ptrCast(@alignCast(data.?));
+                if (value == .failure) {
+                    const failure = value.failure;
+                    if (failure.recoverable) {
+                        self.warnings += 1;
+                        self.named = self.named and std.mem.indexOf(u8, failure.message, "editor-bin") != null and
+                            std.mem.indexOf(u8, failure.message, "optional-") != null;
+                    } else self.fatal += 1;
+                }
+            }
+        };
+        var capture: Capture = .{};
+        _ = try context.subscribe(.{ .function = Capture.event, .data = &capture });
+        var parent = OperationScope.init(manager, .update, "editor-bin");
+        parent.attach();
+        defer parent.finish(.success);
+        const result = manager.installSelectedOptionalDependencies("editor-bin", &.{ "optional-one", "optional-two" });
+        const fatal = if (case.failure) |failure| failure == error.Cancelled or failure == error.OutOfMemory else false;
+        if (fatal) {
+            try std.testing.expectError(case.failure.?, result);
+            try std.testing.expect(capture.fatal > 0);
+            try std.testing.expectEqual(@as(usize, 0), capture.warnings);
+        } else {
+            try result;
+            try std.testing.expectEqual(@as(usize, 0), capture.fatal);
+            try std.testing.expectEqual(@as(usize, 2), capture.warnings);
+            try std.testing.expect(capture.named);
+        }
+        try std.testing.expectEqual(case.expected_calls, service.calls);
+        try std.testing.expect(!manager.skip_optional_dependency_prompt);
+        try std.testing.expect(manager.dispatcher.operation == &parent.operation.?);
+        try std.testing.expect(manager.alpm.dispatcher.operation == &parent.operation.?);
+        try std.testing.expect(manager.aur_client.parent_operation == &parent.operation.?);
+        try std.testing.expect(parent.operation.?.recoverable_errors == null);
+        const previous_fatal = capture.fatal;
+        service.failure = error.Timeout;
+        service.payload = null;
+        try std.testing.expectError(error.AurRpcLookupFailed, manager.aur_client.findProviders("required"));
+        try std.testing.expectEqual(previous_fatal + 1, capture.fatal);
+    }
+}
+
+test "AUR optional dependency failures preserve an installed upgrade and propagate fatal errors" {
+    const allocator = std.testing.allocator;
+    const io = std.testing.io;
+    const cases = [_]struct { failure: ?anyerror = null, native_failure: bool = false }{
+        .{ .failure = error.Timeout },
+        .{ .failure = error.Cancelled },
+        .{ .failure = error.OutOfMemory },
+        .{}, // Optional build fails; the next optional package still installs.
+        .{ .native_failure = true }, // Optional native transaction fails.
+    };
+    for (cases) |case| {
+        const failure = case.failure;
+        var fixture = try createAurManagerFixturePaths(allocator, io);
+        defer fixture.deinit(allocator);
+        try seedNeededInstalledPackage(allocator, io, fixture.root, "editor-bin", "0-1");
+        try fixture.temporary.dir.writeFile(io, .{ .sub_path = "db/local/editor-bin-0-1/files", .data = "%FILES%\n\n" });
+        try createAurFixtureRepository(allocator, io, fixture.remote_root, "editor-bin", null);
+        if (failure == null) {
+            try createAurFixtureRepository(allocator, io, fixture.remote_root, "optional-one", null);
+            try createAurFixtureRepository(allocator, io, fixture.remote_root, "optional-two", null);
+        }
+        const remote = try std.fs.path.join(allocator, &.{ fixture.remote_root, "editor-bin.git" });
+        defer allocator.free(remote);
+        const pkgbuild = try std.fs.path.join(allocator, &.{ remote, "PKGBUILD" });
+        defer allocator.free(pkgbuild);
+        try writeFixtureFile(io, pkgbuild, "pkgname=editor-bin\npkgver=1\npkgrel=1\narch=('any')\noptdepends=('optional-one: first tool' 'optional-two: second tool')\npackage() { :; }\n", false);
+        try runFixtureCommand(allocator, io, &.{ "git", "add", "PKGBUILD" }, remote);
+        try runFixtureCommand(allocator, io, &.{ "git", "commit", "-m", "optional dependencies" }, remote);
+        const makepkg = try std.fs.path.join(allocator, &.{ fixture.root, "makepkg" });
+        defer allocator.free(makepkg);
+        const script = try std.fmt.allocPrint(allocator,
+            \\#!/bin/sh
+            \\set -eu
+            \\fixture_name=$(sed -n 's/^pkgname=//p' PKGBUILD)
+            \\printf 'pkgname = %s\npkgver = 1-1\npkgdesc = optional fixture\nbuilddate = 1700000000\npackager = Shelly Tests\nsize = 0\narch = any\n' "$fixture_name" > .PKGINFO
+            \\if [ "$fixture_name" = optional-one ]; then {s}; fi
+            \\tar -czf "$fixture_name-1-1-any.pkg.tar.gz" .PKGINFO
+            \\rm .PKGINFO
+            \\
+        , .{if (case.native_failure) "printf 'depend = missing-required\\n' >> .PKGINFO" else "exit 1"});
+        defer allocator.free(script);
+        try writeFixtureFile(io, makepkg, script, true);
+        var manager = try Manager.init(allocator, fixture.environ, .{
+            .config_path = fixture.config_path,
+            .cache_root = fixture.cache_root,
+            .aur_git_base_url = fixture.remote_root,
+            .makepkg_command = makepkg,
+            .shellybuild_configuration_paths = .{ .system = fixture.shellybuild_system_path, .user = fixture.shellybuild_user_path },
+        });
+        defer manager.deinit();
+        manager.alpm.disable_transaction_hooks();
+        var service = rpc.TestService{ .packages = &.{
+            .{ .Name = "editor-bin", .PackageBase = "editor-bin" },
+            .{ .Name = "optional-one", .PackageBase = "optional-one" },
+            .{ .Name = "optional-two", .PackageBase = "optional-two" },
+        } };
+        service.install(&manager.aur_client);
+        var context = operation_api.OperationContext.init(allocator, io);
+        defer context.deinit();
+        manager.setOperationContext(&context);
+        defer manager.setOperationContext(null);
+        const Capture = struct {
+            service: *rpc.TestService,
+            failure: ?anyerror,
+            installed: bool = false,
+            calls_before_optional: usize = 0,
+            warnings: usize = 0,
+            fatal: usize = 0,
+            completion: ?operation_api.CompletionStatus = null,
+            fn info(data: ?*anyopaque, args: events.InformationalArgs) void {
+                const self: *@This() = @ptrCast(@alignCast(data.?));
+                if (args.event_type == .aur_install_done and std.mem.eql(u8, args.package_name orelse "", "editor-bin")) {
+                    self.installed = true;
+                    self.calls_before_optional = self.service.calls;
+                    self.service.failure = self.failure;
+                }
+            }
+            fn answer(_: ?*anyopaque, _: operation_api.Question) operation_api.QuestionResponse {
+                return .accepted;
+            }
+            fn event(data: ?*anyopaque, value: operation_api.Event) void {
+                const self: *@This() = @ptrCast(@alignCast(data.?));
+                switch (value) {
+                    .failure => |err| {
+                        if (err.recoverable) self.warnings += 1 else self.fatal += 1;
+                    },
+                    .completed => |completed| {
+                        if (completed.envelope.parent_id == null and completed.envelope.backend == .aur)
+                            self.completion = completed.status;
+                    },
+                    else => {},
+                }
+            }
+        };
+        var capture: Capture = .{ .service = &service, .failure = failure };
+        _ = try manager.dispatcher.addInformationalHandler(.{ .function = Capture.info, .data = &capture });
+        _ = try context.subscribe(.{ .function = Capture.event, .data = &capture });
+        context.setQuestionHandler(.{ .function = Capture.answer });
+        const result = manager.updatePackages(&.{"editor-bin"});
+        if (failure == null) {
+            try result;
+            try std.testing.expectEqual(@as(usize, 1), capture.warnings);
+            try std.testing.expectEqual(@as(usize, 0), capture.fatal);
+            try std.testing.expectEqual(operation_api.CompletionStatus.success, capture.completion.?);
+            try std.testing.expect(!manager.alpm.is_package_installed("optional-one"));
+            try std.testing.expect(manager.alpm.is_package_installed("optional-two"));
+        } else if (failure.? == error.Timeout) {
+            try result;
+            try std.testing.expectEqual(@as(usize, 2), capture.warnings);
+            try std.testing.expectEqual(@as(usize, 0), capture.fatal);
+            try std.testing.expectEqual(operation_api.CompletionStatus.success, capture.completion.?);
+            try std.testing.expectEqual(capture.calls_before_optional + 2, service.calls);
+        } else {
+            try std.testing.expectError(failure.?, result);
+            try std.testing.expect(capture.fatal > 0);
+            try std.testing.expectEqual(capture.calls_before_optional + 1, service.calls);
+        }
+        try std.testing.expect(capture.installed);
+        var installed = (try manager.alpm.get_single_installed_package("editor-bin")).?;
+        defer installed.deinit(allocator);
+        try std.testing.expectEqualStrings("1-1", installed.version().?);
+    }
 }
 
 test "AUR optional dependency prompts identify their package" {

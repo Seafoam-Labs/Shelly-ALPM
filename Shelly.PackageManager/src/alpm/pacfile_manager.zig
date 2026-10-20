@@ -118,13 +118,12 @@ pub const Pacfile = struct {
 
 pub const Options = struct {
     root_directory: []const u8 = "/",
-    database_path: []const u8 = "/var/lib/pacman",
-    cache_directory: []const u8 = "/var/cache/pacman/pkg",
+    database_path: []const u8 = @import("paths").database,
+    cache_directory: []const u8 = @import("paths").cache,
     additional_cache_directories: []const []const u8 = &.{},
     find_paths: []const []const u8 = &default_find_paths,
     temporary_directory: []const u8 = "/tmp",
     locate_command: []const u8 = "locate",
-    pacman_command: []const u8 = "pacman",
     bsdtar_command: []const u8 = "bsdtar",
     diff_program: []const []const u8 = &default_diff_program,
     merge_program: []const []const u8 = &default_merge_program,
@@ -405,7 +404,6 @@ pub const PacfileManager = struct {
                 self.allocator,
                 .limited(max_backup_database_file_size),
             ) catch |err| switch (err) {
-                error.FileNotFound => continue,
                 error.StreamTooLong => return Error.DatabaseReadFailed,
                 else => return Error.DatabaseReadFailed,
             };
@@ -553,32 +551,53 @@ pub const PacfileManager = struct {
     fn packageOwner(self: *PacfileManager, original_path: []const u8) Error![]u8 {
         const logical_path = try self.logicalPath(original_path);
         defer self.allocator.free(logical_path);
-        var argv: std.ArrayList([]const u8) = .empty;
-        defer argv.deinit(self.allocator);
-        argv.append(self.allocator, self.options.pacman_command) catch return Error.OutOfMemory;
-        if (!std.mem.eql(u8, self.options.root_directory, "/")) {
-            argv.appendSlice(self.allocator, &.{ "--root", self.options.root_directory, "--dbpath", self.options.database_path }) catch
-                return Error.OutOfMemory;
-        }
-        argv.appendSlice(self.allocator, &.{ "-Qoq", logical_path }) catch return Error.OutOfMemory;
-        const result = std.process.run(self.allocator, self.io, .{
-            .argv = argv.items,
-            .stdout_limit = .limited(self.options.max_process_output),
-            .stderr_limit = .limited(self.options.max_process_output),
-        }) catch |err| switch (err) {
-            error.StreamTooLong => return Error.ProcessOutputTooLarge,
-            else => return Error.PackageOwnerNotFound,
+        const member_path = std.mem.trimStart(u8, logical_path, "/");
+        if (!safeRelativePath(member_path)) return Error.InvalidConfiguredPath;
+
+        const local_path = std.fs.path.join(self.allocator, &.{ self.options.database_path, "local" }) catch
+            return Error.OutOfMemory;
+        defer self.allocator.free(local_path);
+        var local = std.Io.Dir.cwd().openDir(self.io, local_path, .{ .iterate = true }) catch |err| switch (err) {
+            error.FileNotFound => return Error.PackageOwnerNotFound,
+            else => return Error.DatabaseReadFailed,
         };
-        defer self.allocator.free(result.stdout);
-        defer self.allocator.free(result.stderr);
-        switch (result.term) {
-            .exited => |code| if (code != 0) return Error.PackageOwnerNotFound,
-            else => return Error.PackageOwnerNotFound,
+        defer local.close(self.io);
+        var iterator = local.iterate();
+        while (iterator.next(self.io) catch return Error.DatabaseReadFailed) |package| {
+            if (package.kind != .directory) continue;
+            const files_path = std.fs.path.join(self.allocator, &.{ local_path, package.name, "files" }) catch
+                return Error.OutOfMemory;
+            defer self.allocator.free(files_path);
+            const files = std.Io.Dir.cwd().readFileAlloc(
+                self.io,
+                files_path,
+                self.allocator,
+                .limited(max_backup_database_file_size),
+            ) catch |err| switch (err) {
+                error.StreamTooLong => return Error.DatabaseReadFailed,
+                else => return Error.DatabaseReadFailed,
+            };
+            defer self.allocator.free(files);
+            if (!sectionContains(files, "%FILES%", member_path)) continue;
+
+            const desc_path = std.fs.path.join(self.allocator, &.{ local_path, package.name, "desc" }) catch
+                return Error.OutOfMemory;
+            defer self.allocator.free(desc_path);
+            const desc = std.Io.Dir.cwd().readFileAlloc(
+                self.io,
+                desc_path,
+                self.allocator,
+                .limited(max_backup_database_file_size),
+            ) catch |err| switch (err) {
+                error.StreamTooLong => return Error.DatabaseReadFailed,
+                else => return Error.DatabaseReadFailed,
+            };
+            defer self.allocator.free(desc);
+            const owner = sectionFirstValue(desc, "%NAME%") orelse return Error.DatabaseReadFailed;
+            if (std.mem.indexOfAny(u8, owner, " \t\r\n") != null) return Error.DatabaseReadFailed;
+            return self.allocator.dupe(u8, owner) catch return Error.OutOfMemory;
         }
-        const owner = std.mem.trim(u8, result.stdout, " \t\r\n");
-        if (owner.len == 0 or std.mem.indexOfAny(u8, owner, " \t\r\n") != null)
-            return Error.PackageOwnerNotFound;
-        return self.allocator.dupe(u8, owner) catch return Error.OutOfMemory;
+        return Error.PackageOwnerNotFound;
     }
 
     fn collectCacheEntries(
@@ -758,6 +777,32 @@ fn safeRelativePath(path: []const u8) bool {
     return true;
 }
 
+fn sectionContains(contents: []const u8, section: []const u8, expected: []const u8) bool {
+    var lines = std.mem.splitScalar(u8, contents, '\n');
+    var in_section = false;
+    while (lines.next()) |raw_line| {
+        const line = std.mem.trimEnd(u8, raw_line, "\r");
+        if (!in_section) {
+            if (std.mem.eql(u8, line, section)) in_section = true;
+            continue;
+        }
+        if (line.len == 0) return false;
+        if (std.mem.eql(u8, line, expected)) return true;
+    }
+    return false;
+}
+
+fn sectionFirstValue(contents: []const u8, section: []const u8) ?[]const u8 {
+    var lines = std.mem.splitScalar(u8, contents, '\n');
+    var found = false;
+    while (lines.next()) |raw_line| {
+        const line = std.mem.trimEnd(u8, raw_line, "\r");
+        if (found) return if (line.len == 0) null else line;
+        if (std.mem.eql(u8, line, section)) found = true;
+    }
+    return null;
+}
+
 fn isDecimal(text: []const u8) bool {
     if (text.len == 0) return false;
     for (text) |character| if (!std.ascii.isDigit(character)) return false;
@@ -907,6 +952,17 @@ test "three-way merge is reviewable and applies with a backup" {
     const work = try std.fs.path.join(testing.allocator, &.{ root, "work" });
     defer testing.allocator.free(work);
     try std.Io.Dir.cwd().createDirPath(testing.io, cache);
+    const database = try std.fs.path.join(testing.allocator, &.{ root, "database" });
+    defer testing.allocator.free(database);
+    const package_dir = try std.fs.path.join(testing.allocator, &.{ database, "local/example-2.0-1" });
+    defer testing.allocator.free(package_dir);
+    try std.Io.Dir.cwd().createDirPath(testing.io, package_dir);
+    const files_db = try std.fs.path.join(testing.allocator, &.{ package_dir, "files" });
+    defer testing.allocator.free(files_db);
+    const desc_db = try std.fs.path.join(testing.allocator, &.{ package_dir, "desc" });
+    defer testing.allocator.free(desc_db);
+    try std.Io.Dir.cwd().writeFile(testing.io, .{ .sub_path = files_db, .data = "%FILES%\nexample.conf\n\n" });
+    try std.Io.Dir.cwd().writeFile(testing.io, .{ .sub_path = desc_db, .data = "%NAME%\nexample\n\n" });
 
     inline for (.{ "example-1.0-1-x86_64.pkg.tar.zst", "example-2.0-1-x86_64.pkg.tar.zst" }) |name| {
         const archive = try std.fs.path.join(testing.allocator, &.{ cache, name });
@@ -921,21 +977,19 @@ test "three-way merge is reviewable and applies with a backup" {
     try std.Io.Dir.cwd().writeFile(testing.io, .{ .sub_path = original, .data = "local\n" });
     try std.Io.Dir.cwd().writeFile(testing.io, .{ .sub_path = pacnew, .data = "package\n" });
 
-    const owner_tool = try std.fs.path.join(testing.allocator, &.{ root, "owner-tool" });
-    defer testing.allocator.free(owner_tool);
     const extract_tool = try std.fs.path.join(testing.allocator, &.{ root, "extract-tool" });
     defer testing.allocator.free(extract_tool);
     const merge_tool = try std.fs.path.join(testing.allocator, &.{ root, "merge-tool" });
     defer testing.allocator.free(merge_tool);
-    try writeExecutable(owner_tool, "#!/bin/sh\nprintf 'example\\n'\n");
     try writeExecutable(extract_tool, "#!/bin/sh\nprintf 'base\\n'\n");
     try writeExecutable(merge_tool, "#!/bin/sh\nprintf 'merged\\n'\nexit 1\n");
     var merge_program = [_][]const u8{merge_tool};
     var diff_program = [_][]const u8{"/usr/bin/true"};
     var manager = PacfileManager.init(testing.allocator, testing.io, .{
+        .root_directory = root,
+        .database_path = database,
         .cache_directory = cache,
         .temporary_directory = work,
-        .pacman_command = owner_tool,
         .bsdtar_command = extract_tool,
         .merge_program = &merge_program,
         .diff_program = &diff_program,
@@ -943,6 +997,10 @@ test "three-way merge is reviewable and applies with a backup" {
     var file_list: std.ArrayList(Pacfile) = .empty;
     defer deinitList(testing.allocator, &file_list);
     try addUnique(testing.allocator, &file_list, pacnew);
+
+    const diff = try manager.viewDiff(file_list.items[0], .three_way);
+    try testing.expectEqual(DiffMode.three_way, diff.used_mode);
+    try testing.expect(!diff.fell_back_to_two_way);
 
     var prepared = try manager.prepareMerge(file_list.items[0]);
     defer prepared.deinit();
@@ -975,4 +1033,88 @@ fn writeExecutable(path: []const u8, contents: []const u8) !void {
     var file = try std.Io.Dir.cwd().openFile(testing.io, path, .{ .mode = .read_write });
     defer file.close(testing.io);
     try file.setPermissions(testing.io, .fromMode(0o755));
+}
+
+test "pacfile owner lookup honors the database and root with exact file matching" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+    const root = try tmp.dir.realPathFileAlloc(testing.io, ".", allocator);
+    try tmp.dir.createDirPath(testing.io, "db/local/example-1-1");
+    try tmp.dir.writeFile(testing.io, .{
+        .sub_path = "db/local/example-1-1/files",
+        .data = "%FILES%\r\netc/example.conf\r\netc/nested/settings\r\n\r\n%BACKUP%\r\netc/not-owned\r\n",
+    });
+    try tmp.dir.writeFile(testing.io, .{ .sub_path = "db/local/example-1-1/desc", .data = "%NAME%\r\nexample\r\n\r\n" });
+    var manager = PacfileManager.init(testing.allocator, testing.io, .{
+        .root_directory = root,
+        .database_path = try std.fs.path.join(allocator, &.{ root, "db" }),
+    });
+    for ([_][]const u8{ "etc/example.conf", "etc/nested/settings" }) |relative| {
+        const path = try std.fs.path.join(allocator, &.{ root, relative });
+        const owner = try manager.packageOwner(path);
+        defer testing.allocator.free(owner);
+        try testing.expectEqualStrings("example", owner);
+    }
+    for ([_][]const u8{ "etc/example", "etc/example.conf.extra", "etc/not-owned", "etc/missing" }) |relative| {
+        const path = try std.fs.path.join(allocator, &.{ root, relative });
+        try testing.expectError(Error.PackageOwnerNotFound, manager.packageOwner(path));
+    }
+    try testing.expectError(Error.InvalidConfiguredPath, manager.packageOwner("/outside-root/file"));
+    const escaped = try std.fs.path.join(allocator, &.{ root, "etc/../file" });
+    try testing.expectError(Error.InvalidConfiguredPath, manager.packageOwner(escaped));
+    // The configured database must also be honored for the host root.
+    manager.options.root_directory = "/";
+    const host_owner = try manager.packageOwner("/etc/example.conf");
+    defer testing.allocator.free(host_owner);
+    try testing.expectEqualStrings("example", host_owner);
+}
+
+test "pacfile owner lookup distinguishes absent owners from unreadable metadata" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+    const root = try tmp.dir.realPathFileAlloc(testing.io, ".", allocator);
+    const database = try std.fs.path.join(allocator, &.{ root, "db" });
+    var manager = PacfileManager.init(testing.allocator, testing.io, .{ .database_path = database });
+    try testing.expectError(Error.PackageOwnerNotFound, manager.packageOwner("/etc/example.conf"));
+    try tmp.dir.createDirPath(testing.io, "db/local/example-1-1");
+    try testing.expectError(Error.DatabaseReadFailed, manager.packageOwner("/etc/example.conf"));
+    try tmp.dir.writeFile(testing.io, .{ .sub_path = "db/local/example-1-1/files", .data = "%FILES%\netc/example.conf\n\n" });
+    try testing.expectError(Error.DatabaseReadFailed, manager.packageOwner("/etc/example.conf"));
+    for ([_][]const u8{ "%VERSION%\n1-1\n\n", "%NAME%\n\n", "%NAME%\nbad name\n\n" }) |desc| {
+        try tmp.dir.writeFile(testing.io, .{ .sub_path = "db/local/example-1-1/desc", .data = desc });
+        try testing.expectError(Error.DatabaseReadFailed, manager.packageOwner("/etc/example.conf"));
+    }
+}
+
+test "pacfile three-way diff falls back for a missing owner but reports broken metadata" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+    const root = try tmp.dir.realPathFileAlloc(testing.io, ".", allocator);
+    try tmp.dir.writeFile(testing.io, .{ .sub_path = "example.conf", .data = "local\n" });
+    try tmp.dir.writeFile(testing.io, .{ .sub_path = "example.conf.pacnew", .data = "new\n" });
+    const pacnew = try std.fs.path.join(allocator, &.{ root, "example.conf.pacnew" });
+    var files: std.ArrayList(Pacfile) = .empty;
+    defer deinitList(testing.allocator, &files);
+    try addUnique(testing.allocator, &files, pacnew);
+    var manager = PacfileManager.init(testing.allocator, testing.io, .{
+        .root_directory = root,
+        .database_path = try std.fs.path.join(allocator, &.{ root, "db" }),
+        .diff_program = &.{"/usr/bin/true"},
+    });
+    const fallback = try manager.viewDiff(files.items[0], .three_way);
+    try testing.expectEqual(DiffMode.two_way, fallback.used_mode);
+    try testing.expect(fallback.fell_back_to_two_way);
+    try tmp.dir.createDirPath(testing.io, "db/local/example-1-1");
+    try tmp.dir.writeFile(testing.io, .{ .sub_path = "db/local/example-1-1/files", .data = "%FILES%\nexample.conf\n\n" });
+    // Matching files with missing owner metadata must not silently downgrade.
+    try testing.expectError(Error.DatabaseReadFailed, manager.viewDiff(files.items[0], .three_way));
 }

@@ -10,8 +10,8 @@ pkgname=(
   'shelly-notify'
   'shelly-notify-none'
 )
-pkgver=3.1.6.r7.g66dd2891
-pkgrel=3
+pkgver=3.1.8
+pkgrel=1
 arch=('x86_64' 'aarch64')
 url='https://github.com/Seafoam-Labs/Shelly-ALPM'
 license=('GPL-3.0-only')
@@ -38,7 +38,7 @@ makedepends=(
 )
 checkdepends=('ripgrep')
 _srcdir=Shelly-ALPM
-source=("${_srcdir}::git+${url}.git#branch=development")
+source=("${_srcdir}::git+${url}.git#tag=v${pkgver}")
 sha256sums=('SKIP')
 
 # Components with their own build.zig, in build order.
@@ -58,11 +58,6 @@ _zig_build() {
     --global-cache-dir "${srcdir}/zig-global-cache" \
     -Dcpu=baseline \
     "$@"
-}
-
-pkgver() {
-  cd "${_srcdir}"
-  git describe --long --tags --abbrev=8 | sed 's/^v//;s/\([^-]*-g\)/r\1/;s/-/./g'
 }
 
 prepare() {
@@ -100,7 +95,8 @@ build() {
   (cd Shelly.Ui.Gtk && _zig_build \
     --prefix "${srcdir}/out-ui" \
     -Dflatpak-backend-package=shelly-flatpak-backend \
-    -Doptimize=ReleaseSafe)
+    -Doptimize=ReleaseSafe \
+    -Daur-backend=atoll)
 
   # Generate documentation with a fresh configuration, independent of the
   # builder's own Shelly settings.
@@ -138,7 +134,8 @@ check() {
   (cd Shelly.Flatpak.Backend && _zig_build test abi-test integration-test)
   (cd Shelly.PackageManager && _zig_build -Dlibalpm="${_shelly_libalpm}" \
     -Dpath-profile="${_shelly_path_profile}" \
-    flatpak-test native-backend-test rlpm-adapter-test bootstrap-test)
+    flatpak-test native-backend-test rlpm-adapter-test bootstrap-test \
+    pacfile-test path-profile-test buildinfo-test sandbox-policy-test)
   (cd Shelly.Rlpm && _zig_build test -Dpath-profile="${_shelly_path_profile}")
   (cd Shelly.Key && _zig_build test -Dpath-profile="${_shelly_path_profile}")
   (cd Shelly.Cli.Zig && _zig_build test -Dlibalpm="${_shelly_libalpm}" \
@@ -150,7 +147,7 @@ check() {
 }
 
 package_shelly() {
-  pkgdesc='Shelly: A Modern Arch Package Manager (Devario development build)'
+  pkgdesc='Shelly: A Modern Arch Package Manager (Devario release build)'
   depends=(
     "shelly-cli=${pkgver}-${pkgrel}"
     "shelly-flatpak-backend=${pkgver}-${pkgrel}"
@@ -183,7 +180,7 @@ package_shelly() {
 }
 
 package_shelly-cli() {
-  pkgdesc='Native Shelly package-manager CLI (Devario development build)'
+  pkgdesc='Native Shelly package-manager CLI (Devario release build)'
   depends=(
     'curl'
     'diffutils'
@@ -221,6 +218,10 @@ package_shelly-cli() {
   # The package metadata must match the compiled native backend variant.
   local dynamic
   dynamic=$(LC_ALL=C readelf -d "${pkgdir}/usr/bin/shelly") || return 1
+  if [[ $dynamic != *'Shared library: [libsqlite3.so.0]'* ]]; then
+    printf 'Shelly CLI must directly depend on libsqlite3.so.0 (#2059)\n' >&2
+    return 1
+  fi
   if [[ ${_shelly_libalpm} == true && ${dynamic} != *libalpm.so* ]] ||
      [[ ${_shelly_libalpm} == false && ${dynamic} == *libalpm.so* ]]; then
     printf 'shelly does not match SHELLY_LIBALPM=%s\n' "${_shelly_libalpm}" >&2
@@ -259,7 +260,7 @@ EOF
 }
 
 package_shelly-flatpak-backend() {
-  pkgdesc='Optional native Flatpak backend for Shelly (Devario development build)'
+  pkgdesc='Optional native Flatpak backend for Shelly (Devario release build)'
   depends=("shelly-cli=${pkgver}-${pkgrel}" 'flatpak' 'glib2' 'glibc')
   conflicts=(
     'shelly-flatpak-backend-git'
@@ -276,7 +277,7 @@ package_shelly-flatpak-backend() {
 }
 
 package_shelly-notify() {
-  pkgdesc='Notification tray for Shelly (Devario development build)'
+  pkgdesc='Notification tray for Shelly (Devario release build)'
   depends=("shelly=${pkgver}-${pkgrel}" 'glibc')
   conflicts=('shelly-notify-git')
 

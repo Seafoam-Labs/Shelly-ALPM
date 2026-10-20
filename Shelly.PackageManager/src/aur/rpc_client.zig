@@ -262,7 +262,7 @@ pub const Client = struct {
     fn get(self: *Client, url: []const u8) ![]u8 {
         var operation_scope = HttpOperationScope.init(self, url);
         defer operation_scope.finish(.success);
-        errdefer operation_scope.fail();
+        errdefer |err| operation_scope.fail(err);
         try operation_scope.checkCancelled();
         if (builtin.is_test) if (self.test_transport) |transport|
             return transport.request(transport.context, self.allocator, url, null);
@@ -290,7 +290,7 @@ pub const Client = struct {
     fn postForm(self: *Client, url: []const u8, body: []u8) ![]u8 {
         var operation_scope = HttpOperationScope.init(self, url);
         defer operation_scope.finish(.success);
-        errdefer operation_scope.fail();
+        errdefer |err| operation_scope.fail(err);
         try operation_scope.checkCancelled();
         if (builtin.is_test) if (self.test_transport) |transport|
             return transport.request(transport.context, self.allocator, url, body);
@@ -373,16 +373,16 @@ const HttpOperationScope = struct {
         });
     }
 
-    fn fail(self: *HttpOperationScope) void {
+    fn fail(self: *HttpOperationScope, err: anyerror) void {
         if (self.operation) |*operation| operation.reportError(
-            if (operation.isCancelled()) error.Cancelled else error.AurHttpOperationFailed,
-            if (operation.isCancelled()) "Operation cancelled." else "Could not complete the AUR request to the configured server.",
+            if (operation.isCancelled()) error.Cancelled else err,
+            if (operation.isCancelled() or err == error.Cancelled) "Operation cancelled." else "Could not complete the AUR request to the configured server.",
             "aur-http",
             null,
             false,
         );
         const status: operation_api.CompletionStatus = if (self.operation) |*operation|
-            if (operation.isCancelled()) .cancelled else .failed
+            if (operation.isCancelled() or err == error.Cancelled) .cancelled else .failed
         else
             .failed;
         self.finish(status);

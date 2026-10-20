@@ -15,8 +15,10 @@ const PackagePage = if (features.builtWithDevario)
     @import("devario/package_page.zig").PackagePage
 else
     @import("pages/package_page.zig").PackagePage;
-const AurPage = if (features.builtWithAur) @import("pages/aur_page.zig").AurPage else void;
-const AtollAurPage = if (features.builtWithAur) @import("pages/atoll_aur_page.zig").AtollAurPage else void;
+const AurPage = if (features.builtWithBuiltinAur) @import("pages/aur_page.zig").AurPage else void;
+const AtollAurPage = if (features.builtWithAtoll) @import("pages/atoll_aur_page.zig").AtollAurPage else void;
+const aur_icon_name: [:0]const u8 = if (features.builtWithAtollOnly) "atoll-shark-symbolic" else if (features.builtWithBuiltinAur) AurPage.icon_name else AtollAurPage.icon_name;
+const aur_title: [:0]const u8 = features.aur_source_name;
 const ShellySearchPage = if (features.builtWithShellySearch) @import("pages/search_page.zig").ShellySearchPage else void;
 const UpdatePage = @import("pages/update_page.zig").UpdatePage;
 const RecommendPage = if (features.builtWithRecommend) @import("pages/recommend_page.zig").RecommendPage else void;
@@ -119,9 +121,10 @@ pub const ShellyWindow = extern struct {
         const cfg = svc.get() catch return;
 
         if (features.builtWithAur) {
-            if (cfg.AtollAurEnabled != self.private().aur_slot_atoll) {
-                swapAurSlot(self, cfg.AtollAurEnabled);
-                syncAurUrl(cfg.AtollAurEnabled);
+            const use_atoll = atollAurEnabled();
+            if (use_atoll != self.private().aur_slot_atoll) {
+                swapAurSlot(self, use_atoll);
+                syncAurUrl(use_atoll);
             }
         }
 
@@ -319,7 +322,7 @@ pub const ShellyWindow = extern struct {
 
         if (features.builtWithRecommend) add_nav_button(self, items, stack, true, "recommend", RecommendPage.icon_name, translations._(RecommendPage.title));
         add_nav_button(self, items, stack, true, "package", PackagePage.icon_name, translations._(PackagePage.title));
-        if (features.builtWithAur) add_nav_button(self, items, stack, true, "aur", AurPage.icon_name, translations._(AurPage.title));
+        if (features.builtWithAur) add_nav_button(self, items, stack, true, "aur", aur_icon_name, translations._(aur_title));
         if (features.builtWithFlatpak) add_nav_button(self, items, stack, true, "flatpak", FlatpakPage.icon_name, translations._(FlatpakPage.title));
         if (features.builtWithAppImage) add_nav_button(self, items, stack, true, "appimage", AppImagePage.icon_name, translations._(AppImagePage.title));
         if (features.builtWithShellySearch) add_nav_button(self, items, stack, true, "search", ShellySearchPage.icon_name, translations._(ShellySearchPage.title));
@@ -371,7 +374,7 @@ pub const ShellyWindow = extern struct {
 
         if (features.builtWithRecommend) add_nav_button(self, items, stack, false, "recommend", RecommendPage.icon_name, translations._(RecommendPage.title));
         add_nav_button(self, items, stack, false, "package", PackagePage.icon_name, translations._(PackagePage.title));
-        if (features.builtWithAur) add_nav_button(self, items, stack, false, "aur", AurPage.icon_name, translations._(AurPage.title));
+        if (features.builtWithAur) add_nav_button(self, items, stack, false, "aur", aur_icon_name, translations._(aur_title));
         if (features.builtWithFlatpak) add_nav_button(self, items, stack, false, "flatpak", FlatpakPage.icon_name, translations._(FlatpakPage.title));
         if (features.builtWithAppImage) add_nav_button(self, items, stack, false, "appimage", AppImagePage.icon_name, translations._(AppImagePage.title));
         if (features.builtWithShellySearch) add_nav_button(self, items, stack, false, "search", ShellySearchPage.icon_name, translations._(ShellySearchPage.title));
@@ -597,8 +600,8 @@ pub const ShellyWindow = extern struct {
         }
 
         if (features.builtWithAur) {
-            const au_page = gtk.Stack.addTitled(stack, aurSlotWidget(self), "aur", translations._("AUR"));
-            gtk.StackPage.setIconName(au_page, AurPage.icon_name);
+            const au_page = gtk.Stack.addTitled(stack, aurSlotWidget(self), "aur", translations._(aur_title));
+            gtk.StackPage.setIconName(au_page, aur_icon_name);
         }
 
         if (features.builtWithShellySearch) {
@@ -623,11 +626,20 @@ pub const ShellyWindow = extern struct {
     fn aurSlotWidget(self: *ShellyWindow) *gtk.Widget {
         const use_atoll = atollAurEnabled();
         self.private().aur_slot_atoll = use_atoll;
-        if (use_atoll) return AtollAurPage.new().as(gtk.Widget);
-        return AurPage.new().as(gtk.Widget);
+        return newAurSlotWidget(use_atoll);
+    }
+
+    fn newAurSlotWidget(use_atoll: bool) *gtk.Widget {
+        if (features.builtWithBuiltinAur) {
+            if (features.builtWithAtoll and use_atoll) return AtollAurPage.new().as(gtk.Widget);
+            return AurPage.new().as(gtk.Widget);
+        }
+        return AtollAurPage.new().as(gtk.Widget);
     }
 
     fn atollAurEnabled() bool {
+        if (features.builtWithAtollOnly) return true;
+        if (!features.builtWithAtoll) return false;
         const svc = runtime.config orelse return false;
         const cfg = svc.get() catch return false;
         return cfg.AtollAurEnabled;
@@ -658,13 +670,10 @@ pub const ShellyWindow = extern struct {
             gtk.Stack.remove(stack, child);
         }
 
-        const widget: *gtk.Widget = if (use_atoll)
-            AtollAurPage.new().as(gtk.Widget)
-        else
-            AurPage.new().as(gtk.Widget);
+        const widget: *gtk.Widget = newAurSlotWidget(use_atoll);
 
-        const page = gtk.Stack.addTitled(stack, widget, "aur", translations._("AUR"));
-        gtk.StackPage.setIconName(page, AurPage.icon_name);
+        const page = gtk.Stack.addTitled(stack, widget, "aur", translations._(aur_title));
+        gtk.StackPage.setIconName(page, aur_icon_name);
         p.aur_slot_atoll = use_atoll;
 
         if (was_visible) {

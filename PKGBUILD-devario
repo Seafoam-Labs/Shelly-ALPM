@@ -3,8 +3,8 @@
 # Uses Devario runtime paths (/etc/shelly.conf and /var/lib/shelly).
 
 pkgname=shelly
-pkgver=3.1.6
-pkgrel=3
+pkgver=3.1.8
+pkgrel=1
 # Update this pin to the published commit introducing -Dpath-profile before release.
 _commit=bcbba6aaaf003aefdbe30b75023142c75e96e604
 pkgdesc="Shelly for Devario with the native RLPM backend"
@@ -155,6 +155,10 @@ package() {
   local executable dynamic linked
   for executable in shelly shelly-ui shelly-key shelly-notifications; do
     dynamic=$(LC_ALL=C readelf -d "$pkgdir/usr/bin/$executable") || return 1
+    if [[ $executable == shelly && $dynamic != *'Shared library: [libsqlite3.so.0]'* ]]; then
+      printf 'Shelly CLI must directly depend on libsqlite3.so.0 (#2059)\n' >&2
+      return 1
+    fi
     [[ $dynamic == *'(NEEDED)'* ]] || continue
     linked=$(LC_ALL=C ldd "$pkgdir/usr/bin/$executable") || return 1
     if [[ $linked == *libalpm.so* || $linked == *'not found'* ]]; then

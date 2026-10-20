@@ -32,6 +32,12 @@ pub const BuildConfiguration = struct {
 pub const PackageConfiguration = struct {
     packager: []const u8,
     extension: []const u8,
+    /// Architecture recorded in the assembled package (`.PKGINFO` `arch`,
+    /// `.BUILDINFO` `pkgarch` and the file name), like makepkg's
+    /// PACKAGECARCH. Only the packaging stage sees it: PKGBUILD evaluation,
+    /// `$CARCH`, `*_$CARCH` arrays and the `arch=()` check keep `build.carch`.
+    /// Unset means `build.carch`.
+    carch: ?[]const u8 = null,
     compression_level: ?compression.Preset = null,
     options: []const []const u8,
     strip_binaries: []const []const u8,
@@ -77,6 +83,7 @@ const BuildLayer = struct {
 const PackageLayer = struct {
     packager: ?[]const u8 = null,
     extension: ?[]const u8 = null,
+    carch: ?[]const u8 = null,
     compression_level: ?i64 = null,
     options: ?[]const []const u8 = null,
     strip_binaries: ?[]const []const u8 = null,
@@ -252,6 +259,7 @@ pub const ShellyBuildConfiguration = struct {
         if (layer.package) |package| {
             if (package.packager) |value| self.package.packager = try allocator.dupe(u8, value);
             if (package.extension) |value| self.package.extension = try allocator.dupe(u8, value);
+            if (package.carch) |value| self.package.carch = try allocator.dupe(u8, value);
             if (package.compression_level) |value| self.package.compression_level = try compression.Preset.fromInt(value);
             if (package.options) |value| self.package.options = try duplicateStrings(allocator, value);
             if (package.strip_binaries) |value| self.package.strip_binaries = try duplicateStrings(allocator, value);
@@ -273,9 +281,16 @@ pub const ShellyBuildConfiguration = struct {
         }
     }
 
+    /// Architecture written into built packages: `package.carch` when set,
+    /// otherwise `build.carch`.
+    pub fn packageCarch(self: *const Self) []const u8 {
+        return self.package.carch orelse self.build.carch;
+    }
+
     fn validate(self: *const Self) !void {
         if (self.build.carch.len == 0 or self.build.chost.len == 0)
             return error.InvalidConfiguration;
+        if (self.package.carch) |carch| try validatePackageArchitecture(carch);
         for (self.build.extra_path) |path| try process_runner.build_path.validateEntry(path);
         for (self.package.options) |option| {
             if (!isValidPackageOption(option)) return error.InvalidPackageOption;
@@ -392,7 +407,7 @@ fn validateKnownKeys(allocator: std.mem.Allocator, content: []const u8, diagnost
 }
 
 const build_keys: []const []const u8 = &.{ "carch", "chost", "cppflags", "cflags", "cxxflags", "ldflags", "ltoflags", "makeflags", "check", "ccache", "distcc", "distcc_hosts", "extra_path", "env" };
-const package_keys: []const []const u8 = &.{ "packager", "extension", "compression_level", "options", "strip_binaries", "strip_shared", "strip_static", "sign", "sign_key" };
+const package_keys: []const []const u8 = &.{ "packager", "extension", "carch", "compression_level", "options", "strip_binaries", "strip_shared", "strip_static", "sign", "sign_key" };
 const destination_keys: []const []const u8 = &.{ "build", "packages", "sources", "logs" };
 const sandbox_keys: []const []const u8 = &.{ "enabled", "extra_read", "extra_write" };
 
@@ -433,6 +448,17 @@ fn containsString(values: []const []const u8, expected: []const u8) bool {
 
 fn isValidPackageOption(option: []const u8) bool {
     return containsString(&.{ "strip", "docs", "libtool", "staticlibs", "emptydirs", "zipman", "purge", "debug", "lto", "autodeps", "buildflags", "makeflags" }, option);
+}
+
+/// Mirrors makepkg's `arch` entry lint ([[:alnum:]_]+). The value becomes a
+/// file-name component, so anything else could break `name-ver-rel-arch` parsing
+/// or escape the package directory. `any` is reserved for packages that declare it.
+pub fn validatePackageArchitecture(architecture: []const u8) !void {
+    if (architecture.len == 0 or std.mem.eql(u8, architecture, "any"))
+        return error.InvalidPackageArchitecture;
+    for (architecture) |byte| {
+        if (!std.ascii.isAlphanumeric(byte) and byte != '_') return error.InvalidPackageArchitecture;
+    }
 }
 
 fn isValidPackageExtension(extension: []const u8) bool {
@@ -525,6 +551,38 @@ test "shellybuild compression rejects invalid types ranges and unsupported forma
         "[package]\nextension = '.pkg.tar.lz4'\ncompression_level = 3\n",
         null,
     ));
+}
+
+test "shellybuild package carch defaults to build carch and merges by layer" {
+    const allocator = std.testing.allocator;
+    const defaults = try ShellyBuildConfiguration.initFromBuffers(allocator, null, null);
+    defer defaults.deinit();
+    try expectOptionalUnset(defaults.package.carch);
+    try std.testing.expectEqualStrings("x86_64", defaults.packageCarch());
+
+    const system = "[package]\ncarch = 'x86_64_v3'\n";
+    const inherited = try ShellyBuildConfiguration.initFromBuffers(allocator, system, "[package]\npackager = 'User'\n");
+    defer inherited.deinit();
+    try std.testing.expectEqualStrings("x86_64", inherited.build.carch);
+    try std.testing.expectEqualStrings("x86_64_v3", inherited.packageCarch());
+
+    const overridden = try ShellyBuildConfiguration.initFromBuffers(allocator, system, "[package]\ncarch = 'x86_64_v4'\n");
+    defer overridden.deinit();
+    try std.testing.expectEqualStrings("x86_64_v4", overridden.packageCarch());
+
+    const custom_build = try ShellyBuildConfiguration.initFromBuffers(allocator, "[build]\ncarch = 'aarch64'\n", null);
+    defer custom_build.deinit();
+    try std.testing.expectEqualStrings("aarch64", custom_build.packageCarch());
+}
+
+test "shellybuild package carch rejects values unsafe for package file names" {
+    const allocator = std.testing.allocator;
+    for ([_][]const u8{ "''", "'any'", "'x86-64'", "'x86_64/v3'", "'../x86_64'", "'x86_64 v3'", "'x86_64.v3'" }) |value| {
+        const content = try std.fmt.allocPrint(allocator, "[package]\ncarch = {s}\n", .{value});
+        defer allocator.free(content);
+        try std.testing.expectError(error.InvalidPackageArchitecture, ShellyBuildConfiguration.initFromBuffers(allocator, content, null));
+    }
+    try std.testing.expectError(error.InvalidConfiguration, ShellyBuildConfiguration.initFromBuffers(allocator, "[package]\ncarch = 3\n", null));
 }
 
 test "shellybuild merges system and user files field by field" {

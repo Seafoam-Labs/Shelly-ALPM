@@ -55,6 +55,13 @@ Bootstrap uses the selected profile too; the default profile retains its legacy
 `/var/log/pacman.log` bootstrap log. Profiles supply defaults, not a migration:
 building a new profile does not move an existing database or keyring.
 
+Pacfile, cache-cleanup, and archive-cache fallback options use the same profile.
+Explicit caller options and configuration still override those defaults.
+`shelly --config /path/to/config utility --repair-db` resolves `DBPath` from that
+configuration before removing a stale lock. Configuration is parsed without
+opening the package database; an unreadable explicit configuration fails before
+any lock is touched.
+
 `shelly-key --populate` reads public bundles and their trusted/revoked lists from
 the profile's public key bundle directory. `--populate-from` overrides that
 source directory. Devario keyring packages must install their bundles under
@@ -139,27 +146,31 @@ The shared build needs libarchive, SQLite, curl, Zig, and the existing project
 inputs. Default packages retain pacman/libalpm. RLPM-only source packages omit
 the pacman build and runtime dependency, and verify that the shipped CLI matches
 the requested variant. Prebuilt packages likewise declare the expected variant
-with `SHELLY_LIBALPM` and reject a mismatched release binary. Pacman is optional for package-owner lookup during pacfile merging.
+with `SHELLY_LIBALPM` and reject a mismatched release binary. Pacfile owner lookup
+reads the configured local package database directly, so three-way diff and merge
+do not require the pacman executable. They still need a suitable cached base
+archive and the configured extraction/diff/merge tools. Missing owners or base
+archives retain the two-way diff fallback; unreadable owner metadata is an error.
 GPG and a populated host trust database remain necessary for signature verification.
 
-`PKGBUILD-devario` builds the full application with RLPM only, pinned to a
-published RLPM commit. It always passes `-Dlibalpm=false`, including in CLI and
-PackageManager checks; `SHELLY_LIBALPM` does not override this recipe. The package
-is named `shelly`, keeps Flatpak optional, and has no pacman, libalpm, or
-`devario-alpm-runtime` dependency. Packaging rejects unresolved libraries or
-transitive libalpm linkage in the shipped executables.
+`packaging/devario/PKGBUILD` builds the release tag matching `pkgver` (currently
+`v3.1.8`). `packaging/devario/shelly-git/PKGBUILD` tracks the `development` branch.
+Both use `-Dlibalpm=false -Dpath-profile=devario`, including the matching key tool
+and backend tests. Neither recipe applies downstream patches
+or requires `devario-alpm-runtime`. Their checks include native pacfile ownership,
+helper path defaults, BUILDINFO database selection, and sandbox allow-list
+regressions.
 
 ```sh
-shelly build ./PKGBUILD-devario
-# Alternatively, with makepkg and the build dependencies already installed:
-makepkg -p PKGBUILD-devario
+shelly build ./packaging/devario/PKGBUILD
 ```
 
-The recipe is self-contained: assets and configuration come from the pinned
-checkout. It builds upstream's configuration/storage defaults. It does not apply
-the separate Devario distribution patches for `/etc/shelly.conf`,
-`/var/lib/shelly`, or `SHELLY_ALPM_CONFIG`; that distribution integration remains
-in Devario's own package repository.
+The separate root `PKGBUILD-devario` is a historical pinned recipe. Its current
+`bcbba6aa` pin predates path-profile support even though the recipe passes that
+option. Refresh that pin to a published commit containing these fixes before
+using it for a release. The release and development recipes above do not use that pin.
+Use `--config` for runtime configuration overrides; the former downstream
+`SHELLY_ALPM_CONFIG` variable is not supported.
 
 Only binaries compiled with `-Dlibalpm=false` use the explicit bootstrap package
 set without requiring pacman in the [isolated-build profile](isolated-builds.md).
@@ -167,6 +178,23 @@ Selecting RLPM at runtime in a libalpm-enabled binary retains the existing
 bootstrap packages and staging.
 Recipe dependencies may still install pacman or libalpm inside the guest;
 Shelly's compiled backend does not change the package being built.
+
+## Native build metadata
+
+CLI builds pass their selected configuration to BUILDINFO collection. AUR builds
+also preserve the active manager's backend, root, and database overrides. The
+builder enumerates installed packages when writing metadata, after build
+dependencies have been installed. Isolated guests use their own configuration;
+the host-only configuration used during provisioning is not forwarded into the
+guest build command.
+
+Library callers can set `builder.BuildOptions.native_database` with
+`builder.BuildDatabase.fromManager(manager, config_path)`, or supply its
+`backend`, `config_path`, `root_directory`, and `database_path` fields directly.
+These paths are borrowed until `PackageBuilder.deinit()`. The existing
+`installed_packages` snapshot overrides database collection when supplied.
+`Manager.PacfileManagerOptions.pacman_command` was removed along with the subprocess;
+callers should select `database_path` and `root_directory` instead.
 
 ## Library boundary
 
@@ -198,6 +226,37 @@ private metadata copy. Other database links are rejected; manual cache removal
 is unnecessary when switching from libalpm.
 
 ## Verification and acceptance
+
+For local validation, the test runner detects whether native libalpm headers,
+linker inputs, and runtime loading are available:
+
+```sh
+scripts/test-native-backends.sh                  # auto, Debug
+scripts/test-native-backends.sh auto ReleaseSafe
+```
+
+When libalpm is unavailable it prints a `SKIP` message for the libalpm-specific
+checks and continues with the complete RLPM-only variant. Explicit `false`
+bypasses detection. Explicit `true` requires libalpm and fails if it is missing,
+so CI cannot silently lose coverage.
+
+Direct `zig build test --summary all` commands in `Shelly.PackageManager` and
+`Shelly.Cli.Zig` also work without libalpm. With no `-Dlibalpm` option, native
+test targets check for `libalpm` through pkg-config and omit libalpm-specific
+tests when its development files are unavailable, printing a diagnostic. RLPM
+and backend-independent tests still run. An installed but broken libalpm
+installation remains a test failure. Explicit `-Dlibalpm=true` requires libalpm;
+`-Dlibalpm=false` disables it. Cross-target tests retain the default enabled
+backend unless explicitly disabled. Production modules retain their default
+of including both backends, even when built alongside auto-selected tests.
+
+The wrapper's selection logic has an independent regression suite:
+
+```sh
+python3 scripts/test-native-backend-selection.py
+```
+
+CI and hosts with libalpm can require each matrix variant explicitly:
 
 ```sh
 scripts/test-native-backends.sh true Debug

@@ -487,6 +487,7 @@ test {
     _ = @import("repo/pkginfo.zig");
     _ = @import("repo/database.zig");
     _ = @import("aur/manager.zig");
+    _ = builder;
     _ = @import("aur/builder/builder_test.zig");
     _ = @import("local/manager.zig");
     _ = @import("local/file_inspector.zig");
@@ -504,4 +505,28 @@ test "Flatpak public facade does not expose generated native bindings" {
     _ = flatpak.InstalledApplication;
     _ = flatpak.InstalledRef;
     _ = flatpak.Remote;
+}
+
+test "native helper path defaults follow the profile and allow configuration overrides" {
+    const t = std.testing;
+    const pacfiles = Manager.PacfileManager.init(t.allocator, t.io, .{});
+    const cache = Manager.CacheManager.init(t.allocator, t.io, .{});
+    var archive = Manager.ArchiveManager.init(t.allocator, t.io, .{});
+    defer archive.deinit();
+    try t.expectEqualStrings(paths.database, pacfiles.options.database_path);
+    try t.expectEqualStrings(paths.cache, pacfiles.options.cache_directory);
+    try t.expectEqualStrings(paths.cache, cache.cache_directory);
+    try t.expectEqualStrings(paths.cache, archive.options.cache_directory_fallback);
+
+    var config = try Manager.configuration.Configuration.parse_string(t.allocator, t.io, "[options]\nRootDir = /custom-root\nDBPath = /custom-db\nCacheDir = /custom-cache\n");
+    defer config.deinitialize();
+    const configured = Manager.PacfileManager.initFromConfiguration(t.allocator, t.io, &config);
+    try t.expectEqualStrings("/custom-root", configured.options.root_directory);
+    try t.expectEqualStrings("/custom-db", configured.options.database_path);
+    try t.expectEqualStrings("/custom-cache", configured.options.cache_directory);
+    const custom_cache = Manager.CacheManager.init(t.allocator, t.io, .{ .cache_directory = config.cache_directory });
+    try t.expectEqualStrings("/custom-cache", custom_cache.cache_directory);
+    var custom_archive = Manager.ArchiveManager.init(t.allocator, t.io, .{ .cache_directory_fallback = config.cache_directory });
+    defer custom_archive.deinit();
+    try t.expectEqualStrings("/custom-cache", custom_archive.options.cache_directory_fallback);
 }

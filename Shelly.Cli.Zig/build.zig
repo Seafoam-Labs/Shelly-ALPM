@@ -5,7 +5,7 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
     const path_profile = b.option([]const u8, "path-profile", "Distribution path defaults: pacman or devario") orelse "pacman";
-    const enable_libalpm = b.option(bool, "libalpm", "Include the libalpm backend alongside RLPM") orelse true;
+    const enable_libalpm = b.option(bool, "libalpm", "Include the libalpm backend alongside RLPM (tests auto-detect when omitted)");
     const diagnostics = b.dependency("shelly_diagnostics", .{ .target = target, .optimize = optimize }).module("diagnostics");
     const flatpak_backend_path = b.option(
         []const u8,
@@ -57,8 +57,34 @@ pub fn build(b: *std.Build) void {
     const run_step = b.step("run", "Run Shelly");
     run_step.dependOn(&run_command.step);
 
+    const test_package_manager = package_manager_dependency.module("PackageManagerTests");
+    const test_cli = b.createModule(.{
+        .root_source_file = b.path("src/root.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{
+            .{ .name = "diagnostics", .module = diagnostics },
+            .{ .name = "PackageManager", .module = test_package_manager },
+        },
+    });
+    test_cli.addOptions("build_options", build_options);
+    const test_executable_module = b.createModule(.{
+        .root_source_file = b.path("src/main.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{
+            .{ .name = "diagnostics", .module = diagnostics },
+            .{ .name = "Shelly_Cli_Zig", .module = test_cli },
+            .{ .name = "PackageManager", .module = test_package_manager },
+        },
+    });
+
+    const repair_tests = b.addTest(.{ .root_module = test_cli, .filters = &.{"repairDb"} });
+    const repair_test_step = b.step("database-repair-test", "Test repair of the configured database");
+    repair_test_step.dependOn(&b.addRunArtifact(repair_tests).step);
+
     const configuration_tests = b.addTest(.{
-        .root_module = cli,
+        .root_module = test_cli,
         .filters = &.{ "global config", "config selection", "keyring config", "shellystrap", "hook replacements" },
     });
     const configuration_step = b.step("configuration-test", "Test native configuration selection and subprocess forwarding");
@@ -66,7 +92,7 @@ pub fn build(b: *std.Build) void {
 
     const appimage_tests = b.addTest(.{
         .name = "appimage-test",
-        .root_module = cli,
+        .root_module = test_cli,
         .filters = &.{ "AppImage", "appimage" },
     });
     b.step("appimage-test", "Test AppImage command routing and metadata synchronization")
@@ -74,19 +100,19 @@ pub fn build(b: *std.Build) void {
 
     const purify_tests = b.addTest(.{
         .name = "purify-test",
-        .root_module = cli,
+        .root_module = test_cli,
         .filters = &.{ "purify", "AUR cleanup", "AUR cache" },
     });
     b.step("purify-test", "Test purify planning, confirmation, and cache removal")
         .dependOn(&b.addRunArtifact(purify_tests).step);
 
     const module_tests = b.addTest(.{
-        .root_module = cli,
+        .root_module = test_cli,
     });
     const run_module_tests = b.addRunArtifact(module_tests);
 
     const executable_tests = b.addTest(.{
-        .root_module = executable_module,
+        .root_module = test_executable_module,
     });
     const run_executable_tests = b.addRunArtifact(executable_tests);
 
@@ -95,14 +121,14 @@ pub fn build(b: *std.Build) void {
     test_step.dependOn(&run_executable_tests.step);
 
     const appimage_removal_tests = b.addTest(.{
-        .root_module = cli,
+        .root_module = test_cli,
         .filters = &.{ "AppImage removal", "resolves one AppImage", "remove AppImage" },
     });
     const run_appimage_removal_tests = b.addRunArtifact(appimage_removal_tests);
     b.step("appimage-removal-test", "Test AppImage removal identity and stale metadata cleanup").dependOn(&run_appimage_removal_tests.step);
 
     const upgrade_tests = b.addTest(.{
-        .root_module = cli,
+        .root_module = test_cli,
         .filters = &.{"upgrade"},
     });
     const run_upgrade_tests = b.addRunArtifact(upgrade_tests);
@@ -111,7 +137,7 @@ pub fn build(b: *std.Build) void {
 
     const account_tests = b.addTest(.{
         .name = "user-account-test",
-        .root_module = cli,
+        .root_module = test_cli,
         .filters = &.{ "NSS", "invoking identity", "invoking user", "elevation resolves", "elevation takes precedence", "XDG" },
     });
     const run_account_tests = b.addRunArtifact(account_tests);
@@ -124,7 +150,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
     builder_test_module.addImport("diagnostics", diagnostics);
-    builder_test_module.addImport("PackageManager", package_manager);
+    builder_test_module.addImport("PackageManager", test_package_manager);
     builder_test_module.addOptions("build_options", build_options);
     const bootstrap_configuration_tests = b.addTest(.{
         .name = "bootstrap-configuration-test",
@@ -139,11 +165,14 @@ pub fn build(b: *std.Build) void {
     });
     b.step("isolated-config-test", "Test host configuration isolation from guest build commands")
         .dependOn(&b.addRunArtifact(isolated_config_tests).step);
+    const checksum_update_tests = b.addTest(.{ .root_module = builder_test_module, .filters = &.{"updpkgsums"} });
+    b.step("updpkgsums-test", "Test checksum updates and paired SRCINFO publication").dependOn(&b.addRunArtifact(checksum_update_tests).step);
     const builder_tests = b.addTest(.{
         .name = "builder-command-test",
         .root_module = builder_test_module,
         .filters = &.{
             "makesrcinfo",
+            "updpkgsums",
             "compression presets",
             "review-only accepts Heroic array trimming",
             "review-only accepts filesystem here-strings",
@@ -176,7 +205,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
     isolated_test_module.addImport("diagnostics", diagnostics);
-    isolated_test_module.addImport("PackageManager", package_manager);
+    isolated_test_module.addImport("PackageManager", test_package_manager);
     const isolated_tests = b.addTest(.{
         .name = "isolated-build-test",
         .root_module = isolated_test_module,

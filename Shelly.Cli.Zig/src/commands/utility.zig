@@ -1,6 +1,7 @@
 const std = @import("std");
 const diagnostics = @import("diagnostics");
-const user_account = @import("PackageManager").user_account;
+const PackageManager = @import("PackageManager");
+const user_account = PackageManager.user_account;
 const test_support = @import("test_support.zig");
 const completions = @import("../cli/completions.zig");
 const documentation = @import("../cli/documentation.zig");
@@ -14,7 +15,6 @@ const spec = @import("../cli/spec.zig");
 const xdg = @import("../runtime/xdg.zig");
 
 const command_path = "shelly utility utility";
-const default_database_directory = "/var/lib/pacman";
 
 const Operation = union(enum) {
     fix_permissions,
@@ -73,7 +73,7 @@ fn execute(
 ) anyerror!u8 {
     return switch (operation) {
         .fix_permissions => fixPermissions(context, invocation, permission_runner),
-        .repair_db => repairDb(context, invocation, default_database_directory),
+        .repair_db => repairConfiguredDb(context, invocation),
         .docs => generateDocs(context),
         .completions => |shell| generateCompletions(context, shell),
         .pacfiles => pacfiles.run(context, invocation),
@@ -193,6 +193,17 @@ fn fixPermissions(
         try writeResponseMessage(context, invocation, true, "No Shelly directories need permission repair.");
     }
     return if (failed) 1 else 0;
+}
+
+fn repairConfiguredDb(context: *runtime.RuntimeContext, invocation: *const parser.Invocation) !u8 {
+    const Configuration = PackageManager.Manager.configuration.Configuration;
+    var config = try (if (context.config_path != null) &Configuration.parseStrict else &Configuration.parse)(
+        context.allocator,
+        context.io,
+        context.config_path orelse PackageManager.paths.config_file,
+    );
+    defer config.deinitialize();
+    return repairDb(context, invocation, config.database_path);
 }
 
 fn repairDb(
@@ -488,4 +499,44 @@ test "repairDb succeeds gracefully when no lock file is present" {
 fn expectArguments(expected: []const []const u8, actual: []const []const u8) !void {
     try std.testing.expectEqual(expected.len, actual.len);
     for (expected, actual) |wanted, value| try std.testing.expectEqualStrings(wanted, value);
+}
+
+test "repairDb uses the selected configuration database" {
+    var tc: test_support.TestContext = .{};
+    tc.init();
+    defer tc.deinit();
+    const allocator = tc.arena.allocator();
+    const io = std.testing.io;
+    var temporary = std.testing.tmpDir(.{});
+    defer temporary.cleanup();
+    const root = try temporary.dir.realPathFileAlloc(io, ".", allocator);
+    try temporary.dir.createDirPath(io, "selected-db");
+    try temporary.dir.writeFile(io, .{ .sub_path = "selected-db/db.lck", .data = "" });
+    try temporary.dir.writeFile(io, .{ .sub_path = "db.lck", .data = "untouched" });
+    const config = try std.fmt.allocPrint(allocator, "[options]\nDBPath = {s}/selected-db\n", .{root});
+    try temporary.dir.writeFile(io, .{ .sub_path = "shelly.conf", .data = config });
+    tc.context.config_path = try std.fs.path.join(allocator, &.{ root, "shelly.conf" });
+    const invocation = try parseInvocation(allocator, &.{ "utility", "--repair-db" });
+    try std.testing.expectEqual(@as(u8, 0), try execute(&tc.context, &invocation, .repair_db, Real{}));
+    try std.testing.expectError(error.FileNotFound, temporary.dir.access(io, "selected-db/db.lck", .{}));
+    try temporary.dir.access(io, "db.lck", .{});
+}
+
+test "repairDb rejects invalid explicit configuration before touching a lock" {
+    var tc: test_support.TestContext = .{};
+    tc.init();
+    defer tc.deinit();
+    const allocator = tc.arena.allocator();
+    const io = std.testing.io;
+    var temporary = std.testing.tmpDir(.{});
+    defer temporary.cleanup();
+    const root = try temporary.dir.realPathFileAlloc(io, ".", allocator);
+    try temporary.dir.writeFile(io, .{ .sub_path = "db.lck", .data = "untouched" });
+    tc.context.config_path = try std.fs.path.join(allocator, &.{ root, "shelly.conf" });
+    const invocation = try parseInvocation(allocator, &.{ "utility", "--repair-db" });
+    try std.testing.expectError(error.ConfigReadFailed, execute(&tc.context, &invocation, .repair_db, Real{}));
+    const invalid = try std.fmt.allocPrint(allocator, "[options]\nDBPath = {s}\nHookDirMode = invalid\n", .{root});
+    try temporary.dir.writeFile(io, .{ .sub_path = "shelly.conf", .data = invalid });
+    try std.testing.expectError(error.InvalidHookDirMode, execute(&tc.context, &invocation, .repair_db, Real{}));
+    try temporary.dir.access(io, "db.lck", .{});
 }

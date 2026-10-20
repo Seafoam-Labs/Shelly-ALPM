@@ -386,7 +386,7 @@ fn prepareStandardUpgradePreview(
     try context.stdout.writeAll("Preparing standard upgrade plan...\n");
     try context.stdout.flush();
 
-    const database_path = try xdg.shellyCache(context, &.{"db"});
+    const database_path = try xdg.previewDatabase(context);
     defer context.allocator.free(database_path);
     try std.Io.Dir.cwd().createDirPath(context.io, database_path);
 
@@ -2193,6 +2193,79 @@ test "upgrade all keeps success after an AUR repository miss and preserves insta
         try std.testing.expectEqual(!fail_install, std.mem.indexOf(u8, rendered, ":: All upgrades complete.") != null);
         try std.testing.expectEqual(fail_install, std.mem.indexOf(u8, rendered, "The upgrade did not complete successfully") != null);
         try std.testing.expectEqual(fail_install, std.mem.indexOf(u8, rendered, "AUR installation failed") != null);
+    }
+}
+
+test "upgrade optional AUR HTTP failures warn in UI and terminal without masking required failures" {
+    const Case = enum { optional, required_lookup, required_install };
+    for ([_]bool{ false, true }) |ui_mode| {
+        for ([_]Case{ .optional, .required_lookup, .required_install }) |case| {
+            var tc: test_support.TestContext = .{};
+            tc.init();
+            defer tc.deinit();
+            const manifest = try spec.Manifest.load(tc.arena.allocator());
+            const arguments: []const []const u8 = if (ui_mode)
+                &.{ "upgrade", "all", "--ui-mode", "--no-confirm" }
+            else
+                &.{ "upgrade", "all", "--no-confirm" };
+            const outcome = try parser.parse(tc.arena.allocator(), &manifest, arguments);
+            try std.testing.expect(outcome == .dispatch);
+            const Runner = struct {
+                case: Case,
+                later_backends: usize = 0,
+                fn run(self: *@This(), context: *runtime.RuntimeContext, operations: *PackageManager.OperationContext, backend: Backend, _: *const parser.Invocation) !void {
+                    if (backend == .flatpak or backend == .appimage) self.later_backends += 1;
+                    if (backend != .aur) return;
+                    var parent = operations.begin(.{ .backend = .aur, .kind = .update, .subject = "editor-bin" });
+                    defer parent.finish(.success);
+                    {
+                        var dependency = parent.child(.{ .backend = .aur, .kind = .install, .subject = "optional-tool" });
+                        defer dependency.finish(.failed);
+                        var recovery: PackageManager.operation.RecoverableErrors = .{
+                            .message = "Could not install optional dependency 'optional-tool' for 'editor-bin'. Retry it separately.",
+                        };
+                        if (self.case != .required_lookup) dependency.recoverable_errors = &recovery;
+                        var client = try PackageManager.aur.rpc.Client.init(context.allocator, context.io, PackageManager.aur.rpc.default_rpc_url);
+                        defer client.deinit();
+                        client.setParentOperation(&dependency);
+                        var service = PackageManager.aur.rpc.TestService{ .failure = error.Timeout };
+                        service.install(&client);
+                        try std.testing.expectError(error.AurRpcLookupFailed, client.findProviders("optional-tool"));
+                        dependency.reportError(error.AurRpcLookupFailed, "Provider lookup failed", "aur", null, false);
+                    }
+                    if (self.case == .required_install)
+                        parent.reportError(error.BuildFailed, "Required package installation failed", "aur", null, false);
+                }
+            };
+            var runner: Runner = .{ .case = case };
+            const expected_code: u8 = if (case == .optional) 0 else 1;
+            try std.testing.expectEqual(expected_code, try executeWithRunner(&tc.context, &outcome.dispatch, &runner));
+            try std.testing.expectEqual(@as(usize, 2), runner.later_backends);
+            var decoded: std.Io.Writer.Allocating = .init(tc.arena.allocator());
+            defer decoded.deinit();
+            if (ui_mode) {
+                var lines = std.mem.splitScalar(u8, tc.stdout.writer.buffered(), '\n');
+                while (lines.next()) |line| {
+                    if (!std.mem.startsWith(u8, line, "[JSON]") or !std.mem.endsWith(u8, line, "[/JSON]")) continue;
+                    const encoded = line[6 .. line.len - 7];
+                    const buffer = try tc.arena.allocator().alloc(u8, try std.base64.standard.Decoder.calcSizeForSlice(encoded));
+                    try std.base64.standard.Decoder.decode(buffer, encoded);
+                    try decoded.writer.writeAll(buffer);
+                }
+            } else try decoded.writer.writeAll(tc.stdout.writer.buffered());
+            const rendered = decoded.writer.buffered();
+            if (case != .required_lookup) {
+                try std.testing.expectEqual(@as(usize, 1), std.mem.count(u8, rendered, "Could not install optional dependency"));
+                try std.testing.expect(std.mem.indexOf(u8, rendered, "optional-tool") != null);
+                try std.testing.expect(std.mem.indexOf(u8, rendered, "editor-bin") != null);
+            }
+            if (ui_mode) {
+                try std.testing.expect(std.mem.indexOf(u8, rendered, if (expected_code == 0) "TransactionDone" else "TransactionFailed") != null);
+                if (expected_code == 0) try std.testing.expect(std.mem.indexOf(u8, rendered, "TransactionFailed") == null);
+            } else {
+                try std.testing.expect(std.mem.indexOf(u8, rendered, if (expected_code == 0) "All upgrades complete." else "The upgrade did not complete successfully") != null);
+            }
+        }
     }
 }
 
