@@ -386,7 +386,7 @@ fn prepareStandardUpgradePreview(
     try context.stdout.writeAll("Preparing standard upgrade plan...\n");
     try context.stdout.flush();
 
-    const database_path = try xdg.shellyCache(context, &.{"db"});
+    const database_path = try xdg.previewDatabase(context);
     defer context.allocator.free(database_path);
     try std.Io.Dir.cwd().createDirPath(context.io, database_path);
 

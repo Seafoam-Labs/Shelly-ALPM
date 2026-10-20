@@ -363,6 +363,26 @@ its build lifecycle:
 shelly build --makesrcinfo --reviewed PKGBUILD > .SRCINFO
 ```
 
+Update source checksums and the adjacent `.SRCINFO` together:
+
+```bash
+shelly build PKGBUILD --updpkgsums --reviewed
+```
+
+The path defaults to `./PKGBUILD`. Shelly downloads missing sources, preserves
+existing checksum algorithms and `SKIP` entries, and updates generic and
+architecture-specific arrays. Recipes without checksum arrays get SHA-256.
+Pinned Git tags/commits use deterministic archive checksums; moving references
+use `SKIP`. Existing cached downloads are reused; remove a cached file first
+when intentionally refreshing a URL whose contents changed.
+
+Both files are staged before publication. Metadata uses the same native
+generator as `--makesrcinfo`, including `prepare()` and `pkgver()` when a version
+function exists; checksums are refreshed for the resulting sources. Generation
+failures leave the original files intact. Progress goes to stderr, and `--json`
+reports success. This mode runs as a regular user and cannot be combined with
+building, installation, or `--makesrcinfo`.
+
 The AUR builder extracts source archives and decompresses standalone gzip/Unix
 compress (`.gz`, `.z`, `.Z`), bzip2 (`.bz2`, `.bz`), xz (`.xz`), and zstd (`.zst`)
 files before running `prepare()`. Standalone files must have matching compression

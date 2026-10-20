@@ -165,11 +165,14 @@ pub fn build(b: *std.Build) void {
     });
     b.step("isolated-config-test", "Test host configuration isolation from guest build commands")
         .dependOn(&b.addRunArtifact(isolated_config_tests).step);
+    const checksum_update_tests = b.addTest(.{ .root_module = builder_test_module, .filters = &.{"updpkgsums"} });
+    b.step("updpkgsums-test", "Test checksum updates and paired SRCINFO publication").dependOn(&b.addRunArtifact(checksum_update_tests).step);
     const builder_tests = b.addTest(.{
         .name = "builder-command-test",
         .root_module = builder_test_module,
         .filters = &.{
             "makesrcinfo",
+            "updpkgsums",
             "compression presets",
             "review-only accepts Heroic array trimming",
             "review-only accepts filesystem here-strings",

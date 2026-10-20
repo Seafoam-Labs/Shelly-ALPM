@@ -153,9 +153,10 @@ archive and the configured extraction/diff/merge tools. Missing owners or base
 archives retain the two-way diff fallback; unreadable owner metadata is an error.
 GPG and a populated host trust database remain necessary for signature verification.
 
-`packaging/devario/PKGBUILD` and `packaging/devario/shelly-git/PKGBUILD` build the
-`development` branch with `-Dlibalpm=false -Dpath-profile=devario`, including the
-matching key tool and backend tests. Neither recipe applies downstream patches
+`packaging/devario/PKGBUILD` builds the release tag matching `pkgver` (currently
+`v3.1.8`). `packaging/devario/shelly-git/PKGBUILD` tracks the `development` branch.
+Both use `-Dlibalpm=false -Dpath-profile=devario`, including the matching key tool
+and backend tests. Neither recipe applies downstream patches
 or requires `devario-alpm-runtime`. Their checks include native pacfile ownership,
 helper path defaults, BUILDINFO database selection, and sandbox allow-list
 regressions.
@@ -167,7 +168,7 @@ shelly build ./packaging/devario/PKGBUILD
 The separate root `PKGBUILD-devario` is a historical pinned recipe. Its current
 `bcbba6aa` pin predates path-profile support even though the recipe passes that
 option. Refresh that pin to a published commit containing these fixes before
-using it for a release. The development-branch recipes above do not use that pin.
+using it for a release. The release and development recipes above do not use that pin.
 Use `--config` for runtime configuration overrides; the former downstream
 `SHELLY_ALPM_CONFIG` variable is not supported.
 

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Private-root transactions, runtime selection, and installed ELF boundary.
 set -euo pipefail
+unset LD_PRELOAD LD_LIBRARY_PATH LD_AUDIT
 cd "$(dirname "$0")/.."
 enabled=${1:-auto}
 optimize=${2:-Debug}

@@ -25,7 +25,9 @@ pub fn extract_local_source_files(self: PkgbuildParser, source: [][]const u8) ![
         const entry = split_source_entry(line);
         if (try is_remote_source(entry.location)) continue;
 
-        const name = if (entry.file_name.len == 0) entry.location else entry.file_name;
+        // Local acquisition reads the location; an alias is only the staged
+        // filename. Review the same input bytes that the builder will copy.
+        const name = entry.location;
         if (name.len == 0) continue;
 
         var already_have = false;

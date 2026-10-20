@@ -1068,7 +1068,7 @@ fn runAppImage(context: *runtime.RuntimeContext) !Result {
 }
 
 fn runAur(context: *runtime.RuntimeContext, options: ListOptions) !Result {
-    const database_path = try xdg.shellyCache(context, &.{"db"});
+    const database_path = try xdg.previewDatabase(context);
     defer context.allocator.free(database_path);
     try std.Io.Dir.cwd().createDirPath(context.io, database_path);
     const aur_base = try aur_url.resolve(context, options.aur_url);

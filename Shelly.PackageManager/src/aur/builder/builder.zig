@@ -22,6 +22,8 @@ const srcinfo = @import("../srcinfo.zig");
 pub const pkgbuild_validation = @import("pkgbuild_validation.zig");
 pub const PkgbuildValidation = pkgbuild_validation.PkgbuildValidation;
 pub const pkgbuild_review = @import("pkgbuild_review.zig");
+pub const checksum_update = @import("checksum_update.zig");
+pub const metadata_update = @import("metadata_update.zig");
 pub const pkgver_update = @import("pkgver_update.zig");
 pub const PreparedPkgbuildReview = pkgbuild_review.PreparedPkgbuildReview;
 pub const preparePkgbuildReview = pkgbuild_review.preparePkgbuildReview;
@@ -35,6 +37,8 @@ pub const setNoNewPrivs = security.setNoNewPrivs;
 test {
     _ = @import("source_spec.zig");
     _ = @import("checksums.zig");
+    _ = checksum_update;
+    _ = metadata_update;
     _ = @import("metadata.zig");
     _ = @import("pkgver_update.zig");
     _ = @import("security.zig");
@@ -450,6 +454,16 @@ pub const PackageBuilder = struct {
         operation: *op_context.Operation,
         writer: *std.Io.Writer,
     ) !void {
+        try self.writeMetadataWithOperation(operation, writer, false);
+    }
+
+    /// Caller supplies a staged PKGBUILD. Uses the same generator and pkgver
+    /// lifecycle as --makesrcinfo, refreshing sums before and after pkgver.
+    pub fn updateChecksumsWithOperation(self: *PackageBuilder, operation: *op_context.Operation, writer: *std.Io.Writer) !void {
+        try self.writeMetadataWithOperation(operation, writer, true);
+    }
+
+    fn writeMetadataWithOperation(self: *PackageBuilder, operation: *op_context.Operation, writer: *std.Io.Writer, update_checksums: bool) !void {
         errdefer |err| {
             // Step failures already publish their command and exit status.
             // Publish early metadata errors too, so session logs retain them.
@@ -525,14 +539,19 @@ pub const PackageBuilder = struct {
         }
         self.options.install_scripts = resolved_review.install_scripts;
         self.options.reviewed_files = resolved_review.reviewed_files;
+        if (update_checksums) {
+            try steps.validateBuildDirectories(self);
+            try self.refreshChecksums(operation, &resolved_review, &evaluated);
+        }
         if (self.hasSharedPhase("pkgver")) {
             try steps.validateBuildDirectories(self);
-            try self.prepareVersion(operation, &resolved_review, true);
+            try self.prepareVersion(operation, &resolved_review, true, update_checksums);
             // Source the updated file again for SRCINFO's scalar/array overrides.
             // Never reuse the snapshot taken before pkgver() ran.
             const refreshed = try self.resolveEvaluatedBuilds(operation);
             evaluated.deinit(self.allocator);
             evaluated = refreshed;
+            if (update_checksums) try self.refreshChecksums(operation, &resolved_review, &evaluated);
         }
         try resolved_review.verifyCurrent(self.allocator, self.io, pkgbuild_path, self.options.start_directory);
         const final_pkgbuild = try std.Io.Dir.cwd().readFileAlloc(
@@ -634,7 +653,7 @@ pub const PackageBuilder = struct {
             self.options.reviewed_files = review.reviewed_files;
         }
         try self.validatePackageFunctions();
-        try self.prepareVersion(operation, if (resolved_review) |*review| review else null, false);
+        try self.prepareVersion(operation, if (resolved_review) |*review| review else null, false, false);
         original_review_digest = self.options.reviewed_pkgbuild_digest;
         try self.runSharedPhase(operation, "build");
         if (self.options.run_check) try self.runSharedPhase(operation, "check");
@@ -717,6 +736,34 @@ pub const PackageBuilder = struct {
         return artifacts.toOwnedSlice(self.allocator);
     }
 
+    fn refreshChecksums(self: *PackageBuilder, operation: *op_context.Operation, review: *PreparedPkgbuildReview, evaluated: *steps.DynamicMetadataOverrides) !void {
+        const path = self.options.pkgbuild_path.?;
+        try review.verifyCurrent(self.allocator, self.io, path, self.options.start_directory);
+        const original = try std.Io.Dir.cwd().readFileAlloc(self.io, path, self.allocator, .limited(32 * 1024 * 1024));
+        defer self.allocator.free(original);
+        const updated = try checksum_update.generate(self, operation, evaluated, original);
+        defer self.allocator.free(updated);
+        if (!try pkgver_update.write(self.allocator, self.io, path, original, updated)) return error.PkgbuildNotWritable;
+        const expected = pkgbuild_review.digestPreparedReview(updated, review.reviewed_files);
+        self.options.reviewed_pkgbuild_digest = expected;
+        var digest: pkgbuild_review.Digest = undefined;
+        std.crypto.hash.sha2.Sha256.hash(updated, &digest, .{});
+        self.options.pkgbuild_sha256sum = digest;
+        var refreshed = try self.resolveEvaluatedBuilds(operation);
+        errdefer refreshed.deinit(self.allocator);
+        try checksum_update.verifyRendered(self.allocator, self.io, updated, evaluated, &refreshed);
+        var refreshed_review = try preparePkgbuildReview(self.allocator, self.io, self.options.start_directory, updated, self.package_builds);
+        errdefer refreshed_review.deinit();
+        if (!std.mem.eql(u8, &expected, &refreshed_review.digest)) return error.ReviewedPkgbuildChanged;
+        try refreshed_review.verifyCurrent(self.allocator, self.io, path, self.options.start_directory);
+        review.deinit();
+        review.* = refreshed_review;
+        evaluated.deinit(self.allocator);
+        evaluated.* = refreshed;
+        self.options.install_scripts = review.install_scripts;
+        self.options.reviewed_files = review.reviewed_files;
+    }
+
     fn hasSharedPhase(self: *const PackageBuilder, phase: []const u8) bool {
         const execution = self.package_builds[0].execution orelse return false;
         for (execution.steps) |step| {
@@ -740,15 +787,16 @@ pub const PackageBuilder = struct {
         operation: *op_context.Operation,
         review: ?*PreparedPkgbuildReview,
         require_writeback: bool,
+        refresh_source_review: bool,
     ) !void {
         if (!self.options.sources_prepared) try sources.prepareSources(self, operation);
         try self.runSharedPhase(operation, "prepare");
         try self.runSharedPhase(operation, "pkgver");
         if (self.pending_pkgver != null)
-            try self.finishPkgver(operation, review orelse return error.UnreviewedBuilderRequest, require_writeback);
+            try self.finishPkgver(operation, review orelse return error.UnreviewedBuilderRequest, require_writeback, refresh_source_review);
     }
 
-    fn finishPkgver(self: *PackageBuilder, operation: *op_context.Operation, review: *PreparedPkgbuildReview, require_writeback: bool) !void {
+    fn finishPkgver(self: *PackageBuilder, operation: *op_context.Operation, review: *PreparedPkgbuildReview, require_writeback: bool, refresh_source_review: bool) !void {
         const version = self.pending_pkgver.?;
         self.pending_pkgver = null;
         defer self.allocator.free(version);
@@ -780,7 +828,16 @@ pub const PackageBuilder = struct {
         self.failure_location = .{};
         var refreshed = try preparePkgbuildReview(self.allocator, self.io, self.options.start_directory, updated, self.package_builds);
         errdefer refreshed.deinit();
-        if (!std.mem.eql(u8, &updated_digest, &refreshed.digest)) return error.ReviewedPkgbuildChanged;
+        if (!std.mem.eql(u8, &updated_digest, &refreshed.digest)) {
+            if (!refresh_source_review or self.options.review_digest_is_automation) return error.ReviewedPkgbuildChanged;
+            // A new version can select new local source filenames. The
+            // metadata updater hashes them next; existing reviewed inputs
+            // must still match the snapshot taken before pkgver().
+            var controlled_review = review.*;
+            controlled_review.digest = updated_digest;
+            try controlled_review.verifyCurrent(self.allocator, self.io, path, self.options.start_directory);
+        }
+        self.options.reviewed_pkgbuild_digest = refreshed.digest;
         try refreshed.verifyCurrent(self.allocator, self.io, path, self.options.start_directory);
         try self.validatePackageFunctions();
         const message = try std.fmt.allocPrint(self.allocator, "Updated version: {s}-{s}", .{ self.package_builds[0].pkg_version orelse "", self.package_builds[0].pkg_rel orelse "" });
