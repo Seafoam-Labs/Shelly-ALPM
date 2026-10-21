@@ -534,6 +534,10 @@ fn cleanUserCommand(
         if (environ.getPosix(name)) |value|
             try appendEnvironmentAssignment(allocator, &argv, name, value);
     }
+    for ([_][]const u8{ "http_proxy", "HTTP_PROXY", "https_proxy", "HTTPS_PROXY", "all_proxy", "ALL_PROXY", "no_proxy", "NO_PROXY" }) |name| {
+        if (environ.getPosix(name)) |value|
+            try appendEnvironmentAssignment(allocator, &argv, name, value);
+    }
     try appendOwned(allocator, &argv, &.{command});
     try appendOwned(allocator, &argv, arguments);
     return .{ .argv = try argv.toOwnedSlice(allocator) };
@@ -895,11 +899,12 @@ test "clean invoking-user build command drops the elevated environment" {
         try std.testing.expectEqualStrings(wanted, actual);
 }
 
-test "clean invoking-user build command preserves explicit locale settings" {
+test "clean invoking-user build command preserves explicit locale and proxy settings" {
     const allocator = std.testing.allocator;
     var environment = std.process.Environ.Map.init(allocator);
     defer environment.deinit();
     try environment.put("LANG", "en_US.UTF-8");
+    try environment.put("UNRELATED_PROXY", "excluded");
     const overrides = .{
         .{ "LANGUAGE", "en:de with spaces; $(false)" },
         .{ "LC_ALL", "" },
@@ -915,6 +920,14 @@ test "clean invoking-user build command preserves explicit locale settings" {
         .{ "LC_TELEPHONE", "C" },
         .{ "LC_MEASUREMENT", "C" },
         .{ "LC_IDENTIFICATION", "C" },
+        .{ "http_proxy", "http://proxy.example:8080" },
+        .{ "HTTP_PROXY", "http://upper.example:8080" },
+        .{ "https_proxy", "http://user:p%40ss@secure.example:8080" },
+        .{ "HTTPS_PROXY", "http://upper-secure.example:8080" },
+        .{ "all_proxy", "socks5://fallback.example:1080" },
+        .{ "ALL_PROXY", "socks5://upper-fallback.example:1080" },
+        .{ "no_proxy", "localhost,127.0.0.1,.internal.example" },
+        .{ "NO_PROXY", "" },
     };
     inline for (overrides) |entry| try environment.put(entry[0], entry[1]);
     const environ: std.process.Environ = .{ .block = try environment.createPosixBlock(allocator, .{}) };
@@ -927,6 +940,7 @@ test "clean invoking-user build command preserves explicit locale settings" {
     defer result.deinit(allocator);
     try std.testing.expectEqual(@as(u8, 0), result.exit_code);
     try std.testing.expect(std.mem.indexOf(u8, result.stdout, "\nLANG=en_US.UTF-8\n") != null);
+    try std.testing.expect(std.mem.indexOf(u8, result.stdout, "UNRELATED_PROXY=") == null);
     inline for (overrides) |entry|
         try std.testing.expect(std.mem.indexOf(u8, result.stdout, "\n" ++ entry[0] ++ "=" ++ entry[1] ++ "\n") != null);
 }
