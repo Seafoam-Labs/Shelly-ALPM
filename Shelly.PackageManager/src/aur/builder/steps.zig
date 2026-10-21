@@ -1649,6 +1649,10 @@ test "dynamic function output validates complete bounded declarations" {
     var functions = try parseDynamicFunctionOutput(allocator, "package_demo\x00" ++ definition ++ "\x00");
     defer deinitDynamicScalarOverrides(allocator, &functions);
     try std.testing.expectEqualStrings(definition, functions.get("package_demo").?);
+    const negated_group = "package () \n{\n    if ! {\n        [[ -L /proc/self/ns/user ]] && unshare --user true\n    }; then\n        chmod 4755 \"${pkgdir}/opt/Grok Bot/chrome-sandbox\";\n    fi\n}";
+    var negated_functions = try parseDynamicFunctionOutput(allocator, "package\x00" ++ negated_group ++ "\x00");
+    defer deinitDynamicScalarOverrides(allocator, &negated_functions);
+    try std.testing.expectEqualStrings(negated_group, negated_functions.get("package").?);
     for ([_][]const u8{
         "demo\x00",
         "demo\x00demo () \n{ :; }",

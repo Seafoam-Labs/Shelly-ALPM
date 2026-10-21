@@ -220,6 +220,12 @@ Upcoming features and development targets:
 - **vala** (for building)
 - **libalpm** (provided by `pacman`; omitted from the CLI build with `-Dlibalpm=false`)
 
+CI installs the prebuilt Arch **zig 0.16.0-1** package with its LLVM 21 runtime
+dependencies. This package includes the `R_X86_64_PC64` linker fix required by
+newer glibc startup objects. The shared setup action installs it after system
+updates and verifies the package and compiler versions. Builds retain Zig's
+normal backend defaults; CI does not rebuild the compiler.
+
 ### Optional Prerequisites
 
 - **Flatpak support**: Install both `flatpak` and
