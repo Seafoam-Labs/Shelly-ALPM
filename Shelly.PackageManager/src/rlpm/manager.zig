@@ -278,40 +278,53 @@ pub const Manager = struct {
     }
     pub fn get_updates_available(self: *Manager) ![]types.OwnedPackageWithUpdate {
         try self.checkCancelled();
-        const db = self.owner.localDatabase().?;
-        try self.owner.ensureDatabase(self.io(), db);
+        const previous_callbacks = self.owner.configuration.callbacks;
+        self.owner.configuration.callbacks.question = previewUpgradeQuestion;
+        self.owner.configuration.callbacks.question_with_error = null;
+        defer self.owner.configuration.callbacks = previous_callbacks;
+        var plan = try self.owner.resolve(self.io(), .{
+            .system_upgrade = true,
+            .flags = .{ .no_dependencies = true, .no_conflicts = true },
+        });
+        defer plan.deinit();
+        if (plan.failure != null) return error.UpdateFetchFailed;
         var result: std.ArrayList(types.OwnedPackageWithUpdate) = .empty;
         errdefer {
             for (result.items) |*item| item.deinit(self.allocator);
             result.deinit(self.allocator);
         }
-        for (try self.owner.packageIds(db)) |id| {
-            const ref = try self.owner.packageReference(db, id);
-            const pkg = try self.owner.packageMetadata(self.io(), ref, .{});
-            if (try self.upgradeFor(pkg)) |new| {
-                if (!self.show_hidden_packages and try self.owner.shouldIgnore(self.io(), new)) continue;
-                var old = try self.snapshot(ref, .{});
-                errdefer old.deinit(self.allocator);
-                var next = try self.snapshot(new, .{});
-                errdefer next.deinit(self.allocator);
-                try result.append(self.allocator, .{ .old_package = old, .new_package = next });
-            }
+        for (plan.questions) |question| {
+            if (question != .replace or !question.replace.replace) continue;
+            const old = plan.findReference(question.replace.old) orelse return error.UpdateFetchFailed;
+            const next = plan.findReference(question.replace.new) orelse return error.UpdateFetchFailed;
+            // An affirmative answer can still lose to another repository's package.
+            const selected = for (plan.additions) |addition| {
+                if (addition.package == next) break true;
+            } else false;
+            if (!selected) continue;
+            try self.appendPreviewUpdate(&result, plan.package(old), plan.package(next));
+        }
+        for (plan.additions) |addition| {
+            if (addition.old) |old|
+                try self.appendPreviewUpdate(&result, plan.package(old), plan.package(addition.package));
         }
         return result.toOwnedSlice(self.allocator);
     }
-    fn upgradeFor(self: *Manager, pkg: *const rlpm.Package) !?rlpm.PackageRef {
-        for (self.owner.syncDatabases()) |db| {
-            if (!db.configurationView().usage.upgrade) continue;
-            const ref = self.owner.queryPackage(self.io(), db.identity.?, pkg.name) catch |err| {
-                if (err == error.FileNotFound) continue;
-                return err;
-            };
-            if (ref) |value| {
-                const candidate = try self.owner.packageMetadata(self.io(), value, .{});
-                return if (rlpm.Version.compareStrings(candidate.version.raw, pkg.version.raw) == .greaterThan) value else null;
-            }
+
+    fn previewUpgradeQuestion(_: ?*anyopaque, question: *rlpm.Callbacks.Question) void {
+        if (question.* == .replace) question.replace.replace = true;
+    }
+
+    fn appendPreviewUpdate(self: *Manager, result: *std.ArrayList(types.OwnedPackageWithUpdate), old: *const rlpm.Package, next: *const rlpm.Package) !void {
+        for (result.items) |update| {
+            if (std.mem.eql(u8, update.old_package.name_value, old.name) and
+                std.mem.eql(u8, update.new_package.name_value, next.name)) return;
         }
-        return null;
+        var previous = try owned(self.allocator, old);
+        errdefer previous.deinit(self.allocator);
+        var replacement = try owned(self.allocator, next);
+        errdefer replacement.deinit(self.allocator);
+        try result.append(self.allocator, .{ .old_package = previous, .new_package = replacement });
     }
     fn satisfies(self: *Manager, db: rlpm.DatabaseRef, dependency: rlpm.PackageRelation, literal: bool) !?rlpm.PackageRef {
         try self.checkCancelled();

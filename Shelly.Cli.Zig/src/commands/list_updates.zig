@@ -34,6 +34,7 @@ pub const Backend = enum {
 };
 
 pub const StandardUpdate = struct {
+    old_name: []const u8 = "",
     name: []const u8,
     current_version: []const u8,
     new_version: []const u8,
@@ -437,6 +438,7 @@ fn writeJsonItems(
 fn writeStandardJson(json: *std.json.Stringify, update: StandardUpdate) !void {
     try json.beginObject();
     try field(json, "Name", update.name);
+    try field(json, "OldName", if (update.old_name.len == 0) update.name else update.old_name);
     try field(json, "CurrentVersion", update.current_version);
     try field(json, "NewVersion", update.new_version);
     try field(json, "DownloadSize", update.download_size);
@@ -516,6 +518,11 @@ fn writePlain(context: *runtime.RuntimeContext, result: *const Result) !void {
     }
 }
 
+pub fn standardPackageLabel(allocator: std.mem.Allocator, old_name: []const u8, name: []const u8) ![]const u8 {
+    if (old_name.len == 0 or std.mem.eql(u8, old_name, name)) return name;
+    return std.fmt.allocPrint(allocator, "{s} -> {s}", .{ old_name, name });
+}
+
 fn writeStandardPlain(context: *runtime.RuntimeContext, updates: []const StandardUpdate) !void {
     if (updates.len == 0) return writeColoredLine(context, .success, "All packages are up to date!");
 
@@ -527,7 +534,7 @@ fn writeStandardPlain(context: *runtime.RuntimeContext, updates: []const Standar
     const size_display = try loadSizeDisplay(context);
     for (sorted, rows) |update, *row| {
         const cells = try allocator.alloc([]const u8, 5);
-        cells[0] = update.name;
+        cells[0] = try standardPackageLabel(allocator, update.old_name, update.name);
         cells[1] = update.current_version;
         cells[2] = update.new_version;
         cells[3] = try formatSize(allocator, size_display, update.download_size);
@@ -706,15 +713,16 @@ fn runStandard(context: *runtime.RuntimeContext) !Result {
     }
     const allocator = arena.allocator();
     const updates = try allocator.alloc(StandardUpdate, native_updates.len);
-    for (native_updates, updates) |native, *update| {
+    for (native_updates, updates, 0..) |native, *update, index| {
         const old_package = native.old_package;
         const new_package = native.new_package;
         update.* = .{
+            .old_name = try allocator.dupe(u8, old_package.name_value),
             .name = try allocator.dupe(u8, new_package.name_value),
             .current_version = try allocator.dupe(u8, old_package.version_value),
             .new_version = try allocator.dupe(u8, new_package.version_value),
-            .download_size = new_package.download_size_value,
-            .size_difference = new_package.install_size_value - old_package.install_size_value,
+            .download_size = PackageManager.Manager.OwnedPackageWithUpdate.downloadSize(native_updates, index),
+            .size_difference = PackageManager.Manager.OwnedPackageWithUpdate.sizeDifference(native_updates, index),
             .description = try allocator.dupe(u8, new_package.description_value orelse ""),
             .url = try allocator.dupe(u8, new_package.url_value orelse ""),
             .repository = try allocator.dupe(u8, new_package.repository_value orelse ""),
@@ -1765,4 +1773,38 @@ test "Flatpak available version resolves from AppStream releases" {
     try std.testing.expect(
         std.mem.indexOf(u8, output_buffer.writer.buffered(), "\"Version\":\"1.2.0\",\"NewVersion\":\"1.4.0\"") != null,
     );
+}
+
+test "replacement listing preserves both names in plain and JSON output" {
+    var tc: test_support.TestContext = .{};
+    tc.init();
+    defer tc.deinit();
+    const update: StandardUpdate = .{
+        .old_name = "old",
+        .name = "new",
+        .current_version = "1",
+        .new_version = "2",
+        .download_size = 10,
+        .size_difference = -20,
+        .description = "",
+        .url = "",
+        .repository = "test",
+        .installed_size = 0,
+        .depends = &.{},
+        .optional_depends = &.{},
+        .licenses = &.{},
+        .provides = &.{},
+        .conflicts = &.{},
+        .groups = &.{},
+    };
+    try writeStandardPlain(&tc.context, &.{update});
+    try std.testing.expect(std.mem.indexOf(u8, tc.stdout.writer.buffered(), "old -> new") != null);
+    var writer: std.Io.Writer.Allocating = .init(std.testing.allocator);
+    defer writer.deinit();
+    var json: std.json.Stringify = .{ .writer = &writer.writer, .options = .{} };
+    try writeStandardJson(&json, update);
+    const parsed = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, writer.writer.buffered(), .{});
+    defer parsed.deinit();
+    try std.testing.expectEqualStrings("new", parsed.value.object.get("Name").?.string);
+    try std.testing.expectEqualStrings("old", parsed.value.object.get("OldName").?.string);
 }

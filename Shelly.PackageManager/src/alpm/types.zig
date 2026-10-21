@@ -296,6 +296,25 @@ pub const OwnedPackageWithUpdate = struct {
     old_package: OwnedPackage,
     new_package: OwnedPackage,
 
+    pub fn downloadSize(updates: []const OwnedPackageWithUpdate, index: usize) i64 {
+        const name = updates[index].new_package.name_value;
+        for (updates[0..index]) |previous| {
+            if (std.mem.eql(u8, name, previous.new_package.name_value)) return 0;
+        }
+        return updates[index].new_package.download_size_value;
+    }
+
+    pub fn sizeDifference(updates: []const OwnedPackageWithUpdate, index: usize) i64 {
+        const update = updates[index];
+        var added = update.new_package.install_size_value;
+        var removed = update.old_package.install_size_value;
+        for (updates[0..index]) |previous| {
+            if (std.mem.eql(u8, update.new_package.name_value, previous.new_package.name_value)) added = 0;
+            if (std.mem.eql(u8, update.old_package.name_value, previous.old_package.name_value)) removed = 0;
+        }
+        return added - removed;
+    }
+
     pub fn init(
         allocator: std.mem.Allocator,
         old_package: anytype,

@@ -2995,8 +2995,158 @@ test "get_updates_available returns updates when installed packages have newer v
     for (updates) |update| {
         const old_name = update.old_package.name() orelse return error.TestFailed;
         const new_name = update.new_package.name() orelse return error.TestFailed;
-        // The package names must match — we are comparing the same package.
-        try testing.expectEqualStrings(old_name, new_name);
+        try testing.expect(old_name.len != 0);
+        try testing.expect(new_name.len != 0);
+    }
+}
+
+test "get_updates_available includes native replacements and respects ignore and usage rules" {
+    const allocator = testing.allocator;
+    var threaded: std.Io.Threaded = .init(allocator, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    inline for (.{ Manager, @import("../rlpm/manager.zig").Manager }) |BackendManager| {
+        var workspace = try SyncTestWorkspace.create(allocator, io);
+        defer workspace.cleanup(allocator);
+        try workspace.addLocalPackage(allocator, "old", "1.0-1");
+        try workspace.addLocalPackage(allocator, "merged", "1.0-1");
+        try workspace.addLocalPackage(allocator, "ordinary", "1.0-1");
+        try workspace.addLocalPackage(allocator, "constrained", "3.0-1");
+        for ([_][]const u8{ "old", "merged", "ordinary" }) |name| {
+            const path = try std.fmt.allocPrint(allocator, "{s}/local/{s}-1.0-1/desc", .{ workspace.db_path, name });
+            defer allocator.free(path);
+            const original = try std.Io.Dir.cwd().readFileAlloc(io, path, allocator, .limited(4096));
+            defer allocator.free(original);
+            var file = try std.Io.Dir.cwd().createFile(io, path, .{});
+            defer file.close(io);
+            try file.writeStreamingAll(io, original);
+            try file.writeStreamingAll(io, "%SIZE%\n7\n\n");
+        }
+        const sync_dir = try std.fmt.allocPrint(allocator, "{s}/sync", .{workspace.db_path});
+        defer allocator.free(sync_dir);
+        try std.Io.Dir.cwd().createDirPath(io, sync_dir);
+        const database_path = try std.fmt.allocPrint(allocator, "{s}/seafoam-labs.db", .{sync_dir});
+        defer allocator.free(database_path);
+        {
+            var file = try std.Io.Dir.cwd().createFile(io, database_path, .{});
+            defer file.close(io);
+            var buffer: [4096]u8 = undefined;
+            var writer = file.writer(io, &buffer);
+            var archive: std.tar.Writer = .{ .underlying_writer = &writer.interface };
+            const packages = [_]struct { name: []const u8, replaces: []const u8 }{
+                .{ .name = "new", .replaces = "old<2\nmerged" },
+                .{ .name = "split", .replaces = "old" },
+                .{ .name = "ordinary", .replaces = "" },
+                .{ .name = "not-selected", .replaces = "constrained<2" },
+            };
+            for (packages) |package| {
+                const path = try std.fmt.allocPrint(allocator, "{s}-2.0-1/desc", .{package.name});
+                defer allocator.free(path);
+                const desc = try std.fmt.allocPrint(allocator, "%FILENAME%\n{s}-2.0-1-any.pkg.tar\n\n%NAME%\n{s}\n\n%VERSION%\n2.0-1\n\n%ARCH%\nany\n\n%CSIZE%\n10\n\n%ISIZE%\n20\n\n%REPLACES%\n{s}\n\n%GROUPS%\npreview-test\n\n", .{ package.name, package.name, package.replaces });
+                defer allocator.free(desc);
+                try archive.writeFileBytes(path, desc, .{ .mode = 0o644 });
+            }
+            try archive.finishPedantically();
+            try writer.interface.flush();
+        }
+        const cases = [_]struct { options: []const u8, usage: []const u8, count: usize }{
+            .{ .options = "", .usage = "All", .count = 4 },
+            .{ .options = "IgnorePkg = old merged\n", .usage = "All", .count = 1 },
+            .{ .options = "IgnorePkg = new split\n", .usage = "All", .count = 1 },
+            .{ .options = "IgnorePkg = old* merged\n", .usage = "All", .count = 1 },
+            .{ .options = "IgnoreGroup = preview-test\n", .usage = "All", .count = 0 },
+            .{ .options = "", .usage = "Sync Search Install", .count = 0 },
+        };
+        for (cases) |case| {
+            const config = try std.fmt.allocPrint(allocator, "[options]\nArchitecture = auto\nSigLevel = Never\nDBPath = {s}\n{s}\n[seafoam-labs]\nServer = https://example.invalid\nUsage = {s}\n", .{ workspace.db_path, case.options, case.usage });
+            defer allocator.free(config);
+            {
+                var file = try std.Io.Dir.cwd().createFile(io, workspace.config_path, .{});
+                defer file.close(io);
+                try file.writeStreamingAll(io, config);
+            }
+            const mgr = try BackendManager.init(allocator, testing.environ, .{ .config_path = workspace.config_path });
+            defer mgr.deinit();
+            for (0..2) |_| {
+                const updates = try mgr.get_updates_available();
+                defer libalpm.OwnedPackageWithUpdate.deinitSlice(allocator, updates);
+                try testing.expectEqual(case.count, updates.len);
+                var download: i64 = 0;
+                var difference: i64 = 0;
+                for (updates, 0..) |update, index| {
+                    try testing.expect(!std.mem.eql(u8, update.new_package.name_value, "not-selected"));
+                    download += libalpm.OwnedPackageWithUpdate.downloadSize(updates, index);
+                    difference += libalpm.OwnedPackageWithUpdate.sizeDifference(updates, index);
+                }
+                if (case.count == 4) {
+                    try testing.expectEqual(@as(i64, 30), download);
+                    try testing.expectEqual(@as(i64, 39), difference);
+                    var replacements: usize = 0;
+                    for (updates) |update| {
+                        if (!std.mem.eql(u8, update.old_package.name_value, update.new_package.name_value)) replacements += 1;
+                    }
+                    try testing.expectEqual(@as(usize, 3), replacements);
+                }
+            }
+        }
+    }
+}
+
+test "get_updates_available excludes replacements rejected by repository selection" {
+    const allocator = testing.allocator;
+    var threaded: std.Io.Threaded = .init(allocator, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    inline for (.{ Manager, @import("../rlpm/manager.zig").Manager }) |BackendManager| {
+        var workspace = try SyncTestWorkspace.create(allocator, io);
+        defer workspace.cleanup(allocator);
+        try workspace.addLocalPackage(allocator, "a-old", "1.0-1");
+        try workspace.addLocalPackage(allocator, "b-old", "1.0-1");
+        const sync_dir = try std.fmt.allocPrint(allocator, "{s}/sync", .{workspace.db_path});
+        defer allocator.free(sync_dir);
+        try std.Io.Dir.cwd().createDirPath(io, sync_dir);
+        for ([_]struct { repository: []const u8, replaces: []const u8 }{
+            .{ .repository = "first", .replaces = "a-old" },
+            .{ .repository = "second", .replaces = "b-old" },
+        }) |repo| {
+            const path = try std.fmt.allocPrint(allocator, "{s}/{s}.db", .{ sync_dir, repo.repository });
+            defer allocator.free(path);
+            var file = try std.Io.Dir.cwd().createFile(io, path, .{});
+            defer file.close(io);
+            var buffer: [4096]u8 = undefined;
+            var writer = file.writer(io, &buffer);
+            var archive: std.tar.Writer = .{ .underlying_writer = &writer.interface };
+            const desc = try std.fmt.allocPrint(
+                allocator,
+                "%FILENAME%\nnew-2.0-1-any.pkg.tar\n\n%NAME%\nnew\n\n%VERSION%\n2.0-1\n\n%ARCH%\nany\n\n%REPLACES%\n{s}\n\n",
+                .{repo.replaces},
+            );
+            defer allocator.free(desc);
+            try archive.writeFileBytes("new-2.0-1/desc", desc, .{ .mode = 0o644 });
+            try archive.finishPedantically();
+            try writer.interface.flush();
+        }
+        const config = try std.fmt.allocPrint(
+            allocator,
+            "[options]\nArchitecture = auto\nSigLevel = Never\nDBPath = {s}\n\n[first]\nServer = https://example.invalid\n\n[second]\nServer = https://example.invalid\n",
+            .{workspace.db_path},
+        );
+        defer allocator.free(config);
+        {
+            var file = try std.Io.Dir.cwd().createFile(io, workspace.config_path, .{});
+            defer file.close(io);
+            try file.writeStreamingAll(io, config);
+        }
+        const mgr = try BackendManager.init(allocator, testing.environ, .{ .config_path = workspace.config_path });
+        defer mgr.deinit();
+        for (0..2) |_| {
+            const updates = try mgr.get_updates_available();
+            defer libalpm.OwnedPackageWithUpdate.deinitSlice(allocator, updates);
+            try testing.expectEqual(@as(usize, 1), updates.len);
+            try testing.expectEqualStrings("a-old", updates[0].old_package.name_value);
+            try testing.expectEqualStrings("new", updates[0].new_package.name_value);
+            try testing.expectEqualStrings("first", updates[0].new_package.repository_value.?);
+        }
     }
 }
 
