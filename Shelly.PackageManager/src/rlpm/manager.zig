@@ -29,6 +29,7 @@ pub const Manager = struct {
     hooks_disabled: bool = false,
     package_setup_failed: bool = false,
     detected_cachyos: bool = false,
+    databases_synced: bool = false,
     temporary: bool = false,
     names: std.heap.ArenaAllocator,
     download_address_family_policy: downloader.AddressFamilyPolicy,
@@ -152,6 +153,7 @@ pub const Manager = struct {
             failed = true;
         };
         if (failed) return error.SyncDbFailed;
+        self.databases_synced = true;
         status = .success;
     }
     fn reportSyncFailure(self: *Manager, operation: *op.Operation, subject: []const u8, err: anyerror) !void {
@@ -667,7 +669,7 @@ pub const Manager = struct {
             defer self.dispatcher.setOperation(null);
             if (!update_notice.UpdateNotice.init(self.allocator, self.io()).check(self.environ, &self.dispatcher)) return contract.RestartReport.empty(self.allocator);
         }
-        try self.sync(true);
+        if (!self.databases_synced) try self.sync(true);
         try self.execute(.upgrade, &.{}, flags, .already_approved);
         if (flags.dbonly or flags.downloadonly) return contract.RestartReport.empty(self.allocator);
         return restart_checks.check(self, .{});
