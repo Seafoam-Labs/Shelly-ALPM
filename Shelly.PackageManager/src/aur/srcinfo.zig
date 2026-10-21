@@ -141,10 +141,10 @@ pub fn writePkgbuild(
             );
             if (std.mem.eql(u8, name, "arch")) {
                 package_architectures = values;
-                try writeAttributes(writer, name, values);
+                try writePackageAttributes(writer, name, values);
             } else {
                 defer variables.freeStringSlice(allocator, values);
-                try writeAttributes(writer, name, values);
+                try writePackageAttributes(writer, name, values);
             }
         }
         const effective_architectures = package_architectures orelse global_architectures;
@@ -212,7 +212,10 @@ fn writeArchitectureArrays(
             else
                 try fields.resolve_array_field(parser, content, vars, name);
             defer variables.freeStringSlice(parser.allocator, values);
-            try writeAttributes(writer, name, values);
+            if (package_scoped)
+                try writePackageAttributes(writer, name, values)
+            else
+                try writeAttributes(writer, name, values);
         }
     }
 }
@@ -226,6 +229,16 @@ fn hasScalarAssignment(body: ?[]const u8, name: []const u8) bool {
 
 fn hasArrayAssignment(body: ?[]const u8, name: []const u8) bool {
     return arrays.find_next_scoped_array_start(body orelse return false, name, 0) != null;
+}
+
+// An absent package field inherits its global value. Keep an explicit empty
+// assignment so split packages can clear inherited arrays such as depends.
+fn writePackageAttributes(writer: *std.Io.Writer, name: []const u8, values: []const []const u8) !void {
+    if (values.len == 0) {
+        try writer.print("\t{s} = \n", .{name});
+        return;
+    }
+    try writeAttributes(writer, name, values);
 }
 
 fn writeAttributes(writer: *std.Io.Writer, name: []const u8, values: []const []const u8) !void {
@@ -607,6 +620,59 @@ test ".SRCINFO writer preserves global package and architecture scopes" {
             "\tpkgdesc = Documentation package\n" ++
             "\tarch = any\n" ++
             "\tdepends = demo=1.2.3-2\n",
+        output.writer.buffered(),
+    );
+}
+
+test ".SRCINFO writer preserves explicit empty split package overrides" {
+    const content =
+        \\pkgbase=gtksourceview5
+        \\pkgname=(gtksourceview5 gtksourceview5-docs)
+        \\pkgver=5.20.0
+        \\pkgrel=2
+        \\arch=(x86_64)
+        \\depends=(glibc gtk4)
+        \\depends_x86_64=(arch-runtime)
+        \\provides=(editor-api)
+        \\provides_x86_64=(arch-api)
+        \\conflicts=(old-editor)
+        \\conflicts_x86_64=(old-arch-editor)
+        \\package_gtksourceview5() {
+        \\  provides=('libgtksourceview-5.so=0-64')
+        \\}
+        \\package_gtksourceview5-docs() {
+        \\  depends=()
+        \\  depends_x86_64=()
+        \\  provides=()
+        \\  provides_x86_64=()
+        \\  conflicts=()
+        \\  conflicts_x86_64=()
+        \\}
+    ;
+    var output: std.Io.Writer.Allocating = .init(std.testing.allocator);
+    defer output.deinit();
+    try writePkgbuild(std.testing.allocator, std.testing.io, &output.writer, content, .{});
+    try std.testing.expectEqualStrings(
+        "pkgbase = gtksourceview5\n" ++
+            "\tpkgver = 5.20.0\n" ++
+            "\tpkgrel = 2\n" ++
+            "\tarch = x86_64\n" ++
+            "\tdepends = glibc\n" ++
+            "\tdepends = gtk4\n" ++
+            "\tprovides = editor-api\n" ++
+            "\tconflicts = old-editor\n" ++
+            "\tprovides_x86_64 = arch-api\n" ++
+            "\tconflicts_x86_64 = old-arch-editor\n" ++
+            "\tdepends_x86_64 = arch-runtime\n" ++
+            "\npkgname = gtksourceview5\n" ++
+            "\tprovides = libgtksourceview-5.so=0-64\n" ++
+            "\npkgname = gtksourceview5-docs\n" ++
+            "\tdepends = \n" ++
+            "\tprovides = \n" ++
+            "\tconflicts = \n" ++
+            "\tprovides_x86_64 = \n" ++
+            "\tconflicts_x86_64 = \n" ++
+            "\tdepends_x86_64 = \n",
         output.writer.buffered(),
     );
 }

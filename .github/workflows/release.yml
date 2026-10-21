@@ -17,10 +17,11 @@ jobs:
       - name: Install dependencies
         run: |
           pacman -Syu --noconfirm
-          pacman -S --needed --noconfirm zig flatpak base-devel gtk4 clang glibc git gettext libarchive curl sqlite vala meson ninja json-glib ripgrep
+          pacman -S --needed --noconfirm flatpak base-devel gtk4 clang glibc git gettext libarchive curl sqlite vala meson ninja json-glib ripgrep
 
       # Checkout only after git is installed in the container.
       - uses: actions/checkout@v6
+      - uses: ./.github/actions/setup-zig
 
       - name: Build and test Flatpak backend
         run: |

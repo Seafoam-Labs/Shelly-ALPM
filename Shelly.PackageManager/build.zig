@@ -439,10 +439,12 @@ pub fn build(b: *std.Build) void {
     const sandbox_policy_test_step = b.step("sandbox-policy-test", "Test sandbox allow-list boundaries under /tmp");
     sandbox_policy_test_step.dependOn(&b.addRunArtifact(sandbox_policy_tests).step);
 
+    const checksum_update_tests = b.addTest(.{ .root_module = test_mod, .filters = &.{"updpkgsums"} });
+    b.step("updpkgsums-test", "Test checksum editing and metadata publication").dependOn(&b.addRunArtifact(checksum_update_tests).step);
     const builder_tests = b.addTest(.{
         .name = "builder-test",
         .root_module = test_mod,
-        .filters = &.{ "PackageBuilder", "dynamic function output" },
+        .filters = &.{ "PackageBuilder", "dynamic function output", "updpkgsums" },
     });
     const run_builder_tests = b.addRunArtifact(builder_tests);
     const builder_test_step = b.step("builder-test", "Run native package builder regressions");

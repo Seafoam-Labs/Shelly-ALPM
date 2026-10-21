@@ -2,7 +2,7 @@
 # Maintainer: Caroline Snyder <hirpeng@gmail.com>
 pkgbase=shelly-bin
 pkgname=('shelly-bin' 'shelly-flatpak-backend-bin')
-pkgver=3.1.7
+pkgver=3.1.8
 pkgrel=1
 arch=('x86_64')
 url="https://github.com/Seafoam-Labs/Shelly-ALPM"
@@ -25,8 +25,8 @@ source=(
     'shelly-flatpak-integrate'
 )
 
-sha256sums=('3e3c0bcd9b03e5f386e30030e0db5c9bce68ba62d4aa2ec8f39943eeb6b01ff4'
-            'dff8bc06582009dab700451c244d9a7d3f58ffe084f8fafee1604854a60afa97'
+sha256sums=('366e2ea9dd2548005b6d0bb80151551531673869ba2613625ca8572336a5c914'
+            '38b32c59b4a9549df276de1c7938b14c68139ff7dfbd2186da34d1115af13a3d'
             '9f551f28d79748c7e255a35cb577081b3263e65d290b4809e10066ed17ce30e5'
             '4b7cb0e42eb322de9eb616d22ca05823f91d178db5b8b67497d497ed495aca9c'
             'cf0dc0a6d1865b9010054b36941e7bf4d445c3e7549219889f07ab08283c5c0f'
@@ -68,6 +68,10 @@ package_shelly-bin() {
 
   local shelly_dynamic
   shelly_dynamic=$(LC_ALL=C readelf -d "$srcdir/shelly") || return 1
+  if [[ $shelly_dynamic != *'Shared library: [libsqlite3.so.0]'* ]]; then
+    printf 'Shelly CLI must directly depend on libsqlite3.so.0 (#2059)\n' >&2
+    return 1
+  fi
   if [[ $_shelly_libalpm == true && $shelly_dynamic != *libalpm.so* ]] ||
      [[ $_shelly_libalpm == false && $shelly_dynamic == *libalpm.so* ]]; then
     printf 'Shelly binary does not match SHELLY_LIBALPM package metadata\n' >&2

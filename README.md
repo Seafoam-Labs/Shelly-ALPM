@@ -220,6 +220,12 @@ Upcoming features and development targets:
 - **vala** (for building)
 - **libalpm** (provided by `pacman`; omitted from the CLI build with `-Dlibalpm=false`)
 
+CI installs the prebuilt Arch **zig 0.16.0-1** package with its LLVM 21 runtime
+dependencies. This package includes the `R_X86_64_PC64` linker fix required by
+newer glibc startup objects. The shared setup action installs it after system
+updates and verifies the package and compiler versions. Builds retain Zig's
+normal backend defaults; CI does not rebuild the compiler.
+
 ### Optional Prerequisites
 
 - **Flatpak support**: Install both `flatpak` and
@@ -362,6 +368,26 @@ its build lifecycle:
 ```bash
 shelly build --makesrcinfo --reviewed PKGBUILD > .SRCINFO
 ```
+
+Update source checksums and the adjacent `.SRCINFO` together:
+
+```bash
+shelly build PKGBUILD --updpkgsums --reviewed
+```
+
+The path defaults to `./PKGBUILD`. Shelly downloads missing sources, preserves
+existing checksum algorithms and `SKIP` entries, and updates generic and
+architecture-specific arrays. Recipes without checksum arrays get SHA-256.
+Pinned Git tags/commits use deterministic archive checksums; moving references
+use `SKIP`. Existing cached downloads are reused; remove a cached file first
+when intentionally refreshing a URL whose contents changed.
+
+Both files are staged before publication. Metadata uses the same native
+generator as `--makesrcinfo`, including `prepare()` and `pkgver()` when a version
+function exists; checksums are refreshed for the resulting sources. Generation
+failures leave the original files intact. Progress goes to stderr, and `--json`
+reports success. This mode runs as a regular user and cannot be combined with
+building, installation, or `--makesrcinfo`.
 
 The AUR builder extracts source archives and decompresses standalone gzip/Unix
 compress (`.gz`, `.z`, `.Z`), bzip2 (`.bz2`, `.bz`), xz (`.xz`), and zstd (`.zst`)

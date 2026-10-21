@@ -487,6 +487,7 @@ test {
     _ = @import("repo/pkginfo.zig");
     _ = @import("repo/database.zig");
     _ = @import("aur/manager.zig");
+    _ = builder;
     _ = @import("aur/builder/builder_test.zig");
     _ = @import("local/manager.zig");
     _ = @import("local/file_inspector.zig");

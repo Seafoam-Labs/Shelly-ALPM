@@ -10,7 +10,7 @@ pkgname=(
   'shelly-notify-git'
   'shelly-notify-none-git'
 )
-pkgver=3.1.7
+pkgver=3.1.8
 pkgrel=1
 arch=('x86_64' 'aarch64')
 url='https://github.com/Seafoam-Labs/Shelly-ALPM'
@@ -233,6 +233,10 @@ package_shelly-cli-git() {
   # The package metadata must match the compiled native backend variant.
   local dynamic
   dynamic=$(LC_ALL=C readelf -d "${pkgdir}/usr/bin/shelly") || return 1
+  if [[ $dynamic != *'Shared library: [libsqlite3.so.0]'* ]]; then
+    printf 'Shelly CLI must directly depend on libsqlite3.so.0 (#2059)\n' >&2
+    return 1
+  fi
   if [[ ${_shelly_libalpm} == true && ${dynamic} != *libalpm.so* ]] ||
      [[ ${_shelly_libalpm} == false && ${dynamic} == *libalpm.so* ]]; then
     printf 'shelly does not match SHELLY_LIBALPM=%s\n' "${_shelly_libalpm}" >&2

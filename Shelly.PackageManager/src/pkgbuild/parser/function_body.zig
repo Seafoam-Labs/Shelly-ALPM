@@ -634,7 +634,7 @@ fn is_assignment_word(word: []const u8) bool {
 }
 
 fn is_command_prefix_keyword(token: []const u8) bool {
-    inline for (.{ "then", "else", "elif", "do", "in" }) |keyword|
+    inline for (.{ "!", "if", "then", "else", "elif", "while", "until", "do", "time", "in" }) |keyword|
         if (std.mem.eql(u8, token, keyword)) return true;
     return false;
 }
@@ -868,6 +868,26 @@ test "extract_function_body: brace words outside command position are not groups
     try std.testing.expectEqualStrings(
         \\printf '%s\n' NOTES{ END }
     , result);
+    try std.testing.expect(std.mem.indexOf(u8, result, "build()") == null);
+}
+
+test "extract_function_body: negated and conditional brace groups stay balanced" {
+    const content =
+        \\package() {
+        \\  if ! { [[ -L /proc/self/ns/user ]] && unshare --user true; }; then
+        \\    chmod 4755 "${pkgdir}/opt/Grok Bot/chrome-sandbox"
+        \\  fi
+        \\  while ! {
+        \\    true
+        \\  }; do
+        \\    break
+        \\  done
+        \\}
+        \\build() { echo build; }
+    ;
+    const result = (try extract_function_body(content, "package")).?;
+    try std.testing.expect(std.mem.indexOf(u8, result, "chrome-sandbox") != null);
+    try std.testing.expect(std.mem.endsWith(u8, result, "done"));
     try std.testing.expect(std.mem.indexOf(u8, result, "build()") == null);
 }
 

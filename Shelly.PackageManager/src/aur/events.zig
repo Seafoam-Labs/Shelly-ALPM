@@ -154,7 +154,7 @@ pub const Dispatcher = struct {
                 .aur_download_done, .aur_build_done, .aur_install_done, .aur_cleanup_done, .aur_package_completed => .success,
                 else => .information,
             };
-            operation.status(level, args.message, @tagName(args.event_type), @intFromEnum(args.event_type));
+            operation.packageStatus(level, args.message, @tagName(args.event_type), @intFromEnum(args.event_type), args.package_name);
             if (args.current != null or args.total != null) operation.progress(.{
                 .stage = @tagName(args.event_type),
                 .completed = if (args.current) |value| @intCast(value) else null,
