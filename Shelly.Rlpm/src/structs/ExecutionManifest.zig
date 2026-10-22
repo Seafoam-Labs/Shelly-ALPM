@@ -53,6 +53,7 @@ pub const Local = struct {
 };
 
 pub const Adoption = struct {
+    origin: @import("Migration.zig").Origin = .api,
     package: Plan.Id,
     source: ?Plan.Id,
     path: []const u8,

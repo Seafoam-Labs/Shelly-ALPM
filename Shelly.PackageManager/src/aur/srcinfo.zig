@@ -21,17 +21,17 @@ const global_single_fields = [_][]const u8{
     "pkgdesc", "pkgver", "pkgrel", "epoch", "url", "install", "changelog",
 };
 const global_array_fields = [_][]const u8{
-    "arch",       "groups",     "license",  "checkdepends", "makedepends",
-    "depends",    "optdepends", "provides", "conflicts",    "replaces",
-    "noextract",  "options",    "backup",   "source",       "validpgpkeys",
-    "cksums",     "md5sums",    "sha1sums", "sha224sums",   "sha256sums",
-    "sha384sums", "sha512sums", "b2sums",
+    "arch",       "groups",     "license",  "checkdepends",   "makedepends",
+    "depends",    "optdepends", "provides", "conflicts",      "replaces",
+    "noextract",  "options",    "backup",   "source",         "validpgpkeys",
+    "cksums",     "md5sums",    "sha1sums", "sha224sums",     "sha256sums",
+    "sha384sums", "sha512sums", "b2sums",   "shelly_migrate",
 };
 const package_single_fields = [_][]const u8{ "pkgdesc", "url", "install", "changelog" };
 const package_array_fields = [_][]const u8{
-    "arch",       "groups",   "license",   "checkdepends", "depends",
-    "optdepends", "provides", "conflicts", "replaces",     "options",
-    "backup",
+    "arch",       "groups",         "license",   "checkdepends", "depends",
+    "optdepends", "provides",       "conflicts", "replaces",     "options",
+    "backup",     "shelly_migrate",
 };
 const architecture_array_fields = [_][]const u8{
     "source",     "provides",    "conflicts",    "depends",    "replaces",
@@ -144,6 +144,8 @@ pub fn writePkgbuild(
                 try writePackageAttributes(writer, name, values);
             } else {
                 defer variables.freeStringSlice(allocator, values);
+                if (std.mem.eql(u8, name, "shelly_migrate"))
+                    try @import("Shelly_Rlpm").Migration.validateDeclarations(allocator, values);
                 try writePackageAttributes(writer, name, values);
             }
         }
@@ -187,6 +189,8 @@ fn writeGlobalArray(
 ) !void {
     const values = try fields.resolve_array_field(parser, content, vars, name);
     defer variables.freeStringSlice(parser.allocator, values);
+    if (std.mem.eql(u8, name, "shelly_migrate"))
+        try @import("Shelly_Rlpm").Migration.validateDeclarations(parser.allocator, values);
     try writeAttributes(writer, name, values);
 }
 
@@ -249,6 +253,10 @@ fn writeAttribute(writer: *std.Io.Writer, name: []const u8, raw_value: []const u
     const value = std.mem.trim(u8, raw_value, " \t\r\n\x0b\x0c");
     if (value.len == 0) return;
     try writer.print("\t{s} = ", .{name});
+    if (std.mem.eql(u8, name, "shelly_migrate")) {
+        try writer.print("{s}\n", .{value});
+        return;
+    }
     var whitespace = false;
     for (value) |byte| {
         if (std.ascii.isWhitespace(byte)) {
@@ -675,4 +683,26 @@ test ".SRCINFO writer preserves explicit empty split package overrides" {
             "\tdepends_x86_64 = \n",
         output.writer.buffered(),
     );
+}
+
+test "migration SRCINFO preserves JSON paths and split overrides" {
+    const content =
+        \\pkgname=(demo extra)
+        \\pkgver=1
+        \\pkgrel=1
+        \\arch=(any)
+        \\shelly_migrate=('{"path":"etc/global","from":"unowned"}')
+        \\package_demo() {
+        \\  shelly_migrate=('{"path":"etc/local  config","from":"unowned","optional":true}')
+        \\}
+        \\package_extra() {
+        \\  shelly_migrate=()
+        \\}
+    ;
+    var output: std.Io.Writer.Allocating = .init(std.testing.allocator);
+    defer output.deinit();
+    try writePkgbuild(std.testing.allocator, std.testing.io, &output.writer, content, .{});
+    try std.testing.expect(std.mem.indexOf(u8, output.written(), "shelly_migrate = {\"path\":\"etc/local  config\",\"from\":\"unowned\",\"optional\":true}\n") != null);
+    const extra = std.mem.indexOf(u8, output.written(), "pkgname = extra").?;
+    try std.testing.expect(std.mem.indexOf(u8, output.written()[extra..], "shelly_migrate = \n") != null);
 }

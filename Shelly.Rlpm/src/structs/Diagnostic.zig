@@ -64,7 +64,7 @@ pub fn init(operation: Operation, cause: anyerror, database: ?DatabaseRef) Diagn
             => .resolution,
             error.InvalidMigrationFlags, error.InvalidMigrationPath, error.InvalidMigrationTarget, error.InvalidMigrationSource, error.DuplicateMigration, error.MigrationPathMissing, error.InvalidTransactionFlags, error.InvalidSnapshot => .invalid_argument,
             error.DatabaseNotFound, error.InvalidDatabase, error.IncompleteMetadata => .database,
-            error.UnsupportedMigrationType, error.UnsupportedMigrationBackup, error.UnsupportedPackageOrigin => .unsupported,
+            error.UnsupportedMigrationVersion, error.UnsupportedMigrationType, error.UnsupportedMigrationBackup, error.UnsupportedPackageOrigin => .unsupported,
             error.ChecksumMismatch,
             error.ChecksumMissing,
             error.SignatureMissing,

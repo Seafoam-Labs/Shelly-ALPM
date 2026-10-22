@@ -898,3 +898,99 @@ test "dependency plan captures source configuration before private path override
         try t.expect(!std.mem.eql(u8, original, try pm.Manager.build_plan.configurationDigest(a, manager.config)));
     }
 }
+
+test "migration archive declarations are previewed before confirmation and libalpm rejects them" {
+    for ([_]pm.Manager.Backend{ .rlpm, .libalpm }) |backend| {
+        if (!backend.available()) continue;
+        var fixture = try Fixture.init(backend);
+        defer fixture.deinit();
+        {
+            const file = try fixture.temp.dir.createFile(t.io, "fixture.pkg.tar", .{});
+            defer file.close(t.io);
+            var buffer: [4096]u8 = undefined;
+            var writer = file.writer(t.io, &buffer);
+            var tar: std.tar.Writer = .{ .underlying_writer = &writer.interface };
+            try tar.writeFileBytes(".PKGINFO", "pkgname = backend-fixture\npkgver = 1-1\narch = any\nxdata = shelly.migration.v1={\"path\":\"etc/installer.conf\",\"from\":\"unowned\",\"backup\":true}\n", .{ .mode = 0o644 });
+            try tar.finishPedantically();
+            try writer.interface.flush();
+        }
+        try fixture.temp.dir.createDirPath(t.io, "root/etc");
+        try fixture.temp.dir.writeFile(t.io, .{ .sub_path = "root/etc/installer.conf", .data = "local settings" });
+        const manager = try fixture.manager();
+        defer manager.deinit();
+        if (backend == .libalpm) {
+            try t.expectError(error.MigrationRequiresRlpm, manager.install_local_packages(&.{fixture.archive}, .{ .nohooks = true, .noscriptlet = true }));
+            continue;
+        }
+        const Capture = struct {
+            seen: bool = false,
+            allow: bool = false,
+            fn answer(data: ?*anyopaque, question: pm.operation.Question) pm.operation.QuestionResponse {
+                const self: *@This() = @ptrCast(@alignCast(data.?));
+                if (question.transaction_plan) |plan| {
+                    self.seen = plan.migrations.len == 1 and
+                        std.mem.eql(u8, plan.migrations[0].path, "etc/installer.conf") and
+                        std.mem.eql(u8, plan.migrations[0].origin, "declared") and
+                        std.mem.eql(u8, plan.migrations[0].destination, "backend-fixture") and
+                        plan.migrations[0].source == null;
+                    return if (self.allow) .accepted else .declined;
+                }
+                return .accepted;
+            }
+        };
+        var capture: Capture = .{};
+        var context = pm.OperationContext.init(t.allocator, t.io);
+        defer context.deinit();
+        context.setQuestionHandler(.{ .function = Capture.answer, .data = &capture });
+        manager.setOperationContext(&context);
+        defer manager.setOperationContext(null);
+        try t.expectError(error.Cancelled, manager.install_local_packages(&.{fixture.archive}, .{ .nohooks = true, .noscriptlet = true }));
+        try t.expect(capture.seen);
+        const local = try fixture.temp.dir.readFileAlloc(t.io, "root/etc/installer.conf", t.allocator, .limited(100));
+        defer t.allocator.free(local);
+        try t.expectEqualStrings("local settings", local);
+    }
+}
+
+test "migration repository dependency uses archive declarations absent from repository metadata" {
+    var fixture = try Fixture.init(.rlpm);
+    defer fixture.deinit();
+    const a = fixture.arena.allocator();
+    try fixture.temp.dir.createDirPath(t.io, "db/sync");
+    try fixture.temp.dir.createDirPath(t.io, "root/etc");
+    try fixture.temp.dir.writeFile(t.io, .{ .sub_path = "root/etc/installer.conf", .data = "local settings" });
+    try fixture.temp.dir.writeFile(t.io, .{ .sub_path = "pacman.conf", .data = "[options]\nArchitecture = auto\nSigLevel = Never\nAutoMigrateUnowned = false\n[testing]\nServer = https://invalid.example\n" });
+    const file = try fixture.temp.dir.createFile(t.io, "db/sync/testing.db", .{});
+    defer file.close(t.io);
+    var buffer: [4096]u8 = undefined;
+    var writer = file.writer(t.io, &buffer);
+    var tar: std.tar.Writer = .{ .underlying_writer = &writer.interface };
+    for ([_][]const u8{ "migration-app", "migration-dependency" }) |name| {
+        const filename = try std.fmt.allocPrint(a, "{s}-1-1-any.pkg.tar", .{name});
+        const archive_path = try std.fs.path.join(a, &.{ "cache", filename });
+        const dependency = std.mem.eql(u8, name, "migration-dependency");
+        {
+            const archive = try fixture.temp.dir.createFile(t.io, archive_path, .{});
+            defer archive.close(t.io);
+            var archive_buffer: [4096]u8 = undefined;
+            var archive_writer = archive.writer(t.io, &archive_buffer);
+            var archive_tar: std.tar.Writer = .{ .underlying_writer = &archive_writer.interface };
+            const extra = if (dependency) "xdata = shelly.migration.v1={\"path\":\"etc/installer.conf\",\"from\":\"unowned\"}\n" else "depend = migration-dependency\n";
+            try archive_tar.writeFileBytes(".PKGINFO", try std.fmt.allocPrint(a, "pkgname = {s}\npkgver = 1-1\narch = any\n{s}", .{ name, extra }), .{ .mode = 0o644 });
+            try archive_tar.finishPedantically();
+            try archive_writer.interface.flush();
+        }
+        const bytes = try fixture.temp.dir.readFileAlloc(t.io, archive_path, a, .limited(65536));
+        const checksum = try pm.Manager.build_plan.hashBytes(a, bytes);
+        const desc = try std.fmt.allocPrint(a, "%NAME%\n{s}\n\n%VERSION%\n1-1\n\n%ARCH%\nany\n\n%FILENAME%\n{s}\n\n%CSIZE%\n{d}\n\n%SHA256SUM%\n{s}\n\n%DEPENDS%\n{s}\n\n", .{ name, filename, bytes.len, checksum, if (dependency) "" else "migration-dependency" });
+        try tar.writeFileBytes(try std.fmt.allocPrint(a, "{s}-1-1/desc", .{name}), desc, .{ .mode = 0o644 });
+    }
+    try tar.finishPedantically();
+    try writer.interface.flush();
+    const manager = try fixture.manager();
+    defer manager.deinit();
+    var targets = [_][:0]const u8{"migration-app"};
+    try manager.install_packages(&targets, .{ .nohooks = true, .noscriptlet = true });
+    const record = try fixture.temp.dir.readFileAlloc(t.io, "db/local/migration-dependency-1-1/files", a, .limited(4096));
+    try t.expect(std.mem.indexOf(u8, record, "%RLPM_ADOPTED%\netc/installer.conf\n") != null);
+}

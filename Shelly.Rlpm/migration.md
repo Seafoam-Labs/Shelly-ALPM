@@ -59,9 +59,104 @@ omit the migration request and use normal extraction/backup behavior.
 
 The hermetic fixture uses these package names and paths with inert payloads.
 It also omits them from a generated incoming archive to exercise adoption of
-archive-absent files. No production PKGBUILD changes or migration declarations
-are inferred from this example. This API is an RLPM extension; CLI/PKGBUILD
-syntax and automatic frontend policy are not introduced.
+archive-absent files. The paths are examples, not an instruction to preserve every old helper.
+Package authors can now declare these migrations using the metadata below.
+
+## Package declarations (unreleased)
+
+A Shelly build containing this extension accepts `shelly_migrate`, a
+package-scoped array of JSON objects. For example:
+
+```bash
+replaces=('devario-aqueous-desktop')
+conflicts=('devario-aqueous-desktop')
+shelly_migrate=(
+  '{"path":"etc/xdg/uwsm/env.d/60-devario-gpu.sh","from":"package:devario-aqueous-desktop","optional":true}'
+  '{"path":"etc/devario/local.conf","from":"unowned","optional":true,"backup":true}'
+)
+```
+
+`path` and `from` are required. `optional` and `backup` default to `false`.
+Unknown fields, invalid sources, duplicate paths, noncanonical paths, and
+unknown metadata versions fail validation. Paths are exact and root-relative;
+no leading slash, glob expansion, recursion, rename, or copy is supported.
+
+A `package:NAME` declaration activates for an accepted replacement of NAME by
+the destination, or a same-name upgrade. If NAME is not installed, the rule is
+inactive, allowing clean installation. If NAME is installed without that
+relationship, migration fails. A missing optional path is skipped; optional
+never relaxes ownership or type checks. A failed source check never falls back
+to unowned adoption.
+
+An `unowned` declaration requires no installed owner. It is inactive when the
+path is already owned by the destination's previous version, so later upgrades
+use normal extraction and backup rules. Explicit declarations may adopt paths
+absent from the package archive; `backup: true` gives such regular files an
+initial baseline hash. Named-package declarations intentionally preserve the
+old bytes while their replacement relationship applies.
+
+The destination is the package containing the declaration. Split packages may
+override the array in `package_NAME()`; use `shelly_migrate=()` to clear an
+inherited declaration in both package metadata and generated `.SRCINFO`.
+Runtime package metadata capture also honors `unset shelly_migrate`.
+
+Shelly emits `shelly_migrate` fields in `.SRCINFO` and stores each declaration as
+`xdata = shelly.migration.v1=<JSON>` in `.PKGINFO`. The namespace is reserved:
+use `shelly_migrate`, not hand-written `xdata`. Other xdata remains unchanged.
+Generate metadata with Shelly, replacing `.SRCINFO` only after success:
+
+```bash
+shelly build ./PKGBUILD --makesrcinfo > .SRCINFO.new && mv .SRCINFO.new .SRCINFO
+```
+
+The verified archive is authoritative; repository metadata need not carry these
+extensions. Preflight resolves declarations for every installed addition,
+including dependencies, before removal or extraction. Public `addMigration()`
+requests still precede `prepare()`; archive declarations are resolved internally
+after archives are loaded. Conflicting API and package requests fail rather
+than silently overriding one another.
+
+This feature is unreleased; do not assume the existing 3.1.8 release supports
+it. Publish migration packages only after deploying a Shelly build containing
+this change, and set a minimum Shelly version when the supporting release is
+assigned. Updated Shelly's libalpm backend rejects migration-bearing archives
+before commit. Other package managers and older Shelly builds do not implement
+this extension and may ignore it. Download-only operations do not adopt files;
+database-only transactions reject applicable migration declarations.
+
+## Automatic unowned adoption
+
+In the native configuration file (`/etc/shelly.conf` for Devario), use:
+
+```ini
+[options]
+AutoMigrateUnowned = true
+```
+
+The Devario profile defaults to `true`; the pacman profile and standalone RLPM
+Owner default to `false`. Only `true` and `false` are accepted. RLPM embedders
+can set `OwnerConfiguration.auto_migrate_unowned`. Disabling discovery does not
+disable explicit declarations or retention of earlier archive-absent adoptions.
+
+Discovery considers existing unowned regular files and symlink leaves that the
+incoming archive supplies. It preserves their objects, bytes, and attributes,
+and records ownership. Missing paths install normally. Directories and special
+files are not automatic candidates. Type mismatches, aliases, competing claims,
+and hardlink conflicts still fail normal validation. Existing package owners
+are never treated as unowned merely because their package is being removed.
+
+Explicit requests are evaluated first, then retained adoptions, then automatic
+discovery. Automatic discovery leaves `backup`, `NoExtract`, and `NoUpgrade`
+paths on their normal policy paths. It is disabled for database-only and
+download-only transactions. Automatic payload adoption applies once: after the
+destination owns the file, subsequent upgrades use normal extraction/backup
+behavior. It does not retain outdated packaged helpers indefinitely.
+
+CLI and GTK transaction previews show each preserved path, source, destination,
+and origin (`declared`, `automatic`, `api`, or `retained`). Preflight may download
+archives before final installation confirmation to obtain these details.
+Cancellation at confirmation does not change installed files or ownership.
+Installation output reports planned adoptions and the committed count.
 
 ## Validation and backups
 

@@ -2243,9 +2243,32 @@ pub const Manager = struct {
     }
 
     fn predownloadPreparedPackages(self: *Manager, trans_flags: TransFlag) TransactionError!void {
-        if (trans_flags.dbonly) return;
         self.unexpected_fetch_reported.store(false, .release);
+        // Inspect actual archives even for DBONLY: repository metadata may omit
+        // extensions, and libalpm must not silently discard migration semantics.
         try self.download_prepared_packages();
+        if (trans_flags.downloadonly) return;
+        var packages = rawLibalpm.alpm_trans_get_add(self.handle);
+        while (packages != null) : (packages = packages.*.next) {
+            const data = packages.*.data orelse continue;
+            const package = libalpm.Package{ .ptr = @ptrCast(@alignCast(data)) };
+            const path = if (rawLibalpm.alpm_pkg_get_origin(package.ptr) == rawLibalpm.ALPM_PKG_FROM_SYNCDB)
+                try std.fs.path.join(self.allocator, &.{ self.config.cache_directory, package.file_name() })
+            else
+                try self.allocator.dupe(u8, package.file_name());
+            defer self.allocator.free(path);
+            var archive = @import("Shelly_Rlpm").Package.loadArchive(self.allocator, path, .{}) catch |err| {
+                if (err == error.UnsupportedMigrationVersion) return error.MigrationRequiresRlpm;
+                return error.PackageLoadFailed;
+            };
+            defer archive.deinit();
+            for (archive.xdata) |value| {
+                if (std.mem.startsWith(u8, value.name, @import("Shelly_Rlpm").Migration.metadata_prefix)) {
+                    self.dispatcher.raiseError(.{ .message = diagnostics.cause(error.MigrationRequiresRlpm) });
+                    return error.MigrationRequiresRlpm;
+                }
+            }
+        }
     }
 
     fn stalePartSweep(self: *Manager, max_age: std.Io.Duration) void {

@@ -40,7 +40,7 @@ transaction API provides owned transactions, exclusive locks, frozen
 preparation, typed lifecycle events and PackageManager
 deferred-question/cancellation support. The [transaction guide](transactions.md)
 covers the state machine and lock contract. The executor enables normal commit
-and installed-repository provenance writes. Explicit [file migrations](migration.md)
+and installed-repository provenance writes. [File migrations](migration.md), requested through the API or package metadata,
 adopt existing unowned or replaced-package files and retain archive-absent
 ownership across RLPM upgrades.
 

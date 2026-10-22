@@ -22,7 +22,7 @@ fn commit(owner: *rlpm.Owner, archive: []const u8, flags: rlpm.TransactionFlags)
     try tx.commit();
 }
 
-test "migration rejects changes by real pre-transaction hooks and pre-install scripts" {
+test "migration declarations reject changes by real pre-transaction hooks and pre-install scripts" {
     const path = "etc/xdg/uwsm/env.d/60-devario-gpu.sh";
     for ([_]bool{ false, true }) |hook| {
         var f = try Fixture.init();
@@ -35,7 +35,7 @@ test "migration rejects changes by real pre-transaction hooks and pre-install sc
                 "\n[Action]\nWhen=PreTransaction\nExec=/usr/bin/bash -c 'printf changed > /" ++ path ++ "'\n",
         );
         var archive = try Archive.init(&.{
-            .{ .path = ".PKGINFO", .contents = "pkgname = devario-system-integration\npkgver = 1-1\narch = any\n" },
+            .{ .path = ".PKGINFO", .contents = "pkgname = devario-system-integration\npkgver = 1-1\narch = any\nxdata = shelly.migration.v1={\"path\":\"" ++ path ++ "\",\"from\":\"unowned\",\"backup\":true}\n" },
             .{ .path = ".INSTALL", .contents = if (hook) "pre_install() { :; }\n" else "pre_install() { printf changed > /" ++ path ++ "; }\n" },
         }, .none);
         defer archive.deinit();
@@ -44,7 +44,6 @@ test "migration rejects changes by real pre-transaction hooks and pre-install sc
         const tx = try owner.initializeTransaction(io, .{});
         defer owner.releaseTransaction() catch unreachable;
         try Fixture.add(tx, archive.path);
-        try tx.addMigration(.{ .package = "devario-system-integration", .path = path, .backup = true });
         try tx.prepare();
         try std.testing.expectError(error.StaleFilesystemState, tx.commit());
         try std.testing.expectEqual(.migration, tx.execution.boundary);

@@ -202,18 +202,8 @@ fn resolveMigrations(self: *Transaction) !void {
         } else return error.InvalidMigrationTarget;
         var source: ?Plan.Id = null;
         if (request.source == .replaced_package) {
-            source = for (plan_value.replacements) |replacement| {
-                if (replacement.new == destination and
-                    std.mem.indexOfScalar(Plan.Id, plan_value.removals, replacement.old) != null and
-                    std.mem.eql(u8, plan_value.package(replacement.old).name, request.source.replaced_package))
-                    break replacement.old;
-            } else for (plan_value.additions) |addition| {
-                if (addition.package == destination) {
-                    if (addition.old) |old| {
-                        if (std.mem.eql(u8, plan_value.package(old).name, request.source.replaced_package)) break old;
-                    }
-                }
-            } else return error.InvalidMigrationSource;
+            source = plan_value.migrationSource(destination, request.source.replaced_package) orelse
+                return error.InvalidMigrationSource;
         }
         out.* = .{
             .package = destination,

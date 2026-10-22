@@ -528,3 +528,220 @@ test "allocation failures release explicit and inherited migration plans metadat
     try apply(&owner, input.path, .{ .package = name, .path = helper, .backup = true });
     try std.testing.checkAllAllocationFailures(a, allocationPreflight, .{ &f, input.path, true });
 }
+
+fn declaredArchive(declaration: []const u8, payload: bool, replacement: bool) !Archive {
+    const metadata = try std.fmt.allocPrint(a, "{s}{s}xdata = {s}={s}\n", .{
+        info,
+        if (replacement) "conflict = " ++ previous ++ "\nreplaces = " ++ previous ++ "\n" else "",
+        rlpm.Migration.metadata_key,
+        declaration,
+    });
+    defer a.free(metadata);
+    return Archive.init(if (payload) &.{
+        .{ .path = ".PKGINFO", .contents = metadata },
+        .{ .path = helper, .contents = "new packaged helper" },
+    } else &.{.{ .path = ".PKGINFO", .contents = metadata }}, .none);
+}
+
+const unowned_declaration = "{\"path\":\"" ++ helper ++ "\",\"from\":\"unowned\"}";
+const replacement_declaration = "{\"path\":\"" ++ helper ++ "\",\"from\":\"package:" ++ previous ++ "\"}";
+
+test "migration declarations transfer replaced files and remain inactive on clean install" {
+    for ([_]bool{ false, true }) |replace| {
+        var f = try Fixture.init();
+        defer f.deinit();
+        if (replace) {
+            try f.installed(previous, "1-1", helper, null);
+            try f.write("root/" ++ helper, "old helper");
+        }
+        var input = try declaredArchive(replacement_declaration, true, true);
+        defer input.deinit();
+        var owner = try f.owner();
+        defer owner.deinit() catch unreachable;
+        owner.configuration.callbacks.question = accept;
+        const tx = try owner.initializeTransaction(io, flags);
+        defer owner.releaseTransaction() catch unreachable;
+        try Fixture.add(tx, input.path);
+        try tx.prepare();
+        try tx.preflight();
+        try std.testing.expectEqual(@as(usize, if (replace) 1 else 0), tx.manifest().?.adoptions.items.len);
+        if (replace) try std.testing.expectEqual(.declared, tx.manifest().?.adoptions.items[0].origin);
+        try tx.commit();
+        try f.expect("root/" ++ helper, if (replace) "old helper" else "new packaged helper");
+    }
+}
+
+test "migration declarations adopt archive-absent unowned files with automatic discovery disabled" {
+    var f = try Fixture.init();
+    defer f.deinit();
+    try f.write("root/" ++ helper, "installer helper");
+    var input = try declaredArchive(unowned_declaration, false, false);
+    defer input.deinit();
+    var owner = try f.owner();
+    defer owner.deinit() catch unreachable;
+    const tx = try owner.initializeTransaction(io, flags);
+    defer owner.releaseTransaction() catch unreachable;
+    try Fixture.add(tx, input.path);
+    try tx.prepare();
+    try tx.commit();
+    try f.expect("root/" ++ helper, "installer helper");
+    var fresh = try f.owner();
+    defer fresh.deinit() catch unreachable;
+    try std.testing.expectEqualStrings(helper, (try installed(&fresh)).adopted_files[0]);
+}
+
+test "migration automatic discovery is opt-in and does not freeze subsequent upgrades" {
+    for ([_]bool{ false, true }) |automatic| {
+        var f = try Fixture.init();
+        defer f.deinit();
+        try f.write("root/" ++ helper, "installer helper");
+        var input = try archive(true, false);
+        defer input.deinit();
+        var owner = try f.owner();
+        defer owner.deinit() catch unreachable;
+        owner.configuration.auto_migrate_unowned = automatic;
+        {
+            const tx = try owner.initializeTransaction(io, flags);
+            defer owner.releaseTransaction() catch unreachable;
+            try Fixture.add(tx, input.path);
+            try tx.prepare();
+            if (!automatic) {
+                try std.testing.expectError(error.FileConflicts, tx.preflight());
+                continue;
+            }
+            try tx.preflight();
+            try std.testing.expectEqual(.automatic, tx.manifest().?.adoptions.items[0].origin);
+            try tx.commit();
+            try f.expect("root/" ++ helper, "installer helper");
+        }
+        // A package-owned file follows normal extraction on reinstall.
+        const tx = try owner.initializeTransaction(io, flags);
+        defer owner.releaseTransaction() catch unreachable;
+        try Fixture.add(tx, input.path);
+        try tx.prepare();
+        try tx.commit();
+        try f.expect("root/" ++ helper, "new packaged helper");
+    }
+}
+
+test "migration explicit wrong owner cannot fall back to automatic adoption" {
+    for ([_]bool{ false, true }) |owned| {
+        var f = try Fixture.init();
+        defer f.deinit();
+        try f.installed(previous, "1-1", if (owned) helper else "usr/other", null);
+        try f.write("root/" ++ helper, "existing helper");
+        var input = try declaredArchive(if (owned) unowned_declaration else replacement_declaration, true, true);
+        defer input.deinit();
+        var owner = try f.owner();
+        defer owner.deinit() catch unreachable;
+        owner.configuration.auto_migrate_unowned = true;
+        owner.configuration.callbacks.question = accept;
+        const tx = try owner.initializeTransaction(io, flags);
+        defer owner.releaseTransaction() catch unreachable;
+        try Fixture.add(tx, input.path);
+        try tx.prepare();
+        try std.testing.expectError(error.MigrationOwnershipConflict, tx.preflight());
+        try f.expect("root/" ++ helper, "existing helper");
+    }
+}
+
+test "migration declarations optional missing paths install payload and required paths fail" {
+    for ([_]bool{ false, true }) |optional| {
+        var f = try Fixture.init();
+        defer f.deinit();
+        var input = try declaredArchive(if (optional)
+            "{\"path\":\"" ++ helper ++ "\",\"from\":\"unowned\",\"optional\":true}"
+        else
+            unowned_declaration, true, false);
+        defer input.deinit();
+        var owner = try f.owner();
+        defer owner.deinit() catch unreachable;
+        const tx = try owner.initializeTransaction(io, flags);
+        defer owner.releaseTransaction() catch unreachable;
+        try Fixture.add(tx, input.path);
+        try tx.prepare();
+        if (optional) {
+            try tx.commit();
+            try f.expect("root/" ++ helper, "new packaged helper");
+        } else try std.testing.expectError(error.MigrationPathMissing, tx.preflight());
+    }
+}
+
+test "migration metadata rejects malformed unknown and duplicate declarations" {
+    for ([_][]const u8{
+        "{}",                                       "{\"path\":\"../escape\",\"from\":\"unowned\"}",
+        "{\"path\":\"etc/file\",\"from\":\"any\"}", "{\"path\":\"etc/file\",\"from\":\"unowned\",\"unknown\":true}",
+    }) |invalid| {
+        if (rlpm.Migration.parse(a, invalid)) |parsed| {
+            parsed.deinit();
+            return error.ExpectedInvalidMigrationMetadata;
+        } else |_| {}
+    }
+    try std.testing.expectError(error.DuplicateMigration, rlpm.Migration.validateDeclarations(a, &.{ unowned_declaration, unowned_declaration }));
+    const values = [_]rlpm.Package.XData{.{ .name = "shelly.migration.v2", .value = unowned_declaration }};
+    try std.testing.expectError(error.UnsupportedMigrationVersion, rlpm.Migration.validateXdata(a, &values));
+}
+
+test "migration declared unowned payload returns to normal extraction on reinstall" {
+    var f = try Fixture.init();
+    defer f.deinit();
+    try f.write("root/" ++ helper, "installer helper");
+    var input = try declaredArchive(unowned_declaration, true, false);
+    defer input.deinit();
+    var owner = try f.owner();
+    defer owner.deinit() catch unreachable;
+    try apply(&owner, input.path, null);
+    try f.expect("root/" ++ helper, "installer helper");
+    try apply(&owner, input.path, null);
+    try f.expect("root/" ++ helper, "new packaged helper");
+}
+
+test "migration declared DBONLY fails and DOWNLOADONLY makes no adoption" {
+    for ([_]bool{ false, true }) |download| {
+        var f = try Fixture.init();
+        defer f.deinit();
+        try f.write("root/" ++ helper, "installer helper");
+        var input = try declaredArchive(unowned_declaration, true, false);
+        defer input.deinit();
+        var owner = try f.owner();
+        defer owner.deinit() catch unreachable;
+        const tx = try owner.initializeTransaction(io, .{ .database_only = !download, .download_only = download, .no_hooks = true, .no_scriptlets = true });
+        defer owner.releaseTransaction() catch unreachable;
+        try Fixture.add(tx, input.path);
+        try tx.prepare();
+        if (download) try tx.commit() else try std.testing.expectError(error.InvalidMigrationFlags, tx.preflight());
+        try std.testing.expectEqual(0, tx.execution.adoptions_committed);
+        try f.expect("root/" ++ helper, "installer helper");
+        try std.testing.expect((try owner.findPackage(owner.localDatabase().?, name)) == null);
+    }
+}
+
+test "migration automatic discovery preserves native backup behavior" {
+    var f = try Fixture.init();
+    defer f.deinit();
+    try f.write("root/etc/config", "local settings");
+    var input = try Archive.init(&.{
+        .{ .path = ".PKGINFO", .contents = info ++ "backup = etc/config\n" },
+        .{ .path = "etc/config", .contents = "distributed settings" },
+    }, .none);
+    defer input.deinit();
+    var owner = try f.owner();
+    defer owner.deinit() catch unreachable;
+    owner.configuration.auto_migrate_unowned = true;
+    const tx = try owner.initializeTransaction(io, flags);
+    defer owner.releaseTransaction() catch unreachable;
+    try Fixture.add(tx, input.path);
+    try tx.prepare();
+    try tx.commit();
+    try std.testing.expectEqual(0, tx.execution.adoptions_committed);
+    try f.expect("root/etc/config", "local settings");
+    try f.expect("root/etc/config.pacnew", "distributed settings");
+}
+
+fn declarationAllocations(allocator: std.mem.Allocator) !void {
+    try rlpm.Migration.validateDeclarations(allocator, &.{unowned_declaration});
+}
+
+test "migration declaration allocation failures release JSON and duplicate tracking" {
+    try std.testing.checkAllAllocationFailures(a, declarationAllocations, .{});
+}

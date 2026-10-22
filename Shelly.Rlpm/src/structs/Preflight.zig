@@ -140,6 +140,7 @@ const Builder = struct {
         self.phase(.load_packages, .done);
         try self.tx.owner.checkCancelled();
         try self.migrations();
+        try self.automaticMigrations();
         if (!self.tx.flags.database_only) {
             self.phase(.file_conflicts, .start);
             {
@@ -478,6 +479,7 @@ const Builder = struct {
 
     fn migrations(self: *Builder) !void {
         for (self.plan.migrations) |request| try self.adopt(request);
+        try self.declaredMigrations();
         // Only local migration metadata can carry ownership across upgrades.
         // Incoming archive inventories remain an independently verified input.
         for (self.plan.additions, self.m.archives.items) |addition, archive| {
@@ -492,8 +494,74 @@ const Builder = struct {
                 try self.adopt(.{
                     .package = addition.package,
                     .source = old,
+                    .origin = .retained,
                     .path = path,
                     .optional = true,
+                    .backup = false,
+                });
+            }
+        }
+    }
+
+    fn declaredMigrations(self: *Builder) !void {
+        for (self.m.archives.items) |archive| {
+            for (archive.package.xdata) |value| {
+                if (!std.mem.eql(u8, value.name, Migration.metadata_key)) continue;
+                const parsed = try Migration.parse(self.a, value.value);
+                defer parsed.deinit();
+                const declaration = parsed.value;
+                self.current_package = archive.id;
+                self.current_path = try self.a.dupe(u8, declaration.path);
+                var source: ?Plan.Id = null;
+                if (std.mem.eql(u8, declaration.from, "unowned")) {
+                    // A declaration must not freeze ordinary subsequent upgrades.
+                    if (self.oldOf(archive.id)) |old| {
+                        if (self.owns(old, declaration.path)) continue;
+                    }
+                } else {
+                    const name = declaration.from["package:".len..];
+                    source = self.plan.migrationSource(archive.id, name);
+                    if (source == null) {
+                        // Clean installs do not require the replaced package. An
+                        // installed source without an accepted relationship is an error.
+                        for (self.m.locals.items) |local_item| {
+                            if (std.mem.eql(u8, local_item.package.name, name))
+                                return error.InvalidMigrationSource;
+                        }
+                        continue;
+                    }
+                }
+                try self.adopt(.{
+                    .package = archive.id,
+                    .source = source,
+                    .origin = .declared,
+                    .path = self.current_path.?,
+                    .optional = declaration.optional,
+                    .backup = declaration.backup,
+                });
+            }
+        }
+    }
+
+    fn automaticMigrations(self: *Builder) !void {
+        if (!self.tx.owner.configuration.auto_migrate_unowned or
+            self.tx.flags.database_only or self.tx.flags.download_only) return;
+        for (self.m.archives.items) |archive| {
+            for (archive.payload) |entry| {
+                if (entry.file.kind != .regular and entry.file.kind != .symlink) continue;
+                if (self.adoption(entry.path) != null or self.ownerOf(entry.path) != null) continue;
+                // Leave native backup and extraction policy intact for automatic discovery.
+                if (backupHash(archive.package, entry.path) != .absent or
+                    try self.matches(.no_extract, entry.path) or
+                    try self.matches(.no_upgrade, entry.path)) continue;
+                const before = (try self.observe(entry.path)) orelse continue;
+                if (!before.regular() and !before.symlink()) continue;
+                try self.adopt(.{
+                    .package = archive.id,
+                    .source = null,
+                    .origin = .automatic,
+                    .path = entry.path,
+                    .optional = false,
                     .backup = false,
                 });
             }
@@ -562,6 +630,7 @@ const Builder = struct {
         }
         if (backup != null and !before.regular()) return error.UnsupportedMigrationBackup;
         try self.m.adoptions.append(self.a, .{
+            .origin = request.origin,
             .package = request.package,
             .source = request.source,
             .path = request.path,

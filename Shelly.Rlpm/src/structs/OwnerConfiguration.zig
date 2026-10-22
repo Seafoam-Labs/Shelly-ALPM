@@ -30,6 +30,8 @@ no_extract: []const []const u8 = &.{},
 overwrite_files: []const []const u8 = &.{},
 database_extension: []const u8 = ".db",
 check_space: bool = false,
+/// Preserve eligible existing unowned archive leaves. Frontends select distribution policy.
+auto_migrate_unowned: bool = false,
 /// libalpm handle defaults; pacman.conf policy is supplied by PackageManager.
 default_signature_policy: SignaturePolicy = disabled_signatures,
 local_file_signature_policy: ?SignaturePolicy = disabled_signatures,

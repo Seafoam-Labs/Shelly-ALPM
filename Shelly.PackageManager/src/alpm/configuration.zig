@@ -38,7 +38,7 @@ inline fn usageBit(flag: DatabaseUsage) u32 {
     return @intFromEnum(flag);
 }
 
-pub const ParseError = Allocator.Error || error{ ConfigReadFailed, InvalidHookDirMode };
+pub const ParseError = Allocator.Error || error{ ConfigReadFailed, InvalidHookDirMode, InvalidMigrationPolicy };
 
 pub const Configuration = struct {
     pub const Repository = struct {
@@ -61,6 +61,7 @@ pub const Configuration = struct {
         disable_sandbox_syscalls: bool = false,
         disable_sandbox_network: bool = false,
         disable_download_timeout: bool = false,
+        auto_migrate_unowned: bool = std.mem.eql(u8, paths.profile, "devario"),
 
         root_directory: [:0]const u8,
         database_path: [:0]const u8,
@@ -965,6 +966,8 @@ pub const Configuration = struct {
                 try self.add_split(&c.no_extract, value);
             } else if (equalIgnoreCase(key, "usesyslog")) {
                 c.use_system_log = true;
+            } else if (equalIgnoreCase(key, "automigrateunowned")) {
+                if (equalIgnoreCase(value, "true")) c.auto_migrate_unowned = true else if (equalIgnoreCase(value, "false")) c.auto_migrate_unowned = false else return error.InvalidMigrationPolicy;
             } else if (equalIgnoreCase(key, "checkspace")) {
                 c.check_space = true;
             } else if (equalIgnoreCase(key, "siglevel")) {
@@ -1761,4 +1764,19 @@ test "strict configuration rejects missing explicit files and preserves hook pol
     try testing.expectEqualStrings("/first", config.hook_directory.items[0]);
     try testing.expectEqualStrings("/middle", config.hook_directory.items[1]);
     try testing.expectEqualStrings("/last", config.hook_directory.items[2]);
+}
+
+test "migration automatic policy follows profile and accepts explicit overrides" {
+    var defaults = try Configuration.parse_string(std.testing.allocator, std.testing.io, "");
+    defer defaults.deinitialize();
+    try std.testing.expectEqual(std.mem.eql(u8, paths.profile, "devario"), defaults.auto_migrate_unowned);
+    for ([_]bool{ false, true }) |enabled| {
+        var config = try Configuration.parse_string(std.testing.allocator, std.testing.io, if (enabled)
+            "[options]\nAutoMigrateUnowned = true\n"
+        else
+            "[options]\nAutoMigrateUnowned = false\n");
+        defer config.deinitialize();
+        try std.testing.expectEqual(enabled, config.auto_migrate_unowned);
+    }
+    try std.testing.expectError(error.InvalidMigrationPolicy, Configuration.parse_string(std.testing.allocator, std.testing.io, "[options]\nAutoMigrateUnowned = yes\n"));
 }

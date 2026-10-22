@@ -201,7 +201,8 @@ pub fn validate_xdata(values: []const []const u8) !void {
             return error.InvalidPackageXdata;
         if (separator == 0 or
             std.mem.indexOfScalar(u8, value[separator + 1 ..], '=') != null or
-            std.mem.eql(u8, value[0..separator], "pkgtype"))
+            std.mem.eql(u8, value[0..separator], "pkgtype") or
+            std.mem.startsWith(u8, value[0..separator], "shelly.migration."))
             return error.InvalidPackageXdata;
     }
 }

@@ -427,6 +427,7 @@ fn parsePkginfo(
         }
         // Unknown keys are ignored for compatibility with newer metadata formats.
     }
+    try @import("Migration.zig").validateXdata(allocator, parsed.xdata.items);
 }
 
 test "Package stores version, database, and package relations" {
