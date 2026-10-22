@@ -44,7 +44,7 @@ pub fn append(
         var section = Parsed.descSectionFromHeader(header);
         if (sync) {
             switch (section) {
-                .installed_database, .install_date, .reason, .validation, .backups => section = .ignore,
+                .installed_database, .install_date, .reason, .validation, .backups, .adopted_files => section = .ignore,
                 else => {},
             }
             if (std.mem.eql(u8, header, "%XDATA%") or std.mem.eql(u8, header, "%SIZE%")) section = .ignore;
@@ -65,6 +65,7 @@ pub fn append(
             .none,
             .files,
             .backups,
+            .adopted_files,
             .groups,
             .licenses,
             .depends,
@@ -171,7 +172,8 @@ pub fn apply(
             },
         ),
         .backups => try parsed.backups.append(allocator, try Backup.parseLocal(value)),
-        inline .groups,
+        inline .adopted_files,
+        .groups,
         .licenses,
         .depends,
         .optional_depends,

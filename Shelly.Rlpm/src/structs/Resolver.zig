@@ -300,10 +300,7 @@ const Repo = struct {
     packages: List = .empty,
 };
 
-const Replacement = struct {
-    new: Id,
-    old: Id,
-};
+const Replacement = Plan.Replacement;
 
 const ProviderDecision = struct {
     root: Id,
@@ -1308,6 +1305,7 @@ const Solver = struct {
         }
         self.plan.additions = additions.items;
         self.plan.removals = self.removals.items;
+        self.plan.replacements = self.replacements.items;
         self.plan.unchanged_satisfiers = unchanged.items;
         self.plan.edges = edges.items;
         self.plan.questions = self.questions.items;

@@ -166,6 +166,16 @@ pub fn build(b: *std.Build) void {
         &run_executor_tests.step,
     );
     test_step.dependOn(&run_executor_tests.step);
+    const migration_tests = b.addTest(.{ .root_module = b.createModule(.{
+        .root_source_file = b.path("src/tests/migration.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{.{ .name = "Shelly_Rlpm", .module = mod }},
+    }) });
+    migration_tests.root_module.addOptions("worker_fixture", worker_fixture_options);
+    const run_migration_tests = b.addRunArtifact(migration_tests);
+    b.step("test-migration", "Run in-place adoption and Devario replacement fixtures").dependOn(&run_migration_tests.step);
+    test_step.dependOn(&run_migration_tests.step);
     const hook_tests = b.addTest(.{ .root_module = b.createModule(.{
         .root_source_file = b.path("src/tests/hooks.zig"),
         .target = target,

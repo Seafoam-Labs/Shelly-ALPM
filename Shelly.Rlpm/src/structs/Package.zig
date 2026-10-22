@@ -77,6 +77,8 @@ sha256_sum: ?[]const u8 = null,
 base64_signature: ?[]const u8 = null,
 files: []const PackageFile = &.{},
 backups: []const BackupFile = &.{},
+/// Local-only paths retained across upgrades until supplied by an archive.
+adopted_files: []const []const u8 = &.{},
 files_loaded: bool = false,
 files_source: enum { none, database, archive, mtree } = .none,
 members: Members = .{},

@@ -31,7 +31,7 @@ active pointer: do not retry cleanup using the old pointer.
 
 | State | Allowed work |
 | --- | --- |
-| `initialized` | `addTarget`, `addPackage`, `takeArchive`, `remove`, `systemUpgrade`, `prepare`, release |
+| `initialized` | `addTarget`, `addPackage`, `takeArchive`, `addMigration`, `remove`, `systemUpgrade`, `prepare`, release |
 | `preparing` | Synchronous callbacks; atomic cancellation only |
 | `prepared` | Read the plan/manifest, `downloadSize`, `download`, `preflight`, `revalidatePreflight`, `commit`, release |
 | `committing` | Synchronous callbacks; atomic cancellation only |
@@ -65,6 +65,12 @@ with an arena, nulls the caller's optional only on success, and preserves caller
 ownership on every rejection or allocation failure. Accepted archives, including
 skipped ones, remain transaction-owned until release. A prepared plan independently
 retains sealed descriptors. Metadata-only archives gain no verification claim until successful preflight.
+
+`addMigration` declares exact existing paths to adopt into an incoming package.
+Requests resolve into `plan().migrations`; `plan().replacements` records the
+resolver's accepted replacement relationships. The preflight manifest adds
+resolved adoptions with filesystem observations. See [migration.md](migration.md)
+for the Devario example, source validation, backup and persistence behavior.
 
 ## Lock and snapshot contract
 

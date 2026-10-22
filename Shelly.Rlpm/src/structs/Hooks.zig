@@ -345,6 +345,11 @@ pub fn changes(
             if (!slot.found_existing) slot.value_ptr.* = 0;
             slot.value_ptr.* |= 1;
         };
+    for (manifest.adoptions.items) |item| {
+        const slot = try paths.getOrPut(a, item.path);
+        if (!slot.found_existing) slot.value_ptr.* = 0;
+        slot.value_ptr.* |= 1;
+    }
     for (manifest.locals.items) |local| {
         var removing = std.mem.indexOfScalar(Plan.Id, plan.removals, local.id) != null;
         for (plan.additions) |addition|

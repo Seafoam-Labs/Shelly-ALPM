@@ -18,6 +18,16 @@ pub const Candidate = struct {
     repository: ?usize = null,
 };
 
+pub const Replacement = struct { new: Id, old: Id };
+
+pub const Migration = struct {
+    package: Id,
+    source: ?Id,
+    path: []const u8,
+    optional: bool,
+    backup: bool,
+};
+
 pub const Addition = struct {
     package: Id,
     old: ?Id,
@@ -119,6 +129,8 @@ flags: TransactionFlags = .{},
 had_prepare_targets: bool = false,
 additions: []const Addition = &.{},
 removals: []const Id = &.{},
+replacements: []const Replacement = &.{},
+migrations: []const Migration = &.{},
 unchanged_satisfiers: []const Id = &.{},
 edges: []const Edge = &.{},
 questions: []const Callbacks.Question = &.{},

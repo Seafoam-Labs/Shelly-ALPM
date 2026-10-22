@@ -144,6 +144,7 @@ pub fn loadMetadata(
         );
         candidate.files = package.files;
         candidate.backups = package.backups;
+        candidate.adopted_files = package.adopted_files;
         candidate.files_loaded = package.files_loaded;
         candidate.files_source = package.files_source;
         candidate.members = package.members;
@@ -163,6 +164,7 @@ pub fn loadMetadata(
         const candidate = try parsed.intoPackage(arena, .{ .origin = .local });
         package.files = candidate.files;
         package.backups = candidate.backups;
+        package.adopted_files = candidate.adopted_files;
         package.files_loaded = true;
         package.files_source = .database;
     }
