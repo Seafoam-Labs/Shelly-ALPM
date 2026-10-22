@@ -71,6 +71,7 @@ pub fn createOwner(io: std.Io, allocator: std.mem.Allocator, c: *const Config, p
         .no_extract = try slices(a, c.no_extract.items),
         .assume_installed = assumed,
         .check_space = c.check_space,
+        .auto_migrate_unowned = c.auto_migrate_unowned,
         .use_syslog = c.use_system_log,
         .default_signature_policy = signature(c.signature_level, 0),
         .local_file_signature_policy = signature(c.local_file_signature_level, c.signature_level),

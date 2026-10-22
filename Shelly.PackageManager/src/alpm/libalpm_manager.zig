@@ -2243,9 +2243,32 @@ pub const Manager = struct {
     }
 
     fn predownloadPreparedPackages(self: *Manager, trans_flags: TransFlag) TransactionError!void {
-        if (trans_flags.dbonly) return;
         self.unexpected_fetch_reported.store(false, .release);
+        // Inspect actual archives even for DBONLY: repository metadata may omit
+        // extensions, and libalpm must not silently discard migration semantics.
         try self.download_prepared_packages();
+        if (trans_flags.downloadonly) return;
+        var packages = rawLibalpm.alpm_trans_get_add(self.handle);
+        while (packages != null) : (packages = packages.*.next) {
+            const data = packages.*.data orelse continue;
+            const package = libalpm.Package{ .ptr = @ptrCast(@alignCast(data)) };
+            const path = if (rawLibalpm.alpm_pkg_get_origin(package.ptr) == rawLibalpm.ALPM_PKG_FROM_SYNCDB)
+                try std.fs.path.join(self.allocator, &.{ self.config.cache_directory, package.file_name() })
+            else
+                try self.allocator.dupe(u8, package.file_name());
+            defer self.allocator.free(path);
+            var archive = @import("Shelly_Rlpm").Package.loadArchive(self.allocator, path, .{}) catch |err| {
+                if (err == error.UnsupportedMigrationVersion) return error.MigrationRequiresRlpm;
+                return error.PackageLoadFailed;
+            };
+            defer archive.deinit();
+            for (archive.xdata) |value| {
+                if (std.mem.startsWith(u8, value.name, @import("Shelly_Rlpm").Migration.metadata_prefix)) {
+                    self.dispatcher.raiseError(.{ .message = diagnostics.cause(error.MigrationRequiresRlpm) });
+                    return error.MigrationRequiresRlpm;
+                }
+            }
+        }
     }
 
     fn stalePartSweep(self: *Manager, max_age: std.Io.Duration) void {
@@ -2258,8 +2281,6 @@ pub const Manager = struct {
     }
 
     fn download_prepared_packages(self: *Manager) TransactionError!void {
-        self.dispatcher.notifyDownload(.{ .name = "", .state = .batch_start });
-        self.stalePartSweep(std.Io.Duration.fromSeconds(500));
         const PackageJob = struct {
             package: libalpm.Package,
             database: libalpm.Database,
@@ -2287,6 +2308,14 @@ pub const Manager = struct {
             jobs.append(self.allocator, .{ .package = package, .database = database }) catch
                 return TransactionError.OutOfMemory;
         }
+        // Empty upgrades and local-only installs have no download batch. Keep
+        // archive migration validation in predownloadPreparedPackages active.
+        if (jobs.items.len == 0) {
+            if (failed) return TransactionError.UpdateFetchFailed;
+            return;
+        }
+        self.dispatcher.notifyDownload(.{ .name = "", .state = .batch_start });
+        self.stalePartSweep(std.Io.Duration.fromSeconds(500));
         const Batch = struct {
             manager: *Manager,
             jobs: []const PackageJob,

@@ -19,6 +19,7 @@ pub const InitError = error{
 };
 pub const TransactionError = error{
     DependencyPlanMismatch,
+    MigrationRequiresRlpm,
     NoHandle,
     TransInitFailed,
     PrepareFailed,

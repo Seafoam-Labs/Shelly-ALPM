@@ -11,7 +11,7 @@ const BackupFile = @import("BackupFile.zig");
 const Manifest = @This();
 pub const Capacity = Root.Capacity;
 
-pub const Action = enum { install, replace, remove, preserve, shared_directory, no_extract, pacnew, pacsave };
+pub const Action = enum { adopt, install, replace, remove, preserve, shared_directory, no_extract, pacnew, pacsave };
 
 pub const Entry = struct {
     package: Plan.Id,
@@ -52,12 +52,22 @@ pub const Local = struct {
     package: Package,
 };
 
+pub const Adoption = struct {
+    origin: @import("Migration.zig").Origin = .api,
+    package: Plan.Id,
+    source: ?Plan.Id,
+    path: []const u8,
+    before: Root.State,
+    backup: ?BackupFile = null,
+};
+
 pub const DatabaseChange = struct {
     package: Plan.Id,
     old: ?Plan.Id,
     remove: bool,
     files: []const PackageFile,
     backups: []const BackupFile,
+    adopted_files: []const []const u8 = &.{},
     reason: ?Package.InstallReason,
     installed_database: ?[]const u8,
 };
@@ -99,6 +109,7 @@ database: Root,
 archives: std.ArrayList(Archive) = .empty,
 locals: std.ArrayList(Local) = .empty,
 entries: std.ArrayList(Entry) = .empty,
+adoptions: std.ArrayList(Adoption) = .empty,
 database_changes: std.ArrayList(DatabaseChange) = .empty,
 conflicts: std.ArrayList(Conflict) = .empty,
 guards: std.ArrayList(Guard) = .empty,
@@ -126,6 +137,16 @@ pub fn deinit(self: *Manifest) void {
     self.database.deinit();
     self.arena.deinit();
     self.* = undefined;
+}
+
+/// Keep adopted leaves and their existing ancestors reachable during removals.
+pub fn protectsAdoption(self: *const Manifest, path: []const u8) bool {
+    for (self.adoptions.items) |item| {
+        if (std.mem.eql(u8, item.path, path) or
+            (item.path.len > path.len and item.path[path.len] == '/' and
+                std.mem.startsWith(u8, item.path, path))) return true;
+    }
+    return false;
 }
 
 pub fn check(self: *const Manifest) !void {
@@ -165,7 +186,7 @@ pub fn revalidate(
         ))
             return error.StaleFilesystemState;
     for (self.entries.items) |entry| {
-        if (entry.action == .no_extract or entry.action == .shared_directory or
+        if (entry.action == .adopt or entry.action == .no_extract or entry.action == .shared_directory or
             (entry.action == .preserve and
                 !entry.refresh_existing_pacnew))
             continue;

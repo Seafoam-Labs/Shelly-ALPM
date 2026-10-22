@@ -74,6 +74,12 @@ block-rounded archive members, and staging/journal directories.
 | NOLOCK | Commit rejected |
 | Read-only local database | Installed-state mutation and reason changes rejected |
 
+[In-place migrations](migration.md) retain existing file contents and publish
+ownership in the destination record. Archive-absent paths carry local retention
+metadata for later RLPM upgrades. The execution report includes planned and
+committed adoption counts; a failure after replacement removal can leave retained
+files unowned until an explicitly reviewed retry.
+
 ## Durable local records and cache lifetime
 
 Local format 9 records include compatible desc/files data, backup hashes,

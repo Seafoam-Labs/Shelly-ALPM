@@ -222,7 +222,15 @@ pub const TransactionPackage = struct {
 };
 
 /// Structured transaction data borrowed for the duration of `Operation.ask`.
+pub const TransactionMigration = struct {
+    path: []const u8,
+    destination: []const u8,
+    source: ?[]const u8 = null,
+    origin: []const u8,
+};
+
 pub const TransactionPlan = struct {
+    migrations: []const TransactionMigration = &.{},
     action: TransactionAction,
     packages: []const TransactionPackage,
     total_download_size: ?u64 = null,

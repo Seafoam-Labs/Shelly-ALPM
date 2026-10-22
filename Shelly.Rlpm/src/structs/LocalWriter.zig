@@ -29,6 +29,15 @@ fn number(w: *std.Io.Writer, key: []const u8, value: anytype) !void {
 }
 
 pub fn description(a: std.mem.Allocator, p: *const Package) ![]const u8 {
+    // An allocating writer reports allocation failure as WriteFailed. There is
+    // no I/O here; preserve the allocator error for diagnostics and fault tests.
+    return serializeDescription(a, p) catch |err| switch (err) {
+        error.WriteFailed => error.OutOfMemory,
+        else => return err,
+    };
+}
+
+fn serializeDescription(a: std.mem.Allocator, p: *const Package) ![]const u8 {
     var output: std.Io.Writer.Allocating = .init(a);
     errdefer output.deinit();
     const w = &output.writer;
@@ -86,6 +95,15 @@ pub fn description(a: std.mem.Allocator, p: *const Package) ![]const u8 {
 }
 
 pub fn files(a: std.mem.Allocator, p: *const Package) ![]const u8 {
+    // An allocating writer reports allocation failure as WriteFailed. There is
+    // no I/O here; preserve the allocator error for diagnostics and fault tests.
+    return serializeFiles(a, p) catch |err| switch (err) {
+        error.WriteFailed => error.OutOfMemory,
+        else => return err,
+    };
+}
+
+fn serializeFiles(a: std.mem.Allocator, p: *const Package) ![]const u8 {
     var output: std.Io.Writer.Allocating = .init(a);
     errdefer output.deinit();
     const w = &output.writer;
@@ -93,6 +111,11 @@ pub fn files(a: std.mem.Allocator, p: *const Package) ![]const u8 {
         try w.writeAll("%FILES%\n");
         for (p.files) |item|
             try w.print("{s}\n", .{item.name});
+        try w.writeByte('\n');
+    }
+    if (p.adopted_files.len != 0) {
+        try w.writeAll("%RLPM_ADOPTED%\n");
+        for (p.adopted_files) |path| try w.print("{s}\n", .{path});
         try w.writeByte('\n');
     }
     if (p.backups.len != 0) {

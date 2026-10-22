@@ -77,6 +77,8 @@ sha256_sum: ?[]const u8 = null,
 base64_signature: ?[]const u8 = null,
 files: []const PackageFile = &.{},
 backups: []const BackupFile = &.{},
+/// Local-only paths retained across upgrades until supplied by an archive.
+adopted_files: []const []const u8 = &.{},
 files_loaded: bool = false,
 files_source: enum { none, database, archive, mtree } = .none,
 members: Members = .{},
@@ -425,6 +427,7 @@ fn parsePkginfo(
         }
         // Unknown keys are ignored for compatibility with newer metadata formats.
     }
+    try @import("Migration.zig").validateXdata(allocator, parsed.xdata.items);
 }
 
 test "Package stores version, database, and package relations" {

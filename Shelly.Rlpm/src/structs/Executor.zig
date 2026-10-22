@@ -25,6 +25,7 @@ const c = Ops.c;
 pub const Boundary = enum {
     pre_hooks,
     pre_scriptlet,
+    migration,
     remove,
     extract,
     payload_sync,
@@ -53,6 +54,8 @@ pub const Report = struct {
     payload_sync_ms: i64 = 0,
     payload_sync_targets: usize = 0,
     database_publish_ms: i64 = 0,
+    adoptions_planned: usize = 0,
+    adoptions_committed: usize = 0,
 };
 /// Compiled out of production. Deterministic I/O-boundary fault injection.
 pub var test_fault: if (builtin.is_test) ?Boundary else void = if (builtin.is_test) null else {};
@@ -90,6 +93,7 @@ pub fn run(tx: *Tx) !void {
         reload(tx) catch {};
     }
     const plan = tx.plan().?;
+    tx.execution.adoptions_planned = tx.manifest().?.adoptions.items.len;
     const a = tx.storage.allocator();
     const remaining = try a.alloc(Plan.Id, plan.removals.len + plan.additions.len);
     @memcpy(remaining[0..plan.removals.len], plan.removals);
@@ -98,6 +102,7 @@ pub fn run(tx: *Tx) !void {
     tx.execution.remaining = remaining;
     try checkpoint(tx, .pre_hooks, null);
     const actions = try tx.startActions();
+    try validateAdoptions(tx, null);
     var observed_database = tx.snapshot;
     try checkDatabase(tx, observed_database);
     // Reserve progress storage before the first mutation.
@@ -108,6 +113,7 @@ pub fn run(tx: *Tx) !void {
         try packageEvent(tx, id, null, .start);
         try checkpoint(tx, .pre_scriptlet, null);
         try actions.beforePackage(id);
+        try validateAdoptions(tx, id);
         try checkDatabase(tx, observed_database);
         var payload = Payload.init(tx, id, null);
         defer payload.deinit();
@@ -124,12 +130,14 @@ pub fn run(tx: *Tx) !void {
         );
         try checkpoint(tx, .post_scriptlet, null);
         try actions.afterPackage(id);
+        try validateAdoptions(tx, id);
         try checkDatabase(tx, observed_database);
         try packageEvent(tx, id, null, .done);
         try checkpoint(tx, .database_write, null);
         var record = try Writer.Record.init(&tx.owned_manifest.?.database, tx.io, a);
         defer record.deinit() catch |err| cleanupFailure(tx, err);
         const old = try Writer.recordName(a, plan.package(id));
+        try validateAdoptions(tx, id);
         try checkpoint(tx, .database_publish, old);
         const publication_start = std.Io.Clock.awake.now(tx.io);
         try record.publish(old, null);
@@ -149,6 +157,7 @@ pub fn run(tx: *Tx) !void {
         try packageEvent(tx, id, addition, .start);
         try checkpoint(tx, .pre_scriptlet, null);
         try actions.beforePackage(id);
+        try validateAdoptions(tx, id);
         try checkDatabase(tx, observed_database);
         var payload = Payload.init(tx, id, addition.old);
         defer payload.deinit();
@@ -160,11 +169,15 @@ pub fn run(tx: *Tx) !void {
         try payload.flush();
         try checkpoint(tx, .database_write, null);
         try record.metadata(&package);
+        try validateAdoptions(tx, id);
         const name = try Writer.recordName(a, &package);
         const old = if (addition.old) |old_id| try Writer.recordName(a, plan.package(old_id)) else null;
         try checkpoint(tx, .database_publish, name);
         const publication_start = std.Io.Clock.awake.now(tx.io);
         try record.publish(old, name);
+        for (tx.manifest().?.adoptions.items) |item| {
+            if (item.package == id) tx.execution.adoptions_committed += 1;
+        }
         tx.execution.database_publish_ms += publication_start.untilNow(tx.io, .awake).toMilliseconds();
         tx.execution.database_published = true;
         observed_database = try DatabaseSnapshot.capture(tx.owner, tx.io);
@@ -377,11 +390,40 @@ fn payloadLog(
     callback(callbacks.log_context, .{ .level = level, .message = message });
 }
 
+// Hooks/scripts may change unrelated payloads. Adopted leaves must still be the
+// exact reviewed objects. Parent timestamps may change through our own writes;
+// parent identities and symlink observations must not.
+fn validateAdoptions(tx: *Tx, id: ?Plan.Id) !void {
+    const m = tx.manifest().?;
+    for (m.adoptions.items) |item| {
+        if (id != null and item.package != id.? and item.source != id) continue;
+        try checkpoint(tx, .migration, item.path);
+        if (!std.meta.eql(@as(?Root.State, item.before), try m.root.inspect(item.path, false)))
+            return error.StaleFilesystemState;
+        for (m.guards.items) |guard| {
+            if (guard.path.len >= item.path.len or item.path[guard.path.len] != '/' or
+                !std.mem.startsWith(u8, item.path, guard.path)) continue;
+            const previous = guard.before orelse return error.StaleFilesystemState;
+            const current = (try m.root.inspect(guard.path, guard.follow)) orelse return error.StaleFilesystemState;
+            if (previous.directory()) {
+                if (previous.device != current.device or previous.inode != current.inode or
+                    previous.mount_id != current.mount_id or previous.mode != current.mode or
+                    previous.uid != current.uid or previous.gid != current.gid)
+                    return error.StaleFilesystemState;
+            } else if (!std.meta.eql(previous, current)) return error.StaleFilesystemState;
+        }
+    }
+}
+
 fn removePayload(tx: *Tx, id: Plan.Id, payload: *Payload) !void {
     if (tx.flags.database_only) return;
     const m = &tx.owned_manifest.?;
     for (m.entries.items) |entry| {
-        if (entry.package != id or entry.archive_index != null) continue;
+        if (entry.package != id or entry.archive_index != null or entry.action == .adopt) continue;
+        if (m.protectsAdoption(entry.path)) {
+            payload.step();
+            continue;
+        }
         defer payload.step();
         const current = (try m.root.inspect(entry.path, false)) orelse continue;
         if (try PathPatterns.match(
@@ -453,6 +495,7 @@ fn install(tx: *Tx, addition: Plan.Addition, record: *Writer.Record, payload: *P
     for (m.database_changes.items) |change|
         if (change.package == addition.package) {
             result.files = change.files;
+            result.adopted_files = change.adopted_files;
             result.backups = try tx.storage.allocator().dupe(BackupFile, change.backups);
             result.install_reason = change.reason;
             result.installed_database = change.installed_database;
@@ -502,6 +545,7 @@ fn install(tx: *Tx, addition: Plan.Addition, record: *Writer.Record, payload: *P
         if (tx.flags.database_only or path.len == 0 or path[0] == '.') continue;
         if (effects.get(ordinal)) |entry| {
             defer payload.step();
+            if (entry.action == .adopt) continue;
             const hash = try extract(tx, &reader, entry.*, payload);
             for (@constCast(result.backups)) |*backup|
                 if (std.mem.eql(u8, backup.name, entry.path)) {
@@ -510,6 +554,10 @@ fn install(tx: *Tx, addition: Plan.Addition, record: *Writer.Record, payload: *P
         }
     }
     try reader.finish();
+    for (m.entries.items) |entry| {
+        if (entry.package == addition.package and entry.action == .adopt and entry.archive_index == null)
+            payload.step();
+    }
     return result;
 }
 

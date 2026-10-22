@@ -603,6 +603,11 @@ pub const Renderer = struct {
                 });
             }
         }
+        for (plan.migrations) |migration| {
+            try self.writeColoredLine(.cyan, "  Preserve {s}: {s} -> {s} ({s})", .{
+                migration.path, migration.source orelse "unowned", migration.destination, migration.origin,
+            });
+        }
         if (plan.total_download_size) |size| {
             var buffer: [64]u8 = undefined;
             try self.writeColoredLine(.cyan, "Total download: {s}", .{
@@ -1476,6 +1481,7 @@ test "single-pane renders complete transaction plans and build-time unknowns" {
         .transaction_plan = .{
             .action = .install,
             .packages = &packages,
+            .migrations = &.{.{ .path = "etc/local.conf", .destination = "demo", .source = "legacy", .origin = "declared" }},
         },
     });
     defer answer.deinit(arena.allocator());
@@ -1487,6 +1493,7 @@ test "single-pane renders complete transaction plans and build-time unknowns" {
     try std.testing.expect(std.mem.indexOf(u8, rendered, "Determined during build") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "cmake 4.0.3-1 [build dependency, repository]") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "1024 B") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "Preserve etc/local.conf: legacy -> demo (declared)") != null);
 }
 
 test "terminal PKGBUILD review loads collapse setting and preserves review attachments" {

@@ -3382,13 +3382,16 @@ test "sync_system_update reuses databases refreshed by sync (issue 2060)" {
 
     var counter: DownloadCounter = .{};
     _ = try mgr.dispatcher.addDownloadHandler(.{ .function = DownloadCounter.receive, .data = &counter });
-    // Nothing needs upgrading here, so libalpm refuses the empty commit. Only
-    // the database refresh before it matters.
-    if (mgr.sync_system_update(.{ .dbonly = true })) |result| {
-        var report = result;
-        report.deinit();
-    } else |_| {}
-    try testing.expectEqual(@as(usize, 0), counter.updates);
+    // Nothing needs upgrading here, so libalpm may refuse the empty commit.
+    // Neither a second database refresh nor an empty package-download batch
+    // should emit download events, including during DBONLY migration checks.
+    for ([_]libalpm.TransFlag{ .{ .dbonly = true }, .{} }) |flags| {
+        if (mgr.sync_system_update(flags)) |result| {
+            var report = result;
+            report.deinit();
+        } else |_| {}
+        try testing.expectEqual(@as(usize, 0), counter.updates);
+    }
 }
 
 test "update_package_reason reports PackageFetchFailed for a missing package" {
