@@ -2281,8 +2281,6 @@ pub const Manager = struct {
     }
 
     fn download_prepared_packages(self: *Manager) TransactionError!void {
-        self.dispatcher.notifyDownload(.{ .name = "", .state = .batch_start });
-        self.stalePartSweep(std.Io.Duration.fromSeconds(500));
         const PackageJob = struct {
             package: libalpm.Package,
             database: libalpm.Database,
@@ -2310,6 +2308,14 @@ pub const Manager = struct {
             jobs.append(self.allocator, .{ .package = package, .database = database }) catch
                 return TransactionError.OutOfMemory;
         }
+        // Empty upgrades and local-only installs have no download batch. Keep
+        // archive migration validation in predownloadPreparedPackages active.
+        if (jobs.items.len == 0) {
+            if (failed) return TransactionError.UpdateFetchFailed;
+            return;
+        }
+        self.dispatcher.notifyDownload(.{ .name = "", .state = .batch_start });
+        self.stalePartSweep(std.Io.Duration.fromSeconds(500));
         const Batch = struct {
             manager: *Manager,
             jobs: []const PackageJob,
