@@ -21,6 +21,39 @@ fn commit(owner: *rlpm.Owner, archive: []const u8, flags: rlpm.TransactionFlags)
     try tx.prepare();
     try tx.commit();
 }
+
+test "migration declarations reject changes by real pre-transaction hooks and pre-install scripts" {
+    const path = "etc/xdg/uwsm/env.d/60-devario-gpu.sh";
+    for ([_]bool{ false, true }) |hook| {
+        var f = try Fixture.init();
+        defer f.deinit();
+        try f.shell();
+        try f.write("root/" ++ path, "reviewed configuration");
+        if (hook) try f.hook(
+            "migration.hook",
+            "[Trigger]\nOperation=Install\nType=Path\nTarget=" ++ path ++
+                "\n[Action]\nWhen=PreTransaction\nExec=/usr/bin/bash -c 'printf changed > /" ++ path ++ "'\n",
+        );
+        var archive = try Archive.init(&.{
+            .{ .path = ".PKGINFO", .contents = "pkgname = devario-system-integration\npkgver = 1-1\narch = any\nxdata = shelly.migration.v1={\"path\":\"" ++ path ++ "\",\"from\":\"unowned\",\"backup\":true}\n" },
+            .{ .path = ".INSTALL", .contents = if (hook) "pre_install() { :; }\n" else "pre_install() { printf changed > /" ++ path ++ "; }\n" },
+        }, .none);
+        defer archive.deinit();
+        var owner = try f.owner();
+        defer owner.deinit() catch unreachable;
+        const tx = try owner.initializeTransaction(io, .{});
+        defer owner.releaseTransaction() catch unreachable;
+        try Fixture.add(tx, archive.path);
+        try tx.prepare();
+        try std.testing.expectError(error.StaleFilesystemState, tx.commit());
+        try std.testing.expectEqual(.migration, tx.execution.boundary);
+        try std.testing.expectEqualStrings(path, tx.execution.path.?);
+        try std.testing.expectEqual(0, tx.execution.adoptions_committed);
+        try f.expect("root/" ++ path, "changed");
+        try std.testing.expect((try owner.findPackage(owner.localDatabase().?, "devario-system-integration")) == null);
+    }
+}
+
 test "actual commit replays native scripts hooks DBONLY and DOWNLOADONLY traces" {
     const parsed = try std.json.parseFromSlice(std.json.Value, a, @embedFile("reference/actions.json"), .{});
     defer parsed.deinit();

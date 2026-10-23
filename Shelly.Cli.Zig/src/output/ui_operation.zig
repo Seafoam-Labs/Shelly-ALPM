@@ -795,6 +795,7 @@ test "UI transaction plan preserves package roles sizes and unknown AUR sizes" {
         .transaction_plan = .{
             .action = .install,
             .packages = &packages,
+            .migrations = &.{.{ .path = "etc/local.conf", .destination = "demo", .source = "legacy", .origin = "declared" }},
         },
     });
     defer answer.deinit(arena.allocator());
@@ -813,6 +814,7 @@ test "UI transaction plan preserves package roles sizes and unknown AUR sizes" {
     try std.testing.expect(std.mem.indexOf(u8, decoded, "\"DownloadSize\":null") != null);
     try std.testing.expect(std.mem.indexOf(u8, decoded, "\"Role\":\"build_dependency\"") != null);
     try std.testing.expect(std.mem.indexOf(u8, decoded, "\"DownloadSize\":1024") != null);
+    try std.testing.expect(std.mem.indexOf(u8, decoded, "\"Migrations\":[{\"path\":\"etc/local.conf\",\"destination\":\"demo\",\"source\":\"legacy\",\"origin\":\"declared\"}]") != null);
 }
 
 test "UI removal plan honors accept decline and EOF" {

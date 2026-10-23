@@ -41,6 +41,7 @@ xdata: std.ArrayList(Package.XData) = .empty,
 
 files: std.ArrayList(PackageFile) = .empty,
 backups: std.ArrayList(BackupFile) = .empty,
+adopted_files: std.ArrayList([]const u8) = .empty,
 files_loaded: bool = false,
 
 /// The arena owns all result fields, including copied input strings. Failed
@@ -105,7 +106,7 @@ pub fn intoPackage(
             );
         @field(result, field) = relations;
     }
-    inline for (.{ "groups", "licenses" }) |field| {
+    inline for (.{ "groups", "licenses", "adopted_files" }) |field| {
         const values = @field(self, field).items;
         const strings = try allocator.alloc([]const u8, values.len);
         for (values, strings) |value, *string|
@@ -160,6 +161,7 @@ pub fn deinit(self: *ParsedDescription, allocator: std.mem.Allocator) void {
         "xdata",
         "files",
         "backups",
+        "adopted_files",
     }) |field|
         @field(self, field).deinit(allocator);
     self.* = undefined;
@@ -229,6 +231,7 @@ pub fn parse(
                 },
             ),
             .backups => try result.backups.append(allocator, try BackupFile.parseLocal(line)),
+            .adopted_files => try result.adopted_files.append(allocator, line),
             .groups => try result.groups.append(allocator, line),
             .licenses => try result.licenses.append(allocator, line),
 
@@ -419,6 +422,7 @@ pub fn descSectionFromHeader(header: []const u8) DescSection {
     if (std.mem.eql(u8, header, "%PGPSIG%")) return .base64_signature;
     if (std.mem.eql(u8, header, "%CSIZE%")) return .compressed_size;
     if (std.mem.eql(u8, header, "%FILES%")) return .files;
+    if (std.mem.eql(u8, header, "%RLPM_ADOPTED%")) return .adopted_files;
     if (std.mem.eql(u8, header, "%BACKUP%")) return .backups;
 
     return .ignore;
@@ -467,6 +471,7 @@ pub const DescSection = enum {
     compressed_size,
     files,
     backups,
+    adopted_files,
 };
 
 test "ParsedDescription defaults to empty and releases list storage" {

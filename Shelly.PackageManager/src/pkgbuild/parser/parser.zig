@@ -201,6 +201,9 @@ pub const PkgbuildParser = struct {
         }
         const make_depends = try fields.resolve_arch_array_field(self, content, &vars, "makedepends");
         const check_depends = try fields.resolve_arch_array_field(self, content, &vars, "checkdepends");
+        const migrations = try fields.resolve_package_array_field(self, content, &vars, "shelly_migrate");
+        errdefer variables.freeStringSlice(self.allocator, migrations);
+        try @import("Shelly_Rlpm").Migration.validateDeclarations(self.allocator, migrations);
         const xdata = try fields.resolve_array_field(self, content, &vars, "xdata");
         errdefer variables.freeStringSlice(self.allocator, xdata);
         try validation.validate_xdata(xdata);
@@ -231,6 +234,7 @@ pub const PkgbuildParser = struct {
             .backup = try fields.resolve_package_array_field(self, content, &vars, "backup"),
             .options = try fields.resolve_package_array_field(self, content, &vars, "options"),
             .xdata = xdata,
+            .shelly_migrate = migrations,
             .source = source,
             .valid_pgp_keys = try fields.resolve_array_field(self, content, &vars, "validpgpkeys"),
             .no_extract = try fields.resolve_array_field(self, content, &vars, "noextract"),

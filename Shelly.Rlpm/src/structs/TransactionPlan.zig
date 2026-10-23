@@ -18,6 +18,17 @@ pub const Candidate = struct {
     repository: ?usize = null,
 };
 
+pub const Replacement = struct { new: Id, old: Id };
+
+pub const Migration = struct {
+    origin: @import("Migration.zig").Origin = .api,
+    package: Id,
+    source: ?Id,
+    path: []const u8,
+    optional: bool,
+    backup: bool,
+};
+
 pub const Addition = struct {
     package: Id,
     old: ?Id,
@@ -119,6 +130,8 @@ flags: TransactionFlags = .{},
 had_prepare_targets: bool = false,
 additions: []const Addition = &.{},
 removals: []const Id = &.{},
+replacements: []const Replacement = &.{},
+migrations: []const Migration = &.{},
 unchanged_satisfiers: []const Id = &.{},
 edges: []const Edge = &.{},
 questions: []const Callbacks.Question = &.{},
@@ -206,4 +219,19 @@ pub fn copyValue(comptime T: type, allocator: std.mem.Allocator, value: T) error
         },
         else => return value,
     }
+}
+
+/// Only an accepted replacement or the destination's old version authorizes transfer.
+pub fn migrationSource(self: *const Plan, destination: Id, name: []const u8) ?Id {
+    for (self.replacements) |replacement| {
+        if (replacement.new == destination and
+            std.mem.indexOfScalar(Id, self.removals, replacement.old) != null and
+            std.mem.eql(u8, self.package(replacement.old).name, name)) return replacement.old;
+    }
+    for (self.additions) |addition| {
+        if (addition.package == destination) if (addition.old) |old| {
+            if (std.mem.eql(u8, self.package(old).name, name)) return old;
+        };
+    }
+    return null;
 }

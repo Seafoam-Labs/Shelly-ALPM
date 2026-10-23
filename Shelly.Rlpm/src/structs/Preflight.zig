@@ -1,5 +1,6 @@
 //! Read-only preparation of the filesystem executor's input. No extraction.
 const std = @import("std");
+const Migration = @import("Migration.zig");
 const Tx = @import("Transaction.zig");
 const Manifest = @import("ExecutionManifest.zig");
 const Plan = @import("TransactionPlan.zig");
@@ -138,6 +139,8 @@ const Builder = struct {
         }
         self.phase(.load_packages, .done);
         try self.tx.owner.checkCancelled();
+        try self.migrations();
+        try self.automaticMigrations();
         if (!self.tx.flags.database_only) {
             self.phase(.file_conflicts, .start);
             {
@@ -468,6 +471,191 @@ const Builder = struct {
         self.current_path = null;
     }
 
+    fn adoption(self: *Builder, path: []const u8) ?Manifest.Adoption {
+        for (self.m.adoptions.items) |item|
+            if (std.mem.eql(u8, item.path, path)) return item;
+        return null;
+    }
+
+    fn migrations(self: *Builder) !void {
+        for (self.plan.migrations) |request| try self.adopt(request);
+        try self.declaredMigrations();
+        // Only local migration metadata can carry ownership across upgrades.
+        // Incoming archive inventories remain an independently verified input.
+        for (self.plan.additions, self.m.archives.items) |addition, archive| {
+            const old = addition.old orelse continue;
+            const installed = self.local(old);
+            if (installed.adopted_files.len != 0 and self.tx.flags.database_only)
+                return error.InvalidMigrationFlags;
+            for (installed.adopted_files) |path| {
+                try Migration.validatePath(path);
+                if (!self.owns(old, path)) return error.InvalidMigrationMetadata;
+                if (archive.find(path) != null or self.adoption(path) != null) continue;
+                try self.adopt(.{
+                    .package = addition.package,
+                    .source = old,
+                    .origin = .retained,
+                    .path = path,
+                    .optional = true,
+                    .backup = false,
+                });
+            }
+        }
+    }
+
+    fn declaredMigrations(self: *Builder) !void {
+        for (self.m.archives.items) |archive| {
+            for (archive.package.xdata) |value| {
+                if (!std.mem.eql(u8, value.name, Migration.metadata_key)) continue;
+                const parsed = try Migration.parse(self.a, value.value);
+                defer parsed.deinit();
+                const declaration = parsed.value;
+                self.current_package = archive.id;
+                self.current_path = try self.a.dupe(u8, declaration.path);
+                var source: ?Plan.Id = null;
+                if (std.mem.eql(u8, declaration.from, "unowned")) {
+                    // A declaration must not freeze ordinary subsequent upgrades.
+                    if (self.oldOf(archive.id)) |old| {
+                        if (self.owns(old, declaration.path)) continue;
+                    }
+                } else {
+                    const name = declaration.from["package:".len..];
+                    source = self.plan.migrationSource(archive.id, name);
+                    if (source == null) {
+                        // Clean installs do not require the replaced package. An
+                        // installed source without an accepted relationship is an error.
+                        for (self.m.locals.items) |local_item| {
+                            if (std.mem.eql(u8, local_item.package.name, name))
+                                return error.InvalidMigrationSource;
+                        }
+                        continue;
+                    }
+                }
+                try self.adopt(.{
+                    .package = archive.id,
+                    .source = source,
+                    .origin = .declared,
+                    .path = self.current_path.?,
+                    .optional = declaration.optional,
+                    .backup = declaration.backup,
+                });
+            }
+        }
+    }
+
+    fn automaticMigrations(self: *Builder) !void {
+        if (!self.tx.owner.configuration.auto_migrate_unowned or
+            self.tx.flags.database_only or self.tx.flags.download_only) return;
+        for (self.m.archives.items) |archive| {
+            for (archive.payload) |entry| {
+                if (entry.file.kind != .regular and entry.file.kind != .symlink) continue;
+                if (self.adoption(entry.path) != null or self.ownerOf(entry.path) != null) continue;
+                // Leave native backup and extraction policy intact for automatic discovery.
+                if (backupHash(archive.package, entry.path) != .absent or
+                    try self.matches(.no_extract, entry.path) or
+                    try self.matches(.no_upgrade, entry.path)) continue;
+                const before = (try self.observe(entry.path)) orelse continue;
+                if (!before.regular() and !before.symlink()) continue;
+                try self.adopt(.{
+                    .package = archive.id,
+                    .source = null,
+                    .origin = .automatic,
+                    .path = entry.path,
+                    .optional = false,
+                    .backup = false,
+                });
+            }
+        }
+    }
+
+    fn adopt(self: *Builder, request: Plan.Migration) !void {
+        self.current_package = request.package;
+        self.current_path = request.path;
+        try self.tx.owner.checkCancelled();
+        if (self.tx.flags.database_only or self.tx.flags.download_only) return error.InvalidMigrationFlags;
+        try Migration.validatePath(request.path);
+        if (self.adoption(request.path) != null) return error.DuplicateMigration;
+        if (self.file_owners.get(request.path)) |owners| {
+            if (request.source == null or owners.items.len != 1 or owners.items[0] != request.source.?)
+                return error.MigrationOwnershipConflict;
+        } else if (request.source != null) return error.MigrationOwnershipConflict;
+        if (try self.matches(.no_extract, request.path)) return error.MigrationNoExtractConflict;
+        const before = (try self.observe(request.path)) orelse {
+            if (request.optional) return;
+            return error.MigrationPathMissing;
+        };
+        if (!before.regular() and !before.symlink()) return error.UnsupportedMigrationType;
+        for (self.m.locals.items) |local_item| {
+            for (local_item.package.files) |file| {
+                const path = std.mem.trimEnd(u8, file.name, "/");
+                if (std.mem.eql(u8, file.name, request.path)) continue;
+                if (try self.sameLocation(path, request.path)) return error.MigrationOwnershipConflict;
+            }
+        }
+        var backup: ?BackupFile = null;
+        if (request.source) |id| {
+            for (self.local(id).backups) |item|
+                if (std.mem.eql(u8, item.name, request.path)) {
+                    backup = item;
+                    break;
+                };
+        }
+        for (self.m.archives.items) |archive| {
+            for (archive.payload) |entry| {
+                if (std.mem.eql(u8, entry.path, request.path)) {
+                    if (archive.id != request.package) return error.MigrationTargetConflict;
+                    if ((before.regular() and entry.file.kind != .regular) or
+                        (before.symlink() and entry.file.kind != .symlink)) return error.UnsupportedMigrationType;
+                    if (backup == null and backupHash(archive.package, request.path) != .absent)
+                        backup = .{ .name = request.path, .hash = entry.new_hash };
+                } else if (try self.sameLocation(request.path, entry.path) or
+                    try self.ancestorLocation(request.path, entry.path) or
+                    (entry.file.kind != .directory and try self.ancestorLocation(entry.path, request.path)))
+                    return error.MigrationTargetConflict;
+                if (entry.file.kind == .hardlink and
+                    try self.sameLocation(request.path, entry.file.link_target.?))
+                    return error.MigrationTargetConflict;
+            }
+        }
+        for (self.m.adoptions.items) |other|
+            if (try self.sameLocation(request.path, other.path) or
+                try self.ancestorLocation(request.path, other.path) or
+                try self.ancestorLocation(other.path, request.path))
+                return error.MigrationTargetConflict;
+        if (backup == null and request.backup) {
+            if (!before.regular()) return error.UnsupportedMigrationBackup;
+            var hash: [32]u8 = undefined;
+            if (!try self.m.root.hash(self.tx.io, request.path, &hash)) return error.MigrationPathMissing;
+            backup = .{ .name = request.path, .hash = try self.a.dupe(u8, &hash) };
+        }
+        if (backup != null and !before.regular()) return error.UnsupportedMigrationBackup;
+        try self.m.adoptions.append(self.a, .{
+            .origin = request.origin,
+            .package = request.package,
+            .source = request.source,
+            .path = request.path,
+            .before = before,
+            .backup = backup,
+        });
+    }
+
+    fn sameLocation(self: *Builder, left: []const u8, right: []const u8) !bool {
+        if (std.mem.eql(u8, left, right)) return true;
+        if (!std.mem.eql(u8, std.fs.path.basename(left), std.fs.path.basename(right))) return false;
+        const l = (try self.m.root.inspect(std.fs.path.dirname(left) orelse ".", true)) orelse return false;
+        const r = (try self.m.root.inspect(std.fs.path.dirname(right) orelse ".", true)) orelse return false;
+        return l.device == r.device and l.inode == r.inode;
+    }
+
+    fn ancestorLocation(self: *Builder, parent: []const u8, child: []const u8) !bool {
+        var cursor: usize = 0;
+        while (std.mem.indexOfScalarPos(u8, child, cursor, '/')) |index| {
+            if (try self.sameLocation(parent, child[0..index])) return true;
+            cursor = index + 1;
+        }
+        return false;
+    }
+
     fn matches(
         self: *Builder,
         comptime list: OwnerConfiguration.StringList,
@@ -579,6 +767,9 @@ const Builder = struct {
                     cursor = index + 1;
                 }
                 const before = (try self.observe(entry.path)) orelse continue;
+                if (self.adoption(entry.path)) |item| {
+                    if (item.package == archive.id) continue;
+                }
                 if (before.directory() and entry.file.kind == .directory) continue;
                 const old = self.oldOf(archive.id);
                 if (old) |id|
@@ -697,6 +888,7 @@ const Builder = struct {
                 // Existing nonempty directories may remain after removals. The
                 // executor must use rmdir, never recursive deletion.
             }
+            if (self.m.protectsAdoption(path)) entry.action = .preserve;
             if (entry.action == .remove and entry.before != null and !entry.before.?.directory() and
                 !self.tx.flags.no_save)
             {
@@ -774,6 +966,13 @@ const Builder = struct {
             self.current_path = source.path;
             var entry = source;
             entry.before = try self.observe(entry.path);
+            if (self.adoption(entry.path)) |item| {
+                if (item.package == archive.id) {
+                    entry.action = .adopt;
+                    try self.m.entries.append(self.a, entry);
+                    continue;
+                }
+            }
             if (entry.file.kind == .symlink and backupHash(archive.package, entry.path) != .absent) {
                 entry.new_hash = try self.hashLink(entry.path, entry.file.link_target.?, 0);
             }
@@ -861,6 +1060,16 @@ const Builder = struct {
             }
             try self.m.entries.append(self.a, entry);
         }
+        for (self.m.adoptions.items) |item| {
+            if (item.package != archive.id or archive.find(item.path) != null) continue;
+            try self.m.entries.append(self.a, .{
+                .package = item.package,
+                .path = item.path,
+                .action = .adopt,
+                .before = item.before,
+                .file = .{ .name = item.path, .size = item.before.size, .mode = item.before.mode, .kind = if (item.before.regular()) .regular else .symlink },
+            });
+        }
         self.current_package = null;
         self.current_path = null;
     }
@@ -885,13 +1094,30 @@ const Builder = struct {
                 },
             );
         for (self.plan.additions, self.m.archives.items) |addition, archive| {
-            const files = try self.a.alloc(File, archive.payload.len);
-            for (files, archive.payload) |*file, entry|
-                file.* = entry.file;
-            std.mem.sort(File, files, {}, fileLess);
-            const backups = try self.a.alloc(BackupFile, archive.package.backups.len);
-            for (backups, archive.package.backups) |*backup, original| {
-                backup.* = .{ .name = original.name, .hash = null };
+            var files: std.ArrayList(File) = .empty;
+            var adopted: std.ArrayList([]const u8) = .empty;
+            var backups: std.ArrayList(BackupFile) = .empty;
+            for (archive.payload) |entry| try files.append(self.a, entry.file);
+            for (self.m.adoptions.items) |item| {
+                if (item.package != archive.id) continue;
+                if (archive.find(item.path) == null) {
+                    try files.append(self.a, .{ .name = item.path });
+                    try adopted.append(self.a, item.path);
+                }
+                if (item.backup) |backup| try backups.append(self.a, backup);
+            }
+            std.mem.sort(File, files.items, {}, fileLess);
+            std.mem.sort([]const u8, adopted.items, {}, struct {
+                fn less(_: void, left: []const u8, right: []const u8) bool {
+                    return std.mem.lessThan(u8, left, right);
+                }
+            }.less);
+            for (archive.package.backups) |original| {
+                if (self.adoption(original.name)) |item| {
+                    if (item.backup != null) continue;
+                }
+                try backups.append(self.a, .{ .name = original.name, .hash = null });
+                const backup = &backups.items[backups.items.len - 1];
                 const entry = archive.find(original.name) orelse continue;
                 if (!self.tx.flags.database_only and !try self.matches(.no_extract, entry.file.name))
                     backup.hash = entry.new_hash;
@@ -908,8 +1134,9 @@ const Builder = struct {
                     .package = addition.package,
                     .old = addition.old,
                     .remove = false,
-                    .files = files,
-                    .backups = backups,
+                    .files = files.items,
+                    .backups = backups.items,
+                    .adopted_files = adopted.items,
                     .reason = addition.reason,
                     .installed_database = addition.installed_database,
                 },
@@ -960,7 +1187,7 @@ const Builder = struct {
         for (self.m.entries.items) |entry| {
             self.current_package = entry.package;
             self.current_path = entry.path;
-            if (entry.action == .no_extract or entry.action == .shared_directory or
+            if (entry.action == .adopt or entry.action == .no_extract or entry.action == .shared_directory or
                 (entry.action == .preserve and
                     !entry.refresh_existing_pacnew))
                 continue;
@@ -1050,6 +1277,7 @@ const Builder = struct {
                     if (change.package == archive.id) {
                         package.files = change.files;
                         package.backups = change.backups;
+                        package.adopted_files = change.adopted_files;
                         package.install_reason = change.reason;
                         package.installed_database = change.installed_database;
                     };

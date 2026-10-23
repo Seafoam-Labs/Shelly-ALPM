@@ -13,6 +13,7 @@ const TransactionFlags = @import("TransactionFlags.zig");
 const ExecutionManifest = @import("ExecutionManifest.zig");
 const TransactionActions = @import("TransactionActions.zig");
 const DatabaseLock = @import("DatabaseLock.zig");
+const Migration = @import("Migration.zig");
 const Preflight = @import("Preflight.zig");
 const Diagnostic = @import("Diagnostic.zig");
 const Callbacks = @import("Callbacks.zig");
@@ -47,6 +48,7 @@ cause: ?anyerror = null,
 storage: std.heap.ArenaAllocator,
 targets: std.ArrayList(Target) = .empty,
 removals: std.ArrayList([]const u8) = .empty,
+migration_requests: std.ArrayList(Migration.Request) = .empty,
 system_upgrade: bool = false,
 allow_downgrade: bool = false,
 owned_plan: ?Plan = null,
@@ -174,6 +176,46 @@ pub fn addTarget(self: *Transaction, text: []const u8) !void {
     try self.targets.append(self.owner.allocator, .{ .text = owned });
 }
 
+/// Adopt exact existing paths without extracting over them. Must precede prepare.
+pub fn addMigration(self: *Transaction, request: Migration.Request) !void {
+    try self.mutable();
+    defer self.owner.busy = false;
+    errdefer |err| self.recordFailure(err);
+    if (self.flags.database_only or self.flags.download_only) return error.InvalidMigrationFlags;
+    try Migration.validatePath(request.path);
+    if (request.package.len == 0) return error.InvalidMigrationTarget;
+    for (self.migration_requests.items) |previous|
+        if (std.mem.eql(u8, previous.path, request.path)) return error.DuplicateMigration;
+    const a = self.storage.allocator();
+    const owned = try Plan.copyValue(Migration.Request, a, request);
+    try self.migration_requests.append(a, owned);
+}
+
+fn resolveMigrations(self: *Transaction) !void {
+    const plan_value = &self.owned_plan.?;
+    const a = plan_value.arena.allocator();
+    const resolved = try a.alloc(Plan.Migration, self.migration_requests.items.len);
+    for (self.migration_requests.items, resolved) |request, *out| {
+        const destination = for (plan_value.additions) |addition| {
+            if (std.mem.eql(u8, plan_value.package(addition.package).name, request.package))
+                break addition.package;
+        } else return error.InvalidMigrationTarget;
+        var source: ?Plan.Id = null;
+        if (request.source == .replaced_package) {
+            source = plan_value.migrationSource(destination, request.source.replaced_package) orelse
+                return error.InvalidMigrationSource;
+        }
+        out.* = .{
+            .package = destination,
+            .source = source,
+            .path = try a.dupe(u8, request.path),
+            .optional = request.optional,
+            .backup = request.backup,
+        };
+    }
+    plan_value.migrations = resolved;
+}
+
 pub fn addPackage(self: *Transaction, reference: Ref) !void {
     try self.mutable();
     defer self.owner.busy = false;
@@ -253,7 +295,10 @@ fn prepareInternal(self: *Transaction) !void {
     try self.checkSnapshot();
     if (self.owned_plan) |*previous| previous.deinit();
     self.owned_plan = null;
-    if (self.targets.items.len == 0 and self.removals.items.len == 0 and !self.system_upgrade) return;
+    if (self.targets.items.len == 0 and self.removals.items.len == 0 and !self.system_upgrade) {
+        if (self.migration_requests.items.len != 0) return error.InvalidMigrationTarget;
+        return;
+    }
     var targets: std.ArrayList(Resolver.Target) = .empty;
     defer targets.deinit(self.owner.allocator);
     for (self.targets.items) |target|
@@ -273,6 +318,7 @@ fn prepareInternal(self: *Transaction) !void {
         },
     );
     try self.owned_plan.?.check();
+    try self.resolveMigrations();
     try self.checkSnapshot();
 }
 

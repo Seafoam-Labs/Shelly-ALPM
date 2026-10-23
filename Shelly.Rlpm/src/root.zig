@@ -39,6 +39,7 @@ pub const PhysicalArchitectures = @import("structs/PhysicalArchitectures.zig");
 pub const Resolver = @import("structs/Resolver.zig");
 pub const TransactionPlan = @import("structs/TransactionPlan.zig");
 pub const TransactionFlags = @import("structs/TransactionFlags.zig");
+pub const Migration = @import("structs/Migration.zig");
 pub const Transaction = @import("structs/Transaction.zig");
 pub const ExecutionManifest = @import("structs/ExecutionManifest.zig");
 pub const PathPatterns = @import("structs/PathPatterns.zig");

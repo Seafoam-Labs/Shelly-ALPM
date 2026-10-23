@@ -72,6 +72,12 @@ removals and transfers between upgrading packages affect conflict decisions.
 Replacing a directory requires eligible directory owners and ownership of every
 existing descendant. Overwrite cannot authorize replacement of an unowned tree.
 
+Explicit [migration requests](migration.md) also contribute adoption entries and
+installed inventory, even when their paths are absent from the archive. Adoption
+checks all local owners and competing payload paths before planning removals;
+approved leaves and their necessary ancestors are retained. These checks are not
+bypassed by overwrite patterns or NOCONFLICTS.
+
 ## Patterns and backups
 
 `Owner.matchNoExtract(path)` and `matchNoUpgrade(path)` return `PathPatterns.Match`:

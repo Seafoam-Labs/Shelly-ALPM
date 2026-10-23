@@ -152,7 +152,15 @@ pub const Question = union(enum) {
     transaction: TransactionQuestion,
 };
 
+pub const TransactionMigration = struct {
+    path: []const u8,
+    destination: []const u8,
+    source: ?[]const u8 = null,
+    origin: []const u8,
+};
+
 pub const TransactionQuestion = struct {
+    migrations: []const TransactionMigration = &.{},
     question_id: []const u8,
     question_text: []const u8,
     action: []const u8,
@@ -236,6 +244,7 @@ pub const TransactionRequest = struct {
     QuestionText: []const u8 = "",
     Action: []const u8 = "",
     Packages: []TransactionPackageWire = &.{},
+    Migrations: []TransactionMigration = &.{},
     TotalDownloadSize: ?u64 = null,
     TotalInstalledSize: ?u64 = null,
     NetInstalledSize: ?i64 = null,
@@ -862,7 +871,15 @@ fn parseTransaction(op: *ShellyOperation, json: []const u8) !?*PendingQuestion {
         .installed_size = package.InstalledSize,
     };
 
+    const migrations = try qa.alloc(TransactionMigration, e.value.Migrations.len);
+    for (e.value.Migrations, migrations) |migration, *target| target.* = .{
+        .path = try qa.dupe(u8, migration.path),
+        .destination = try qa.dupe(u8, migration.destination),
+        .source = if (migration.source) |source| try qa.dupe(u8, source) else null,
+        .origin = try qa.dupe(u8, migration.origin),
+    };
     pending.request = .{ .transaction = .{
+        .migrations = migrations,
         .question_id = try qa.dupe(u8, e.value.QuestionId),
         .question_text = qa.dupe(u8, e.value.QuestionText) catch "",
         .action = qa.dupe(u8, e.value.Action) catch "",
@@ -1073,4 +1090,19 @@ test "clean cache argv preserves the caller cache before privileged launch" {
     }
     try std.testing.expectEqual(null, try purifyCacheRoot(std.testing.allocator, &.{ "purify", "standard", "--cache", "0" }, &environment));
     try std.testing.expectEqual(null, try purifyCacheRoot(std.testing.allocator, &.{ "purify", "standard", "--aur-cache", "--aur-cache-root", "/tmp/explicit/Shelly" }, &environment));
+}
+
+test "transaction migration preview owns strings after decoding" {
+    // Parsing needs only the allocator; no subprocess or GTK display is used.
+    var operation: ShellyOperation = undefined;
+    operation.allocator = std.testing.allocator;
+    const pending = (try parseTransaction(&operation,
+        \\{"$kind":"q.transaction","QuestionId":"1","Action":"install","Migrations":[{"path":"etc/local.conf","destination":"demo","source":"legacy","origin":"declared"}]}
+    )).?;
+    defer pending.destroy();
+    const migration = pending.request.transaction.migrations[0];
+    try std.testing.expectEqualStrings("etc/local.conf", migration.path);
+    try std.testing.expectEqualStrings("demo", migration.destination);
+    try std.testing.expectEqualStrings("legacy", migration.source.?);
+    try std.testing.expectEqualStrings("declared", migration.origin);
 }

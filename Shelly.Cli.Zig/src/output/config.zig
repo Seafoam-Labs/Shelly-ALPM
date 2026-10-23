@@ -319,6 +319,8 @@ pub fn writeTransactionQuestionFrame(
         try json.endObject();
     }
     try json.endArray();
+    try json.objectField("Migrations");
+    try json.write(plan.migrations);
     try json.objectField("TotalDownloadSize");
     try json.write(plan.total_download_size);
     try json.objectField("TotalInstalledSize");

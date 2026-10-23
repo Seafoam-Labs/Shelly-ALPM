@@ -478,6 +478,15 @@ fn writePackageInfo(
     try writeKeyValue(writer, "pkgbase", package_base);
     try writeKeyValue(writer, "xdata", if (package_build.is_split) "pkgtype=split" else "pkgtype=pkg");
     try writeKeyValues(writer, "xdata", package_build.xdata);
+    const migration = @import("Shelly_Rlpm").Migration;
+    if (package_build.shelly_migrate) |declarations| {
+        try migration.validateDeclarations(self.allocator, declarations);
+        for (declarations) |declaration| {
+            const value = try std.fmt.allocPrint(self.allocator, "{s}={s}", .{ migration.metadata_key, declaration });
+            defer self.allocator.free(value);
+            try writeKeyValue(writer, "xdata", value);
+        }
+    }
     try writeKeyValue(writer, "pkgver", full_version);
     if (package_build.pkg_desc) |value| try writeKeyValue(writer, "pkgdesc", value);
     if (package_build.url) |value| try writeKeyValue(writer, "url", value);

@@ -3,14 +3,14 @@ msgstr ""
 "Project-Id-Version: shelly-ui 2.2.4.1\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
 "POT-Creation-Date: 2026-10-11 18:31-0300\n"
-"PO-Revision-Date: 2026-09-22 15:29+0200\n"
+"PO-Revision-Date: 2026-10-20 16:15+0200\n"
 "Last-Translator: helge1o1o1@gmail.com\n"
 "Language-Team: Deutschland (Deutsch) helge1o1o1@gmail.com\n"
 "Language: de\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"X-Generator: Poedit 3.9\n"
+"X-Generator: Poedit 3.10\n"
 
 msgid "No installable addons available"
 msgstr "Keine installierbaren Add-ons verfügbar"
@@ -60,12 +60,11 @@ msgstr "App-Daten werden dauerhaft entfernt."
 msgid "Confirm"
 msgstr "Bestätigen"
 
-#| msgid "No description available."
 msgid "Permissions unavailable"
-msgstr ""
+msgstr "Berechtigungen nicht verfügbar"
 
 msgid "Shelly could not read the permissions for this app."
-msgstr ""
+msgstr "Shelly konnte die Berechtigungen für diese App nicht lesen."
 
 msgid "No special permissions requested"
 msgstr "Keine besonderen Berechtigungen angefordert"
@@ -112,12 +111,11 @@ msgstr ""
 msgid "Review PKGBUILD"
 msgstr "PKGBUILD überprüfen"
 
-#| msgid "Review PKGBUILD"
 msgid "PKGBUILD"
-msgstr ""
+msgstr "PKGBUILD"
 
 msgid "Retry"
-msgstr ""
+msgstr "Wiederholen"
 
 msgid "Skip"
 msgstr "Überspringen"
@@ -211,9 +209,8 @@ msgstr "Entfernen"
 msgid "Search the AUR by name or keyword"
 msgstr "AUR nach Namen oder Schlagworten durchsuchen"
 
-#| msgid "Search..."
 msgid "Search By"
-msgstr ""
+msgstr "Suche nach"
 
 msgid "Installed Only"
 msgstr "Nur Installation"
@@ -222,14 +219,13 @@ msgid "Show only installed packages"
 msgstr "Nur installierte Pakete anzeigen"
 
 msgid "Previous page"
-msgstr ""
+msgstr "Vorherige Seite"
 
 msgid "Page 1 of 1"
-msgstr ""
+msgstr "Seite 1 von 1"
 
-#| msgid "Default page"
 msgid "Next page"
-msgstr ""
+msgstr "Nächste Seite"
 
 msgid "Additional Options"
 msgstr "Weitere Optionen"
@@ -237,9 +233,8 @@ msgstr "Weitere Optionen"
 msgid "Install Selected"
 msgstr "Ausgewählte installieren"
 
-#| msgid "Selected"
 msgid "Select"
-msgstr ""
+msgstr "Auswählen"
 
 msgid "Name"
 msgstr "Name"
@@ -251,10 +246,10 @@ msgid "Popularity"
 msgstr "Popularität"
 
 msgid "Loading the AUR index"
-msgstr ""
+msgstr "AUR-Index laden"
 
 msgid "Powered by Atoll."
-msgstr ""
+msgstr "Bereitgestellt von Atoll."
 
 msgid "Run checks"
 msgstr "Prüfungen durchführen"
@@ -406,9 +401,8 @@ msgstr "Über"
 msgid "Shelly"
 msgstr "Shelly"
 
-#| msgid "Optional Depends"
 msgid "Install Optional Deps"
-msgstr ""
+msgstr "Optionale Abhängigkeiten installieren"
 
 msgid "Reinstall"
 msgstr "Neu installieren"
@@ -659,7 +653,7 @@ msgid "Enable Shelly Search"
 msgstr "Shelly-Suche aktivieren"
 
 msgid "Enable Atoll Powered AUR"
-msgstr ""
+msgstr "Atoll Powered AUR aktivieren"
 
 msgid "AppImage Install Path"
 msgstr "AppImage-Installationspfad"
@@ -847,27 +841,26 @@ msgstr "Weiter"
 msgid "Start Shelly"
 msgstr "Shelly starten"
 
-#| msgid "System bus"
 msgid "System files"
-msgstr ""
+msgstr "Systemdateien"
 
 msgid "Other folders"
-msgstr ""
+msgstr "Weitere Ordner"
 
 msgid "Running services"
-msgstr ""
+msgstr "Ausgeführte Dienste"
 
 msgid "Other apps' data"
-msgstr ""
+msgstr "Daten anderer Apps"
 
 msgid "Home folder"
-msgstr ""
+msgstr "Home-Ordner"
 
 msgid "User folders"
-msgstr ""
+msgstr "Benutzerordner"
 
 msgid "Persistent files"
-msgstr ""
+msgstr "Dauerhafte Dateien"
 
 msgid "Devices"
 msgstr "Geräte"
@@ -878,39 +871,38 @@ msgstr "Session-Bus"
 msgid "System bus"
 msgstr "System-Bus"
 
-#| msgid "Network"
 msgid "Network access"
-msgstr ""
+msgstr "Netzwerkzugriff"
 
 msgid "Display server"
-msgstr ""
+msgstr "Server anzeigen"
 
 msgid "Sandbox features"
-msgstr ""
+msgstr "Sandbox-Funktionen"
 
 msgid "Environment"
 msgstr "Umgebung"
 
 msgid "Sound"
-msgstr ""
+msgstr "Ton"
 
 msgid "Printing"
-msgstr ""
+msgstr "Drucken"
 
 msgid "Inter-process communication"
-msgstr ""
+msgstr "Interprozesskommunikation"
 
 msgid "Other"
 msgstr "Andere"
 
 msgid "No network access"
-msgstr ""
+msgstr "Kein Netzwerkzugriff"
 
 msgid "No device access"
-msgstr ""
+msgstr "Kein Gerätezugriff"
 
 msgid "No access to system files"
-msgstr ""
+msgstr "Kein Systemdateienzugriff"
 
 msgid "Review PKGBUILD changes for"
 msgstr "PKGBUILD-Änderungen überprüfen für"
@@ -955,11 +947,10 @@ msgid "net"
 msgstr "net"
 
 msgid "Scanning PKGBUILD…"
-msgstr ""
+msgstr "PKGBUILD durchsuchen…"
 
-#| msgid "No description available."
 msgid "Security scan unavailable."
-msgstr ""
+msgstr "Sicherheitsscan nicht verfügbar."
 
 msgid "Could not load the PKGBUILD preview."
 msgstr "PKGBUILD-Vorschau konnte nicht geladen werden."
@@ -967,13 +958,14 @@ msgstr "PKGBUILD-Vorschau konnte nicht geladen werden."
 msgid ""
 "PKGBUILD changed. Close and reopen the preview to scan the current version."
 msgstr ""
+"PKGBUILD wurde geändert. Schließe die Vorschau und öffne sie erneut, um die "
+"aktuelle Version zu erfassen."
 
-#| msgid "Flatpak files"
 msgid "No related files."
-msgstr ""
+msgstr "Keine zugehörigen Dateien."
 
 msgid "Previous"
-msgstr ""
+msgstr "Vorherige"
 
 msgid "Dismiss"
 msgstr "Verwerfen"
@@ -1081,7 +1073,7 @@ msgid "Try a shorter or more general keyword."
 msgstr "Mit einem kürzeren oder allgemeineren Suchbegriff versuchen."
 
 msgid "Could not reach Atoll"
-msgstr ""
+msgstr "Atoll konnte nicht erreicht werden"
 
 msgid "Check your connection and try again."
 msgstr "Deine Verbindung überprüfen und erneut versuchen."
@@ -1102,7 +1094,7 @@ msgid "Package(s)"
 msgstr "Paket(e)"
 
 msgid "Page"
-msgstr ""
+msgstr "Seite"
 
 msgid "of"
 msgstr "von"
@@ -1415,11 +1407,10 @@ msgid "Making Package Dependency"
 msgstr "Paketabhängigkeiten erstellen"
 
 msgid "Select Optional Dependencies to Install"
-msgstr ""
+msgstr "Zu installierende optionale Abhängigkeiten auswählen"
 
-#| msgid "Installing packages"
 msgid "Installing optional dependencies"
-msgstr ""
+msgstr "Installation optionaler Abhängigkeiten"
 
 msgid "Package is already installed"
 msgstr "Paket bereits installiert"
@@ -1785,16 +1776,16 @@ msgid "Installing Flatpak and AppImage support"
 msgstr "Unterstützung für Flatpak und AppImage installieren"
 
 msgid "Main menu"
-msgstr ""
+msgstr "Hauptmenü"
 
 msgid "Settings"
 msgstr "Einstellungen"
 
 msgid "Expand sidebar"
-msgstr ""
+msgstr "Seitenleiste aufklappen"
 
 msgid "Collapse sidebar"
-msgstr ""
+msgstr "Seitenleiste einklappen"
 
 msgid "Package"
 msgstr "Pakete"

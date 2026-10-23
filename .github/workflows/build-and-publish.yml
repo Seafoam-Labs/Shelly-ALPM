@@ -31,11 +31,17 @@ jobs:
         with:
           filters: |
             backend:
+              - '.github/actions/setup-zig/**'
+              - '.github/workflows/build-and-publish.yml'
               - 'Shelly.Flatpak.Backend/**'
               - 'Shelly.Diagnostics/**'
             http:
+              - '.github/actions/setup-zig/**'
+              - '.github/workflows/build-and-publish.yml'
               - 'Shelly.Http/**'
             packagemanager:
+              - '.github/actions/setup-zig/**'
+              - '.github/workflows/build-and-publish.yml'
               - 'Shelly.Download/**'
               - 'Shelly.Http/**'
               - 'Shelly.PackageManager/**'
@@ -43,6 +49,8 @@ jobs:
               - 'Shelly.Key/**'
               - 'Shelly.Diagnostics/**'
             cli:
+              - '.github/actions/setup-zig/**'
+              - '.github/workflows/build-and-publish.yml'
               - 'Shelly.Download/**'
               - 'Shelly.Http/**'
               - 'Shelly.Cli.Zig/**'
@@ -51,18 +59,27 @@ jobs:
               - 'Shelly.Flatpak.Backend/**'
               - 'scripts/**'
             gtk:
+              - '.github/actions/setup-zig/**'
+              - '.github/workflows/build-and-publish.yml'
               - 'Shelly.Http/**'
               - 'Shelly.Ui.Gtk/**'
               - 'Shelly.Diagnostics/**'
             devario:
+              - '.github/actions/setup-zig/**'
+              - '.github/workflows/build-and-publish.yml'
               - 'Shelly.Ui.Gtk/src/devario/**'
             tui:
+              - '.github/actions/setup-zig/**'
+              - '.github/workflows/build-and-publish.yml'
               - 'Shelly.Tui/**'
               - 'Shelly.Diagnostics/**'
             key:
+              - '.github/actions/setup-zig/**'
+              - '.github/workflows/build-and-publish.yml'
               - 'Shelly.Key/**'
               - 'Shelly.Diagnostics/**'
             rlpm:
+              - '.github/actions/setup-zig/**'
               - 'Shelly.Download/**'
               - 'Shelly.Http/**'
               - 'Shelly.Rlpm/**'
@@ -74,6 +91,8 @@ jobs:
               - 'Shelly.Diagnostics/**'
               - '.github/workflows/build-and-publish.yml'
             notifications:
+              - '.github/actions/setup-zig/**'
+              - '.github/workflows/build-and-publish.yml'
               - 'Shelly.Notifications.Zig/**'
               - 'Shelly.Diagnostics/**'
             pkgbuild:
@@ -92,8 +111,9 @@ jobs:
     steps:
       - run: |
           pacman -Syu --noconfirm
-          pacman -S --needed --noconfirm zig flatpak base-devel glibc git libarchive
+          pacman -S --needed --noconfirm flatpak base-devel glibc git libarchive
       - uses: actions/checkout@v6
+      - uses: ./.github/actions/setup-zig
       - name: Build and test Flatpak backend
         run: |
           cd Shelly.Flatpak.Backend
@@ -113,8 +133,9 @@ jobs:
     steps:
       - run: |
           pacman -Syu --noconfirm
-          pacman -S --needed --noconfirm zig base-devel glibc git
+          pacman -S --needed --noconfirm base-devel glibc git
       - uses: actions/checkout@v6
+      - uses: ./.github/actions/setup-zig
       - name: Build and test HTTP client
         run: |
           cd Shelly.Http
@@ -132,8 +153,9 @@ jobs:
     steps:
       - run: |
           pacman -Syu --noconfirm
-          pacman -S --needed --noconfirm zig flatpak base-devel glibc git libarchive curl sqlite
+          pacman -S --needed --noconfirm flatpak base-devel glibc git libarchive curl sqlite
       - uses: actions/checkout@v6
+      - uses: ./.github/actions/setup-zig
       - name: Build and test PackageManager
         run: |
           cd Shelly.PackageManager
@@ -153,8 +175,9 @@ jobs:
     steps:
       - run: |
           pacman -Syu --noconfirm
-          pacman -S --needed --noconfirm zig flatpak base-devel glibc git libarchive curl sqlite ripgrep
+          pacman -S --needed --noconfirm flatpak base-devel glibc git libarchive curl sqlite ripgrep
       - uses: actions/checkout@v6
+      - uses: ./.github/actions/setup-zig
       - name: Test shared diagnostics
         run: cd Shelly.Diagnostics && zig build test
       - name: Build CLI and test
@@ -186,8 +209,9 @@ jobs:
     steps:
       - run: |
           pacman -Syu --noconfirm
-          pacman -S --needed --noconfirm zig base-devel gtk4 glibc git vala xorg-server-xvfb xorg-xauth
+          pacman -S --needed --noconfirm base-devel gtk4 glibc git vala xorg-server-xvfb xorg-xauth
       - uses: actions/checkout@v6
+      - uses: ./.github/actions/setup-zig
       - name: Build GTK GUI and test without a display
         run: |
           cd Shelly.Ui.Gtk
@@ -209,8 +233,9 @@ jobs:
     steps:
       - run: |
           pacman -Syu --noconfirm
-          pacman -S --needed --noconfirm zig base-devel gtk4 glibc git
+          pacman -S --needed --noconfirm base-devel gtk4 glibc git
       - uses: actions/checkout@v6
+      - uses: ./.github/actions/setup-zig
       - name: Build the Devario GTK variant
         run: |
           cd Shelly.Ui.Gtk
@@ -227,8 +252,9 @@ jobs:
     steps:
       - run: |
           pacman -Syu --noconfirm
-          pacman -S --needed --noconfirm zig base-devel glibc git
+          pacman -S --needed --noconfirm base-devel glibc git
       - uses: actions/checkout@v6
+      - uses: ./.github/actions/setup-zig
       - name: Build TUI and test
         run: |
           cd Shelly.Tui
@@ -246,8 +272,9 @@ jobs:
     steps:
       - run: |
           pacman -Syu --noconfirm
-          pacman -S --needed --noconfirm zig base-devel glibc git
+          pacman -S --needed --noconfirm base-devel glibc git
       - uses: actions/checkout@v6
+      - uses: ./.github/actions/setup-zig
       - name: Build keys & test
         run: |
           cd Shelly.Key
@@ -271,8 +298,9 @@ jobs:
     steps:
       - run: |
           pacman -Syu --noconfirm
-          pacman -S --needed --noconfirm zig base-devel glibc git libarchive sqlite gnupg curl ripgrep
+          pacman -S --needed --noconfirm base-devel glibc git libarchive sqlite gnupg curl ripgrep
       - uses: actions/checkout@v6
+      - uses: ./.github/actions/setup-zig
       - name: Remove libalpm development and runtime files in this disposable container
         if: ${{ matrix.libalpm == 'false' }}
         shell: bash
@@ -308,8 +336,9 @@ jobs:
     steps:
       - run: |
           pacman -Syu --noconfirm
-          pacman -S --needed --noconfirm zig base-devel glibc git libarchive sqlite gnupg curl util-linux
+          pacman -S --needed --noconfirm base-devel glibc git libarchive sqlite gnupg curl util-linux
       - uses: actions/checkout@v6
+      - uses: ./.github/actions/setup-zig
       - name: Build and run RLPM unit and disposable-root action tests
         working-directory: Shelly.Rlpm
         run: |
@@ -338,8 +367,9 @@ jobs:
     steps:
       - run: |
           pacman -Syu --noconfirm
-          pacman -S --needed --noconfirm base-devel glibc git zig clang gettext
+          pacman -S --needed --noconfirm base-devel glibc git clang gettext
       - uses: actions/checkout@v6
+      - uses: ./.github/actions/setup-zig
       - name: Build Shelly.Notifications.Zig
         run: |
           cd Shelly.Notifications.Zig

@@ -6,7 +6,9 @@
 # directory inside this repo, drops in the matching top-level PKGBUILD* plus
 # each local file its source=() array references, regenerates the checksums
 # and .SRCINFO together (shelly build --updpkgsums), shows the resulting diff,
-# and asks before committing and pushing. No package build runs by default.
+# and asks before committing and pushing. Successful preparation also updates
+# the checkout's PKGBUILD (and root .SRCINFO for shelly), except in dry runs.
+# No package build runs by default.
 #
 # The temporary directory is offered for deletion once every package is done.
 #
@@ -60,7 +62,7 @@ package_table=(
 )
 
 usage() {
-    sed -n '3,45p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+    sed -n '3,/^$/p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
 }
 
 die() {
@@ -118,6 +120,23 @@ published_version() { # published_version <clone dir> -> pkgver-pkgrel
         version="$(sed -n 's/^pkgver=//p' "${clone}/PKGBUILD" | head -1)"
     printf '%s-%s\n' "${version}" "$(sed -n 's/^pkgrel=//p' "${clone}/PKGBUILD" | head -1)"
 }
+
+refresh_metadata() ( # refresh_metadata <clone dir>
+    # A configured shared source cache can contain an older upload with the
+    # same filename. Hash freshly downloaded bytes in a private cache instead.
+    local clone="$1" scratch config_path
+    scratch="$(mktemp -d "${TMPDIR:-/tmp}/shelly-aur-metadata.XXXXXX")"
+    trap 'rm -rf -- "${scratch}"' EXIT
+    scratch="$(cd "${scratch}" && pwd)"
+    mkdir -p "${scratch}/config/shelly" "${scratch}/sources" "${scratch}/build"
+    config_path="${scratch//\\/\\\\}"
+    config_path="${config_path//\"/\\\"}"
+    printf '[destinations]\nsources = "%s/sources"\nbuild = "%s/build"\n' \
+        "${config_path}" "${config_path}" > "${scratch}/config/shelly/shellybuild.conf"
+    cd "${clone}"
+    XDG_CONFIG_HOME="${scratch}/config" \
+        "${shelly_bin}" build PKGBUILD --reviewed --no-confirm --updpkgsums
+)
 
 workdir="${repo_root}/.aur-release"
 dry_run=0
@@ -212,20 +231,34 @@ release_one() { # release_one <aur package>
 
     step "${name}: updating checksums and .SRCINFO"
     # Shelly updates the PKGBUILD and adjacent .SRCINFO as one transaction.
-    (cd "${clone}" &&
-        "${shelly_bin}" build --reviewed --no-confirm --updpkgsums PKGBUILD)
+    refresh_metadata "${clone}"
 
     if [[ ${skip_build} -eq 0 ]]; then
         local build_args=(--reviewed --no-confirm)
         if [[ ${no_check} -eq 1 ]]; then build_args+=(--no-check); fi
         step "${name}: test build"
         (cd "${clone}" && "${shelly_bin}" build "${build_args[@]}" PKGBUILD)
+        # pkgver() may have changed during the build. Replace metadata only
+        # after generation succeeds, keeping the published pair consistent.
+        (cd "${clone}" &&
+            "${shelly_bin}" build PKGBUILD --reviewed --no-confirm --makesrcinfo > .SRCINFO.new &&
+            mv .SRCINFO.new .SRCINFO)
     else
         note "${name}: test build skipped"
     fi
 
+    # Preserve newly generated metadata even when the AUR repo had none.
+    git -C "${clone}" add -- PKGBUILD .SRCINFO
     git -C "${clone}" clean -fdxq
     git -C "${clone}" add -A
+
+    if [[ ${dry_run} -eq 0 ]]; then
+        cp "${clone}/PKGBUILD" "${repo_root}/${pkgbuild_file}"
+        if [[ "${pkgbuild_file}" == PKGBUILD ]]; then
+            cp "${clone}/.SRCINFO" "${repo_root}/.SRCINFO"
+        fi
+        ok "${name}: refreshed ${pkgbuild_file} in checkout"
+    fi
 
     if git -C "${clone}" diff --cached --quiet; then
         note "${name}: nothing to publish, AUR already matches"

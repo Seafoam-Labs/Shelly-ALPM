@@ -1,6 +1,7 @@
 const std = @import("std");
 const user_account = @import("PackageManager").user_account;
 const runtime = @import("context.zig");
+const elevation = @import("elevation.zig");
 
 pub fn configHome(context: *const runtime.RuntimeContext) ![]const u8 {
     return resolve(context, "XDG_CONFIG_HOME", &.{".config"});
@@ -31,6 +32,21 @@ pub fn shellyCache(context: *const runtime.RuntimeContext, parts: []const []cons
     try path_parts.appendSlice(context.allocator, &.{ try cacheHome(context), "Shelly" });
     try path_parts.appendSlice(context.allocator, parts);
     return std.fs.path.join(context.allocator, path_parts.items);
+}
+
+/// Native update previews keep copies of the package databases here. A root
+/// run uses root's own cache, so it never leaves root-owned files in the
+/// invoking user's cache that a later unprivileged preview cannot replace.
+pub fn previewDatabase(context: *const runtime.RuntimeContext) ![]const u8 {
+    return previewDatabaseFor(context, elevation.isRoot());
+}
+
+fn previewDatabaseFor(context: *const runtime.RuntimeContext, as_root: bool) ![]const u8 {
+    if (!as_root) return shellyCache(context, &.{"db"});
+    const account = (try user_account.byUid(context.allocator, 0)) orelse return error.HomeNotConfigured;
+    defer account.deinit(context.allocator);
+    if (account.home.len == 0) return error.HomeNotConfigured;
+    return std.fs.path.join(context.allocator, &.{ account.home, ".cache", "Shelly", "db" });
 }
 
 pub fn shellyData(context: *const runtime.RuntimeContext, parts: []const []const u8) ![]const u8 {
@@ -122,6 +138,32 @@ test "NSS XDG paths resolve the caller before falling back to HOME" {
         try environment.put("XDG_CACHE_HOME", "/tmp/custom-cache");
         try std.testing.expectEqualStrings("/tmp/custom-cache", try cacheHome(&context));
     }
+}
+
+test "root previews keep their databases out of the invoking user's cache" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const account = (try user_account.byName(allocator, "nobody")) orelse return error.SkipZigTest;
+    const root = (try user_account.byUid(allocator, 0)) orelse return error.SkipZigTest;
+    var environment = std.process.Environ.Map.init(allocator);
+    try environment.put("SUDO_USER", account.username);
+    try environment.put("HOME", "/home/tester");
+    try environment.put("XDG_CACHE_HOME", "/tmp/custom-cache");
+    var stdout = std.Io.Writer.Discarding.init(&.{});
+    var stderr = std.Io.Writer.Discarding.init(&.{});
+    const context: runtime.RuntimeContext = .{
+        .allocator = allocator,
+        .io = std.testing.io,
+        .stdout = &stdout.writer,
+        .stderr = &stderr.writer,
+        .environment = &environment,
+    };
+    try std.testing.expectEqualStrings("/tmp/custom-cache/Shelly/db", try previewDatabaseFor(&context, false));
+    try std.testing.expectEqualStrings(
+        try std.fs.path.join(allocator, &.{ root.home, ".cache", "Shelly", "db" }),
+        try previewDatabaseFor(&context, true),
+    );
 }
 
 test "uses absolute XDG paths and rejects relative overrides" {
