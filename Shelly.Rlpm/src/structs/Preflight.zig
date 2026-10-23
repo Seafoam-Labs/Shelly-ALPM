@@ -1,4 +1,5 @@
 //! Read-only preparation of the filesystem executor's input. No extraction.
+
 const std = @import("std");
 const Migration = @import("Migration.zig");
 const Tx = @import("Transaction.zig");
@@ -21,8 +22,10 @@ const PackageRelation = @import("PackageRelation.zig");
 
 fn policyFor(tx: *Tx, id: Plan.Id) SignaturePolicy {
     const expected = tx.owned_plan.?.package(id);
+
     if (expected.origin == .sync)
         return tx.owner.sync_databases.items[tx.owned_plan.?.candidates[@intFromEnum(id)].repository.?].signature_policy;
+
     return switch (expected.archive_source) {
         .local_file => tx.owner.configuration.effectiveLocalSignaturePolicy(),
         .remote_file => tx.owner.configuration.effectiveRemoteSignaturePolicy(),
@@ -30,6 +33,7 @@ fn policyFor(tx: *Tx, id: Plan.Id) SignaturePolicy {
             for (tx.owner.sync_databases.items) |db| {
                 if (std.meta.eql(expected.archive_repository, db.identity)) break :blk db.signature_policy;
             }
+
             // Portable archives may outlive their source Owner/registration.
             break :blk expected.archive_signature_policy orelse
                 tx.owner.configuration.effectiveLocalSignaturePolicy();
@@ -44,14 +48,17 @@ pub fn populate(tx: *Tx, manifest: *Manifest) !void {
         .a = manifest.arena.allocator(),
         .plan = &tx.owned_plan.?,
     };
+
     builder.run() catch |err| {
         manifest.failure = .{
             .cause = err,
             .package = builder.current_package,
             .path = builder.current_path,
         };
+
         return err;
     };
+
     manifest.complete = true;
     try manifest.check();
 }
@@ -60,14 +67,17 @@ pub fn populate(tx: *Tx, manifest: *Manifest) !void {
 /// signatures can. Reapply the captured effective source policy before use.
 pub fn reverify(tx: *Tx, manifest: *const Manifest) !void {
     var download_index: usize = 0;
+
     for (manifest.archives.items) |archive| {
         try tx.owner.checkCancelled();
+
         const expected = tx.owned_plan.?.package(archive.id);
         const file = if (expected.origin == .sync) blk: {
             const item = &tx.downloaded_files.?[download_index];
             download_index += 1;
             break :blk item;
         } else null;
+
         const signature = if (file) |download|
             if (download.signature) |*sig|
                 try std.Io.Dir.cwd().readFileAlloc(
@@ -127,6 +137,7 @@ const Builder = struct {
         // Pure removal has no native package-loading/file-conflict phases.
         if (self.plan.additions.len == 0) return;
         if (value == .disk_space and self.tx.flags.database_only) return;
+
         self.tx.owner.transactionEvent(.{ .phase = .{ .phase = value, .boundary = boundary } });
     }
 
@@ -137,41 +148,55 @@ const Builder = struct {
             try self.loadArchives();
             try self.loadLocal();
         }
+
         self.phase(.load_packages, .done);
         try self.tx.owner.checkCancelled();
         try self.migrations();
         try self.automaticMigrations();
+
         if (!self.tx.flags.database_only) {
             self.phase(.file_conflicts, .start);
             {
                 errdefer self.phase(.file_conflicts, .failed);
                 try self.conflicts();
+
                 if (self.m.conflicts.items.len != 0) return error.FileConflicts;
                 for (self.plan.removals) |id|
                     try self.removePackage(id, null);
+
                 for (self.m.archives.items) |archive| {
                     if (self.oldOf(archive.id)) |old| try self.removePackage(old, archive.id);
+
                     try self.additions(archive);
                 }
             }
+
             self.phase(.file_conflicts, .done);
         }
+
         try self.databaseChanges();
+
         if (self.tx.owner.configuration.check_space) self.phase(.disk_space, .start);
+
         {
             errdefer if (self.tx.owner.configuration.check_space) self.phase(.disk_space, .failed);
             try self.space();
         }
+
         if (self.tx.owner.configuration.check_space) self.phase(.disk_space, .done);
+
         try self.tx.owner.checkCancelled();
     }
 
     fn loadArchives(self: *Builder) !void {
         var download_index: usize = 0;
+
         for (self.plan.additions, 0..) |addition, index| {
             try self.tx.owner.checkCancelled();
             self.current_package = addition.package;
+
             const callbacks = self.tx.owner.configuration.callbacks;
+
             if (callbacks.log) |log| {
                 var buffer: [512]u8 = undefined;
                 const message = std.fmt.bufPrint(
@@ -184,20 +209,25 @@ const Builder = struct {
                     },
                 ) catch
                     "Checking package archive";
+
                 log(callbacks.log_context, .{ .level = .function, .message = message });
             }
+
             const expected = self.plan.package(addition.package);
             const downloaded = if (expected.origin == .sync) blk: {
                 const file = &self.tx.downloaded_files.?[download_index];
                 download_index += 1;
                 break :blk file;
             } else null;
+
             const path = if (downloaded) |file|
                 file.path
             else
                 expected.archive_path orelse
                     return error.InvalidPackageOwnership;
+
             self.current_path = try self.a.dupe(u8, path);
+
             var snapshot = if (downloaded) |file|
                 try file.snapshot.clone()
             else if (expected.verified_archive) |*file|
@@ -208,6 +238,7 @@ const Builder = struct {
                     path,
                     null,
                 );
+
             var transferred = false;
             defer if (!transferred) snapshot.deinit();
             const policy = policyFor(self.tx, addition.package);
@@ -225,6 +256,7 @@ const Builder = struct {
                     null
             else
                 null;
+
             const validation = try Verification.check(
                 self.tx.owner.allocator,
                 self.tx.io,
@@ -241,25 +273,31 @@ const Builder = struct {
                 },
                 &self.tx.owner.last_verification,
             );
+
             var loaded = try Package.loadArchive(self.tx.owner.allocator, snapshot.path(), .{ .mode = .full });
             errdefer if (!transferred) loaded.deinit();
             try metadataMatches(expected, &loaded);
+
             if (loaded.architecture) |arch|
                 if (!std.mem.eql(u8, arch, "any") and
                     self.tx.owner.configuration.architectures.len != 0)
                 {
                     var accepted = false;
+
                     for (self.tx.owner.configuration.architectures) |allowed|
                         if (std.mem.eql(u8, arch, allowed)) {
                             accepted = true;
                             break;
                         };
+
                     if (!accepted) return error.InvalidArchitecture;
                 };
+
             loaded.validation = validation;
             loaded.archive_signature_policy = policy;
             loaded.archive_source = expected.archive_source;
             loaded.archive_repository = expected.archive_repository;
+
             // Ensure there is storage before transferring descriptor ownership.
             try self.m.archives.ensureUnusedCapacity(self.a, 1);
             loaded.verified_archive = snapshot;
@@ -267,6 +305,7 @@ const Builder = struct {
             self.m.archives.appendAssumeCapacity(.{ .id = addition.package, .package = loaded });
             try self.scan(&self.m.archives.items[self.m.archives.items.len - 1]);
         }
+
         self.current_package = null;
         self.current_path = null;
     }
@@ -280,19 +319,23 @@ const Builder = struct {
             archive.payload = payload.items;
             archive.metadata = metadata.items;
         }
+
         var names: std.StringHashMapUnmanaged(void) = .empty;
         var ordinal: usize = 0;
         var verified_bytes: u64 = 0;
         var reported = std.Io.Clock.awake.now(self.tx.io);
+
         while (try reader.next()) |borrowed| : (ordinal += 1) {
             try self.tx.owner.checkCancelled();
             self.reportArchiveProgress(archive.id, ordinal, verified_bytes, &reported);
             self.current_path = try self.a.dupe(u8, borrowed.name);
+
             // Conventional tar root header carries no package file.
             if (borrowed.kind == .directory and
                 (std.mem.eql(u8, borrowed.name, ".") or
                     std.mem.eql(u8, borrowed.name, "./")))
                 continue;
+
             const normalized = try Root.normalize(borrowed.name);
             const path = std.mem.trimEnd(u8, normalized, "/");
             var file = try Plan.copyValue(File, self.a, borrowed);
@@ -300,6 +343,7 @@ const Builder = struct {
                 try std.fmt.allocPrint(self.a, "{s}/", .{path})
             else
                 try self.a.dupe(u8, path);
+
             if (file.kind != .directory and normalized.len != path.len) return error.UnsafeArchivePath;
             if ((try names.getOrPut(self.a, file.name)).found_existing) return error.DuplicateArchivePath;
             if (file.kind == .hardlink)
@@ -307,22 +351,30 @@ const Builder = struct {
                     u8,
                     try Root.normalize(file.link_target.?),
                 );
+
             if (file.kind == .symlink and file.link_target.?.len == 0) return error.UnsafeSymlink;
+
             var hash = std.crypto.hash.Md5.init(.{});
             var count: u64 = 0;
             var buffer: [64 * 1024]u8 = undefined;
+
             while (true) {
                 const n = try reader.read(&buffer);
+
                 if (n == 0) break;
+
                 hash.update(buffer[0..n]);
                 count = try std.math.add(u64, count, n);
                 verified_bytes +|= n;
                 self.reportArchiveProgress(archive.id, ordinal, verified_bytes, &reported);
                 try self.tx.owner.checkCancelled();
             }
+
             if (file.kind == .regular and count != file.size.?) return error.ArchiveFailed;
+
             var digest: [16]u8 = undefined;
             hash.final(&digest);
+
             const hex = std.fmt.bytesToHex(digest, .lower);
             const entry: Manifest.Entry = .{
                 .package = archive.id,
@@ -335,6 +387,7 @@ const Builder = struct {
                 else
                     null,
             };
+
             if (path[0] == '.') {
                 // libalpm reserves every root-dot entry. Only known database
                 // members may be published later, and those must be regular.
@@ -342,52 +395,68 @@ const Builder = struct {
                     if (std.mem.eql(u8, path, reserved) and file.kind != .regular)
                         return error.UnsafeArchivePath;
                 }
+
                 try metadata.append(self.a, entry);
             } else {
                 const result = try archive.by_path.getOrPut(self.a, entry.path);
+
                 if (result.found_existing) return error.DuplicateArchivePath;
+
                 result.value_ptr.* = payload.items.len;
                 try payload.append(self.a, entry);
             }
         }
+
         try reader.finish();
+
         for (payload.items) |*entry| {
             if (entry.file.kind == .hardlink) {
                 var target = entry.file.link_target.?;
                 var depth: usize = 0;
+
                 while (true) : (depth += 1) {
                     if (depth >= payload.items.len) return error.UnsafeHardlink;
+
                     const source = payload.items[
                         archive.by_path.get(target) orelse
                             return error.UnsafeHardlink
                     ];
+
                     if (!try self.matches(.no_extract, entry.file.name) and
                         try self.matches(.no_extract, source.file.name))
                         return error.UnsafeHardlink;
+
                     if (source.file.kind == .hardlink) {
                         target = source.file.link_target.?;
                         continue;
                     }
+
                     if (source.file.kind != .regular) return error.UnsafeHardlink;
+
                     entry.new_hash = source.new_hash;
                     break;
                 }
             }
         }
+
         // The mtree must describe the actual stream. Reject disagreement instead
         // of letting conflict checks and extraction see different payloads.
         self.current_path = if (archive.package.files_source == .mtree)
             ".MTREE"
         else
             archive.package.archive_path;
+
         if (archive.package.files.len != payload.items.len) return error.ArchiveInventoryMismatch;
         for (archive.package.files) |file| {
             self.current_path = file.name;
+
             const path = std.mem.trimEnd(u8, try Root.normalize(file.name), "/");
             const entry = payload.items[archive.by_path.get(path) orelse return error.ArchiveInventoryMismatch];
+
             if (std.mem.endsWith(u8, file.name, "/") != (entry.file.kind == .directory))
                 return error.ArchiveInventoryMismatch;
         }
+
         // PKGINFO may retain backup declarations for files no longer shipped
         // (for example java.policy in JDK 27). libalpm keeps those records
         // without a hash; they are not assertions about the archive inventory.
@@ -395,15 +464,18 @@ const Builder = struct {
             self.current_path = backup.name;
             _ = try Root.normalize(backup.name);
         }
+
         // Downstream phases consume the scanned stream's metadata, never a
         // size/mode/scriptlet assertion that only appeared in .MTREE.
         const files = try archive.package.archive_arena.?.allocator().alloc(File, payload.items.len);
+
         for (payload.items, files) |entry, *file|
             file.* = try Plan.copyValue(
                 File,
                 archive.package.archive_arena.?.allocator(),
                 entry.file,
             );
+
         std.mem.sort(File, files, {}, fileLess);
         archive.package.files = files;
         archive.package.files_source = .archive;
@@ -412,11 +484,13 @@ const Builder = struct {
             .changelog = .absent,
             .mtree = .absent,
         };
+
         for (metadata.items) |entry| {
             if (std.mem.eql(u8, entry.path, ".INSTALL")) archive.package.members.install = .present;
             if (std.mem.eql(u8, entry.path, ".CHANGELOG")) archive.package.members.changelog = .present;
             if (std.mem.eql(u8, entry.path, ".MTREE")) archive.package.members.mtree = .present;
         }
+
         archive.package.has_scriptlet = archive.package.members.install == .present;
     }
 
@@ -430,8 +504,11 @@ const Builder = struct {
         const callbacks = self.tx.owner.configuration.callbacks;
         const log = callbacks.log orelse return;
         const now = std.Io.Clock.awake.now(self.tx.io);
+
         if (reported.durationTo(now).toMilliseconds() < 250) return;
+
         reported.* = now;
+
         var buffer: [512]u8 = undefined;
         const message = std.fmt.bufPrint(
             &buffer,
@@ -443,30 +520,40 @@ const Builder = struct {
             },
         ) catch
             "Checking package archive contents";
+
         log(callbacks.log_context, .{ .level = .function, .message = message });
     }
 
     fn loadLocal(self: *Builder) !void {
         const db = &self.tx.owner.local.?;
+
         for (self.plan.candidates, 0..) |candidate, index| {
             if (candidate.package.origin != .local) continue;
+
             self.current_package = @enumFromInt(index);
             self.current_path = candidate.package.metadata_directory;
             try self.tx.owner.checkCancelled();
             try db.loadMetadata(self.tx.io, candidate.reference.id, .{ .files = true });
+
             const package = try Plan.copyMetadata(
                 self.a,
                 db.packages.packages.items[@intFromEnum(candidate.reference.id)],
             );
+
             for (package.files) |file| {
                 _ = try Root.normalize(file.name);
+
                 const result = try self.file_owners.getOrPut(self.a, file.name);
+
                 if (!result.found_existing) result.value_ptr.* = .empty;
+
                 try result.value_ptr.append(self.a, @enumFromInt(index));
             }
+
             try self.local_indices.put(self.a, @enumFromInt(index), self.m.locals.items.len);
             try self.m.locals.append(self.a, .{ .id = @enumFromInt(index), .package = package });
         }
+
         self.current_package = null;
         self.current_path = null;
     }
@@ -474,23 +561,30 @@ const Builder = struct {
     fn adoption(self: *Builder, path: []const u8) ?Manifest.Adoption {
         for (self.m.adoptions.items) |item|
             if (std.mem.eql(u8, item.path, path)) return item;
+
         return null;
     }
 
     fn migrations(self: *Builder) !void {
         for (self.plan.migrations) |request| try self.adopt(request);
+
         try self.declaredMigrations();
+
         // Only local migration metadata can carry ownership across upgrades.
         // Incoming archive inventories remain an independently verified input.
         for (self.plan.additions, self.m.archives.items) |addition, archive| {
             const old = addition.old orelse continue;
             const installed = self.local(old);
+
             if (installed.adopted_files.len != 0 and self.tx.flags.database_only)
                 return error.InvalidMigrationFlags;
+
             for (installed.adopted_files) |path| {
                 try Migration.validatePath(path);
+
                 if (!self.owns(old, path)) return error.InvalidMigrationMetadata;
                 if (archive.find(path) != null or self.adoption(path) != null) continue;
+
                 try self.adopt(.{
                     .package = addition.package,
                     .source = old,
@@ -507,12 +601,15 @@ const Builder = struct {
         for (self.m.archives.items) |archive| {
             for (archive.package.xdata) |value| {
                 if (!std.mem.eql(u8, value.name, Migration.metadata_key)) continue;
+
                 const parsed = try Migration.parse(self.a, value.value);
                 defer parsed.deinit();
                 const declaration = parsed.value;
                 self.current_package = archive.id;
                 self.current_path = try self.a.dupe(u8, declaration.path);
+
                 var source: ?Plan.Id = null;
+
                 if (std.mem.eql(u8, declaration.from, "unowned")) {
                     // A declaration must not freeze ordinary subsequent upgrades.
                     if (self.oldOf(archive.id)) |old| {
@@ -521,6 +618,7 @@ const Builder = struct {
                 } else {
                     const name = declaration.from["package:".len..];
                     source = self.plan.migrationSource(archive.id, name);
+
                     if (source == null) {
                         // Clean installs do not require the replaced package. An
                         // installed source without an accepted relationship is an error.
@@ -528,9 +626,11 @@ const Builder = struct {
                             if (std.mem.eql(u8, local_item.package.name, name))
                                 return error.InvalidMigrationSource;
                         }
+
                         continue;
                     }
                 }
+
                 try self.adopt(.{
                     .package = archive.id,
                     .source = source,
@@ -546,16 +646,21 @@ const Builder = struct {
     fn automaticMigrations(self: *Builder) !void {
         if (!self.tx.owner.configuration.auto_migrate_unowned or
             self.tx.flags.database_only or self.tx.flags.download_only) return;
+
         for (self.m.archives.items) |archive| {
             for (archive.payload) |entry| {
                 if (entry.file.kind != .regular and entry.file.kind != .symlink) continue;
                 if (self.adoption(entry.path) != null or self.ownerOf(entry.path) != null) continue;
+
                 // Leave native backup and extraction policy intact for automatic discovery.
                 if (backupHash(archive.package, entry.path) != .absent or
                     try self.matches(.no_extract, entry.path) or
                     try self.matches(.no_upgrade, entry.path)) continue;
+
                 const before = (try self.observe(entry.path)) orelse continue;
+
                 if (!before.regular() and !before.symlink()) continue;
+
                 try self.adopt(.{
                     .package = archive.id,
                     .source = null,
@@ -572,27 +677,37 @@ const Builder = struct {
         self.current_package = request.package;
         self.current_path = request.path;
         try self.tx.owner.checkCancelled();
+
         if (self.tx.flags.database_only or self.tx.flags.download_only) return error.InvalidMigrationFlags;
+
         try Migration.validatePath(request.path);
+
         if (self.adoption(request.path) != null) return error.DuplicateMigration;
         if (self.file_owners.get(request.path)) |owners| {
             if (request.source == null or owners.items.len != 1 or owners.items[0] != request.source.?)
                 return error.MigrationOwnershipConflict;
         } else if (request.source != null) return error.MigrationOwnershipConflict;
+
         if (try self.matches(.no_extract, request.path)) return error.MigrationNoExtractConflict;
+
         const before = (try self.observe(request.path)) orelse {
             if (request.optional) return;
+
             return error.MigrationPathMissing;
         };
+
         if (!before.regular() and !before.symlink()) return error.UnsupportedMigrationType;
         for (self.m.locals.items) |local_item| {
             for (local_item.package.files) |file| {
                 const path = std.mem.trimEnd(u8, file.name, "/");
+
                 if (std.mem.eql(u8, file.name, request.path)) continue;
                 if (try self.sameLocation(path, request.path)) return error.MigrationOwnershipConflict;
             }
         }
+
         var backup: ?BackupFile = null;
+
         if (request.source) |id| {
             for (self.local(id).backups) |item|
                 if (std.mem.eql(u8, item.name, request.path)) {
@@ -600,35 +715,45 @@ const Builder = struct {
                     break;
                 };
         }
+
         for (self.m.archives.items) |archive| {
             for (archive.payload) |entry| {
                 if (std.mem.eql(u8, entry.path, request.path)) {
                     if (archive.id != request.package) return error.MigrationTargetConflict;
                     if ((before.regular() and entry.file.kind != .regular) or
                         (before.symlink() and entry.file.kind != .symlink)) return error.UnsupportedMigrationType;
+
                     if (backup == null and backupHash(archive.package, request.path) != .absent)
                         backup = .{ .name = request.path, .hash = entry.new_hash };
                 } else if (try self.sameLocation(request.path, entry.path) or
                     try self.ancestorLocation(request.path, entry.path) or
                     (entry.file.kind != .directory and try self.ancestorLocation(entry.path, request.path)))
                     return error.MigrationTargetConflict;
+
                 if (entry.file.kind == .hardlink and
                     try self.sameLocation(request.path, entry.file.link_target.?))
                     return error.MigrationTargetConflict;
             }
         }
+
         for (self.m.adoptions.items) |other|
             if (try self.sameLocation(request.path, other.path) or
                 try self.ancestorLocation(request.path, other.path) or
                 try self.ancestorLocation(other.path, request.path))
                 return error.MigrationTargetConflict;
+
         if (backup == null and request.backup) {
             if (!before.regular()) return error.UnsupportedMigrationBackup;
+
             var hash: [32]u8 = undefined;
+
             if (!try self.m.root.hash(self.tx.io, request.path, &hash)) return error.MigrationPathMissing;
+
             backup = .{ .name = request.path, .hash = try self.a.dupe(u8, &hash) };
         }
+
         if (backup != null and !before.regular()) return error.UnsupportedMigrationBackup;
+
         try self.m.adoptions.append(self.a, .{
             .origin = request.origin,
             .package = request.package,
@@ -642,17 +767,22 @@ const Builder = struct {
     fn sameLocation(self: *Builder, left: []const u8, right: []const u8) !bool {
         if (std.mem.eql(u8, left, right)) return true;
         if (!std.mem.eql(u8, std.fs.path.basename(left), std.fs.path.basename(right))) return false;
+
         const l = (try self.m.root.inspect(std.fs.path.dirname(left) orelse ".", true)) orelse return false;
         const r = (try self.m.root.inspect(std.fs.path.dirname(right) orelse ".", true)) orelse return false;
+
         return l.device == r.device and l.inode == r.inode;
     }
 
     fn ancestorLocation(self: *Builder, parent: []const u8, child: []const u8) !bool {
         var cursor: usize = 0;
+
         while (std.mem.indexOfScalarPos(u8, child, cursor, '/')) |index| {
             if (try self.sameLocation(parent, child[0..index])) return true;
+
             cursor = index + 1;
         }
+
         return false;
     }
 
@@ -666,19 +796,23 @@ const Builder = struct {
 
     fn overwrite(self: *Builder, name: []const u8) !bool {
         if (try self.matches(.overwrite_files, name)) return true;
+
         const absolute = try std.fmt.allocPrint(self.a, "{s}{s}", .{ self.tx.owner.configuration.root, name });
+
         return self.matches(.overwrite_files, absolute);
     }
 
     fn removed(self: *const Builder, id: Plan.Id) bool {
         for (self.plan.removals) |old|
             if (old == id) return true;
+
         return false;
     }
 
     fn replaced(self: *const Builder, id: Plan.Id) bool {
         for (self.plan.additions) |addition|
             if (addition.old == id) return true;
+
         return false;
     }
 
@@ -688,17 +822,20 @@ const Builder = struct {
 
     fn ownerOf(self: *const Builder, name: []const u8) ?Plan.Id {
         const owners = self.file_owners.get(name) orelse return null;
+
         return owners.items[0];
     }
 
     fn owns(self: *const Builder, id: Plan.Id, name: []const u8) bool {
         const owners = self.file_owners.get(name) orelse return false;
+
         return std.mem.indexOfScalar(Plan.Id, owners.items, id) != null;
     }
 
     fn oldOf(self: *const Builder, id: Plan.Id) ?Plan.Id {
         for (self.plan.additions) |addition|
             if (addition.package == id) return addition.old;
+
         return null;
     }
 
@@ -716,13 +853,16 @@ const Builder = struct {
 
     fn observe(self: *Builder, path: []const u8) !?Root.State {
         _ = try self.m.remember(".", true);
+
         var cursor: usize = 0;
+
         while (std.mem.indexOfScalarPos(u8, path, cursor, '/')) |index| {
             const prefix = path[0..index];
             _ = try self.m.remember(prefix, false);
             _ = try self.m.remember(prefix, true);
             cursor = index + 1;
         }
+
         return self.m.remember(path, false);
     }
 
@@ -730,51 +870,70 @@ const Builder = struct {
         for (self.m.archives.items) |archive|
             for (archive.payload) |entry| {
                 const result = try self.targets.getOrPut(self.a, entry.path);
+
                 if (!result.found_existing) result.value_ptr.* = .empty;
                 for (result.value_ptr.items) |other| {
                     if (entry.file.kind == .directory and other.file.kind == .directory) continue;
                     if (std.mem.eql(u8, entry.file.name, other.file.name) and try self.overwrite(entry.file.name))
                         continue;
+
                     try self.addConflict(entry, other.package, true);
                 }
+
                 try result.value_ptr.append(self.a, entry);
             };
+
         for (self.m.archives.items) |archive|
             for (archive.payload) |entry| {
                 self.current_package = archive.id;
                 self.current_path = entry.path;
                 try self.tx.owner.checkCancelled();
+
                 var parent_cursor: usize = 0;
+
                 while (std.mem.indexOfScalarPos(u8, entry.path, parent_cursor, '/')) |index| {
                     if (self.targets.get(entry.path[0..index])) |parents|
                         for (parents.items) |parent| {
                             if (parent.file.kind != .directory) try self.addConflict(entry, parent.package, true);
                         };
+
                     parent_cursor = index + 1;
                 }
+
                 // Existing ancestors may be symlinks, but must resolve to directories
                 // inside the root, or be owned file->directory transitions.
                 var cursor: usize = 0;
+
                 while (std.mem.indexOfScalarPos(u8, entry.path, cursor, '/')) |index| {
                     const prefix = entry.path[0..index];
+
                     if (try self.m.root.inspect(prefix, false)) |before| {
                         const followed = try self.m.root.inspect(prefix, true);
+
                         if ((followed == null or !followed.?.directory()) and !self.plannedDirectory(prefix)) {
                             _ = before;
                             try self.addConflict(entry, self.ownerOf(prefix), false);
                         }
                     }
+
                     cursor = index + 1;
                 }
+
                 const before = (try self.observe(entry.path)) orelse continue;
+
                 if (self.adoption(entry.path)) |item| {
                     if (item.package == archive.id) continue;
                 }
+
                 if (before.directory() and entry.file.kind == .directory) continue;
+
                 const old = self.oldOf(archive.id);
+
                 if (old) |id|
                     if (!before.directory() and self.owns(id, entry.file.name)) continue;
+
                 var resolved = false;
+
                 for (self.m.locals.items) |item|
                     if ((self.removed(item.id) or self.replaced(item.id)) and
                         self.owns(item.id, entry.path))
@@ -782,39 +941,50 @@ const Builder = struct {
                         resolved = true;
                         break;
                     };
+
                 if (resolved and !before.directory()) continue;
                 if (before.directory() and entry.file.kind != .directory and
                     try self.canReplaceDirectory(entry.path, old))
                     continue;
+
                 if (!before.directory() and self.ownerOf(entry.path) == null and
                     backupHash(archive.package, entry.path) != .absent)
                     continue;
+
                 if (!before.directory() and try self.overwrite(entry.file.name)) continue;
+
                 try self.addConflict(entry, self.ownerOf(entry.path), false);
             };
+
         self.current_package = null;
         self.current_path = null;
     }
 
     fn plannedDirectory(self: *Builder, path: []const u8) bool {
         const owner = self.ownerOf(path) orelse return false;
+
         if (!self.removed(owner) and !self.replaced(owner)) return false;
         for (self.m.archives.items) |archive|
             if (archive.find(path)) |entry|
                 if (entry.file.kind == .directory)
                     return true;
+
         return false;
     }
 
     fn canReplaceDirectory(self: *Builder, path: []const u8, old: ?Plan.Id) !bool {
         const directory = try std.fmt.allocPrint(self.a, "{s}/", .{path});
         var owners: std.ArrayList(Plan.Id) = .empty;
+
         for (self.m.locals.items) |item|
             if (self.owns(item.id, directory)) {
                 if (old != item.id and !self.removed(item.id)) return false;
+
                 try owners.append(self.a, item.id);
             };
+
         if (owners.items.len == 0) return false;
+
         return self.directoryOwned(path, owners.items);
     }
 
@@ -825,33 +995,42 @@ const Builder = struct {
         var dir = try std.Io.Dir.cwd().openDir(self.tx.io, held, .{ .iterate = true });
         defer dir.close(self.tx.io);
         var iterator = dir.iterate();
+
         while (try iterator.next(self.tx.io)) |entry| {
             try self.tx.owner.checkCancelled();
+
             const child = try std.fmt.allocPrint(self.a, "{s}/{s}", .{ path, entry.name });
             const before = (try self.observe(child)) orelse return error.StaleFilesystemState;
             const name = if (before.directory()) try std.fmt.allocPrint(self.a, "{s}/", .{child}) else child;
             var owned = false;
+
             for (owners) |id|
                 if (self.owns(id, name)) {
                     owned = true;
                     break;
                 };
+
             if (!owned) return false;
             if (before.directory() and !try self.directoryOwned(child, owners)) return false;
         }
+
         return true;
     }
 
     fn removePackage(self: *Builder, id: Plan.Id, replacement: ?Plan.Id) !void {
         const package = self.local(id);
         self.current_package = id;
+
         // Native removes deepest paths first; local inventories are sorted.
         var i = package.files.len;
+
         while (i != 0) {
             i -= 1;
+
             const file = package.files[i];
             const path = std.mem.trimEnd(u8, file.name, "/");
             self.current_path = path;
+
             var entry: Manifest.Entry = .{
                 .package = id,
                 .file = file,
@@ -859,16 +1038,19 @@ const Builder = struct {
                 .action = .remove,
                 .before = try self.observe(path),
             };
+
             if (entry.before == null or try self.matches(.no_upgrade, file.name)) entry.action = .preserve;
             for (self.m.archives.items) |archive|
                 if (archive.find(path)) |new| {
                     if (new.file.kind == .directory and entry.before != null and entry.before.?.directory())
                         entry.action = .shared_directory;
+
                     if (archive.id != replacement and !std.mem.endsWith(u8, file.name, "/"))
                         entry.action = .preserve; // transfer
                     if (archive.id == replacement and backupHash(archive.package, path) != .absent)
                         entry.action = .preserve;
                 };
+
             if (entry.action == .remove and entry.before != null and entry.before.?.directory()) {
                 for (self.m.locals.items) |item|
                     if (item.id != id and !self.removed(item.id) and
@@ -878,16 +1060,21 @@ const Builder = struct {
                         entry.action = .shared_directory;
                         break;
                     };
+
                 entry.remove_if_empty = true;
+
                 const parent = try self.m.root.ancestor(path);
                 defer _ = Root.c.close(parent);
                 const parent_state = try Root.state(parent);
+
                 if (parent_state.device != entry.before.?.device or
                     parent_state.mount_id != entry.before.?.mount_id)
                     entry.action = .preserve;
+
                 // Existing nonempty directories may remain after removals. The
                 // executor must use rmdir, never recursive deletion.
             }
+
             if (self.m.protectsAdoption(path)) entry.action = .preserve;
             if (entry.action == .remove and entry.before != null and !entry.before.?.directory() and
                 !self.tx.flags.no_save)
@@ -895,6 +1082,7 @@ const Builder = struct {
                 if (backupHash(package.*, path) == .hash) {
                     var hash: [32]u8 = undefined;
                     _ = try self.m.remember(path, true);
+
                     if (try self.m.root.hash(self.tx.io, path, &hash) and
                         !std.mem.eql(
                             u8,
@@ -908,7 +1096,9 @@ const Builder = struct {
                     }
                 }
             }
+
             try self.m.entries.append(self.a, entry);
+
             if (entry.action == .remove or entry.action == .pacsave)
                 try self.cleared.put(self.a, entry.path, {});
         }
@@ -916,6 +1106,7 @@ const Builder = struct {
 
     fn rotatePacsave(self: *Builder, destination: []const u8) !void {
         _ = try self.observe(destination);
+
         const parent = std.fs.path.dirname(destination) orelse ".";
         const fd = (try self.m.root.open(parent, true)) orelse return;
         defer _ = Root.c.close(fd);
@@ -924,6 +1115,7 @@ const Builder = struct {
         defer dir.close(self.tx.io);
         const prefix = try std.fmt.allocPrint(self.a, "{s}.", .{std.fs.path.basename(destination)});
         var iterator = dir.iterate();
+
         // Avoid unbounded work from an adversarial numeric suffix; only existing
         // paths need rotation, descending by numeric suffix.
         var rotations: std.ArrayList(struct {
@@ -931,16 +1123,21 @@ const Builder = struct {
             rotation: Manifest.Rotation,
         }) = .empty;
         iterator = dir.iterate();
+
         while (try iterator.next(self.tx.io)) |entry| {
             if (!std.mem.startsWith(u8, entry.name, prefix)) continue;
+
             const number = std.fmt.parseInt(u64, entry.name[prefix.len..], 10) catch continue;
+
             if (number == 0 or number == std.math.maxInt(u64)) return error.InvalidBackup;
+
             const from = try std.fmt.allocPrint(self.a, "{s}.{d}", .{ destination, number });
             const to = try std.fmt.allocPrint(self.a, "{s}.{d}", .{ destination, number + 1 });
             _ = try self.observe(from);
             _ = try self.observe(to);
             try rotations.append(self.a, .{ .number = number, .rotation = .{ .from = from, .to = to } });
         }
+
         std.mem.sort(
             @TypeOf(rotations.items[0]),
             rotations.items,
@@ -951,8 +1148,10 @@ const Builder = struct {
                 }
             }.less,
         );
+
         for (rotations.items) |rotation|
             try self.m.rotations.append(self.a, rotation.rotation);
+
         if (try self.m.root.inspect(destination, false) != null) {
             const to = try std.fmt.allocPrint(self.a, "{s}.1", .{destination});
             _ = try self.observe(to);
@@ -964,8 +1163,10 @@ const Builder = struct {
         for (archive.payload) |source| {
             self.current_package = archive.id;
             self.current_path = source.path;
+
             var entry = source;
             entry.before = try self.observe(entry.path);
+
             if (self.adoption(entry.path)) |item| {
                 if (item.package == archive.id) {
                     entry.action = .adopt;
@@ -973,9 +1174,11 @@ const Builder = struct {
                     continue;
                 }
             }
+
             if (entry.file.kind == .symlink and backupHash(archive.package, entry.path) != .absent) {
                 entry.new_hash = try self.hashLink(entry.path, entry.file.link_target.?, 0);
             }
+
             if (try self.matches(.no_extract, entry.file.name)) {
                 entry.action = .no_extract;
             } else if (entry.before) |before| existing: {
@@ -986,10 +1189,12 @@ const Builder = struct {
                     entry.action = .install;
                     break :existing;
                 }
+
                 entry.action = if (before.directory() and entry.file.kind == .directory)
                     .shared_directory
                 else
                     .replace;
+
                 if (entry.file.kind != .directory and !before.directory()) {
                     if (try self.matches(.no_upgrade, entry.file.name)) {
                         entry.action = .pacnew;
@@ -998,10 +1203,13 @@ const Builder = struct {
                             backupHash(self.local(id).*, entry.path)
                         else
                             .absent;
+
                         const new = backupHash(archive.package, entry.path);
+
                         if (old != .absent or new != .absent) {
                             var hash: [32]u8 = undefined;
                             _ = try self.m.remember(entry.path, true);
+
                             const local_hash: ?[]const u8 = if (try self.m.root.hash(
                                 self.tx.io,
                                 entry.path,
@@ -1010,18 +1218,22 @@ const Builder = struct {
                                 &hash
                             else
                                 null;
+
                             entry.action = backupAction(
                                 if (old == .hash) old.hash else null,
                                 local_hash,
                                 entry.new_hash,
                             );
+
                             if (entry.action == .preserve) {
                                 const pacnew = try std.fmt.allocPrint(self.a, "{s}.pacnew", .{entry.path});
                                 entry.refresh_existing_pacnew = try self.observe(pacnew) != null;
+
                                 if (entry.refresh_existing_pacnew) entry.destination = pacnew;
                             }
                         }
                     }
+
                     if (entry.action == .pacnew)
                         entry.destination = try std.fmt.allocPrint(
                             self.a,
@@ -1030,22 +1242,27 @@ const Builder = struct {
                         );
                 }
             }
+
             if (entry.destination) |destination| {
                 if (try self.observe(destination)) |before|
                     if (before.directory()) {
                         var conflict = entry;
                         conflict.path = destination;
                         try self.addConflict(conflict, self.ownerOf(destination), false);
+
                         return error.FileConflicts;
                     };
             }
+
             if (entry.action == .install or entry.action == .replace or entry.action == .pacnew or
                 entry.refresh_existing_pacnew)
             {
                 var parents: std.ArrayList([]const u8) = .empty;
                 var cursor: usize = 0;
+
                 while (std.mem.indexOfScalarPos(u8, entry.path, cursor, '/')) |index| {
                     const prefix = entry.path[0..index];
+
                     if (!self.created_directories.contains(prefix) and
                         (self.cleared.contains(prefix) or
                             try self.m.root.inspect(prefix, true) == null))
@@ -1053,15 +1270,21 @@ const Builder = struct {
                         try parents.append(self.a, prefix);
                         try self.created_directories.put(self.a, prefix, {});
                     }
+
                     cursor = index + 1;
                 }
+
                 entry.create_parents = parents.items;
+
                 if (entry.file.kind == .directory) try self.created_directories.put(self.a, entry.path, {});
             }
+
             try self.m.entries.append(self.a, entry);
         }
+
         for (self.m.adoptions.items) |item| {
             if (item.package != archive.id or archive.find(item.path) != null) continue;
+
             try self.m.entries.append(self.a, .{
                 .package = item.package,
                 .path = item.path,
@@ -1070,6 +1293,7 @@ const Builder = struct {
                 .file = .{ .name = item.path, .size = item.before.size, .mode = item.before.mode, .kind = if (item.before.regular()) .regular else .symlink },
             });
         }
+
         self.current_package = null;
         self.current_path = null;
     }
@@ -1080,6 +1304,7 @@ const Builder = struct {
                 self.a,
                 &installed.package,
             );
+
         for (self.plan.removals) |id|
             try self.m.database_changes.append(
                 self.a,
@@ -1093,10 +1318,12 @@ const Builder = struct {
                     .installed_database = null,
                 },
             );
+
         for (self.plan.additions, self.m.archives.items) |addition, archive| {
             var files: std.ArrayList(File) = .empty;
             var adopted: std.ArrayList([]const u8) = .empty;
             var backups: std.ArrayList(BackupFile) = .empty;
+
             for (archive.payload) |entry| try files.append(self.a, entry.file);
             for (self.m.adoptions.items) |item| {
                 if (item.package != archive.id) continue;
@@ -1104,23 +1331,30 @@ const Builder = struct {
                     try files.append(self.a, .{ .name = item.path });
                     try adopted.append(self.a, item.path);
                 }
+
                 if (item.backup) |backup| try backups.append(self.a, backup);
             }
+
             std.mem.sort(File, files.items, {}, fileLess);
             std.mem.sort([]const u8, adopted.items, {}, struct {
                 fn less(_: void, left: []const u8, right: []const u8) bool {
                     return std.mem.lessThan(u8, left, right);
                 }
             }.less);
+
             for (archive.package.backups) |original| {
                 if (self.adoption(original.name)) |item| {
                     if (item.backup != null) continue;
                 }
+
                 try backups.append(self.a, .{ .name = original.name, .hash = null });
+
                 const backup = &backups.items[backups.items.len - 1];
                 const entry = archive.find(original.name) orelse continue;
+
                 if (!self.tx.flags.database_only and !try self.matches(.no_extract, entry.file.name))
                     backup.hash = entry.new_hash;
+
                 if (entry.file.kind == .symlink)
                     for (self.m.entries.items) |effect| {
                         if (effect.package == archive.id and effect.archive_index != null and
@@ -1128,6 +1362,7 @@ const Builder = struct {
                             backup.hash = effect.new_hash;
                     };
             }
+
             try self.m.database_changes.append(
                 self.a,
                 .{
@@ -1146,6 +1381,7 @@ const Builder = struct {
 
     fn hashLink(self: *Builder, path: []const u8, link: []const u8, depth: usize) anyerror!?[]const u8 {
         if (depth >= 40) return error.UnsafeSymlink;
+
         const absolute = try std.fs.path.resolvePosix(
             self.a,
             &.{
@@ -1154,13 +1390,18 @@ const Builder = struct {
                 link,
             },
         );
+
         const target = if (absolute.len == 1) "." else absolute[1..];
+
         // Resolve against effects already preceding this archive header. Later
         // writes cannot change the hash recorded at the native extraction point.
         var index = self.m.entries.items.len;
+
         while (index != 0) {
             index -= 1;
+
             const entry = self.m.entries.items[index];
+
             if (!std.mem.eql(u8, entry.path, target)) continue;
             switch (entry.action) {
                 .remove, .pacsave => return null,
@@ -1171,15 +1412,19 @@ const Builder = struct {
                             entry.file.link_target.?,
                             depth + 1,
                         );
+
                     return entry.new_hash;
                 },
                 .shared_directory => return null,
                 else => {},
             }
         }
+
         _ = try self.observe(target);
         _ = try self.m.remember(target, true);
+
         var hash: [32]u8 = undefined;
+
         return if (try self.m.root.hash(self.tx.io, target, &hash)) try self.a.dupe(u8, &hash) else null;
     }
 
@@ -1187,10 +1432,12 @@ const Builder = struct {
         for (self.m.entries.items) |entry| {
             self.current_package = entry.package;
             self.current_path = entry.path;
+
             if (entry.action == .adopt or entry.action == .no_extract or entry.action == .shared_directory or
                 (entry.action == .preserve and
                     !entry.refresh_existing_pacnew))
                 continue;
+
             for (entry.create_parents) |parent_path| {
                 const ancestor = try self.m.root.ancestor(parent_path);
                 defer _ = Root.c.close(ancestor);
@@ -1203,27 +1450,36 @@ const Builder = struct {
                             .path = parent_path,
                         },
                     );
+
                     continue;
                 };
+
                 if (cap.read_only) return error.ReadOnlyFilesystem;
+
                 const bucket = try self.spaceBucket(parent_path, false, cap);
                 bucket.delta += 1;
                 bucket.peak = @max(bucket.peak, @as(u64, @intCast(@max(0, bucket.delta))));
             }
+
             const path = entry.destination orelse entry.path;
             const fd = try self.m.root.ancestor(path);
             defer _ = Root.c.close(fd);
             try self.m.root.access(path);
+
             const cap = Root.capacity(fd) catch |err| {
                 try self.m.warnings.append(self.a, .{
                     .cause = err,
                     .package = entry.package,
                     .path = path,
                 });
+
                 continue;
             };
+
             if (cap.read_only) return error.ReadOnlyFilesystem;
+
             const bucket = try self.spaceBucket(path, false, cap);
+
             if (entry.action == .remove) {
                 if (entry.before) |before|
                     if (before.regular()) {
@@ -1240,9 +1496,11 @@ const Builder = struct {
                     @as(u64, 1)
                 else
                     0;
+
                 // Reserve the temporary output before crediting a replacement.
                 bucket.peak = @max(bucket.peak, @as(u64, @intCast(@max(0, bucket.delta + needed))));
                 bucket.delta += needed;
+
                 if (entry.action == .replace) {
                     if (entry.before) |before|
                         if (before.regular()) {
@@ -1251,14 +1509,17 @@ const Builder = struct {
                 }
             }
         }
+
         for (self.m.rotations.items) |rotation| {
             try self.m.root.access(rotation.from);
             try self.m.root.access(rotation.to);
         }
+
         // Local records and staged record publication use the DB filesystem,
         // which may differ from the root. Reserve metadata plus inventory bytes.
         if (self.m.database_changes.items.len != 0) db_space: {
             try Root.writable(self.m.database.fd);
+
             const cap = Root.capacity(self.m.database.fd) catch |err| {
                 try self.m.warnings.append(
                     self.a,
@@ -1267,12 +1528,16 @@ const Builder = struct {
                         .path = self.tx.owner.configuration.database_path,
                     },
                 );
+
                 break :db_space;
             };
+
             const bucket = try self.spaceBucket("local/record", true, cap);
+
             if (cap.read_only) return error.ReadOnlyFilesystem;
             for (self.m.archives.items) |archive| {
                 var package = archive.package;
+
                 for (self.m.database_changes.items) |change|
                     if (change.package == archive.id) {
                         package.files = change.files;
@@ -1281,10 +1546,13 @@ const Builder = struct {
                         package.install_reason = change.reason;
                         package.installed_database = change.installed_database;
                     };
+
                 package.install_date = @intCast(std.Io.Clock.real.now(self.tx.io).toSeconds());
                 _ = try LocalWriter.recordName(self.a, &package);
+
                 const desc = try LocalWriter.description(self.a, &package);
                 const files = try LocalWriter.files(self.a, &package);
+
                 // Actual serialized members, separately rounded blocks, plus
                 // record/staging directories and the rollback journal.
                 var size: u64 = 4 * cap.block_size;
@@ -1293,6 +1561,7 @@ const Builder = struct {
                     size,
                     (blocks(desc.len, cap.block_size) + blocks(files.len, cap.block_size)) * cap.block_size,
                 );
+
                 for (archive.metadata) |entry|
                     if (!std.mem.eql(u8, entry.path, ".PKGINFO")) {
                         size = try std.math.add(
@@ -1301,16 +1570,19 @@ const Builder = struct {
                             blocks(entry.file.size orelse 0, cap.block_size) * cap.block_size,
                         );
                     };
+
                 bucket.delta += blocks(size, cap.block_size);
                 bucket.peak = @max(bucket.peak, @as(u64, @intCast(@max(0, bucket.delta))));
             }
         }
+
         if (self.tx.owner.configuration.check_space)
             for (self.m.spaces.items) |space_info|
                 try Manifest.checkCapacity(
                     space_info.capacity,
                     space_info.peak,
                 );
+
         self.current_package = null;
         self.current_path = null;
     }
@@ -1319,11 +1591,13 @@ const Builder = struct {
         for (self.m.spaces.items) |*space_info|
             if (space_info.capacity.device == cap.device)
                 return space_info;
+
         try self.m.spaces.append(self.a, .{
             .path = path,
             .database = database,
             .capacity = cap,
         });
+
         return &self.m.spaces.items[self.m.spaces.items.len - 1];
     }
 };
@@ -1345,6 +1619,7 @@ fn backupHash(package: Package, name: []const u8) Backup {
                 .{ .hash = hash }
             else
                 .unhashed;
+
     return .absent;
 }
 
@@ -1352,6 +1627,7 @@ pub fn backupAction(old: ?[]const u8, local: ?[]const u8, new: ?[]const u8) Mani
     if (equalOptional(local, new)) return .replace;
     if (equalOptional(old, new)) return .preserve;
     if (equalOptional(old, local)) return .replace;
+
     return .pacnew;
 }
 
@@ -1367,42 +1643,52 @@ fn metadataMatches(expected: *const Package, actual: *const Package) !void {
             actual.version.raw,
         ))
         return error.PackageIdentityMismatch;
+
     if (expected.installed_size != actual.installed_size or
         !optionalStringsEqual(
             expected.architecture,
             actual.architecture,
         ))
         return error.PackageMetadataMismatch;
+
     inline for (.{ "depends", "provides", "conflicts", "replaces" }) |field| {
         const left = @field(expected, field);
         const right = @field(actual, field);
+
         if (left.len != right.len) return error.PackageMetadataMismatch;
         for (left) |relation| {
             var wanted: usize = 0;
             var found: usize = 0;
+
             for (left) |other|
                 if (relationsEqual(relation, other)) {
                     wanted += 1;
                 };
+
             for (right) |other|
                 if (relationsEqual(relation, other)) {
                     found += 1;
                 };
+
             if (wanted != found) return error.PackageMetadataMismatch;
         }
     }
+
     if (expected.groups.len != actual.groups.len) return error.PackageMetadataMismatch;
     for (expected.groups) |group| {
         var wanted: usize = 0;
         var found: usize = 0;
+
         for (expected.groups) |other|
             if (std.mem.eql(u8, group, other)) {
                 wanted += 1;
             };
+
         for (actual.groups) |other|
             if (std.mem.eql(u8, group, other)) {
                 found += 1;
             };
+
         if (wanted != found) return error.PackageMetadataMismatch;
     }
 }
@@ -1418,6 +1704,7 @@ fn relationsEqual(
     if (!std.mem.eql(u8, left.name, right.name) or
         std.meta.activeTag(left.constraint) != std.meta.activeTag(right.constraint))
         return false;
+
     return switch (left.constraint) {
         .any => true,
         inline else => |value, tag| std.mem.eql(u8, value, @field(right.constraint, @tagName(tag))),

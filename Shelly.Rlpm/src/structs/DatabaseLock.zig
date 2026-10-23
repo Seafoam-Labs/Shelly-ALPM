@@ -1,7 +1,9 @@
 //! Exclusive pacman lock. Only the acquiring instance may unlink it.
+
 const std = @import("std");
 
 const Lock = @This();
+
 extern "c" fn rlpm_lock_acquire([*:0]const u8, *c_int) c_int;
 extern "c" fn rlpm_lock_check([*:0]const u8, c_int) c_int;
 extern "c" fn rlpm_lock_release([*:0]const u8, c_int) c_int;
@@ -14,6 +16,7 @@ pub fn acquire(allocator: std.mem.Allocator, path: []const u8) !Lock {
     errdefer allocator.free(owned);
     var fd: c_int = undefined;
     try check(rlpm_lock_acquire(owned, &fd));
+
     return .{ .path = owned, .fd = fd };
 }
 
@@ -31,6 +34,7 @@ pub fn release(self: *Lock, allocator: std.mem.Allocator) !void {
 
 fn check(result: c_int) !void {
     if (result == 0) return;
+
     return switch (@as(std.c.E, @enumFromInt(result))) {
         .EXIST => error.DatabaseLocked,
         .ACCES, .PERM, .ROFS => error.LockPermissionDenied,

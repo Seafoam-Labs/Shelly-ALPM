@@ -1,5 +1,6 @@
 //! Parsed strings borrow their input. Conversion deep-copies into an explicit
 //! enclosing arena; releasing that arena reclaims complete or failed conversions.
+
 const std = @import("std");
 const Package = @import("Package.zig");
 const PackageRelation = @import("PackageRelation.zig");
@@ -55,9 +56,11 @@ pub fn intoPackage(
     const allocator = arena.allocator();
     const name = self.name orelse return error.MissingPackageName;
     const raw_version = self.version orelse return error.MissingPackageVersion;
+
     if (name.len == 0) return error.MissingPackageName;
     if (raw_version.len == 0) return error.InvalidVersion;
     if (std.mem.indexOfScalar(u8, name, 0) != null) return error.InvalidPackageName;
+
     var result: Package = .{
         .name = try allocator.dupe(u8, name),
         .version = try Version.initRaw(raw_version, allocator),
@@ -75,6 +78,7 @@ pub fn intoPackage(
         .files_source = if (self.files_loaded) .database else .none,
         .download_size = if (source.origin == .archive or source.origin == .local) 0 else null,
     };
+
     inline for (.{
         "base",
         "description",
@@ -89,6 +93,7 @@ pub fn intoPackage(
     }) |field| {
         @field(result, field) = try copyOptional(allocator, @field(self, field));
     }
+
     inline for (.{
         "depends",
         "optional_depends",
@@ -100,45 +105,60 @@ pub fn intoPackage(
     }) |field| {
         const values = @field(self, field).items;
         const relations = try allocator.alloc(PackageRelation, values.len);
+
         for (values, relations) |value, *relation|
             relation.* = try (try PackageRelation.parse(value)).clone(
                 allocator,
             );
+
         @field(result, field) = relations;
     }
+
     inline for (.{ "groups", "licenses", "adopted_files" }) |field| {
         const values = @field(self, field).items;
         const strings = try allocator.alloc([]const u8, values.len);
+
         for (values, strings) |value, *string|
             string.* = try allocator.dupe(u8, value);
+
         @field(result, field) = strings;
     }
+
     const xdata = try allocator.alloc(Package.XData, self.xdata.items.len);
+
     for (self.xdata.items, xdata) |item, *owned|
         owned.* = .{
             .name = try allocator.dupe(u8, item.name),
             .value = try allocator.dupe(u8, item.value),
         };
+
     result.xdata = xdata;
+
     const files = try allocator.alloc(PackageFile, self.files.items.len);
+
     for (self.files.items, files) |item, *owned| {
         owned.* = item;
         owned.name = try allocator.dupe(u8, item.name);
         owned.link_target = try copyOptional(allocator, item.link_target);
     }
+
     std.mem.sort(PackageFile, files, {}, struct {
         fn less(_: void, a: PackageFile, b: PackageFile) bool {
             return std.mem.lessThan(u8, a.name, b.name);
         }
     }.less);
     result.files = files;
+
     const backups = try allocator.alloc(BackupFile, self.backups.items.len);
+
     for (self.backups.items, backups) |item, *owned|
         owned.* = .{
             .name = try allocator.dupe(u8, item.name),
             .hash = try copyOptional(allocator, item.hash),
         };
+
     result.backups = backups;
+
     return result;
 }
 
@@ -164,6 +184,7 @@ pub fn deinit(self: *ParsedDescription, allocator: std.mem.Allocator) void {
         "adopted_files",
     }) |field|
         @field(self, field).deinit(allocator);
+
     self.* = undefined;
 }
 
@@ -193,7 +214,9 @@ pub fn parse(
             line[line.len - 1] == '%')
         {
             section = descSectionFromHeader(line);
+
             if (section == .files) result.files_loaded = true;
+
             continue;
         }
 
@@ -218,6 +241,7 @@ pub fn parse(
             .base64_signature => try setDescValue(&result.base64_signature, line),
             .compressed_size => {
                 if (result.compressed_size != null) return error.DuplicateValue;
+
                 result.compressed_size = try std.fmt.parseInt(u64, line, 10);
             },
             .files => try result.files.append(
@@ -518,10 +542,12 @@ test "ParsedDescription converts local metadata into an arena-owned package" {
     try std.testing.expectEqualStrings("1.2.3", package.version.pkgver);
     try std.testing.expectEqualStrings("4", package.version.pkgrel.?);
     try std.testing.expectEqualStrings("glibc", package.depends[0].name);
+
     switch (package.depends[0].constraint) {
         .greater_equal => |version| try std.testing.expectEqualStrings("2.39", version),
         else => return error.TestUnexpectedResult,
     }
+
     try std.testing.expectEqualStrings("docs", package.optional_depends[0].name);
     try std.testing.expectEqualStrings("documentation support", package.optional_depends[0].description.?);
     try std.testing.expectEqualStrings("base", package.groups[0]);
@@ -541,6 +567,7 @@ test "ParsedDescription retains large package and provision epochs" {
     defer parsed.deinit(allocator);
     try parsed.provides.append(allocator, "virtual=00018446744073709551617:2.0");
     try parsed.depends.append(allocator, "runtime>=18446744073709551616:1.0");
+
     const package = try parsed.intoPackage(&arena, .{ .origin = .local, .database_name = "local" });
     try std.testing.expectEqualStrings("18446744073709551616", package.version.epoch);
     try std.testing.expectEqualStrings("00018446744073709551617:2.0", package.provides[0].constraint.equal);
@@ -551,6 +578,7 @@ test "ParsedDescription retains large package and provision epochs" {
             package.version.raw,
         ),
     );
+
     try std.testing.expectEqual(
         .equal,
         Version.compareStrings(
@@ -564,6 +592,7 @@ test "ParsedDescription preserves permissive package and relation versions" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
+
     for ([_][]const u8{ "+1:1.0", "1_0:1.0" }) |invalid| {
         var parsed: ParsedDescription = .{ .name = "demo", .version = invalid };
         defer parsed.deinit(allocator);

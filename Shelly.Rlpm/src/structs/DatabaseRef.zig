@@ -1,4 +1,5 @@
 //! A durable identifier, not a pointer into an Owner's growable database array.
+
 const std = @import("std");
 
 const DatabaseRef = @This();

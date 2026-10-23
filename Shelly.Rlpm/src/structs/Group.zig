@@ -4,6 +4,7 @@ const PackageId = @import("PackageRef.zig").Id;
 const Group = @This();
 
 name: []const u8,
+
 /// IDs into the containing database's current package cache, never raw pointers.
 packages: std.ArrayList(PackageId),
 

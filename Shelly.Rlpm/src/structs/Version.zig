@@ -9,6 +9,7 @@ pub const CompareResults = enum(i8) {
 };
 
 raw: []const u8,
+
 /// Digit string, preserving leading zeros; absent epochs use the static "0".
 epoch: []const u8,
 pkgver: []const u8,
@@ -27,13 +28,16 @@ pub fn validate(version: []const u8) error{ InvalidVersion, InvalidCharacter }!v
     if (std.mem.indexOfScalar(u8, version, 0) != null) return error.InvalidCharacter;
 
     var ver_rel = version;
+
     if (std.mem.find(u8, version, ":")) |epoch_index| {
         if (epoch_index == 0 or epoch_index + 1 == version.len) {
             return error.InvalidVersion;
         }
+
         for (version[0..epoch_index]) |byte| {
             if (!isDigit(byte)) return error.InvalidCharacter;
         }
+
         ver_rel = version[epoch_index + 1 ..];
     }
 
@@ -50,14 +54,17 @@ pub fn validate(version: []const u8) error{ InvalidVersion, InvalidCharacter }!v
 /// Shallow copies share ownership: call deinit only once for each init.
 pub fn init(version: []const u8, allocator: std.mem.Allocator) !Version {
     try validate(version);
+
     return initRaw(version, allocator);
 }
 
 /// Own a permissive, NUL-free version from package metadata. Strict callers use init.
 pub fn initRaw(version: []const u8, allocator: std.mem.Allocator) !Version {
     if (std.mem.indexOfScalar(u8, version, 0) != null) return error.InvalidCharacter;
+
     const raw = try allocator.dupe(u8, version);
     const parts = parseParts(raw);
+
     return .{
         .raw = raw,
         .epoch = parts.epoch,
@@ -100,6 +107,7 @@ pub fn compareStrings(v1: []const u8, v2: []const u8) CompareResults {
 // An initial ':' is the special empty epoch (zero); other colons stay in pkgver.
 fn parseParts(version: []const u8) Parts {
     var digits_end: usize = 0;
+
     while (digits_end < version.len and isDigit(version[digits_end])) : (digits_end += 1) {}
 
     const has_epoch = digits_end < version.len and version[digits_end] == ':';
@@ -108,6 +116,7 @@ fn parseParts(version: []const u8) Parts {
         digits_end + index
     else
         null;
+
     return .{
         .epoch = if (has_epoch and digits_end != 0) version[0..digits_end] else "0",
         .pkgver = version[version_start .. release_separator orelse version.len],
@@ -117,9 +126,11 @@ fn parseParts(version: []const u8) Parts {
 
 fn compareParts(v1: Parts, v2: Parts) CompareResults {
     const epoch_result = compareSegments(v1.epoch, v2.epoch);
+
     if (epoch_result != .equal) return epoch_result;
 
     const pkgver_result = compareSegments(v1.pkgver, v2.pkgver);
+
     if (pkgver_result != .equal) return pkgver_result;
 
     if (v1.pkgrel != null and v2.pkgrel != null) {
@@ -142,6 +153,7 @@ fn compareSegments(v1: []const u8, v2: []const u8) CompareResults {
         while (v1_index < v1.len and !isAlphanumeric(v1[v1_index])) {
             v1_index += 1;
         }
+
         while (v2_index < v2.len and !isAlphanumeric(v2[v2_index])) {
             v2_index += 1;
         }
@@ -150,6 +162,7 @@ fn compareSegments(v1: []const u8, v2: []const u8) CompareResults {
 
         const v1_separator_length = v1_index - v1_separator_start;
         const v2_separator_length = v2_index - v2_separator_start;
+
         if (v1_separator_length < v2_separator_length) return .lessThan;
         if (v1_separator_length > v2_separator_length) return .greaterThan;
 
@@ -161,6 +174,7 @@ fn compareSegments(v1: []const u8, v2: []const u8) CompareResults {
             while (v1_segment_end < v1.len and isDigit(v1[v1_segment_end])) {
                 v1_segment_end += 1;
             }
+
             while (v2_segment_end < v2.len and isDigit(v2[v2_segment_end])) {
                 v2_segment_end += 1;
             }
@@ -168,6 +182,7 @@ fn compareSegments(v1: []const u8, v2: []const u8) CompareResults {
             while (v1_segment_end < v1.len and isAlpha(v1[v1_segment_end])) {
                 v1_segment_end += 1;
             }
+
             while (v2_segment_end < v2.len and isAlpha(v2[v2_segment_end])) {
                 v2_segment_end += 1;
             }
@@ -180,16 +195,19 @@ fn compareSegments(v1: []const u8, v2: []const u8) CompareResults {
 
         var v1_significant_start = v1_index;
         var v2_significant_start = v2_index;
+
         if (numeric) {
             while (v1_significant_start < v1_segment_end and v1[v1_significant_start] == '0') {
                 v1_significant_start += 1;
             }
+
             while (v2_significant_start < v2_segment_end and v2[v2_significant_start] == '0') {
                 v2_significant_start += 1;
             }
 
             const v1_digits = v1_segment_end - v1_significant_start;
             const v2_digits = v2_segment_end - v2_significant_start;
+
             if (v1_digits < v2_digits) return .lessThan;
             if (v1_digits > v2_digits) return .greaterThan;
         }
@@ -198,6 +216,7 @@ fn compareSegments(v1: []const u8, v2: []const u8) CompareResults {
             v1[v1_significant_start..v1_segment_end],
             v2[v2_significant_start..v2_segment_end],
         );
+
         if (segment_result != .equal) return segment_result;
 
         v1_index = v1_segment_end;
@@ -220,6 +239,7 @@ fn compareSegments(v1: []const u8, v2: []const u8) CompareResults {
 fn compareBytes(v1: []const u8, v2: []const u8) CompareResults {
     var index: usize = 0;
     const shared_length = @min(v1.len, v2.len);
+
     while (index < shared_length) : (index += 1) {
         if (v1[index] < v2[index]) return .lessThan;
         if (v1[index] > v2[index]) return .greaterThan;
@@ -227,6 +247,7 @@ fn compareBytes(v1: []const u8, v2: []const u8) CompareResults {
 
     if (v1.len < v2.len) return .lessThan;
     if (v1.len > v2.len) return .greaterThan;
+
     return .equal;
 }
 
@@ -474,10 +495,12 @@ test "Version splits permissive inputs without losing empty components" {
             },
         },
     };
+
     for (cases) |case| {
         const actual = parseParts(case.raw);
         try std.testing.expectEqualStrings(case.expected.epoch, actual.epoch);
         try std.testing.expectEqualStrings(case.expected.pkgver, actual.pkgver);
+
         if (case.expected.pkgrel) |release| {
             try std.testing.expectEqualStrings(
                 release,
@@ -495,11 +518,13 @@ test "Version metadata validation remains separate from comparison" {
         try std.testing.expectError(error.InvalidVersion, init(invalid, std.testing.allocator));
         try std.testing.expectEqual(.equal, compareStrings(invalid, invalid));
     }
+
     for ([_][]const u8{ "alpha:1", "+1:1", "1_0:1", "-1:1" }) |invalid| {
         try std.testing.expectError(error.InvalidCharacter, validate(invalid));
         try std.testing.expectError(error.InvalidCharacter, init(invalid, std.testing.allocator));
         try std.testing.expectEqual(.equal, compareStrings(invalid, invalid));
     }
+
     for ([_][]const u8{ "1", "0:1", "01:1-beta-3", "1:2:3", "18446744073709551616:1" }) |valid| {
         try validate(valid);
     }
@@ -785,13 +810,16 @@ test "Version comparison matches libalpm expected results" {
             .expected = 0,
         },
     };
+
     for (cases) |case| {
         try std.testing.expectEqual(case.expected, @intFromEnum(compareStrings(case.left, case.right)));
         try std.testing.expectEqual(-case.expected, @intFromEnum(compareStrings(case.right, case.left)));
         try std.testing.expectEqual(.equal, compareStrings(case.left, case.left));
+
         // The same ordering must be available through validated, owned values.
         validate(case.left) catch continue;
         validate(case.right) catch continue;
+
         var left = try init(case.left, std.testing.allocator);
         defer left.deinit(std.testing.allocator);
         var right = try init(case.right, std.testing.allocator);

@@ -1,5 +1,6 @@
 //! CachyOS's physical-architecture query, pinned to cpu_capabilities.c. This is
 //! runtime CPU/OS probing; the binary's compilation target is not the host ISA.
+
 const std = @import("std");
 const builtin = @import("builtin");
 
@@ -21,11 +22,16 @@ const Probe = struct {
 
 pub fn init(allocator: std.mem.Allocator) !PhysicalArchitectures {
     if (builtin.os.tag != .linux) return error.UnsupportedPlatform;
+
     var info: std.c.utsname = undefined;
+
     if (std.c.uname(&info) != 0) return error.SystemInformationUnavailable;
+
     var probe: Probe = .{ .machine = std.mem.sliceTo(&info.machine, 0) };
+
     if (builtin.cpu.arch == .x86_64 or builtin.cpu.arch == .x86) {
         const max_leaf = cpuid(0).eax;
+
         if (max_leaf >= 1) probe.leaf1_ecx = cpuid(1).ecx;
         if (max_leaf >= 7) probe.leaf7_ebx = cpuid(7).ebx;
         if (probe.leaf1_ecx & (@as(u32, 1) << 27) != 0) {
@@ -35,6 +41,7 @@ pub fn init(allocator: std.mem.Allocator) !PhysicalArchitectures {
                 : .{ .edx = true });
         }
     }
+
     return fromProbe(allocator, probe);
 }
 
@@ -55,6 +62,7 @@ fn cpuid(leaf: u32) struct {
         : [_] "{eax}" (leaf),
           [_] "{ecx}" (@as(u32, 0)),
     );
+
     return .{
         .eax = eax,
         .ebx = ebx,
@@ -68,6 +76,7 @@ fn fromProbe(allocator: std.mem.Allocator, probe: Probe) !PhysicalArchitectures 
     const owned = arena.allocator();
     var names: std.ArrayList([]const u8) = .empty;
     try names.append(owned, try owned.dupe(u8, probe.machine));
+
     if (!std.mem.eql(u8, probe.machine, "aarch64")) {
         // The pinned CachyOS source labels ECX bit 0 as SSSE3. Preserve that
         // observed test, rather than substituting a different ISA-level policy.
@@ -77,11 +86,14 @@ fn fromProbe(allocator: std.mem.Allocator, probe: Probe) !PhysicalArchitectures 
         const v2 = probe.leaf1_ecx & v2_bits == v2_bits;
         const v3 = v2 and probe.leaf1_ecx & v3_bits == v3_bits and probe.xcr0 & 6 == 6 and
             probe.leaf7_ebx & (1 << 5) != 0;
+
         const v4 = v3 and probe.xcr0 & 224 == 224 and probe.leaf7_ebx & v4_bits == v4_bits;
+
         if (v2) try names.append(owned, "x86_64_v2");
         if (v3) try names.append(owned, "x86_64_v3");
         if (v4) try names.append(owned, "x86_64_v4");
     }
+
     return .{ .arena = arena, .names = try names.toOwnedSlice(owned) };
 }
 
@@ -148,12 +160,15 @@ test "CachyOS architecture levels follow CPU bits and OS-enabled vector state" {
             .count = 1,
         },
     };
+
     for (cases) |case| {
         var result = try fromProbe(std.testing.allocator, case.probe);
         defer result.deinit();
         try std.testing.expectEqual(case.count, result.names.len);
         try std.testing.expectEqualStrings(case.probe.machine, result.names[0]);
+
         const suffixes = [_][]const u8{ "x86_64_v2", "x86_64_v3", "x86_64_v4" };
+
         for (result.names[1..], 0..) |name, i|
             try std.testing.expectEqualStrings(suffixes[i], name);
     }

@@ -1,5 +1,6 @@
 //! Hermetic preflight fixtures. Only the fixture builder writes the private roots;
 //! RLPM preflight must never mutate installed payloads or local records.
+
 const std = @import("std");
 const rlpm = @import("Shelly_Rlpm");
 const Archive = @import("archive_fixture.zig");
@@ -18,8 +19,10 @@ const Fixture = struct {
         try tmp.dir.createDirPath(io, "root");
         try tmp.dir.createDirPath(io, "db/local");
         try tmp.dir.writeFile(io, .{ .sub_path = "db/local/ALPM_DB_VERSION", .data = "9\n" });
+
         const root = try tmp.dir.realPathFileAlloc(io, "root", a);
         errdefer a.free(root);
+
         return .{
             .tmp = tmp,
             .root = root,
@@ -41,11 +44,13 @@ const Fixture = struct {
         const dir = try std.fmt.allocPrint(a, "db/local/{s}-1-1", .{name});
         defer a.free(dir);
         try self.tmp.dir.createDirPath(io, dir);
+
         const desc_path = try std.fmt.allocPrint(a, "{s}/desc", .{dir});
         defer a.free(desc_path);
         const desc = try std.fmt.allocPrint(a, "%NAME%\n{s}\n\n%VERSION%\n1-1\n\n%REASON%\n0\n\n", .{name});
         defer a.free(desc);
         try self.tmp.dir.writeFile(io, .{ .sub_path = desc_path, .data = desc });
+
         const file_path = try std.fmt.allocPrint(a, "{s}/files", .{dir});
         defer a.free(file_path);
         const data = try std.fmt.allocPrint(a, "%FILES%\n{s}\n\n%BACKUP%\n{s}\n\n", .{ files, backups });
@@ -56,7 +61,9 @@ const Fixture = struct {
     fn write(self: *Fixture, name: []const u8, bytes: []const u8) !void {
         const path = try std.fmt.allocPrint(a, "root/{s}", .{name});
         defer a.free(path);
+
         if (std.fs.path.dirname(path)) |parent| try self.tmp.dir.createDirPath(io, parent);
+
         try self.tmp.dir.writeFile(io, .{ .sub_path = path, .data = bytes });
     }
 };
@@ -72,8 +79,10 @@ fn effect(manifest: *const rlpm.ExecutionManifest, path: []const u8, addition: b
         if ((entry.archive_index != null) == addition and
             std.mem.eql(u8, path, entry.path))
             return entry;
+
     return error.MissingEffect;
 }
+
 const info = "pkgname = demo\npkgver = 2-1\narch = any\n";
 
 test "full sealed stream creates payload metadata database and link manifests without mutation" {
@@ -108,9 +117,11 @@ test "full sealed stream creates payload metadata database and link manifests wi
     defer owner.releaseTransaction() catch unreachable;
     try add(tx, archive.path);
     try tx.prepare();
+
     // A replacement pathname must not replace the bytes selected by prepare.
     try std.Io.Dir.cwd().writeFile(io, .{ .sub_path = archive.path, .data = "changed after verification" });
     try tx.preflight();
+
     const manifest = tx.manifest().?;
     try std.testing.expect(manifest.complete);
     try std.testing.expectEqual(4, manifest.entries.items.len);
@@ -119,10 +130,12 @@ test "full sealed stream creates payload metadata database and link manifests wi
         "/usr/data",
         (try effect(manifest, "usr/link", true)).file.link_target.?,
     );
+
     try std.testing.expectEqualStrings(
         (try effect(manifest, "usr/data", true)).new_hash.?,
         (try effect(manifest, "usr/hard", true)).new_hash.?,
     );
+
     try std.testing.expectEqual(4, manifest.database_changes.items[0].files.len);
     try std.testing.expectError(error.FileNotFound, f.tmp.dir.access(io, "root/usr/data", .{}));
     try tx.revalidatePreflight();
@@ -166,6 +179,7 @@ test "ordered patterns match native slash dot negation escaping and directory be
             .result = .matched,
         },
     };
+
     for (cases) |case|
         try std.testing.expectEqual(
             case.result,
@@ -175,6 +189,7 @@ test "ordered patterns match native slash dot negation escaping and directory be
                 case.path,
             ),
         );
+
     var f = try Fixture.init();
     defer f.deinit();
     var owner = try f.owner(a);
@@ -190,6 +205,7 @@ test "unowned and target conflicts survive NOCONFLICTS and NoExtract; overwrite 
         var f = try Fixture.init();
         defer f.deinit();
         try f.write("same", "unowned");
+
         var first = try Archive.init(
             &.{
                 .{ .path = ".PKGINFO", .contents = info },
@@ -212,12 +228,15 @@ test "unowned and target conflicts survive NOCONFLICTS and NoExtract; overwrite 
         var owner = try f.owner(a);
         defer owner.deinit() catch unreachable;
         try owner.setList(io, .no_extract, &.{"same"});
+
         if (overwrite) try owner.setList(io, .overwrite_files, &.{"same"});
+
         const tx = try owner.initializeTransaction(io, .{ .no_conflicts = true });
         defer owner.releaseTransaction() catch unreachable;
         try add(tx, first.path);
         try add(tx, second.path);
         try tx.prepare();
+
         if (overwrite) {
             try tx.preflight();
             try std.testing.expectEqual(.no_extract, (try effect(tx.manifest().?, "same", true)).action);
@@ -229,6 +248,7 @@ test "unowned and target conflicts survive NOCONFLICTS and NoExtract; overwrite 
             try std.testing.expectError(error.FileConflicts, tx.preflight());
             try std.testing.expectEqual(.file_conflict, owner.diagnostic().?.category);
             try std.testing.expect(tx.manifest().?.conflicts.items.len >= 2);
+
             for (tx.manifest().?.conflicts.items) |conflict|
                 try std.testing.expectEqualStrings(
                     "same",
@@ -278,6 +298,7 @@ test "backups compare original local new contents and NoUpgrade always creates p
             .expected = .pacnew,
         },
     };
+
     for (cases) |case| {
         var f = try Fixture.init();
         defer f.deinit();
@@ -285,6 +306,7 @@ test "backups compare original local new contents and NoUpgrade always creates p
         defer a.free(backup);
         try f.installed("demo", "etc/\netc/conf", backup);
         try f.write("etc/conf", case.local);
+
         var archive = try Archive.init(
             &.{
                 .{ .path = ".PKGINFO", .contents = info ++ "backup = etc/conf\n" },
@@ -296,7 +318,9 @@ test "backups compare original local new contents and NoUpgrade always creates p
         defer archive.deinit();
         var owner = try f.owner(a);
         defer owner.deinit() catch unreachable;
+
         if (case.noupgrade) try owner.setList(io, .no_upgrade, &.{"etc/conf"});
+
         const tx = try owner.initializeTransaction(io, .{});
         defer owner.releaseTransaction() catch unreachable;
         try add(tx, archive.path);
@@ -307,6 +331,7 @@ test "backups compare original local new contents and NoUpgrade always creates p
             &rlpm.Checksum.bytes(.md5, case.new),
             tx.manifest().?.database_changes.items[0].backups[0].hash.?,
         );
+
         const unchanged = try f.tmp.dir.readFileAlloc(io, "root/etc/conf", a, .limited(100));
         defer a.free(unchanged);
         try std.testing.expectEqualStrings(case.local, unchanged);
@@ -322,6 +347,7 @@ test "removal pacsave rotation NOSAVE and file transfers preserve the new owner"
         try f.write("conf.pacsave", "prior");
         try f.write("conf.pacsave.2", "older");
         try f.write("transfer", "old");
+
         var archive = try Archive.init(
             &.{
                 .{ .path = ".PKGINFO", .contents = info },
@@ -342,6 +368,7 @@ test "removal pacsave rotation NOSAVE and file transfers preserve the new owner"
             if (no_save) rlpm.ExecutionManifest.Action.remove else .pacsave,
             (try effect(tx.manifest().?, "conf", false)).action,
         );
+
         try std.testing.expectEqual(if (no_save) @as(usize, 0) else 2, tx.manifest().?.rotations.items.len);
         try std.testing.expectEqual(.preserve, (try effect(tx.manifest().?, "transfer", false)).action);
     }
@@ -353,7 +380,9 @@ test "directory transitions reject unowned descendants and allow owned tree remo
         defer f.deinit();
         try f.installed("demo", "node/\nnode/owned", "");
         try f.write("node/owned", "old");
+
         if (unowned) try f.write("node/unowned", "keep");
+
         var archive = try Archive.init(
             &.{
                 .{ .path = ".PKGINFO", .contents = info },
@@ -368,19 +397,23 @@ test "directory transitions reject unowned descendants and allow owned tree remo
         var owner = try f.owner(a);
         defer owner.deinit() catch unreachable;
         try owner.setList(io, .overwrite_files, &.{"*"});
+
         const tx = try owner.initializeTransaction(io, .{});
         defer owner.releaseTransaction() catch unreachable;
         try add(tx, archive.path);
         try tx.prepare();
+
         if (unowned)
             try std.testing.expectError(error.FileConflicts, tx.preflight())
         else
             try tx.preflight();
     }
+
     var f = try Fixture.init();
     defer f.deinit();
     try f.installed("demo", "node", "");
     try f.write("node", "old");
+
     var archive = try Archive.init(
         &.{
             .{ .path = ".PKGINFO", .contents = info }, .{ .path = "node/", .kind = .directory },
@@ -406,6 +439,7 @@ test "missing backup members retain unhashed metadata without inventing payloads
         var f = try Fixture.init();
         defer f.deinit();
         try f.write("etc/missing", "unowned configuration");
+
         var archive = try Archive.init(
             &.{
                 .{ .path = ".PKGINFO", .contents = info ++ "backup = etc/missing\nbackup = etc/present\n" },
@@ -422,6 +456,7 @@ test "missing backup members retain unhashed metadata without inventing payloads
         try add(tx, archive.path);
         try tx.prepare();
         try tx.preflight();
+
         const manifest = tx.manifest().?;
         const change = manifest.database_changes.items[0];
         try std.testing.expectEqual(1, change.files.len);
@@ -430,6 +465,7 @@ test "missing backup members retain unhashed metadata without inventing payloads
         try std.testing.expect(change.backups[0].hash == null);
         try std.testing.expectEqual(database_only, change.backups[1].hash == null);
         try std.testing.expectError(error.MissingEffect, effect(manifest, "etc/missing", true));
+
         const untouched = try f.tmp.dir.readFileAlloc(io, "root/etc/missing", a, .limited(100));
         defer a.free(untouched);
         try std.testing.expectEqualStrings("unowned configuration", untouched);
@@ -484,6 +520,7 @@ test "archive traversal hardlink escape duplicate entries and lying mtree are re
             .expected = error.ArchiveInventoryMismatch,
         },
     };
+
     for (cases) |case| {
         var f = try Fixture.init();
         defer f.deinit();
@@ -512,6 +549,7 @@ test "existing absolute directory links are confined and filesystem changes inva
     defer f.deinit();
     try f.tmp.dir.createDirPath(io, "root/usr/bin");
     try f.tmp.dir.symLink(io, "/usr/bin", "root/bin", .{});
+
     var archive = try Archive.init(
         &.{
             .{ .path = ".PKGINFO", .contents = info },
@@ -541,6 +579,7 @@ test "DBONLY keeps file inventory but bypasses payload conflicts and effects" {
     var f = try Fixture.init();
     defer f.deinit();
     try f.write("data", "unowned");
+
     var archive = try Archive.init(
         &.{
             .{ .path = ".PKGINFO", .contents = info },
@@ -568,8 +607,10 @@ test "check-space cushion boundary and read-only filesystems" {
         .total = 1000,
         .read_only = false,
     };
+
     try rlpm.ExecutionManifest.checkCapacity(cap, 9);
     try std.testing.expectError(error.DiskSpaceInsufficient, rlpm.ExecutionManifest.checkCapacity(cap, 10));
+
     var read_only = cap;
     read_only.read_only = true;
     try std.testing.expectError(
@@ -599,6 +640,7 @@ test "pinned libalpm oracle replays backup pattern conflict and installed invent
         },
         inventory: ?[]const u8,
     };
+
     const oracle = try std.json.parseFromSlice(
         struct {
             library_sha256: []const u8,
@@ -613,9 +655,11 @@ test "pinned libalpm oracle replays backup pattern conflict and installed invent
         "da30edd45277cf4b1000485658976042f8106fe0b97378d1e6c4e81a9d7c4888",
         oracle.value.library_sha256,
     );
+
     for (oracle.value.cases) |case| {
         var f = try Fixture.init();
         defer f.deinit();
+
         if (case.old) |old| {
             const backup = if (case.backup or case.oldbackup)
                 try std.fmt.allocPrint(
@@ -628,8 +672,10 @@ test "pinned libalpm oracle replays backup pattern conflict and installed invent
             defer a.free(backup);
             try f.installed("demo", "conf", backup);
         }
+
         if (case.local) |bytes| try f.write("conf", bytes);
         if (case.pacnew) |bytes| try f.write("conf.pacnew", bytes);
+
         var archive = try Archive.init(
             &.{
                 .{
@@ -649,25 +695,33 @@ test "pinned libalpm oracle replays backup pattern conflict and installed invent
         try owner.setList(io, .no_extract, case.noextract);
         try owner.setList(io, .no_upgrade, case.noupgrade);
         try owner.setList(io, .overwrite_files, case.overwrite);
+
         const tx = try owner.initializeTransaction(io, .{ .no_conflicts = case.noconflicts });
         defer owner.releaseTransaction() catch unreachable;
         try add(tx, archive.path);
         try tx.prepare();
+
         if (case.@"error" != null) {
             try std.testing.expectError(error.FileConflicts, tx.preflight());
             continue;
         }
+
         try tx.preflight();
+
         const entry = try effect(tx.manifest().?, "conf", true);
+
         // Project manifest decisions into values; no payload executor is used.
         var final = case.local;
         var pacnew = case.pacnew;
         var pacsave: ?[]const u8 = null;
+
         if (case.old != null) {
             const removal = try effect(tx.manifest().?, "conf", false);
+
             if (removal.action == .remove or removal.action == .pacsave) final = null;
             if (removal.action == .pacsave) pacsave = case.local;
         }
+
         switch (entry.action) {
             .install, .replace => final = case.new,
             .pacnew => pacnew = case.new,
@@ -677,11 +731,14 @@ test "pinned libalpm oracle replays backup pattern conflict and installed invent
             .no_extract => {},
             else => return error.UnexpectedAction,
         }
+
         try std.testing.expectEqualDeep(case.contents.conf, final);
         try std.testing.expectEqualDeep(case.contents.@"conf.pacnew", pacnew);
         try std.testing.expectEqualDeep(case.contents.@"conf.pacsave", pacsave);
+
         const change = tx.manifest().?.database_changes.items[0];
         try std.testing.expectEqualStrings("conf", change.files[0].name);
+
         if (case.backup)
             try std.testing.expect(
                 std.mem.indexOf(
@@ -702,11 +759,13 @@ fn allocationPreflight(allocator: std.mem.Allocator, fixture: *Fixture, path: []
     try tx.prepare();
     try tx.preflight();
 }
+
 test "every allocation failure releases archives root descriptors manifest and lock" {
     var f = try Fixture.init();
     defer f.deinit();
     try f.installed("demo", "conf", "conf\t149603e6c03516362a8da23f624db945");
     try f.write("conf", "edited");
+
     var archive = try Archive.init(
         &.{
             .{ .path = ".PKGINFO", .contents = info ++ "backup = conf\n" },
@@ -742,6 +801,7 @@ test "metadata-only targets are reloaded and cannot change identity dependencies
             .expected = error.PackageMetadataMismatch,
         },
     };
+
     for (cases) |case| {
         var f = try Fixture.init();
         defer f.deinit();
@@ -763,17 +823,20 @@ test "metadata-only targets are reloaded and cannot change identity dependencies
         defer replacement.deinit();
         var owner = try f.owner(a);
         defer owner.deinit() catch unreachable;
+
         if (case.required) {
             var config = owner.options();
             config.local_file_signature_policy = .{ .package = .required };
             try owner.setOptions(io, config);
         }
+
         const tx = try owner.initializeTransaction(io, .{ .no_dependencies = true });
         defer owner.releaseTransaction() catch unreachable;
         var raw: ?rlpm.Package = try rlpm.Package.loadArchive(a, archive.path, .{});
         defer if (raw) |*pkg| pkg.deinit();
         try tx.takeArchive(&raw);
         try tx.prepare();
+
         const bytes = try std.Io.Dir.cwd().readFileAlloc(io, replacement.path, a, .limited(1024 * 1024));
         defer a.free(bytes);
         try std.Io.Dir.cwd().writeFile(io, .{ .sub_path = archive.path, .data = bytes });
@@ -805,19 +868,24 @@ test "cancellation callbacks cannot reenter preflight and retain failed phase di
 
         fn event(context: ?*anyopaque, value: rlpm.Callbacks.Event) void {
             const self: *@This() = @ptrCast(@alignCast(context.?));
+
             if (value != .phase or value.phase.phase != .load_packages) return;
             if (value.phase.boundary == .start) {
                 self.owner.active_transaction.?.preflight() catch |err| {
                     self.reentry = err == error.CallbackReentry;
                 };
+
                 self.owner.requestCancellation();
                 self.cancelled = true;
             }
+
             if (value.phase.boundary == .failed) self.failed = true;
         }
     };
+
     var capture: Capture = .{ .owner = &owner };
     try owner.setCallbacks(.{ .event = Capture.event, .event_context = &capture });
+
     const tx = try owner.initializeTransaction(io, .{});
     defer owner.releaseTransaction() catch unreachable;
     try add(tx, archive.path);
@@ -832,9 +900,11 @@ test "detects permission changes and symlink loops before payload mutation" {
         var f = try Fixture.init();
         defer f.deinit();
         try f.tmp.dir.createDirPath(io, "root/parent");
+
         if (loop) {
             try f.tmp.dir.symLink(io, "loop", "root/parent/loop", .{});
         }
+
         var archive = try Archive.init(
             &.{
                 .{ .path = ".PKGINFO", .contents = info },
@@ -855,11 +925,14 @@ test "detects permission changes and symlink loops before payload mutation" {
         defer owner.releaseTransaction() catch unreachable;
         try add(tx, archive.path);
         try tx.prepare();
+
         if (loop) {
             try std.testing.expectError(error.UnsafeSymlink, tx.preflight());
             continue;
         }
+
         try tx.preflight();
+
         const parent = try f.tmp.dir.openFile(io, "root/parent", .{});
         defer parent.close(io);
         try parent.setPermissions(io, .fromMode(0o500));
@@ -874,8 +947,10 @@ test "large inventory uses indexed ownership and includes database staging in sp
     const entries = try a.alloc(Archive.Entry, 2049);
     defer a.free(entries);
     entries[0] = .{ .path = ".PKGINFO", .contents = info };
+
     var arena = std.heap.ArenaAllocator.init(a);
     defer arena.deinit();
+
     for (entries[1..], 0..) |*entry, i|
         entry.* = .{
             .path = try std.fmt.allocPrint(
@@ -885,6 +960,7 @@ test "large inventory uses indexed ownership and includes database staging in sp
             ),
             .contents = "payload",
         };
+
     var archive = try Archive.init(entries, .none);
     defer archive.deinit();
     var owner = try f.owner(a);
@@ -892,6 +968,7 @@ test "large inventory uses indexed ownership and includes database staging in sp
     var config = owner.options();
     config.check_space = true;
     try owner.setOptions(io, config);
+
     const tx = try owner.initializeTransaction(io, .{});
     defer owner.releaseTransaction() catch unreachable;
     try add(tx, archive.path);
@@ -899,9 +976,12 @@ test "large inventory uses indexed ownership and includes database staging in sp
     try tx.preflight();
     try std.testing.expectEqual(2048, tx.manifest().?.entries.items.len);
     try std.testing.expectEqualStrings("data", tx.manifest().?.entries.items[0].create_parents[0]);
+
     var blocks: u64 = 0;
+
     for (tx.manifest().?.spaces.items) |space|
         blocks += space.peak;
+
     try std.testing.expect(blocks > 2048);
 }
 
@@ -922,6 +1002,7 @@ test "sync preflight verifies cached bytes metadata and CachyOS database provena
         try f.tmp.dir.createDirPath(io, "cache");
         try f.tmp.dir.createDirPath(io, "db/sync");
         try f.tmp.dir.writeFile(io, .{ .sub_path = "cache/demo.pkg.tar", .data = bytes });
+
         const cache = try f.tmp.dir.realPathFileAlloc(io, "cache", a);
         defer a.free(cache);
         const description = try std.fmt.allocPrint(
@@ -941,10 +1022,13 @@ test "sync preflight verifies cached bytes metadata and CachyOS database provena
         const dbbytes = try std.Io.Dir.cwd().readFileAlloc(io, database.path, a, .limited(1024 * 1024));
         defer a.free(dbbytes);
         try f.tmp.dir.writeFile(io, .{ .sub_path = "db/sync/cachyos.db", .data = dbbytes });
+
         var owner = try f.owner(a);
         defer owner.deinit() catch unreachable;
         try owner.setList(io, .cache_directories, &.{cache});
+
         const repository = try owner.registerDatabase(.{ .database_name = "cachyos" });
+
         if (!mismatch) {
             const reference = (try owner.queryPackage(io, repository, "demo")).?;
             var imported: ?rlpm.Package = try owner.loadPackage(
@@ -965,14 +1049,17 @@ test "sync preflight verifies cached bytes metadata and CachyOS database provena
                 imported_tx.manifest().?.database_changes.items[0].installed_database.?,
             );
         }
+
         const tx = try owner.initializeTransaction(io, .{ .no_dependencies = true });
         defer owner.releaseTransaction() catch unreachable;
         try tx.addTarget("demo");
         try tx.prepare();
+
         if (mismatch) {
             try std.testing.expectError(error.PackageMetadataMismatch, tx.preflight());
             continue;
         }
+
         try tx.preflight();
         try tx.revalidatePreflight();
         try std.testing.expect(tx.manifest().?.archives.items[0].package.validation.sha256);
@@ -1003,6 +1090,7 @@ test "backup symlink hashes prior payload without rewriting its absolute target"
     try add(tx, archive.path);
     try tx.prepare();
     try tx.preflight();
+
     const entry = try effect(tx.manifest().?, "conf", true);
     try std.testing.expectEqualStrings("/data", entry.file.link_target.?);
     try std.testing.expectEqualStrings(&rlpm.Checksum.bytes(.md5, "new"), entry.new_hash.?);
@@ -1030,6 +1118,7 @@ test "packages loaded before a stricter policy cannot bypass current preflight v
     var config = owner.options();
     config.remote_file_signature_policy = .{ .package = .required };
     try owner.setOptions(io, config);
+
     const tx = try owner.initializeTransaction(io, .{});
     defer owner.releaseTransaction() catch unreachable;
     try tx.takeArchive(&package);

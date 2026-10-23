@@ -70,6 +70,7 @@ metadata_error: ?anyerror = null,
 metadata_issues: DatabaseRecord.Issues = .{},
 repository_filename: ?[]const u8 = null,
 compressed_size: ?u64 = null,
+
 /// Remaining transfer after cache planning; null means not planned yet.
 download_size: ?u64 = null,
 md5_sum: ?[]const u8 = null,
@@ -77,6 +78,7 @@ sha256_sum: ?[]const u8 = null,
 base64_signature: ?[]const u8 = null,
 files: []const PackageFile = &.{},
 backups: []const BackupFile = &.{},
+
 /// Local-only paths retained across upgrades until supplied by an archive.
 adopted_files: []const []const u8 = &.{},
 files_loaded: bool = false,
@@ -105,9 +107,11 @@ groups: []const []const u8 = &.{},
 licenses: []const []const u8 = &.{},
 xdata: []const XData = &.{},
 archive_arena: ?std.heap.ArenaAllocator = null,
+
 /// Owned only by verified archive packages. Member/payload readers reopen this
 /// sealed file, while archive_path retains the caller's original pathname.
 verified_archive: ?ImmutableFile = null,
+
 /// Preserve the source's effective policy for transaction preflight rechecks.
 archive_signature_policy: ?SignaturePolicy = null,
 archive_source: enum { local_file, remote_file, repository } = .local_file,
@@ -133,43 +137,55 @@ pub fn loadArchive(allocator: std.mem.Allocator, path: []const u8, options: Load
     var hit_mtree = false;
     var members: Members = .{};
     var scriptlet = false;
+
     while (true) {
         const entry = (try reader.next()) orelse {
             inline for (std.meta.fields(Members)) |field|
                 if (@field(members, field.name) == .unknown) {
                     @field(members, field.name) = .absent;
                 };
+
             break;
         };
+
         const name = ArchiveReader.normalizedName(entry.name);
+
         if (std.mem.eql(u8, name, ".PKGINFO")) {
             if (entry.kind != .regular) return error.InvalidPkginfo;
             if (entry.size.? > max_pkginfo_size) return error.PkginfoTooLarge;
+
             const contents = reader.readAll(owned, max_pkginfo_size) catch |err|
                 return if (err == error.MetadataTooLarge)
                     error.PkginfoTooLarge
                 else
                     err;
+
             try parsePkginfo(&parsed, owned, contents);
             try checkArchiveIdentity(&parsed);
             config = true;
             continue;
         }
+
         if (std.mem.eql(u8, name, ".INSTALL")) {
             members.install = .present;
             scriptlet = true;
             continue;
         }
+
         if (std.mem.eql(u8, name, ".CHANGELOG")) members.changelog = .present;
         if (std.mem.eql(u8, name, ".MTREE")) {
             members.mtree = .present;
+
             if (options.mode == .full) {
                 const bytes = try reader.readAll(owned, max_mtree_size);
+
                 // Invalid mtree falls back to the archive inventory, like libalpm.
                 if (readMtreeFiles(owned, bytes)) |inventory| {
                     parsed.files = inventory.files;
                     scriptlet = scriptlet or inventory.scriptlet;
+
                     if (inventory.scriptlet) members.install = .present;
+
                     hit_mtree = true;
                 } else |err| switch (err) {
                     error.OutOfMemory => return err,
@@ -177,44 +193,58 @@ pub fn loadArchive(allocator: std.mem.Allocator, path: []const u8, options: Load
                     // an invalid duplicate. Report the malformed input safely.
                     else => if (hit_mtree) return error.InvalidMtree,
                 }
+
                 continue;
             }
         }
+
         if (std.mem.startsWith(u8, name, ".")) continue;
         if (options.mode == .full and !hit_mtree) try appendFile(owned, &parsed.files, entry);
+
         try reader.skip();
+
         if (config and (options.mode == .metadata or hit_mtree)) break;
     }
+
     if (!config) return error.MissingPkginfo;
+
     try checkPackageMetadata(&parsed);
     parsed.files_loaded = options.mode == .full;
     parsed.compressed_size = reader.file_size;
     parsed.validation.none = true;
+
     var package = try parsed.intoPackage(&arena, .{ .origin = .archive, .archive_path = path });
     try reader.finish();
     package.archive_arena = arena;
     package.members = members;
     package.has_scriptlet = scriptlet;
     package.files_source = if (options.mode == .metadata) .none else if (hit_mtree) .mtree else .archive;
+
     return package;
 }
 
 fn checkArchiveIdentity(parsed: *const ParsedDescription) !void {
     const name = parsed.name orelse return error.MissingPackageName;
+
     if (name.len == 0) return error.MissingPackageName;
+
     const version = parsed.version orelse return error.MissingPackageVersion;
+
     if (version.len == 0 or std.mem.indexOfScalar(u8, version, '-') == null) return error.InvalidVersion;
 }
 
 fn checkPackageMetadata(parsed: *const ParsedDescription) !void {
     const name = parsed.name.?;
     const version = parsed.version.?;
+
     if (name[0] == '.' or name[0] == '-') return error.InvalidPackageName;
     for (name) |byte|
         if (!std.ascii.isAlphanumeric(byte) and std.mem.indexOfScalar(u8, "+_.@-", byte) == null)
             return error.InvalidPackageName;
+
     if (std.mem.count(u8, version, "-") > 1 or std.mem.indexOfScalar(u8, version, '/') != null)
         return error.InvalidVersion;
+
     if (name.len + version.len + 1 > 255) return error.InvalidPackageName;
 }
 
@@ -233,6 +263,7 @@ fn appendFile(
         )
     else
         try allocator.dupe(u8, name);
+
     file.link_target = if (entry.link_target) |link| try allocator.dupe(u8, link) else null;
     try files.append(allocator, file);
 }
@@ -246,12 +277,16 @@ fn readMtreeFiles(allocator: std.mem.Allocator, bytes: []const u8) !MtreeInvento
     var reader = try ArchiveReader.openMemory(bytes, .mtree);
     defer reader.deinit();
     var result: MtreeInventory = .{};
+
     while (try reader.next()) |entry| {
         const name = ArchiveReader.normalizedName(entry.name);
+
         if (std.mem.eql(u8, name, ".INSTALL")) result.scriptlet = true;
         if (std.mem.startsWith(u8, name, ".")) continue;
+
         try appendFile(allocator, &result.files, entry);
     }
+
     return result;
 }
 
@@ -262,20 +297,24 @@ pub fn satisfies(self: *const Package, requirement: PackageRelation) bool {
 pub fn findFile(self: *const Package, path: []const u8) ?*const PackageFile {
     var lo: usize = 0;
     var hi = self.files.len;
+
     while (lo < hi) {
         const mid = lo + (hi - lo) / 2;
+
         switch (std.mem.order(u8, self.files[mid].name, path)) {
             .eq => return &self.files[mid],
             .lt => lo = mid + 1,
             .gt => hi = mid,
         }
     }
+
     return null;
 }
 
 /// The caller owns the decoded bytes. Decoding is not signature verification.
 pub fn decodeSignature(self: *const Package, allocator: std.mem.Allocator) !?[]u8 {
     const encoded = self.base64_signature orelse return null;
+
     return try OpenPgp.decode(allocator, encoded);
 }
 
@@ -298,12 +337,15 @@ pub fn getSignature(
     cached_path: ?[]const u8,
 ) !?[]u8 {
     if (self.base64_signature != null) return self.decodeSignature(allocator);
+
     const path = cached_path orelse self.archive_path orelse return error.PackageArchiveRequired;
+
     return OpenPgp.readDetached(allocator, io, path);
 }
 
 pub fn checkMd5sum(self: *const Package, io: std.Io, cached_path: []const u8) !void {
     if (self.origin != .sync) return error.UnsupportedPackageOrigin;
+
     try Checksum.check(
         .md5,
         io,
@@ -316,11 +358,13 @@ pub fn checkMd5sum(self: *const Package, io: std.Io, cached_path: []const u8) !v
 /// always use the same bytes checked by Owner.loadPackage.
 pub fn openArchive(self: *const Package, allocator: std.mem.Allocator) !ArchiveReader {
     if (self.origin != .archive) return error.UnsupportedPackageOrigin;
+
     const path = if (self.verified_archive) |*snapshot|
         snapshot.path()
     else
         self.archive_path orelse
             return error.InvalidPath;
+
     return ArchiveReader.openFile(allocator, path);
 }
 
@@ -330,9 +374,12 @@ pub fn openMember(self: *const Package, allocator: std.mem.Allocator, member: Me
     if (self.origin == .local and self.metadata_directory != null) {
         const path = try std.fs.path.join(allocator, &.{ self.metadata_directory.?, @tagName(member) });
         defer allocator.free(path);
+
         return MemberReader.openFile(allocator, path);
     }
+
     if (self.origin != .archive) return error.UnsupportedPackageOrigin;
+
     var reader = try self.openArchive(allocator);
     errdefer reader.deinit();
     const wanted = switch (member) {
@@ -340,14 +387,19 @@ pub fn openMember(self: *const Package, allocator: std.mem.Allocator, member: Me
         .changelog => ".CHANGELOG",
         .mtree => ".MTREE",
     };
+
     while (try reader.next()) |entry| {
         if (std.mem.eql(u8, ArchiveReader.normalizedName(entry.name), wanted)) {
             if (entry.kind != .regular) return error.InvalidArchiveEntry;
+
             return .{ .stream = .{ .archive = reader } };
         }
+
         try reader.skip();
     }
+
     reader.deinit();
+
     return null;
 }
 
@@ -356,6 +408,7 @@ pub fn openMtree(self: *const Package, allocator: std.mem.Allocator) !?MtreeIter
     defer member.deinit();
     const bytes = try member.readAll(allocator, max_mtree_size);
     errdefer allocator.free(bytes);
+
     return try MtreeIterator.initOwned(allocator, bytes);
 }
 
@@ -363,6 +416,7 @@ pub fn openMtree(self: *const Package, allocator: std.mem.Allocator) !?MtreeIter
 pub fn deinit(self: *Package) void {
     if (self.verified_archive) |*snapshot| snapshot.deinit();
     if (self.archive_arena) |*arena| arena.deinit();
+
     self.* = undefined;
 }
 
@@ -375,17 +429,25 @@ fn parsePkginfo(
     contents: []const u8,
 ) !void {
     if (std.mem.indexOfScalar(u8, contents, 0) != null) return error.InvalidPkginfo;
+
     var lines = std.mem.splitScalar(u8, contents, '\n');
+
     while (lines.next()) |raw_line| {
         if (raw_line.len > 512 * 1024) return error.MetadataLineTooLong;
+
         // Retain the existing CRLF input convenience; values otherwise keep
         // their exact whitespace, as in the reference's "key = value" parser.
         const line = std.mem.trimEnd(u8, raw_line, "\r");
+
         if (line.len == 0 or line[0] == '#') continue;
+
         const separator = std.mem.indexOfScalar(u8, line, ' ') orelse continue;
+
         if (!std.mem.startsWith(u8, line[separator..], " = ")) continue;
+
         const key = line[0..separator];
         const value = line[separator + 3 ..];
+
         if (key.len == 0) continue;
 
         const strings = .{
@@ -394,11 +456,13 @@ fn parsePkginfo(
             .{ "url", "url" },           .{ "arch", "architecture" },
             .{ "packager", "packager" },
         };
+
         inline for (strings) |field| {
             if (std.mem.eql(u8, key, field[0])) {
                 @field(parsed, field[1]) = value;
             }
         }
+
         const lists = .{
             .{ "group", "groups" },            .{ "license", "licenses" },
             .{ "depend", "depends" },          .{ "optdepend", "optional_depends" },
@@ -406,10 +470,12 @@ fn parsePkginfo(
             .{ "conflict", "conflicts" },      .{ "provides", "provides" },
             .{ "replaces", "replaces" },
         };
+
         inline for (lists) |field| {
             if (std.mem.eql(u8, key, field[0]))
                 try @field(parsed, field[1]).append(allocator, value);
         }
+
         if (std.mem.eql(u8, key, "builddate")) {
             parsed.build_date = try std.fmt.parseInt(i64, value, 10);
         } else if (std.mem.eql(u8, key, "size")) {
@@ -419,14 +485,18 @@ fn parsePkginfo(
         } else if (std.mem.eql(u8, key, "xdata")) {
             const equals = std.mem.indexOfScalar(u8, value, '=') orelse
                 return error.InvalidXData;
+
             if (equals == 0) return error.InvalidXData;
+
             try parsed.xdata.append(allocator, .{
                 .name = value[0..equals],
                 .value = value[equals + 1 ..],
             });
         }
+
         // Unknown keys are ignored for compatibility with newer metadata formats.
     }
+
     try @import("Migration.zig").validateXdata(allocator, parsed.xdata.items);
 }
 
@@ -437,9 +507,11 @@ test "Package stores version, database, and package relations" {
     var provides = [_]PackageRelation{
         .{ .name = "go", .constraint = .any },
     };
+
     var depends = [_]PackageRelation{
         .{ .name = "glibc", .constraint = .any },
     };
+
     var no_relations = [_]PackageRelation{};
 
     const package: Package = .{
@@ -483,9 +555,12 @@ const ArchiveFixture = struct {
 
         const writer = c.archive_write_new() orelse return error.OutOfMemory;
         defer _ = c.archive_write_free(writer);
+
         if (compressed) try std.testing.expectEqual(c.ARCHIVE_OK, c.archive_write_add_filter_zstd(writer));
+
         try std.testing.expectEqual(c.ARCHIVE_OK, c.archive_write_set_format_pax_restricted(writer));
         try std.testing.expectEqual(c.ARCHIVE_OK, c.archive_write_open_filename(writer, path.ptr));
+
         for (entries) |item| {
             const entry = c.archive_entry_new() orelse return error.OutOfMemory;
             defer c.archive_entry_free(entry);
@@ -494,15 +569,19 @@ const ArchiveFixture = struct {
             c.archive_entry_set_perm(entry, 0o644);
             c.archive_entry_set_size(entry, @intCast(item.size orelse item.contents.len));
             try std.testing.expectEqual(c.ARCHIVE_OK, c.archive_write_header(writer, entry));
+
             if (item.contents.len != 0) {
                 try std.testing.expectEqual(
                     @as(isize, @intCast(item.contents.len)),
                     c.archive_write_data(writer, item.contents.ptr, item.contents.len),
                 );
             }
+
             try std.testing.expectEqual(c.ARCHIVE_OK, c.archive_write_finish_entry(writer));
         }
+
         try std.testing.expectEqual(c.ARCHIVE_OK, c.archive_write_close(writer));
+
         return .{ .temporary = temporary, .path = path };
     }
 
@@ -534,6 +613,7 @@ test "archive package reads metadata and relations with owned storage" {
             .{ .path = "./.PKGINFO", .contents = archive_pkginfo_fixture },
         }, compressed);
         defer fixture.deinit();
+
         // Pass a non-sentinel-terminated slice; only the requested path is opened.
         const longer_path = try std.fmt.allocPrint(std.testing.allocator, "{s}suffix", .{fixture.path});
         defer std.testing.allocator.free(longer_path);
@@ -600,6 +680,7 @@ test "archive package rejects missing invalid and oversized metadata" {
             .expected = error.InvalidPackageName,
         },
     };
+
     for (cases) |case| {
         var fixture = try ArchiveFixture.init(&.{case.entry}, true);
         defer fixture.deinit();
@@ -621,6 +702,7 @@ test "archive package rejects invalid paths and unreadable archives" {
             "bad\x00path",
         ),
     );
+
     var fixture = try ArchiveFixture.init(&.{}, false);
     defer fixture.deinit();
     try fixture.temporary.dir.writeFile(
@@ -630,6 +712,7 @@ test "archive package rejects invalid paths and unreadable archives" {
             .data = "not an archive",
         },
     );
+
     try std.testing.expectError(
         error.ArchiveFailed,
         initializePackageFromArchive(
@@ -637,6 +720,7 @@ test "archive package rejects invalid paths and unreadable archives" {
             fixture.path,
         ),
     );
+
     try fixture.temporary.dir.deleteFile(std.testing.io, "package.tar");
     try std.testing.expectError(
         error.ArchiveFailed,
@@ -657,6 +741,7 @@ test "archive package rejects truncated metadata" {
         .limited(64 * 1024),
     );
     defer std.testing.allocator.free(contents);
+
     // Retain the tar header but cut off the metadata body.
     try fixture.temporary.dir.writeFile(
         std.testing.io,
@@ -665,6 +750,7 @@ test "archive package rejects truncated metadata" {
             .data = contents[0..520],
         },
     );
+
     try std.testing.expectError(
         error.ArchiveFailed,
         initializePackageFromArchive(

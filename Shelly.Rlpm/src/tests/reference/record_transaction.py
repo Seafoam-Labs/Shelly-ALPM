@@ -25,12 +25,16 @@ def main():
     parser.add_argument('--library', required=True, type=Path)
     args = parser.parse_args()
     digest = hashlib.sha256(args.library.read_bytes()).hexdigest()
+
     if digest != json.loads((HERE / 'manifest.json').read_text())['library']['sha256']:
         parser.error('library does not match the frozen reference')
+
     locale.setlocale(locale.LC_ALL, 'C')
     lib = c.CDLL(str(args.library.resolve()))
+
     def bind(name, result, *arguments):
         fn = getattr(lib, name); fn.restype = result; fn.argtypes = list(arguments); return fn
+
     initialize = bind('alpm_initialize', c.c_void_p, c.c_char_p, c.c_char_p, c.POINTER(c.c_int))
     release = bind('alpm_release', c.c_int, c.c_void_p)
     errno = bind('alpm_errno', c.c_int, c.c_void_p)
@@ -71,31 +75,42 @@ def main():
         dict(name='explicit-unlock', actions=['unlock', 'init', 'unlock', 'release']),
         dict(name='lock-contention', actions=['init', 'compete', 'release', 'compete']),
     ]
+
     for case in cases:
         with tempfile.TemporaryDirectory(prefix='rlpm-transaction-oracle-') as directory:
             base = Path(directory); root = base / 'root'; db = base / 'db'; root.mkdir(); (db / 'local/demo-1-1').mkdir(parents=True)
             (db / 'local/ALPM_DB_VERSION').write_text('9\n')
             (db / 'local/demo-1-1/desc').write_text('%NAME%\ndemo\n\n%VERSION%\n1-1\n\n%REASON%\n0\n\n')
+
             if case.get('dependent'):
                 (db / 'local/dependent-1-1').mkdir()
                 (db / 'local/dependent-1-1/desc').write_text('%NAME%\ndependent\n\n%VERSION%\n1-1\n\n%DEPENDS%\ndemo\n\n')
+
             archive_path = base / 'archive.pkg.tar'
+
             with tarfile.open(archive_path, 'w') as archive:
                 contents = (('pkgname = demo\n' if case.get('same') else 'pkgname = archive\n') + 'pkgver = 1-1\narch = any\n' + ('depend = absent\n' if case.get('missing') else '')).encode()
                 entry = tarfile.TarInfo('.PKGINFO'); entry.size = len(contents); archive.addfile(entry, io.BytesIO(contents))
+
             error = c.c_int(); handle = initialize(str(root).encode(), str(db).encode(), c.byref(error)); assert handle
             active = False; trace = []; emitted = []
+
             @event_fn
             def event(_, ptr): emitted.append(events[c.cast(ptr, c.POINTER(c.c_int))[0] - 1])
+
             @question_fn
             def question(_, ptr):
                 values = c.cast(ptr, c.POINTER(c.c_int))
+
                 if values[0] == 16: values[1] = int(case.get('skip', False))
+
             bind('alpm_option_set_eventcb', c.c_int, c.c_void_p, event_fn, c.c_void_p)(handle, event, None)
             bind('alpm_option_set_questioncb', c.c_int, c.c_void_p, question_fn, c.c_void_p)(handle, question, None)
+
             try:
                 for action in case['actions']:
                     emitted.clear(); data = ListPtr()
+
                     if action == 'init':
                         result = init(handle, case.get('flags', 0)); active = active or result == 0
                     elif action == 'prepare': result = prepare(handle, c.byref(data))
@@ -105,6 +120,7 @@ def main():
                         result = commit(handle, c.byref(data))
                     elif action == 'release':
                         result = trans_release(handle)
+
                         if result == 0: active = False
                     elif action == 'interrupt': result = interrupt(handle)
                     elif action == 'unlock': result = unlock(handle)
@@ -114,30 +130,41 @@ def main():
                         result = add(handle, loaded)
                         node = getadd(handle)
                         transferred = False
+
                         while node:
                             transferred = transferred or node.contents.data == loaded.value
                             node = node.contents.next
+
                         if not transferred: free_pkg(loaded)
                     elif action == 'compete':
                         competitor = initialize(str(root).encode(), str(db).encode(), c.byref(error)); assert competitor
                         result = init(competitor, 0); native_error = errors[errno(competitor)] if result else None
+
                         if result == 0: assert trans_release(competitor) == 0
+
                         assert release(competitor) == 0
                     else: raise AssertionError(action)
+
                     if data:
                         assert errors[errno(handle)] == 'ALPM_ERR_UNSATISFIED_DEPS'
                         node = data
+
                         while node:
                             bind('alpm_depmissing_free', None, c.c_void_p)(node.contents.data); node = node.contents.next
+
                         bind('alpm_list_free', None, ListPtr)(data)
+
                     lock = db / 'db.lck'
                     trace.append(dict(action=action, error=(native_error if action == 'compete' else errors[errno(handle)]) if result else None,
                                       events=list(emitted), locked=lock.exists(), mode=(lock.stat().st_mode & 0o777) if lock.exists() else None,
                                       size=lock.stat().st_size if lock.exists() else None))
             finally:
                 if active: assert trans_release(handle) == 0
+
                 assert release(handle) == 0
+
             case['trace'] = trace
+
     print(json.dumps(dict(library_sha256=digest, cases=cases), indent=2))
 
 

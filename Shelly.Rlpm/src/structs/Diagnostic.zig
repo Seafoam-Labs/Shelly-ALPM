@@ -1,4 +1,5 @@
 //! Stored diagnostics contain values only; they never retain caller-owned strings.
+
 const std = @import("std");
 const DatabaseRef = @import("DatabaseRef.zig");
 
@@ -32,6 +33,7 @@ pub const Category = enum {
     unsupported,
     io,
 };
+
 operation: Operation,
 category: Category,
 cause: anyerror,
@@ -116,5 +118,6 @@ pub fn init(operation: Operation, cause: anyerror, database: ?DatabaseRef) Diagn
 
 pub fn format(self: Diagnostic, writer: *std.Io.Writer) std.Io.Writer.Error!void {
     try writer.print("{t}: {s}", .{ self.operation, @errorName(self.cause) });
+
     if (self.database) |reference| try writer.print(" (database {d})", .{@intFromEnum(reference.id)});
 }

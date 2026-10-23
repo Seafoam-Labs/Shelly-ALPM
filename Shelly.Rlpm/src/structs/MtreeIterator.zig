@@ -1,9 +1,11 @@
 //! Owns the encoded mtree and libarchive parser. Entries borrow until next().
+
 const std = @import("std");
 const ArchiveReader = @import("ArchiveReader.zig");
 const PackageFile = @import("PackageFile.zig");
 
 const MtreeIterator = @This();
+
 allocator: std.mem.Allocator,
 bytes: []u8,
 reader: ArchiveReader,
@@ -20,6 +22,7 @@ pub fn initOwned(allocator: std.mem.Allocator, bytes: []u8) !MtreeIterator {
 pub fn next(self: *MtreeIterator) !?PackageFile {
     var entry = (try self.reader.next()) orelse return null;
     entry.name = ArchiveReader.normalizedName(entry.name);
+
     return entry;
 }
 

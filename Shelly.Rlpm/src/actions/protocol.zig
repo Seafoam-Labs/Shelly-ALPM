@@ -1,6 +1,7 @@
 //! Private versioned protocol, shared only by the matching native Zig worker.
 //! stdin: u32-le JSON size, JSON, then unframed action stdin. stderr: 8-byte
 //! setup reports (stage, fatal, reserved, reserved, i32-le errno), closed on exec.
+
 const std = @import("std");
 
 pub const Network = enum { required, best_effort, allowed };
@@ -30,6 +31,7 @@ pub const Result = struct {
         return self.setup_failure == null and self.term == .exited and self.term.exited == 0;
     }
 };
+
 pub const maximum_request = 1024 * 1024;
 pub const c = @cImport({
     @cUndef("_FORTIFY_SOURCE");

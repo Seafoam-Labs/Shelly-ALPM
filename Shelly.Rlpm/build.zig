@@ -12,20 +12,25 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .link_libc = true,
     });
+
     const action_protocol = b.addModule("Shelly_Rlpm_Action_Protocol", .{
         .root_source_file = b.path("src/actions/protocol.zig"),
         .target = target,
         .optimize = optimize,
         .link_libc = true,
     });
+
     mod.addImport("action_protocol", action_protocol);
+
     const action_worker = b.addModule("Shelly_Rlpm_Action_Worker", .{
         .root_source_file = b.path("src/actions/worker.zig"),
         .target = target,
         .optimize = optimize,
         .link_libc = true,
     });
+
     action_worker.addImport("action_protocol", action_protocol);
+
     const download = b.dependency("shelly_download", .{ .target = target, .optimize = optimize });
     const workers = b.addModule("Shelly_Rlpm_Workers", .{
         .root_source_file = b.path("src/workers.zig"),
@@ -36,8 +41,10 @@ pub fn build(b: *std.Build) void {
             .{ .name = "action_worker", .module = action_worker },
         },
     });
+
     mod.addImport("workers", workers);
     mod.addImport("Shelly_Download", download.module("Shelly_Download"));
+
     // Only test consumers request this artifact; it is never installed.
     const worker_fixture = b.addExecutable(.{
         .name = "rlpm-worker-fixture",
@@ -48,11 +55,13 @@ pub fn build(b: *std.Build) void {
             .imports = &.{.{ .name = "workers", .module = workers }},
         }),
     });
+
     const worker_fixture_options = b.addOptions();
     b.addNamedLazyPath("worker_fixture", worker_fixture.getEmittedBin());
     worker_fixture_options.addOptionPath("path", worker_fixture.getEmittedBin());
     mod.addImport("Shelly_Key", shelly_key.module("Shelly_Key"));
     mod.linkSystemLibrary("archive", .{});
+
     // SQLite is a direct RLPM dependency, including in libalpm-enabled CLIs.
     // Keep its DT_NEEDED entry instead of relying on transitive libraries (#2059).
     // Zig 0.16's pkg-config path bypasses `needed`, so link by name explicitly.
@@ -70,15 +79,20 @@ pub fn build(b: *std.Build) void {
             .imports = &.{.{ .name = "Shelly_Rlpm", .module = mod }},
         }),
     });
+
     b.installArtifact(exe);
+
     const run = b.addRunArtifact(exe);
     run.step.dependOn(b.getInstallStep());
+
     if (b.args) |args| run.addArgs(args);
+
     b.step("run", "Read local metadata (arguments: ROOT DBPATH)").dependOn(&run.step);
 
     const unit = b.addTest(.{ .root_module = mod });
     const test_step = b.step("test", "Run hermetic tests, public API checks, and reference ledger validation");
     test_step.dependOn(&b.addRunArtifact(unit).step);
+
     // Compile the real read-only example too, rather than an empty test runner.
     test_step.dependOn(&exe.step);
 
@@ -91,6 +105,7 @@ pub fn build(b: *std.Build) void {
             .imports = &.{.{ .name = "Shelly_Rlpm", .module = mod }},
         }),
     });
+
     const run_self_execution = b.addRunArtifact(self_execution);
     test_step.dependOn(&run_self_execution.step);
     b.step("test-self-execution", "Exercise actions after replacing the embedding executable").dependOn(&run_self_execution.step);
@@ -102,6 +117,7 @@ pub fn build(b: *std.Build) void {
         .imports = &.{.{ .name = "Shelly_Rlpm", .module = mod }},
     }) });
     public_tests.root_module.addOptions("worker_fixture", worker_fixture_options);
+
     const run_public = b.addRunArtifact(public_tests);
     public_tests.root_module.addCSourceFile(
         .{
@@ -109,6 +125,7 @@ pub fn build(b: *std.Build) void {
             .flags = &.{"-std=c11"},
         },
     );
+
     test_step.dependOn(&run_public.step);
     b.step("test-public-api", "Exercise the exported API from a separate importing module").dependOn(
         &run_public.step,
@@ -161,11 +178,14 @@ pub fn build(b: *std.Build) void {
         .imports = &.{.{ .name = "Shelly_Rlpm", .module = mod }},
     }) });
     executor_tests.root_module.addOptions("worker_fixture", worker_fixture_options);
+
     const run_executor_tests = b.addRunArtifact(executor_tests);
     b.step("test-executor", "Run disposable-root payload and database transactions").dependOn(
         &run_executor_tests.step,
     );
+
     test_step.dependOn(&run_executor_tests.step);
+
     const migration_tests = b.addTest(.{ .root_module = b.createModule(.{
         .root_source_file = b.path("src/tests/migration.zig"),
         .target = target,
@@ -173,9 +193,11 @@ pub fn build(b: *std.Build) void {
         .imports = &.{.{ .name = "Shelly_Rlpm", .module = mod }},
     }) });
     migration_tests.root_module.addOptions("worker_fixture", worker_fixture_options);
+
     const run_migration_tests = b.addRunArtifact(migration_tests);
     b.step("test-migration", "Run in-place adoption and Devario replacement fixtures").dependOn(&run_migration_tests.step);
     test_step.dependOn(&run_migration_tests.step);
+
     const hook_tests = b.addTest(.{ .root_module = b.createModule(.{
         .root_source_file = b.path("src/tests/hooks.zig"),
         .target = target,
@@ -186,6 +208,7 @@ pub fn build(b: *std.Build) void {
     b.step("test-hooks", "Run hermetic hook parser, discovery, matching and ownership fixtures").dependOn(
         &b.addRunArtifact(hook_tests).step,
     );
+
     const preflight_tests = b.addTest(.{ .root_module = b.createModule(.{
         .root_source_file = b.path("src/tests/preflight.zig"),
         .target = target,
@@ -195,6 +218,7 @@ pub fn build(b: *std.Build) void {
     b.step("test-preflight", "Run private-root archive, conflict, backup and space fixtures").dependOn(
         &b.addRunArtifact(preflight_tests).step,
     );
+
     const sandbox_tests = b.addTest(.{ .root_module = b.createModule(.{
         .root_source_file = b.path("src/tests/download_sandbox.zig"),
         .target = target,
@@ -202,14 +226,17 @@ pub fn build(b: *std.Build) void {
         .imports = &.{.{ .name = "Shelly_Rlpm", .module = mod }},
     }) });
     sandbox_tests.root_module.addOptions("worker_fixture", worker_fixture_options);
+
     const sandbox_run = b.addRunArtifact(sandbox_tests);
     sandbox_run.has_side_effects = true;
     b.step("test-download-sandbox", "Opt-in root-only sandbox integration, private /tmp roots").dependOn(
         &sandbox_run.step,
     );
+
     b.step("check-download-sandbox", "Compile the root-only integration fixture").dependOn(
         &sandbox_tests.step,
     );
+
     const download_tests = b.addTest(.{ .root_module = b.createModule(.{
         .root_source_file = b.path("src/tests/download.zig"),
         .target = target,
@@ -219,6 +246,7 @@ pub fn build(b: *std.Build) void {
     b.step("test-download", "Run private-cache, acquisition, refresh and DOWNLOADONLY fixtures").dependOn(
         &b.addRunArtifact(download_tests).step,
     );
+
     const transaction_tests = b.addTest(.{ .root_module = b.createModule(.{
         .root_source_file = b.path("src/tests/transaction.zig"),
         .target = target,
@@ -231,6 +259,7 @@ pub fn build(b: *std.Build) void {
             .flags = &.{"-std=c11"},
         },
     );
+
     b.step(
         "test-transaction",
         "Run private-root lifecycle, lock, ownership, cancellation and reference fixtures",
@@ -243,6 +272,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     }) });
+
     const run_ledger = b.addRunArtifact(ledger_tests);
     test_step.dependOn(&run_ledger.step);
     b.step(
@@ -265,7 +295,9 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .link_libc = true,
     });
+
     package_mod.linkSystemLibrary("archive", .{});
+
     const package_tests = b.addTest(.{ .root_module = package_mod });
     b.step("test-package", "Run hermetic package archive tests").dependOn(
         &b.addRunArtifact(package_tests).step,
@@ -284,6 +316,7 @@ pub fn build(b: *std.Build) void {
         },
         .mode = .simple,
     };
+
     const payload_benchmark = b.addTest(.{ .root_module = b.createModule(.{
         .root_source_file = b.path("src/tests/payload_benchmark.zig"),
         .target = target,
@@ -291,6 +324,7 @@ pub fn build(b: *std.Build) void {
         .imports = &.{.{ .name = "Shelly_Rlpm", .module = mod }},
     }), .test_runner = terminal_runner });
     payload_benchmark.root_module.addOptions("worker_fixture", worker_fixture_options);
+
     const run_payload_benchmark = b.addRunArtifact(payload_benchmark);
     run_payload_benchmark.stdio = .inherit;
     run_payload_benchmark.has_side_effects = true;
@@ -300,12 +334,14 @@ pub fn build(b: *std.Build) void {
     ).dependOn(
         &run_payload_benchmark.step,
     );
+
     const executor_driver = b.addExecutable(.{ .name = "rlpm-executor-fixture", .root_module = b.createModule(.{
         .root_source_file = b.path("src/tests/executor_driver.zig"),
         .target = target,
         .optimize = optimize,
         .imports = &.{.{ .name = "Shelly_Rlpm", .module = mod }},
     }) });
+
     const interop = b.addSystemCommand(&.{ "unshare", "--user", "--map-root-user", "--mount", "python3" });
     interop.addFileArg(b.path("src/tests/reference/check_executor_interop.py"));
     interop.addArg("--driver");
@@ -318,6 +354,7 @@ pub fn build(b: *std.Build) void {
     ).dependOn(
         &interop.step,
     );
+
     const executor_integration = b.addTest(.{ .root_module = b.createModule(.{
         .root_source_file = b.path("src/tests/executor_integration.zig"),
         .target = target,
@@ -325,6 +362,7 @@ pub fn build(b: *std.Build) void {
         .imports = &.{.{ .name = "Shelly_Rlpm", .module = mod }},
     }), .test_runner = terminal_runner });
     executor_integration.root_module.addOptions("worker_fixture", worker_fixture_options);
+
     const run_executor = b.addSystemCommand(&.{ "unshare", "--user", "--map-root-user", "--mount" });
     run_executor.addArtifactArg(executor_integration);
     run_executor.stdio = .inherit;
@@ -335,6 +373,7 @@ pub fn build(b: *std.Build) void {
     ).dependOn(
         &run_executor.step,
     );
+
     const action_filter = b.addExecutable(.{ .name = "rlpm-action-filter-fixture", .root_module = b.createModule(.{
         .root_source_file = b.path("src/tests/action_filter.zig"),
         .target = target,
@@ -343,15 +382,18 @@ pub fn build(b: *std.Build) void {
     }) });
     action_filter.root_module.addOptions("worker_fixture", worker_fixture_options);
     action_filter.root_module.addImport("workers", workers);
+
     const action_probe = b.addExecutable(.{ .name = "rlpm-action-probe-fixture", .root_module = b.createModule(.{
         .root_source_file = b.path("src/tests/action_probe.zig"),
         .target = target,
         .optimize = optimize,
         .link_libc = true,
     }) });
+
     const action_fixture_options = b.addOptions();
     action_fixture_options.addOptionPath("filter", action_filter.getEmittedBin());
     action_fixture_options.addOptionPath("probe", action_probe.getEmittedBin());
+
     const action_tests = b.addTest(.{ .root_module = b.createModule(.{
         .root_source_file = b.path("src/tests/actions.zig"),
         .target = target,
@@ -360,6 +402,7 @@ pub fn build(b: *std.Build) void {
     }), .test_runner = terminal_runner });
     action_tests.root_module.addOptions("worker_fixture", worker_fixture_options);
     action_tests.root_module.addOptions("action_fixtures", action_fixture_options);
+
     const run_actions = b.addSystemCommand(
         &.{
             "unshare",
@@ -371,15 +414,18 @@ pub fn build(b: *std.Build) void {
             "SHLVL=7",
         },
     );
+
     run_actions.addArtifactArg(action_tests);
     run_actions.stdio = .inherit;
     run_actions.has_side_effects = true;
     b.step("test-actions", "Run real actions in disposable chroots under a user namespace").dependOn(
         &run_actions.step,
     );
+
     b.step("check-actions", "Compile action integration tests without executing them").dependOn(
         &action_tests.step,
     );
+
     const signature_tests = b.addTest(.{
         .root_module = b.createModule(.{
             .root_source_file = b.path("src/tests/signature.zig"),
@@ -389,6 +435,7 @@ pub fn build(b: *std.Build) void {
         }),
         .test_runner = terminal_runner,
     });
+
     const run_signature = b.addRunArtifact(signature_tests);
     run_signature.stdio = .inherit;
     run_signature.has_side_effects = true;
@@ -403,14 +450,17 @@ pub fn build(b: *std.Build) void {
         .link_libc = true,
         .imports = &.{.{ .name = "Shelly_Key", .module = shelly_key.module("Shelly_Key") }},
     });
+
     host_mod.addCSourceFile(.{ .file = b.path("src/native/publication.c"), .flags = &.{"-std=c11"} });
     host_mod.linkSystemLibrary("archive", .{});
     host_mod.linkSystemLibrary("sqlite3", .{ .needed = true, .use_pkg_config = .no });
+
     const host_tests = b.addTest(.{
         .root_module = host_mod,
         .filters = &.{"host-readonly:"},
         .test_runner = terminal_runner,
     });
+
     const run_host = b.addRunArtifact(host_tests);
     run_host.stdio = .inherit;
     run_host.has_side_effects = true;
