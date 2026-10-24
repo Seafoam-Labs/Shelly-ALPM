@@ -150,7 +150,13 @@ fn question(data: ?*anyopaque, borrowed: *rlpm.Callbacks.Question) !void {
 }
 // Read the failed resolution plan while the transaction still owns it. Execution
 // manifests only describe later failures, after dependency resolution succeeded.
-fn formatFailure(allocator: std.mem.Allocator, err: anyerror, operation: op.Operation, plan: ?*const rlpm.TransactionPlan, path: ?[]const u8) ![]u8 {
+fn formatFailure(
+    allocator: std.mem.Allocator,
+    err: anyerror,
+    operation: op.Operation,
+    plan: ?*const rlpm.TransactionPlan,
+    path: ?[]const u8,
+) ![]u8 {
     const diagnostics = @import("diagnostics");
     var text: std.Io.Writer.Allocating = .init(allocator);
     defer text.deinit();
@@ -190,7 +196,7 @@ fn formatFailure(allocator: std.mem.Allocator, err: anyerror, operation: op.Oper
 }
 fn reportFailure(self: *Adapter, err: anyerror) void {
     var operation = self.operation.*;
-    const issue = if (self.owner.transaction()) |tx| blk: {
+    const issure = if (self.owner.transaction()) |tx| blk: {
         const manifest = tx.manifest() orelse break :blk null;
         const failure = manifest.failure orelse break :blk null;
         if (failure.package) |id| if (tx.plan()) |plan| {
