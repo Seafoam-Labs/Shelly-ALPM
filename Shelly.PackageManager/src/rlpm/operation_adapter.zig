@@ -148,8 +148,7 @@ fn question(data: ?*anyopaque, borrowed: *rlpm.Callbacks.Question) !void {
     }
     try rlpm.OwnedQuestion.applyAnswer(borrowed, q.*);
 }
-// Read the failed resolution plan while the transaction still owns it. Execution
-// manifests only describe later failures, after dependency resolution succeeded.
+// Read resolution and preflight issues while the transaction still owns the plan.
 fn formatFailure(
     allocator: std.mem.Allocator,
     err: anyerror,
@@ -160,7 +159,7 @@ fn formatFailure(
     const diagnostics = @import("diagnostics");
     var text: std.Io.Writer.Allocating = .init(allocator);
     defer text.deinit();
-    if (plan) |resolution| if (resolution.failure != null) {
+    if (plan) |resolution| {
         for (resolution.issues) |issue| switch (issue) {
             .missing => |missing| {
                 const relation = try missing.dependency.formatAlloc(allocator);
@@ -181,9 +180,25 @@ fn formatFailure(
                     diagnostics.safe(resolution.package(conflict.first).name), diagnostics.safe(resolution.package(conflict.second).name), diagnostics.safe(relation),
                 });
             },
+            .file_conflict => |conflict| {
+                const first = resolution.package(conflict.first).name;
+                if (conflict.second) |second| {
+                    const relationship = switch (conflict.kind) {
+                        .target => "also provided by",
+                        .filesystem => "owned by",
+                    };
+                    try text.writer.print("\"{f}\": \"{f}\" conflicts with a file {s} \"{f}\".\n", .{
+                        diagnostics.safe(conflict.path), diagnostics.safe(first), relationship, diagnostics.safe(resolution.package(second).name),
+                    });
+                } else {
+                    try text.writer.print("\"{f}\": \"{f}\" conflicts with an existing filesystem entry.\n", .{
+                        diagnostics.safe(conflict.path), diagnostics.safe(first),
+                    });
+                }
+            },
             else => {},
         };
-    };
+    }
     if (text.written().len != 0) {
         try text.writer.print("\nTechnical details: {s}", .{@errorName(err)});
         return allocator.dupe(u8, text.written());
@@ -196,7 +211,7 @@ fn formatFailure(
 }
 fn reportFailure(self: *Adapter, err: anyerror) void {
     var operation = self.operation.*;
-    const issure = if (self.owner.transaction()) |tx| blk: {
+    const issue = if (self.owner.transaction()) |tx| blk: {
         const manifest = tx.manifest() orelse break :blk null;
         const failure = manifest.failure orelse break :blk null;
         if (failure.package) |id| if (tx.plan()) |plan| {
@@ -868,4 +883,74 @@ test "resolution failure without plan retains a useful cause and technical code"
         try std.testing.expect(std.mem.indexOf(u8, message, @errorName(err)) != null);
         try std.testing.expect(std.mem.indexOf(u8, message, "more specific reason") == null);
     }
+}
+
+test "preflight file conflicts reach operation and legacy error handlers" {
+    const a = std.testing.allocator;
+    const io = std.testing.io;
+    var temporary = std.testing.tmpDir(.{});
+    defer temporary.cleanup();
+    const root = try temporary.dir.realPathFileAlloc(io, ".", a);
+    defer a.free(root);
+    try temporary.dir.writeFile(io, .{ .sub_path = "unowned", .data = "local" });
+    const path = try std.fs.path.join(a, &.{ root, "fixture.pkg.tar" });
+    defer a.free(path);
+    {
+        var file = try temporary.dir.createFile(io, "fixture.pkg.tar", .{});
+        defer file.close(io);
+        var buffer: [4096]u8 = undefined;
+        var writer = file.writer(io, &buffer);
+        var tar: std.tar.Writer = .{ .underlying_writer = &writer.interface };
+        try tar.writeFileBytes(".PKGINFO", "pkgname = demo\npkgver = 1-1\narch = any\n", .{ .mode = 0o644 });
+        try tar.writeFileBytes("unowned", "new", .{ .mode = 0o644 });
+        try tar.finishPedantically();
+        try writer.interface.flush();
+    }
+    var owner = try rlpm.Owner.init(io, a, .{ .root = root, .database_path = root }, &.{});
+    defer owner.deinit() catch unreachable;
+    var context = op.OperationContext.init(a, io);
+    defer context.deinit();
+    const Capture = struct {
+        operation_message: std.Io.Writer.Allocating,
+        legacy_message: std.Io.Writer.Allocating,
+        failures: usize = 0,
+        legacy_failures: usize = 0,
+        fn event(data: ?*anyopaque, value: op.Event) void {
+            const self: *@This() = @ptrCast(@alignCast(data.?));
+            if (value == .failure) {
+                self.failures += 1;
+                self.operation_message.writer.writeAll(value.failure.message) catch unreachable;
+            }
+        }
+        fn legacy(data: ?*anyopaque, message: []const u8) void {
+            const self: *@This() = @ptrCast(@alignCast(data.?));
+            self.legacy_failures += 1;
+            self.legacy_message.writer.writeAll(message) catch unreachable;
+        }
+    };
+    var capture: Capture = .{ .operation_message = .init(a), .legacy_message = .init(a) };
+    defer capture.operation_message.deinit();
+    defer capture.legacy_message.deinit();
+    _ = try context.subscribe(.{ .function = Capture.event, .data = &capture });
+    var operation = context.begin(.{ .backend = .alpm, .kind = .install });
+    defer operation.finish(.failed);
+    var adapter: Adapter = undefined;
+    try adapter.init(&owner, &operation);
+    adapter.failure_handler = .{ .function = Capture.legacy, .data = &capture };
+    defer adapter.deinit() catch unreachable;
+    const tx = try owner.initializeTransaction(io, .{});
+    defer owner.releaseTransaction() catch unreachable;
+    var package: ?rlpm.Package = try owner.loadPackage(io, path, .local_file, .{});
+    defer if (package) |*value| value.deinit();
+    try tx.takeArchive(&package);
+    try tx.prepare();
+    try std.testing.expectError(error.FileConflicts, tx.preflight());
+    try std.testing.expectEqual(null, tx.plan().?.failure);
+    try std.testing.expectEqual(1, capture.failures);
+    try std.testing.expectEqual(1, capture.legacy_failures);
+    try std.testing.expectEqualStrings(capture.operation_message.written(), capture.legacy_message.written());
+    try std.testing.expectEqualStrings(
+        "\"unowned\": \"demo\" conflicts with an existing filesystem entry.\n\nTechnical details: FileConflicts",
+        capture.operation_message.written(),
+    );
 }
