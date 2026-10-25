@@ -76,6 +76,12 @@ pub const Failure = enum {
     duplicate_filename,
 };
 
+pub const FileConflict = struct {
+    path: []const u8,
+    first: Id,
+    second: Id,
+};
+
 pub const Issue = union(enum) {
     target: []const u8,
     duplicate: struct {
