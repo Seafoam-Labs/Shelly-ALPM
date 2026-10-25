@@ -1,0 +1,5 @@
+{
+  "build_options": [
+    { "name": "libalpm", "value": "false" }
+  ]
+}
