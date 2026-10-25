@@ -6648,6 +6648,22 @@ test "PackageBuilder keeps shared split builds under the global pkgname" {
     try fixture.temporary.dir.access(io, "pkg/shelly-flatpak-backend-git/usr/bin/backend", .{});
 }
 
+test "PackageBuilder collapses whitespace in a wrapped pkgdesc like makepkg" {
+    const allocator = testing.allocator;
+    const pkgbuild_content =
+        "pkgname=wrapped-desc\npkgver=1\npkgrel=1\narch=('any')\n" ++
+        "pkgdesc=\"  A description that is\n \twrapped onto  a second line \"\n" ++
+        "package() {\n  mkdir -p \"$pkgdir/usr/share/wrapped-desc\"\n}\n";
+    var fixture = try Fixture.create(allocator, pkgbuild_content, null, null);
+    defer fixture.destroy();
+
+    const artifacts = try fixture.builder.BuildPackage();
+    defer builder_mod.deinitArtifacts(allocator, artifacts);
+    const pkginfo = try readPkgInfo(allocator, artifacts[0].path);
+    defer allocator.free(pkginfo);
+    try testing.expect(std.mem.indexOf(u8, pkginfo, "pkgdesc = A description that is wrapped onto a second line\n") != null);
+}
+
 test "PackageBuilder preserves selected split metadata in PKGINFO" {
     if (!@import("../../alpm/backend.zig").libalpm_enabled) return error.SkipZigTest;
     const allocator = testing.allocator;
