@@ -156,6 +156,7 @@ fn formatFailure(
     operation: op.Operation,
     plan: ?*const rlpm.TransactionPlan,
     path: ?[]const u8,
+    file_conflict: ?*const rlpm.ExecutionManifest.Conflict,
 ) ![]u8 {
     const diagnostics = @import("diagnostics");
     var text: std.Io.Writer.Allocating = .init(allocator);
