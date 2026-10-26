@@ -94,6 +94,7 @@ pub const Model = struct {
     parsed: ?std.json.Parsed([]Package) = null,
 
     load: *LoadState,
+    load_thread: ?std.Thread = null,
     loading: bool = true,
     load_failed: bool = false,
 
@@ -170,6 +171,12 @@ pub const Model = struct {
 
     pub fn deinit(self: *Model) void {
         const gpa = self.gpa;
+        if (self.load_thread) |thread| {
+            thread.join();
+            self.load_thread = null;
+        }
+        if (self.load.result) |*result| result.deinit();
+        gpa.destroy(self.load);
         self.text_field.deinit();
         self.aur_field.deinit();
         self.filtered.deinit(gpa);
@@ -384,8 +391,7 @@ pub const Model = struct {
     // -- background jobs ---------------------------------------------------
 
     fn startLoad(self: *Model, ctx: *vxfw.EventContext) !void {
-        const thread = try std.Thread.spawn(.{}, loadPackages, .{self.load});
-        thread.detach();
+        self.load_thread = try std.Thread.spawn(.{}, loadPackages, .{self.load});
         try ctx.tick(100, self.widget());
     }
 
@@ -403,10 +409,12 @@ pub const Model = struct {
             return;
         };
         const installed = cli.get_installed_packages() catch {
+            parsed.deinit();
             load.failed = true;
             load.done.store(true, .release);
             return;
         };
+        defer installed.deinit();
         for (installed.value) |pkg| {
             for (parsed.value) |*p_pkg| {
                 if (std.ascii.eqlIgnoreCase(p_pkg.Name, pkg.Name)) p_pkg.Installed = true;
@@ -422,6 +430,7 @@ pub const Model = struct {
 
         const failed = self.load.failed;
         const parsed = self.load.result;
+        self.load.result = null;
         self.loading = false;
         self.load_failed = failed;
         if (parsed) |p| {
