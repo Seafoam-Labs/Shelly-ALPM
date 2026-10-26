@@ -21,6 +21,16 @@ The target is the latest `development`. CLI/package-manager changes affecting th
 - Package identity/source/scope and accurate outcomes must survive refresh and interruption.
 - Devario tooling is preferred. Real package mutations require disposable environments and verification with both native engines.
 
+### Client and operation refactor
+
+| Component | Responsibility |
+| --- | --- |
+| `shelly_cli.zig` | Queries and short commands: arguments, execution, decoded data, and useful errors. Existing GTK methods provide a reference for coverage. |
+| `shelly_operation.zig` or equivalent | Interactive transactions: streaming output, questions/answers, progress, cancellation, process cleanup, and outcomes, with a separate authentication boundary. |
+| Application state / `Model` | Coordinate actions, selection, pending questions, and results; views render state. Subprocess handling moves into the client layer. |
+
+Implementation starts with the existing query client's foundation, then one native transaction and the corresponding `Model` refactor. Full query coverage is not a prerequisite for that transaction. Further workflows and view extraction follow incrementally, using both GTK client and operation implementations as references.
+
 ## Implementation plan
 
 “Documented” means source assessment is complete, not runtime verification.
