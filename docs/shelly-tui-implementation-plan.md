@@ -77,7 +77,7 @@ The intended flow is browse → details → review/provider questions → execut
 | ID | Finding | Remaining work |
 | --- | --- | --- |
 | TUI-B01 | Debug CLI path depends on the working directory. Listing works when launched from `Shelly.Tui`. | Reliable executable discovery and errors. |
-| TUI-B02 | Reported `LoadState` leak; source also leaves installed-query data and some failure/unconsumed results unreleased. | Define worker completion and result ownership before freeing shared state. |
+| TUI-B02 | Fixed in `3b210700`: loader joined before cleanup, result ownership transferred explicitly, and temporary/unconsumed results freed. | Maintainer exit test passed with no allocator warning. Exit during loading and query-failure cleanup still need separate verification. Shutdown waits for the loader. |
 | TUI-B03 | Tabbing out of the unimplemented Updates/Upgrade page reportedly crashes. | Exact reproduction and panic trace; cause unconfirmed. |
 | TUI-B04 | Mouse-reporting sequences remain visible after a crash. | Terminal restoration; connection to B03 unconfirmed. |
 | TUI-B05 | Unused detail-query helper omits `--detail`; working details render loaded metadata. Empty searches may emit only an info frame. | Correct query contracts and distinguish empty results from errors. |
@@ -90,5 +90,6 @@ The intended flow is browse → details → review/provider questions → execut
 | --- | --- | --- |
 | 2026-10-25 | `27a69951` / `020f9db8` | Initial tracker and maintainer findings: working read-only behavior, leak, navigation crash, and terminal disruption. Tested binary revision unrecorded. |
 | 2026-10-25 | `613b58e5` | Step 1 source assessment and compiled CLI inventory completed with Zig 0.16.0; remote development checked. No new TUI runtime tests or package operations. |
+| 2026-10-26 | `3b210700` | TUI-B02 loader cleanup fixed. Maintainer reported successful exit; captured stderr contained only Vaxis debug messages. Early-exit and failure-path checks remain unconfirmed. |
 
 Further verification is required for authentication, repeated questions, decline/cancellation, source availability, refresh identity, both native engines, and terminal recovery. Exclusions or deferrals require explicit decisions.
