@@ -254,8 +254,47 @@ test "unowned and target conflicts survive NOCONFLICTS and NoExtract; overwrite 
                     "same",
                     conflict.path,
                 );
+            const plan = tx.plan().?;
+            try std.testing.expectEqual(null, plan.failure);
+            try std.testing.expectEqual(tx.manifest().?.conflicts.items.len, plan.issues.len);
+            for (plan.issues, tx.manifest().?.conflicts.items) |issue, conflict| {
+                const item = issue.file_conflict;
+                try std.testing.expectEqual(conflict.package, item.first);
+                try std.testing.expectEqual(conflict.other, item.second);
+                try std.testing.expectEqualStrings(@tagName(conflict.kind), @tagName(item.kind));
+                try std.testing.expectEqualStrings(conflict.path, item.path);
+                try std.testing.expect(conflict.path.ptr != item.path.ptr);
+            }
         }
     }
+}
+
+test "late pacnew destination conflicts are copied to plan issues" {
+    var f = try Fixture.init();
+    defer f.deinit();
+    try f.installed("demo", "conf", "");
+    try f.write("conf", "local");
+    try f.tmp.dir.createDirPath(io, "root/conf.pacnew");
+    var archive = try Archive.init(&.{
+        .{ .path = ".PKGINFO", .contents = info },
+        .{ .path = "conf", .contents = "new" },
+    }, .none);
+    defer archive.deinit();
+    var owner = try f.owner(a);
+    defer owner.deinit() catch unreachable;
+    try owner.setList(io, .no_upgrade, &.{"conf"});
+    const tx = try owner.initializeTransaction(io, .{});
+    defer owner.releaseTransaction() catch unreachable;
+    try add(tx, archive.path);
+    try tx.prepare();
+    try std.testing.expectError(error.FileConflicts, tx.preflight());
+    const plan = tx.plan().?;
+    try std.testing.expectEqual(1, plan.issues.len);
+    const conflict = plan.issues[0].file_conflict;
+    try std.testing.expectEqualStrings("conf.pacnew", conflict.path);
+    try std.testing.expectEqualStrings("demo", plan.package(conflict.first).name);
+    try std.testing.expectEqual(null, conflict.second);
+    try std.testing.expectEqual(.filesystem, conflict.kind);
 }
 
 test "backups compare original local new contents and NoUpgrade always creates pacnew" {
