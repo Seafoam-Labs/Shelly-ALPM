@@ -403,7 +403,7 @@ pub const Model = struct {
         defer threaded.deinit();
 
         const cli: ShellyCli = .{ .allocator = alloc, .io = threaded.io() };
-        const parsed = cli.get_packages() catch {
+        const parsed = cli.get_packages(false) catch {
             load.failed = true;
             load.done.store(true, .release);
             return;

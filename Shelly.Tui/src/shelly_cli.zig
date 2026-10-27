@@ -3,8 +3,11 @@ const diagnostics = @import("diagnostics");
 const Io = std.Io;
 const Package = @import("packages.zig").Package;
 const AurPackage = @import("packages.zig").AurPackage;
+const PkgBuild = @import("pkgbuild.zig").PkgBuild;
 const Remote = @import("flatpak.zig").Remote;
 const Flatpak = @import("flatpak.zig").Flatpak;
+const AppImage = @import("appimage.zig").AppImage;
+const AppImageUpdate = @import("appimage.zig").AppImageUpdate;
 const AppstreamApp = @import("flatpak.zig").AppstreamApp;
 const FlatpakSearchResponse = @import("flatpak.zig").FlatpakSearchResponse;
 const CheckUpdates = @import("sync.zig").CheckUpdates;
@@ -12,6 +15,61 @@ const JsonPackFrame = @import("ui_decode.zig").JsonPackFrame;
 const RunResult = std.process.RunResult;
 const runtime = @import("runtime.zig");
 const builtin = @import("builtin");
+const log = std.log.scoped(.shelly_cli);
+
+fn containsPackageName(packages: []const Package, name: []const u8) bool {
+    for (packages) |pkg| {
+        if (std.mem.eql(u8, pkg.Name, name)) return true;
+    }
+    return false;
+}
+
+// Query responses may include informational frames before or after their data.
+// The caller owns the returned parse, independently of the process output.
+fn decodeQuery(comptime T: type, allocator: std.mem.Allocator, output: []const u8, native_search: bool) !std.json.Parsed(T) {
+    var data: ?std.json.Parsed(T) = null;
+    errdefer if (data) |*parsed| parsed.deinit();
+    var empty_search = false;
+    var frames = JsonPackFrame.frames(output);
+    while (frames.next()) |payload| {
+        const json = try JsonPackFrame.decodeBase64(allocator, payload);
+        defer allocator.free(json);
+        const frame = try std.json.parseFromSlice(std.json.Value, allocator, json, .{});
+        defer frame.deinit();
+
+        if (frame.value == .object) {
+            if (frame.value.object.get("$kind")) |kind| {
+                if (kind != .string) return error.UnexpectedFrame;
+                if (std.mem.eql(u8, kind.string, "alpm.error")) return error.CommandFailed;
+                if (!std.mem.eql(u8, kind.string, "alpm.info")) return error.UnsupportedFrame;
+                // Current native search emits no array for zero results. Keep this
+                // compatibility rule specific to its exact completion message.
+                if (native_search) {
+                    const event = frame.value.object.get("EventType");
+                    const message = frame.value.object.get("Message");
+                    if (event != null and event.? == .string and
+                        std.mem.eql(u8, event.?.string, "InformationalOutput") and
+                        message != null and message.? == .string and
+                        std.mem.eql(u8, message.?.string, "Showing 0 search results"))
+                    {
+                        empty_search = true;
+                    }
+                }
+                continue;
+            }
+        }
+        if (data != null) return error.MultipleDataFrames;
+        data = try std.json.parseFromSlice(T, allocator, json, .{
+            .ignore_unknown_fields = true,
+            .allocate = .alloc_always,
+        });
+    }
+    if (data) |parsed| return parsed;
+    if (native_search and empty_search) {
+        return std.json.parseFromSlice(T, allocator, "[]", .{ .allocate = .alloc_always });
+    }
+    return error.NoDataFrame;
+}
 
 pub const ShellyCli = struct {
     allocator: std.mem.Allocator,
@@ -57,12 +115,12 @@ pub const ShellyCli = struct {
         return result;
     }
 
-    pub fn get_packages(self: ShellyCli) !std.json.Parsed([]Package) {
-        const result = try self.run(&.{"-Ssv"});
+    pub fn get_packages(self: ShellyCli, show_hidden: bool) !std.json.Parsed([]Package) {
+        const result = try self.run(&.{if (show_hidden) "-Ssvw" else "-Ssv"});
         defer self.allocator.free(result.stdout);
         defer self.allocator.free(result.stderr);
 
-        return try JsonPackFrame.decode([]Package, self.allocator, result.stdout);
+        return decodeQuery([]Package, self.allocator, result.stdout, true);
     }
 
     pub fn get_installed_packages(self: ShellyCli) !std.json.Parsed([]Package) {
@@ -70,22 +128,33 @@ pub const ShellyCli = struct {
         defer self.allocator.free(result.stdout);
         defer self.allocator.free(result.stderr);
 
-        return try JsonPackFrame.decode([]Package, self.allocator, result.stdout);
+        return decodeQuery([]Package, self.allocator, result.stdout, true);
     }
 
-    pub fn get_remotes(self: ShellyCli) !std.json.Parsed([]Remote) {
-        const result = try self.run(&.{ "flatpak", "list", "remote" });
+    pub fn isPackageInstalled(self: ShellyCli, name: []const u8) !bool {
+        const result = try self.run(&.{ "-Ssi", name });
         defer self.allocator.free(result.stdout);
         defer self.allocator.free(result.stderr);
 
-        return try JsonPackFrame.decode([]Remote, self.allocator, result.stdout);
+        const parsed = try decodeQuery([]Package, self.allocator, result.stdout, true);
+        defer parsed.deinit();
+
+        return containsPackageName(parsed.value, name);
+    }
+
+    pub fn get_remotes(self: ShellyCli) !std.json.Parsed([]Remote) {
+        const result = try self.run(&.{ "list", "flatpak", "remote" });
+        defer self.allocator.free(result.stdout);
+        defer self.allocator.free(result.stderr);
+
+        return decodeQuery([]Remote, self.allocator, result.stdout, false);
     }
 
     pub fn get_installed_flatpaks(self: ShellyCli) !std.json.Parsed([]Flatpak) {
         const result = try self.run(&.{"-Lf"});
         defer self.allocator.free(result.stdout);
         defer self.allocator.free(result.stderr);
-        return try JsonPackFrame.decode([]Flatpak, self.allocator, result.stdout);
+        return decodeQuery([]Flatpak, self.allocator, result.stdout, false);
     }
 
     pub fn get_remote_appstream_apps(self: ShellyCli) !std.json.Parsed([]AppstreamApp) {
@@ -93,24 +162,33 @@ pub const ShellyCli = struct {
         defer self.allocator.free(result.stdout);
         defer self.allocator.free(result.stderr);
 
-        return try JsonPackFrame.decode([]AppstreamApp, self.allocator, result.stdout);
+        return decodeQuery([]AppstreamApp, self.allocator, result.stdout, false);
     }
 
-    pub fn get_flatpak_remote_info(self: ShellyCli, remote: []const u8, id: []const u8, branch: []const u8) !std.json.Parsed(FlatpakSearchResponse) {
+    pub fn get_flatpak_remote_info(self: ShellyCli, id: []const u8) !std.json.Parsed(FlatpakSearchResponse) {
         const result = try self.run(&.{ "search", "flatpak", id });
-        _ = remote;
-        _ = branch;
         defer self.allocator.free(result.stdout);
         defer self.allocator.free(result.stderr);
 
-        return try JsonPackFrame.decode(FlatpakSearchResponse, self.allocator, result.stdout);
+        return decodeQuery(FlatpakSearchResponse, self.allocator, result.stdout, false);
     }
 
     pub fn get_package_details(self: ShellyCli, name: []const u8) !std.json.Parsed(Package) {
-        const result = try self.run(&.{ "search", "standard", name });
+        const result = try self.run(&.{ "search", "standard", name, "--detail", "--installed" });
         defer self.allocator.free(result.stdout);
         defer self.allocator.free(result.stderr);
-        return JsonPackFrame.decodeLast(Package, self.allocator, result.stdout);
+        return decodeQuery(Package, self.allocator, result.stdout, false);
+    }
+
+    /// Searches system packages via the CLI. The caller owns the parsed result.
+    pub fn search_standard(self: ShellyCli, query: []const u8) !std.json.Parsed([]Package) {
+        const result = try self.run(&.{
+            "search", "standard", "--available", "--installed", query,
+        });
+        defer self.allocator.free(result.stdout);
+        defer self.allocator.free(result.stderr);
+
+        return decodeQuery([]Package, self.allocator, result.stdout, true);
     }
 
     /// Searches the AUR via the CLI. The caller owns the parsed result.
@@ -119,21 +197,70 @@ pub const ShellyCli = struct {
         defer self.allocator.free(result.stdout);
         defer self.allocator.free(result.stderr);
 
-        var it = JsonPackFrame.frames(result.stdout);
-        while (it.next()) |payload| {
-            const json = try JsonPackFrame.decodeBase64(self.allocator, payload);
-            defer self.allocator.free(json);
-            // Skip info/error frames, decode the first data frame
-            if (std.mem.indexOf(u8, json, "\"$kind\"") != null) continue;
-            return std.json.parseFromSlice([]AurPackage, self.allocator, json, .{
-                .ignore_unknown_fields = true,
-                .allocate = .alloc_always,
-            });
-        }
-        return error.NoDataFrame;
+        return decodeQuery([]AurPackage, self.allocator, result.stdout, false);
     }
 
-    pub const InstallBackend = enum { standard, aur };
+    pub fn list_aur_installed(self: ShellyCli) !std.json.Parsed([]AurPackage) {
+        const result = try self.run(&.{
+            "list",
+            "aur",
+        });
+        defer self.allocator.free(result.stdout);
+        defer self.allocator.free(result.stderr);
+
+        return decodeQuery([]AurPackage, self.allocator, result.stdout, false);
+    }
+
+    pub fn fetch_pkgbuild(self: ShellyCli, name: []const u8) !std.json.Parsed([]PkgBuild) {
+        return self.fetchPkgbuild(name, .preview);
+    }
+
+    pub const PkgbuildFetchMode = enum {
+        preview,
+        atoll_preview,
+        atoll_scan,
+    };
+
+    pub fn fetchPkgbuild(self: ShellyCli, name: []const u8, mode: PkgbuildFetchMode) !std.json.Parsed([]PkgBuild) {
+        const args: []const []const u8 = switch (mode) {
+            .preview => &.{ "search", "aur", name, "--pkgbuild" },
+            .atoll_preview => &.{ "search", "aur", name, "--pkgbuild", "--aur-url", "https://atoll.seafoam-labs.org" },
+            .atoll_scan => &.{ "search", "aur", name, "--pkgbuild", "--scan-pkgbuild", "--aur-url", "https://atoll.seafoam-labs.org" },
+        };
+        const result = try self.run(args);
+        defer self.allocator.free(result.stderr);
+        defer self.allocator.free(result.stdout);
+
+        log.debug("pkgbuild response received ({d} bytes)", .{result.stdout.len});
+
+        return decodeQuery([]PkgBuild, self.allocator, result.stdout, false);
+    }
+
+    pub fn search_flatpak(self: ShellyCli, query: []const u8) !std.json.Parsed(FlatpakSearchResponse) {
+        const result = try self.run(&.{ "search", "flatpak", query, "--limit", "50" });
+        defer self.allocator.free(result.stdout);
+        defer self.allocator.free(result.stderr);
+
+        return decodeQuery(FlatpakSearchResponse, self.allocator, result.stdout, false);
+    }
+
+    pub fn get_appimages(self: ShellyCli) !std.json.Parsed([]AppImage) {
+        const result = try self.run(&.{ "list", "appimage" });
+        defer self.allocator.free(result.stdout);
+        defer self.allocator.free(result.stderr);
+
+        return decodeQuery([]AppImage, self.allocator, result.stdout, false);
+    }
+
+    pub fn get_appimage_updates(self: ShellyCli) !std.json.Parsed([]AppImageUpdate) {
+        const result = try self.run(&.{ "list-updates", "appimage" });
+        defer self.allocator.free(result.stdout);
+        defer self.allocator.free(result.stderr);
+
+        return decodeQuery([]AppImageUpdate, self.allocator, result.stdout, false);
+    }
+
+    pub const InstallBackend = enum { standard, aur, flatpak, appimage };
 
     /// Installs a package through the CLI without prompting. Fails with
     /// error.CommandFailed when the CLI exits non-zero.
@@ -143,25 +270,12 @@ pub const ShellyCli = struct {
         defer self.allocator.free(result.stderr);
     }
 
-    pub fn check_updates(self: ShellyCli) !std.json.Parsed(CheckUpdates) {
-        const result = try self.run(&.{"-P"});
+    pub fn check_updates(self: ShellyCli, show_hidden: bool) !std.json.Parsed(CheckUpdates) {
+        const result = try self.run(if (show_hidden) &.{ "-P", "--show-hidden" } else &.{"-P"});
         defer self.allocator.free(result.stdout);
         defer self.allocator.free(result.stderr);
 
-        var it = JsonPackFrame.frames(result.stdout);
-        while (it.next()) |payload| {
-            const json = JsonPackFrame.decodeBase64(self.allocator, payload) catch continue;
-            defer self.allocator.free(json);
-
-            if (std.mem.indexOf(u8, json, "\"$kind\"") != null) continue;
-
-            return std.json.parseFromSlice(CheckUpdates, self.allocator, json, .{
-                .ignore_unknown_fields = true,
-                .allocate = .alloc_always,
-            });
-        }
-
-        return error.NoDataFrame;
+        return decodeQuery(CheckUpdates, self.allocator, result.stdout, false);
     }
 };
 
@@ -171,7 +285,7 @@ test "get_packages" {
 
     const cli: ShellyCli = .{ .allocator = std.testing.allocator, .io = threaded.io() };
 
-    const parsed = try cli.get_packages();
+    const parsed = try cli.get_packages(false);
 
     defer parsed.deinit();
 
@@ -205,4 +319,57 @@ test "get_flatpaks" {
 
     try std.testing.expect(parsed.value.len > 0);
     std.debug.print("{s} {t}\n", .{ parsed.value[0].Name, parsed.value[0].InstallLevel });
+}
+
+fn queryTestFrame(allocator: std.mem.Allocator, json: []const u8) ![]u8 {
+    const encoded = try allocator.alloc(u8, std.base64.standard.Encoder.calcSize(json.len));
+    defer allocator.free(encoded);
+    _ = std.base64.standard.Encoder.encode(encoded, json);
+    return std.fmt.allocPrint(allocator, "[JSON]{s}[/JSON]\n", .{encoded});
+}
+
+test "query decoding owns package strings and handles informational frames" {
+    const allocator = std.testing.allocator;
+    const info = try queryTestFrame(allocator, "{\"$kind\":\"alpm.info\",\"Message\":\"Searching\"}");
+    defer allocator.free(info);
+    const data = try queryTestFrame(allocator, "[{\"Name\":\"editor\",\"Description\":\"Contains \\\"$kind\\\" text\"}]");
+    defer allocator.free(data);
+    const output = try std.mem.concat(allocator, u8, &.{ info, data, info });
+    const parsed = decodeQuery([]Package, allocator, output, true) catch |err| {
+        allocator.free(output);
+        return err;
+    };
+    allocator.free(output);
+    defer parsed.deinit();
+    try std.testing.expectEqualStrings("editor", parsed.value[0].Name);
+    try std.testing.expect(containsPackageName(parsed.value, "editor"));
+    try std.testing.expect(!containsPackageName(parsed.value, "edit"));
+}
+
+test "query decoding distinguishes empty native search from missing data" {
+    const allocator = std.testing.allocator;
+    const empty = try queryTestFrame(allocator, "{\"$kind\":\"alpm.info\",\"EventType\":\"InformationalOutput\",\"Message\":\"Showing 0 search results\"}");
+    defer allocator.free(empty);
+    const parsed = try decodeQuery([]Package, allocator, empty, true);
+    defer parsed.deinit();
+    try std.testing.expectEqual(@as(usize, 0), parsed.value.len);
+    try std.testing.expectError(error.NoDataFrame, decodeQuery([]Package, allocator, empty, false));
+    try std.testing.expectError(error.NoDataFrame, decodeQuery([]Package, allocator, "", true));
+    const malformed = try queryTestFrame(allocator, "{");
+    defer allocator.free(malformed);
+    try std.testing.expectError(error.UnexpectedEndOfInput, decodeQuery([]Package, allocator, malformed, true));
+}
+
+test "query decoding rejects trailing errors and unsupported questions" {
+    const allocator = std.testing.allocator;
+    const data = try queryTestFrame(allocator, "[{\"Name\":\"editor\"}]");
+    defer allocator.free(data);
+    const failure = try queryTestFrame(allocator, "{\"$kind\":\"alpm.error\",\"ErrorMessage\":\"Failed\"}");
+    defer allocator.free(failure);
+    const output = try std.mem.concat(allocator, u8, &.{ data, failure });
+    defer allocator.free(output);
+    try std.testing.expectError(error.CommandFailed, decodeQuery([]Package, allocator, output, true));
+    const question = try queryTestFrame(allocator, "{\"$kind\":\"q.yesno\",\"QuestionId\":\"1\"}");
+    defer allocator.free(question);
+    try std.testing.expectError(error.UnsupportedFrame, decodeQuery([]Package, allocator, question, true));
 }
