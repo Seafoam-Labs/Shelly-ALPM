@@ -667,6 +667,10 @@ pub const Manager = struct {
         defer operation_scope.finish(.success);
         errdefer operation_scope.fail();
         try self.checkOperationCancelled();
+        return self.repositoryTransaction(package_names, trans_flags_arg, build_request, false);
+    }
+
+    fn repositoryTransaction(self: *Manager, package_names: [][:0]const u8, trans_flags_arg: TransFlag, build_request: ?build_transaction.Request, system_upgrade: bool) TransactionError!void {
         const sync_databases = rawLibalpm.alpm_get_syncdbs(self.handle);
         var packages: std.ArrayList(*rawLibalpm.alpm_pkg_t) = .empty;
         defer packages.deinit(self.allocator);
@@ -732,8 +736,10 @@ pub const Manager = struct {
                 }
                 return error.NoPackageFound;
             };
+            // Never silently drop a missing target from a combined upgrade.
+            if (packages.items.len == before) return TransactionError.PackageFetchFailed;
         }
-        if (packages.items.len == 0) return TransactionError.PackageFetchFailed;
+        if (packages.items.len == 0 and !system_upgrade) return TransactionError.PackageFetchFailed;
 
         // Ask once per package. Shared callers return every selected option index;
         // legacy handlers may still return a single package name in `pkg`.
@@ -830,6 +836,11 @@ pub const Manager = struct {
             if (rawLibalpm.alpm_errno(self.handle) == rawLibalpm.ALPM_ERR_TRANS_DUP_TARGET) continue;
             return TransactionError.PrepareFailed;
         }
+        // Explicit repository choices must be queued before automatic upgrades.
+        if (system_upgrade and rawLibalpm.alpm_sync_sysupgrade(self.handle, 0) != 0) {
+            self.handleErrorMessage(@intCast(rawLibalpm.alpm_errno(self.handle)), null) catch {};
+            return TransactionError.UpdateFetchFailed;
+        }
         var data: [*c]rawLibalpm.alpm_list_t = null;
         if (rawLibalpm.alpm_trans_prepare(self.handle, &data) != 0) {
             if (build_request) |request| if (request.issues) |output| {
@@ -880,7 +891,8 @@ pub const Manager = struct {
             if (request.output != null) return;
         }
         if (self.preparedInstallIsEmpty()) return;
-        try self.confirmPreparedInstall(packages.items, optional_names.items, trans_flags);
+        if (!system_upgrade or package_names.len != 0)
+            try self.confirmPreparedInstall(packages.items, optional_names.items, trans_flags, system_upgrade);
         try self.predownloadPreparedPackages(trans_flags);
 
         // The prepare error list does not belong to the commit call.
@@ -890,10 +902,10 @@ pub const Manager = struct {
             return TransactionError.CommitFailed;
         }
         const local_db = rawLibalpm.alpm_get_localdb(self.handle);
-        for (optional_names.items) |name| {
+        if (!trans_flags.downloadonly) for (optional_names.items) |name| {
             const installed = rawLibalpm.alpm_db_get_pkg(local_db, name.ptr) orelse continue;
             _ = rawLibalpm.alpm_pkg_set_reason(installed, rawLibalpm.ALPM_PKG_REASON_DEPEND);
-        }
+        };
     }
 
     pub fn remove_packages(self: *Manager, packages_names: [][:0]const u8, flags: TransFlag, keep_optional_dependencis: bool) TransactionError!void {
@@ -1081,6 +1093,10 @@ pub const Manager = struct {
     /// processes and services which still use replaced libraries. The returned
     /// report is owned by the caller and must be deinitialized.
     pub fn sync_system_update(self: *Manager, flags: TransFlag) TransactionError!RestartReport {
+        return self.sync_system_update_with_packages(&.{}, flags);
+    }
+
+    pub fn sync_system_update_with_packages(self: *Manager, targets: [][:0]const u8, flags: TransFlag) TransactionError!RestartReport {
         if (self.handle == null) return TransactionError.NoHandle;
         var operation_scope = OperationScope.init(self, .update, null);
         operation_scope.attach();
@@ -1097,53 +1113,10 @@ pub const Manager = struct {
 
         self.package_download = true;
 
-        var trans_flags = flags;
-        if (trans_flags.dbonly) trans_flags.nodeps = true;
-
-        if (rawLibalpm.alpm_trans_init(self.handle, @bitCast(trans_flags.to_trans_flag())) != 0) {
-            self.handleErrorMessage(@intCast(rawLibalpm.alpm_errno(self.handle)), null) catch {};
-            return TransactionError.TransInitFailed;
-        }
-        var transaction_active = true;
-        defer {
-            if (transaction_active) _ = rawLibalpm.alpm_trans_release(self.handle);
-        }
-
-        // Potentially could allow downgrade here
-        if (rawLibalpm.alpm_sync_sysupgrade(self.handle, @intFromBool(false)) != 0) {
-            self.handleErrorMessage(@intCast(rawLibalpm.alpm_errno(self.handle)), null) catch {
-                // Dropping here cause this is super screwed.
-            };
-            return TransactionError.UpdateFetchFailed;
-        }
-
-        var data: [*c]rawLibalpm.alpm_list_t = null;
-
-        // Fully calculate dependencies, replacements, and conflicts,
-        // collects data for concurrent downloading
-        if (rawLibalpm.alpm_trans_prepare(self.handle, &data) != 0) {
-            self.handleErrorMessage(@intCast(rawLibalpm.alpm_errno(self.handle)), data) catch {
-                // drop here has now use
-            };
-            return TransactionError.PrepareFailed;
-        }
-
-        try self.predownloadPreparedPackages(trans_flags);
-
-        data = null;
-        if (rawLibalpm.alpm_trans_commit(self.handle, &data) != 0) {
-            self.handleErrorMessage(@intCast(rawLibalpm.alpm_errno(self.handle)), data) catch {
-                // Abandon hope all yee who enter here
-            };
-            return TransactionError.CommitFailed;
-        }
-
-        // Do not hold the pacman database lock while inspecting processes or
-        // invoking systemctl.
-        _ = rawLibalpm.alpm_trans_release(self.handle);
-        transaction_active = false;
-
-        if (trans_flags.dbonly) return RestartReport.empty(self.allocator);
+        // repositoryTransaction releases the database lock before restart checks.
+        try self.repositoryTransaction(targets, flags, null, true);
+        if (flags.dbonly or flags.downloadonly or !std.mem.eql(u8, self.config.root_directory, "/"))
+            return RestartReport.empty(self.allocator);
         return self.checkForRequiredRestarts(.{}) catch TransactionError.OutOfMemory;
     }
 
@@ -2174,6 +2147,7 @@ pub const Manager = struct {
         requested_packages: []const *rawLibalpm.alpm_pkg_t,
         optional_names: []const [:0]const u8,
         trans_flags: TransFlag,
+        system_upgrade: bool,
     ) TransactionError!void {
         const operation = self.dispatcher.operation orelse return;
 
@@ -2222,9 +2196,9 @@ pub const Manager = struct {
 
         var answer = operation.ask(.{
             .kind = .confirm_transaction,
-            .prompt = "Proceed with package installation?",
+            .prompt = if (system_upgrade) "Proceed with the system upgrade and requested packages?" else "Proceed with package installation?",
             .transaction_plan = .{
-                .action = .install,
+                .action = if (system_upgrade) .update else .install,
                 .packages = plan_packages.items,
                 .total_download_size = total_download,
                 .total_installed_size = total_installed,

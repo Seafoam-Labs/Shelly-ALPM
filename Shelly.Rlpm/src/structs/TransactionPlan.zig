@@ -1,6 +1,7 @@
 //! Owned, read-only resolution result. Treat its views as immutable. It survives
 //! Owner/cache/archive release; deinit exactly once. A failed plan is diagnostic
 //! data, never an executable transaction. Transaction binds review to live state.
+//! Transaction preflight may append owned diagnostic issues after resolution.
 
 const std = @import("std");
 const Package = @import("Package.zig");
@@ -76,6 +77,13 @@ pub const Failure = enum {
     duplicate_filename,
 };
 
+pub const FileConflict = struct {
+    path: []const u8,
+    first: Id,
+    second: ?Id = null,
+    kind: enum { target, filesystem },
+};
+
 pub const Issue = union(enum) {
     target: []const u8,
     duplicate: struct {
@@ -85,6 +93,7 @@ pub const Issue = union(enum) {
     architecture: Id,
     missing: Missing,
     conflict: Conflict,
+    file_conflict: FileConflict,
     filename: struct {
         first: Id,
         second: Id,
