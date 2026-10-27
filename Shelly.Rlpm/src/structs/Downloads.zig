@@ -1,4 +1,5 @@
 //! Cache acquisition operates on sealed bytes. Network workers never call Owner.
+
 const std = @import("std");
 const transport = @import("Shelly_Download");
 const Owner = @import("Owner.zig");
@@ -27,7 +28,9 @@ pub const File = struct {
     pub fn deinit(self: *File) void {
         self.allocator.free(self.path);
         self.snapshot.deinit();
+
         if (self.signature) |*signature| signature.deinit();
+
         self.* = undefined;
     }
 };
@@ -39,6 +42,7 @@ pub const FileSet = struct {
     pub fn deinit(self: *FileSet) void {
         for (self.files) |*file|
             file.deinit();
+
         self.allocator.free(self.files);
         self.* = undefined;
     }
@@ -48,6 +52,7 @@ pub const Request = struct {
     name: []const u8,
     servers: []const []const u8,
     cache_servers: []const []const u8 = &.{},
+
     /// Direct URL; servers are ignored.
     url: ?[]const u8 = null,
     package: ?*const Package = null,
@@ -72,24 +77,32 @@ pub fn urlFilename(allocator: std.mem.Allocator, url: []const u8) ![]const u8 {
         .raw => |v| v,
         .percent_encoded => |v| v,
     };
+
     if (encoded.len == 0 or encoded[encoded.len - 1] == '/') return error.InvalidPackageFilename;
+
     const basename: std.Uri.Component = .{ .percent_encoded = std.fs.path.basename(encoded) };
     const decoded = try basename.toRawMaybeAlloc(allocator);
     defer if (decoded.ptr != encoded.ptr and decoded.ptr != basename.percent_encoded.ptr)
         allocator.free(decoded);
+
     try filename(decoded);
+
     return allocator.dupe(u8, decoded);
 }
 
 fn check(owner: *Owner, io: std.Io, path: []const u8, request: Request) !File {
     try owner.checkCancelled();
+
     var snapshot = try Immutable.copy(io, path);
     errdefer snapshot.deinit();
+
     if (request.package) |pkg|
         if (pkg.compressed_size) |size| {
             const actual = try std.Io.Dir.cwd().statFile(io, snapshot.path(), .{});
+
             if (size != actual.size) return error.DownloadSizeMismatch;
         };
+
     const pkg = request.package;
     const embedded = if (pkg) |p| p.base64_signature != null else false;
     const bytes = if (request.policy.package != .disabled and !embedded)
@@ -111,6 +124,7 @@ fn check(owner: *Owner, io: std.Io, path: []const u8, request: Request) !File {
         .sha256 = if (pkg) |p| p.sha256_sum else null,
         .base64_signature = if (pkg) |p| p.base64_signature else null,
     }, &owner.last_verification);
+
     return .{
         .allocator = owner.allocator,
         .path = try owner.allocator.dupe(u8, path),
@@ -124,12 +138,16 @@ fn check(owner: *Owner, io: std.Io, path: []const u8, request: Request) !File {
 
 pub fn cached(owner: *Owner, io: std.Io, request: Request) !?File {
     try filename(request.name);
+
     const directories = owner.configuration.cache_directories;
+
     for (0..directories.len + @intFromBool(owner.fallback_cache != null)) |index| {
         const directory = if (index < directories.len) directories[index] else owner.fallback_cache.?;
         try owner.checkCancelled();
+
         const canonical = std.Io.Dir.cwd().realPathFileAlloc(io, directory, owner.allocator) catch |err| {
             if (err == error.OutOfMemory) return err;
+
             continue;
         };
         defer owner.allocator.free(canonical);
@@ -137,13 +155,16 @@ pub fn cached(owner: *Owner, io: std.Io, request: Request) !?File {
         defer owner.allocator.free(path);
         Publication.ensureReadable(io, owner.allocator, path) catch |err| {
             if (err != error.DatabaseRecoveryRequired) return err;
+
             try Publication.recover(io, owner.allocator, path);
         };
+
         // Validation can authorize removal of a corrupt pair, so cache lookup
         // needs the writer lock for its entire check/question/removal sequence.
         var guard = Publication.DirectoryLock.acquire(canonical, true, false) catch continue;
         defer guard.deinit();
         try Publication.ensureReadable(io, owner.allocator, path);
+
         var found = check(owner, io, path, request) catch |err| switch (err) {
             error.FileNotFound => continue,
             error.OutOfMemory,
@@ -155,21 +176,26 @@ pub fn cached(owner: *Owner, io: std.Io, request: Request) !?File {
             else => {
                 var question: Callbacks.Question = .{ .corrupted = .{ .path = path, .reason = err } };
                 try owner.askInternal(&question);
+
                 if (question.corrupted.remove) {
                     try std.Io.Dir.cwd().deleteFile(io, path);
+
                     const sig = try std.fmt.allocPrint(owner.allocator, "{s}.sig", .{path});
                     defer owner.allocator.free(sig);
                     std.Io.Dir.cwd().deleteFile(io, sig) catch |failure|
                         if (failure != error.FileNotFound)
                             return failure;
                 }
+
                 continue;
             },
         };
         errdefer found.deinit();
         try owner.checkCancelled();
+
         return found;
     }
+
     return null;
 }
 
@@ -220,22 +246,27 @@ const Batch = struct {
     fn serverState(self: *Batch, url: []const u8) ?*ServerState {
         const uri = std.Uri.parse(url) catch return null;
         const host = uri.host orelse return null;
+
         for (self.servers) |*entry|
             if (std.ascii.eqlIgnoreCase(entry.host, switch (host) {
                 .raw => |v| v,
                 .percent_encoded => |v| v,
             })) return entry;
+
         return null;
     }
 
     fn serverFailure(self: *Batch, url: []const u8, cache_server: bool, err: anyerror) void {
         const state = self.serverState(url) orelse return;
+
         if (err == error.HostNotFound) {
             state.errors.store(-1, .release);
             return;
         }
+
         if (!cache_server) {
             var current = state.errors.load(.acquire);
+
             while (current >= 0 and current < 3) {
                 current = state.errors.cmpxchgWeak(current, current + 1, .acq_rel, .acquire) orelse return;
             }
@@ -244,15 +275,18 @@ const Batch = struct {
 
     fn cancelled(ctx: ?*anyopaque) bool {
         const owner: *Owner = @ptrCast(@alignCast(ctx.?));
+
         return owner.cancelled.load(.acquire);
     }
 
     fn event(ctx: ?*anyopaque, e: transport.DownloadEvent) void {
         const job: *Job = @ptrCast(@alignCast(ctx.?));
+
         if (e.retrying) |resuming| {
             job.resuming.store(resuming, .release);
             _ = job.retries.fetchAdd(1, .release);
         }
+
         if (e.progress) |progress| {
             job.total.store(progress.bytes_total orelse 0, .release);
             job.downloaded.store(progress.bytes_downloaded, .release);
@@ -261,18 +295,23 @@ const Batch = struct {
 
     fn execute(self: *Batch, index: usize) !void {
         const job = &self.jobs[index];
+
         if (!job.needs_download) return;
         defer job.done.store(true, .release);
         job.started.store(true, .release);
+
         if (self.owner.configuration.callbacks.fetch != null) self.dispatch();
+
         self.acquire(job) catch |err| {
             job.failure = err;
+
             return err;
         };
     }
 
     fn acquire(self: *Batch, job: *Job) !void {
         if (job.database) return self.acquireDatabase(job);
+
         var arena = std.heap.ArenaAllocator.init(self.allocator);
         defer arena.deinit();
         const a = arena.allocator();
@@ -287,24 +326,33 @@ const Batch = struct {
                     job.request.servers,
                 },
             );
+
         if (sources.len == 0) return error.NoServers;
+
         var last: anyerror = error.DownloadFailed;
+
         for (sources, 0..) |source, attempt| {
             try self.owner.checkCancelled();
+
             const is_cache = job.request.url == null and attempt < job.request.cache_servers.len;
+
             if (self.serverState(source)) |state| {
                 const errors = state.errors.load(.acquire);
+
                 if (errors < 0 or (!is_cache and errors >= 3)) continue;
             }
+
             if (attempt != 0) {
                 const partial = try std.fmt.allocPrint(a, "{s}.part", .{job.path});
                 const resumed = if (std.Io.Dir.cwd().statFile(self.io, partial, .{})) |st|
                     st.size != 0
                 else |_|
                     false;
+
                 job.resuming.store(resumed, .release);
                 _ = job.retries.fetchAdd(1, .release);
             }
+
             const url = if (job.request.url != null) source else try joinUrl(a, source, job.request.name);
             self.fetch(
                 job,
@@ -318,15 +366,19 @@ const Batch = struct {
                     job.unchanged = true;
                 } else {
                     if (err == error.Cancelled) return err;
+
                     self.serverFailure(source, is_cache, err);
                     last = err;
                     continue;
                 }
             };
+
             const policy = job.request.policy.package;
             const embedded = if (job.request.package) |p| p.base64_signature != null else false;
+
             if (policy != .disabled and !embedded) {
                 const sig = try std.fmt.allocPrint(a, "{s}.sig", .{job.path});
+
                 // A signature from another mirror must never accompany new data.
                 std.Io.Dir.cwd().deleteFile(self.io, sig) catch {};
                 _ = self.fetch(
@@ -351,8 +403,10 @@ const Batch = struct {
                     }
                 };
             }
+
             return;
         }
+
         return last;
     }
 
@@ -366,13 +420,17 @@ const Batch = struct {
         mtime: ?i128,
     ) !void {
         const is_payload = std.mem.eql(u8, path, job.path);
+
         if (is_payload) {
             if (job.effective_url) |previous| self.allocator.free(previous);
+
             job.effective_url = null;
         }
+
         if (self.owner.configuration.callbacks.fetch) |callback| {
             // Custom fetch batches run synchronously on the owning thread.
             self.owner.in_callback = true;
+
             const result = callback(
                 self.owner.configuration.callbacks.fetch_context,
                 .{
@@ -382,19 +440,27 @@ const Batch = struct {
                 },
             ) catch |err| {
                 self.owner.in_callback = false;
+
                 return err;
             };
+
             self.owner.in_callback = false;
             try self.owner.checkCancelled();
+
             const st = try std.Io.Dir.cwd().statFile(self.io, path, .{ .follow_symlinks = false });
+
             if (st.kind != .file) return error.NotRegularFile;
             if (maximum) |limit|
                 if (st.size > limit) return error.DownloadSizeMismatch;
+
             if (result == .unchanged) return error.NotModified;
             if (std.mem.eql(u8, path, job.path)) job.downloaded.store(st.size, .release);
+
             return;
         }
+
         var signature_downloaded: std.atomic.Value(u64) = .init(0);
+
         if (Sandbox.applicable(self.owner))
             return Sandbox.fetch(
                 self.owner,
@@ -412,6 +478,7 @@ const Batch = struct {
                     &signature_downloaded,
                 if (is_payload) &job.effective_url else null,
             );
+
         var downloader = self.session.downloader(
             .{
                 .address_family_policy = self.owner.configuration.address_family_policy,
@@ -444,12 +511,16 @@ const Batch = struct {
         downloader.quiet = true;
         downloader.cancellation = cancelled;
         downloader.cancellation_context = self.owner;
+
         if (std.mem.eql(u8, path, job.path)) downloader.setEventCallback(event, job);
+
         const result = downloader.downloadToFile(url, path, force or mtime == null);
+
         if (is_payload and (result == .succes or result == .skipped)) {
             if (downloader.effective_url) |effective|
                 job.effective_url = try self.allocator.dupe(u8, effective);
         }
+
         switch (result) {
             .succes => {},
             .skipped => return error.NotModified,
@@ -463,27 +534,36 @@ const Batch = struct {
         const a = arena.allocator();
         const sig = try std.fmt.allocPrint(a, "{s}.sig", .{job.path});
         var last: anyerror = error.NoServers;
+
         while (job.next_server < job.request.servers.len) {
             try self.owner.checkCancelled();
+
             const server = job.request.servers[job.next_server];
             job.next_server += 1;
+
             if (job.next_server > 1) {
                 job.resuming.store(false, .release);
                 _ = job.retries.fetchAdd(1, .release);
             }
+
             job.unchanged = false;
             job.downloaded.store(0, .release);
             job.total.store(0, .release);
+
             if (job.mtime != null) try Publication.copy(self.io, job.destination, job.path);
+
             const url = try joinUrl(a, server, job.request.name);
             self.fetch(job, url, job.path, job.force, null, job.mtime) catch |err| {
                 if (err == error.NotModified and job.mtime != null) job.unchanged = true else {
                     if (err == error.Cancelled) return err;
+
                     last = err;
                     continue;
                 }
             };
+
             std.Io.Dir.cwd().deleteFile(self.io, sig) catch {};
+
             if (job.request.policy.database != .disabled) {
                 self.fetch(
                     job,
@@ -507,8 +587,10 @@ const Batch = struct {
                     }
                 };
             }
+
             return;
         }
+
         return last;
     }
 
@@ -516,6 +598,7 @@ const Batch = struct {
     /// unavailable or a custom fetch implementation owns the transport.
     fn wait(self: *Batch) void {
         self.finished.store(false, .release);
+
         if (self.owner.configuration.callbacks.fetch != null) {
             for (0..self.jobs.len) |i| {
                 self.execute(i) catch {};
@@ -523,11 +606,13 @@ const Batch = struct {
             }
         } else {
             var future = self.io.concurrent(Batch.run, .{self}) catch null;
+
             if (future) |*running| {
                 while (!self.finished.load(.acquire)) {
                     self.dispatch();
                     self.io.sleep(.fromMilliseconds(20), .awake) catch self.owner.requestCancellation();
                 }
+
                 running.await(self.io);
             } else self.run();
             self.dispatch();
@@ -548,17 +633,21 @@ const Batch = struct {
     fn dispatch(self: *Batch) void {
         for (self.jobs) |*job| {
             if (!job.needs_download or job.reported_done or !job.started.load(.acquire)) continue;
+
             // Snapshot completion before byte counters. If the worker finishes
             // during this dispatch, leave its terminal event to the next pass
             // so no late progress can reopen a completed child operation.
             const done = job.done.load(.acquire);
+
             if (!job.reported_start) {
                 job.reported_start = true;
                 self.owner.downloadEvent(
                     .{ .started = .{ .name = job.request.name, .attempt = job.attempt } },
                 );
             }
+
             const retry_count = job.retries.load(.acquire);
+
             while (job.reported_retries < retry_count) : (job.reported_retries += 1)
                 self.owner.downloadEvent(
                     .{
@@ -569,7 +658,9 @@ const Batch = struct {
                         },
                     },
                 );
+
             const progress = job.downloaded.load(.acquire);
+
             if (progress != job.reported) {
                 const observed_total = job.total.load(.acquire);
                 const expected_total = if (job.request.package) |p| p.compressed_size else null;
@@ -587,8 +678,10 @@ const Batch = struct {
                         },
                     },
                 );
+
                 job.reported = progress;
             }
+
             // Acquire pairs all non-atomic result fields with the worker's
             // release, and never read them while its signature request runs.
             if (done) {
@@ -628,30 +721,39 @@ pub fn acquire(owner: *Owner, io: std.Io, requests: []const Request) ![]File {
                     },
                 },
             );
+
         if (job.result) |*result| result.deinit();
         if (job.stage_lock) |*lock| {
             if (job.failure == null) std.Io.Dir.cwd().deleteTree(io, job.stage) catch {};
+
             lock.deinit();
         }
     };
+
     var directory: ?[]const u8 = null;
+
     for (requests, jobs) |request, *job| {
         try owner.checkCancelled();
         try filename(request.name);
+
         for (jobs[0..initialized]) |previous|
             if (std.mem.eql(u8, previous.request.name, request.name))
                 return error.DuplicateFilename;
+
         job.* = .{
             .request = request,
             .stage = "",
             .path = "",
             .destination = "",
         };
+
         initialized += 1;
         job.result = try cached(owner, io, request);
         job.needs_download = job.result == null;
+
         if (!job.needs_download) continue;
         if (directory == null) directory = try writableCache(owner, io, a);
+
         const stage = try stageDirectory(a, io, directory.?, request.name);
         job.stage = stage;
         job.path = try std.fs.path.join(a, &.{ stage, request.name });
@@ -661,6 +763,7 @@ pub fn acquire(owner: *Owner, io: std.Io, requests: []const Request) ![]File {
         job.event_initialized = true;
         owner.downloadEvent(.{ .init = .{ .name = request.name, .optional = false } });
     }
+
     var thread_safe: transport.LockedAllocator = .{ .child_allocator = owner.allocator, .io = io };
     var session = transport.DownloadSession.init(
         thread_safe.allocator(),
@@ -673,6 +776,7 @@ pub fn acquire(owner: *Owner, io: std.Io, requests: []const Request) ![]File {
     );
     defer session.deinit();
     const servers = &owner.download_servers;
+
     for (requests) |request| {
         for ([_][]const []const u8{
             request.servers,
@@ -686,12 +790,15 @@ pub fn acquire(owner: *Owner, io: std.Io, requests: []const Request) ![]File {
                     .raw => |v| v,
                     .percent_encoded => |v| v,
                 };
+
                 var found = false;
+
                 for (servers.items) |entry|
                     if (std.ascii.eqlIgnoreCase(entry.host, name)) {
                         found = true;
                         break;
                     };
+
                 if (!found) {
                     const owned = try owner.allocator.dupe(u8, name);
                     errdefer owner.allocator.free(owned);
@@ -699,6 +806,7 @@ pub fn acquire(owner: *Owner, io: std.Io, requests: []const Request) ![]File {
                 }
             };
     }
+
     var batch: Batch = .{
         .owner = owner,
         .allocator = thread_safe.allocator(),
@@ -707,8 +815,11 @@ pub fn acquire(owner: *Owner, io: std.Io, requests: []const Request) ![]File {
         .session = &session,
         .servers = servers.items,
     };
+
     batch.wait();
+
     var failure: ?anyerror = null;
+
     for (jobs, 0..) |*job, index| {
         if (!job.needs_download) continue;
         if (!job.done.load(.acquire))
@@ -716,15 +827,18 @@ pub fn acquire(owner: *Owner, io: std.Io, requests: []const Request) ![]File {
                 error.Cancelled
             else
                 error.DownloadFailed;
+
         if (job.failure == null) owner.checkCancelled() catch |err| {
             job.failure = err;
         };
+
         if (job.failure == null) {
             processing(owner, job, .verification, .start, index + 1, jobs.len);
             job.result = check(owner, io, job.path, job.request) catch |err| blk: {
                 job.failure = err;
                 break :blk null;
             };
+
             processing(
                 owner,
                 job,
@@ -733,19 +847,24 @@ pub fn acquire(owner: *Owner, io: std.Io, requests: []const Request) ![]File {
                 index + 1,
                 jobs.len,
             );
+
             if (job.failure == null) owner.checkCancelled() catch |err| {
                 job.failure = err;
             };
+
             if (job.result) |*result|
                 if (job.failure == null) {
                     processing(owner, job, .publication, .start, index + 1, jobs.len);
+
                     // A progress callback may cancel before the durable write.
                     owner.checkCancelled() catch |err| {
                         job.failure = err;
                     };
+
                     if (job.failure == null) publishCache(owner, io, result, job.path, job.destination) catch |err| {
                         job.failure = err;
                     };
+
                     processing(
                         owner,
                         job,
@@ -754,10 +873,12 @@ pub fn acquire(owner: *Owner, io: std.Io, requests: []const Request) ![]File {
                         index + 1,
                         jobs.len,
                     );
+
                     result.cached = false;
                     result.transferred = job.downloaded.load(.acquire);
                 };
         }
+
         job.event_completed = true;
         owner.downloadEvent(
             .{
@@ -770,17 +891,23 @@ pub fn acquire(owner: *Owner, io: std.Io, requests: []const Request) ![]File {
                 },
             },
         );
+
         if (job.failure) |err| {
             if (failure == null or err == error.Cancelled) failure = err;
         }
     }
+
     if (failure) |err| return err;
+
     try owner.checkCancelled();
+
     const results = try owner.allocator.alloc(File, jobs.len);
+
     for (jobs, results) |*job, *result| {
         result.* = job.result.?;
         job.result = null;
     }
+
     return results;
 }
 
@@ -826,23 +953,29 @@ fn publishCache(
             null,
         destination,
     );
+
     owner.allocator.free(result.path);
     result.path = new_path;
 }
 
 pub fn joinUrl(a: std.mem.Allocator, server: []const u8, name: []const u8) ![]const u8 {
     try filename(name);
+
     var writer: std.Io.Writer.Allocating = .init(a);
     defer writer.deinit();
+
     // Repository filenames are literal path segments. Escape reserved bytes
     // too: S3-backed mirrors interpret an unescaped '+' as a space.
     try (std.Uri.Component{ .raw = name }).formatEscaped(&writer.writer);
+
     const encoded = writer.written();
+
     return std.fmt.allocPrint(a, "{s}/{s}", .{ std.mem.trimEnd(u8, server, "/"), encoded });
 }
 
 pub fn signatureUrl(a: std.mem.Allocator, url: []const u8) ![]const u8 {
     const end = std.mem.indexOfAny(u8, url, "?#") orelse url.len;
+
     return std.fmt.allocPrint(a, "{s}.sig{s}", .{ url[0..end], url[end..] });
 }
 
@@ -853,7 +986,9 @@ pub fn signatureSource(original: []const u8, effective: ?[]const u8, extension: 
         .raw => |value| value,
         .percent_encoded => |value| value,
     };
+
     const name = std.fs.path.basename(path);
+
     return if (std.mem.indexOf(u8, name, extension) != null or std.mem.indexOf(u8, name, ".pkg") != null)
         url
     else
@@ -863,15 +998,20 @@ pub fn signatureSource(original: []const u8, effective: ?[]const u8, extension: 
 fn writableCache(owner: *Owner, io: std.Io, a: std.mem.Allocator) ![]const u8 {
     for (owner.configuration.cache_directories) |directory| {
         std.Io.Dir.cwd().createDirPath(io, directory) catch continue;
+
         const probe = try uniquePath(a, io, directory, ".rlpm-write");
         const file = std.Io.Dir.cwd().createFile(io, probe, .{ .exclusive = true }) catch continue;
         file.close(io);
         try std.Io.Dir.cwd().deleteFile(io, probe);
+
         return std.Io.Dir.cwd().realPathFileAlloc(io, directory, a);
     }
+
     const fallback = try std.fmt.allocPrint(a, "/tmp/rlpm-cache-{d}", .{std.c.getuid()});
     try Publication.privateDirectory(fallback);
+
     if (owner.fallback_cache == null) owner.fallback_cache = try owner.allocator.dupe(u8, fallback);
+
     return fallback;
 }
 
@@ -883,12 +1023,15 @@ pub fn stageDirectory(
 ) ![]const u8 {
     var digest: [32]u8 = undefined;
     std.crypto.hash.sha2.Sha256.hash(name, &digest, .{});
+
     const path = try std.fmt.allocPrint(
         a,
         "{s}/.rlpm-{s}",
         .{ directory, std.fmt.bytesToHex(digest, .lower) },
     );
+
     try Publication.privateDirectory(path);
+
     return path;
 }
 
@@ -900,6 +1043,7 @@ pub fn uniquePath(
 ) ![]const u8 {
     var random: [8]u8 = undefined;
     io.random(&random);
+
     return std.fmt.allocPrint(a, "{s}/{s}-{s}", .{ directory, name, std.fmt.bytesToHex(random, .lower) });
 }
 
@@ -926,6 +1070,7 @@ pub const RefreshResult = struct {
 
 pub fn refresh(owner: *Owner, io: std.Io, force: bool) !RefreshResult {
     try owner.checkCancelled();
+
     var lock = try DatabaseLock.acquire(owner.allocator, owner.lock_file);
     var lock_live = true;
     defer if (lock_live) lock.release(owner.allocator) catch {};
@@ -934,6 +1079,7 @@ pub fn refresh(owner: *Owner, io: std.Io, force: bool) !RefreshResult {
     var arena = std.heap.ArenaAllocator.init(owner.allocator);
     defer arena.deinit();
     const jobs = try arena.allocator().alloc(Job, entries.len);
+
     // All jobs are initialized before cleanup, including skipped repositories.
     for (owner.sync_databases.items, entries, jobs) |*db, *entry, *job| {
         entry.* = .{ .reference = db.identity.?, .outcome = .skipped };
@@ -963,11 +1109,13 @@ pub fn refresh(owner: *Owner, io: std.Io, force: bool) !RefreshResult {
                     },
                 },
             );
+
         if (job.stage_lock) |*guard| {
             std.Io.Dir.cwd().deleteTree(io, job.stage) catch {};
             guard.deinit();
         }
     };
+
     var thread_safe: transport.LockedAllocator = .{ .child_allocator = owner.allocator, .io = io };
     var session = transport.DownloadSession.init(
         thread_safe.allocator(),
@@ -986,21 +1134,28 @@ pub fn refresh(owner: *Owner, io: std.Io, force: bool) !RefreshResult {
         .jobs = jobs,
         .session = &session,
     };
+
     owner.transactionEvent(.{ .phase = .{ .phase = .database_retrieve, .boundary = .start } });
+
     for (owner.sync_databases.items, jobs, entries) |*db, *job, *entry| {
         if (!db.usage.sync) continue;
+
         prepareDatabase(owner, io, arena.allocator(), job) catch |err| {
             entry.outcome = .failed;
             entry.cause = err;
             continue;
         };
+
         job.needs_download = true;
         job.event_initialized = true;
         owner.downloadEvent(.{ .init = .{ .name = job.request.name, .optional = false } });
     }
+
     while (true) {
         batch.wait();
+
         var retry = false;
+
         for (owner.sync_databases.items, jobs, entries, 0..) |*db, *job, *entry, index| {
             if (!job.needs_download) continue;
             if (!job.done.load(.acquire))
@@ -1008,11 +1163,13 @@ pub fn refresh(owner: *Owner, io: std.Io, force: bool) !RefreshResult {
                     error.Cancelled
                 else
                     error.DownloadFailed;
+
             if (job.failure == null) {
                 const accepted = acceptDatabase(owner, io, db, job, &lock, index + 1, jobs.len) catch |err| blk: {
                     job.failure = err;
                     break :blk true; // Fatal errors must not try another mirror.
                 };
+
                 if (!accepted and job.next_server < job.request.servers.len and
                     !owner.cancelled.load(.acquire))
                 {
@@ -1031,6 +1188,7 @@ pub fn refresh(owner: *Owner, io: std.Io, force: bool) !RefreshResult {
                     continue;
                 }
             }
+
             job.needs_download = false;
             job.event_completed = true;
             entry.outcome = if (job.failure != null)
@@ -1039,6 +1197,7 @@ pub fn refresh(owner: *Owner, io: std.Io, force: bool) !RefreshResult {
                 .updated
             else
                 .unchanged;
+
             entry.cause = job.failure;
             owner.downloadEvent(
                 .{
@@ -1055,12 +1214,16 @@ pub fn refresh(owner: *Owner, io: std.Io, force: bool) !RefreshResult {
                 },
             );
         }
+
         if (!retry) break;
     }
+
     var failed = false;
+
     for (entries) |entry|
         if (entry.cause) |err| {
             failed = true;
+
             if (owner.last_diagnostic == null)
                 owner.last_diagnostic = Diagnostic.init(
                     .refresh,
@@ -1068,6 +1231,7 @@ pub fn refresh(owner: *Owner, io: std.Io, force: bool) !RefreshResult {
                     entry.reference,
                 );
         };
+
     lock_live = false;
     try lock.release(owner.allocator);
     owner.transactionEvent(
@@ -1078,17 +1242,20 @@ pub fn refresh(owner: *Owner, io: std.Io, force: bool) !RefreshResult {
             },
         },
     );
+
     return .{ .allocator = owner.allocator, .databases = entries };
 }
 
 fn prepareDatabase(owner: *Owner, io: std.Io, a: std.mem.Allocator, job: *Job) !void {
     try owner.checkCancelled();
+
     const parent = std.fs.path.dirname(job.destination).?;
     try std.Io.Dir.cwd().createDirPath(io, parent);
     try Publication.recover(io, owner.allocator, job.destination);
     job.stage = try stageDirectory(a, io, parent, job.request.name);
     job.path = try std.fs.path.join(a, &.{ job.stage, job.request.name });
     job.stage_lock = try Publication.DirectoryLock.acquire(job.stage, true, true);
+
     if (!job.force) {
         const st = std.Io.Dir.cwd().statFile(io, job.destination, .{}) catch return;
         job.mtime = st.mtime.nanoseconds;
@@ -1108,9 +1275,11 @@ fn acceptDatabase(
 ) !bool {
     try owner.checkCancelled();
     processing(owner, job, .verification, .start, position, total);
+
     var verified = false;
     errdefer if (!verified) processing(owner, job, .verification, .failed, position, total);
     try owner.checkCancelled();
+
     var snapshot = try Immutable.copy(io, job.path);
     defer snapshot.deinit();
     const signature_bytes = if (db.signature_policy.database != .disabled)
@@ -1133,12 +1302,15 @@ fn acceptDatabase(
         db.last_load_error = err;
         job.failure = err;
         processing(owner, job, .verification, .failed, position, total);
+
         return false;
     };
+
     verified = true;
     processing(owner, job, .verification, .done, position, total);
     try owner.checkCancelled();
     try lock.validate();
+
     // Verify and parse exactly the sealed bytes subsequently published.
     var old_signature_invalid = false;
     const old_signature = if (db.signature_policy.database != .disabled) OpenPgp.readDetached(
@@ -1147,6 +1319,7 @@ fn acceptDatabase(
         db.path,
     ) catch |err| blk: {
         if (err == error.OutOfMemory) return err;
+
         old_signature_invalid = true;
         break :blk null;
     } else null;
@@ -1157,6 +1330,7 @@ fn acceptDatabase(
                 std.mem.eql(u8, bytes, old_signature.?)
         else
             old_signature == null;
+
     if (!job.unchanged or !same_signature) {
         processing(owner, job, .publication, .start, position, total);
         try owner.checkCancelled();
@@ -1169,16 +1343,21 @@ fn acceptDatabase(
             if (signature) |*file| file.path() else null,
             db.path,
         );
+
         if (!job.unchanged) db.takeCache(&candidate);
+
         processing(owner, job, .publication, .done, position, total);
     }
+
     if (job.unchanged) {
         Verification.clearReport(&db.last_verification);
         db.last_verification = candidate.last_verification;
         candidate.last_verification = null;
         db.last_load_error = null;
     }
+
     db.last_refresh_updated = !job.unchanged;
+
     return true;
 }
 
@@ -1189,6 +1368,7 @@ pub fn sizes(owner: *Owner, io: std.Io, requests: []const Request) !Sizes {
     var arena = std.heap.ArenaAllocator.init(owner.allocator);
     defer arena.deinit();
     const a = arena.allocator();
+
     for (requests) |request| {
         if (try cached(owner, io, request)) |value| {
             var file = value;
@@ -1196,11 +1376,14 @@ pub fn sizes(owner: *Owner, io: std.Io, requests: []const Request) !Sizes {
             result.cached += 1;
             continue;
         }
+
         const size = if (request.package) |pkg| pkg.compressed_size else null;
+
         if (size) |total| {
             var partial_size: u64 = 0;
             var digest: [32]u8 = undefined;
             std.crypto.hash.sha2.Sha256.hash(request.name, &digest, .{});
+
             for (owner.configuration.cache_directories) |directory| {
                 const path = try std.fmt.allocPrint(
                     a,
@@ -1211,14 +1394,18 @@ pub fn sizes(owner: *Owner, io: std.Io, requests: []const Request) !Sizes {
                         request.name,
                     },
                 );
+
                 const st = std.Io.Dir.cwd().statFile(io, path, .{ .follow_symlinks = false }) catch continue;
+
                 if (st.kind == .file and st.size < total) {
                     partial_size = st.size;
                     break;
                 }
             }
+
             result.bytes = try std.math.add(u64, result.bytes, total - partial_size);
         } else result.unknown += 1;
     }
+
     return result;
 }

@@ -1,4 +1,5 @@
 //! A separate consumer module: imports alone do not instantiate lazy function bodies.
+
 const std = @import("std");
 const rlpm = @import("Shelly_Rlpm");
 const OwnerTests = @import("owner.zig");
@@ -29,6 +30,7 @@ test "public API converts description metadata with the caller's arena" {
     var parsed: rlpm.ParsedDescription = .{ .name = "demo", .version = "1.2-3" };
     defer parsed.deinit(arena.allocator());
     try parsed.depends.append(arena.allocator(), "runtime>=2");
+
     const package = try parsed.intoPackage(&arena, .{ .origin = .sync, .database_name = "fixture" });
     try std.testing.expectEqualStrings("demo", package.name);
     try std.testing.expectEqualStrings("fixture", package.database_name);
@@ -48,17 +50,20 @@ test "public Owner retains two repositories and releases their configuration" {
     defer owner.deinit() catch unreachable;
     try std.testing.expectEqual(2, owner.syncDatabases().len);
     try std.testing.expectEqual(0, (try owner.packageIds(owner.localDatabase().?)).len);
+
     const core = owner.findDatabase("core").?;
     try std.testing.expectEqualStrings(
         "https://example.invalid/core",
         (try owner.database(core)).servers.items[0],
     );
+
     try owner.unregisterDatabase(core);
     try std.testing.expectError(error.StaleDatabaseReference, owner.database(core));
     try std.testing.expectEqualStrings("cachyos", owner.syncDatabases()[0].name);
     try owner.unregisterSyncDatabases();
     try std.testing.expectEqual(0, owner.syncDatabases().len);
     try std.testing.expect(rlpm.capabilities().transactions);
+
     var physical = try rlpm.PhysicalArchitectures.init(std.testing.allocator);
     defer physical.deinit();
     try std.testing.expect(physical.names.len >= 1);

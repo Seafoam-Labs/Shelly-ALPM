@@ -16,3 +16,4 @@ Shelly.Notifications.Zig/build/
 .qwen/settings.json
 .zed/
 /.aur-release/
+opencode.json

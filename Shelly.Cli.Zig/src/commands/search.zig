@@ -418,7 +418,7 @@ fn runStandard(
         }
     }
 
-    if (invocation.globals.ui_mode) {
+    if (invocation.globals.ui_mode or optionEnabled(invocation, "--names-only")) {
         return .{
             .mode = .packages,
             .packages = selected.items,
@@ -618,6 +618,11 @@ fn renderStandard(
     invocation: *const parser.Invocation,
     result: StandardResult,
 ) !void {
+    if (optionEnabled(invocation, "--names-only") and !invocation.globals.ui_mode and !invocation.globals.json) {
+        for (result.packages) |package| try context.stdout.print("{s}\n", .{package.name});
+        for (result.local_packages) |package| try context.stdout.print("{s}\n", .{package.name});
+        return;
+    }
     if (invocation.globals.ui_mode) {
         if (result.mode == .packages) {
             if (result.packages.len > 0) {
@@ -1505,6 +1510,7 @@ test "default standard search renders package tables and JSON for both command f
     };
     const shortcodes = @import("../cli/shortcodes.zig");
     for ([_][]const []const u8{
+        &.{ "search", "standard", "discord", "--names-only" },
         &.{ "search", "standard", "discord" },
         &.{ "-Ss", "discord" },
         &.{ "search", "standard", "--available", "discord" },
@@ -1522,6 +1528,8 @@ test "default standard search renders package tables and JSON for both command f
             try std.testing.expectEqual(@as(usize, 2), parsed.value.array.items.len);
             try std.testing.expectEqualStrings("discord", parsed.value.array.items[0].object.get("Name").?.string);
             try std.testing.expectEqualStrings("webcord", parsed.value.array.items[1].object.get("Name").?.string);
+        } else if (optionEnabled(&outcome.dispatch, "--names-only")) {
+            try std.testing.expectEqualStrings("discord\nwebcord\n", rendered);
         } else {
             try std.testing.expect(std.mem.indexOf(u8, rendered, "│ Name") != null);
             try std.testing.expect(std.mem.indexOf(u8, rendered, "Repository") != null);

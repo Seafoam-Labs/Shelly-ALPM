@@ -1,4 +1,5 @@
 //! Private-root lifecycle tests; no libalpm, network, or package mutations.
+
 const std = @import("std");
 const rlpm = @import("Shelly_Rlpm");
 const Archive = @import("archive_fixture.zig");
@@ -25,6 +26,7 @@ const Fixture = struct {
                 .data = "%NAME%\ndemo\n\n%VERSION%\n1-1\n\n%REASON%\n0\n\n",
             },
         );
+
         return .{ .temporary = temporary, .path = try temporary.dir.realPathFileAlloc(io, ".", a) };
     }
 
@@ -51,6 +53,7 @@ const Fixture = struct {
 
     fn locked(self: *Fixture) bool {
         self.temporary.dir.access(io, "db.lck", .{}) catch return false;
+
         return true;
     }
 };
@@ -63,6 +66,7 @@ test "transaction locks at init, freezes configuration, and releases uncommitted
     const previous = (try owner.findPackage(owner.localDatabase().?, "demo")).?;
     const tx = try owner.initializeTransaction(io, .{});
     try std.testing.expect(fixture.locked());
+
     const lock_stat = try fixture.temporary.dir.statFile(io, "db.lck", .{});
     try std.testing.expectEqual(0, lock_stat.size);
     try std.testing.expectEqual(0, lock_stat.permissions.toMode() & 0o777);
@@ -119,6 +123,7 @@ test "losing owner and explicit unlock preserve foreign locks" {
     try second.unlock();
     try std.testing.expect(fixture.locked());
     try first.releaseTransaction();
+
     const tx = try second.initializeTransaction(io, .{});
     try tx.remove("demo");
     try tx.prepare();
@@ -143,6 +148,7 @@ test "replacement lock survives release and stale database fails before commit" 
     try std.testing.expect(owner.transaction() == null);
     try std.testing.expect(fixture.locked());
     try fixture.temporary.dir.deleteFile(io, "db.lck");
+
     const tx = try owner.initializeTransaction(io, .{});
     try tx.remove("demo");
     try tx.prepare();
@@ -153,6 +159,7 @@ test "replacement lock survives release and stale database fails before commit" 
             .data = "%NAME%\ndemo\n\n%VERSION%\n2-1\n\n",
         },
     );
+
     try std.testing.expectError(error.StaleDatabaseState, tx.commit());
     try std.testing.expectEqual(.failed, tx.state);
     try owner.releaseTransaction();
@@ -210,6 +217,7 @@ test "archive ownership transfers once and duplicate rejection retains caller re
         "archive",
         tx.plan().?.package(tx.plan().?.additions[0].package).name,
     );
+
     const plan_fd = tx.plan().?.package(tx.plan().?.additions[0].package).verified_archive.?.fd;
     try owner.releaseTransaction();
     try std.testing.expectEqual(-1, std.c.fcntl(archive_fd, std.c.F.GETFD));
@@ -224,6 +232,7 @@ fn allocationLifecycle(allocator: std.mem.Allocator, fixture: *Fixture) !void {
     try tx.remove("demo");
     try tx.prepare();
 }
+
 test "transaction init and preparation allocation failures always release lock and resources" {
     var fixture = try Fixture.init();
     defer fixture.deinit();
@@ -242,6 +251,7 @@ test "another process contends with Owner in both lock acquisition orders" {
     try std.testing.expectEqual(0, rlpm_test_contender(path));
     try std.testing.expect(fixture.locked());
     try owner.releaseTransaction();
+
     var writer: c_int = undefined;
     var signal: c_int = undefined;
     try std.testing.expectEqual(0, rlpm_test_writer(path, &writer, &signal));
@@ -261,26 +271,32 @@ test "lifecycle and prepare event order with callback reentry and cancellation" 
         fn event(data: ?*anyopaque, value: rlpm.Callbacks.Event) void {
             const self: *@This() = @ptrCast(@alignCast(data.?));
             std.testing.expectError(error.CallbackReentry, self.owner.releaseTransaction()) catch unreachable;
+
             const text: []const u8 = switch (value) {
                 .lifecycle => |result| @tagName(result.state),
                 .phase => |phase| if (phase.boundary == .start) "dependency start" else "dependency done",
                 else => "other",
             };
+
             self.items[self.count] = text;
             self.count += 1;
+
             if (self.cancel_phase and value == .phase) self.owner.requestCancellation();
         }
     };
+
     var fixture = try Fixture.init();
     defer fixture.deinit();
     var owner = try fixture.owner(a);
     defer owner.deinit() catch unreachable;
     var capture: Capture = .{ .owner = &owner };
     try owner.setCallbacks(.{ .event = Capture.event, .event_context = &capture });
+
     var tx = try owner.initializeTransaction(io, .{});
     try tx.remove("demo");
     try tx.prepare();
     try owner.releaseTransaction();
+
     const expected = [_][]const u8{
         "initialized",
         "preparing",
@@ -289,9 +305,12 @@ test "lifecycle and prepare event order with callback reentry and cancellation" 
         "prepared",
         "released",
     };
+
     try std.testing.expectEqual(expected.len, capture.count);
+
     for (expected, capture.items[0..capture.count]) |left, right|
         try std.testing.expectEqualStrings(left, right);
+
     capture.count = 0;
     capture.cancel_phase = true;
     tx = try owner.initializeTransaction(io, .{});
@@ -311,11 +330,13 @@ test "OwnedQuestion snapshots metadata through source teardown and validates ans
         .origin = .archive,
         .database_name = "file",
     };
+
     const ref: rlpm.PackageRef = .{
         .database = .{ .owner = @enumFromInt(1), .id = .archive },
         .generation = 1,
         .id = @enumFromInt(0),
     };
+
     var question: rlpm.Callbacks.Question = .{
         .select_provider = .{
             .dependency = try rlpm.PackageRelation.parse("virtual>=1"),
@@ -323,6 +344,7 @@ test "OwnedQuestion snapshots metadata through source teardown and validates ans
             .views = &.{.{ .reference = ref, .package = &pkg }},
         },
     };
+
     var owned = try rlpm.OwnedQuestion.init(a, question);
     defer owned.deinit();
     arena.deinit();
@@ -334,6 +356,7 @@ test "OwnedQuestion snapshots metadata through source teardown and validates ans
         error.InvalidAnswer,
         rlpm.OwnedQuestion.applyAnswer(&question, owned.question),
     );
+
     try std.testing.expectError(
         error.InvalidAnswer,
         rlpm.OwnedQuestion.applyAnswer(
@@ -343,6 +366,7 @@ test "OwnedQuestion snapshots metadata through source teardown and validates ans
             },
         ),
     );
+
     try std.testing.expectEqual(0, question.select_provider.selected);
 }
 
@@ -375,12 +399,15 @@ const OracleCapture = struct {
 
     fn question(data: ?*anyopaque, q: *rlpm.Callbacks.Question) void {
         const self: *@This() = @ptrCast(@alignCast(data.?));
+
         if (q.* == .remove_packages) q.remove_packages.skip = self.skip;
     }
 
     fn event(data: ?*anyopaque, value: rlpm.Callbacks.Event) void {
         const self: *@This() = @ptrCast(@alignCast(data.?));
+
         if (value != .phase) return;
+
         const phase = value.phase;
         self.events[self.count] = switch (phase.phase) {
             .dependencies => if (phase.boundary == .start)
@@ -397,6 +424,7 @@ const OracleCapture = struct {
                 "ALPM_EVENT_INTERCONFLICTS_DONE",
             else => "unexpected",
         };
+
         self.count += 1;
     }
 };
@@ -412,6 +440,7 @@ fn oracleAction(
         _ = try owner.initializeTransaction(io, try rlpm.TransactionFlags.fromBits(case.flags));
         return;
     }
+
     if (std.mem.eql(u8, action, "release")) return owner.releaseTransaction();
     if (std.mem.eql(u8, action, "unlock")) return owner.unlock();
     if (std.mem.eql(u8, action, "compete")) {
@@ -421,7 +450,9 @@ fn oracleAction(
         try competitor.releaseTransaction();
         return;
     }
+
     const tx = owner.active_transaction orelse return error.TransactionNotInitialized;
+
     if (std.mem.eql(u8, action, "prepare")) return tx.prepare();
     if (std.mem.eql(u8, action, "commit")) return tx.commit();
     if (std.mem.eql(u8, action, "interrupt")) return tx.interrupt();
@@ -429,8 +460,10 @@ fn oracleAction(
     if (std.mem.eql(u8, action, "archive")) {
         var input: ?rlpm.Package = try owner.loadPackage(io, archive.path, .local_file, .{});
         defer if (input) |*pkg| pkg.deinit();
+
         return tx.takeArchive(&input);
     }
+
     return error.UnexpectedAction;
 }
 
@@ -439,6 +472,7 @@ fn oracleError(name: []const u8) anyerror {
         native: []const u8,
         result: anyerror,
     };
+
     for ([_]Mapping{
         .{ .native = "ALPM_ERR_TRANS_NULL", .result = error.TransactionNotInitialized },
         .{ .native = "ALPM_ERR_TRANS_NOT_NULL", .result = error.TransactionActive },
@@ -450,8 +484,10 @@ fn oracleError(name: []const u8) anyerror {
         .{ .native = "ALPM_ERR_UNSATISFIED_DEPS", .result = error.UnsatisfiedDependencies },
     }) |mapping|
         if (std.mem.eql(u8, name, mapping.native)) return mapping.result;
+
     return error.UnexpectedReferenceError;
 }
+
 test "pinned transaction oracle lifecycle errors lock mode and prepare event traces" {
     const parsed = try std.json.parseFromSlice(
         struct {
@@ -467,9 +503,11 @@ test "pinned transaction oracle lifecycle errors lock mode and prepare event tra
         "da30edd45277cf4b1000485658976042f8106fe0b97378d1e6c4e81a9d7c4888",
         parsed.value.library_sha256,
     );
+
     for (parsed.value.cases) |case| {
         var fixture = try Fixture.init();
         defer fixture.deinit();
+
         if (case.dependent) {
             try fixture.temporary.dir.createDirPath(io, "local/dependent-1-1");
             try fixture.temporary.dir.writeFile(
@@ -480,6 +518,7 @@ test "pinned transaction oracle lifecycle errors lock mode and prepare event tra
                 },
             );
         }
+
         var archive = try Archive.init(
             &.{
                 .{
@@ -507,17 +546,24 @@ test "pinned transaction oracle lifecycle errors lock mode and prepare event tra
                 .question_context = &capture,
             },
         );
+
         for (case.trace) |expected| {
             capture.count = 0;
+
             const result = oracleAction(expected.action, &owner, &fixture, case, &archive);
+
             if (expected.@"error") |err| try std.testing.expectError(oracleError(err), result) else try result;
+
             try std.testing.expectEqual(expected.locked, fixture.locked());
+
             if (expected.locked) {
                 const stat = try fixture.temporary.dir.statFile(io, "db.lck", .{});
                 try std.testing.expectEqual(expected.mode.?, stat.permissions.toMode() & 0o777);
                 try std.testing.expectEqual(expected.size.?, stat.size);
             }
+
             try std.testing.expectEqual(expected.events.len, capture.count);
+
             for (expected.events, capture.events[0..capture.count]) |wanted, actual|
                 try std.testing.expectEqualStrings(
                     wanted,
@@ -537,6 +583,7 @@ fn allocationTransfer(allocator: std.mem.Allocator, fixture: *Fixture, path: []c
     try tx.takeArchive(&input);
     try tx.prepare();
 }
+
 test "archive transfer and preparation allocation failures preserve single ownership" {
     var fixture = try Fixture.init();
     defer fixture.deinit();
@@ -559,6 +606,7 @@ test "missing lock release is harmless and permission denial never creates a tra
     _ = try owner.initializeTransaction(io, .{});
     try fixture.temporary.dir.deleteFile(io, "db.lck");
     try owner.releaseTransaction();
+
     // The test runner is normally unprivileged. Root bypasses DAC permissions.
     if (std.c.geteuid() != 0) {
         const dir_file = try std.Io.Dir.cwd().openFile(io, fixture.path, .{});
@@ -584,11 +632,14 @@ test "stale state before prepare and during questions cannot become a prepared p
             const self: *@This() = @ptrCast(@alignCast(data.?));
             self.fixture.temporary.dir.writeFile(io, .{ .sub_path = "local/new-state", .data = "changed" }) catch
                 unreachable;
+
             if (q.* == .remove_packages) q.remove_packages.skip = true;
         }
     };
+
     var change: Change = .{ .fixture = &fixture };
     try owner.setCallbacks(.{ .question = Change.question, .question_context = &change });
+
     var archive = try Archive.init(
         &.{
             .{
@@ -629,18 +680,22 @@ test "transaction package references and system upgrade preserve CachyOS reposit
     defer a.free(bytes);
     try fixture.temporary.dir.createDirPath(io, "sync");
     try fixture.temporary.dir.writeFile(io, .{ .sub_path = "sync/cachyos.db", .data = bytes });
+
     var owner = try fixture.owner(a);
     defer owner.deinit() catch unreachable;
     const repo = try owner.registerDatabase(.{ .database_name = "cachyos" });
     const old = (try owner.queryPackage(io, repo, "demo")).?;
     var tx = try owner.initializeTransaction(io, .{});
     try std.testing.expectError(error.StalePackageReference, tx.addPackage(old));
+
     const ref = (try owner.queryPackage(io, repo, "demo")).?;
     try tx.addPackage(ref);
     try tx.addPackage(ref);
+
     var foreign = ref;
     foreign.database.owner = @enumFromInt(@intFromEnum(ref.database.owner) + 1);
     try std.testing.expectError(error.ForeignOwner, tx.addPackage(foreign));
+
     const local = (try owner.findPackage(owner.localDatabase().?, "demo")).?;
     try std.testing.expectError(error.UnsupportedPackageOrigin, tx.addPackage(local));
     try std.testing.expectError(
@@ -651,6 +706,7 @@ test "transaction package references and system upgrade preserve CachyOS reposit
             &.{"https://example.invalid"},
         ),
     );
+
     try std.testing.expectError(error.TransactionActive, owner.setDatabaseUsage(repo, .{}));
     try tx.prepare();
     try std.testing.expectEqual(1, tx.plan().?.additions.len);
@@ -682,20 +738,25 @@ test "database check output precedes initialization and supports cancellation wi
 
             fn log(data: ?*anyopaque, value: rlpm.Callbacks.Log) void {
                 const self: *@This() = @ptrCast(@alignCast(data.?));
+
                 if (std.mem.eql(u8, value.message, "Checking package databases")) {
                     self.started += 1;
+
                     if (self.cancel) self.owner.requestCancellation();
                 }
+
                 if (std.mem.startsWith(u8, value.message, "Package database checks complete"))
                     self.completed += 1;
             }
 
             fn event(data: ?*anyopaque, value: rlpm.Callbacks.Event) void {
                 const self: *@This() = @ptrCast(@alignCast(data.?));
+
                 if (value == .lifecycle and value.lifecycle.state == .initialized)
                     self.initialized = self.completed != 0;
             }
         };
+
         var capture: Capture = .{ .owner = &owner, .cancel = cancel };
         try owner.setCallbacks(
             .{
@@ -705,6 +766,7 @@ test "database check output precedes initialization and supports cancellation wi
                 .event_context = &capture,
             },
         );
+
         if (cancel) {
             try std.testing.expectError(error.Cancelled, owner.initializeTransaction(io, .{}));
             try std.testing.expect(capture.started != 0 and capture.completed == 0 and !capture.initialized);
@@ -714,8 +776,10 @@ test "database check output precedes initialization and supports cancellation wi
                 capture.started != 0 and capture.started == capture.completed and
                     capture.initialized,
             );
+
             try owner.releaseTransaction();
         }
+
         try std.testing.expect(!fixture.locked());
     }
 }

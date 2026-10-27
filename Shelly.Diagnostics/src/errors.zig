@@ -302,6 +302,7 @@ pub fn cause(err: anyerror) []const u8 {
         error.SourceChecksumMismatch => "The downloaded source does not match its expected checksum. Download it again; if verification still fails, contact the package source.",
         error.GpgFailed => "GPG reported a failure. Review its output and the selected keyring.",
         error.NoSecretKey => "The selected keyring has no secret signing key. Initialize the intended keyring before retrying.",
+        error.MigrationRequiresRlpm => "This package declares file migrations that require RLPM. Set NativePackageBackend to rlpm before installing it.",
         error.BackendUnavailable => "The configured native package backend is not included in this build. Set NativePackageBackend to rlpm or install a build with libalpm enabled.",
         error.InvalidBackend => "NativePackageBackend must be libalpm or rlpm. Correct the setting with shelly config set NativePackageBackend rlpm.",
         error.InvalidPreviewRoot => "The update-check cache overlaps the system package database or contains an unexpected database link. Use a separate cache directory.",

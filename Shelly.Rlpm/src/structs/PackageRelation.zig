@@ -1,5 +1,6 @@
 //! Relations borrow strings. parse performs no allocation; clone owns all strings
 //! and must be paired with deinit. Constraint versions are intentionally raw.
+
 const std = @import("std");
 const Version = @import("Version.zig");
 
@@ -13,6 +14,7 @@ pub const Constraint = union(enum) {
     greater: []const u8,
     less: []const u8,
 };
+
 name: []const u8,
 constraint: Constraint = .any,
 description: ?[]const u8 = null,
@@ -21,19 +23,23 @@ description: ?[]const u8 = null,
 /// in every relation family. Embedded NUL cannot be represented by the C API.
 pub fn parse(value: []const u8) !PackageRelation {
     if (std.mem.indexOfScalar(u8, value, 0) != null) return error.InvalidPackageRelation;
+
     const end = std.mem.indexOf(u8, value, ": ") orelse value.len;
     const specification = value[0..end];
     var result: PackageRelation = .{
         .name = specification,
         .description = if (end != value.len) value[end + 2 ..] else null,
     };
+
     // Comparator precedence is '<', then '>', then '='; it is not the first
     // comparator in the string, nor a longest-token-first search.
     for ([_]u8{ '<', '>', '=' }) |operator| {
         const index = std.mem.indexOfScalar(u8, specification, operator) orelse continue;
         result.name = specification[0..index];
+
         const inclusive = operator != '=' and index + 1 < specification.len and
             specification[index + 1] == '=';
+
         const version = specification[index + (if (inclusive) @as(usize, 2) else 1) ..];
         result.constraint = switch (operator) {
             '<' => if (inclusive) .{ .less_equal = version } else .{ .less = version },
@@ -41,8 +47,10 @@ pub fn parse(value: []const u8) !PackageRelation {
             '=' => .{ .equal = version },
             else => unreachable,
         };
+
         break;
     }
+
     return result;
 }
 
@@ -51,15 +59,18 @@ pub fn clone(self: PackageRelation, allocator: std.mem.Allocator) !PackageRelati
     if (self.description) |value|
         if (std.mem.indexOfScalar(u8, value, 0) != null)
             return error.InvalidPackageRelation;
+
     switch (self.constraint) {
         .any => {},
         inline else => |value| if (std.mem.indexOfScalar(u8, value, 0) != null)
             return error.InvalidPackageRelation,
     }
+
     const name = try allocator.dupe(u8, self.name);
     errdefer allocator.free(name);
     const description = if (self.description) |value| try allocator.dupe(u8, value) else null;
     errdefer if (description) |value| allocator.free(value);
+
     return .{
         .name = name,
         .description = description,
@@ -73,16 +84,19 @@ pub fn clone(self: PackageRelation, allocator: std.mem.Allocator) !PackageRelati
 /// Only for a relation returned by clone, never a borrowed parse result.
 pub fn deinit(self: *PackageRelation, allocator: std.mem.Allocator) void {
     allocator.free(self.name);
+
     if (self.description) |value| allocator.free(value);
     switch (self.constraint) {
         .any => {},
         inline else => |value| allocator.free(value),
     }
+
     self.* = undefined;
 }
 
 pub fn format(self: PackageRelation, writer: *std.Io.Writer) std.Io.Writer.Error!void {
     try writer.writeAll(self.name);
+
     switch (self.constraint) {
         .any => {},
         inline else => |value, tag| {
@@ -94,9 +108,11 @@ pub fn format(self: PackageRelation, writer: *std.Io.Writer) std.Io.Writer.Error
                 .less => "<",
                 .any => unreachable,
             };
+
             try writer.print("{s}{s}", .{ operator, value });
         },
     }
+
     if (self.description) |value| try writer.print(": {s}", .{value});
 }
 
@@ -122,6 +138,7 @@ pub fn satisfiedBy(
     provisions: []const PackageRelation,
 ) bool {
     if (std.mem.eql(u8, self.name, name) and self.matchesVersion(version)) return true;
+
     return self.providedBy(provisions);
 }
 
@@ -133,12 +150,14 @@ pub fn providedBy(self: PackageRelation, provisions: []const PackageRelation) bo
         if (self.constraint == .any) return true;
         if (provision.constraint == .equal and self.matchesVersion(provision.constraint.equal)) return true;
     }
+
     return false;
 }
 
 test "relation defaults and borrowed parsing preserve unusual constraints" {
     const plain: PackageRelation = .{ .name = "go" };
     try std.testing.expect(plain.constraint == .any);
+
     const relation = try parse("foo>1<2: description");
     try std.testing.expectEqualStrings("foo>1", relation.name);
     try std.testing.expectEqualStrings("2", relation.constraint.less);

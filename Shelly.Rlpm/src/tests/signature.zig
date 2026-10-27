@@ -21,6 +21,7 @@ const SignatureFixture = struct {
             runCommand(&.{ executable, "--version" }, .inherit) catch |err| switch (err) {
                 error.FileNotFound => {
                     std.debug.print("integration test requires {s}\n", .{executable});
+
                     return error.GpgIntegrationUnavailable;
                 },
                 else => return err,
@@ -31,6 +32,7 @@ const SignatureFixture = struct {
         errdefer cleanupTemporary(&temporary) catch |err| {
             std.log.err("failed to remove signature fixture: {t}", .{err});
         };
+
         var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
         errdefer arena.deinit();
         const allocator = arena.allocator();
@@ -38,8 +40,10 @@ const SignatureFixture = struct {
         const signer_home = try std.fs.path.join(allocator, &.{ path, "signer" });
         const verifier_home = try std.fs.path.join(allocator, &.{ path, "verifier" });
         const unknown_home = try std.fs.path.join(allocator, &.{ path, "unknown" });
+
         for ([_][]const u8{ "signer", "verifier", "unknown" }) |name| {
             try temporary.dir.createDir(std.testing.io, name, .fromMode(0o700));
+
             // Verification cannot fetch keys or start extra agents.
             if (!std.mem.eql(u8, name, "signer")) {
                 const config_path = try std.fs.path.join(allocator, &.{ name, "gpg.conf" });
@@ -58,6 +62,7 @@ const SignatureFixture = struct {
             .verifier_home = verifier_home,
             .unknown_home = unknown_home,
         };
+
         // Also stop agents if key generation or any later setup operation fails.
         errdefer fixture.stopAgents() catch |err| {
             std.log.err("failed to stop fixture GPG agents: {t}", .{err});
@@ -68,6 +73,7 @@ const SignatureFixture = struct {
                 "GPG integration requires permission to start an agent and bind its Unix sockets\n",
                 .{},
             );
+
             return error.GpgIntegrationUnavailable;
         };
 
@@ -75,19 +81,23 @@ const SignatureFixture = struct {
             .sub_path = "test.db",
             .data = contents,
         });
+
         try fixture.runGpg(signer_home, &.{
             "--pinentry-mode",      "loopback", "--passphrase", "",
             "--quick-generate-key", identity,   "ed25519",      "sign",
             "0",
         });
+
         try fixture.runGpg(signer_home, &.{
             "--pinentry-mode", "loopback", "--passphrase", "",
             "--local-user",    identity,   "--output",     "test.db.sig",
             "--detach-sign",   "test.db",
         });
+
         try fixture.runGpg(signer_home, &.{ "--output", "public-key.gpg", "--export", identity });
         try fixture.runGpg(verifier_home, &.{ "--no-autostart", "--import", "public-key.gpg" });
         try fixture.runGpg(signer_home, &.{"--check-trustdb"});
+
         return fixture;
     }
 
@@ -97,6 +107,7 @@ const SignatureFixture = struct {
         try argv.appendSlice(std.testing.allocator, &.{
             "gpg", "--no-options", "--homedir", homedir, "--batch", "--yes",
         });
+
         try argv.appendSlice(std.testing.allocator, extra);
         try runCommand(argv.items, .{ .dir = self.temporary.dir });
     }
@@ -120,15 +131,19 @@ const SignatureFixture = struct {
         defer std.testing.allocator.free(result.stdout);
         defer std.testing.allocator.free(result.stderr);
         var lines = std.mem.splitScalar(u8, result.stdout, '\n');
+
         while (lines.next()) |line| {
             if (!std.mem.startsWith(u8, line, "fpr:")) continue;
+
             var fields = std.mem.splitScalar(u8, line, ':');
             var index: usize = 0;
+
             while (fields.next()) |field| : (index += 1)
                 if (index == 9) {
                     return std.testing.allocator.dupe(u8, field);
                 };
         }
+
         return error.MissingFingerprint;
     }
 
@@ -157,6 +172,7 @@ const SignatureFixture = struct {
                 signer,
             },
         );
+
         try args.appendSlice(std.testing.allocator, extra);
         try args.appendSlice(std.testing.allocator, &.{ "--output", signature, "--detach-sign", name });
         try self.runGpg(self.signer_home, args.items);
@@ -165,17 +181,20 @@ const SignatureFixture = struct {
 
     fn stopAgents(self: SignatureFixture) !void {
         var failure: ?anyerror = null;
+
         for ([_][]const u8{ self.signer_home, self.verifier_home, self.unknown_home }) |homedir| {
             runCommand(&.{ "gpgconf", "--homedir", homedir, "--kill", "all" }, .inherit) catch |err| {
                 failure = err;
             };
         }
+
         if (failure) |err| return err;
     }
 
     fn deinit(self: *SignatureFixture) !void {
         defer self.arena.deinit();
         const stopped = self.stopAgents();
+
         // Attempt file cleanup even if stopping an agent failed, and report errors.
         try cleanupTemporary(&self.temporary);
         try stopped;
@@ -192,14 +211,17 @@ const TemporaryHome = struct {
     fn init() !TemporaryHome {
         var random: [12]u8 = undefined;
         std.testing.io.random(&random);
+
         var name: [25]u8 = undefined;
         @memcpy(name[0..9], "rlpm-gpg-");
         _ = std.base64.url_safe.Encoder.encode(name[9..], &random);
+
         var parent = try std.Io.Dir.openDirAbsolute(std.testing.io, "/tmp", .{});
         errdefer parent.close(std.testing.io);
         try parent.createDir(std.testing.io, &name, .fromMode(0o700));
         errdefer parent.deleteTree(std.testing.io, &name) catch {};
         const dir = try parent.openDir(std.testing.io, &name, .{});
+
         return .{
             .dir = dir,
             .parent_dir = parent,
@@ -224,13 +246,16 @@ fn runCommand(argv: []const []const u8, cwd: std.process.Child.Cwd) !void {
     });
     defer std.testing.allocator.free(result.stdout);
     defer std.testing.allocator.free(result.stderr);
+
     switch (result.term) {
         .exited => |code| if (code == 0) return,
         else => {},
     }
+
     std.debug.print("fixture command {s} failed ({any}):\n{s}\n{s}\n", .{
         argv[0], result.term, result.stdout, result.stderr,
     });
+
     return error.GpgFixtureCommandFailed;
 }
 
@@ -239,6 +264,7 @@ test "signature: validateSignature accepts a real detached signature" {
     defer fixture.deinit() catch |err| {
         std.debug.panic("signature fixture cleanup failed: {t}", .{err});
     };
+
     var database = try Database.init(std.testing.allocator, "test", fixture.path, .{});
     defer database.deinit();
 
@@ -250,10 +276,12 @@ test "signature: validateSignature rejects tampered database contents" {
     defer fixture.deinit() catch |err| {
         std.debug.panic("signature fixture cleanup failed: {t}", .{err});
     };
+
     var database = try Database.init(std.testing.allocator, "test", fixture.path, .{});
     defer database.deinit();
 
     try std.testing.expect(try database.validateSignature(std.testing.io, fixture.verifier_home));
+
     var tampered = SignatureFixture.contents.*;
     tampered[0] ^= 1;
     try fixture.temporary.dir.writeFile(std.testing.io, .{ .sub_path = "test.db", .data = &tampered });
@@ -265,6 +293,7 @@ test "signature: validateSignature rejects a missing detached signature" {
     defer fixture.deinit() catch |err| {
         std.debug.panic("signature fixture cleanup failed: {t}", .{err});
     };
+
     var database = try Database.init(std.testing.allocator, "test", fixture.path, .{});
     defer database.deinit();
 
@@ -278,10 +307,12 @@ test "signature: validateSignature rejects a corrupted detached signature" {
     defer fixture.deinit() catch |err| {
         std.debug.panic("signature fixture cleanup failed: {t}", .{err});
     };
+
     var database = try Database.init(std.testing.allocator, "test", fixture.path, .{});
     defer database.deinit();
 
     try std.testing.expect(try database.validateSignature(std.testing.io, fixture.verifier_home));
+
     const signature = try fixture.temporary.dir.readFileAlloc(
         std.testing.io,
         "test.db.sig",
@@ -300,6 +331,7 @@ test "signature: validateSignature rejects an unknown signing key" {
     defer fixture.deinit() catch |err| {
         std.debug.panic("signature fixture cleanup failed: {t}", .{err});
     };
+
     var database = try Database.init(std.testing.allocator, "test", fixture.path, .{});
     defer database.deinit();
 
@@ -329,12 +361,14 @@ test "real GPG separates full and unknown trust and parses binary issuers" {
             &report,
         ),
     );
+
     try std.testing.expect(report.?.signatures[0].cryptographically_valid);
     try std.testing.expectEqualStrings("Shelly Signature Tests", report.?.signatures[0].user_name.?);
     try std.testing.expectEqualStrings("signature-tests@example.invalid", report.?.signatures[0].email.?);
     try std.testing.expect(report.?.signatures[0].key_created.? > 0);
     try std.testing.expectEqual(255, report.?.signatures[0].key_length.?);
     try std.testing.expectEqual(.unknown, report.?.signatures[0].trust);
+
     var permissive = strict;
     permissive.trust.allow_unknown = true;
     try std.testing.expect(
@@ -348,6 +382,7 @@ test "real GPG separates full and unknown trust and parses binary issuers" {
             &report,
         )).pgp,
     );
+
     try std.testing.expect(
         (try rlpm.Verification.check(
             std.testing.allocator,
@@ -359,7 +394,9 @@ test "real GPG separates full and unknown trust and parses binary issuers" {
             &report,
         )).pgp,
     );
+
     try std.testing.expectEqual(.full, report.?.signatures[0].trust);
+
     const bytes = (try rlpm.OpenPgp.readDetached(std.testing.allocator, std.testing.io, path)).?;
     defer std.testing.allocator.free(bytes);
     var issuers = try rlpm.OpenPgp.extractIssuers(std.testing.allocator, bytes);
@@ -388,7 +425,9 @@ test "real GPG requires all signatures and rejects a tampered payload" {
             "0",
         },
     );
+
     try fixture.sign("test.db", SignatureFixture.identity, &.{ "--local-user", second });
+
     const path = try fixture.dataPath("test.db");
     defer std.testing.allocator.free(path);
     var snapshot = try rlpm.ImmutableFile.copy(std.testing.io, path);
@@ -406,6 +445,7 @@ test "real GPG requires all signatures and rejects a tampered payload" {
             &report,
         )).pgp,
     );
+
     try std.testing.expectEqual(2, report.?.signatures.len);
     try std.testing.expectError(
         error.KeyImportDeclined,
@@ -422,7 +462,9 @@ test "real GPG requires all signatures and rejects a tampered payload" {
             &report,
         ),
     );
+
     try std.testing.expectEqual(2, report.?.signatures.len);
+
     var tampered = try rlpm.ImmutableFile.fromBytes("tampered");
     defer tampered.deinit();
     try std.testing.expectError(
@@ -437,6 +479,7 @@ test "real GPG requires all signatures and rejects a tampered payload" {
             &report,
         ),
     );
+
     try std.testing.expectEqual(2, report.?.signatures.len);
 }
 
@@ -451,8 +494,10 @@ const ImportAnswer = struct {
         std.debug.assert(question.* == .import_key);
         self.questions += 1;
         question.import_key.import = self.accept;
+
         if (self.owner) |owner| {
             std.testing.expectError(error.CallbackReentry, owner.unregisterSyncDatabases()) catch unreachable;
+
             if (self.cancel) owner.requestCancellation();
         }
     }
@@ -475,6 +520,7 @@ test "real Owner imports only after consent, honors cancellation and retains ver
     defer std.testing.allocator.free(bytes);
     try fixture.temporary.dir.writeFile(std.testing.io, .{ .sub_path = "demo.pkg.tar", .data = bytes });
     try fixture.sign("demo.pkg.tar", SignatureFixture.identity, &.{});
+
     const path = try fixture.dataPath("demo.pkg.tar");
     defer std.testing.allocator.free(path);
     const keypath = try fixture.dataPath("public-key.gpg");
@@ -493,7 +539,9 @@ test "real Owner imports only after consent, honors cancellation and retains ver
             "0",
         },
     );
+
     try fixture.runGpg(fixture.signer_home, &.{ "--output", "bundle.gpg", "--export" });
+
     const bundle = try fixture.dataPath("bundle.gpg");
     defer std.testing.allocator.free(bundle);
     var answer: ImportAnswer = .{};
@@ -520,7 +568,9 @@ test "real Owner imports only after consent, honors cancellation and retains ver
             .{},
         ),
     );
+
     answer.accept = true;
+
     var options = owner.options();
     options.key_acquisition.key_files = &.{bundle};
     try owner.setOptions(std.testing.io, options);
@@ -533,6 +583,7 @@ test "real Owner imports only after consent, honors cancellation and retains ver
             .{},
         ),
     );
+
     options = owner.options();
     options.key_acquisition.key_files = &.{keypath};
     try owner.setOptions(std.testing.io, options);
@@ -540,6 +591,7 @@ test "real Owner imports only after consent, honors cancellation and retains ver
     try std.testing.expectError(error.Cancelled, owner.loadPackage(std.testing.io, path, .local_file, .{}));
     try owner.resetCancellation();
     answer.cancel = false;
+
     var package = owner.loadPackage(std.testing.io, path, .local_file, .{}) catch |err| {
         if (owner.last_verification) |report|
             for (report.key_operations.items) |operation|
@@ -550,11 +602,13 @@ test "real Owner imports only after consent, honors cancellation and retains ver
                         operation.diagnostics,
                     },
                 );
+
         return err;
     };
     defer package.deinit();
     try std.testing.expectEqual(4, answer.questions);
     try std.testing.expect(package.validation.pgp and !package.validation.none);
+
     var cached = try owner.loadPackage(std.testing.io, path, .local_file, .{});
     defer cached.deinit();
     try std.testing.expect(cached.validation.pgp);
@@ -566,6 +620,7 @@ test "real Owner imports only after consent, honors cancellation and retains ver
             .data = "replaced after verification",
         },
     );
+
     var changelog = (try package.openMember(std.testing.allocator, .changelog)).?;
     defer changelog.deinit();
     const text = try changelog.readAll(std.testing.allocator, 1024);
@@ -587,6 +642,7 @@ test "real GPG marginal web-of-trust requires the marginal allowance" {
     defer fixture.deinit() catch unreachable;
     const certifier = "Certifier <certifier@example.invalid>";
     const subject = "Subject <subject@example.invalid>";
+
     for ([_][]const u8{ certifier, subject }) |identity|
         try fixture.runGpg(
             fixture.signer_home,
@@ -602,6 +658,7 @@ test "real GPG marginal web-of-trust requires the marginal allowance" {
                 "0",
             },
         );
+
     const root_fpr = try fixture.fingerprint(SignatureFixture.identity);
     defer std.testing.allocator.free(root_fpr);
     const cert_fpr = try fixture.fingerprint(certifier);
@@ -621,6 +678,7 @@ test "real GPG marginal web-of-trust requires the marginal allowance" {
             cert_fpr,
         },
     );
+
     try fixture.runGpg(
         fixture.signer_home,
         &.{
@@ -634,14 +692,17 @@ test "real GPG marginal web-of-trust requires the marginal allowance" {
             sub_fpr,
         },
     );
+
     try fixture.runGpg(fixture.signer_home, &.{ "--output", "all-keys.gpg", "--export" });
     try fixture.runGpg(fixture.verifier_home, &.{ "--import", "all-keys.gpg" });
+
     const trust = try std.fmt.allocPrint(std.testing.allocator, "{s}:6:\n{s}:4:\n", .{ root_fpr, cert_fpr });
     defer std.testing.allocator.free(trust);
     try fixture.temporary.dir.writeFile(std.testing.io, .{ .sub_path = "ownertrust", .data = trust });
     try fixture.runGpg(fixture.verifier_home, &.{ "--import-ownertrust", "ownertrust" });
     try fixture.runGpg(fixture.verifier_home, &.{"--check-trustdb"});
     try fixture.sign("test.db", subject, &.{});
+
     const path = try fixture.dataPath("test.db");
     defer std.testing.allocator.free(path);
     var snapshot = try rlpm.ImmutableFile.copy(std.testing.io, path);
@@ -664,6 +725,7 @@ test "real GPG marginal web-of-trust requires the marginal allowance" {
             &report,
         ),
     );
+
     try std.testing.expectEqual(.marginal, report.?.signatures[0].trust);
     try std.testing.expect(
         (try rlpm.Verification.check(
@@ -702,7 +764,9 @@ test "real GPG distinguishes expired signatures from refreshable expired keys" {
             "1d",
         },
     );
+
     try fixture.sign("test.db", expired, &.{ "--faked-system-time", past });
+
     const path = try fixture.dataPath("test.db");
     defer std.testing.allocator.free(path);
     var snapshot = try rlpm.ImmutableFile.copy(std.testing.io, path);
@@ -714,6 +778,7 @@ test "real GPG distinguishes expired signatures from refreshable expired keys" {
         .requirement = .required,
         .trust = .{ .allow_unknown = true },
     };
+
     try std.testing.expect(
         (try rlpm.Verification.check(
             std.testing.allocator,
@@ -725,6 +790,7 @@ test "real GPG distinguishes expired signatures from refreshable expired keys" {
             &report,
         )).pgp,
     );
+
     try std.testing.expectEqual(.key_expired, report.?.signatures[0].status);
     options.refresh_expired_keys = true;
     try std.testing.expectError(
@@ -739,6 +805,7 @@ test "real GPG distinguishes expired signatures from refreshable expired keys" {
             &report,
         ),
     );
+
     const old = "Old <old@example.invalid>";
     try fixture.runGpg(
         fixture.signer_home,
@@ -756,6 +823,7 @@ test "real GPG distinguishes expired signatures from refreshable expired keys" {
             "0",
         },
     );
+
     try fixture.sign("test.db", old, &.{ "--faked-system-time", past, "--default-sig-expire", "1d" });
     try std.testing.expectError(
         error.InvalidSignature,
@@ -769,6 +837,7 @@ test "real GPG distinguishes expired signatures from refreshable expired keys" {
             &report,
         ),
     );
+
     try std.testing.expectEqual(.signature_expired, report.?.signatures[0].status);
 }
 
@@ -791,6 +860,7 @@ test "real GPG disabled and revoked keys fail even with permissive trust" {
             .allow_marginal = true,
         },
     };
+
     try fixture.runGpg(fixture.signer_home, &.{ "--edit-key", fpr, "disable", "quit" });
     try std.testing.expectError(
         error.InvalidSignature,
@@ -804,8 +874,10 @@ test "real GPG disabled and revoked keys fail even with permissive trust" {
             &report,
         ),
     );
+
     try std.testing.expectEqual(.key_disabled, report.?.signatures[0].status);
     try fixture.runGpg(fixture.signer_home, &.{ "--edit-key", fpr, "enable", "quit" });
+
     const revoke_path = try std.fmt.allocPrint(
         std.testing.allocator,
         "signer/openpgp-revocs.d/{s}.rev",
@@ -827,6 +899,7 @@ test "real GPG disabled and revoked keys fail even with permissive trust" {
             .data = revoke[begin + 1 ..],
         },
     );
+
     try fixture.runGpg(fixture.signer_home, &.{ "--import", "revoke.asc" });
     try std.testing.expectError(
         error.InvalidSignature,
@@ -840,6 +913,7 @@ test "real GPG disabled and revoked keys fail even with permissive trust" {
             &report,
         ),
     );
+
     try std.testing.expectEqual(.key_revoked, report.?.signatures[0].status);
 }
 
@@ -866,6 +940,7 @@ test "real signed database is authenticated before publication and failed reload
     try fixture.temporary.dir.createDirPath(std.testing.io, "sync");
     try fixture.temporary.dir.writeFile(std.testing.io, .{ .sub_path = "sync/core.db", .data = bytes });
     try fixture.sign("sync/core.db", SignatureFixture.identity, &.{});
+
     var owner = try rlpm.Owner.init(
         std.testing.io,
         std.testing.allocator,
@@ -893,6 +968,7 @@ test "signed downloads acquire unknown keys only with consent and revalidate cac
     const io = std.testing.io;
     const a = std.testing.allocator;
     try fixture.temporary.dir.createDirPath(io, "cache");
+
     const cache = try fixture.dataPath("cache");
     defer a.free(cache);
     const key = try fixture.dataPath("public-key.gpg");
@@ -918,9 +994,11 @@ test "signed downloads acquire unknown keys only with consent and revalidate cac
     try std.testing.expectError(error.KeyImportDeclined, owner.fetchPackage(io, url));
     try std.testing.expectError(error.FileNotFound, fixture.temporary.dir.access(io, "cache/test.db", .{}));
     answer.accept = true;
+
     var file = try owner.fetchPackage(io, url);
     defer file.deinit();
     try std.testing.expect(file.validation.pgp);
+
     var cached = try owner.fetchPackage(io, url);
     defer cached.deinit();
     try std.testing.expect(cached.cached and cached.validation.pgp);
@@ -928,6 +1006,7 @@ test "signed downloads acquire unknown keys only with consent and revalidate cac
     try fixture.temporary.dir.writeFile(io, .{ .sub_path = "cache/test.db", .data = "tampered" });
     try fixture.temporary.dir.writeFile(io, .{ .sub_path = "test.db", .data = "tampered too" });
     try std.testing.expectError(error.InvalidSignature, owner.fetchPackage(io, url));
+
     const pinned = try std.Io.Dir.cwd().readFileAlloc(io, file.snapshot.path(), a, .limited(1000));
     defer a.free(pinned);
     try std.testing.expectEqualStrings(SignatureFixture.contents, pinned);
@@ -947,9 +1026,11 @@ test "preflight retains remote signature policy and revalidates before execution
     defer a.free(bytes);
     try fixture.temporary.dir.writeFile(io, .{ .sub_path = "demo.pkg.tar", .data = bytes });
     try fixture.sign("demo.pkg.tar", SignatureFixture.identity, &.{});
+
     const path = try fixture.dataPath("demo.pkg.tar");
     defer a.free(path);
     try fixture.temporary.dir.createDirPath(io, "installed-root");
+
     const root = try fixture.dataPath("installed-root");
     defer a.free(root);
     var owner = try rlpm.Owner.init(io, a, .{
@@ -976,6 +1057,7 @@ test "preflight retains remote signature policy and revalidates before execution
             .data = "corrupted detached signature",
         },
     );
+
     try std.testing.expectError(error.InvalidSignature, tx.revalidatePreflight());
     try std.testing.expectEqual(.failed, tx.result().state);
     try std.testing.expectError(
@@ -1007,6 +1089,7 @@ test "signed refresh publishes a matched pair and preserves it after bad signatu
     defer a.free(source);
     try std.Io.Dir.cwd().copyFile(archive.path, .cwd(), source, io, .{});
     try fixture.sign("core.db", SignatureFixture.identity, &.{});
+
     const server = try std.fmt.allocPrint(a, "file://{s}", .{fixture.path});
     defer a.free(server);
     var owner = try rlpm.Owner.init(
@@ -1031,6 +1114,7 @@ test "signed refresh publishes a matched pair and preserves it after bad signatu
     try refresh.check();
     try owner.reloadDatabase(io, owner.findDatabase("core").?);
     try fixture.temporary.dir.writeFile(io, .{ .sub_path = "core.db.sig", .data = "invalid signature" });
+
     var rejected = try owner.refreshDatabases(io, true);
     defer rejected.deinit();
     try std.testing.expectEqual(.failed, rejected.databases[0].outcome);

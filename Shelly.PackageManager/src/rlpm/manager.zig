@@ -29,6 +29,7 @@ pub const Manager = struct {
     hooks_disabled: bool = false,
     package_setup_failed: bool = false,
     detected_cachyos: bool = false,
+    databases_synced: bool = false,
     temporary: bool = false,
     names: std.heap.ArenaAllocator,
     download_address_family_policy: downloader.AddressFamilyPolicy,
@@ -152,6 +153,7 @@ pub const Manager = struct {
             failed = true;
         };
         if (failed) return error.SyncDbFailed;
+        self.databases_synced = true;
         status = .success;
     }
     fn reportSyncFailure(self: *Manager, operation: *op.Operation, subject: []const u8, err: anyerror) !void {
@@ -429,17 +431,16 @@ pub const Manager = struct {
         var optional_names: std.ArrayList([]const u8) = .empty;
         defer optional_names.deinit(self.allocator);
         for (targets) |target| switch (mode) {
-            .install => try tx.addTarget(target),
+            .install, .upgrade => try tx.addTarget(target),
             .archive => {
                 var package: ?rlpm.Package = try self.owner.loadPackage(self.io(), target, .local_file, .{ .mode = .full });
                 defer if (package) |*p| p.deinit();
                 try tx.takeArchive(&package);
             },
             .remove => try tx.remove(target),
-            .upgrade => unreachable,
         };
         if (mode == .upgrade) try tx.systemUpgrade(false);
-        if (mode == .install and build_request == null) try self.selectOptional(tx, targets, flags, &optional_names);
+        if ((mode == .install or mode == .upgrade) and build_request == null) try self.selectOptional(tx, targets, flags, &optional_names);
         tx.prepare() catch |err| {
             if (build_request) |request| if (request.issues) |output| {
                 if (tx.plan()) |failed| {
@@ -491,10 +492,25 @@ pub const Manager = struct {
                 if (answer.answer != 1) return error.PrepareFailed;
             };
         };
+        // Archive migration metadata and ownership are available only after preflight.
+        if (tx.state == .prepared and !tx.flags.download_only) try tx.preflight();
         if (self.operation_context != null and (mode != .remove or confirmation == .required)) try self.confirmPlan(&operation, plan, mode);
+        if (tx.manifest()) |manifest| for (manifest.adoptions.items) |item| {
+            const message = try std.fmt.allocPrint(self.allocator, "Preserve {s}: {s} -> {s} ({s})", .{
+                item.path,                       if (item.source) |id| plan.package(id).name else "unowned",
+                plan.package(item.package).name, @tagName(item.origin),
+            });
+            defer self.allocator.free(message);
+            self.dispatcher.raiseInformational(.{ .event_type = .validation_complete, .message = message, .code = "migration_planned" });
+        };
         if (tx.state == .prepared) {
             defer self.reportActionFailures(tx);
             try tx.commit();
+            if (tx.execution.adoptions_planned != 0) {
+                const message = try std.fmt.allocPrint(self.allocator, "Preserved and adopted {d} file(s).", .{tx.execution.adoptions_committed});
+                defer self.allocator.free(message);
+                self.dispatcher.raiseInformational(.{ .event_type = .validation_complete, .message = message, .code = "migration_committed" });
+            }
         }
         self.package_setup_failed = tx.result().warnings != 0;
         // Empty/--needed plans have no commit lifecycle event. Finish before
@@ -581,7 +597,17 @@ pub const Manager = struct {
             try packages.append(self.allocator, .{ .name = pkg.name, .version = pkg.version.raw, .source = .local, .role = .requested, .installed_size = pkg.installed_size });
         }
         if (packages.items.len == 0) return;
-        var response = try operation.ask(.{ .kind = .confirm_transaction, .prompt = if (mode == .remove) "Proceed with package removal?" else "Proceed with package installation?", .transaction_plan = .{ .action = if (mode == .remove) .remove else if (mode == .upgrade) .update else .install, .packages = packages.items, .total_download_size = plan.sizes.download_upper_bound, .total_installed_size = if (mode == .remove) plan.sizes.installed_remove else plan.sizes.installed_add, .net_installed_size = @as(i64, @intCast(plan.sizes.installed_add)) - @as(i64, @intCast(plan.sizes.installed_remove)) }, .default_response = .accepted });
+        var migrations: std.ArrayList(op.TransactionMigration) = .empty;
+        defer migrations.deinit(self.allocator);
+        if (self.owner.transaction()) |tx| if (tx.manifest()) |manifest| {
+            for (manifest.adoptions.items) |item| try migrations.append(self.allocator, .{
+                .path = item.path,
+                .destination = plan.package(item.package).name,
+                .source = if (item.source) |id| plan.package(id).name else null,
+                .origin = @tagName(item.origin),
+            });
+        };
+        var response = try operation.ask(.{ .kind = .confirm_transaction, .prompt = if (mode == .remove) "Proceed with package removal?" else "Proceed with package installation?", .transaction_plan = .{ .action = if (mode == .remove) .remove else if (mode == .upgrade) .update else .install, .packages = packages.items, .migrations = migrations.items, .total_download_size = plan.sizes.download_upper_bound, .total_installed_size = if (mode == .remove) plan.sizes.installed_remove else plan.sizes.installed_add, .net_installed_size = @as(i64, @intCast(plan.sizes.installed_add)) - @as(i64, @intCast(plan.sizes.installed_remove)) }, .default_response = .accepted });
         defer response.deinit(self.allocator);
         if (response.response != .accepted) return error.Cancelled;
     }
@@ -658,6 +684,9 @@ pub const Manager = struct {
         try names.append(a, try a.dupe(u8, name));
     }
     pub fn sync_system_update(self: *Manager, flags: types.TransFlag) !contract.RestartReport {
+        return self.sync_system_update_with_packages(&.{}, flags);
+    }
+    pub fn sync_system_update_with_packages(self: *Manager, targets: [][:0]const u8, flags: types.TransFlag) !contract.RestartReport {
         if (self.detected_cachyos) {
             var fallback = op.OperationContext.init(self.allocator, self.io());
             defer fallback.deinit();
@@ -667,9 +696,12 @@ pub const Manager = struct {
             defer self.dispatcher.setOperation(null);
             if (!update_notice.UpdateNotice.init(self.allocator, self.io()).check(self.environ, &self.dispatcher)) return contract.RestartReport.empty(self.allocator);
         }
-        try self.sync(true);
-        try self.execute(.upgrade, &.{}, flags, .already_approved);
-        if (flags.dbonly or flags.downloadonly) return contract.RestartReport.empty(self.allocator);
+        if (!self.databases_synced) try self.sync(true);
+        const names = try self.namesSlice(targets);
+        defer self.allocator.free(names);
+        try self.execute(.upgrade, names, flags, .already_approved);
+        if (flags.dbonly or flags.downloadonly or !std.mem.eql(u8, self.config.root_directory, "/"))
+            return contract.RestartReport.empty(self.allocator);
         return restart_checks.check(self, .{});
     }
     pub fn update_packages(self: *Manager, values: [][:0]const u8, flags: types.TransFlag) !void {

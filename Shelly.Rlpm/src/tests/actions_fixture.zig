@@ -5,6 +5,7 @@ const worker_fixture = @import("worker_fixture");
 const a = std.testing.allocator;
 const io = std.testing.io;
 const Fixture = @This();
+
 tmp: std.testing.TmpDir,
 root: [:0]u8,
 db: [:0]u8,
@@ -15,8 +16,10 @@ pub fn init() !Fixture {
     try tmp.dir.createDirPath(io, "root");
     try tmp.dir.createDirPath(io, "db/local");
     try tmp.dir.writeFile(io, .{ .sub_path = "db/local/ALPM_DB_VERSION", .data = "9\n" });
+
     const root = try tmp.dir.realPathFileAlloc(io, "root", a);
     errdefer a.free(root);
+
     return .{
         .tmp = tmp,
         .root = root,
@@ -33,11 +36,13 @@ pub fn deinit(self: *Fixture) void {
 pub fn owner(self: *Fixture) !rlpm.Owner {
     const worker_path = try std.Io.Dir.cwd().realPathFileAlloc(io, worker_fixture.path, a);
     defer a.free(worker_path);
+
     return rlpm.Owner.init(io, a, .{ .root = self.root, .database_path = self.db, .worker_executable = worker_path }, &.{});
 }
 
 pub fn write(self: *Fixture, path: []const u8, contents: []const u8) !void {
     if (std.fs.path.dirname(path)) |parent| try self.tmp.dir.createDirPath(io, parent);
+
     try self.tmp.dir.writeFile(io, .{ .sub_path = path, .data = contents });
 }
 
@@ -70,6 +75,7 @@ pub fn installed(
             .{ name, version },
         ),
     );
+
     try self.write(
         try std.fmt.allocPrint(alloc, "{s}/files", .{directory}),
         try std.fmt.allocPrint(
@@ -78,6 +84,7 @@ pub fn installed(
             .{files},
         ),
     );
+
     if (install) |script|
         try self.write(try std.fmt.allocPrint(alloc, "{s}/install", .{directory}), script);
 }
@@ -91,12 +98,16 @@ pub fn shell(self: *Fixture) !void {
 pub fn executable(self: *Fixture, source: []const u8, destination: []const u8) !void {
     try self.tmp.dir.createDirPath(io, std.fs.path.dirname(destination).?);
     try std.Io.Dir.cwd().copyFile(source, self.tmp.dir, destination, io, .{});
+
     const dependencies = try std.process.run(a, io, .{ .argv = &.{ "/usr/bin/ldd", source } });
     defer a.free(dependencies.stdout);
     defer a.free(dependencies.stderr);
+
     if (dependencies.term != .exited or dependencies.term.exited != 0)
         return error.FixtureShellUnavailable;
+
     var words = std.mem.tokenizeAny(u8, dependencies.stdout, " \t\r\n");
+
     while (words.next()) |word|
         if (std.mem.startsWith(u8, word, "/")) try self.copy(word);
 }

@@ -29,6 +29,7 @@ pub const variants = [_]types.Variant{
             flag("--group", &.{"-g"}, "List package groups or restrict available packages to the requested group"),
             flag("--explicit", &.{"-e"}, "Filter installed packages to explicitly installed packages; select installed packages when no source is specified"),
             flag("--depends", &.{"-D"}, "Filter installed packages to dependencies; select installed packages when no source is specified"),
+            flag("--names-only", &.{}, "Print all matching package names, one per line, without pagination"),
         },
     },
     .{

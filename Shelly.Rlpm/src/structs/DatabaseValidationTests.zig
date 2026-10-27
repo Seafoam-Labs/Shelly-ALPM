@@ -35,7 +35,9 @@ const SignatureTestIo = struct {
         self.spawned = true;
         std.debug.assert(std.mem.eql(u8, options.argv[0], "gpg"));
         std.debug.assert(options.stdout == .pipe);
+
         if (self.spawn_error) |err| return err;
+
         return .{
             .id = std.mem.zeroes(std.process.Child.Id),
             .thread_handle = undefined,
@@ -49,12 +51,15 @@ const SignatureTestIo = struct {
     fn operate(context: ?*anyopaque, operation: std.Io.Operation) std.Io.Cancelable!std.Io.Operation.Result {
         const self = fromContext(context);
         const read = operation.file_read_streaming;
+
         if (self.read_error) |err| return .{ .file_read_streaming = err };
         if (self.output.len == 0) return .{ .file_read_streaming = error.EndOfStream };
+
         // Deliver small chunks to exercise capture across multiple reads.
         const count = @min(read.data[0].len, self.output.len, 7);
         @memcpy(read.data[0][0..count], self.output[0..count]);
         self.output = self.output[count..];
+
         return .{ .file_read_streaming = count };
     }
 
@@ -66,13 +71,16 @@ const SignatureTestIo = struct {
         const self = fromContext(context);
         self.waited = true;
         child.id = null;
+
         return self.term;
     }
 
     fn kill(context: ?*anyopaque, child: *std.process.Child) void {
         const self = fromContext(context);
         self.killed = true;
+
         if (child.stdout != null) self.closed = true;
+
         child.stdout = null;
         child.id = null;
     }
@@ -99,6 +107,7 @@ test "validateSignature rejects unsuccessful GPG termination" {
         .{ .stopped = .TERM },
         .{ .unknown = 0x7f },
     };
+
     for (terms) |term| {
         // Even apparently successful status text must not override failure.
         var fake: SignatureTestIo = .{ .term = term };

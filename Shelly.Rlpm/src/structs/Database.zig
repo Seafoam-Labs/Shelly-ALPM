@@ -52,6 +52,7 @@ backend: Backend = .{ .local = .{} },
 metadata_arenas: std.ArrayList(std.heap.ArenaAllocator) = .empty,
 skipped_entries: std.ArrayList(EntryIssue) = .empty,
 last_load_error: ?anyerror = null,
+
 /// Last verification attempt, including a rejected reload. Cache generations
 /// remain unchanged on failure. null means no GPG check was performed.
 last_verification: ?SignatureResult = null,
@@ -92,6 +93,7 @@ pub fn init(
     const database_allocator = result.arena.allocator();
     result.name = try database_allocator.dupe(u8, name);
     result.path = try database_allocator.dupe(u8, path);
+
     return result;
 }
 
@@ -102,6 +104,7 @@ pub fn initSync(
     default_policy: SignaturePolicy,
 ) !Database {
     try configuration.validate();
+
     var result = try init(
         allocator,
         configuration.database_name,
@@ -114,11 +117,15 @@ pub fn initSync(
     result.backend = .{ .sync = .{} };
     result.signature_override = configuration.signature_policy;
     result.usage = configuration.usage;
+
     const owned = result.arena.allocator();
+
     for (configuration.servers) |url|
         try result.servers.append(owned, try copyServer(owned, url));
+
     for (configuration.cache_servers) |url|
         try result.cache_servers.append(owned, try copyServer(owned, url));
+
     return result;
 }
 
@@ -150,15 +157,20 @@ pub fn copyRegistration(
         .local => |local| .{ .local = local },
         .sync => .{ .sync = .{} },
     };
+
     result.identity = self.identity;
     result.generation = std.math.add(u64, self.generation, 1) catch return error.IdentityExhausted;
     result.signature_override = self.signature_override;
     result.usage = self.usage;
+
     const owned = result.arena.allocator();
+
     for (self.servers.items) |url|
         try result.servers.append(owned, try owned.dupe(u8, url));
+
     for (self.cache_servers.items) |url|
         try result.cache_servers.append(owned, try owned.dupe(u8, url));
+
     return result;
 }
 
@@ -187,8 +199,10 @@ pub fn takeCache(self: *Database, source: *Database) void {
 
 pub fn deinit(self: *Database) void {
     Verification.clearReport(&self.last_verification);
+
     for (self.metadata_arenas.items) |*arena|
         arena.deinit();
+
     self.cache_arena.deinit();
     self.arena.deinit();
     self.* = undefined;
@@ -204,12 +218,16 @@ pub fn invalidateCache(self: *Database) !void {
 
 fn resetCacheStorage(self: *Database) void {
     Verification.clearReport(&self.last_verification);
+
     for (self.metadata_arenas.items) |*arena|
         arena.deinit();
+
     self.metadata_arenas = .empty;
     self.skipped_entries = .empty;
     self.last_load_error = null;
+
     if (self.backend == .sync) self.backend.sync = .{};
+
     self.cache_arena.deinit();
     self.cache_arena = std.heap.ArenaAllocator.init(self.allocator);
     self.packages = .{};
@@ -221,6 +239,7 @@ fn resetCacheStorage(self: *Database) void {
 /// builds a separate generation and retains the old generation on every failure.
 pub fn loadDatabase(self: *Database, io: std.Io, gnupg_path: ?[]const u8) !void {
     if (self.status.package_cache_loaded) return error.DatabaseAlreadyLoaded;
+
     try self.reloadDatabase(io, gnupg_path);
 }
 
@@ -231,6 +250,7 @@ pub fn reloadDatabase(self: *Database, io: std.Io, gnupg_path: ?[]const u8) !voi
 pub fn reloadWithVerification(self: *Database, io: std.Io, context: Verification.Context) !void {
     var candidate = self.copyRegistration(self.path, self.signature_policy) catch |err| {
         self.last_load_error = err;
+
         return err;
     };
     errdefer candidate.deinit();
@@ -239,12 +259,16 @@ pub fn reloadWithVerification(self: *Database, io: std.Io, context: Verification
         self.last_verification = candidate.last_verification;
         candidate.last_verification = null;
         self.last_load_error = err;
+
         if (!self.status.package_cache_loaded) {
             if (err == error.FileNotFound) self.status.markMissing() else self.status.markInvalid();
         }
+
         return err;
     };
+
     try context.checkCancelled();
+
     var old = self.*;
     self.* = candidate;
     old.deinit();
@@ -254,12 +278,15 @@ fn populate(self: *Database, io: std.Io, context: Verification.Context) !void {
     if (self.backend == .sync) {
         var guard = Publication.DirectoryLock.acquire(std.fs.path.dirname(self.path).?, false, false) catch |err| {
             std.Io.Dir.cwd().access(io, self.path, .{}) catch |failure| return failure;
+
             return err;
         };
         defer guard.deinit();
         try Publication.ensureReadable(io, self.allocator, self.path);
+
         return self.populateStaged(io, context);
     }
+
     return self.populateStaged(io, context);
 }
 
@@ -270,9 +297,11 @@ pub fn populateStaged(self: *Database, io: std.Io, context: Verification.Context
         .sync => {
             var snapshot = try ImmutableFile.copy(io, self.path);
             defer snapshot.deinit();
+
             return self.populateSealed(io, context, &snapshot, .read_from_path);
         },
     }
+
     self.finishPopulation();
 }
 
@@ -302,7 +331,9 @@ fn finishPopulation(self: *Database) void {
             );
         }
     }.lessThan);
+
     if (self.status.presence != .missing) self.status.markValid();
+
     self.status.package_cache_loaded = true;
 }
 
@@ -310,7 +341,9 @@ pub fn addPackage(self: *Database, package: Package) !void {
     const allocator = self.cache_arena.allocator();
     const id: PackageId = @enumFromInt(std.math.cast(u32, self.packages.packages.items.len) orelse
         return error.TooManyPackages);
+
     if (self.packages.by_name.contains(package.name)) return error.DuplicatePackage;
+
     try self.packages.packages.append(allocator, package);
     try self.packages.by_name.put(allocator, package.name, id);
     try self.packages.ordered.append(allocator, id);
@@ -323,22 +356,29 @@ pub fn recordSkipped(self: *Database, entry: []const u8, cause: anyerror) !void 
 
 pub fn loadMetadata(self: *Database, io: std.Io, id: PackageId, request: Metadata) !void {
     const index = @intFromEnum(id);
+
     if (!self.status.package_cache_loaded or index >= self.packages.packages.items.len)
         return error.StalePackageReference;
+
     const package = &self.packages.packages.items[index];
+
     if (self.kind != .local) return;
     if ((!request.description or package.description_loaded) and (!request.files or package.files_loaded) and
         (!request.members or
             package.members.install != .unknown))
         return;
+
     if (package.metadata_error) |err| return err;
+
     var arena = std.heap.ArenaAllocator.init(self.allocator);
     errdefer arena.deinit();
     var candidate = package.*;
     LocalBackend.loadMetadata(io, &arena, &candidate, request) catch |err| {
         if (isCorruptMetadata(err)) package.metadata_error = err;
+
         return err;
     };
+
     try self.metadata_arenas.append(self.cache_arena.allocator(), arena);
     package.* = candidate;
 }
@@ -366,18 +406,23 @@ pub fn loadDescriptions(self: *Database, io: std.Io) !void {
 pub fn loadGroups(self: *Database, io: std.Io) !void {
     if (self.status.group_cache_loaded) return;
     if (!self.status.package_cache_loaded) return error.DatabaseNotLoaded;
+
     try self.loadDescriptions(io);
+
     var arena = std.heap.ArenaAllocator.init(self.allocator);
     errdefer arena.deinit();
     const allocator = arena.allocator();
     var groups: GroupIndex = .{};
+
     for (self.packages.ordered.items) |package_id| {
         const package = self.packages.packages.items[@intFromEnum(package_id)];
+
         for (package.groups) |group_name| {
             const group_id = try groupForPackage(&groups, allocator, group_name, package_id);
             try groups.groups.items[@intFromEnum(group_id)].packages.append(allocator, package_id);
         }
     }
+
     // libalpm group enumeration follows first encounter in sorted package order.
     try self.metadata_arenas.append(self.cache_arena.allocator(), arena);
     self.groups = groups;
@@ -392,20 +437,29 @@ fn groupForPackage(
 ) !GroupId {
     if (groups.by_name.get(name)) |first| {
         const members = groups.groups.items[@intFromEnum(first)].packages.items;
+
         if (members.len == 0 or members[members.len - 1] != package) return first;
+
         // The reference creates another same-name group for duplicate group
         // metadata. Preserve that observable enumeration; exact lookup uses first.
         for (groups.groups.items[@intFromEnum(first) + 1 ..], @intFromEnum(first) + 1..) |group, index| {
             if (!std.mem.eql(u8, group.name, name)) continue;
+
             const other = group.packages.items;
+
             if (other.len == 0 or other[other.len - 1] != package) return @enumFromInt(index);
         }
     }
+
     const id: GroupId = @enumFromInt(std.math.cast(u32, groups.groups.items.len) orelse
         return error.TooManyGroups);
+
     try groups.groups.append(allocator, .{ .name = name, .packages = .empty });
+
     if (!groups.by_name.contains(name)) try groups.by_name.put(allocator, name, id);
+
     try groups.ordered.append(allocator, id);
+
     return id;
 }
 
@@ -420,6 +474,7 @@ fn freeStrings(
     for (strings.items) |string| {
         allocator.free(string);
     }
+
     strings.deinit(allocator);
     strings.* = .empty;
 }
@@ -436,6 +491,7 @@ pub fn validateSignature(
         .io = io,
         .homedir = gpg_path,
     };
+
     const db_name = try std.fmt.allocPrint(self.allocator, "{s}.db", .{self.name});
     defer self.allocator.free(db_name);
     const db_path = if (self.kind == .sync)
@@ -471,6 +527,7 @@ pub fn validateSignature(
         else => return err,
     };
     defer self.allocator.free(status);
+
     return true;
 }
 
@@ -639,10 +696,12 @@ test "parseDescription covers every supported local database field" {
     try std.testing.expectEqualStrings("tools", package.groups[1]);
 
     try std.testing.expectEqualStrings("glibc", package.depends[0].name);
+
     switch (package.depends[0].constraint) {
         .greater_equal => |version| try std.testing.expectEqualStrings("2.39", version),
         else => return error.TestUnexpectedResult,
     }
+
     try std.testing.expectEqualStrings("zlib", package.depends[1].name);
     try std.testing.expect(package.depends[1].constraint == .any);
     try std.testing.expectEqualStrings("documentation support", package.optional_depends[0].description.?);
@@ -650,10 +709,12 @@ test "parseDescription covers every supported local database field" {
     try std.testing.expectEqualStrings("pytest", package.check_depends[0].name);
     try std.testing.expectEqualStrings("demo-old", package.conflicts[0].name);
     try std.testing.expectEqualStrings("virtual-demo", package.provides[0].name);
+
     switch (package.provides[0].constraint) {
         .equal => |version| try std.testing.expectEqualStrings("2:1.2.3", version),
         else => return error.TestUnexpectedResult,
     }
+
     try std.testing.expectEqualStrings("old-demo", package.replaces[0].name);
 }
 
@@ -686,14 +747,17 @@ test "parseDescription rejects malformed scalar values" {
         error.ValueOutsideSection,
         parseDescription(allocator, "orphan value\n"),
     );
+
     try std.testing.expectError(
         error.DuplicateValue,
         parseDescription(allocator, "%NAME%\ndemo\nduplicate\n"),
     );
+
     try std.testing.expectError(
         error.InvalidCharacter,
         parseDescription(allocator, "%BUILDDATE%\nnot-a-number\n"),
     );
+
     var unknown_reason = try parseDescription(allocator, "%REASON%\n9\n");
     defer unknown_reason.deinit(allocator);
     try std.testing.expectEqual(.unknown, unknown_reason.reason.?);
@@ -754,6 +818,7 @@ test "loadDatabase owns and indexes parsed packages" {
     var temporary = std.testing.tmpDir(.{});
     defer temporary.cleanup();
     try temporary.dir.createDir(std.testing.io, "demo-1.2.3-4", .default_dir);
+
     var package_dir = try temporary.dir.openDir(std.testing.io, "demo-1.2.3-4", .{});
     defer package_dir.close(std.testing.io);
     try package_dir.writeFile(std.testing.io, .{
@@ -765,6 +830,7 @@ test "loadDatabase owns and indexes parsed packages" {
     defer std.testing.allocator.free(path);
 
     try temporary.dir.writeFile(std.testing.io, .{ .sub_path = "ALPM_DB_VERSION", .data = "9\n" });
+
     var database = try Database.init(std.testing.allocator, "local", path, .{});
     defer database.deinit();
     database.signature_policy.database = .disabled;
@@ -772,14 +838,17 @@ test "loadDatabase owns and indexes parsed packages" {
 
     try std.testing.expect(database.status.package_cache_loaded);
     try std.testing.expectEqual(@as(usize, 1), database.packages.packages.items.len);
+
     const package_id = database.packages.by_name.get("demo") orelse return error.TestUnexpectedResult;
     try std.testing.expectEqual(@as(u32, 0), @intFromEnum(package_id));
     try database.loadMetadata(std.testing.io, package_id, .{});
     try database.loadGroups(std.testing.io);
+
     const package = database.packages.packages.items[@intFromEnum(package_id)];
     try std.testing.expectEqualStrings("demo", package.name);
     try std.testing.expectEqualStrings("1.2.3-4", package.version.raw);
     try std.testing.expectEqualStrings("glibc", package.depends[0].name);
+
     const group_id = database.groups.by_name.get("base") orelse return error.TestUnexpectedResult;
     const group = database.groups.groups.items[@intFromEnum(group_id)];
     try std.testing.expectEqual(@as(usize, 1), group.packages.items.len);
@@ -810,6 +879,7 @@ test "loadDatabase retains identities with missing and incomplete descriptions" 
             .data = "%NAME%\nvalid\n\n%VERSION%\n1.0-1\n",
         });
     }
+
     {
         var malformed_dir = try temporary.dir.openDir(std.testing.io, "malformed-1.0-1", .{});
         defer malformed_dir.close(std.testing.io);
@@ -823,6 +893,7 @@ test "loadDatabase retains identities with missing and incomplete descriptions" 
     defer std.testing.allocator.free(path);
 
     try temporary.dir.writeFile(std.testing.io, .{ .sub_path = "ALPM_DB_VERSION", .data = "9\n" });
+
     var database = try Database.init(std.testing.allocator, "local", path, .{});
     defer database.deinit();
     database.signature_policy.database = .disabled;
@@ -849,6 +920,7 @@ pub const HostTests = struct {
             error.FileNotFound, error.AccessDenied => return error.SkipZigTest,
             else => return err,
         };
+
         probe.close(std.testing.io);
 
         const previous_log_level = std.testing.log_level;
@@ -866,6 +938,7 @@ pub const HostTests = struct {
             database.packages.packages.items.len,
             database.packages.ordered.items.len,
         );
+
         try std.testing.expectEqual(
             database.packages.packages.items.len,
             database.packages.by_name.count(),
@@ -876,6 +949,7 @@ pub const HostTests = struct {
             "\nlocal database preview ({d} of {d} packages):\n",
             .{ preview_count, database.packages.packages.items.len },
         );
+
         for (database.packages.ordered.items[0..preview_count]) |package_id| {
             const package = database.packages.packages.items[@intFromEnum(package_id)];
             std.debug.print("  {s} {s}\n", .{ package.name, package.version.raw });
@@ -901,8 +975,10 @@ pub const HostTests = struct {
         defer dir.close(std.testing.io);
         var count: usize = 0;
         var iterator = dir.iterate();
+
         while (try iterator.next(std.testing.io)) |entry| {
             if (!std.mem.endsWith(u8, entry.name, ".db")) continue;
+
             const full_path = try std.fs.path.join(std.testing.allocator, &.{ path, entry.name });
             defer std.testing.allocator.free(full_path);
             var database = try Database.initSync(
@@ -928,8 +1004,10 @@ pub const HostTests = struct {
                     database.backend.sync.format,
                 },
             );
+
             count += 1;
         }
+
         if (count == 0) return error.SkipZigTest;
     }
 };
@@ -940,18 +1018,21 @@ test "freeStrings frees each string and the list storage" {
     defer {
         for (strings.items) |string|
             allocator.free(string);
+
         strings.deinit(allocator);
     }
 
     const first = try allocator.dupe(u8, "https://mirror-one.example");
     strings.append(allocator, first) catch |err| {
         allocator.free(first);
+
         return err;
     };
 
     const second = try allocator.dupe(u8, "https://mirror-two.example");
     strings.append(allocator, second) catch |err| {
         allocator.free(second);
+
         return err;
     };
 

@@ -1,5 +1,6 @@
 //! Borrowed configuration input. Owner copies all strings/lists; callback contexts
 //! remain borrowed. Runtime effects are documented in options.md.
+
 const std = @import("std");
 const SignaturePolicy = @import("SignaturePolicy.zig");
 const PackageRelation = @import("PackageRelation.zig");
@@ -12,9 +13,11 @@ const OwnerConfiguration = @This();
 
 root: []const u8,
 database_path: []const u8,
+
 /// Create an absent/empty local database as libalpm does; read_only never writes.
 local_database_mode: Backend.Mode = .create,
 cache_directories: []const []const u8 = &.{},
+
 /// null selects <root>/usr/share/libalpm/hooks; an empty list disables discovery.
 hook_directories: ?[]const []const u8 = null,
 gpg_directory: ?[]const u8 = null,
@@ -30,6 +33,10 @@ no_extract: []const []const u8 = &.{},
 overwrite_files: []const []const u8 = &.{},
 database_extension: []const u8 = ".db",
 check_space: bool = false,
+
+/// Preserve eligible existing unowned archive leaves. Frontends select distribution policy.
+auto_migrate_unowned: bool = false,
+
 /// libalpm handle defaults; pacman.conf policy is supplied by PackageManager.
 default_signature_policy: SignaturePolicy = disabled_signatures,
 local_file_signature_policy: ?SignaturePolicy = disabled_signatures,
@@ -38,6 +45,7 @@ disable_download_timeout: bool = false,
 parallel_downloads: u32 = 1,
 address_family_policy: transport.AddressFamilyPolicy = .prefer_ipv4,
 sandbox_user: ?[]const u8 = null,
+
 /// Absolute executable implementing Workers.dispatch; null re-executes this process.
 worker_executable: ?[]const u8 = null,
 sandbox: Sandbox = .{},
@@ -95,12 +103,16 @@ pub fn list(self: OwnerConfiguration, comptime field: StringList) []const []cons
 /// failed copies never publish partial configuration or leak replaced options.
 pub fn copy(self: OwnerConfiguration, allocator: std.mem.Allocator, io: std.Io) !OwnerConfiguration {
     if (self.parallel_downloads == 0) return error.InvalidOption;
+
     try validateString(self.database_extension, true);
+
     if (std.mem.indexOfScalar(u8, self.database_extension, '/') != null) return error.InvalidOption;
+
     var result = self;
     result.root = try existingDirectory(allocator, io, self.root);
     result.database_path = try existingDirectory(allocator, io, self.database_path);
     result.database_extension = try allocator.dupe(u8, self.database_extension);
+
     inline for (.{
         "cache_directories",
         "architectures",
@@ -116,6 +128,7 @@ pub fn copy(self: OwnerConfiguration, allocator: std.mem.Allocator, io: std.Io) 
             std.mem.eql(u8, field, "cache_directories"),
         );
     }
+
     result.hook_directories = if (self.hook_directories) |paths|
         try copyStrings(allocator, paths, true)
     else blk: {
@@ -123,23 +136,32 @@ pub fn copy(self: OwnerConfiguration, allocator: std.mem.Allocator, io: std.Io) 
         paths[0] = try std.fmt.allocPrint(allocator, "{s}usr/share/libalpm/hooks/", .{result.root});
         break :blk paths;
     };
+
     result.gpg_directory = if (self.gpg_directory) |path| try directoryString(allocator, path) else null;
     result.key_acquisition.key_files = try copyStrings(allocator, self.key_acquisition.key_files, false);
     result.key_acquisition.keyserver = try copyOptional(allocator, self.key_acquisition.keyserver);
     result.log_file = try copyOptional(allocator, self.log_file);
+
     if (self.worker_executable) |path| {
         try validateString(path, false);
+
         if (!std.fs.path.isAbsolute(path)) return error.InvalidOption;
     }
+
     result.worker_executable = try copyOptional(allocator, self.worker_executable);
     result.sandbox_user = try copyOptional(allocator, self.sandbox_user);
+
     const assumed = try allocator.alloc(PackageRelation, self.assume_installed.len);
+
     for (self.assume_installed, assumed) |relation, *owned| {
         if (relation.constraint != .any and relation.constraint != .equal) return error.InvalidOption;
+
         try validateString(relation.name, true);
         owned.* = try relation.clone(allocator);
     }
+
     result.assume_installed = assumed;
+
     return result;
 }
 
@@ -150,6 +172,7 @@ pub fn validateString(value: []const u8, allow_empty: bool) !void {
 
 pub fn directoryString(allocator: std.mem.Allocator, value: []const u8) ![]const u8 {
     validateString(value, false) catch return error.InvalidPath;
+
     return if (std.mem.endsWith(u8, value, "/"))
         allocator.dupe(u8, value)
     else
@@ -162,17 +185,21 @@ pub fn directoryString(allocator: std.mem.Allocator, value: []const u8) ![]const
 
 fn existingDirectory(allocator: std.mem.Allocator, io: std.Io, path: []const u8) ![]const u8 {
     validateString(path, false) catch return error.InvalidPath;
+
     var directory = try std.Io.Dir.cwd().openDir(io, path, .{});
     defer directory.close(io);
     const resolved = try directory.realPathFileAlloc(io, ".", allocator);
+
     return directoryString(allocator, resolved);
 }
 
 fn copyOptional(allocator: std.mem.Allocator, value: ?[]const u8) !?[]const u8 {
     if (value) |text| {
         try validateString(text, true);
+
         return try allocator.dupe(u8, text);
     }
+
     return null;
 }
 
@@ -182,9 +209,11 @@ pub fn copyStrings(
     directories: bool,
 ) ![]const []const u8 {
     const owned = try allocator.alloc([]const u8, values.len);
+
     for (values, owned) |value, *item| {
         try validateString(value, !directories);
         item.* = if (directories) try directoryString(allocator, value) else try allocator.dupe(u8, value);
     }
+
     return owned;
 }

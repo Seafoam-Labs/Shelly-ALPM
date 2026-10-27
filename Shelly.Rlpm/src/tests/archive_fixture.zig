@@ -1,10 +1,12 @@
 const std = @import("std");
 
 const Fixture = @This();
+
 const c = @cImport({
     @cInclude("archive.h");
     @cInclude("archive_entry.h");
 });
+
 const io = std.testing.io;
 const allocator = std.testing.allocator;
 
@@ -42,10 +44,13 @@ pub fn init(entries: []const Entry, compression: Compression) !Fixture {
         .xz => c.archive_write_add_filter_xz(writer),
         .bzip2 => c.archive_write_add_filter_bzip2(writer),
     };
+
     try std.testing.expectEqual(c.ARCHIVE_OK, filter);
+
     const extended = for (entries) |item| {
         if (item.xattr != null or item.capabilities or item.sparse or item.acl) break true;
     } else false;
+
     // Restricted PAX handles long paths and absolute link targets from deep
     // checkouts. Keep full PAX for fixtures requiring extended metadata.
     try std.testing.expectEqual(
@@ -55,7 +60,9 @@ pub fn init(entries: []const Entry, compression: Compression) !Fixture {
         else
             c.archive_write_set_format_pax_restricted(writer),
     );
+
     try std.testing.expectEqual(c.ARCHIVE_OK, c.archive_write_open_filename(writer, path.ptr));
+
     for (entries) |item| {
         const entry = c.archive_entry_new() orelse return error.OutOfMemory;
         defer c.archive_entry_free(entry);
@@ -72,12 +79,15 @@ pub fn init(entries: []const Entry, compression: Compression) !Fixture {
                 else
                     0o644),
         );
+
         c.archive_entry_set_mtime(entry, item.mtime, 0);
+
         if (item.xattr) |value| c.archive_entry_xattr_add_entry(entry, "user.rlpm", value.ptr, value.len);
         if (item.capabilities) {
             const caps = [_]u8{ 1, 0, 0, 2, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }; // CAP_NET_BIND_SERVICE effective+permitted
             c.archive_entry_xattr_add_entry(entry, "security.capability", &caps, caps.len);
         }
+
         if (item.acl) {
             _ = c.archive_entry_acl_add_entry(
                 entry,
@@ -87,6 +97,7 @@ pub fn init(entries: []const Entry, compression: Compression) !Fixture {
                 -1,
                 null,
             );
+
             _ = c.archive_entry_acl_add_entry(
                 entry,
                 c.ARCHIVE_ENTRY_ACL_TYPE_ACCESS,
@@ -95,6 +106,7 @@ pub fn init(entries: []const Entry, compression: Compression) !Fixture {
                 -1,
                 null,
             );
+
             _ = c.archive_entry_acl_add_entry(
                 entry,
                 c.ARCHIVE_ENTRY_ACL_TYPE_ACCESS,
@@ -103,6 +115,7 @@ pub fn init(entries: []const Entry, compression: Compression) !Fixture {
                 -1,
                 null,
             );
+
             _ = c.archive_entry_acl_add_entry(
                 entry,
                 c.ARCHIVE_ENTRY_ACL_TYPE_ACCESS,
@@ -111,6 +124,7 @@ pub fn init(entries: []const Entry, compression: Compression) !Fixture {
                 -1,
                 null,
             );
+
             _ = c.archive_entry_acl_add_entry(
                 entry,
                 c.ARCHIVE_ENTRY_ACL_TYPE_ACCESS,
@@ -120,6 +134,7 @@ pub fn init(entries: []const Entry, compression: Compression) !Fixture {
                 "fixture",
             );
         }
+
         c.archive_entry_set_filetype(entry, switch (item.kind) {
             .file => 0o100000,
             .directory => 0o040000,
@@ -129,11 +144,16 @@ pub fn init(entries: []const Entry, compression: Compression) !Fixture {
             .character => 0o020000,
             .block => 0o060000,
         });
+
         if (item.kind == .symlink) c.archive_entry_set_symlink(entry, target.?.ptr);
         if (item.kind == .hardlink) c.archive_entry_set_hardlink(entry, target.?.ptr);
+
         c.archive_entry_set_size(entry, @intCast(item.declared_size orelse item.contents.len));
+
         if (item.sparse) c.archive_entry_sparse_add_entry(entry, @intCast(item.contents.len - 4), 4);
+
         try std.testing.expectEqual(c.ARCHIVE_OK, c.archive_write_header(writer, entry));
+
         if (item.contents.len != 0)
             try std.testing.expectEqual(
                 @as(isize, @intCast(item.contents.len)),
@@ -143,9 +163,12 @@ pub fn init(entries: []const Entry, compression: Compression) !Fixture {
                     item.contents.len,
                 ),
             );
+
         try std.testing.expectEqual(c.ARCHIVE_OK, c.archive_write_finish_entry(writer));
     }
+
     try std.testing.expectEqual(c.ARCHIVE_OK, c.archive_write_close(writer));
+
     return .{ .temporary = temporary, .path = path };
 }
 
@@ -160,6 +183,7 @@ pub fn gzip(bytes: []const u8) ![]u8 {
     try std.testing.expectEqual(c.ARCHIVE_OK, c.archive_write_add_filter_gzip(writer));
     try std.testing.expectEqual(c.ARCHIVE_OK, c.archive_write_set_format_raw(writer));
     try std.testing.expectEqual(c.ARCHIVE_OK, c.archive_write_set_bytes_per_block(writer, 0));
+
     const buffer = try allocator.alloc(u8, bytes.len + 4096);
     defer allocator.free(buffer);
     var used: usize = 0;
@@ -172,6 +196,7 @@ pub fn gzip(bytes: []const u8) ![]u8 {
             &used,
         ),
     );
+
     const entry = c.archive_entry_new() orelse return error.OutOfMemory;
     defer c.archive_entry_free(entry);
     c.archive_entry_set_pathname(entry, "data");
@@ -186,6 +211,8 @@ pub fn gzip(bytes: []const u8) ![]u8 {
             bytes.len,
         ),
     );
+
     try std.testing.expectEqual(c.ARCHIVE_OK, c.archive_write_close(writer));
+
     return allocator.dupe(u8, buffer[0..used]);
 }

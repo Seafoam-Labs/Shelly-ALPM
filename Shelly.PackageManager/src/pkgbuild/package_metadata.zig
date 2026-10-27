@@ -1,6 +1,6 @@
 const std = @import("std");
 
-/// Package fields that makepkg permits package()/package_<name>() to
+/// Package fields (including Shelly migration metadata) that package functions may
 /// override. Keep this schema in one place so parsing, runtime capture, and
 /// validation cannot silently drift apart.
 pub const scalar_fields = [_][]const u8{
@@ -20,6 +20,7 @@ pub const array_fields = [_][]const u8{
     "conflicts",
     "replaces",
     "backup",
+    "shelly_migrate",
     "options",
 };
 
@@ -37,10 +38,11 @@ pub const architecture_array_fields = [_][]const u8{
 pub const captured_field_count = scalar_fields.len + array_fields.len + architecture_array_fields.len;
 
 const pkgbuild_array_fields = [_][]const u8{
-    "arch",     "backup",      "checkdepends", "conflicts",  "depends",    "groups",
-    "license",  "makedepends", "noextract",    "optdepends", "options",    "provides",
-    "replaces", "source",      "validpgpkeys", "xdata",      "cksums",     "md5sums",
-    "sha1sums", "sha224sums",  "sha256sums",   "sha384sums", "sha512sums", "b2sums",
+    "arch",           "backup",      "checkdepends", "conflicts",  "depends",    "groups",
+    "license",        "makedepends", "noextract",    "optdepends", "options",    "provides",
+    "replaces",       "source",      "validpgpkeys", "xdata",      "cksums",     "md5sums",
+    "sha1sums",       "sha224sums",  "sha256sums",   "sha384sums", "sha512sums", "b2sums",
+    "shelly_migrate",
 };
 
 const pkgbuild_scalar_fields = [_][]const u8{
@@ -188,7 +190,7 @@ pub const shell_capture_prelude =
     \\__shelly_capture_metadata() {
     \\  local name
     \\  for name in pkgdesc url install changelog; do __shelly_capture_scalar "$name"; done
-    \\  for name in arch license groups depends optdepends provides conflicts replaces backup options; do
+    \\  for name in arch license groups depends optdepends provides conflicts replaces backup shelly_migrate options; do
     \\    __shelly_capture_array "$name"
     \\  done
     \\  for name in depends optdepends provides conflicts replaces options; do

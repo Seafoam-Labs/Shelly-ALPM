@@ -1,11 +1,13 @@
 //! A metadata-only snapshot for deferred UI. No borrowed strings, Package
 //! pointers, arenas, or file descriptors survive the originating callback.
+
 const std = @import("std");
 const C = @import("Callbacks.zig");
 const Plan = @import("TransactionPlan.zig");
 const Package = @import("Package.zig");
 
 const OwnedQuestion = @This();
+
 arena: std.heap.ArenaAllocator,
 question: C.Question,
 
@@ -16,14 +18,17 @@ pub fn init(allocator: std.mem.Allocator, source: C.Question) !OwnedQuestion {
     const question: C.Question = switch (source) {
         inline else => |value, tag| blk: {
             var copied: @TypeOf(value) = undefined;
+
             inline for (std.meta.fields(@TypeOf(value))) |field| {
                 if (comptime std.mem.eql(u8, field.name, "views")) {
                     const views = try a.alloc(C.PackageView, value.views.len);
+
                     for (views, value.views) |*out, view| {
                         const pkg = try a.create(Package);
                         pkg.* = try Plan.copyMetadata(a, view.package.*);
                         out.* = .{ .reference = view.reference, .package = pkg };
                     }
+
                     copied.views = views;
                 } else if (@typeInfo(field.type) == .error_set) {
                     @field(copied, field.name) = @field(value, field.name);
@@ -33,9 +38,11 @@ pub fn init(allocator: std.mem.Allocator, source: C.Question) !OwnedQuestion {
                     @field(value, field.name),
                 );
             }
+
             break :blk @unionInit(C.Question, @tagName(tag), copied);
         },
     };
+
     return .{ .arena = arena, .question = question };
 }
 
@@ -56,6 +63,7 @@ pub fn applyAnswer(destination: *C.Question, answer: C.Question) !void {
         .import_key => |*q| q.import = answer.import_key.import,
         .select_provider => |*q| {
             if (answer.select_provider.selected >= q.candidates.len) return error.InvalidAnswer;
+
             q.selected = answer.select_provider.selected;
         },
     }

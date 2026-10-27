@@ -65,11 +65,15 @@ def main():
     parser=argparse.ArgumentParser(description=__doc__); parser.add_argument('--library',required=True,type=Path)
     args=parser.parse_args(); digest=hashlib.sha256(args.library.read_bytes()).hexdigest()
     manifest=json.loads(Path(__file__).with_name('manifest.json').read_text())
+
     if digest!=manifest['library']['sha256']: parser.error('library does not match frozen reference')
+
     locale.setlocale(locale.LC_ALL,'C'); lib=c.CDLL(str(args.library.resolve()))
     libc=c.CDLL(None);libc.free.argtypes=[c.c_void_p]
+
     def bind(name,result,*args):
         f=getattr(lib,name);f.restype=result;f.argtypes=list(args);return f
+
     initialize=bind('alpm_initialize',c.c_void_p,c.c_char_p,c.c_char_p,c.POINTER(c.c_int))
     release=bind('alpm_release',c.c_int,c.c_void_p)
     errno=bind('alpm_errno',c.c_int,c.c_void_p)
@@ -78,79 +82,113 @@ def main():
     getcache=bind('alpm_db_get_pkgcache',ListPtr,c.c_void_p)
     search=bind('alpm_db_search',c.c_int,c.c_void_p,ListPtr,c.POINTER(ListPtr))
     free_list=bind('alpm_list_free',None,ListPtr)
+
     def walk(head):
         while head:
             yield head.contents.data;head=head.contents.next
+
     def txt(pkg,field):
         value=bind('alpm_pkg_get_'+field,c.c_char_p,c.c_void_p)(pkg)
+
         return value.decode() if value is not None else None
+
     def snapshot(pkg):
         result={field:txt(pkg,field) for field in ('name','version','desc','installed_db','arch','filename')}
         result.update({field:bind('alpm_pkg_get_'+field,c.c_int64,c.c_void_p)(pkg) for field in ('isize','builddate')})
         result['groups']=[c.string_at(v).decode() for v in walk(bind('alpm_pkg_get_groups',ListPtr,c.c_void_p)(pkg))]
         files=bind('alpm_pkg_get_files',c.POINTER(FileList),c.c_void_p)(pkg).contents
         result['files']=[f.name.decode() for f in files.files[:files.count]]
+
         for field in ('requiredby','optionalfor'):
             head=bind('alpm_pkg_compute_'+field,ListPtr,c.c_void_p)(pkg)
             result[field]=[c.string_at(value).decode() for value in walk(head)]
+
             for value in walk(head):libc.free(value)
+
             free_list(head)
+
         return result
+
     result=dict(schema=1,library_sha256=digest,locale='C',local=[],sync=[])
+
     with tempfile.TemporaryDirectory(prefix='rlpm-database-reference-') as temp:
         for kind,cases in (('local',LOCAL),('sync',SYNC)):
             for index,case in enumerate(cases):
                 base=Path(temp)/f'{kind}-{index}';base.mkdir();root=base/'root';root.mkdir();db=base/'db';db.mkdir()
+
                 if kind=='local':
                     if case['marker'] is not None or case['entries']:
                         (db/'local').mkdir()
+
                         if case['marker'] is not None: (db/'local/ALPM_DB_VERSION').write_text(case['marker'])
+
                     for entry in case['entries']:
                         path=db/'local'/entry['path'];path.mkdir()
+
                         if 'desc' in entry:(path/'desc').write_text(entry['desc'])
                 else:
                     (db/'sync').mkdir();path=db/'sync/test.db'
+
                     with tarfile.open(path,'w',format=tarfile.USTAR_FORMAT) as archive:
                         entries=list(case['entries'])
+
                         if 'columns' in case:
                             sql=base/'input.sqlite';connection=sqlite3.connect(sql)
+
                             if case['columns']:
                                 connection.execute('CREATE TABLE packages ('+','.join('"'+v+'" TEXT' for v in case['columns'])+')')
                                 connection.executemany('INSERT INTO packages VALUES ('+','.join('?' for _ in case['columns'])+')',case['rows'])
                             else: connection.execute('CREATE TABLE different (value TEXT)')
+
                             connection.commit();connection.close()
                             entries.append(dict(path='pacman.db',contents=sql.read_bytes()))
+
                         for entry in entries:
                             data=entry['contents'];data=data.encode() if isinstance(data,str) else data
                             info=tarfile.TarInfo(entry['path']);info.size=len(data);archive.addfile(info,io.BytesIO(data))
+
                     if 'truncate' in case:path.write_bytes(path.read_bytes()[:case['truncate']])
+
                 def capture():
                     error=c.c_int();handle=initialize(str(root).encode(),str(db).encode(),c.byref(error))
+
                     if not handle:return dict(success=False,error=error.value)
+
                     try:
                         database=localdb(handle) if kind=='local' else register(handle,b'test',0)
                         cache=getcache(database);error=errno(handle)
                         result=dict(success=error==0,error=error,packages=[snapshot(p) for p in walk(cache)])
+
                         if kind=='sync' and result['success']:
                             result['groups']=[]
+
                             for pointer in walk(bind('alpm_db_get_groupcache',ListPtr,c.c_void_p)(database)):
                                 group=c.cast(pointer,c.POINTER(Group)).contents
                                 result['groups'].append(dict(name=group.name.decode(),packages=[txt(pkg,'name') for pkg in walk(group.packages)]))
+
                             result['searches']=[]
+
                             for needles in NEEDLES:
                                 strings=[c.create_string_buffer(s.encode()) for s in needles]
                                 nodes=[List(c.cast(s,c.c_void_p),None,None) for s in strings]
+
                                 for i in range(len(nodes)-1):nodes[i].next=c.pointer(nodes[i+1])
+
                                 out=ListPtr();status=search(database,c.pointer(nodes[0]) if nodes else None,c.byref(out))
                                 result['searches'].append(dict(patterns=needles,success=status==0,names=[txt(p,'name') for p in walk(out)]));free_list(out)
+
                             bind('alpm_db_set_usage',c.c_int,c.c_void_p,c.c_int)(database,0)
                             out=ListPtr();bad=c.create_string_buffer(b'[');node=List(c.cast(bad,c.c_void_p),None,None)
                             result['disabled_search_success']=search(database,c.pointer(node),c.byref(out))==0
                             result['disabled_exact_visible']=bool(bind('alpm_db_get_pkg',c.c_void_p,c.c_void_p,c.c_char_p)(database,b'demo'))
                             free_list(out)
+
                         return result
                     finally:assert release(handle)==0
+
                 captured=isolated_capture(capture,False);captured.pop('full',None)
                 result[kind].append(dict(case,result=captured))
+
     print(json.dumps(result,indent=2))
+
 if __name__=='__main__':main()

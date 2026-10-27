@@ -234,7 +234,10 @@ fn applyPackageMetadataEntry(
         try updateOptionalStrings(self.allocator, &package_build.replaces, values, append)
     else if (std.mem.eql(u8, entry.name, "backup"))
         try updateOptionalStrings(self.allocator, &package_build.backup, values, append)
-    else if (std.mem.eql(u8, entry.name, "options"))
+    else if (std.mem.eql(u8, entry.name, "shelly_migrate")) {
+        try @import("Shelly_Rlpm").Migration.validateDeclarations(self.allocator, values);
+        try updateOptionalStrings(self.allocator, &package_build.shelly_migrate, values, append);
+    } else if (std.mem.eql(u8, entry.name, "options"))
         try updateOptionalStrings(self.allocator, &package_build.options, values, append)
     else
         return error.InvalidPackageMetadata;

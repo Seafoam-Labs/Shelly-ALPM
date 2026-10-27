@@ -551,7 +551,9 @@ pub const ShellySearchPage = extern struct {
 
         self.applyOptionsFromConfig();
         self.update_selection_ui();
-        _ = gtk.Widget.grabFocus(p.search_entry.as(gtk.Widget));
+        // The page is the focus stop, so a page switch lands on its group name
+        // and Tab reaches the search entry from there.
+        _ = a11y.focusFirst(self.as(gtk.Widget));
     }
 
     extern fn malloc_trim(pad: usize) c_int;

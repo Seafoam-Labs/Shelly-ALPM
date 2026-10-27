@@ -3,7 +3,7 @@
 # Uses Devario runtime paths (/etc/shelly.conf and /var/lib/shelly).
 
 pkgname=shelly
-pkgver=3.1.8
+pkgver=3.1.9
 pkgrel=1
 # Update this pin to the published commit introducing -Dpath-profile before release.
 _commit=bcbba6aaaf003aefdbe30b75023142c75e96e604

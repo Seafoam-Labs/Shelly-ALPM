@@ -1,4 +1,5 @@
 //! Public consumer tests: normal runs replay frozen data without libalpm.
+
 const std = @import("std");
 const rlpm = @import("Shelly_Rlpm");
 const Archive = @import("archive_fixture.zig");
@@ -43,6 +44,7 @@ fn repository(packages: []const R.Entry) R.Repository {
 fn expectAdds(plan: *const rlpm.TransactionPlan, names: []const []const u8) !void {
     try plan.check();
     try std.testing.expectEqual(names.len, plan.additions.len);
+
     for (names, plan.additions) |name, addition|
         try std.testing.expectEqualStrings(
             name,
@@ -53,8 +55,10 @@ fn expectAdds(plan: *const rlpm.TransactionPlan, names: []const []const u8) !voi
 test "resolver shared closure and owned original provision edges" {
     var app = package("app", "1-1", .sync);
     app.depends = &.{try rlpm.PackageRelation.parse("virtual>=2")};
+
     var library = package("library", "3-1", .sync);
     library.provides = &.{try rlpm.PackageRelation.parse("virtual=2")};
+
     var plan = try R.resolve(
         a,
         .{
@@ -79,6 +83,7 @@ test "resolver shared closure and owned original provision edges" {
 test "transaction flags round trip known bits and reject reserved bits" {
     for (0..18) |bit| {
         const mask = @as(u32, 1) << @intCast(bit);
+
         if (bit == 1 or bit == 12) {
             try std.testing.expectError(error.InvalidTransactionFlags, rlpm.TransactionFlags.fromBits(mask));
         } else try std.testing.expectEqual(mask, (try rlpm.TransactionFlags.fromBits(mask)).toBits());
@@ -111,6 +116,7 @@ const Answers = struct {
 
     fn answer(context: ?*anyopaque, q: *rlpm.Callbacks.Question) !void {
         const self: *const Answers = @ptrCast(@alignCast(context.?));
+
         switch (q.*) {
             .install_ignored => |*value| value.install = self.install_ignored != 0,
             .replace => |*value| value.replace = self.replace != 0,
@@ -180,8 +186,10 @@ const Case = struct {
 
 fn relations(alloc: std.mem.Allocator, strings: []const []const u8) ![]const rlpm.PackageRelation {
     const result = try alloc.alloc(rlpm.PackageRelation, strings.len);
+
     for (strings, result) |str, *out|
         out.* = try rlpm.PackageRelation.parse(str);
+
     return result;
 }
 
@@ -193,6 +201,7 @@ fn jsonEntries(
     name: []const u8,
 ) ![]const R.Entry {
     const entries = try alloc.alloc(R.Entry, packages.len);
+
     for (packages, entries, 0..) |input, *out, i| {
         const pkg = try alloc.create(rlpm.Package);
         pkg.* = package(input.name, input.version, origin);
@@ -209,6 +218,7 @@ fn jsonEntries(
                     "{s}-{s}.pkg.tar",
                     .{ input.name, input.version },
                 );
+
         if (origin == .archive)
             pkg.archive_path = if (input.path) |path|
                 try std.fmt.allocPrint(
@@ -222,9 +232,11 @@ fn jsonEntries(
                     "/fixture/{d}.pkg.tar",
                     .{i},
                 );
+
         pkg.installed_size = 300;
         pkg.compressed_size = 100;
         pkg.groups = input.groups;
+
         inline for (.{
             "depends",
             "provides",
@@ -235,8 +247,10 @@ fn jsonEntries(
             "check_depends",
         }) |field|
             @field(pkg, field) = try relations(alloc, @field(input, field));
+
         out.* = entry(pkg, db, @intCast(i));
     }
+
     return entries;
 }
 
@@ -246,6 +260,7 @@ fn casePlan(alloc: std.mem.Allocator, case: Case) !rlpm.TransactionPlan {
     const scratch = arena.allocator();
     const local = try jsonEntries(scratch, case.local, .local, 0, "local");
     const repositories = try scratch.alloc(R.Repository, case.repositories.len);
+
     for (case.repositories, repositories, 0..) |input, *out, i| {
         out.* = .{
             .reference = .{ .owner = @enumFromInt(1), .id = @enumFromInt(i + 1) },
@@ -259,12 +274,16 @@ fn casePlan(alloc: std.mem.Allocator, case: Case) !rlpm.TransactionPlan {
             .packages = try jsonEntries(scratch, input.packages, .sync, i + 1, input.name),
         };
     }
+
     for (case.result.queries) |query| {
         for (local) |item| {
             if (!std.mem.eql(u8, query.package, try identity(scratch, item.package))) continue;
+
             const newer = R.newVersion(.{ .repositories = repositories }, item.package);
+
             if (query.new_version) |expected| {
                 const ref = newer orelse return error.TestUnexpectedResult;
+
                 for (repositories) |repo|
                     for (repo.packages) |candidate| {
                         if (std.meta.eql(ref, candidate.reference))
@@ -287,8 +306,10 @@ fn casePlan(alloc: std.mem.Allocator, case: Case) !rlpm.TransactionPlan {
             );
         }
     }
+
     const archives = try jsonEntries(scratch, case.archives, .archive, std.math.maxInt(u64), "");
     const targets = try scratch.alloc(R.Target, case.targets.len);
+
     for (case.targets, targets) |input, *out| {
         out.* = if (std.mem.startsWith(u8, input, "@"))
             .{
@@ -297,6 +318,7 @@ fn casePlan(alloc: std.mem.Allocator, case: Case) !rlpm.TransactionPlan {
         else
             .{ .text = input };
     }
+
     return R.resolve(alloc, .{
         .owner = @enumFromInt(1),
         .local = local,
@@ -336,8 +358,10 @@ fn compareCase(case: Case, plan: *const rlpm.TransactionPlan) !void {
     const scratch = arena.allocator();
     try std.testing.expectEqual(case.result.success, plan.failure == null);
     try std.testing.expectEqual(case.result.category, plan.failure);
+
     if (case.result.success) {
         try std.testing.expectEqual(case.result.add.len, plan.additions.len);
+
         for (case.result.add, plan.additions) |expected, actual| {
             try std.testing.expectEqualStrings(
                 expected.identity,
@@ -346,6 +370,7 @@ fn compareCase(case: Case, plan: *const rlpm.TransactionPlan) !void {
                     plan.package(actual.package),
                 ),
             );
+
             try std.testing.expectEqual(
                 if (expected.reason == 0)
                     rlpm.Package.InstallReason.explicit
@@ -354,13 +379,17 @@ fn compareCase(case: Case, plan: *const rlpm.TransactionPlan) !void {
                 actual.selection_reason,
             );
         }
+
         try std.testing.expectEqual(case.result.remove.len, plan.removals.len);
+
         for (case.result.remove, plan.removals) |expected, actual|
             try std.testing.expectEqualStrings(
                 expected,
                 try identity(scratch, plan.package(actual)),
             );
+
         var cycles: std.ArrayList([]const u8) = .empty;
+
         for (plan.warnings) |warning|
             if (warning == .cycle) {
                 const cycle = warning.cycle;
@@ -380,13 +409,17 @@ fn compareCase(case: Case, plan: *const rlpm.TransactionPlan) !void {
                     ),
                 );
             };
+
         try std.testing.expectEqual(case.result.cycles.len, cycles.items.len);
+
         for (case.result.cycles, cycles.items) |expected, actual|
             try std.testing.expectEqualStrings(
                 expected,
                 actual,
             );
+
         try std.testing.expectEqual(case.result.edges.len, plan.edges.len);
+
         for (case.result.edges, plan.edges) |expected, actual| {
             try std.testing.expectEqualStrings(
                 expected.requiring,
@@ -395,10 +428,12 @@ fn compareCase(case: Case, plan: *const rlpm.TransactionPlan) !void {
                     plan.package(actual.requiring),
                 ),
             );
+
             try std.testing.expectEqualStrings(
                 expected.dependency,
                 try actual.dependency.formatAlloc(scratch),
             );
+
             switch (actual.satisfier) {
                 .package => |id| try std.testing.expectEqualStrings(
                     expected.satisfier.?,
@@ -409,6 +444,7 @@ fn compareCase(case: Case, plan: *const rlpm.TransactionPlan) !void {
                     try dep.formatAlloc(scratch),
                 ),
             }
+
             if (expected.provision) |dep|
                 try std.testing.expectEqualStrings(
                     dep,
@@ -418,9 +454,12 @@ fn compareCase(case: Case, plan: *const rlpm.TransactionPlan) !void {
                 try std.testing.expect(actual.provision == null);
         }
     }
+
     try std.testing.expectEqual(case.result.questions.len, plan.questions.len);
+
     for (case.result.questions, plan.questions) |expected, actual| {
         try std.testing.expectEqualStrings(expected.kind, @tagName(actual));
+
         const value: struct {
             answer: usize,
             views: []const rlpm.Callbacks.PackageView,
@@ -441,20 +480,25 @@ fn compareCase(case: Case, plan: *const rlpm.TransactionPlan) !void {
             },
             else => return error.UnexpectedQuestion,
         };
+
         try std.testing.expectEqual(expected.answer, value.answer);
         try std.testing.expectEqual(expected.packages.len, value.views.len);
+
         for (expected.packages, value.views) |name, view| {
             try std.testing.expectEqualStrings(name, try identity(scratch, view.package));
             try std.testing.expect(plan.findReference(view.reference) != null);
         }
+
         if (expected.dependency) |dep|
             try std.testing.expectEqualStrings(
                 dep,
                 try value.dependency.?.formatAlloc(scratch),
             );
     }
+
     if (plan.failure == .unsatisfied_dependencies or plan.failure == .conflicting_dependencies) {
         try std.testing.expectEqual(case.result.issues.len, plan.issues.len);
+
         for (case.result.issues, plan.issues) |expected, actual|
             switch (actual) {
                 .missing => |missing| {
@@ -463,6 +507,7 @@ fn compareCase(case: Case, plan: *const rlpm.TransactionPlan) !void {
                         expected.dependency,
                         try missing.dependency.formatAlloc(scratch),
                     );
+
                     if (expected.causing) |cause|
                         try std.testing.expectEqualStrings(
                             cause,
@@ -479,6 +524,7 @@ fn compareCase(case: Case, plan: *const rlpm.TransactionPlan) !void {
                             plan.package(conflict.first),
                         ),
                     );
+
                     try std.testing.expectEqualStrings(
                         expected.second.?,
                         try identity(
@@ -486,6 +532,7 @@ fn compareCase(case: Case, plan: *const rlpm.TransactionPlan) !void {
                             plan.package(conflict.second),
                         ),
                     );
+
                     try std.testing.expectEqualStrings(
                         expected.dependency,
                         try conflict.reason.formatAlloc(scratch),
@@ -505,6 +552,7 @@ const Reference = struct {
         success: bool,
     },
 };
+
 test "pinned prepare oracle: frozen pacman adaptations and generated universes" {
     const parsed = try std.json.parseFromSlice(
         Reference,
@@ -517,8 +565,11 @@ test "pinned prepare oracle: frozen pacman adaptations and generated universes" 
         "da30edd45277cf4b1000485658976042f8106fe0b97378d1e6c4e81a9d7c4888",
         parsed.value.library_sha256,
     );
+
     try std.testing.expectEqual(@as(usize, 314), parsed.value.cases.len);
+
     var failures: usize = 0;
+
     for (parsed.value.cases) |case| {
         var plan = try casePlan(a, case);
         defer plan.deinit();
@@ -527,6 +578,7 @@ test "pinned prepare oracle: frozen pacman adaptations and generated universes" 
             failures += 1;
         };
     }
+
     try std.testing.expectEqual(@as(usize, 0), failures);
 }
 
@@ -538,17 +590,21 @@ test "resolver final reasons, actions, sizes and selected repository provenance"
         .{ .ignore_unknown_fields = true },
     );
     defer parsed.deinit();
+
     for (parsed.value.cases) |case| {
         if (!std.mem.startsWith(u8, case.name, "reason-needed-")) continue;
+
         var plan = try casePlan(a, case);
         defer plan.deinit();
         try plan.check();
+
         if (plan.additions.len == 0) {
             try std.testing.expectEqualStrings("1-1", case.repositories[0].packages[0].version);
             try std.testing.expect(plan.flags.needed);
             try std.testing.expectEqual(@as(u64, 0), plan.sizes.installed_remove);
             continue;
         }
+
         const addition = plan.additions[0];
         try std.testing.expectEqual(
             if (plan.flags.all_explicit and !plan.flags.all_dependencies)
@@ -557,6 +613,7 @@ test "resolver final reasons, actions, sizes and selected repository provenance"
                 .dependency,
             addition.reason,
         );
+
         const version = plan.package(addition.package).version.raw;
         try std.testing.expectEqualStrings(
             if (version[0] == '0')
@@ -567,6 +624,7 @@ test "resolver final reasons, actions, sizes and selected repository provenance"
                 "upgrade",
             @tagName(addition.action),
         );
+
         try std.testing.expectEqualStrings("test", addition.installed_database.?);
         try std.testing.expectEqual(@as(u64, 300), plan.sizes.installed_add);
         try std.testing.expectEqual(@as(u64, 300), plan.sizes.installed_remove);
@@ -581,6 +639,7 @@ test "upgrade warnings explain ignored and newer local packages" {
         .local = &.{entry(&old, 0, 0)},
         .repositories = &.{repository(&.{entry(&new, 1, 0)})},
     };
+
     var ignored = try R.resolve(
         a,
         snapshot,
@@ -592,6 +651,7 @@ test "upgrade warnings explain ignored and newer local packages" {
     try expectAdds(&ignored, &.{});
     try std.testing.expect(ignored.warnings[0] == .ignored_upgrade);
     new.version.raw = "0-1";
+
     var newer = try R.resolve(
         a,
         snapshot,
@@ -609,6 +669,7 @@ fn allocationCase(alloc: std.mem.Allocator, case: Case) !void {
     defer plan.deinit();
     try std.testing.expectEqual(case.result.success, plan.failure == null);
 }
+
 test "resolver frees all allocations in success, failure, questions, replacement and removal paths" {
     const parsed = try std.json.parseFromSlice(
         Reference,
@@ -617,6 +678,7 @@ test "resolver frees all allocations in success, failure, questions, replacement
         .{ .ignore_unknown_fields = true },
     );
     defer parsed.deinit();
+
     for (parsed.value.cases) |case| {
         for ([_][]const u8{
             "provider-order",
@@ -657,6 +719,7 @@ const Fixture = struct {
                 .data = "%NAME%\nkept\n\n%VERSION%\n1-1\n\n%REASON%\n1\n\n%INSTALLED_DB%\nold-cachyos\n\n",
             },
         );
+
         var archive = try Archive.init(
             &.{
                 .{
@@ -672,9 +735,11 @@ const Fixture = struct {
         const bytes = try std.Io.Dir.cwd().readFileAlloc(io, archive.path, a, .limited(1 << 20));
         defer a.free(bytes);
         try temp.dir.writeFile(io, .{ .sub_path = "db/sync/cachyos.db", .data = bytes });
+
         const root = try temp.dir.realPathFileAlloc(io, "root", a);
         errdefer a.free(root);
         const db = try temp.dir.realPathFileAlloc(io, "db", a);
+
         return .{
             .temp = temp,
             .root = root,
@@ -718,17 +783,21 @@ test "Owner plans survive cache invalidation and release; provider callbacks hav
                 ),
             ) catch
                 unreachable;
+
             state.checked = true;
             q.select_provider.selected = 1;
         }
     };
+
     var state: State = .{ .owner = &owner };
     try owner.setCallbacks(.{ .question = State.callback, .question_context = &state });
+
     var plan = try owner.resolve(io, .{ .install = &.{.{ .text = "app" }} });
     defer plan.deinit();
     try std.testing.expect(state.checked);
     try expectAdds(&plan, &.{ "z", "app" });
     try std.testing.expectEqualStrings("cachyos", plan.additions[0].installed_database.?);
+
     const ref = plan.candidates[@intFromEnum(plan.additions[0].package)].reference;
     try owner.invalidateDatabase(owner.findDatabase("cachyos").?);
     try std.testing.expectError(
@@ -738,6 +807,7 @@ test "Owner plans survive cache invalidation and release; provider callbacks hav
             .{ .install = &.{.{ .reference = ref }} },
         ),
     );
+
     try owner.deinit();
     live = false;
     try expectAdds(&plan, &.{ "z", "app" });
@@ -745,6 +815,7 @@ test "Owner plans survive cache invalidation and release; provider callbacks hav
         "2",
         plan.questions[0].select_provider.dependency.constraint.greater_equal,
     );
+
     try std.testing.expectEqualStrings("old-cachyos", plan.candidates[0].package.installed_database.?);
 }
 
@@ -760,6 +831,7 @@ test "Owner resolver rejects invalid answers, cancellation and foreign reference
 
         fn callback(raw: ?*anyopaque, q: *rlpm.Callbacks.Question) void {
             const state: *@This() = @ptrCast(@alignCast(raw.?));
+
             switch (state.mode) {
                 .index => q.select_provider.selected = 100,
                 .tag => q.* = .{ .import_key = .{ .key = .{ .fingerprint = "wrong" } } },
@@ -767,8 +839,10 @@ test "Owner resolver rejects invalid answers, cancellation and foreign reference
             }
         }
     };
+
     var state: State = .{ .owner = &owner };
     try owner.setCallbacks(.{ .question = State.callback, .question_context = &state });
+
     for ([_]State{
         .{ .owner = &owner },
         .{ .owner = &owner, .mode = .tag },
@@ -782,13 +856,17 @@ test "Owner resolver rejects invalid answers, cancellation and foreign reference
                 .{ .install = &.{.{ .text = "app" }} },
             ),
         );
+
         try std.testing.expectEqual(.resolve, owner.diagnostic().?.operation);
     }
+
     try owner.resetCancellation();
     try owner.setCallbacks(.{});
+
     var plan = try owner.resolve(io, .{ .install = &.{.{ .text = "app" }} });
     defer plan.deinit();
     try expectAdds(&plan, &.{ "a", "app" });
+
     var ref = plan.candidates[@intFromEnum(plan.additions[0].package)].reference;
     ref.database.owner = @enumFromInt(0);
     try owner.invalidateDatabase(owner.findDatabase("cachyos").?);
@@ -799,6 +877,7 @@ test "Owner resolver rejects invalid answers, cancellation and foreign reference
             .data = "invalid unrelated database",
         },
     );
+
     try std.testing.expectError(
         error.ForeignOwner,
         owner.resolve(
@@ -806,6 +885,7 @@ test "Owner resolver rejects invalid answers, cancellation and foreign reference
             .{ .install = &.{.{ .reference = ref }} },
         ),
     );
+
     owner.requestCancellation();
     try std.testing.expectError(error.Cancelled, owner.resolve(io, .{}));
 }
@@ -834,6 +914,7 @@ test "Owner resolution requires complete local metadata and handles missing repo
             .{ .install = &.{.{ .text = "app" }} },
         ),
     );
+
     var file = package("file", "1-1", .archive);
     var archive_plan = try owner.resolve(io, .{ .install = &.{.{ .archive = &file }} });
     defer archive_plan.deinit();
@@ -848,6 +929,7 @@ test "Owner resolution queries and assumed provisions preserve native matching r
     defer fixture.deinit();
     var config = fixture.config();
     config.ignore_packages = &.{"app"};
+
     var owner = try rlpm.Owner.init(
         io,
         a,
@@ -867,9 +949,11 @@ test "Owner resolution queries and assumed provisions preserve native matching r
         .{ .ignore_unknown_fields = true },
     );
     defer parsed.deinit();
+
     for (parsed.value.assumed_options) |input| {
         var updated = owner.options();
         updated.assume_installed = &.{try rlpm.PackageRelation.parse(input.relation)};
+
         if (input.success)
             try owner.setOptions(io, updated)
         else
@@ -878,15 +962,18 @@ test "Owner resolution queries and assumed provisions preserve native matching r
                 owner.setOptions(io, updated),
             );
     }
+
     var cleared = owner.options();
     cleared.assume_installed = &.{};
     try owner.setOptions(io, cleared);
+
     var old = package("app", "1-1", .archive);
     const newer = (try owner.newVersion(io, &old)).?;
     try std.testing.expectEqualStrings("2-1", (try owner.package(newer)).version.raw);
     try std.testing.expect(try owner.shouldIgnore(io, newer));
     old.version.raw = "3-1";
     try std.testing.expect(try owner.newVersion(io, &old) == null);
+
     const dep = try rlpm.PackageRelation.parse("virtual=02: first");
     try owner.addAssumedInstalled(io, dep);
     try owner.addAssumedInstalled(io, dep);
@@ -897,10 +984,12 @@ test "Owner resolution queries and assumed provisions preserve native matching r
             try rlpm.PackageRelation.parse("virtual>=2"),
         ),
     );
+
     try std.testing.expectEqual(@as(usize, 2), owner.options().assume_installed.len);
     try std.testing.expect(
         !try owner.removeAssumedInstalled(io, try rlpm.PackageRelation.parse("virtual=2")),
     );
+
     try std.testing.expect(
         try owner.removeAssumedInstalled(
             io,
@@ -909,9 +998,12 @@ test "Owner resolution queries and assumed provisions preserve native matching r
             ),
         ),
     );
+
     try std.testing.expectEqual(@as(usize, 1), owner.options().assume_installed.len);
+
     var provider = package("provider", "1-1", .sync);
     provider.provides = &.{try rlpm.PackageRelation.parse("app=9")};
+
     const entries = [_]R.Entry{ entry(&provider, 1, 0), entry(&old, 1, 1) };
     try std.testing.expectEqual(
         entries[0].reference,
@@ -934,6 +1026,7 @@ fn sealedAllocation(alloc: std.mem.Allocator, file: *const rlpm.Package) !void {
     try plan.check();
     try std.testing.expectEqual(@as(usize, 1), plan.additions.len);
 }
+
 test "plans retain verified archive bytes after package release with independent archive identities" {
     var fixture = try Fixture.init();
     defer fixture.deinit();
@@ -949,6 +1042,7 @@ test "plans retain verified archive bytes after package release with independent
     var file_live = true;
     defer if (file_live) file.deinit();
     try std.testing.checkAllAllocationFailures(a, sealedAllocation, .{&file});
+
     var plan = try owner.resolve(io, .{ .install = &.{.{ .archive = &file }} });
     defer plan.deinit();
     var other = try owner.resolve(io, .{ .install = &.{.{ .archive = &file }} });
@@ -959,6 +1053,7 @@ test "plans retain verified archive bytes after package release with independent
     file.deinit();
     file_live = false;
     try archive.temporary.dir.writeFile(io, .{ .sub_path = "package.tar", .data = "changed file" });
+
     var reader = (try plan.package(plan.additions[0].package).openMember(a, .changelog)).?;
     defer reader.deinit();
     const bytes = try reader.readAll(a, 100);
@@ -973,8 +1068,10 @@ test "large dependency chains use iterative closure and ordering" {
     const count = 1024;
     const packages = try alloc.alloc(rlpm.Package, count);
     const entries = try alloc.alloc(R.Entry, count);
+
     for (packages, entries, 0..) |*pkg, *out, i| {
         pkg.* = package(try std.fmt.allocPrint(alloc, "pkg{d}", .{i}), "1-1", .sync);
+
         if (i + 1 < count)
             pkg.depends = try relations(
                 alloc,
@@ -982,8 +1079,10 @@ test "large dependency chains use iterative closure and ordering" {
                     try std.fmt.allocPrint(alloc, "pkg{d}", .{i + 1}),
                 },
             );
+
         out.* = entry(pkg, 1, @intCast(i));
     }
+
     var plan = try R.resolve(
         a,
         .{ .repositories = &.{repository(entries)} },

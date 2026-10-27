@@ -62,8 +62,10 @@ def main():
     assert os.geteuid() == 0, 'run in an unprivileged user namespace'
     locale.setlocale(locale.LC_ALL, 'C')
     lib = c.CDLL(str(args.library.resolve()))
+
     def bind(name, result, *params):
         fn = getattr(lib, name); fn.restype = result; fn.argtypes = list(params); return fn
+
     initialize = bind('alpm_initialize', c.c_void_p, c.c_char_p, c.c_char_p, c.POINTER(c.c_int))
     release = bind('alpm_release', c.c_int, c.c_void_p)
     init = bind('alpm_trans_init', c.c_int, c.c_void_p, c.c_int)
@@ -79,32 +81,41 @@ def main():
     errno = bind('alpm_errno', c.c_int, c.c_void_p)
     libs = [Path(word) for word in subprocess.check_output(['/usr/bin/ldd', '/usr/bin/bash'], text=True).split() if word.startswith('/')]
     rows = []
+
     for case in CASES:
         with tempfile.TemporaryDirectory(prefix='rlpm-actions-oracle-') as temp:
             base = Path(temp).resolve(); root = base / 'root'; db = base / 'db'
             root.mkdir(); (db / 'local').mkdir(parents=True)
             (db / 'local/ALPM_DB_VERSION').write_text('9\n')
+
             for source in [Path('/usr/bin/bash'), *libs]:
                 destination = root / str(source).lstrip('/')
                 destination.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(source, destination)
+
             hooks = root / 'usr/share/libalpm/hooks'; hooks.mkdir(parents=True)
             (hooks / 'fixture.hook').write_text(case['hook'])
+
             if old := case.get('old_version'):
                 record = db / f'local/demo-{old}'; record.mkdir()
                 (record / 'desc').write_text(f'%NAME%\ndemo\n\n%VERSION%\n{old}\n\n%REASON%\n0\n\n')
                 (record / 'files').write_text('%FILES%\n\n')
                 (record / 'install').write_text('pre_remove() { exit 99; }\n')
+
             pkg = base / 'fixture.pkg.tar'
             entries = {'.PKGINFO': 'pkgname = demo\npkgver = 2-1\narch = any\n'}
+
             if 'script' in case: entries['.INSTALL'] = case['script']
+
             with tarfile.open(pkg, 'w', format=tarfile.USTAR_FORMAT) as archive:
                 for name, contents in entries.items():
                     assert name in ('.PKGINFO', '.INSTALL')
                     data = contents.encode(); entry = tarfile.TarInfo(name); entry.size = len(data); entry.mode = 0o644
                     archive.addfile(entry, io.BytesIO(data))
+
             err = c.c_int(); handle = initialize(str(root).encode(), str(db).encode(), c.byref(err)); assert handle, err.value
             started = False
+
             try:
                 assert init(handle, case.get('flags', 0)) == 0; started = True
                 package = c.c_void_p(); assert load(handle, str(pkg).encode(), 1, 0, c.byref(package)) == 0
@@ -115,16 +126,20 @@ def main():
                 assert base.name.startswith('rlpm-actions-oracle-') and root.parent == db.parent == base
                 assert not any(p.is_symlink() for p in base.rglob('*'))
                 cursor = gethooks(handle)
+
                 while cursor:
                     assert Path(c.cast(cursor.contents.data, c.c_char_p).value.decode()).resolve() == hooks
                     cursor = cursor.contents.next
+
                 assert not (root / 'usr/bin/ldconfig').exists()
                 result = commit(handle, c.byref(data))
                 rows.append(dict(**case, success=result == 0, error=strerror(errno(handle)).decode() if result else None,
                                  trace=(root / 'trace').read_text() if (root / 'trace').exists() else ''))
             finally:
                 if started: finish(handle)
+
                 release(handle)
+
     print(json.dumps(dict(library_sha256=digest, cases=rows), indent=2))
 
 if __name__ == '__main__': main()

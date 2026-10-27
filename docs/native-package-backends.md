@@ -90,6 +90,18 @@ Configuration directives (`DBPath`, `CacheDir`, `GPGDir`, `LogFile`, `HookDir`,
 and others) override the profile defaults. Library callers can override those
 values with `Manager.InitOptions`; `config_path` selects the file to read.
 
+### File migration policy
+
+RLPM supports package-declared `shelly_migrate` entries and automatic adoption
+of eligible unowned files supplied by incoming archives. Devario builds enable
+automatic discovery by default; pacman-profile builds disable it. Override with
+`AutoMigrateUnowned = true|false` under `[options]` in the native configuration.
+Explicit declarations remain available when automatic discovery is disabled.
+
+See the [migration guide](../Shelly.Rlpm/migration.md) for PKGBUILD syntax,
+replacement ownership rules, backup behavior, and release compatibility.
+Shelly's libalpm backend rejects archives declaring these RLPM semantics.
+
 ### Hook directory policy
 
 `HookDir` remains additive by default. To use only the listed directories:

@@ -1,5 +1,6 @@
 //! Independent native package metadata and lifecycle API. Operational capability
 //! reporting is intentionally narrower than the eventual libalpm target.
+
 const builtin = @import("builtin");
 pub const Workers = @import("workers");
 pub const TransactionActions = @import("structs/TransactionActions.zig");
@@ -39,6 +40,7 @@ pub const PhysicalArchitectures = @import("structs/PhysicalArchitectures.zig");
 pub const Resolver = @import("structs/Resolver.zig");
 pub const TransactionPlan = @import("structs/TransactionPlan.zig");
 pub const TransactionFlags = @import("structs/TransactionFlags.zig");
+pub const Migration = @import("structs/Migration.zig");
 pub const Transaction = @import("structs/Transaction.zig");
 pub const ExecutionManifest = @import("structs/ExecutionManifest.zig");
 pub const PathPatterns = @import("structs/PathPatterns.zig");
@@ -60,6 +62,7 @@ pub const Capabilities = struct {
     transaction_lifecycle: bool = true,
     downloads: bool = true,
     filesystem_preflight: bool = true,
+
     /// Hook/scriptlet execution and installed-state mutation are operational.
     transaction_actions: bool = true,
     transactions: bool = true,

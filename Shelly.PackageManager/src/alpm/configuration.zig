@@ -38,7 +38,7 @@ inline fn usageBit(flag: DatabaseUsage) u32 {
     return @intFromEnum(flag);
 }
 
-pub const ParseError = Allocator.Error || error{ ConfigReadFailed, InvalidHookDirMode };
+pub const ParseError = Allocator.Error || error{ ConfigReadFailed, InvalidHookDirMode, InvalidMigrationPolicy };
 
 pub const Configuration = struct {
     pub const Repository = struct {
@@ -61,6 +61,7 @@ pub const Configuration = struct {
         disable_sandbox_syscalls: bool = false,
         disable_sandbox_network: bool = false,
         disable_download_timeout: bool = false,
+        auto_migrate_unowned: bool = std.mem.eql(u8, paths.profile, "devario"),
 
         root_directory: [:0]const u8,
         database_path: [:0]const u8,
@@ -144,7 +145,8 @@ pub const Configuration = struct {
         config_path: []const u8,
         package_names: []const []const u8,
     ) IgnorePackageError!void {
-        var changed = false;
+        var added: std.ArrayList([]const u8) = .empty;
+        defer added.deinit(scratch_allocator);
         const arena_allocator = config.arena.allocator();
 
         for (package_names) |package_name| {
@@ -153,10 +155,11 @@ pub const Configuration = struct {
 
             const owned_name = try arena_allocator.dupeSentinel(u8, normalized, 0);
             try config.ignore_package.append(arena_allocator, owned_name);
-            changed = true;
+            try added.append(scratch_allocator, owned_name);
         }
 
-        if (changed) try rewrite_ignore_packages(config, io, scratch_allocator, config_path);
+        if (added.items.len != 0)
+            try rewrite_ignore_packages(io, scratch_allocator, config_path, added.items, &.{});
     }
 
     pub fn remove_ignore_package(
@@ -199,7 +202,7 @@ pub const Configuration = struct {
             }
         }
 
-        if (changed) try rewrite_ignore_packages(config, io, scratch_allocator, config_path);
+        if (changed) try rewrite_ignore_packages(io, scratch_allocator, config_path, &.{}, normalized_names.items);
     }
 
     /// Returns a normalized list whose strings are borrowed from `config`.
@@ -398,18 +401,21 @@ pub const Configuration = struct {
         if (changed) try rewrite_remove_repository(io, scratch_allocator, config_path, normalized);
     }
 
+    /// Edits only the IgnorePkg entries written in `config_path`. Entries
+    /// that came from an Include stay in their own file.
     fn rewrite_ignore_packages(
-        config: *const Config,
         io: Io,
         allocator: Allocator,
         config_path: []const u8,
+        added: []const []const u8,
+        removed: []const []const u8,
     ) IgnorePackageError!void {
         return rewrite_package_directive(
             io,
             allocator,
             config_path,
             "IgnorePkg",
-            config.ignore_package.items,
+            .{ .update = .{ .added = added, .removed = removed } },
         );
     }
 
@@ -424,16 +430,24 @@ pub const Configuration = struct {
             allocator,
             config_path,
             "HoldPkg",
-            config.hold_packages.items,
+            .{ .replace = config.hold_packages.items },
         );
     }
+
+    const DirectiveEdit = union(enum) {
+        /// Write exactly these names.
+        replace: []const [:0]const u8,
+        /// Keep the names this file already lists, apart from `removed`, and
+        /// append `added`.
+        update: struct { added: []const []const u8, removed: []const []const u8 },
+    };
 
     fn rewrite_package_directive(
         io: Io,
         allocator: Allocator,
         config_path: []const u8,
         directive: []const u8,
-        package_names: []const [:0]const u8,
+        edit: DirectiveEdit,
     ) PackageDirectiveError!void {
         const contents = Io.Dir.cwd().readFileAlloc(io, config_path, allocator, .unlimited) catch |err| switch (err) {
             error.OutOfMemory => return error.OutOfMemory,
@@ -447,11 +461,25 @@ pub const Configuration = struct {
         const section = find_section(lines.items, "options");
         const first_directive_line = find_directive_line(lines.items, section, directive);
 
-        var unique_names: std.ArrayList([:0]const u8) = .empty;
+        var unique_names: std.ArrayList([]const u8) = .empty;
         defer unique_names.deinit(allocator);
-        for (package_names) |package_name| {
-            if (package_name.len == 0 or contains_package_name(unique_names.items, package_name)) continue;
-            try unique_names.append(allocator, package_name);
+        switch (edit) {
+            .replace => |package_names| for (package_names) |package_name| {
+                try append_unique_name(&unique_names, allocator, package_name);
+            },
+            .update => |update| {
+                if (section.start) |start| {
+                    for (lines.items[start + 1 .. section.end]) |line| {
+                        const value = active_directive_value(line, directive) orelse continue;
+                        var names = std.mem.tokenizeAny(u8, value, " \t");
+                        while (names.next()) |name| {
+                            if (!contains_name(update.removed, name))
+                                try append_unique_name(&unique_names, allocator, name);
+                        }
+                    }
+                }
+                for (update.added) |name| try append_unique_name(&unique_names, allocator, name);
+            },
         }
 
         var output: std.ArrayList(u8) = .empty;
@@ -631,6 +659,24 @@ pub const Configuration = struct {
         return false;
     }
 
+    fn append_unique_name(
+        names: *std.ArrayList([]const u8),
+        allocator: Allocator,
+        name: []const u8,
+    ) Allocator.Error!void {
+        if (name.len == 0 or contains_name(names.items, name)) return;
+        try names.append(allocator, name);
+    }
+
+    /// Returns the value of an uncommented `directive = value` line.
+    fn active_directive_value(line: []const u8, directive: []const u8) ?[]const u8 {
+        const trimmed = std.mem.trim(u8, line, " \t");
+        if (trimmed.len == 0 or trimmed[0] == '#') return null;
+        const equals = std.mem.indexOfScalar(u8, trimmed, '=') orelse return null;
+        if (!equalIgnoreCase(std.mem.trim(u8, trimmed[0..equals], " \t"), directive)) return null;
+        return trimmed[equals + 1 ..];
+    }
+
     fn config_section_name(line: []const u8) ?[]const u8 {
         const trimmed = std.mem.trim(u8, line, " \t\r");
         if (trimmed.len < 2 or trimmed[0] != '[' or trimmed[trimmed.len - 1] != ']') return null;
@@ -674,7 +720,7 @@ pub const Configuration = struct {
         output: *std.ArrayList(u8),
         allocator: Allocator,
         directive: []const u8,
-        package_names: []const [:0]const u8,
+        package_names: []const []const u8,
     ) PackageDirectiveError!void {
         if (package_names.len == 0) {
             try output.append(allocator, '#');
@@ -965,6 +1011,8 @@ pub const Configuration = struct {
                 try self.add_split(&c.no_extract, value);
             } else if (equalIgnoreCase(key, "usesyslog")) {
                 c.use_system_log = true;
+            } else if (equalIgnoreCase(key, "automigrateunowned")) {
+                if (equalIgnoreCase(value, "true")) c.auto_migrate_unowned = true else if (equalIgnoreCase(value, "false")) c.auto_migrate_unowned = false else return error.InvalidMigrationPolicy;
             } else if (equalIgnoreCase(key, "checkspace")) {
                 c.check_space = true;
             } else if (equalIgnoreCase(key, "siglevel")) {
@@ -1341,6 +1389,57 @@ test "adding an ignored package creates a missing options section" {
         original ++ "[options]\nIgnorePkg = linux\n",
         rewritten,
     );
+}
+
+test "ignore package mutations leave IgnorePkg from included files in place" {
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    const directory = try std.fmt.allocPrint(testing.allocator, ".zig-cache/tmp/{s}", .{tmp.sub_path});
+    defer testing.allocator.free(directory);
+    const config_path = try std.fmt.allocPrint(testing.allocator, "{s}/pacman.conf", .{directory});
+    defer testing.allocator.free(config_path);
+
+    const offline = "[options]\nIgnorePkg = linux nvidia\n";
+    try tmp.dir.writeFile(testing.io, .{ .sub_path = "offline.conf", .data = offline });
+    const original = try std.fmt.allocPrint(
+        testing.allocator,
+        "[options]\nIgnorePkg = mine\nInclude = {s}/offline.conf\n",
+        .{directory},
+    );
+    defer testing.allocator.free(original);
+    try tmp.dir.writeFile(testing.io, .{ .sub_path = "pacman.conf", .data = original });
+
+    var config = try Configuration.parse(testing.allocator, testing.io, config_path);
+    defer config.deinitialize();
+    try testing.expectEqual(@as(usize, 3), config.ignore_package.items.len);
+
+    try Configuration.add_ignore_package(&config, testing.io, testing.allocator, config_path, "mesa");
+    const after_add = try tmp.dir.readFileAlloc(testing.io, "pacman.conf", testing.allocator, .unlimited);
+    defer testing.allocator.free(after_add);
+    const expected_add = try std.fmt.allocPrint(
+        testing.allocator,
+        "[options]\nIgnorePkg = mine mesa\nInclude = {s}/offline.conf\n",
+        .{directory},
+    );
+    defer testing.allocator.free(expected_add);
+    try testing.expectEqualStrings(expected_add, after_add);
+
+    const removals = [_][]const u8{ "mine", "linux" };
+    try Configuration.remove_ignore_packages(&config, testing.io, testing.allocator, config_path, &removals);
+    const after_remove = try tmp.dir.readFileAlloc(testing.io, "pacman.conf", testing.allocator, .unlimited);
+    defer testing.allocator.free(after_remove);
+    const expected_remove = try std.fmt.allocPrint(
+        testing.allocator,
+        "[options]\nIgnorePkg = mesa\nInclude = {s}/offline.conf\n",
+        .{directory},
+    );
+    defer testing.allocator.free(expected_remove);
+    try testing.expectEqualStrings(expected_remove, after_remove);
+
+    const included = try tmp.dir.readFileAlloc(testing.io, "offline.conf", testing.allocator, .unlimited);
+    defer testing.allocator.free(included);
+    try testing.expectEqualStrings(offline, included);
 }
 
 test "hold package mutations rewrite HoldPkg and preserve shelly" {
@@ -1761,4 +1860,19 @@ test "strict configuration rejects missing explicit files and preserves hook pol
     try testing.expectEqualStrings("/first", config.hook_directory.items[0]);
     try testing.expectEqualStrings("/middle", config.hook_directory.items[1]);
     try testing.expectEqualStrings("/last", config.hook_directory.items[2]);
+}
+
+test "migration automatic policy follows profile and accepts explicit overrides" {
+    var defaults = try Configuration.parse_string(std.testing.allocator, std.testing.io, "");
+    defer defaults.deinitialize();
+    try std.testing.expectEqual(std.mem.eql(u8, paths.profile, "devario"), defaults.auto_migrate_unowned);
+    for ([_]bool{ false, true }) |enabled| {
+        var config = try Configuration.parse_string(std.testing.allocator, std.testing.io, if (enabled)
+            "[options]\nAutoMigrateUnowned = true\n"
+        else
+            "[options]\nAutoMigrateUnowned = false\n");
+        defer config.deinitialize();
+        try std.testing.expectEqual(enabled, config.auto_migrate_unowned);
+    }
+    try std.testing.expectError(error.InvalidMigrationPolicy, Configuration.parse_string(std.testing.allocator, std.testing.io, "[options]\nAutoMigrateUnowned = yes\n"));
 }

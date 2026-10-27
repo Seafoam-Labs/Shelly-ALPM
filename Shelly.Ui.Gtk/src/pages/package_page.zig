@@ -734,7 +734,9 @@ pub const PackagePage = extern struct {
         p.generation += 1;
         show_loading(self);
         self.update_selection_ui();
-        _ = gtk.Widget.grabFocus(p.search_entry.as(gtk.Widget));
+        // The page is the focus stop, so a page switch lands on its group name
+        // and Tab reaches the search entry from there.
+        _ = a11y.focusFirst(self.as(gtk.Widget));
         const thread = std.Thread.spawn(.{}, load_worker, .{ self, p.generation, p.show_hidden }) catch return;
         gtk.Widget.setVisible(p.no_results_overlay.as(gtk.Widget), 0);
         thread.detach();

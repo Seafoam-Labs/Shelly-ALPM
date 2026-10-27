@@ -1,0 +1,16 @@
+name: Set up project Zig
+description: Install patched Arch Zig 0.16.0-1
+runs:
+  using: composite
+  steps:
+    # Arch's package includes the PC64 linker fix missing from upstream 0.16.0.
+    # Run after system updates so they cannot upgrade the pinned compiler.
+    - name: Install patched Zig
+      shell: bash
+      run: |
+        pacman -S --needed --noconfirm clang21 lld21 llvm21-libs
+        pacman -U --noconfirm \
+          https://archive.archlinux.org/packages/z/zig/zig-0.16.0-1-x86_64.pkg.tar.zst
+        test "$(pacman -Q zig)" = "zig 0.16.0-1"
+        test "$(zig version)" = "0.16.0"
+        zig version

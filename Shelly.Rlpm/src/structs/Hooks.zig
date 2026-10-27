@@ -1,5 +1,6 @@
 //! Owned hook discovery and matching. Discover separately at each transaction
 //! boundary: a package may install, replace, or remove post-transaction hooks.
+
 const std = @import("std");
 const Patterns = @import("PathPatterns.zig");
 const Plan = @import("TransactionPlan.zig");
@@ -47,6 +48,7 @@ pub const Match = struct {
     hook: *const Hook,
     targets: []const []const u8,
 };
+
 arena: std.heap.ArenaAllocator,
 hooks: std.ArrayList(Hook) = .empty,
 issues: std.ArrayList(Issue) = .empty,
@@ -84,18 +86,23 @@ pub fn parse(self: *Hooks, name: []const u8, input: []const u8) !void {
     var line: usize = 0;
     const hook = self.parseInternal(name, input, &line) catch |err| {
         if (err == error.OutOfMemory) return err;
+
         return self.issue(name, line, err, false);
     };
+
     try self.hooks.append(self.arena.allocator(), hook);
 }
 
 fn parseInternal(self: *Hooks, name: []const u8, input: []const u8, line_number: *usize) !Hook {
     const a = self.arena.allocator();
     const contents = try a.dupe(u8, input);
+
     if (std.mem.indexOfScalar(u8, contents, 0) != null) return error.InvalidHook;
+
     var hook: Hook = .{ .name = try a.dupe(u8, name) };
     var section: enum { none, trigger, action } = .none;
     var offset: usize = 0;
+
     while (offset < contents.len) {
         // safe_fgets in the pinned parser uses PATH_MAX bytes, so long physical
         // lines are interpreted as separate 4095-byte chunks.
@@ -104,8 +111,10 @@ fn parseInternal(self: *Hooks, name: []const u8, input: []const u8, line_number:
         const raw = available[0..count];
         offset += count;
         line_number.* += 1;
+
         // Native INI comments occupy a whole line; inline # is literal.
         const line = std.mem.trim(u8, raw, " \t\r\n\x0b\x0c");
+
         if (line.len == 0 or line[0] == '#') continue;
         if (line[0] == '[') {
             if (std.mem.eql(u8, line, "[Trigger]")) {
@@ -115,15 +124,19 @@ fn parseInternal(self: *Hooks, name: []const u8, input: []const u8, line_number:
                 section = .action
             else
                 return error.InvalidHookSection;
+
             continue;
         }
+
         const split = std.mem.indexOfScalar(u8, line, '=');
         const key = std.mem.trim(u8, line[0 .. split orelse line.len], " \t\r\x0b\x0c");
         const value = if (split) |index| std.mem.trim(u8, line[index + 1 ..], " \t\r\x0b\x0c") else "";
+
         switch (section) {
             .none => return error.InvalidHookOption,
             .trigger => {
                 const trigger = &hook.triggers.items[hook.triggers.items.len - 1];
+
                 if (std.mem.eql(u8, key, "Operation")) {
                     const op: Operation = if (std.mem.eql(u8, value, "Install"))
                         .install
@@ -133,6 +146,7 @@ fn parseInternal(self: *Hooks, name: []const u8, input: []const u8, line_number:
                         .remove
                     else
                         return error.InvalidHookValue;
+
                     trigger.operations |= @as(u3, 1) << @intFromEnum(op);
                 } else if (std.mem.eql(u8, key, "Type")) {
                     if (trigger.kind != null)
@@ -142,6 +156,7 @@ fn parseInternal(self: *Hooks, name: []const u8, input: []const u8, line_number:
                             error.RepeatedHookOption,
                             true,
                         );
+
                     trigger.kind = if (std.mem.eql(u8, value, "Package"))
                         .package
                     else if (std.mem.eql(u8, value, "Path") or
@@ -151,6 +166,7 @@ fn parseInternal(self: *Hooks, name: []const u8, input: []const u8, line_number:
                         return error.InvalidHookValue;
                 } else if (std.mem.eql(u8, key, "Target")) {
                     if (split == null) return error.InvalidHookValue;
+
                     try trigger.targets.append(a, value);
                 } else return error.InvalidHookOption;
             },
@@ -161,6 +177,7 @@ fn parseInternal(self: *Hooks, name: []const u8, input: []const u8, line_number:
                     hook.needs_targets = true;
                 } else if (std.mem.eql(u8, key, "When")) {
                     if (hook.when != null) try self.issue(name, line_number.*, error.RepeatedHookOption, true);
+
                     hook.when = if (std.mem.eql(u8, value, "PreTransaction"))
                         .pre_transaction
                     else if (std.mem.eql(u8, value, "PostTransaction"))
@@ -175,6 +192,7 @@ fn parseInternal(self: *Hooks, name: []const u8, input: []const u8, line_number:
                             error.RepeatedHookOption,
                             true,
                         );
+
                     hook.argv = try wordsplit(a, value);
                 } else if (std.mem.eql(u8, key, "Description")) {
                     if (split == null) return error.InvalidHookValue;
@@ -185,22 +203,27 @@ fn parseInternal(self: *Hooks, name: []const u8, input: []const u8, line_number:
                             error.RepeatedHookOption,
                             true,
                         );
+
                     hook.description = value;
                 } else if (std.mem.eql(u8, key, "Depends")) {
                     if (split == null) return error.InvalidHookValue;
+
                     try hook.depends.append(a, value);
                 } else if (std.mem.eql(u8, key, "NetworkAccess")) {
                     if (!std.mem.eql(u8, value, "allowed")) return error.InvalidHookValue;
+
                     hook.allow_network = true;
                 } else return error.InvalidHookOption;
             },
         }
     }
+
     if (hook.triggers.items.len == 0) return hook;
     for (hook.triggers.items) |trigger|
         if (trigger.kind == null or trigger.operations == 0 or
             trigger.targets.items.len == 0)
             return error.IncompleteHookTrigger;
+
     if (hook.argv.len == 0 or hook.when == null) return error.IncompleteHookAction;
     if (hook.when == .post_transaction and hook.abort_on_fail)
         try self.issue(
@@ -209,6 +232,7 @@ fn parseInternal(self: *Hooks, name: []const u8, input: []const u8, line_number:
             error.PostHookAbortIgnored,
             true,
         );
+
     return hook;
 }
 
@@ -220,8 +244,10 @@ pub fn wordsplit(a: std.mem.Allocator, value: []const u8) ![]const []const u8 {
     var quote: ?u8 = null;
     var started = false;
     var index: usize = 0;
+
     while (index < value.len) : (index += 1) {
         const ch = value[index];
+
         // Only quotes can be escaped. Within quotes, only that delimiter is
         // escapable; other backslashes remain literal (including before space).
         if (ch == '\\' and index + 1 < value.len and
@@ -245,9 +271,11 @@ pub fn wordsplit(a: std.mem.Allocator, value: []const u8) ![]const []const u8 {
             started = true;
         }
     }
+
     if (quote != null) return error.InvalidHookCommand;
     if (started) try words.append(a, try word.toOwnedSlice(a));
     if (words.items.len == 0 or words.items[0].len == 0) return error.InvalidHookCommand;
+
     return words.toOwnedSlice(a);
 }
 
@@ -259,20 +287,25 @@ pub fn discover(self: *Hooks, io: std.Io, directories: []const []const u8) !void
     const a = self.arena.allocator();
     var seen: std.StringHashMapUnmanaged(void) = .empty;
     var index = directories.len;
+
     while (index > 0) {
         index -= 1;
+
         var dir = std.Io.Dir.cwd().openDir(io, directories[index], .{ .iterate = true }) catch |err| {
             if (err == error.FileNotFound) continue;
+
             try self.issue(directories[index], 0, err, false);
             continue;
         };
         defer dir.close(io);
         var iterator = dir.iterate();
+
         while (iterator.next(io) catch |err| blk: {
             try self.issue(directories[index], 0, err, false);
             break :blk null;
         }) |entry| {
             if (!std.mem.endsWith(u8, entry.name, ".hook") or seen.contains(entry.name)) continue;
+
             const file = dir.openFile(io, entry.name, .{}) catch |err| {
                 try self.issue(entry.name, 0, err, false);
                 continue;
@@ -282,19 +315,25 @@ pub fn discover(self: *Hooks, io: std.Io, directories: []const []const u8) !void
                 try self.issue(entry.name, 0, err, false);
                 continue;
             };
+
             if (info.kind == .directory) continue;
+
             // /dev/null is deliberately readable as an empty masking hook.
             var reader = file.reader(io, &.{});
             const contents = reader.interface.allocRemaining(a, .limited(4 * 1024 * 1024)) catch |err| {
                 if (err == error.OutOfMemory) return err;
+
                 try self.issue(entry.name, 0, err, false);
                 continue;
             };
+
             const count = self.hooks.items.len;
             try self.parse(entry.name, contents);
+
             if (self.hooks.items.len != count) try seen.put(a, self.hooks.items[count].name, {});
         }
     }
+
     std.mem.sort(Hook, self.hooks.items, {}, less);
 }
 
@@ -311,6 +350,7 @@ pub fn changes(
     errdefer result.deinit(a);
     var paths: std.StringHashMapUnmanaged(u2) = .empty;
     defer paths.deinit(a);
+
     for (plan.additions) |addition| {
         try result.append(
             a,
@@ -324,42 +364,64 @@ pub fn changes(
             },
         );
     }
+
     for (plan.removals) |id| {
         const name = plan.package(id).name;
         var replacing = false;
+
         for (plan.additions) |addition|
             if (std.mem.eql(u8, name, plan.package(addition.package).name)) {
                 replacing = true;
                 break;
             };
+
         if (!replacing) try result.append(a, .{
             .kind = .package,
             .operation = .remove,
             .target = name,
         });
     }
+
     for (manifest.archives.items) |archive|
         for (archive.package.files) |file| {
             if (try Patterns.match(a, no_extract, file.name) == .matched) continue;
+
             const slot = try paths.getOrPut(a, file.name);
+
             if (!slot.found_existing) slot.value_ptr.* = 0;
+
             slot.value_ptr.* |= 1;
         };
+
+    for (manifest.adoptions.items) |item| {
+        const slot = try paths.getOrPut(a, item.path);
+
+        if (!slot.found_existing) slot.value_ptr.* = 0;
+
+        slot.value_ptr.* |= 1;
+    }
+
     for (manifest.locals.items) |local| {
         var removing = std.mem.indexOfScalar(Plan.Id, plan.removals, local.id) != null;
+
         for (plan.additions) |addition|
             if (addition.old == local.id) {
                 removing = true;
                 break;
             };
+
         if (!removing) continue;
         for (local.package.files) |file| {
             const slot = try paths.getOrPut(a, file.name);
+
             if (!slot.found_existing) slot.value_ptr.* = 0;
+
             slot.value_ptr.* |= 2;
         }
     }
+
     var iterator = paths.iterator();
+
     while (iterator.next()) |item|
         try result.append(a, .{
             .kind = .path,
@@ -371,31 +433,41 @@ pub fn changes(
                 else => unreachable,
             },
         });
+
     return result.toOwnedSlice(a);
 }
 
 pub fn match(self: *Hooks, when: When, effects: []const Change) ![]const Match {
     const a = self.arena.allocator();
     var result: std.ArrayList(Match) = .empty;
+
     for (self.hooks.items) |*hook| {
         if (hook.when != when) continue;
+
         var targets: std.StringHashMapUnmanaged(void) = .empty;
+
         for (hook.triggers.items) |trigger|
             for (effects) |effect| {
                 if (trigger.kind != effect.kind or
                     trigger.operations & (@as(u3, 1) << @intFromEnum(effect.operation)) == 0)
                     continue;
+
                 if (try Patterns.match(a, trigger.targets.items, effect.target) == .matched)
                     try targets.put(a, effect.target, {});
             };
+
         if (targets.count() == 0) continue;
+
         const names = try a.alloc([]const u8, targets.count());
         var keys = targets.keyIterator();
+
         for (names) |*name|
             name.* = try a.dupe(u8, keys.next().?.*);
+
         std.mem.sort([]const u8, names, {}, stringLess);
         try result.append(a, .{ .hook = hook, .targets = names });
     }
+
     return result.toOwnedSlice(a);
 }
 

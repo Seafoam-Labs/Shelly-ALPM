@@ -1,4 +1,5 @@
 //! Stored diagnostics contain values only; they never retain caller-owned strings.
+
 const std = @import("std");
 const DatabaseRef = @import("DatabaseRef.zig");
 
@@ -32,6 +33,7 @@ pub const Category = enum {
     unsupported,
     io,
 };
+
 operation: Operation,
 category: Category,
 cause: anyerror,
@@ -43,8 +45,9 @@ pub fn init(operation: Operation, cause: anyerror, database: ?DatabaseRef) Diagn
         .cause = cause,
         .database = database,
         .category = switch (cause) {
-            error.FileConflicts => .file_conflict,
+            error.FileConflicts, error.MigrationOwnershipConflict, error.MigrationTargetConflict, error.MigrationNoExtractConflict => .file_conflict,
             error.StaleFilesystemState => .stale_reference,
+            error.InvalidMigrationMetadata,
             error.PackageMetadataMismatch,
             error.UnsafeArchivePath,
             error.UnsafeHardlink,
@@ -61,9 +64,9 @@ pub fn init(operation: Operation, cause: anyerror, database: ?DatabaseRef) Diagn
             error.ConflictingDependencies,
             error.DuplicateFilename,
             => .resolution,
-            error.InvalidTransactionFlags, error.InvalidSnapshot => .invalid_argument,
+            error.InvalidMigrationFlags, error.InvalidMigrationPath, error.InvalidMigrationTarget, error.InvalidMigrationSource, error.DuplicateMigration, error.MigrationPathMissing, error.InvalidTransactionFlags, error.InvalidSnapshot => .invalid_argument,
             error.DatabaseNotFound, error.InvalidDatabase, error.IncompleteMetadata => .database,
-            error.UnsupportedPackageOrigin => .unsupported,
+            error.UnsupportedMigrationVersion, error.UnsupportedMigrationType, error.UnsupportedMigrationBackup, error.UnsupportedPackageOrigin => .unsupported,
             error.ChecksumMismatch,
             error.ChecksumMissing,
             error.SignatureMissing,
@@ -115,5 +118,6 @@ pub fn init(operation: Operation, cause: anyerror, database: ?DatabaseRef) Diagn
 
 pub fn format(self: Diagnostic, writer: *std.Io.Writer) std.Io.Writer.Error!void {
     try writer.print("{t}: {s}", .{ self.operation, @errorName(self.cause) });
+
     if (self.database) |reference| try writer.print(" (database {d})", .{@intFromEnum(reference.id)});
 }

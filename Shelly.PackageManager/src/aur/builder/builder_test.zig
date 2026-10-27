@@ -6648,6 +6648,22 @@ test "PackageBuilder keeps shared split builds under the global pkgname" {
     try fixture.temporary.dir.access(io, "pkg/shelly-flatpak-backend-git/usr/bin/backend", .{});
 }
 
+test "PackageBuilder collapses whitespace in a wrapped pkgdesc like makepkg" {
+    const allocator = testing.allocator;
+    const pkgbuild_content =
+        "pkgname=wrapped-desc\npkgver=1\npkgrel=1\narch=('any')\n" ++
+        "pkgdesc=\"  A description that is\n \twrapped onto  a second line \"\n" ++
+        "package() {\n  mkdir -p \"$pkgdir/usr/share/wrapped-desc\"\n}\n";
+    var fixture = try Fixture.create(allocator, pkgbuild_content, null, null);
+    defer fixture.destroy();
+
+    const artifacts = try fixture.builder.BuildPackage();
+    defer builder_mod.deinitArtifacts(allocator, artifacts);
+    const pkginfo = try readPkgInfo(allocator, artifacts[0].path);
+    defer allocator.free(pkginfo);
+    try testing.expect(std.mem.indexOf(u8, pkginfo, "pkgdesc = A description that is wrapped onto a second line\n") != null);
+}
+
 test "PackageBuilder preserves selected split metadata in PKGINFO" {
     if (!@import("../../alpm/backend.zig").libalpm_enabled) return error.SkipZigTest;
     const allocator = testing.allocator;
@@ -8177,4 +8193,66 @@ test "PackageBuilder issue 1981 executes large generated function snapshots" {
     const artifacts = try fixture.builder.BuildPackage();
     defer builder_mod.deinitArtifacts(allocator, artifacts);
     try testing.expectEqual(@as(usize, 1), artifacts.len);
+}
+
+test "migration split declarations round trip through build and RLPM installation" {
+    const rlpm = @import("Shelly_Rlpm");
+    const content =
+        \\pkgbase=migration-suite
+        \\pkgname=(migration-main migration-extra)
+        \\pkgver=1
+        \\pkgrel=1
+        \\arch=(any)
+        \\xdata=('channel=stable')
+        \\shelly_migrate=(' {"path":"etc/inherited","from":"unowned","optional":true}')
+        \\package_migration-main() {
+        \\  shelly_migrate=('{"path":"etc/local  config","from":"unowned","backup":true}')
+        \\  mkdir -p "$pkgdir/usr/share"
+        \\  printf payload > "$pkgdir/usr/share/migration-main"
+        \\}
+        \\package_migration-extra() {
+        \\  unset shelly_migrate
+        \\  mkdir -p "$pkgdir/usr/share"
+        \\  printf extra > "$pkgdir/usr/share/migration-extra"
+        \\}
+    ;
+    var fixture = try Fixture.createMany(testing.allocator, content, &.{ "migration-main", "migration-extra" }, null);
+    defer fixture.destroy();
+    const artifacts = try fixture.builder.BuildPackage();
+    defer builder_mod.deinitArtifacts(testing.allocator, artifacts);
+    for (artifacts) |artifact| {
+        var package = try rlpm.Package.loadArchive(testing.allocator, artifact.path, .{});
+        defer package.deinit();
+        var found: usize = 0;
+        for (package.xdata) |value| {
+            if (!std.mem.eql(u8, value.name, rlpm.Migration.metadata_key)) continue;
+            found += 1;
+            const parsed = try rlpm.Migration.parse(testing.allocator, value.value);
+            defer parsed.deinit();
+            try testing.expectEqualStrings("etc/local  config", parsed.value.path);
+        }
+        try testing.expectEqual(@as(usize, if (std.mem.eql(u8, package.name, "migration-main")) 1 else 0), found);
+    }
+    try fixture.temporary.dir.createDirPath(testing.io, "migration-root/etc");
+    try fixture.temporary.dir.createDirPath(testing.io, "migration-db");
+    try fixture.temporary.dir.writeFile(testing.io, .{ .sub_path = "migration-root/etc/local  config", .data = "local settings" });
+    const root = try std.fs.path.join(testing.allocator, &.{ fixture.build_dir, "migration-root" });
+    defer testing.allocator.free(root);
+    const db = try std.fs.path.join(testing.allocator, &.{ fixture.build_dir, "migration-db" });
+    defer testing.allocator.free(db);
+    var owner = try rlpm.Owner.init(testing.io, testing.allocator, .{ .root = root, .database_path = db }, &.{});
+    defer owner.deinit() catch unreachable;
+    const tx = try owner.initializeTransaction(testing.io, .{ .no_hooks = true, .no_scriptlets = true });
+    defer owner.releaseTransaction() catch unreachable;
+    var package: ?rlpm.Package = try owner.loadPackage(testing.io, artifacts[0].path, .local_file, .{ .mode = .full });
+    defer if (package) |*value| value.deinit();
+    try tx.takeArchive(&package);
+    try tx.prepare();
+    try tx.commit();
+    const local = try fixture.temporary.dir.readFileAlloc(testing.io, "migration-root/etc/local  config", testing.allocator, .limited(100));
+    defer testing.allocator.free(local);
+    try testing.expectEqualStrings("local settings", local);
+    const record = try fixture.temporary.dir.readFileAlloc(testing.io, "migration-db/local/migration-main-1-1/files", testing.allocator, .limited(4096));
+    defer testing.allocator.free(record);
+    try testing.expect(std.mem.indexOf(u8, record, "%RLPM_ADOPTED%\netc/local  config\n") != null);
 }

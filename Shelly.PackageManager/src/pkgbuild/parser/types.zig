@@ -23,6 +23,7 @@ pub const Pkgbuild = struct {
     backup: ?[][]const u8 = null,
     options: ?[][]const u8 = null,
     xdata: ?[][]const u8 = null,
+    shelly_migrate: ?[][]const u8 = null,
     source: ?[][]const u8 = null,
     valid_pgp_keys: ?[][]const u8 = null,
     no_extract: ?[][]const u8 = null,
@@ -118,6 +119,10 @@ pub const Pkgbuild = struct {
             allocator.free(a);
         }
         if (self.options) |a| {
+            for (a) |item| allocator.free(item);
+            allocator.free(a);
+        }
+        if (self.shelly_migrate) |a| {
             for (a) |item| allocator.free(item);
             allocator.free(a);
         }

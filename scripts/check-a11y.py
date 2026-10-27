@@ -583,9 +583,14 @@ def check_wizard(rep: Report, app: Accessible) -> None:
             "reports STATE_FOCUSED. Press Next in Orca to check this by ear."
         )
     else:
+        # A page change lands on the page's own named group, which is the
+        # entry point a screen reader reads; its controls are one Tab away.
+        # The control roles stay accepted so the check also passes on a build
+        # that focuses the first control directly.
         rep.expect(
             "focus moved into the new page",
-            target.role in ("check box", "switch", "combo box"),
+            (target.role == "grouping" and target.name == "Select Your Sources")
+            or target.role in ("check box", "switch", "combo box"),
             f"focus is on [{target.role}] {target.name!r}",
         )
 

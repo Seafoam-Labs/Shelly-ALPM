@@ -1,6 +1,8 @@
 //! Owned, read-only resolution result. Treat its views as immutable. It survives
 //! Owner/cache/archive release; deinit exactly once. A failed plan is diagnostic
 //! data, never an executable transaction. Transaction binds review to live state.
+//! Transaction preflight may append owned diagnostic issues after resolution.
+
 const std = @import("std");
 const Package = @import("Package.zig");
 const Relation = @import("PackageRelation.zig");
@@ -18,12 +20,25 @@ pub const Candidate = struct {
     repository: ?usize = null,
 };
 
+pub const Replacement = struct { new: Id, old: Id };
+
+pub const Migration = struct {
+    origin: @import("Migration.zig").Origin = .api,
+    package: Id,
+    source: ?Id,
+    path: []const u8,
+    optional: bool,
+    backup: bool,
+};
+
 pub const Addition = struct {
     package: Id,
     old: ?Id,
     action: enum { install, reinstall, upgrade, downgrade },
+
     /// Reason during dependency preparation, before executor overrides.
     selection_reason: Package.InstallReason,
+
     /// Final reason, including old reason and ALLDEPS/ALLEXPLICIT precedence.
     reason: Package.InstallReason,
     explicit_target: bool,
@@ -34,6 +49,7 @@ pub const Edge = struct {
     requiring: Id,
     dependency: Relation,
     satisfier: union(enum) { package: Id, assumed: Relation },
+
     /// null means the package's literal name/version satisfied this edge.
     provision: ?Relation = null,
     version_ignored: bool = false,
@@ -61,6 +77,13 @@ pub const Failure = enum {
     duplicate_filename,
 };
 
+pub const FileConflict = struct {
+    path: []const u8,
+    first: Id,
+    second: ?Id = null,
+    kind: enum { target, filesystem },
+};
+
 pub const Issue = union(enum) {
     target: []const u8,
     duplicate: struct {
@@ -70,6 +93,7 @@ pub const Issue = union(enum) {
     architecture: Id,
     missing: Missing,
     conflict: Conflict,
+    file_conflict: FileConflict,
     filename: struct {
         first: Id,
         second: Id,
@@ -106,6 +130,7 @@ pub const Warning = union(enum) {
 pub const Sizes = struct {
     installed_add: u64 = 0,
     installed_remove: u64 = 0,
+
     /// Upper estimate before accounting for cached archives and partial downloads.
     download_upper_bound: u64 = 0,
     unknown_installed: usize = 0,
@@ -115,10 +140,13 @@ pub const Sizes = struct {
 arena: std.heap.ArenaAllocator,
 candidates: []const Candidate = &.{},
 flags: TransactionFlags = .{},
+
 /// Whether target selection left work for native prepare to enter a phase.
 had_prepare_targets: bool = false,
 additions: []const Addition = &.{},
 removals: []const Id = &.{},
+replacements: []const Replacement = &.{},
+migrations: []const Migration = &.{},
 unchanged_satisfiers: []const Id = &.{},
 edges: []const Edge = &.{},
 questions: []const Callbacks.Question = &.{},
@@ -133,6 +161,7 @@ pub fn deinit(self: *Plan) void {
             var owned = file;
             owned.deinit();
         };
+
     self.arena.deinit();
     self.* = undefined;
 }
@@ -145,6 +174,7 @@ pub fn findReference(self: *const Plan, reference: PackageRef) ?Id {
     for (self.candidates, 0..) |candidate, index| {
         if (std.meta.eql(candidate.reference, reference)) return @enumFromInt(index);
     }
+
     return null;
 }
 
@@ -164,6 +194,7 @@ pub fn check(self: *const Plan) !void {
 /// separately by the caller; never copy allocator or descriptor internals.
 pub fn copyMetadata(allocator: std.mem.Allocator, source: Package) !Package {
     var result: Package = undefined;
+
     inline for (std.meta.fields(Package)) |field| {
         if (comptime std.mem.eql(u8, field.name, "archive_arena") or
             std.mem.eql(
@@ -175,6 +206,7 @@ pub fn copyMetadata(allocator: std.mem.Allocator, source: Package) !Package {
             @field(result, field.name) = null;
         } else @field(result, field.name) = try copyValue(field.type, allocator, @field(source, field.name));
     }
+
     return result;
 }
 
@@ -182,23 +214,29 @@ pub fn copyValue(comptime T: type, allocator: std.mem.Allocator, value: T) error
     switch (@typeInfo(T)) {
         .pointer => |info| {
             if (info.size != .slice) @compileError("snapshot copy requires slices");
+
             const result = try allocator.alloc(info.child, value.len);
+
             for (value, result) |item, *out|
                 out.* = try copyValue(info.child, allocator, item);
+
             return result;
         },
         .optional => |info| {
             if (@typeInfo(info.child) == .error_set) return value;
+
             return if (value) |item| try copyValue(info.child, allocator, item) else null;
         },
         .@"struct" => {
             var result: T = undefined;
+
             inline for (std.meta.fields(T)) |field|
                 @field(result, field.name) = try copyValue(
                     field.type,
                     allocator,
                     @field(value, field.name),
                 );
+
             return result;
         },
         .@"union" => return switch (value) {
@@ -206,4 +244,21 @@ pub fn copyValue(comptime T: type, allocator: std.mem.Allocator, value: T) error
         },
         else => return value,
     }
+}
+
+/// Only an accepted replacement or the destination's old version authorizes transfer.
+pub fn migrationSource(self: *const Plan, destination: Id, name: []const u8) ?Id {
+    for (self.replacements) |replacement| {
+        if (replacement.new == destination and
+            std.mem.indexOfScalar(Id, self.removals, replacement.old) != null and
+            std.mem.eql(u8, self.package(replacement.old).name, name)) return replacement.old;
+    }
+
+    for (self.additions) |addition| {
+        if (addition.package == destination) if (addition.old) |old| {
+            if (std.mem.eql(u8, self.package(old).name, name)) return old;
+        };
+    }
+
+    return null;
 }

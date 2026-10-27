@@ -40,7 +40,9 @@ transaction API provides owned transactions, exclusive locks, frozen
 preparation, typed lifecycle events and PackageManager
 deferred-question/cancellation support. The [transaction guide](transactions.md)
 covers the state machine and lock contract. The executor enables normal commit
-and installed-repository provenance writes.
+and installed-repository provenance writes. [File migrations](migration.md), requested through the API or package metadata,
+adopt existing unowned or replaced-package files and retain archive-absent
+ownership across RLPM upgrades.
 
 Downloads use the shared PackageManager transport for verified cache
 acquisition, repository refresh and DOWNLOADONLY transactions. See
@@ -83,6 +85,7 @@ module dependency. From this directory:
 | `zig build test-verification` | Policy/status, checksums, reference cases, imports and sealed-file tests |
 | `zig build test-resolver` | Plans, flags, questions, removal/upgrade behavior and 314 reference scenarios |
 | `zig build test-transaction` | Lifecycle, locks/process contention, archive ownership, cancellation and 16 reference scenarios |
+| `zig build test-migration` | In-place adoption, Devario replacements, persistence, backups and failures |
 | `zig build test-executor` | Payload, persistence, failure and 26 complete native state/event cases |
 | `zig build test-executor-integration` | Full commits, 19 native process traces, attributes and ENOSPC in namespaces |
 | `zig build test-executor-interop` | Both-way disposable-database interoperability with the pinned native binary |
