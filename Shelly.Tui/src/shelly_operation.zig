@@ -6,11 +6,94 @@ const Scope = @import("flatpak.zig").InstallLevel;
 const UpdateType = @import("appimage.zig").UpdateType;
 
 pub const ElevatedInstallRequest = struct {
+    sudo_bin: []const u8 = "sudo",
     shelly_bin: []const u8,
     environ_map: *const std.process.Environ.Map,
     name: []const u8,
     backend: []const u8,
     password: []const u8,
+};
+
+/// Fixed-size, owned display data; safe to copy between the worker and UI.
+pub const Progress = struct {
+    status: [512]u8 = @splat(0),
+    status_len: usize = 0,
+    percent: ?i64 = null,
+    messages: [4][512]u8 = @splat(@splat(0)),
+    lengths: [4]usize = @splat(0),
+
+    pub fn text(self: *const Progress) []const u8 {
+        return self.status[0..self.status_len];
+    }
+
+    fn update(self: *Progress, text_value: []const u8, percent: ?i64) void {
+        self.percent = percent;
+        self.status_len = @min(text_value.len, self.status.len);
+        @memcpy(self.status[0..self.status_len], text_value[0..self.status_len]);
+    }
+
+    fn log(self: *Progress, value: []const u8) void {
+        if (value.len == 0) return;
+        for (0..3) |i| {
+            self.messages[i] = self.messages[i + 1];
+            self.lengths[i] = self.lengths[i + 1];
+        }
+        self.lengths[3] = @min(value.len, 512);
+        @memcpy(self.messages[3][0..self.lengths[3]], value[0..self.lengths[3]]);
+    }
+};
+
+const ProgressStream = struct {
+    payload: [256 * 1024]u8 = undefined,
+    len: usize = 0,
+    matched: usize = 0,
+    in_frame: bool = false,
+    failed: bool = false,
+    error_text: [512]u8 = @splat(0),
+    error_len: usize = 0,
+
+    fn feed(self: *ProgressStream, bytes: []const u8, operation: ?*InstallOperation, io: std.Io) void {
+        for (bytes) |byte| {
+            if (!self.in_frame) {
+                const marker = "[JSON]";
+                if (byte == marker[self.matched]) {
+                    self.matched += 1;
+                    if (self.matched == marker.len) {
+                        self.in_frame = true;
+                        self.matched = 0;
+                        self.len = 0;
+                    }
+                } else self.matched = if (byte == '[') 1 else 0;
+                continue;
+            }
+            if (self.len == self.payload.len) {
+                self.failed = true;
+                self.in_frame = false;
+                self.len = 0;
+                continue;
+            }
+            self.payload[self.len] = byte;
+            self.len += 1;
+            if (!std.mem.endsWith(u8, self.payload[0..self.len], "[/JSON]")) continue;
+            self.in_frame = false;
+            var message = decodePayload(std.heap.page_allocator, self.payload[0 .. self.len - 7]) catch {
+                self.failed = true;
+                continue;
+            };
+            defer message.deinit();
+            switch (message.value) {
+                .question => self.failed = true,
+                .event => |event| {
+                    if (event == .err) {
+                        self.failed = true;
+                        self.error_len = @min(event.err.message.len, self.error_text.len);
+                        @memcpy(self.error_text[0..self.error_len], event.err.message[0..self.error_len]);
+                    }
+                    if (operation) |op| op.record(io, event);
+                },
+            }
+        }
+    }
 };
 
 pub const InstallOperation = struct {
@@ -19,6 +102,41 @@ pub const InstallOperation = struct {
     thread: ?std.Thread = null,
     done: std.atomic.Value(bool) = .init(false),
     result: InstallResult = .{},
+    progress_mutex: std.Io.Mutex = .init,
+    progress: Progress = .{},
+
+    pub fn snapshot(self: *InstallOperation, io: std.Io) Progress {
+        self.progress_mutex.lockUncancelable(io);
+        defer self.progress_mutex.unlock(io);
+        return self.progress;
+    }
+
+    fn record(self: *InstallOperation, io: std.Io, event: Event) void {
+        self.progress_mutex.lockUncancelable(io);
+        defer self.progress_mutex.unlock(io);
+        var buffer: [512]u8 = undefined;
+        switch (event) {
+            .info => |info| {
+                self.progress.update(info.message, null);
+                self.progress.log(info.message);
+            },
+            .err => |err| {
+                self.progress.update(err.message, null);
+                self.progress.log(err.message);
+            },
+            .alpm_progress => |progress| {
+                const text_value = std.fmt.bufPrint(&buffer, "{s}: {s}", .{
+                    progress.stage orelse progress.progress_type,
+                    if (progress.package_name.len > 0) progress.package_name else progress.message orelse "",
+                }) catch buffer[0..];
+                self.progress.update(text_value, progress.percent);
+            },
+            inline .flatpak_progress, .appimage_progress => |progress| {
+                self.progress.update(progress.status orelse "Installing…", progress.percentage);
+            },
+            .unknown => {},
+        }
+    }
 
     pub fn start(request: ElevatedInstallRequest) !*InstallOperation {
         const self = try std.heap.page_allocator.create(InstallOperation);
@@ -29,6 +147,7 @@ pub const InstallOperation = struct {
         };
         errdefer self.arena.deinit();
         const alloc = self.arena.allocator();
+        self.request.sudo_bin = try alloc.dupe(u8, request.sudo_bin);
         self.request.shelly_bin = try alloc.dupe(u8, request.shelly_bin);
         self.request.name = try alloc.dupe(u8, request.name);
         self.request.backend = try alloc.dupe(u8, request.backend);
@@ -42,7 +161,7 @@ pub const InstallOperation = struct {
         {
             var threaded: std.Io.Threaded = .init(std.heap.page_allocator, .{});
             defer threaded.deinit();
-            self.result = elevatedInstall(threaded.io(), std.heap.page_allocator, self.request);
+            self.result = runInstall(threaded.io(), std.heap.page_allocator, self.request, self);
             @memset(@constCast(self.request.password), 0);
         }
         self.done.store(true, .release);
@@ -75,13 +194,17 @@ pub const InstallResult = struct {
 /// Retains sudo password input and automatic confirmation until the interactive
 /// transport and terminal authentication replace this path.
 pub fn elevatedInstall(io: std.Io, alloc: std.mem.Allocator, request: ElevatedInstallRequest) InstallResult {
+    return runInstall(io, alloc, request, null);
+}
+
+fn runInstall(io: std.Io, alloc: std.mem.Allocator, request: ElevatedInstallRequest, operation: ?*InstallOperation) InstallResult {
     var result: InstallResult = .{};
     const argv = alloc.alloc([]const u8, 10) catch {
         result.failed = true;
         return result;
     };
     defer alloc.free(argv);
-    argv[0] = "sudo";
+    argv[0] = request.sudo_bin;
     argv[1] = "-S";
     argv[2] = "-p";
     argv[3] = "";
@@ -125,18 +248,35 @@ pub fn elevatedInstall(io: std.Io, alloc: std.mem.Allocator, request: ElevatedIn
     multi_reader.init(alloc, io, multi_reader_buffer.toStreams(), &.{ child.stdout.?, child.stderr.? });
     defer multi_reader.deinit();
 
+    var stream: ProgressStream = .{};
+    var stderr_tail: [4096]u8 = undefined;
+    var stderr_len: usize = 0;
     var read_failed = false;
     while (true) {
-        multi_reader.fill(64, .none) catch |err| {
+        var eof = false;
+        multi_reader.fill(4096, .none) catch |err| {
             if (err != error.EndOfStream) read_failed = true;
-            break;
+            eof = true;
         };
+        const stdout_reader = multi_reader.reader(0);
+        stream.feed(stdout_reader.buffered(), operation, io);
+        stdout_reader.seek = stdout_reader.end;
+        const stderr_reader = multi_reader.reader(1);
+        const bytes = stderr_reader.buffered();
+        if (bytes.len > 0) {
+            const take = @min(bytes.len, stderr_tail.len);
+            const keep = @min(stderr_len, stderr_tail.len - take);
+            std.mem.copyForwards(u8, stderr_tail[0..keep], stderr_tail[stderr_len - keep .. stderr_len]);
+            @memcpy(stderr_tail[keep .. keep + take], bytes[bytes.len - take ..]);
+            stderr_len = keep + take;
+        }
+        stderr_reader.seek = stderr_reader.end;
+        if (eof) break;
     }
-    if (read_failed) {
-        result.error_detail = alloc.dupe(u8, "Could not read the installation command output for the requested package.") catch "";
-        result.failed = true;
-        return result;
-    }
+    multi_reader.checkAnyError() catch {
+        read_failed = true;
+    };
+    if (stream.in_frame) stream.failed = true;
 
     const term = child.wait(io) catch {
         result.error_detail = alloc.dupe(u8, "Could not collect the installation result for the requested package. Its final status could not be confirmed.") catch "";
@@ -144,13 +284,18 @@ pub fn elevatedInstall(io: std.Io, alloc: std.mem.Allocator, request: ElevatedIn
         return result;
     };
 
-    if (term != .exited or term.exited != 0) {
-        const stderr = multi_reader.toOwnedSlice(1) catch &.{};
-        const stdout = multi_reader.toOwnedSlice(0) catch &.{};
-        defer if (stderr.len > 0) alloc.free(stderr);
-        defer if (stdout.len > 0) alloc.free(stdout);
-        result.error_detail = (JsonPackFrame.failureMessage(alloc, stdout) catch null) orelse
-            (diagnostics.sanitizeAlloc(alloc, if (stderr.len > 0) std.mem.trim(u8, stderr, " \t\r\n") else "Could not install the requested package. Shelly returned no error details. Review the command output before retrying.") catch "");
+    if (term != .exited or term.exited != 0 or read_failed or stream.failed) {
+        const detail = if (stream.error_len > 0)
+            stream.error_text[0..stream.error_len]
+        else if (read_failed)
+            "Could not read installation output; the final status could not be confirmed."
+        else if (stream.failed)
+            "Installation output contained an invalid, incomplete, or unsupported message. Check package state before retrying."
+        else if (stderr_len > 0)
+            std.mem.trim(u8, stderr_tail[0..stderr_len], " \t\r\n")
+        else
+            "Could not install the requested package. Shelly returned no error details.";
+        result.error_detail = diagnostics.sanitizeAlloc(alloc, detail) catch "";
         result.failed = true;
     }
     return result;
@@ -910,6 +1055,7 @@ test "operation worker owns inputs and joins on launch failure" {
     try env.put("PATH", "/nonexistent-shelly-operation-test");
     var name = [_]u8{ 't', 'e', 's', 't' };
     const operation = try InstallOperation.start(.{
+        .sudo_bin = "/nonexistent-shelly-sudo",
         .shelly_bin = "/nonexistent-shelly",
         .environ_map = &env,
         .name = &name,
@@ -928,4 +1074,40 @@ test "operation worker owns inputs and joins on launch failure" {
     // Cleanup must also join a worker whose result has never been polled.
     const unpolled = try InstallOperation.start(operation.request);
     unpolled.deinit();
+}
+
+test "operation progress stream handles fragmented frames and owns display data" {
+    var threaded: std.Io.Threaded = .init(std.testing.allocator, .{});
+    defer threaded.deinit();
+    var operation: InstallOperation = .{
+        .arena = .init(std.testing.allocator),
+        .request = undefined,
+    };
+    defer operation.arena.deinit();
+    const json = "{\"$kind\":\"alpm.progress\",\"PackageName\":\"dependency\",\"ProgressType\":\"PackageDownload\",\"Percent\":37,\"Stage\":\"Downloading\"}";
+    var encoded: [std.base64.standard.Encoder.calcSize(json.len)]u8 = undefined;
+    _ = std.base64.standard.Encoder.encode(&encoded, json);
+    var stream: ProgressStream = .{};
+    stream.feed("noise[JS", &operation, threaded.io());
+    stream.feed("ON]", &operation, threaded.io());
+    for (encoded) |byte| stream.feed(&.{byte}, &operation, threaded.io());
+    stream.feed("[/JSON]", &operation, threaded.io());
+    @memset(&encoded, 0);
+    const progress = operation.snapshot(threaded.io());
+    try std.testing.expectEqualStrings("Downloading: dependency", progress.text());
+    try std.testing.expectEqual(@as(?i64, 37), progress.percent);
+    try std.testing.expect(!stream.failed);
+    stream.feed("[JSON]invalid[/JSON]", &operation, threaded.io());
+    try std.testing.expect(stream.failed);
+}
+
+test "operation progress retains only bounded recent messages" {
+    var progress: Progress = .{};
+    for ([_][]const u8{ "one", "two", "three", "four", "five" }) |line| progress.log(line);
+    try std.testing.expectEqualStrings("two", progress.messages[0][0..progress.lengths[0]]);
+    try std.testing.expectEqualStrings("five", progress.messages[3][0..progress.lengths[3]]);
+    var stream: ProgressStream = .{};
+    stream.feed("[JSON]", null, undefined);
+    for (0..256 * 1024 + 1) |_| stream.feed("a", null, undefined);
+    try std.testing.expect(stream.failed);
 }

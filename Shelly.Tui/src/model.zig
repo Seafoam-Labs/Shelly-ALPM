@@ -56,12 +56,15 @@ const SudoPrompt = struct {
     /// Failure detail shown after a failed attempt; owned by `gpa`.
     detail: []const u8 = "",
 
+    progress: shelly_operation.Progress = .{},
+
     const State = enum { entering, running, succeeded, failed };
 
     fn operationView(self: *const SudoPrompt) ?operation_view.View {
         return .{
             .name = self.name,
             .detail = self.detail,
+            .progress = self.progress,
             .state = switch (self.state) {
                 .entering => return null,
                 .running => .running,
@@ -620,10 +623,14 @@ pub const Model = struct {
 
     fn pollInstall(self: *Model) !bool {
         const job = self.install_job orelse return false;
-        const result = job.poll() orelse return true;
+        const result = job.poll();
+        if (self.overlay) |overlay| {
+            if (overlay == .sudo) overlay.sudo.progress = job.snapshot(runtime.io);
+        }
+        const completed = result orelse return true;
         defer job.deinit();
 
-        const failed = result.failed;
+        const failed = completed.failed;
         self.install_job = null;
 
         // Reflect a successful standard install in the loaded data
@@ -642,8 +649,8 @@ pub const Model = struct {
                     if (failed) {
                         prompt.state = .failed;
                         if (prompt.detail.len > 0) self.gpa.free(prompt.detail);
-                        prompt.detail = if (result.error_detail.len > 0)
-                            self.gpa.dupe(u8, result.error_detail) catch ""
+                        prompt.detail = if (completed.error_detail.len > 0)
+                            self.gpa.dupe(u8, completed.error_detail) catch ""
                         else
                             "";
                     } else {
