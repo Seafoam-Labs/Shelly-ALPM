@@ -994,3 +994,210 @@ test "migration repository dependency uses archive declarations absent from repo
     const record = try fixture.temp.dir.readFileAlloc(t.io, "db/local/migration-dependency-1-1/files", a, .limited(4096));
     try t.expect(std.mem.indexOf(u8, record, "%RLPM_ADOPTED%\netc/installer.conf\n") != null);
 }
+
+const UpgradePackage = struct {
+    name: []const u8,
+    version: []const u8,
+    depends: []const u8 = "",
+    provides: []const u8 = "",
+};
+
+fn upgradeArchive(fixture: *Fixture, package: UpgradePackage) ![]const u8 {
+    const a = fixture.arena.allocator();
+    const filename = try std.fmt.allocPrint(a, "{s}-{s}-any.pkg.tar", .{ package.name, package.version });
+    const path = try std.fs.path.join(a, &.{ "cache", filename });
+    const file = try fixture.temp.dir.createFile(t.io, path, .{});
+    defer file.close(t.io);
+    var buffer: [4096]u8 = undefined;
+    var writer = file.writer(t.io, &buffer);
+    var tar: std.tar.Writer = .{ .underlying_writer = &writer.interface };
+    const depends = if (package.depends.len == 0) "" else try std.fmt.allocPrint(a, "depend = {s}\n", .{package.depends});
+    const provides = if (package.provides.len == 0) "" else try std.fmt.allocPrint(a, "provides = {s}\n", .{package.provides});
+    try tar.writeFileBytes(".PKGINFO", try std.fmt.allocPrint(a, "pkgname = {s}\npkgver = {s}\npkgdesc = Upgrade regression fixture\narch = any\nsize = 4\n{s}{s}", .{ package.name, package.version, depends, provides }), .{ .mode = 0o644 });
+    try tar.writeFileBytes(try std.fmt.allocPrint(a, "usr/share/{s}", .{package.name}), package.version, .{ .mode = 0o644 });
+    try tar.finishPedantically();
+    try writer.interface.flush();
+    return path;
+}
+
+fn upgradeRepository(fixture: *Fixture, repository: []const u8, packages: []const UpgradePackage) !void {
+    const a = fixture.arena.allocator();
+    const file = try fixture.temp.dir.createFile(t.io, try std.fmt.allocPrint(a, "mirror/{s}.db", .{repository}), .{});
+    defer file.close(t.io);
+    var buffer: [4096]u8 = undefined;
+    var writer = file.writer(t.io, &buffer);
+    var tar: std.tar.Writer = .{ .underlying_writer = &writer.interface };
+    for (packages) |package| {
+        const path = try upgradeArchive(fixture, package);
+        const filename = std.fs.path.basename(path);
+        const bytes = try fixture.temp.dir.readFileAlloc(t.io, path, a, .limited(64 * 1024));
+        try fixture.temp.dir.writeFile(t.io, .{ .sub_path = try std.fs.path.join(a, &.{ "mirror", filename }), .data = bytes });
+        const checksum = try pm.Manager.build_plan.hashBytes(a, bytes);
+        const desc = try std.fmt.allocPrint(a, "%NAME%\n{s}\n\n%VERSION%\n{s}\n\n%ARCH%\nany\n\n%FILENAME%\n{s}\n\n%CSIZE%\n{d}\n\n%ISIZE%\n4\n\n%SHA256SUM%\n{s}\n\n%DEPENDS%\n{s}\n\n%PROVIDES%\n{s}\n\n", .{ package.name, package.version, filename, bytes.len, checksum, package.depends, package.provides });
+        try tar.writeFileBytes(try std.fmt.allocPrint(a, "{s}-{s}/desc", .{ package.name, package.version }), desc, .{ .mode = 0o644 });
+    }
+    try tar.finishPedantically();
+    try writer.interface.flush();
+}
+
+const old_upgrade_packages = [_]UpgradePackage{
+    .{ .name = "filezilla", .version = "1-1", .depends = "libfilezilla.so=59-64" },
+    .{ .name = "libfilezilla", .version = "1-1", .provides = "libfilezilla.so=59-64" },
+    .{ .name = "unrelated", .version = "1-1" },
+};
+const upgrade_flags: pm.Manager.TransFlag = .{ .nohooks = true, .noscriptlet = true };
+
+fn setupUpgrade(fixture: *Fixture, updates: bool) !*pm.Manager {
+    const a = fixture.arena.allocator();
+    try fixture.temp.dir.createDirPath(t.io, "mirror");
+    const directory = try fixture.temp.dir.realPathFileAlloc(t.io, ".", a);
+    try fixture.temp.dir.writeFile(t.io, .{ .sub_path = "pacman.conf", .data = try std.fmt.allocPrint(
+        a,
+        "[options]\nArchitecture = auto\nSigLevel = Never\nLocalFileSigLevel = Never\n" ++
+            "[preferred]\nServer = file://{s}/mirror\n[extra-testing]\nServer = file://{s}/mirror\n",
+        .{ directory, directory },
+    ) });
+    // The higher-priority repository masks the rebuilt application, but not
+    // the library upgrade. An explicit repository target must override it.
+    try upgradeRepository(fixture, "preferred", old_upgrade_packages[0..1]);
+    try upgradeRepository(fixture, "extra-testing", &.{
+        .{ .name = "filezilla", .version = if (updates) "2-1" else "1-1", .depends = if (updates) "libfilezilla.so=64-64" else "libfilezilla.so=59-64" },
+        .{ .name = "libfilezilla", .version = if (updates) "2-1" else "1-1", .provides = if (updates) "libfilezilla.so=64-64" else "libfilezilla.so=59-64" },
+        .{ .name = "unrelated", .version = if (updates) "2-1" else "1-1" },
+        .{ .name = "fresh", .version = "1-1" },
+        .{ .name = "broken", .version = "1-1", .depends = "missing-dependency" },
+    });
+    var archives: [old_upgrade_packages.len][]const u8 = undefined;
+    for (old_upgrade_packages, &archives) |package, *path| {
+        path.* = try fixture.temp.dir.realPathFileAlloc(t.io, try upgradeArchive(fixture, package), a);
+    }
+    const manager = try fixture.manager();
+    errdefer manager.deinit();
+    try manager.install_local_packages(&archives, upgrade_flags);
+    try manager.sync(false);
+    return manager;
+}
+
+fn expectUpgradeVersion(fixture: *Fixture, manager: *pm.Manager, version: []const u8) !void {
+    for (old_upgrade_packages) |package| {
+        var installed = (try manager.get_single_installed_package(try fixture.arena.allocator().dupeZ(u8, package.name))).?;
+        defer installed.deinit(t.allocator);
+        try t.expectEqualStrings(version, installed.version_value);
+        const contents = try fixture.temp.dir.readFileAlloc(t.io, try std.fmt.allocPrint(fixture.arena.allocator(), "root/usr/share/{s}", .{package.name}), t.allocator, .limited(64));
+        defer t.allocator.free(contents);
+        try t.expectEqualStrings(version, contents);
+    }
+    try t.expectError(error.FileNotFound, fixture.temp.dir.statFile(t.io, "db/db.lck", .{}));
+}
+
+test "native backend combined upgrade resolves explicit repository ABI transition (issue 2093)" {
+    for ([_]pm.Manager.Backend{ .libalpm, .rlpm }) |backend| {
+        if (!backend.available()) continue;
+        var fixture = try Fixture.init(backend);
+        defer fixture.deinit();
+        const manager = try setupUpgrade(&fixture, true);
+        defer manager.deinit();
+        // This is the old CLI's first transaction, before it reached the targets.
+        // The RLPM facade currently maps this dependency failure to CommitFailed.
+        try t.expectError(if (backend == .libalpm) error.PrepareFailed else error.CommitFailed, manager.sync_system_update(upgrade_flags));
+        try expectUpgradeVersion(&fixture, manager, "1-1");
+        var context = pm.OperationContext.init(t.allocator, t.io);
+        defer context.deinit();
+        const Preview = struct {
+            count: usize = 0,
+            valid: bool = false,
+            fn answer(data: ?*anyopaque, question: pm.operation.Question) pm.operation.QuestionResponse {
+                const self: *@This() = @ptrCast(@alignCast(data.?));
+                if (question.kind == .confirm_transaction) {
+                    self.count += 1;
+                    const plan = question.transaction_plan.?;
+                    self.valid = plan.action == .update and plan.packages.len == 3;
+                    for (plan.packages) |package| self.valid = self.valid and std.mem.eql(u8, package.version.?, "2-1");
+                }
+                return .accepted;
+            }
+        };
+        var preview: Preview = .{};
+        context.setQuestionHandler(.{ .function = Preview.answer, .data = &preview });
+        manager.setOperationContext(&context);
+        defer manager.setOperationContext(null);
+        var targets = [_][:0]const u8{ "extra-testing/filezilla", "extra-testing/libfilezilla" };
+        var report = try manager.sync_system_update_with_packages(&targets, upgrade_flags);
+        defer report.deinit();
+        try t.expectEqual(@as(usize, 1), preview.count);
+        try t.expect(preview.valid);
+        try expectUpgradeVersion(&fixture, manager, "2-1");
+        // --needed must not reinstall the requested packages on a second run.
+        try fixture.temp.dir.writeFile(t.io, .{ .sub_path = "root/usr/share/filezilla", .data = "locally changed" });
+        var needed_flags = upgrade_flags;
+        needed_flags.needed = true;
+        var again = try manager.sync_system_update_with_packages(&targets, needed_flags);
+        defer again.deinit();
+        const contents = try fixture.temp.dir.readFileAlloc(t.io, "root/usr/share/filezilla", t.allocator, .limited(64));
+        defer t.allocator.free(contents);
+        try t.expectEqualStrings("locally changed", contents);
+        try t.expectEqual(@as(usize, 1), preview.count);
+    }
+}
+
+test "native backend combined upgrade rejects missing or broken targets before changes" {
+    for ([_]pm.Manager.Backend{ .libalpm, .rlpm }) |backend| {
+        if (!backend.available()) continue;
+        var fixture = try Fixture.init(backend);
+        defer fixture.deinit();
+        const manager = try setupUpgrade(&fixture, true);
+        defer manager.deinit();
+        for ([_][:0]const u8{ "missing", "extra-testing/missing", "extra-testing/broken" }) |invalid| {
+            var targets = [_][:0]const u8{ "extra-testing/filezilla", "extra-testing/libfilezilla", invalid };
+            if (manager.sync_system_update_with_packages(&targets, upgrade_flags)) |value| {
+                var report = value;
+                report.deinit();
+                return error.InvalidUpgradeSucceeded;
+            } else |_| {}
+            try expectUpgradeVersion(&fixture, manager, "1-1");
+            try t.expect(!manager.is_package_installed("broken"));
+        }
+    }
+}
+
+test "native backend combined upgrade installs targets when automatic upgrades are empty" {
+    for ([_]pm.Manager.Backend{ .libalpm, .rlpm }) |backend| {
+        if (!backend.available()) continue;
+        var fixture = try Fixture.init(backend);
+        defer fixture.deinit();
+        const manager = try setupUpgrade(&fixture, false);
+        defer manager.deinit();
+        const updates = try manager.get_updates_available();
+        defer pm.Manager.OwnedPackageWithUpdate.deinitSlice(t.allocator, updates);
+        try t.expectEqual(@as(usize, 0), updates.len);
+        var targets = [_][:0]const u8{"extra-testing/fresh"};
+        var report = try manager.sync_system_update_with_packages(&targets, upgrade_flags);
+        defer report.deinit();
+        try t.expect(manager.is_package_installed("fresh"));
+        try expectUpgradeVersion(&fixture, manager, "1-1");
+    }
+}
+
+test "native backend declined combined upgrade preserves packages and releases the lock" {
+    for ([_]pm.Manager.Backend{ .libalpm, .rlpm }) |backend| {
+        if (!backend.available()) continue;
+        var fixture = try Fixture.init(backend);
+        defer fixture.deinit();
+        const manager = try setupUpgrade(&fixture, true);
+        defer manager.deinit();
+        var context = pm.OperationContext.init(t.allocator, t.io);
+        defer context.deinit();
+        const Decline = struct {
+            fn answer(_: ?*anyopaque, _: pm.operation.Question) pm.operation.QuestionResponse {
+                return .declined;
+            }
+        };
+        context.setQuestionHandler(.{ .function = Decline.answer });
+        manager.setOperationContext(&context);
+        defer manager.setOperationContext(null);
+        var targets = [_][:0]const u8{ "extra-testing/filezilla", "extra-testing/libfilezilla" };
+        try t.expectError(error.Cancelled, manager.sync_system_update_with_packages(&targets, upgrade_flags));
+        manager.setOperationContext(null);
+        try expectUpgradeVersion(&fixture, manager, "1-1");
+    }
+}

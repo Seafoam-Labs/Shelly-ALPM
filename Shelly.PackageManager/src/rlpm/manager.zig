@@ -431,17 +431,16 @@ pub const Manager = struct {
         var optional_names: std.ArrayList([]const u8) = .empty;
         defer optional_names.deinit(self.allocator);
         for (targets) |target| switch (mode) {
-            .install => try tx.addTarget(target),
+            .install, .upgrade => try tx.addTarget(target),
             .archive => {
                 var package: ?rlpm.Package = try self.owner.loadPackage(self.io(), target, .local_file, .{ .mode = .full });
                 defer if (package) |*p| p.deinit();
                 try tx.takeArchive(&package);
             },
             .remove => try tx.remove(target),
-            .upgrade => unreachable,
         };
         if (mode == .upgrade) try tx.systemUpgrade(false);
-        if (mode == .install and build_request == null) try self.selectOptional(tx, targets, flags, &optional_names);
+        if ((mode == .install or mode == .upgrade) and build_request == null) try self.selectOptional(tx, targets, flags, &optional_names);
         tx.prepare() catch |err| {
             if (build_request) |request| if (request.issues) |output| {
                 if (tx.plan()) |failed| {
@@ -685,6 +684,9 @@ pub const Manager = struct {
         try names.append(a, try a.dupe(u8, name));
     }
     pub fn sync_system_update(self: *Manager, flags: types.TransFlag) !contract.RestartReport {
+        return self.sync_system_update_with_packages(&.{}, flags);
+    }
+    pub fn sync_system_update_with_packages(self: *Manager, targets: [][:0]const u8, flags: types.TransFlag) !contract.RestartReport {
         if (self.detected_cachyos) {
             var fallback = op.OperationContext.init(self.allocator, self.io());
             defer fallback.deinit();
@@ -695,8 +697,11 @@ pub const Manager = struct {
             if (!update_notice.UpdateNotice.init(self.allocator, self.io()).check(self.environ, &self.dispatcher)) return contract.RestartReport.empty(self.allocator);
         }
         if (!self.databases_synced) try self.sync(true);
-        try self.execute(.upgrade, &.{}, flags, .already_approved);
-        if (flags.dbonly or flags.downloadonly) return contract.RestartReport.empty(self.allocator);
+        const names = try self.namesSlice(targets);
+        defer self.allocator.free(names);
+        try self.execute(.upgrade, names, flags, .already_approved);
+        if (flags.dbonly or flags.downloadonly or !std.mem.eql(u8, self.config.root_directory, "/"))
+            return contract.RestartReport.empty(self.allocator);
         return restart_checks.check(self, .{});
     }
     pub fn update_packages(self: *Manager, values: [][:0]const u8, flags: types.TransFlag) !void {
