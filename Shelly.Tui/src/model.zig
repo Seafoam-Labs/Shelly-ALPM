@@ -384,7 +384,7 @@ pub const Model = struct {
         switch (self.active) {
             .packages => try ctx.requestFocus(self.text_field.widget()),
             .aur => try ctx.requestFocus(self.aur_field.widget()),
-            .upgrade => {},
+            .upgrade => try ctx.requestFocus(self.widget()),
         }
     }
 
@@ -1326,3 +1326,27 @@ const TabBar = struct {
         }
     }
 };
+
+test "tab switching requests focus on a widget in the active page" {
+    var model: Model = undefined;
+    model.active = .packages;
+    var ctx: vxfw.EventContext = .{
+        .io = undefined,
+        .alloc = std.testing.allocator,
+        .cmds = .empty,
+    };
+    defer ctx.cmds.deinit(std.testing.allocator);
+
+    for ([_]i32{ 1, 1, 1, -1, -1, -1 }) |direction| {
+        ctx.cmds.clearRetainingCapacity();
+        model.switchTab(direction);
+        try model.focusActiveTab(&ctx);
+        try std.testing.expectEqual(@as(usize, 1), ctx.cmds.items.len);
+        const expected = switch (model.active) {
+            .packages => model.text_field.widget(),
+            .aur => model.aur_field.widget(),
+            .upgrade => model.widget(),
+        };
+        try std.testing.expect(ctx.cmds.items[0].request_focus.eql(expected));
+    }
+}
