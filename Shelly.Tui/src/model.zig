@@ -45,15 +45,6 @@ const AurSearchJob = struct {
     done: std.atomic.Value(bool) = .init(false),
 };
 
-const InstallJob = struct {
-    name: []const u8,
-    backend: InstallBackend,
-    failed: bool = false,
-    /// Failure output captured by the worker; owned by the page allocator.
-    error_detail: []const u8 = "",
-    done: std.atomic.Value(bool) = .init(false),
-};
-
 /// Modal password prompt used to elevate installs through sudo.
 const SudoPrompt = struct {
     /// Package being installed; owned by `gpa`.
@@ -114,7 +105,7 @@ pub const Model = struct {
     /// Modal package details.
     overlay: ?Overlay = null,
     /// The currently running install, if any.
-    install_job: ?*InstallJob = null,
+    install_job: ?*shelly_operation.InstallOperation = null,
     /// Result of the last finished operation; owned by `gpa` unless empty.
     notice: []const u8 = "",
 
@@ -190,15 +181,7 @@ pub const Model = struct {
         // exit is intentionally leaked because its worker thread may still
         // hold a reference.
         if (self.aur_job) |job| if (job.done.load(.acquire)) gpa.destroy(job);
-        if (self.install_job) |job| {
-            if (job.done.load(.acquire)) {
-                if (job.error_detail.len > 0) {
-                    std.heap.page_allocator.free(@constCast(job.error_detail));
-                }
-                gpa.free(job.name);
-                gpa.destroy(job);
-            }
-        }
+        if (self.install_job) |operation| operation.deinit();
         if (self.overlay) |overlay| {
             switch (overlay) {
                 .sudo => |prompt| prompt.deinit(gpa),
@@ -607,48 +590,16 @@ pub const Model = struct {
     }
 
     fn startElevatedInstall(self: *Model, ctx: *vxfw.EventContext, prompt: *SudoPrompt) !void {
-        const job = try self.gpa.create(InstallJob);
-        errdefer self.gpa.destroy(job);
-        job.* = .{
-            .name = try self.gpa.dupe(u8, prompt.name),
-            .backend = prompt.backend,
-        };
-        errdefer self.gpa.free(job.name);
-        self.install_job = job;
-
-        // The worker owns this copy and wipes it after feeding it to sudo.
-        // It must be allocated with the page allocator because the worker
-        // frees it with the page allocator (using a different allocator than
-        // the one that allocated a block is undefined behavior).
-        const password = try std.heap.page_allocator.dupe(u8, prompt.password.items);
-        errdefer std.heap.page_allocator.free(password);
-
-        const thread = try std.Thread.spawn(.{}, installElevatedThread, .{ job, password });
-        thread.detach();
+        if (self.install_job != null) return error.OperationAlreadyRunning;
+        // Schedule polling before starting so scheduling failure cannot orphan a worker.
         try ctx.tick(100, self.widget());
-    }
-
-    fn installElevatedThread(job: *InstallJob, password: []u8) void {
-        const alloc = std.heap.page_allocator;
-        defer {
-            // Wipe and release the duplicated password
-            @memset(password, 0);
-            alloc.free(password);
-        }
-
-        var threaded: std.Io.Threaded = .init(alloc, .{});
-        defer threaded.deinit();
-
-        const result = shelly_operation.elevatedInstall(threaded.io(), alloc, .{
+        self.install_job = try shelly_operation.InstallOperation.start(.{
             .shelly_bin = shellyBin(),
             .environ_map = runtime.environ_map,
-            .name = job.name,
-            .backend = @tagName(job.backend),
-            .password = password,
+            .name = prompt.name,
+            .backend = @tagName(prompt.backend),
+            .password = prompt.password.items,
         });
-        job.failed = result.failed;
-        job.error_detail = result.error_detail;
-        job.done.store(true, .release);
     }
 
     fn shellyBin() []const u8 {
@@ -669,15 +620,16 @@ pub const Model = struct {
 
     fn pollInstall(self: *Model) !bool {
         const job = self.install_job orelse return false;
-        if (!job.done.load(.acquire)) return true;
+        const result = job.poll() orelse return true;
+        defer job.deinit();
 
-        const failed = job.failed;
+        const failed = result.failed;
         self.install_job = null;
 
         // Reflect a successful standard install in the loaded data
-        if (!failed and job.backend == .standard) {
+        if (!failed and std.mem.eql(u8, job.request.backend, "standard")) {
             for (self.packages) |*pkg| {
-                if (std.mem.eql(u8, pkg.Name, job.name)) {
+                if (std.mem.eql(u8, pkg.Name, job.request.name)) {
                     pkg.Installed = true;
                     break;
                 }
@@ -690,8 +642,8 @@ pub const Model = struct {
                     if (failed) {
                         prompt.state = .failed;
                         if (prompt.detail.len > 0) self.gpa.free(prompt.detail);
-                        prompt.detail = if (job.error_detail.len > 0)
-                            self.gpa.dupe(u8, job.error_detail) catch ""
+                        prompt.detail = if (result.error_detail.len > 0)
+                            self.gpa.dupe(u8, result.error_detail) catch ""
                         else
                             "";
                     } else {
@@ -703,17 +655,12 @@ pub const Model = struct {
         }
 
         const message = if (failed)
-            try std.fmt.allocPrint(self.gpa, "Could not install {0f}.", .{diagnostics.safe(job.name)})
+            try std.fmt.allocPrint(self.gpa, "Could not install {0f}.", .{diagnostics.safe(job.request.name)})
         else
-            try std.fmt.allocPrint(self.gpa, "Installed {s}", .{job.name});
+            try std.fmt.allocPrint(self.gpa, "Installed {s}", .{job.request.name});
+        defer self.gpa.free(message);
         try self.setNotice(message);
-        self.gpa.free(message);
 
-        if (job.error_detail.len > 0) {
-            std.heap.page_allocator.free(@constCast(job.error_detail));
-        }
-        self.gpa.free(job.name);
-        self.gpa.destroy(job);
         return false;
     }
 
@@ -962,7 +909,7 @@ pub const Model = struct {
 
     fn statusText(self: *const Model, arena: Allocator) Allocator.Error![]const u8 {
         if (self.install_job) |job| {
-            return try std.fmt.allocPrint(arena, "Installing {s}…", .{job.name});
+            return try std.fmt.allocPrint(arena, "Installing {s}…", .{job.request.name});
         }
         if (self.notice.len > 0) return self.notice;
         switch (self.active) {
@@ -1007,7 +954,7 @@ pub const Model = struct {
             .sudo => return null,
         }
         if (self.install_job) |job| {
-            body = try std.fmt.allocPrint(arena, "{s}\n\nInstalling {s}…", .{ body, job.name });
+            body = try std.fmt.allocPrint(arena, "{s}\n\nInstalling {s}…", .{ body, job.request.name });
         }
 
         const box_width = @min(max.width -| 2, @as(u16, 80));

@@ -13,6 +13,54 @@ pub const ElevatedInstallRequest = struct {
     password: []const u8,
 };
 
+pub const InstallOperation = struct {
+    arena: std.heap.ArenaAllocator,
+    request: ElevatedInstallRequest,
+    thread: ?std.Thread = null,
+    done: std.atomic.Value(bool) = .init(false),
+    result: InstallResult = .{},
+
+    pub fn start(request: ElevatedInstallRequest) !*InstallOperation {
+        const self = try std.heap.page_allocator.create(InstallOperation);
+        errdefer std.heap.page_allocator.destroy(self);
+        self.* = .{
+            .arena = .init(std.heap.page_allocator),
+            .request = request,
+        };
+        errdefer self.arena.deinit();
+        const alloc = self.arena.allocator();
+        self.request.shelly_bin = try alloc.dupe(u8, request.shelly_bin);
+        self.request.name = try alloc.dupe(u8, request.name);
+        self.request.backend = try alloc.dupe(u8, request.backend);
+        self.request.password = try alloc.dupe(u8, request.password);
+        errdefer @memset(@constCast(self.request.password), 0);
+        self.thread = try std.Thread.spawn(.{}, run, .{self});
+        return self;
+    }
+
+    fn run(self: *InstallOperation) void {
+        {
+            var threaded: std.Io.Threaded = .init(std.heap.page_allocator, .{});
+            defer threaded.deinit();
+            self.result = elevatedInstall(threaded.io(), std.heap.page_allocator, self.request);
+            @memset(@constCast(self.request.password), 0);
+        }
+        self.done.store(true, .release);
+    }
+
+    pub fn poll(self: *InstallOperation) ?*const InstallResult {
+        if (!self.done.load(.acquire)) return null;
+        return &self.result;
+    }
+
+    pub fn deinit(self: *InstallOperation) void {
+        if (self.thread) |thread| thread.join();
+        self.result.deinit(std.heap.page_allocator);
+        self.arena.deinit();
+        std.heap.page_allocator.destroy(self);
+    }
+};
+
 pub const InstallResult = struct {
     failed: bool = false,
     error_detail: []const u8 = "",
@@ -853,4 +901,31 @@ test "operation builders preserve package operands and source options" {
     const source = try ShellyCommands.configure_appimage(allocator, "Editor", "owner/repo", .GitHub, true);
     try std.testing.expectEqualStrings("GitHub", source[4]);
     try std.testing.expectEqualStrings("--prerelease", source[5]);
+}
+
+test "operation worker owns inputs and joins on launch failure" {
+    var env: std.process.Environ.Map = .init(std.testing.allocator);
+    defer env.deinit();
+    // No real sudo or package operation can be launched by this test.
+    try env.put("PATH", "/nonexistent-shelly-operation-test");
+    var name = [_]u8{ 't', 'e', 's', 't' };
+    const operation = try InstallOperation.start(.{
+        .shelly_bin = "/nonexistent-shelly",
+        .environ_map = &env,
+        .name = &name,
+        .backend = "standard",
+        .password = "",
+    });
+    defer operation.deinit();
+    @memset(&name, 'x');
+    try std.testing.expectEqualStrings("test", operation.request.name);
+    operation.thread.?.join();
+    operation.thread = null;
+    const result = operation.poll() orelse return error.ExpectedCompletion;
+    try std.testing.expect(result.failed);
+    try std.testing.expect(result.error_detail.len > 0);
+
+    // Cleanup must also join a worker whose result has never been polled.
+    const unpolled = try InstallOperation.start(operation.request);
+    unpolled.deinit();
 }
