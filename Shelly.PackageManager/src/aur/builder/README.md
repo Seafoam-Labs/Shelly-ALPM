@@ -40,6 +40,16 @@ fields that depend on the new version. It never runs `build()`, `check()`, or
 package functions. Without `pkgver()`, sources and lifecycle functions are
 skipped.
 
+AUR dependency planning uses `writeDependencySrcinfoWithOperation`, transported
+as `build --makesrcinfo --metadata-only` by the CLI. It performs the same reviewed,
+sandboxed top-level evaluation and split-package metadata serialization, but
+never acquires sources, invokes lifecycle functions, or updates the PKGBUILD.
+This lets the coordinator discover and install build dependencies before
+`prepare()` needs them, including for recursive AUR dependencies. Metadata-only
+planning rejects any change to reviewed inputs; it cannot reconcile a version
+edit into the approval. Normal builds prepare sources and update `pkgver()`
+after dependency installation, refreshing the metadata used for the artifacts.
+
 Unlike `makepkg --printsrcinfo`, `shelly build --makesrcinfo` can download sources
 and update the selected PKGBUILD's version and release. Preparation tools must
 already be available. The CLI uses a temporary work directory and the configured
