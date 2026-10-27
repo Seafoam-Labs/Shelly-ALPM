@@ -38,7 +38,7 @@ Implementation starts with the existing query client's foundation, then one nati
 | Step | Scope | Status |
 | --- | --- | --- |
 | TUI-01 | Existing implementation, CLI inventory, ownership, first native workflow, and gaps. | Documented |
-| TUI-02 | Independent CLI communication, repeated questions, authentication, cancellation, and terminal recovery. | In progress: query coverage expanded; interactive operations pending. |
+| TUI-02 | Independent CLI communication, repeated questions, authentication, cancellation, and terminal recovery. | In progress: queries, protocol codecs, and install worker ownership implemented; streaming and authentication replacement pending. |
 | TUI-03 | State/view separation, responsive queries, stable selection, and refresh. | Not started |
 | TUI-04 | Reviewed native install/remove with accurate outcomes on both engines. | Not started |
 | TUI-05 | Remaining native actions, AUR, AppImage, and Flatpak. | Not started |
@@ -50,10 +50,10 @@ Implementation starts with the existing query client's foundation, then one nati
 | --- | --- |
 | Working behavior | Browsing, listing, selection, and metadata display work in maintainer testing. Other workflows remain unverified. |
 | Read-only flow | Startup launches a background loader → CLI queries available/installed packages → decoded data reaches the UI through polling → filtering and details use the loaded array. |
-| Ownership | `Model.parsed` owns package data; lists and overlays borrow pointers. Detached workers and result cleanup need explicit lifetimes. |
+| Ownership | `Model.parsed` owns package data; lists and overlays borrow pointers. InstallOperation now owns and joins the install worker; detached AUR worker cleanup remains open. |
 | Reuse | Vaxis setup, lists, formatting, data models, and framing can be adapted. State, process lifecycle, and authentication need restructuring. |
 | CLI scope | Compiled catalog contains 62 variants, 191 command-specific options, and 11 global options. It covers native/AUR/AppImage/Flatpak, builds, settings, repositories, keyrings, backup, and maintenance. The catalog remains the detailed inventory authority. |
-| Authentication | Package details → `i` opens a password modal → `sudo -S` runs install with `--no-confirm --ui-mode`. Implemented in source; not runtime-verified. Replacement belongs to TUI-02. |
+| Authentication | Package details → `i` opens a password modal → `sudo -S` runs install with `--no-confirm --ui-mode`. Maintainer verified the existing install flow after migration. Password-modal replacement belongs to TUI-02. |
 | Protocol | UI mode emits Base64 JSON frames between `[JSON]` and `[/JSON]`. Questions use string `QuestionId` values; answers must match the ID and kind. |
 | Outcomes | Install can emit `TransactionCancelled` and exit zero. Exit status alone cannot establish success; removal has different cancellation reporting. |
 | Shared services | Recommendations, Atoll browsing, and notification settings have GUI-side services needing reusable interfaces. Tray and graphical-content equivalents remain undecided. |
@@ -77,6 +77,7 @@ The intended flow is browse → details → review/provider questions → execut
 - [Startup](/home/vinnyqf/RiderProjects/Shelly-ALPM/Shelly.Tui/src/main.zig)
 - [Model, workers, views, and authentication](/home/vinnyqf/RiderProjects/Shelly-ALPM/Shelly.Tui/src/model.zig)
 - [CLI client](/home/vinnyqf/RiderProjects/Shelly-ALPM/Shelly.Tui/src/shelly_cli.zig)
+- [Operation protocol and install lifecycle](/home/vinnyqf/RiderProjects/Shelly-ALPM/Shelly.Tui/src/shelly_operation.zig)
 - [CLI catalog](/home/vinnyqf/RiderProjects/Shelly-ALPM/Shelly.Cli.Zig/src/cli/catalog.zig)
 - [CLI questions and outcomes](/home/vinnyqf/RiderProjects/Shelly-ALPM/Shelly.Cli.Zig/src/output/ui_operation.zig)
 - [CLI wire formats](/home/vinnyqf/RiderProjects/Shelly-ALPM/Shelly.Cli.Zig/src/output/config.zig)
@@ -88,8 +89,8 @@ The intended flow is browse → details → review/provider questions → execut
 | --- | --- | --- |
 | TUI-B01 | Debug CLI path depends on the working directory. Listing works when launched from `Shelly.Tui`. | Reliable executable discovery and errors. |
 | TUI-B02 | Fixed in `3b210700`: loader joined before cleanup, result ownership transferred explicitly, and temporary/unconsumed results freed. | Maintainer exit test passed with no allocator warning. Exit during loading and query-failure cleanup still need separate verification. Shutdown waits for the loader. |
-| TUI-B03 | Tabbing out of the unimplemented Updates/Upgrade page reportedly crashes. | Exact reproduction and panic trace; cause unconfirmed. |
-| TUI-B04 | Mouse-reporting sequences remain visible after a crash. | Terminal restoration; connection to B03 unconfirmed. |
+| TUI-B03 | Fixed in `3245dc70`: Updates now focuses the root instead of leaving focus on a hidden search field. | Regression test and build passed; maintainer confirmed tab switching works. |
+| TUI-B04 | Partially addressed by `3245dc70`: the fixed tab-switching crash no longer triggers the broken terminal state. | Terminal restoration after other crashes remains unverified. |
 | TUI-B05 | Corrected in `4b84daae`: detail query includes `--detail`; shared decoding classifies frames, detects trailing errors, and handles the existing empty-native-search message. | Decoder tests passed; live detail/empty-query verification pending. |
 | TUI-B06 | Corrected remote-list ordering and removed ignored remote/branch parameters in `4b84daae`. Native selection remains name-based; Flatpak lookup searches by ID. | Exact identity/scope handling remains open. |
 | TUI-B07 | Install buffers output, closes stdin, and uses `--no-confirm`. | Streaming questions/answers, authentication, cancellation, and outcome tests in TUI-02. |
@@ -102,5 +103,13 @@ The intended flow is browse → details → review/provider questions → execut
 | 2026-10-25 | `613b58e5` | Step 1 source assessment and compiled CLI inventory completed with Zig 0.16.0; remote development checked. No new TUI runtime tests or package operations. |
 | 2026-10-26 | `3b210700` | TUI-B02 loader cleanup fixed. Maintainer reported successful exit; captured stderr contained only Vaxis debug messages. Early-exit and failure-path checks remain unconfirmed. |
 | 2026-10-26 | `4b84daae` | Fetching methods expanded toward GTK parity: native search/lookup, installed AUR, Flatpak search, AppImage lists/updates, and PKGBUILD previews/scans. Added models, hidden-query options, and decoding corrections. Three decoder tests and AppImage/PKGBUILD model tests passed; build passed with `-Dlibalpm=false`. Maintainer confirmed native and AUR browsing still work. Other query integration checks and full data-model parity remain pending. |
+| 2026-10-27 | `3b86cc39` / `8b395946` / `a8e8fc46` | Added protocol codecs/builders and moved install execution, worker ownership, and cleanup into `InstallOperation`. Model uses start/poll/deinit and renders results. Build and six operation tests passed; maintainer confirmed installation works after migration. Closing during installation waits for completion; live shutdown remains unverified. |
+| 2026-10-27 | `3245dc70` | Fixed Updates tab focus crash; regression test, build, and maintainer navigation check passed. |
+
+## Next slice
+
+- Add an install operation view for status, progress, messages, and completion, alongside streamed event delivery.
+- Follow with interactive questions/review and terminal authentication.
+- Verify shutdown during installation; cancellation and terminal recovery remain open.
 
 Further verification is required for authentication, repeated questions, decline/cancellation, source availability, refresh identity, both native engines, and terminal recovery. Exclusions or deferrals require explicit decisions.
