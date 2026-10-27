@@ -1,8 +1,112 @@
 //! Frontend-neutral operation protocol baseline, adapted from the GTK client.
 const std = @import("std");
+const diagnostics = @import("diagnostics");
 const JsonPackFrame = @import("ui_decode.zig").JsonPackFrame;
 const Scope = @import("flatpak.zig").InstallLevel;
 const UpdateType = @import("appimage.zig").UpdateType;
+
+pub const ElevatedInstallRequest = struct {
+    shelly_bin: []const u8,
+    environ_map: *const std.process.Environ.Map,
+    name: []const u8,
+    backend: []const u8,
+    password: []const u8,
+};
+
+pub const InstallResult = struct {
+    failed: bool = false,
+    error_detail: []const u8 = "",
+
+    pub fn deinit(self: *InstallResult, allocator: std.mem.Allocator) void {
+        if (self.error_detail.len > 0) allocator.free(self.error_detail);
+        self.* = undefined;
+    }
+};
+
+/// Blocking prototype install path. The caller schedules background execution.
+/// Retains sudo password input and automatic confirmation until the interactive
+/// transport and terminal authentication replace this path.
+pub fn elevatedInstall(io: std.Io, alloc: std.mem.Allocator, request: ElevatedInstallRequest) InstallResult {
+    var result: InstallResult = .{};
+    const argv = alloc.alloc([]const u8, 10) catch {
+        result.failed = true;
+        return result;
+    };
+    defer alloc.free(argv);
+    argv[0] = "sudo";
+    argv[1] = "-S";
+    argv[2] = "-p";
+    argv[3] = "";
+    argv[4] = request.shelly_bin;
+    argv[5] = "install";
+    argv[6] = request.backend;
+    argv[7] = request.name;
+    argv[8] = "--no-confirm";
+    argv[9] = "--ui-mode";
+
+    var child = std.process.spawn(io, .{
+        .argv = argv,
+        .environ_map = request.environ_map,
+        .stdin = .pipe,
+        .stdout = .pipe,
+        .stderr = .pipe,
+    }) catch {
+        result.error_detail = alloc.dupe(u8, "Could not start sudo to authorize installation of the requested package.") catch "";
+        result.failed = true;
+        return result;
+    };
+    defer child.kill(io);
+
+    // Feed the password to sudo, then close stdin. The writes fail
+    // harmlessly if sudo already exited (e.g. wrong password); the
+    // error then surfaces via stderr below.
+    {
+        var stdin_buffer: [1024]u8 = undefined;
+        var stdin_writer = child.stdin.?.writer(io, &stdin_buffer);
+        const stdin = &stdin_writer.interface;
+        stdin.writeAll(request.password) catch {};
+        stdin.writeByte('\n') catch {};
+        stdin.flush() catch {};
+        child.stdin.?.close(io);
+        child.stdin = null;
+    }
+
+    // Drain both streams concurrently, mirroring std.process.run
+    var multi_reader_buffer: std.Io.File.MultiReader.Buffer(2) = undefined;
+    var multi_reader: std.Io.File.MultiReader = undefined;
+    multi_reader.init(alloc, io, multi_reader_buffer.toStreams(), &.{ child.stdout.?, child.stderr.? });
+    defer multi_reader.deinit();
+
+    var read_failed = false;
+    while (true) {
+        multi_reader.fill(64, .none) catch |err| {
+            if (err != error.EndOfStream) read_failed = true;
+            break;
+        };
+    }
+    if (read_failed) {
+        result.error_detail = alloc.dupe(u8, "Could not read the installation command output for the requested package.") catch "";
+        result.failed = true;
+        return result;
+    }
+
+    const term = child.wait(io) catch {
+        result.error_detail = alloc.dupe(u8, "Could not collect the installation result for the requested package. Its final status could not be confirmed.") catch "";
+        result.failed = true;
+        return result;
+    };
+
+    if (term != .exited or term.exited != 0) {
+        const stderr = multi_reader.toOwnedSlice(1) catch &.{};
+        const stdout = multi_reader.toOwnedSlice(0) catch &.{};
+        defer if (stderr.len > 0) alloc.free(stderr);
+        defer if (stdout.len > 0) alloc.free(stdout);
+        result.error_detail = (JsonPackFrame.failureMessage(alloc, stdout) catch null) orelse
+            (diagnostics.sanitizeAlloc(alloc, if (stderr.len > 0) std.mem.trim(u8, stderr, " \t\r\n") else "Could not install the requested package. Shelly returned no error details. Review the command output before retrying.") catch "");
+        result.failed = true;
+    }
+    return result;
+}
 
 pub const Event = union(enum) {
     info: struct {

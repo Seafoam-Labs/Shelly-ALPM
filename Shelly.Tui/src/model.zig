@@ -1,5 +1,5 @@
 const std = @import("std");
-const ui_decode = @import("ui_decode.zig");
+const shelly_operation = @import("shelly_operation.zig");
 const diagnostics = @import("diagnostics");
 const vaxis = @import("vaxis");
 const vxfw = vaxis.vxfw;
@@ -639,88 +639,16 @@ pub const Model = struct {
         var threaded: std.Io.Threaded = .init(alloc, .{});
         defer threaded.deinit();
 
-        elevatedInstall(threaded.io(), alloc, job, password);
-        job.done.store(true, .release);
-    }
-
-    fn elevatedInstall(io: std.Io, alloc: Allocator, job: *InstallJob, password: []const u8) void {
-        const argv = alloc.alloc([]const u8, 10) catch {
-            job.failed = true;
-            return;
-        };
-        defer alloc.free(argv);
-        argv[0] = "sudo";
-        argv[1] = "-S";
-        argv[2] = "-p";
-        argv[3] = "";
-        argv[4] = shellyBin();
-        argv[5] = "install";
-        argv[6] = @tagName(job.backend);
-        argv[7] = job.name;
-        argv[8] = "--no-confirm";
-        argv[9] = "--ui-mode";
-
-        var child = std.process.spawn(io, .{
-            .argv = argv,
+        const result = shelly_operation.elevatedInstall(threaded.io(), alloc, .{
+            .shelly_bin = shellyBin(),
             .environ_map = runtime.environ_map,
-            .stdin = .pipe,
-            .stdout = .pipe,
-            .stderr = .pipe,
-        }) catch {
-            job.error_detail = alloc.dupe(u8, "Could not start sudo to authorize installation of the requested package.") catch "";
-            job.failed = true;
-            return;
-        };
-        defer child.kill(io);
-
-        // Feed the password to sudo, then close stdin. The writes fail
-        // harmlessly if sudo already exited (e.g. wrong password); the
-        // error then surfaces via stderr below.
-        {
-            var stdin_buffer: [1024]u8 = undefined;
-            var stdin_writer = child.stdin.?.writer(io, &stdin_buffer);
-            const stdin = &stdin_writer.interface;
-            stdin.writeAll(password) catch {};
-            stdin.writeByte('\n') catch {};
-            stdin.flush() catch {};
-            child.stdin.?.close(io);
-            child.stdin = null;
-        }
-
-        // Drain both streams concurrently, mirroring std.process.run
-        var multi_reader_buffer: std.Io.File.MultiReader.Buffer(2) = undefined;
-        var multi_reader: std.Io.File.MultiReader = undefined;
-        multi_reader.init(alloc, io, multi_reader_buffer.toStreams(), &.{ child.stdout.?, child.stderr.? });
-        defer multi_reader.deinit();
-
-        var read_failed = false;
-        while (true) {
-            multi_reader.fill(64, .none) catch |err| {
-                if (err != error.EndOfStream) read_failed = true;
-                break;
-            };
-        }
-        if (read_failed) {
-            job.error_detail = alloc.dupe(u8, "Could not read the installation command output for the requested package.") catch "";
-            job.failed = true;
-            return;
-        }
-
-        const term = child.wait(io) catch {
-            job.error_detail = alloc.dupe(u8, "Could not collect the installation result for the requested package. Its final status could not be confirmed.") catch "";
-            job.failed = true;
-            return;
-        };
-
-        if (term != .exited or term.exited != 0) {
-            const stderr = multi_reader.toOwnedSlice(1) catch &.{};
-            const stdout = multi_reader.toOwnedSlice(0) catch &.{};
-            defer if (stderr.len > 0) alloc.free(stderr);
-            defer if (stdout.len > 0) alloc.free(stdout);
-            job.error_detail = (ui_decode.JsonPackFrame.failureMessage(alloc, stdout) catch null) orelse
-                (diagnostics.sanitizeAlloc(alloc, if (stderr.len > 0) std.mem.trim(u8, stderr, " \t\r\n") else "Could not install the requested package. Shelly returned no error details. Review the command output before retrying.") catch "");
-            job.failed = true;
-        }
+            .name = job.name,
+            .backend = @tagName(job.backend),
+            .password = password,
+        });
+        job.failed = result.failed;
+        job.error_detail = result.error_detail;
+        job.done.store(true, .release);
     }
 
     fn shellyBin() []const u8 {
