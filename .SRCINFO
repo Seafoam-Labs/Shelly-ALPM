@@ -12,7 +12,7 @@ pkgbase = shelly
 	makedepends = git
 	makedepends = pkgconf
 	makedepends = gtk4
-	makedepends = zig=0.16
+	makedepends = zig=0.16.0
 	makedepends = clang
 	makedepends = gettext
 	makedepends = flatpak
