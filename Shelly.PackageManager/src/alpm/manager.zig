@@ -341,11 +341,15 @@ pub const Manager = struct {
         };
     }
     pub fn sync_system_update(self: *Manager, flags: TransFlag) TransactionError!contract.RestartReport {
+        return self.sync_system_update_with_packages(&.{}, flags);
+    }
+    /// Resolve explicit repository targets and the system upgrade together.
+    pub fn sync_system_update_with_packages(self: *Manager, targets: [][:0]const u8, flags: TransFlag) TransactionError!contract.RestartReport {
         return switch (self.engine orelse {
             return error.NoHandle;
         }) {
-            .libalpm => |value| if (comptime selection.libalpm_enabled) value.sync_system_update(flags) else unreachable,
-            .rlpm => |value| value.sync_system_update(flags) catch |err| return mapTransaction(err),
+            .libalpm => |value| if (comptime selection.libalpm_enabled) value.sync_system_update_with_packages(targets, flags) else unreachable,
+            .rlpm => |value| value.sync_system_update_with_packages(targets, flags) catch |err| return mapTransaction(err),
         };
     }
     pub fn update_package_reason(self: *Manager, pkg_name: [:0]const u8, reason: libalpm.PackageReason) TransactionError!void {

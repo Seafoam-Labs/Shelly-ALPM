@@ -56,11 +56,37 @@ pub fn populate(tx: *Tx, manifest: *Manifest) !void {
             .path = builder.current_path,
         };
 
+        if (err == error.FileConflicts) try recordFileConflictIssues(tx, manifest);
         return err;
     };
 
     manifest.complete = true;
     try manifest.check();
+}
+
+fn recordFileConflictIssues(tx: *Tx, manifest: *const Manifest) !void {
+    if (manifest.conflicts.items.len == 0) return;
+
+    const plan = &tx.owned_plan.?;
+    const allocator = plan.arena.allocator();
+    const previous_count = plan.issues.len;
+    const issues = try allocator.alloc(Plan.Issue, previous_count + manifest.conflicts.items.len);
+    @memcpy(issues[0..previous_count], plan.issues);
+
+    for (manifest.conflicts.items, issues[previous_count..]) |conflict, *issue| {
+        issue.* = .{ .file_conflict = .{
+            .first = conflict.package,
+            .second = conflict.other,
+            .path = try allocator.dupe(u8, conflict.path),
+            .kind = switch (conflict.kind) {
+                .target => .target,
+                .filesystem => .filesystem,
+            },
+        } };
+    }
+
+    // Publish only after every path has been copied into the plan's arena.
+    plan.issues = issues;
 }
 
 /// Sealed bytes cannot change, but keyring trust/revocation and detached
