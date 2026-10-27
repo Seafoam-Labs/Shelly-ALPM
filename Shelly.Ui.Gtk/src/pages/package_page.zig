@@ -831,31 +831,9 @@ pub const PackagePage = extern struct {
         all.appendSlice(alloc, parsed.value) catch {};
 
         if (installed) |inst| {
-            var map: std.StringHashMapUnmanaged(*const Package) = .empty;
-            for (inst.value) |*pkg| {
-                map.put(alloc, pkg.Name, pkg) catch {};
-            }
-
-            var matched: std.StringHashMapUnmanaged(void) = .empty;
-            for (all.items) |*pkg| {
-                if (map.get(pkg.Name)) |ipkg| {
-                    pkg.Installed = true;
-                    pkg.InstallDate = ipkg.InstallDate;
-                    pkg.Explicit = std.mem.eql(u8, ipkg.InstallReason, "Explicit");
-                    matched.put(alloc, pkg.Name, {}) catch {};
-                } else {
-                    pkg.Installed = false;
-                }
-            }
-
-            for (inst.value) |ipkg| {
-                if (!matched.contains(ipkg.Name)) {
-                    var extra = ipkg;
-                    extra.Installed = true;
-                    extra.Explicit = std.mem.eql(u8, ipkg.InstallReason, "Explicit");
-                    all.append(alloc, extra) catch {};
-                }
-            }
+            mergeInstalledPackages(alloc, &all, inst.value) catch |err| {
+                std.debug.print("Could not merge installed packages: {s}\n", .{@errorName(err)});
+            };
         }
 
         var set: std.StringHashMapUnmanaged(void) = .empty;
@@ -1339,4 +1317,110 @@ pub const PackagePage = extern struct {
         const thread = std.Thread.spawn(.{}, load_worker, .{ self, p.generation, p.show_hidden }) catch return;
         thread.detach();
     }
+
+    const InstalledPackageEntry = struct {
+        pkg: *const Package,
+        matched: bool = false,
+    };
+
+    pub fn mergeInstalledPackages(
+        alloc: std.mem.Allocator,
+        all: *std.ArrayListUnmanaged(Package),
+        installed: []const Package,
+    ) !void {
+        var map: std.StringHashMapUnmanaged(InstalledPackageEntry) = .empty;
+        defer map.deinit(alloc);
+        try map.ensureTotalCapacity(alloc, @intCast(installed.len));
+        for (installed) |*pkg| {
+            map.putAssumeCapacity(pkg.Name, .{ .pkg = pkg, .matched = false });
+        }
+
+        for (all.items) |*pkg| {
+            if (map.getPtr(pkg.Name)) |entry| {
+                const ipkg = entry.pkg;
+                pkg.Installed = true;
+                pkg.Version = ipkg.Version;
+                pkg.Repository = ipkg.Repository;
+                pkg.InstallDate = ipkg.InstallDate;
+                pkg.InstalledSize = ipkg.InstalledSize;
+                pkg.InstallReason = ipkg.InstallReason;
+                if (ipkg.BuildDate.len > 0) {
+                    pkg.BuildDate = ipkg.BuildDate;
+                }
+                pkg.Explicit = std.mem.eql(u8, ipkg.InstallReason, "Explicit");
+                entry.matched = true;
+            } else {
+                pkg.Installed = false;
+            }
+        }
+
+        var it = map.valueIterator();
+        while (it.next()) |entry| {
+            if (!entry.matched) {
+                var extra = entry.pkg.*;
+                extra.Installed = true;
+                extra.Explicit = std.mem.eql(u8, extra.InstallReason, "Explicit");
+                try all.append(alloc, extra);
+            }
+        }
+    }
 };
+
+test "mergeInstalledPackages updates version and repository for installed packages" {
+    const testing = std.testing;
+    const alloc = testing.allocator;
+
+    var all: std.ArrayListUnmanaged(Package) = .empty;
+    defer all.deinit(alloc);
+
+    try all.append(alloc, .{
+        .Name = "plasma5support",
+        .Version = "6.7.5-1.1",
+        .Repository = "cachyos-extra-v3",
+        .InstalledSize = 0,
+    });
+    try all.append(alloc, .{
+        .Name = "uninstalled-pkg",
+        .Version = "1.0.0",
+        .Repository = "extra",
+    });
+
+    const installed = [_]Package{
+        .{
+            .Name = "plasma5support",
+            .Version = "6.8.0-1",
+            .Repository = "local",
+            .InstalledSize = 123456,
+            .InstallReason = "Explicit",
+            .InstallDate = "2026-10-14",
+        },
+        .{
+            .Name = "local-only-pkg",
+            .Version = "2.0.0",
+            .Repository = "local",
+            .InstallReason = "Dependency",
+        },
+    };
+
+    try PackagePage.mergeInstalledPackages(alloc, &all, &installed);
+
+    try testing.expectEqual(@as(usize, 3), all.items.len);
+
+    try testing.expectEqualStrings("plasma5support", all.items[0].Name);
+    try testing.expectEqualStrings("6.8.0-1", all.items[0].Version);
+    try testing.expectEqualStrings("local", all.items[0].Repository);
+    try testing.expectEqual(true, all.items[0].Installed);
+    try testing.expectEqual(true, all.items[0].Explicit);
+    try testing.expectEqual(@as(i64, 123456), all.items[0].InstalledSize);
+
+    try testing.expectEqualStrings("uninstalled-pkg", all.items[1].Name);
+    try testing.expectEqualStrings("1.0.0", all.items[1].Version);
+    try testing.expectEqualStrings("extra", all.items[1].Repository);
+    try testing.expectEqual(false, all.items[1].Installed);
+
+    try testing.expectEqualStrings("local-only-pkg", all.items[2].Name);
+    try testing.expectEqualStrings("2.0.0", all.items[2].Version);
+    try testing.expectEqualStrings("local", all.items[2].Repository);
+    try testing.expectEqual(true, all.items[2].Installed);
+    try testing.expectEqual(false, all.items[2].Explicit);
+}

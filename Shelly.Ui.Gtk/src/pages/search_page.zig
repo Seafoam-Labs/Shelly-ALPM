@@ -19,6 +19,7 @@ const ShellyWindow = @import("../shelly_window.zig").ShellyWindow;
 const ShellyCli = @import("../services/shelly_cli.zig").ShellyCli;
 const ShellyCommands = @import("../services/shelly_operation.zig").ShellyCommands;
 const ShellyConfig = @import("../models/shelly_config.zig").ShellyConfig;
+const Package = @import("../models/packages.zig").Package;
 const runtime = @import("../services/runtime.zig");
 const translations = @import("../helpers/translations.zig");
 const a11y = @import("../helpers/a11y.zig");
@@ -741,20 +742,12 @@ pub const ShellySearchPage = extern struct {
                     std.debug.print("Could not search standard repositories. {0s}\n\nTechnical details: {1s}\n", .{ diagnostics.cause(err), @errorName(err) });
                     return;
                 };
-                var seen = std.StringHashMap(void).init(alloc);
-                for (parsed.value) |pkg| {
-                    if (seen.contains(pkg.Name)) continue;
-                    seen.put(pkg.Name, {}) catch continue;
-                    items.append(alloc, .{
-                        .source = .standard,
-                        .name = alloc.dupeZ(u8, pkg.Name) catch continue,
-                        .install_target = alloc.dupeZ(u8, pkg.Name) catch continue,
-                        .version = alloc.dupeZ(u8, pkg.Version) catch continue,
-                        .description = alloc.dupeZ(u8, pkg.Description) catch continue,
-                        .repository = alloc.dupeZ(u8, pkg.Repository) catch continue,
-                        .installed = std.mem.eql(u8, pkg.Repository, "local"),
-                    }) catch continue;
-                }
+                deduplicateStandardResults(alloc, parsed.value, &items) catch |err| {
+                    std.debug.print(
+                        "Could not deduplicate search results: {s}\n",
+                        .{@errorName(err)},
+                    );
+                };
             },
             .aur => {
                 const parsed = cli.search_aur(query) catch |err| {
@@ -1147,4 +1140,142 @@ pub const ShellySearchPage = extern struct {
             gobject.Object.virtual_methods.dispose.implement(class, &dispose);
         }
     };
+
+    pub fn deduplicateStandardResults(
+        alloc: std.mem.Allocator,
+        packages: []const Package,
+        items: *std.ArrayListUnmanaged(SearchResult),
+    ) !void {
+        var seen: std.StringHashMapUnmanaged(usize) = .empty;
+        defer seen.deinit(alloc);
+        try seen.ensureTotalCapacity(alloc, @intCast(packages.len));
+
+        for (packages) |pkg| {
+            const is_local = std.mem.eql(u8, pkg.Repository, "local") or
+                pkg.Installed or
+                pkg.InstallDate != null;
+
+            if (seen.get(pkg.Name)) |idx| {
+                if (is_local and !items.items[idx].installed) {
+                    items.items[idx].version = try alloc.dupeZ(u8, pkg.Version);
+                    items.items[idx].repository = try alloc.dupeZ(u8, pkg.Repository);
+                    items.items[idx].installed = true;
+                    if (pkg.Description.len > 0 and items.items[idx].description.len == 0) {
+                        items.items[idx].description = try alloc.dupeZ(u8, pkg.Description);
+                    }
+                } else if (!is_local and items.items[idx].installed) {
+                    if (pkg.Description.len > 0 and items.items[idx].description.len == 0) {
+                        items.items[idx].description = try alloc.dupeZ(u8, pkg.Description);
+                    }
+                }
+                continue;
+            }
+
+            const idx = items.items.len;
+            const name_z = try alloc.dupeZ(u8, pkg.Name);
+            const target_z = try alloc.dupeZ(u8, pkg.Name);
+            const version_z = try alloc.dupeZ(u8, pkg.Version);
+            const desc_z = try alloc.dupeZ(u8, pkg.Description);
+            const repo_z = try alloc.dupeZ(u8, pkg.Repository);
+
+            try items.append(alloc, .{
+                .source = .standard,
+                .name = name_z,
+                .install_target = target_z,
+                .version = version_z,
+                .description = desc_z,
+                .repository = repo_z,
+                .installed = is_local,
+            });
+            seen.putAssumeCapacity(items.items[idx].name, idx);
+        }
+    }
 };
+
+test "deduplicateStandardResults prioritizes installed local package over sync package" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+
+    var items: std.ArrayListUnmanaged(SearchResult) = .empty;
+
+    const packages = [_]Package{
+        .{
+            .Name = "plasma5support",
+            .Version = "6.7.5-1.1",
+            .Repository = "cachyos-extra-v3",
+            .Description = "Support components for Plasma 5",
+        },
+        .{
+            .Name = "plasma5support",
+            .Version = "6.8.0-1",
+            .Repository = "local",
+            .Description = "Support components for Plasma 5",
+        },
+        .{
+            .Name = "uninstalled-pkg",
+            .Version = "1.2.3",
+            .Repository = "extra",
+            .Description = "An uninstalled package",
+        },
+    };
+
+    try ShellySearchPage.deduplicateStandardResults(alloc, &packages, &items);
+
+    try std.testing.expectEqual(@as(usize, 2), items.items.len);
+
+    try std.testing.expectEqualStrings("plasma5support", items.items[0].name);
+    try std.testing.expectEqualStrings("6.8.0-1", items.items[0].version);
+    try std.testing.expectEqualStrings("local", items.items[0].repository);
+    try std.testing.expect(items.items[0].installed);
+
+    try std.testing.expectEqualStrings("uninstalled-pkg", items.items[1].name);
+    try std.testing.expectEqualStrings("1.2.3", items.items[1].version);
+    try std.testing.expectEqualStrings("extra", items.items[1].repository);
+    try std.testing.expect(!items.items[1].installed);
+}
+
+test "deduplicateStandardResults preserves local package when local comes before sync" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+
+    var items: std.ArrayListUnmanaged(SearchResult) = .empty;
+
+    const packages = [_]Package{
+        .{
+            .Name = "plasma5support",
+            .Version = "6.8.0-1",
+            .Repository = "local",
+            .Description = "",
+        },
+        .{
+            .Name = "plasma5support",
+            .Version = "6.7.5-1.1",
+            .Repository = "cachyos-extra-v3",
+            .Description = "Support components for Plasma 5",
+        },
+    };
+
+    try ShellySearchPage.deduplicateStandardResults(alloc, &packages, &items);
+
+    try std.testing.expectEqual(@as(usize, 1), items.items.len);
+    try std.testing.expectEqualStrings("plasma5support", items.items[0].name);
+    try std.testing.expectEqualStrings("6.8.0-1", items.items[0].version);
+    try std.testing.expectEqualStrings("local", items.items[0].repository);
+    try std.testing.expectEqualStrings(
+        "Support components for Plasma 5",
+        items.items[0].description,
+    );
+    try std.testing.expect(items.items[0].installed);
+}
+
+test "deduplicateStandardResults handles empty package slice" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+
+    var items: std.ArrayListUnmanaged(SearchResult) = .empty;
+    try ShellySearchPage.deduplicateStandardResults(alloc, &.{}, &items);
+    try std.testing.expectEqual(@as(usize, 0), items.items.len);
+}
