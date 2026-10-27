@@ -496,6 +496,22 @@ pub const Model = struct {
             return;
         };
 
+        const installed = cli.get_installed_packages() catch {
+            parsed.deinit();
+            job.failed = true;
+            job.done.store(true, .release);
+            return;
+        };
+        defer installed.deinit();
+        for (parsed.value) |*pkg| {
+            for (installed.value) |local| {
+                if (std.mem.eql(u8, pkg.Name, local.Name)) {
+                    pkg.Installed = true;
+                    break;
+                }
+            }
+        }
+
         job.result = parsed;
         job.done.store(true, .release);
     }
@@ -534,7 +550,7 @@ pub const Model = struct {
                 backend = .standard;
             },
             .aur => |pkg| {
-                if (action == .remove) return;
+                if (action == .remove and !pkg.Installed) return;
                 name = pkg.Name;
                 backend = .aur;
             },
@@ -643,12 +659,20 @@ pub const Model = struct {
         const failed = completed.failed;
         self.install_job = null;
 
-        // Reflect a successful standard install in the loaded data
-        if (!failed and std.mem.eql(u8, job.request.backend, "standard")) {
+        // Native and AUR operations change the same installed package database.
+        if (!failed) {
             for (self.packages) |*pkg| {
                 if (std.mem.eql(u8, pkg.Name, job.request.name)) {
                     pkg.Installed = job.request.action == .install;
                     break;
+                }
+            }
+        }
+        if (!failed) {
+            if (self.aur_parsed) |parsed| {
+                for (parsed.value) |*pkg| {
+                    if (std.mem.eql(u8, pkg.Name, job.request.name))
+                        pkg.Installed = job.request.action == .install;
                 }
             }
         }
@@ -969,7 +993,10 @@ pub const Model = struct {
             },
             .aur => |pkg| {
                 title = try std.fmt.allocPrint(arena, "{s} {s} (AUR)", .{ pkg.Name, pkg.Version });
-                body = try aurDetailsText(arena, pkg);
+                body = try std.fmt.allocPrint(arena, "{s}\n\n{s}", .{
+                    try aurDetailsText(arena, pkg),
+                    if (pkg.Installed) "I: install/reinstall    R: remove    Esc: close" else "I: install    Esc: close",
+                });
             },
             .sudo => return null,
         }
@@ -1191,6 +1218,7 @@ pub const Model = struct {
         try lines.append(arena, pkg.Description orelse "No description.");
         try lines.append(arena, "");
 
+        try lines.append(arena, try std.fmt.allocPrint(arena, "Installed:       {s}", .{if (pkg.Installed) "yes" else "no"}));
         try lines.append(arena, try std.fmt.allocPrint(arena, "Version:         {s}", .{pkg.Version}));
         try lines.append(arena, try std.fmt.allocPrint(arena, "Package base:    {s}", .{pkg.PackageBase}));
         try lines.append(arena, try std.fmt.allocPrint(arena, "Votes:           {d}", .{pkg.NumVotes}));

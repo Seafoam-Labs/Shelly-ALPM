@@ -217,12 +217,13 @@ pub fn elevatedInstall(io: std.Io, alloc: std.mem.Allocator, request: OperationR
 
 fn runInstall(io: std.Io, alloc: std.mem.Allocator, request: OperationRequest, operation: ?*Operation) OperationResult {
     var result: OperationResult = .{};
-    if (request.action == .remove and !std.mem.eql(u8, request.backend, "standard")) {
+    if (request.action == .remove and !std.mem.eql(u8, request.backend, "standard") and !std.mem.eql(u8, request.backend, "aur")) {
         result.failed = true;
-        result.error_detail = alloc.dupe(u8, "Removal currently supports system packages only.") catch "";
+        result.error_detail = alloc.dupe(u8, "Removal currently supports system and AUR packages only.") catch "";
         return result;
     }
-    const argv = alloc.alloc([]const u8, if (request.action == .remove) 11 else 10) catch {
+    const keep_dependencies = request.action == .remove and std.mem.eql(u8, request.backend, "standard");
+    const argv = alloc.alloc([]const u8, if (keep_dependencies) 11 else 10) catch {
         result.failed = true;
         return result;
     };
@@ -237,7 +238,7 @@ fn runInstall(io: std.Io, alloc: std.mem.Allocator, request: OperationRequest, o
     argv[7] = request.name;
     argv[8] = "--no-confirm";
     argv[9] = "--ui-mode";
-    if (request.action == .remove) argv[10] = "--no-cascade";
+    if (keep_dependencies) argv[10] = "--no-cascade";
 
     var child = std.process.spawn(io, .{
         .argv = argv,
@@ -1144,10 +1145,10 @@ test "operation rejects removal from unsupported sources before launching" {
         .shelly_bin = "unused",
         .environ_map = &env,
         .name = "test",
-        .backend = "aur",
+        .backend = "flatpak",
         .password = "",
     });
     defer result.deinit(std.testing.allocator);
     try std.testing.expect(result.failed);
-    try std.testing.expectEqualStrings("Removal currently supports system packages only.", result.error_detail);
+    try std.testing.expectEqualStrings("Removal currently supports system and AUR packages only.", result.error_detail);
 }
