@@ -51,6 +51,7 @@ const SudoPrompt = struct {
     /// Package being installed; owned by `gpa`.
     name: []const u8,
     backend: InstallBackend,
+    action: shelly_operation.Action = .install,
     password: std.ArrayList(u8),
     state: State = .entering,
     /// Failure detail shown after a failed attempt; owned by `gpa`.
@@ -63,6 +64,7 @@ const SudoPrompt = struct {
     fn operationView(self: *const SudoPrompt) ?operation_view.View {
         return .{
             .name = self.name,
+            .action = self.action,
             .detail = self.detail,
             .progress = self.progress,
             .state = switch (self.state) {
@@ -122,7 +124,7 @@ pub const Model = struct {
     /// Modal package details.
     overlay: ?Overlay = null,
     /// The currently running install, if any.
-    install_job: ?*shelly_operation.InstallOperation = null,
+    install_job: ?*shelly_operation.Operation = null,
     /// Result of the last finished operation; owned by `gpa` unless empty.
     notice: []const u8 = "",
 
@@ -238,7 +240,11 @@ pub const Model = struct {
                                 return ctx.consumeAndRedraw();
                             }
                             if (key.matches('i', .{})) {
-                                try self.installFromOverlay();
+                                try self.operationFromOverlay(.install);
+                                return ctx.consumeAndRedraw();
+                            }
+                            if (key.matches('r', .{})) {
+                                try self.operationFromOverlay(.remove);
                                 return ctx.consumeAndRedraw();
                             }
                             return ctx.consumeEvent();
@@ -516,17 +522,19 @@ pub const Model = struct {
         return false;
     }
 
-    fn installFromOverlay(self: *Model) !void {
+    fn operationFromOverlay(self: *Model, action: shelly_operation.Action) !void {
         if (self.install_job != null) return; // one install at a time
         const overlay = self.overlay orelse return;
         var name: []const u8 = undefined;
         var backend: InstallBackend = undefined;
         switch (overlay) {
             .package => |pkg| {
+                if (action == .remove and !pkg.Installed) return;
                 name = pkg.Name;
                 backend = .standard;
             },
             .aur => |pkg| {
+                if (action == .remove) return;
                 name = pkg.Name;
                 backend = .aur;
             },
@@ -537,6 +545,7 @@ pub const Model = struct {
         prompt.* = .{
             .name = try self.gpa.dupe(u8, name),
             .backend = backend,
+            .action = action,
             .password = .empty,
         };
         self.overlay = .{ .sudo = prompt };
@@ -596,10 +605,11 @@ pub const Model = struct {
         if (self.install_job != null) return error.OperationAlreadyRunning;
         // Schedule polling before starting so scheduling failure cannot orphan a worker.
         try ctx.tick(100, self.widget());
-        self.install_job = try shelly_operation.InstallOperation.start(.{
+        self.install_job = try shelly_operation.Operation.start(.{
             .shelly_bin = shellyBin(),
             .environ_map = runtime.environ_map,
             .name = prompt.name,
+            .action = prompt.action,
             .backend = @tagName(prompt.backend),
             .password = prompt.password.items,
         });
@@ -637,7 +647,7 @@ pub const Model = struct {
         if (!failed and std.mem.eql(u8, job.request.backend, "standard")) {
             for (self.packages) |*pkg| {
                 if (std.mem.eql(u8, pkg.Name, job.request.name)) {
-                    pkg.Installed = true;
+                    pkg.Installed = job.request.action == .install;
                     break;
                 }
             }
@@ -662,9 +672,9 @@ pub const Model = struct {
         }
 
         const message = if (failed)
-            try std.fmt.allocPrint(self.gpa, "Could not install {0f}.", .{diagnostics.safe(job.request.name)})
+            try std.fmt.allocPrint(self.gpa, "Could not {s} {f}.", .{ @tagName(job.request.action), diagnostics.safe(job.request.name) })
         else
-            try std.fmt.allocPrint(self.gpa, "Installed {s}", .{job.request.name});
+            try std.fmt.allocPrint(self.gpa, "{s} {s}", .{ job.request.action.completed(), job.request.name });
         defer self.gpa.free(message);
         try self.setNotice(message);
 
@@ -916,7 +926,7 @@ pub const Model = struct {
 
     fn statusText(self: *const Model, arena: Allocator) Allocator.Error![]const u8 {
         if (self.install_job) |job| {
-            return try std.fmt.allocPrint(arena, "Installing {s}…", .{job.request.name});
+            return try std.fmt.allocPrint(arena, "{s} {s}…", .{ job.request.action.ongoing(), job.request.name });
         }
         if (self.notice.len > 0) return self.notice;
         switch (self.active) {
@@ -952,7 +962,10 @@ pub const Model = struct {
         switch (overlay) {
             .package => |pkg| {
                 title = try std.fmt.allocPrint(arena, "{s} {s}", .{ pkg.Name, pkg.Version });
-                body = try packageDetailsText(arena, pkg);
+                body = try std.fmt.allocPrint(arena, "{s}\n\n{s}", .{
+                    try packageDetailsText(arena, pkg),
+                    if (pkg.Installed) "I: install/reinstall    R: remove    Esc: close" else "I: install    Esc: close",
+                });
             },
             .aur => |pkg| {
                 title = try std.fmt.allocPrint(arena, "{s} {s} (AUR)", .{ pkg.Name, pkg.Version });
@@ -961,7 +974,7 @@ pub const Model = struct {
             .sudo => return null,
         }
         if (self.install_job) |job| {
-            body = try std.fmt.allocPrint(arena, "{s}\n\nInstalling {s}…", .{ body, job.request.name });
+            body = try std.fmt.allocPrint(arena, "{s}\n\n{s} {s}…", .{ body, job.request.action.ongoing(), job.request.name });
         }
 
         const box_width = @min(max.width -| 2, @as(u16, 80));
@@ -997,7 +1010,10 @@ pub const Model = struct {
             @memcpy(mask[pos .. pos + 3], "●");
             pos += 3;
         }
-        const body = try std.fmt.allocPrint(arena, "Installing '{s}' requires administrator privileges.\n\nPassword: {s}\n\nEnter: run with sudo    Esc: cancel", .{ prompt.name, mask[0..pos] });
+        const body = try std.fmt.allocPrint(arena, "{s} '{s}'?{s}\n\nPassword: {s}\n\nEnter: confirm and run with sudo    Esc: cancel", .{
+            prompt.action.verb(),                                                                          prompt.name,
+            if (prompt.action == .remove) "\nUnused dependencies and configuration will be kept." else "", mask[0..pos],
+        });
 
         const box_width = @min(max.width -| 2, @as(u16, 70));
         const box_height = @min(max.height -| 2, @as(u16, 20));

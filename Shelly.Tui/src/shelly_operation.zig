@@ -5,7 +5,25 @@ const JsonPackFrame = @import("ui_decode.zig").JsonPackFrame;
 const Scope = @import("flatpak.zig").InstallLevel;
 const UpdateType = @import("appimage.zig").UpdateType;
 
-pub const ElevatedInstallRequest = struct {
+pub const Action = enum {
+    install,
+    remove,
+
+    pub fn verb(self: Action) []const u8 {
+        return if (self == .install) "Install" else "Remove";
+    }
+
+    pub fn ongoing(self: Action) []const u8 {
+        return if (self == .install) "Installing" else "Removing";
+    }
+
+    pub fn completed(self: Action) []const u8 {
+        return if (self == .install) "Installed" else "Removed";
+    }
+};
+
+pub const OperationRequest = struct {
+    action: Action = .install,
     sudo_bin: []const u8 = "sudo",
     shelly_bin: []const u8,
     environ_map: *const std.process.Environ.Map,
@@ -52,7 +70,7 @@ const ProgressStream = struct {
     error_text: [512]u8 = @splat(0),
     error_len: usize = 0,
 
-    fn feed(self: *ProgressStream, bytes: []const u8, operation: ?*InstallOperation, io: std.Io) void {
+    fn feed(self: *ProgressStream, bytes: []const u8, operation: ?*Operation, io: std.Io) void {
         for (bytes) |byte| {
             if (!self.in_frame) {
                 const marker = "[JSON]";
@@ -96,22 +114,22 @@ const ProgressStream = struct {
     }
 };
 
-pub const InstallOperation = struct {
+pub const Operation = struct {
     arena: std.heap.ArenaAllocator,
-    request: ElevatedInstallRequest,
+    request: OperationRequest,
     thread: ?std.Thread = null,
     done: std.atomic.Value(bool) = .init(false),
-    result: InstallResult = .{},
+    result: OperationResult = .{},
     progress_mutex: std.Io.Mutex = .init,
     progress: Progress = .{},
 
-    pub fn snapshot(self: *InstallOperation, io: std.Io) Progress {
+    pub fn snapshot(self: *Operation, io: std.Io) Progress {
         self.progress_mutex.lockUncancelable(io);
         defer self.progress_mutex.unlock(io);
         return self.progress;
     }
 
-    fn record(self: *InstallOperation, io: std.Io, event: Event) void {
+    fn record(self: *Operation, io: std.Io, event: Event) void {
         self.progress_mutex.lockUncancelable(io);
         defer self.progress_mutex.unlock(io);
         var buffer: [512]u8 = undefined;
@@ -138,8 +156,8 @@ pub const InstallOperation = struct {
         }
     }
 
-    pub fn start(request: ElevatedInstallRequest) !*InstallOperation {
-        const self = try std.heap.page_allocator.create(InstallOperation);
+    pub fn start(request: OperationRequest) !*Operation {
+        const self = try std.heap.page_allocator.create(Operation);
         errdefer std.heap.page_allocator.destroy(self);
         self.* = .{
             .arena = .init(std.heap.page_allocator),
@@ -157,7 +175,7 @@ pub const InstallOperation = struct {
         return self;
     }
 
-    fn run(self: *InstallOperation) void {
+    fn run(self: *Operation) void {
         {
             var threaded: std.Io.Threaded = .init(std.heap.page_allocator, .{});
             defer threaded.deinit();
@@ -167,12 +185,12 @@ pub const InstallOperation = struct {
         self.done.store(true, .release);
     }
 
-    pub fn poll(self: *InstallOperation) ?*const InstallResult {
+    pub fn poll(self: *Operation) ?*const OperationResult {
         if (!self.done.load(.acquire)) return null;
         return &self.result;
     }
 
-    pub fn deinit(self: *InstallOperation) void {
+    pub fn deinit(self: *Operation) void {
         if (self.thread) |thread| thread.join();
         self.result.deinit(std.heap.page_allocator);
         self.arena.deinit();
@@ -180,11 +198,11 @@ pub const InstallOperation = struct {
     }
 };
 
-pub const InstallResult = struct {
+pub const OperationResult = struct {
     failed: bool = false,
     error_detail: []const u8 = "",
 
-    pub fn deinit(self: *InstallResult, allocator: std.mem.Allocator) void {
+    pub fn deinit(self: *OperationResult, allocator: std.mem.Allocator) void {
         if (self.error_detail.len > 0) allocator.free(self.error_detail);
         self.* = undefined;
     }
@@ -193,13 +211,18 @@ pub const InstallResult = struct {
 /// Blocking prototype install path. The caller schedules background execution.
 /// Retains sudo password input and automatic confirmation until the interactive
 /// transport and terminal authentication replace this path.
-pub fn elevatedInstall(io: std.Io, alloc: std.mem.Allocator, request: ElevatedInstallRequest) InstallResult {
+pub fn elevatedInstall(io: std.Io, alloc: std.mem.Allocator, request: OperationRequest) OperationResult {
     return runInstall(io, alloc, request, null);
 }
 
-fn runInstall(io: std.Io, alloc: std.mem.Allocator, request: ElevatedInstallRequest, operation: ?*InstallOperation) InstallResult {
-    var result: InstallResult = .{};
-    const argv = alloc.alloc([]const u8, 10) catch {
+fn runInstall(io: std.Io, alloc: std.mem.Allocator, request: OperationRequest, operation: ?*Operation) OperationResult {
+    var result: OperationResult = .{};
+    if (request.action == .remove and !std.mem.eql(u8, request.backend, "standard")) {
+        result.failed = true;
+        result.error_detail = alloc.dupe(u8, "Removal currently supports system packages only.") catch "";
+        return result;
+    }
+    const argv = alloc.alloc([]const u8, if (request.action == .remove) 11 else 10) catch {
         result.failed = true;
         return result;
     };
@@ -209,11 +232,12 @@ fn runInstall(io: std.Io, alloc: std.mem.Allocator, request: ElevatedInstallRequ
     argv[2] = "-p";
     argv[3] = "";
     argv[4] = request.shelly_bin;
-    argv[5] = "install";
+    argv[5] = @tagName(request.action);
     argv[6] = request.backend;
     argv[7] = request.name;
     argv[8] = "--no-confirm";
     argv[9] = "--ui-mode";
+    if (request.action == .remove) argv[10] = "--no-cascade";
 
     var child = std.process.spawn(io, .{
         .argv = argv,
@@ -222,7 +246,7 @@ fn runInstall(io: std.Io, alloc: std.mem.Allocator, request: ElevatedInstallRequ
         .stdout = .pipe,
         .stderr = .pipe,
     }) catch {
-        result.error_detail = alloc.dupe(u8, "Could not start sudo to authorize installation of the requested package.") catch "";
+        result.error_detail = alloc.dupe(u8, "Could not start sudo to authorize the requested package operation.") catch "";
         result.failed = true;
         return result;
     };
@@ -279,7 +303,7 @@ fn runInstall(io: std.Io, alloc: std.mem.Allocator, request: ElevatedInstallRequ
     if (stream.in_frame) stream.failed = true;
 
     const term = child.wait(io) catch {
-        result.error_detail = alloc.dupe(u8, "Could not collect the installation result for the requested package. Its final status could not be confirmed.") catch "";
+        result.error_detail = alloc.dupe(u8, "Could not collect the operation result for the requested package. Its final status could not be confirmed.") catch "";
         result.failed = true;
         return result;
     };
@@ -288,13 +312,13 @@ fn runInstall(io: std.Io, alloc: std.mem.Allocator, request: ElevatedInstallRequ
         const detail = if (stream.error_len > 0)
             stream.error_text[0..stream.error_len]
         else if (read_failed)
-            "Could not read installation output; the final status could not be confirmed."
+            "Could not read operation output; the final status could not be confirmed."
         else if (stream.failed)
-            "Installation output contained an invalid, incomplete, or unsupported message. Check package state before retrying."
+            "Operation output contained an invalid, incomplete, or unsupported message. Check package state before retrying."
         else if (stderr_len > 0)
             std.mem.trim(u8, stderr_tail[0..stderr_len], " \t\r\n")
         else
-            "Could not install the requested package. Shelly returned no error details.";
+            "The requested package operation failed. Shelly returned no error details.";
         result.error_detail = diagnostics.sanitizeAlloc(alloc, detail) catch "";
         result.failed = true;
     }
@@ -1054,7 +1078,7 @@ test "operation worker owns inputs and joins on launch failure" {
     // No real sudo or package operation can be launched by this test.
     try env.put("PATH", "/nonexistent-shelly-operation-test");
     var name = [_]u8{ 't', 'e', 's', 't' };
-    const operation = try InstallOperation.start(.{
+    const operation = try Operation.start(.{
         .sudo_bin = "/nonexistent-shelly-sudo",
         .shelly_bin = "/nonexistent-shelly",
         .environ_map = &env,
@@ -1072,14 +1096,14 @@ test "operation worker owns inputs and joins on launch failure" {
     try std.testing.expect(result.error_detail.len > 0);
 
     // Cleanup must also join a worker whose result has never been polled.
-    const unpolled = try InstallOperation.start(operation.request);
+    const unpolled = try Operation.start(operation.request);
     unpolled.deinit();
 }
 
 test "operation progress stream handles fragmented frames and owns display data" {
     var threaded: std.Io.Threaded = .init(std.testing.allocator, .{});
     defer threaded.deinit();
-    var operation: InstallOperation = .{
+    var operation: Operation = .{
         .arena = .init(std.testing.allocator),
         .request = undefined,
     };
@@ -1110,4 +1134,20 @@ test "operation progress retains only bounded recent messages" {
     stream.feed("[JSON]", null, undefined);
     for (0..256 * 1024 + 1) |_| stream.feed("a", null, undefined);
     try std.testing.expect(stream.failed);
+}
+
+test "operation rejects removal from unsupported sources before launching" {
+    var env: std.process.Environ.Map = .init(std.testing.allocator);
+    defer env.deinit();
+    var result = elevatedInstall(undefined, std.testing.allocator, .{
+        .action = .remove,
+        .shelly_bin = "unused",
+        .environ_map = &env,
+        .name = "test",
+        .backend = "aur",
+        .password = "",
+    });
+    defer result.deinit(std.testing.allocator);
+    try std.testing.expect(result.failed);
+    try std.testing.expectEqualStrings("Removal currently supports system packages only.", result.error_detail);
 }

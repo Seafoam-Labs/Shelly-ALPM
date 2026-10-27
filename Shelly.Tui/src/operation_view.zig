@@ -5,6 +5,7 @@ const vxfw = vaxis.vxfw;
 
 pub const View = struct {
     name: []const u8,
+    action: @import("shelly_operation.zig").Action = .install,
     state: enum { running, succeeded, failed },
     detail: []const u8 = "",
     progress: @import("shelly_operation.zig").Progress = .{},
@@ -23,9 +24,9 @@ pub const View = struct {
         const arena = ctx.arena;
         const max = ctx.max.size();
         const outcome = switch (self.state) {
-            .running => try std.fmt.allocPrint(arena, "Installing '{0f}' as root…", .{diagnostics.safe(self.name)}),
-            .succeeded => try std.fmt.allocPrint(arena, "✔ '{0f}' was installed successfully.\n\nEsc: close", .{diagnostics.safe(self.name)}),
-            .failed => try std.fmt.allocPrint(arena, "Could not install {0f}.\n\n{1f}\n\nEsc: close", .{ diagnostics.safe(self.name), diagnostics.safe(if (self.detail.len > 0) self.detail else "Shelly returned no error details.") }),
+            .running => try std.fmt.allocPrint(arena, "{s} '{f}' as root…", .{ self.action.ongoing(), diagnostics.safe(self.name) }),
+            .succeeded => try std.fmt.allocPrint(arena, "✔ {s} '{f}' successfully.\n\nEsc: close", .{ self.action.completed(), diagnostics.safe(self.name) }),
+            .failed => try std.fmt.allocPrint(arena, "Could not {s} {f}.\n\n{f}\n\nEsc: close", .{ @tagName(self.action), diagnostics.safe(self.name), diagnostics.safe(if (self.detail.len > 0) self.detail else "Shelly returned no error details.") }),
         };
         const percentage = if (self.progress.percent) |percent|
             try std.fmt.allocPrint(arena, " ({d}%)", .{percent})
@@ -46,7 +47,7 @@ pub const View = struct {
         if (box_width < 30 or box_height < 8) return null;
 
         var text: vxfw.Text = .{ .text = body };
-        const labels = [_]vxfw.Border.BorderLabel{.{ .text = "Installation", .alignment = .top_left }};
+        const labels = [_]vxfw.Border.BorderLabel{.{ .text = if (self.action == .install) "Installation" else "Removal", .alignment = .top_left }};
         var border: vxfw.Border = .{
             .child = text.widget(),
             .labels = &labels,
