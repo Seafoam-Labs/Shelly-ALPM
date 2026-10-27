@@ -1,4 +1,5 @@
 const std = @import("std");
+const operation_view = @import("operation_view.zig");
 const shelly_operation = @import("shelly_operation.zig");
 const diagnostics = @import("diagnostics");
 const vaxis = @import("vaxis");
@@ -56,6 +57,19 @@ const SudoPrompt = struct {
     detail: []const u8 = "",
 
     const State = enum { entering, running, succeeded, failed };
+
+    fn operationView(self: *const SudoPrompt) ?operation_view.View {
+        return .{
+            .name = self.name,
+            .detail = self.detail,
+            .state = switch (self.state) {
+                .entering => return null,
+                .running => .running,
+                .succeeded => .succeeded,
+                .failed => .failed,
+            },
+        };
+    }
 
     fn deinit(self: *SudoPrompt, gpa: Allocator) void {
         // Scrub the password before releasing its memory.
@@ -547,46 +561,32 @@ pub const Model = struct {
     }
 
     fn handleSudoKey(self: *Model, prompt: *SudoPrompt, ctx: *vxfw.EventContext, key: vaxis.Key) anyerror!void {
-        switch (prompt.state) {
-            .entering => {
-                if (key.matches(vaxis.Key.escape, .{})) {
-                    self.closeOverlay();
-                    return ctx.consumeAndRedraw();
-                }
-                if (key.matches(vaxis.Key.enter, .{})) {
-                    if (prompt.password.items.len == 0) return ctx.consumeEvent();
-                    try self.startElevatedInstall(ctx, prompt);
-                    prompt.state = .running;
-                    return ctx.consumeAndRedraw();
-                }
-                if (key.matches(vaxis.Key.backspace, .{})) {
-                    popGrapheme(&prompt.password);
-                    return ctx.consumeAndRedraw();
-                }
-                if (key.text) |text| {
-                    // Record printable input only; skip control characters
-                    for (text) |b| {
-                        if (b >= 0x20) try prompt.password.append(self.gpa, b);
-                    }
-                    return ctx.consumeAndRedraw();
-                }
-                return ctx.consumeEvent();
-            },
-            .running => {
-                // Ctrl+C is intercepted earlier, in the capture handler
-                return ctx.consumeEvent();
-            },
-            .succeeded, .failed => {
-                if (key.matches(vaxis.Key.escape, .{}) or
-                    key.matches(vaxis.Key.enter, .{}) or
-                    key.matches('q', .{}))
-                {
-                    self.closeOverlay();
-                    return ctx.consumeAndRedraw();
-                }
-                return ctx.consumeEvent();
-            },
+        if (prompt.operationView()) |view| {
+            if (view.handleKey(key) == .close) self.closeOverlay();
+            return ctx.consumeAndRedraw();
         }
+
+        if (key.matches(vaxis.Key.escape, .{})) {
+            self.closeOverlay();
+            return ctx.consumeAndRedraw();
+        }
+        if (key.matches(vaxis.Key.enter, .{})) {
+            if (prompt.password.items.len == 0) return ctx.consumeEvent();
+            try self.startElevatedInstall(ctx, prompt);
+            prompt.state = .running;
+            return ctx.consumeAndRedraw();
+        }
+        if (key.matches(vaxis.Key.backspace, .{})) {
+            popGrapheme(&prompt.password);
+            return ctx.consumeAndRedraw();
+        }
+        if (key.text) |text| {
+            for (text) |b| {
+                if (b >= 0x20) try prompt.password.append(self.gpa, b);
+            }
+            return ctx.consumeAndRedraw();
+        }
+        return ctx.consumeEvent();
     }
 
     fn startElevatedInstall(self: *Model, ctx: *vxfw.EventContext, prompt: *SudoPrompt) !void {
@@ -982,28 +982,15 @@ pub const Model = struct {
     }
 
     fn drawSudoPrompt(_: *const Model, ctx: vxfw.DrawContext, arena: Allocator, max: vxfw.Size, prompt: *const SudoPrompt) Allocator.Error!?vxfw.SubSurface {
-        var body: []const u8 = undefined;
-        switch (prompt.state) {
-            .entering => {
-                const count = codepointCount(prompt.password.items);
-                const mask = try arena.alloc(u8, count * 3);
-                var pos: usize = 0;
-                for (0..count) |_| {
-                    @memcpy(mask[pos .. pos + 3], "●");
-                    pos += 3;
-                }
-                body = try std.fmt.allocPrint(arena, "Installing '{s}' requires administrator privileges.\n\nPassword: {s}\n\nEnter: run with sudo    Esc: cancel", .{ prompt.name, mask[0..pos] });
-            },
-            .running => {
-                body = try std.fmt.allocPrint(arena, "Installing '{s}' as root…", .{prompt.name});
-            },
-            .succeeded => {
-                body = try std.fmt.allocPrint(arena, "✔ '{s}' was installed successfully.\n\nEsc: close", .{prompt.name});
-            },
-            .failed => {
-                body = try std.fmt.allocPrint(arena, "Could not install {0f}.\n\n{1f}\n\nEsc: close", .{ diagnostics.safe(prompt.name), diagnostics.safe(if (prompt.detail.len > 0) prompt.detail else "Shelly returned no error details.") });
-            },
+        if (prompt.operationView()) |view| return view.draw(ctx);
+        const count = codepointCount(prompt.password.items);
+        const mask = try arena.alloc(u8, count * 3);
+        var pos: usize = 0;
+        for (0..count) |_| {
+            @memcpy(mask[pos .. pos + 3], "●");
+            pos += 3;
         }
+        const body = try std.fmt.allocPrint(arena, "Installing '{s}' requires administrator privileges.\n\nPassword: {s}\n\nEnter: run with sudo    Esc: cancel", .{ prompt.name, mask[0..pos] });
 
         const box_width = @min(max.width -| 2, @as(u16, 70));
         const box_height = @min(max.height -| 2, @as(u16, 20));
