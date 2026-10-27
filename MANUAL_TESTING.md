@@ -204,12 +204,12 @@ literal word). Click the window first: one launched from a terminal keeps the ke
 terminal, and then nothing at all is spoken and every key lands in your shell. This takes over
 the session for the duration.
 
-- [ ] **First-run wizard.** Each page change puts focus on a control of the new page and speaks
-      it, for example `AUR Arch User Repository community packages, check box not checked` after
-      `Next`. Silence here is the original bug report. Entering the window speaks the lockout
-      itself: `Shelly`, `Welcome to Shelly v3`, `dialog`, then its description and the `Next`
-      button. The page's own group name (`Select Your Sources`) is in the tree for browse mode but
-      is not spoken on entry with Orca's defaults, so do not expect to hear it.
+- [ ] **First-run wizard.** Focus starts on the page group, so entering the window speaks the
+      lockout (`Shelly`, `Welcome to Shelly v3`, dialog, description) and the `Welcome to
+      Shelly v3` group; `Tab` reaches `Next`. After `Next`, focus lands on `Select Your
+      Sources`, and `Tab` reaches the first checkbox and speaks it, for example `AUR Arch User
+      Repository community packages, check box not checked`. Focus must move on every page: on
+      the first page it used to stay on `Next` forever, which is the original bug report.
 - [ ] **Modal lockout.** A blocking screen is announced as a dialog, and closing it puts focus
       on the navigation button for the page in view rather than on a widget that has left the tree.
       Check it in both nav modes: only the rail or the top bar is visible at a time, and focus

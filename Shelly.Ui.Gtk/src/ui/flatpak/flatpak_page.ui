@@ -2,6 +2,12 @@
 <interface domain="shelly-ui">
   <requires lib="gtk" version="4.0"/>
   <template class="ShellyFlatpakPage" parent="GtkBox">
+    <property name="focusable">true</property>
+    <property name="focus-on-click">false</property>
+    <property name="accessible-role">group</property>
+    <accessibility>
+      <property name="label" translatable="yes">Flatpak</property>
+    </accessibility>
     <property name="orientation">vertical</property>
     <property name="hexpand">true</property>
     <property name="vexpand">true</property>

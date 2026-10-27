@@ -72,8 +72,10 @@ pub fn setDescription(widget: *gtk.Widget, text: []const u8) void {
     updateProperty(widget, .description, text);
 }
 
-/// Focuses the first focusable descendant, so a page swap hands the keyboard to
-/// a control an AT can announce. `grabFocus` on a container does not delegate.
+/// Focuses the first focusable widget in the subtree, starting with `widget`
+/// itself. A page root made focusable is therefore the entry point and its
+/// first control is one Tab away; a page with no control still lands inside.
+/// `grabFocus` on a container does not delegate to its children.
 pub fn focusFirst(widget: *gtk.Widget) bool {
     return focusDescendant(widget);
 }
@@ -176,6 +178,54 @@ test "focusFirst reaches a control on a stack page that just became visible" {
     try std.testing.expect(focusFirst(second_page.as(gtk.Widget)));
     const focus = gtk.Window.getFocus(window);
     try std.testing.expectEqual(@as(?*gtk.Widget, second_button.as(gtk.Widget)), focus);
+    gtk.Window.destroy(window);
+}
+
+test "a focusable page with no control is a Tab stop that leads to navigation" {
+    try gtk_test.requireDisplay();
+
+    // The first wizard page shape: static content only, with the wizard's
+    // navigation as a sibling. Making the page itself focusable is what gives
+    // the page change somewhere to land and Tab somewhere to go.
+    const page = gtk.Box.new(.vertical, 0);
+    gtk.Widget.setFocusable(page.as(gtk.Widget), 1);
+    gtk.Box.append(page, gtk.Label.new("Welcome to Shelly v3").as(gtk.Widget));
+
+    const next = gtk.Button.new();
+    gtk.Button.setLabel(next, "Next");
+
+    const shell = gtk.Box.new(.vertical, 0);
+    gtk.Box.append(shell, page.as(gtk.Widget));
+    gtk.Box.append(shell, next.as(gtk.Widget));
+    const window = shownWindow(shell.as(gtk.Widget));
+
+    try std.testing.expect(focusFirst(page.as(gtk.Widget)));
+    try std.testing.expectEqual(@as(?*gtk.Widget, page.as(gtk.Widget)), gtk.Window.getFocus(window));
+    try std.testing.expect(gtk.Widget.childFocus(window.as(gtk.Widget), .tab_forward) != 0);
+    try std.testing.expectEqual(@as(?*gtk.Widget, next.as(gtk.Widget)), gtk.Window.getFocus(window));
+
+    gtk.Window.destroy(window);
+}
+
+test "a focusable page hands Tab to its first control" {
+    try gtk_test.requireDisplay();
+
+    // A list page shape: the page is the entry point, and its first control is
+    // one Tab away rather than being where the page change dropped focus.
+    const page = gtk.Box.new(.vertical, 0);
+    gtk.Widget.setFocusable(page.as(gtk.Widget), 1);
+    const search = gtk.Button.new();
+    gtk.Button.setLabel(search, "Search");
+    gtk.Box.append(page, search.as(gtk.Widget));
+
+    const shell = gtk.Box.new(.vertical, 0);
+    gtk.Box.append(shell, page.as(gtk.Widget));
+    const window = shownWindow(shell.as(gtk.Widget));
+
+    try std.testing.expect(focusFirst(page.as(gtk.Widget)));
+    try std.testing.expect(gtk.Widget.childFocus(window.as(gtk.Widget), .tab_forward) != 0);
+    try std.testing.expectEqual(@as(?*gtk.Widget, search.as(gtk.Widget)), gtk.Window.getFocus(window));
+
     gtk.Window.destroy(window);
 }
 
