@@ -1,4 +1,5 @@
 const std = @import("std");
+const commands = @import("commands.zig");
 const packages_view = @import("views/packages_view.zig");
 const aur_view = @import("views/aur_view.zig");
 const updates_view = @import("views/updates_view.zig");
@@ -256,23 +257,22 @@ pub const Model = struct {
         const self: *Model = @ptrCast(@alignCast(ptr));
         switch (event) {
             .key_press => |key| {
-                if (key.matches('c', .{ .ctrl = true })) {
-                    ctx.quit = true;
-                    return;
+                const command = commands.global(key, Tab.all.len);
+                if (command) |action| {
+                    if (action == .quit) {
+                        ctx.quit = true;
+                        return ctx.consumeEvent();
+                    }
                 }
                 if (self.overlay) |overlay| {
                     switch (overlay) {
                         .package, .aur => {
-                            if (key.matches(vaxis.Key.escape, .{}) or key.matches('q', .{})) {
-                                self.closeOverlay();
-                                return ctx.consumeAndRedraw();
-                            }
-                            if (key.matches('i', .{})) {
-                                try self.operationFromOverlay(.install);
-                                return ctx.consumeAndRedraw();
-                            }
-                            if (key.matches('r', .{})) {
-                                try self.operationFromOverlay(.remove);
+                            if (commands.detail(key)) |action| {
+                                switch (action) {
+                                    .close => self.closeOverlay(),
+                                    .install => try self.operationFromOverlay(.install),
+                                    .remove => try self.operationFromOverlay(.remove),
+                                }
                                 return ctx.consumeAndRedraw();
                             }
                             return ctx.consumeEvent();
@@ -282,7 +282,7 @@ pub const Model = struct {
                         },
                     }
                 }
-                if (self.active == .upgrade and key.matches('r', .{})) {
+                if (self.active == .upgrade and commands.refreshes(key)) {
                     try self.startUpdates(ctx);
                     return ctx.consumeAndRedraw();
                 }
@@ -291,24 +291,17 @@ pub const Model = struct {
                     return ctx.consumeAndRedraw();
                 }
 
-                if (key.matches(vaxis.Key.tab, .{})) {
-                    self.switchTab(1);
-                    try self.focusActiveTab(ctx);
-                    try self.ensureUpdates(ctx);
-                    return ctx.consumeAndRedraw();
-                }
-                if (key.matches(vaxis.Key.tab, .{ .shift = true })) {
-                    self.switchTab(-1);
-                    try self.focusActiveTab(ctx);
-                    try self.ensureUpdates(ctx);
-                    return ctx.consumeAndRedraw();
-                }
-                // Alt+<n> jumps straight to tab n
-                for (Tab.all, 1..) |tab, number| {
-                    if (key.matches('0' + @as(u21, @intCast(number)), .{ .alt = true })) {
-                        try self.setTab(tab, ctx);
-                        return ctx.consumeAndRedraw();
+                if (command) |action| {
+                    switch (action) {
+                        .quit => unreachable,
+                        .next_tab, .previous_tab => {
+                            self.switchTab(if (action == .next_tab) 1 else -1);
+                            try self.focusActiveTab(ctx);
+                            try self.ensureUpdates(ctx);
+                        },
+                        .select_tab => |index| try self.setTab(Tab.all[index], ctx),
                     }
+                    return ctx.consumeAndRedraw();
                 }
             },
             else => {},
@@ -337,32 +330,6 @@ pub const Model = struct {
                 return ctx.consumeAndRedraw();
             },
             .key_press => |key| {
-                if (key.matches('c', .{ .ctrl = true })) {
-                    ctx.quit = true;
-                    return;
-                }
-                if (key.matches(vaxis.Key.escape, .{})) {
-                    switch (self.active) {
-                        .packages => {
-                            if (self.query.len > 0) {
-                                self.text_field.clearRetainingCapacity();
-                                try self.setQuery("");
-                                return ctx.consumeAndRedraw();
-                            }
-                        },
-                        .aur => {
-                            if (self.aur_field.buf.realLength() > 0) {
-                                self.aur_field.clearRetainingCapacity();
-                                return ctx.consumeAndRedraw();
-                            }
-                        },
-                        .upgrade => {
-                            return ctx.consumeAndRedraw();
-                        },
-                    }
-                    ctx.quit = true;
-                    return;
-                }
                 // Enter opens the details of the selected package. On the
                 // AUR tab Enter is consumed by the search field instead.
                 if (key.matches(vaxis.Key.enter, .{})) {
@@ -371,27 +338,6 @@ pub const Model = struct {
                         @as(usize, self.list_view.cursor) < self.filtered.items.len)
                     {
                         self.overlay = .{ .package = self.filtered.items[self.list_view.cursor] };
-                        return ctx.consumeAndRedraw();
-                    }
-                }
-                // Arrows and plain digits switch tabs. Note these only fire
-                // when the search field does not have focus — the field
-                // consumes arrows for cursor movement and digits as text.
-                if (key.matches(vaxis.Key.left, .{})) {
-                    self.switchTab(-1);
-                    try self.focusActiveTab(ctx);
-                    try self.ensureUpdates(ctx);
-                    return ctx.consumeAndRedraw();
-                }
-                if (key.matches(vaxis.Key.right, .{})) {
-                    self.switchTab(1);
-                    try self.focusActiveTab(ctx);
-                    try self.ensureUpdates(ctx);
-                    return ctx.consumeAndRedraw();
-                }
-                for (Tab.all, 1..) |tab, number| {
-                    if (key.matches('0' + @as(u21, @intCast(number)), .{})) {
-                        try self.setTab(tab, ctx);
                         return ctx.consumeAndRedraw();
                     }
                 }
@@ -698,10 +644,6 @@ pub const Model = struct {
             return ctx.consumeAndRedraw();
         }
 
-        if (key.matches(vaxis.Key.escape, .{})) {
-            self.closeOverlay();
-            return ctx.consumeAndRedraw();
-        }
         if (key.matches(vaxis.Key.enter, .{})) {
             if (prompt.password.items.len == 0) return ctx.consumeEvent();
             try self.startElevatedInstall(ctx, prompt);
@@ -990,14 +932,14 @@ pub const Model = struct {
                 title = try std.fmt.allocPrint(arena, "{s} {s}", .{ pkg.Name, pkg.Version });
                 body = try std.fmt.allocPrint(arena, "{s}\n\n{s}", .{
                     try packages_view.detailsText(arena, pkg),
-                    if (pkg.Installed) "I: install/reinstall    R: remove    Esc: close" else "I: install    Esc: close",
+                    commands.detailsHint(pkg.Installed),
                 });
             },
             .aur => |pkg| {
                 title = try std.fmt.allocPrint(arena, "{s} {s} (AUR)", .{ pkg.Name, pkg.Version });
                 body = try std.fmt.allocPrint(arena, "{s}\n\n{s}", .{
                     try aur_view.detailsText(arena, pkg),
-                    if (pkg.Installed) "I: install/reinstall    R: remove    Esc: close" else "I: install    Esc: close",
+                    commands.detailsHint(pkg.Installed),
                 });
             },
             .sudo => return null,
@@ -1039,9 +981,10 @@ pub const Model = struct {
             @memcpy(mask[pos .. pos + 3], "●");
             pos += 3;
         }
-        const body = try std.fmt.allocPrint(arena, "{s} '{s}'?{s}\n\nPassword: {s}\n\nEnter: confirm and run with sudo    Esc: cancel", .{
+        const body = try std.fmt.allocPrint(arena, "{s} '{s}'?{s}\n\nPassword: {s}\n\n{s}", .{
             prompt.action.verb(),                                                                          prompt.name,
             if (prompt.action == .remove) "\nUnused dependencies and configuration will be kept." else "", mask[0..pos],
+            commands.authentication_hint,
         });
 
         const box_width = @min(max.width -| 2, @as(u16, 70));
@@ -1278,4 +1221,41 @@ test "updates polling transfers results and cleans unconsumed results" {
     pending.* = .{ .result = try std.json.parseFromSlice(CheckUpdates, std.testing.allocator, "{}", .{}) };
     model.updates_job = pending;
     model.updates_thread = try std.Thread.spawn(.{}, Worker.complete, .{pending});
+}
+
+test "shared commands quit from every tab and modal" {
+    const model = try Model.init(std.testing.allocator);
+    defer {
+        model.overlay = null;
+        model.deinit();
+    }
+    var ctx: vxfw.EventContext = .{
+        .io = undefined,
+        .alloc = std.testing.allocator,
+        .cmds = .empty,
+    };
+    defer ctx.cmds.deinit(std.testing.allocator);
+    for (Tab.all) |tab| {
+        model.active = tab;
+        ctx.quit = false;
+        ctx.consume_event = false;
+        try Model.typeErasedCaptureHandler(model, &ctx, .{ .key_press = .{ .codepoint = vaxis.Key.escape } });
+        try std.testing.expect(ctx.quit and ctx.consume_event);
+    }
+    var pkg: Package = .{ .Name = "test" };
+    model.overlay = .{ .package = &pkg };
+    ctx.quit = false;
+    try Model.typeErasedCaptureHandler(model, &ctx, .{ .key_press = .{ .codepoint = vaxis.Key.escape } });
+    try std.testing.expect(ctx.quit);
+    var prompt: SudoPrompt = .{ .name = "test", .backend = .standard, .password = .empty };
+    for ([_]SudoPrompt.State{ .entering, .running, .succeeded, .failed }) |state| {
+        prompt.state = state;
+        model.overlay = .{ .sudo = &prompt };
+        ctx.quit = false;
+        try Model.typeErasedCaptureHandler(model, &ctx, .{ .key_press = .{ .codepoint = vaxis.Key.escape } });
+        try std.testing.expect(ctx.quit);
+    }
+    model.overlay = null;
+    try std.testing.expect(commands.global(.{ .codepoint = vaxis.Key.left }, Tab.all.len) == null);
+    try std.testing.expect(commands.global(.{ .codepoint = '1' }, Tab.all.len) == null);
 }
