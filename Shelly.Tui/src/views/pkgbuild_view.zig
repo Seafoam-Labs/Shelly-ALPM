@@ -2,6 +2,7 @@ const std = @import("std");
 const vaxis = @import("vaxis");
 const vxfw = vaxis.vxfw;
 const commands = @import("../commands.zig");
+const operation = @import("../services/shelly_operation.zig");
 const PkgBuild = @import("../models/pkgbuild.zig").PkgBuild;
 
 pub const Document = struct {
@@ -35,6 +36,78 @@ pub const Document = struct {
             } else {
                 try section(alloc, &lines, "Scan findings and related files were not supplied.", &remaining);
             }
+        }
+        return .{ .arena = arena, .lines = try lines.toOwnedSlice(alloc) };
+    }
+
+    /// Builds the actual CLI operation question, never a fetched browsing preview.
+    pub fn fromQuestion(allocator: std.mem.Allocator, question: operation.Question) !Document {
+        var arena = std.heap.ArenaAllocator.init(allocator);
+        errdefer arena.deinit();
+        const alloc = arena.allocator();
+        var lines: std.ArrayList([]const u8) = .empty;
+        var remaining: usize = 2 * 1024 * 1024;
+        switch (question) {
+            .pkgbuild => |review| {
+                try section(alloc, &lines, review.package_name, &remaining);
+                if (review.old_pkgbuild.len > 0) {
+                    try section(alloc, &lines, "Previous PKGBUILD", &remaining);
+                    try source(alloc, &lines, review.old_pkgbuild, &remaining);
+                }
+                try section(alloc, &lines, "Proposed PKGBUILD", &remaining);
+                try source(alloc, &lines, review.new_pkgbuild, &remaining);
+                if (review.diff_lines.len > 0) {
+                    try section(alloc, &lines, "Diff", &remaining);
+                    for (review.diff_lines) |line| try source(alloc, &lines, line, &remaining);
+                }
+                try section(alloc, &lines, "Findings", &remaining);
+                if (review.warnings.len == 0) try section(alloc, &lines, "No findings supplied by the CLI.", &remaining);
+                for (review.warnings) |warning| {
+                    const text = try std.fmt.allocPrint(alloc, "[{s}] {s} / {s}: {s}\n{s}", .{
+                        warning.Severity, warning.Tool, warning.Hook, warning.Message, warning.MatchedLine,
+                    });
+                    try source(alloc, &lines, text, &remaining);
+                }
+                for (review.source_files) |file| {
+                    try section(alloc, &lines, file.name, &remaining);
+                    try source(alloc, &lines, file.content, &remaining);
+                }
+            },
+            .yes_no => |request| {
+                try source(alloc, &lines, request.question_text, &remaining);
+                for (request.arguments) |argument| try source(alloc, &lines, argument, &remaining);
+            },
+            .transaction => |request| {
+                try source(alloc, &lines, request.question_text, &remaining);
+                try section(alloc, &lines, request.action, &remaining);
+                for (request.packages) |pkg| {
+                    const text = try std.fmt.allocPrint(alloc, "{s}/{s} {s}  source={s} role={s}", .{
+                        pkg.repository orelse "", pkg.name, pkg.version orelse "",
+                        pkg.source,               pkg.role,
+                    });
+                    try source(alloc, &lines, text, &remaining);
+                }
+                for (request.migrations) |migration| {
+                    const text = try std.fmt.allocPrint(alloc, "Migration: {s} → {s} ({s})", .{ migration.path, migration.destination, migration.origin });
+                    try source(alloc, &lines, text, &remaining);
+                }
+                if (request.total_download_size) |size| {
+                    try source(alloc, &lines, try std.fmt.allocPrint(alloc, "Download: {d} bytes", .{size}), &remaining);
+                }
+                if (request.net_installed_size) |size| {
+                    try source(alloc, &lines, try std.fmt.allocPrint(alloc, "Installed size change: {d} bytes", .{size}), &remaining);
+                }
+            },
+            inline .select_one, .select_many => |request| {
+                try source(alloc, &lines, request.prompt, &remaining);
+                for (request.options) |option| {
+                    const text = try std.fmt.allocPrint(alloc, "{d}: {s} — {s}{s}{s}", .{
+                        option.index,                                    option.name,                                   option.description,
+                        if (option.is_installed) " [installed]" else "", if (option.is_selected) " [selected]" else "",
+                    });
+                    try source(alloc, &lines, text, &remaining);
+                }
+            },
         }
         return .{ .arena = arena, .lines = try lines.toOwnedSlice(alloc) };
     }
@@ -79,15 +152,29 @@ pub const Document = struct {
     }
 };
 
-pub const Action = enum { close, retry };
+pub const Action = enum { close, retry, approve, decline };
 
 pub const View = struct {
     name: []const u8,
     scroll: *vxfw.ScrollView,
     loading: bool,
     failure: ?anyerror,
+    review: bool = false,
+    choices: bool = false,
+    answer_input: []const u8 = "",
+    answer_error: []const u8 = "",
 
-    pub fn handleKey(_: View, key: vaxis.Key) ?Action {
+    pub fn handleKey(self: View, key: vaxis.Key) ?Action {
+        if (self.review) {
+            if (self.choices) {
+                if (key.matches(vaxis.Key.enter, .{})) return .approve;
+                return null;
+            }
+            return switch (commands.review(key) orelse return null) {
+                .approve => .approve,
+                .decline => .decline,
+            };
+        }
         if (commands.closesPreview(key)) return .close;
         if (commands.refreshes(key)) return .retry;
         return null;
@@ -116,12 +203,20 @@ pub const View = struct {
                 .surface = try self.scroll.draw(ctx.withConstraints(.{}, .{ .width = inner_width, .height = inner_height - 2 })),
             });
         }
-        var hint: vxfw.Text = .{ .text = commands.preview_hint, .softwrap = false };
+        var hint: vxfw.Text = .{ .text = if (self.review)
+            if (self.choices) commands.choice_hint else commands.review_hint
+        else
+            commands.preview_hint, .softwrap = false };
         try children.append(ctx.arena, .{
             .origin = .{ .row = inner_height - 2, .col = 0 },
             .surface = try hint.draw(ctx.withConstraints(.{}, .{ .width = inner_width, .height = 1 })),
         });
-        var note: vxfw.Text = .{ .text = "Browsing preview; install-time review is separate.", .softwrap = false };
+        var note: vxfw.Text = .{ .text = if (self.review)
+            if (self.choices)
+                try std.fmt.allocPrint(ctx.arena, "Indices: {s}  {s}", .{ self.answer_input, self.answer_error })
+            else if (self.answer_error.len > 0) self.answer_error else "Approval applies only to this CLI request."
+        else
+            "Browsing preview; install-time review is separate.", .softwrap = false };
         try children.append(ctx.arena, .{
             .origin = .{ .row = inner_height - 1, .col = 0 },
             .surface = try note.draw(ctx.withConstraints(.{}, .{ .width = inner_width, .height = 1 })),
@@ -135,7 +230,7 @@ pub const View = struct {
         const holder = try ctx.arena.create(FixedContent);
         holder.* = .{ .surface = content };
         const labels = [_]vxfw.Border.BorderLabel{.{
-            .text = "PKGBUILD preview",
+            .text = if (self.review) "Operation review" else "PKGBUILD preview",
             .alignment = .top_left,
         }};
         const border = try ctx.arena.create(vxfw.Border);

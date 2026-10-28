@@ -46,13 +46,14 @@ pub fn detailsHint(installed: bool) []const u8 {
 pub const result_hint = "Enter/Q: close    Esc: quit";
 pub const authentication_hint = "Enter: confirm and run with sudo    Esc: quit";
 
-pub const Updates = enum { refresh, upgrade_system };
+pub const Updates = enum { refresh, upgrade_system, upgrade_aur };
 pub fn updates(key: vaxis.Key) ?Updates {
     if (refreshes(key)) return .refresh;
     if (key.matches('u', .{})) return .upgrade_system;
+    if (key.matches('a', .{})) return .upgrade_aur;
     return null;
 }
-pub const updates_hint = "U: upgrade system    R: refresh";
+pub const updates_hint = "U: system    A: AUR    R: refresh";
 
 pub fn closesPreview(key: vaxis.Key) bool {
     return key.matches('q', .{});
@@ -65,3 +66,12 @@ pub fn aurDetailsHint(installed: bool) []const u8 {
         "P: PKGBUILD    I: install    Q: close    Esc: quit";
 }
 pub const preview_hint = "↑↓/←→: scroll  Ctrl+D/U: page  R: retry  Q: back  Esc: quit";
+
+pub const Review = enum { approve, decline };
+pub fn review(key: vaxis.Key) ?Review {
+    if (key.matches('y', .{})) return .approve;
+    if (key.matches('n', .{}) or key.matches('q', .{})) return .decline;
+    return null;
+}
+pub const review_hint = "↑↓/←→: scroll  Y: approve  N/Q: decline  Esc: quit";
+pub const choice_hint = "Enter indices, comma-separated for multiple choices; Enter: send";

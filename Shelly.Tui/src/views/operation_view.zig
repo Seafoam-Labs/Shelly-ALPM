@@ -7,7 +7,7 @@ const vxfw = vaxis.vxfw;
 pub const View = struct {
     name: []const u8,
     action: @import("../services/shelly_operation.zig").Action = .install,
-    state: enum { running, succeeded, failed },
+    state: enum { running, succeeded, failed, declined },
     detail: []const u8 = "",
     progress: @import("../services/shelly_operation.zig").Progress = .{},
 
@@ -25,6 +25,7 @@ pub const View = struct {
         const outcome = switch (self.state) {
             .running => try std.fmt.allocPrint(arena, "{s} '{f}' as root…", .{ self.action.ongoing(), diagnostics.safe(self.name) }),
             .succeeded => try std.fmt.allocPrint(arena, "✔ {s} '{f}' successfully.\n\n{s}", .{ self.action.completed(), diagnostics.safe(self.name), commands.result_hint }),
+            .declined => try std.fmt.allocPrint(arena, "Declined {s} for '{f}'.\nSome dependency changes may already have completed.\n\n{s}", .{ @tagName(self.action), diagnostics.safe(self.name), commands.result_hint }),
             .failed => try std.fmt.allocPrint(arena, "Could not {s} {f}.\n\n{f}\n\n{s}", .{ @tagName(self.action), diagnostics.safe(self.name), diagnostics.safe(if (self.detail.len > 0) self.detail else "Shelly returned no error details."), commands.result_hint }),
         };
         const percentage = if (self.progress.percent) |percent|
@@ -49,7 +50,7 @@ pub const View = struct {
         const labels = [_]vxfw.Border.BorderLabel{.{ .text = switch (self.action) {
             .install => "Installation",
             .remove => "Removal",
-            .upgrade => "System upgrade",
+            .upgrade => "Package upgrade",
         }, .alignment = .top_left }};
         var border: vxfw.Border = .{
             .child = text.widget(),

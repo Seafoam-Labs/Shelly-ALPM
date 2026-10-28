@@ -75,7 +75,8 @@ pub const Progress = struct {
 };
 
 const ProgressStream = struct {
-    payload: [256 * 1024]u8 = undefined,
+    const max_frame_bytes = 8 * 1024 * 1024;
+    payload: std.ArrayList(u8) = .empty,
     len: usize = 0,
     matched: usize = 0,
     in_frame: bool = false,
@@ -84,6 +85,10 @@ const ProgressStream = struct {
     error_len: usize = 0,
     transaction_done: bool = false,
     transaction_cancelled: bool = false,
+
+    fn deinit(self: *ProgressStream) void {
+        self.payload.deinit(std.heap.page_allocator);
+    }
 
     fn feed(self: *ProgressStream, bytes: []const u8, operation: ?*Operation, io: std.Io) void {
         for (bytes) |byte| {
@@ -95,31 +100,54 @@ const ProgressStream = struct {
                         self.in_frame = true;
                         self.matched = 0;
                         self.len = 0;
+                        self.payload.clearRetainingCapacity();
                     }
                 } else self.matched = if (byte == '[') 1 else 0;
                 continue;
             }
-            if (self.len == self.payload.len) {
+            if (self.len == max_frame_bytes) {
                 self.failed = true;
+                if (operation) |op| op.closeInput(io);
                 self.in_frame = false;
                 self.len = 0;
                 continue;
             }
-            self.payload[self.len] = byte;
-            self.len += 1;
-            if (!std.mem.endsWith(u8, self.payload[0..self.len], "[/JSON]")) continue;
-            self.in_frame = false;
-            var message = decodePayload(std.heap.page_allocator, self.payload[0 .. self.len - 7]) catch {
+            self.payload.append(std.heap.page_allocator, byte) catch {
                 self.failed = true;
+                if (operation) |op| op.closeInput(io);
+                return;
+            };
+            self.len += 1;
+            if (!std.mem.endsWith(u8, self.payload.items, "[/JSON]")) continue;
+            self.in_frame = false;
+            var message = decodePayload(std.heap.page_allocator, self.payload.items[0 .. self.len - 7]) catch {
+                self.failed = true;
+                if (operation) |op| op.closeInput(io);
                 continue;
             };
-            defer message.deinit();
+            var transferred = false;
+            defer if (!transferred) message.deinit();
             switch (message.value) {
-                .question => self.failed = true,
+                .question => {
+                    if (operation) |op| {
+                        op.queueQuestion(io, message) catch {
+                            self.failed = true;
+                            op.closeInput(io);
+                            continue;
+                        };
+                        transferred = true;
+                    } else self.failed = true;
+                },
                 .event => |event| {
                     if (event == .info) {
                         if (std.mem.eql(u8, event.info.event_type, "TransactionDone")) self.transaction_done = true;
-                        if (std.mem.eql(u8, event.info.event_type, "TransactionFailed")) self.failed = true;
+                        if (std.mem.eql(u8, event.info.event_type, "TransactionFailed")) {
+                            self.failed = true;
+                            if (self.error_len == 0) {
+                                self.error_len = @min(event.info.message.len, self.error_text.len);
+                                @memcpy(self.error_text[0..self.error_len], event.info.message[0..self.error_len]);
+                            }
+                        }
                         if (std.mem.eql(u8, event.info.event_type, "TransactionCancelled")) self.transaction_cancelled = true;
                     }
                     if (event == .err) {
@@ -142,6 +170,80 @@ pub const Operation = struct {
     result: OperationResult = .{},
     progress_mutex: std.Io.Mutex = .init,
     progress: Progress = .{},
+    input: ?std.Io.File = null,
+    input_closing: bool = false,
+    pending: ?OwnedMessage = null,
+    expected_id: [20]u8 = undefined,
+    expected_len: usize = 0,
+    expected_answer: ?enum { yes_no, transaction, optional_dependencies, pkgbuild, provider } = null,
+    user_declined: bool = false,
+
+    fn queueQuestion(self: *Operation, io: std.Io, message: OwnedMessage) !void {
+        const question = message.value.question;
+        const id = questionId(question);
+        self.progress_mutex.lockUncancelable(io);
+        defer self.progress_mutex.unlock(io);
+        if (!interactiveAur(self.request) or self.input == null or self.input_closing) return error.InputClosed;
+        if (self.expected_answer != null or self.pending != null) return error.QuestionAlreadyPending;
+        if (id.len > self.expected_id.len) return error.InvalidQuestionId;
+        @memcpy(self.expected_id[0..id.len], id);
+        self.expected_len = id.len;
+        self.expected_answer = switch (question) {
+            .yes_no => .yes_no,
+            .transaction => .transaction,
+            .pkgbuild => .pkgbuild,
+            .select_one => .provider,
+            .select_many => .optional_dependencies,
+        };
+        self.pending = message;
+    }
+
+    /// Transfers ownership to the UI. Answers remain tied to this question ID.
+    pub fn takeQuestion(self: *Operation, io: std.Io) ?OwnedMessage {
+        self.progress_mutex.lockUncancelable(io);
+        defer self.progress_mutex.unlock(io);
+        const message = self.pending;
+        self.pending = null;
+        return message;
+    }
+
+    pub fn sendAnswer(self: *Operation, io: std.Io, id: []const u8, answer: Answer) !void {
+        const encoded = try encodeAnswer(std.heap.page_allocator, id, answer);
+        defer std.heap.page_allocator.free(encoded);
+        self.progress_mutex.lockUncancelable(io);
+        defer self.progress_mutex.unlock(io);
+        const expected = self.expected_answer orelse return error.NoPendingQuestion;
+        if (!std.mem.eql(u8, id, self.expected_id[0..self.expected_len])) return error.StaleQuestion;
+        if (!std.mem.eql(u8, @tagName(answer), @tagName(expected))) return error.WrongAnswerKind;
+        if (self.pending != null) return error.QuestionNotDelivered;
+        const input = self.input orelse return error.InputClosed;
+        var buffer: [4096]u8 = undefined;
+        var writer = input.writer(io, &buffer);
+        try writer.interface.writeAll(encoded);
+        try writer.interface.flush();
+        switch (answer) {
+            .yes_no, .transaction, .pkgbuild => |accepted| {
+                if (!accepted) self.user_declined = true;
+            },
+            else => {},
+        }
+        self.expected_answer = null;
+        self.expected_len = 0;
+    }
+
+    pub fn closeInput(self: *Operation, io: std.Io) void {
+        self.progress_mutex.lockUncancelable(io);
+        defer self.progress_mutex.unlock(io);
+        self.input_closing = true;
+        if (self.input) |input| input.close(io);
+        self.input = null;
+    }
+
+    fn registerInput(self: *Operation, io: std.Io, input: std.Io.File) void {
+        self.progress_mutex.lockUncancelable(io);
+        defer self.progress_mutex.unlock(io);
+        if (self.input_closing) input.close(io) else self.input = input;
+    }
 
     pub fn snapshot(self: *Operation, io: std.Io) Progress {
         self.progress_mutex.lockUncancelable(io);
@@ -211,7 +313,13 @@ pub const Operation = struct {
     }
 
     pub fn deinit(self: *Operation) void {
+        if (!self.done.load(.acquire)) {
+            var threaded: std.Io.Threaded = .init(std.heap.page_allocator, .{});
+            defer threaded.deinit();
+            self.closeInput(threaded.io());
+        }
         if (self.thread) |thread| thread.join();
+        if (self.pending) |*pending| pending.deinit();
         self.result.deinit(std.heap.page_allocator);
         self.arena.deinit();
         std.heap.page_allocator.destroy(self);
@@ -220,6 +328,7 @@ pub const Operation = struct {
 
 pub const OperationResult = struct {
     failed: bool = false,
+    declined: bool = false,
     error_detail: []const u8 = "",
 
     pub fn deinit(self: *OperationResult, allocator: std.mem.Allocator) void {
@@ -234,36 +343,78 @@ pub fn elevatedInstall(io: std.Io, alloc: std.mem.Allocator, request: OperationR
     return runInstall(io, alloc, request, null);
 }
 
+fn interactiveAur(request: OperationRequest) bool {
+    return std.mem.eql(u8, request.backend, "aur") and request.action != .remove;
+}
+
 fn operationArgv(alloc: std.mem.Allocator, request: OperationRequest) ![][]const u8 {
     const keep_dependencies = request.action == .remove and std.mem.eql(u8, request.backend, "standard");
-    if (request.action == .upgrade and !std.mem.eql(u8, request.backend, "standard"))
+    if (request.action == .upgrade and !std.mem.eql(u8, request.backend, "standard") and !std.mem.eql(u8, request.backend, "aur"))
         return error.UnsupportedUpgradeSource;
-    const argv = try alloc.alloc([]const u8, if (request.action == .upgrade) 9 else if (keep_dependencies) 11 else 10);
-    argv[0] = request.sudo_bin;
-    argv[1] = "-S";
-    argv[2] = "-p";
-    argv[3] = "";
-    argv[4] = request.shelly_bin;
-    argv[5] = @tagName(request.action);
-    argv[6] = request.backend;
-    if (request.action == .upgrade) {
-        argv[7] = "--no-confirm";
-        argv[8] = "--ui-mode";
+    var argv: std.ArrayList([]const u8) = .empty;
+    errdefer argv.deinit(alloc);
+    if (interactiveAur(request)) {
+        try argv.appendSlice(alloc, &.{ request.sudo_bin, "-n", request.shelly_bin, @tagName(request.action), request.backend });
     } else {
-        argv[7] = request.name;
-        argv[8] = "--no-confirm";
-        argv[9] = "--ui-mode";
-        if (keep_dependencies) argv[10] = "--no-cascade";
+        try argv.appendSlice(alloc, &.{ request.sudo_bin, "-S", "-p", "", request.shelly_bin, @tagName(request.action), request.backend });
     }
-    return argv;
+    if (request.action != .upgrade) try argv.append(alloc, request.name);
+    if (!interactiveAur(request)) try argv.append(alloc, "--no-confirm");
+    try argv.append(alloc, "--ui-mode");
+    if (keep_dependencies) try argv.append(alloc, "--no-cascade");
+    return argv.toOwnedSlice(alloc);
+}
+
+/// Authenticate with a password-only stdin. 
+fn authorize(io: std.Io, alloc: std.mem.Allocator, request: OperationRequest) !?[]const u8 {
+    var child = try std.process.spawn(io, .{
+        .argv = &.{ request.sudo_bin, "-S", "-p", "", "-v" },
+        .environ_map = request.environ_map,
+        .stdin = .pipe,
+        .stdout = .ignore,
+        .stderr = .pipe,
+    });
+    defer child.kill(io);
+    var write_buffer: [1024]u8 = undefined;
+    var writer = child.stdin.?.writer(io, &write_buffer);
+    writer.interface.writeAll(request.password) catch {};
+    writer.interface.writeByte('\n') catch {};
+    writer.interface.flush() catch {};
+    child.stdin.?.close(io);
+    child.stdin = null;
+    var read_buffer: [4096]u8 = undefined;
+    var reader = child.stderr.?.reader(io, &read_buffer);
+    const stderr = try reader.interface.allocRemaining(alloc, .limited(16 * 1024));
+    defer alloc.free(stderr);
+    const term = try child.wait(io);
+    if (term == .exited and term.exited == 0) return null;
+    return try diagnostics.sanitizeAlloc(alloc, if (stderr.len > 0) stderr else "Authorization failed.");
 }
 
 fn runInstall(io: std.Io, alloc: std.mem.Allocator, request: OperationRequest, operation: ?*Operation) OperationResult {
     var result: OperationResult = .{};
+    if (interactiveAur(request) and operation == null) {
+        result.failed = true;
+        result.error_detail = alloc.dupe(u8, "Interactive AUR operations require an operation handle.") catch "";
+        return result;
+    }
     if (request.action == .remove and !std.mem.eql(u8, request.backend, "standard") and !std.mem.eql(u8, request.backend, "aur")) {
         result.failed = true;
         result.error_detail = alloc.dupe(u8, "Removal currently supports system and AUR packages only.") catch "";
         return result;
+    }
+    if (interactiveAur(request)) {
+        const failure = authorize(io, alloc, request) catch {
+            result.failed = true;
+            result.error_detail = alloc.dupe(u8, "Could not validate authorization for the AUR operation.") catch "";
+            return result;
+        };
+        if (failure) |detail| {
+            result.failed = true;
+            result.error_detail = detail;
+            return result;
+        }
+        if (operation) |op| @memset(@constCast(op.request.password), 0);
     }
     const argv = operationArgv(alloc, request) catch {
         result.failed = true;
@@ -285,19 +436,20 @@ fn runInstall(io: std.Io, alloc: std.mem.Allocator, request: OperationRequest, o
     };
     defer child.kill(io);
 
-    // Feed the password to sudo, then close stdin. The writes fail
-    // harmlessly if sudo already exited (e.g. wrong password); the
-    // error then surfaces via stderr below.
-    {
+    if (operation != null and interactiveAur(request)) {
+        operation.?.registerInput(io, child.stdin.?);
+        child.stdin = null;
+    } else {
         var stdin_buffer: [1024]u8 = undefined;
         var stdin_writer = child.stdin.?.writer(io, &stdin_buffer);
-        const stdin = &stdin_writer.interface;
-        stdin.writeAll(request.password) catch {};
-        stdin.writeByte('\n') catch {};
-        stdin.flush() catch {};
+        stdin_writer.interface.writeAll(request.password) catch {};
+        stdin_writer.interface.writeByte('\n') catch {};
+        stdin_writer.interface.flush() catch {};
         child.stdin.?.close(io);
         child.stdin = null;
     }
+
+    defer if (operation) |op| op.closeInput(io);
 
     // Drain both streams concurrently, mirroring std.process.run
     var multi_reader_buffer: std.Io.File.MultiReader.Buffer(2) = undefined;
@@ -306,6 +458,7 @@ fn runInstall(io: std.Io, alloc: std.mem.Allocator, request: OperationRequest, o
     defer multi_reader.deinit();
 
     var stream: ProgressStream = .{};
+    defer stream.deinit();
     var stderr_tail: [4096]u8 = undefined;
     var stderr_len: usize = 0;
     var read_failed = false;
@@ -335,14 +488,19 @@ fn runInstall(io: std.Io, alloc: std.mem.Allocator, request: OperationRequest, o
     };
     if (stream.in_frame) stream.failed = true;
 
+    if (operation) |op| op.closeInput(io);
     const term = child.wait(io) catch {
         result.error_detail = alloc.dupe(u8, "Could not collect the operation result for the requested package. Its final status could not be confirmed.") catch "";
         result.failed = true;
         return result;
     };
 
-    const missing_completion = request.action == .upgrade and !stream.transaction_done;
-    if (term != .exited or term.exited != 0 or read_failed or stream.failed or stream.transaction_cancelled or missing_completion) {
+    if (operation) |op| {
+        result.declined = op.user_declined;
+        if (op.expected_answer != null) stream.failed = true;
+    }
+    const missing_completion = (request.action == .upgrade or interactiveAur(request)) and !stream.transaction_done;
+    if (term != .exited or term.exited != 0 or read_failed or stream.failed or stream.transaction_cancelled or missing_completion or result.declined) {
         const detail = if (stream.transaction_cancelled)
             "The operation was cancelled. Refresh package state before retrying."
         else if (stream.error_len > 0)
@@ -1150,6 +1308,7 @@ test "operation progress stream handles fragmented frames and owns display data"
     var encoded: [std.base64.standard.Encoder.calcSize(json.len)]u8 = undefined;
     _ = std.base64.standard.Encoder.encode(&encoded, json);
     var stream: ProgressStream = .{};
+    defer stream.deinit();
     stream.feed("noise[JS", &operation, threaded.io());
     stream.feed("ON]", &operation, threaded.io());
     for (encoded) |byte| stream.feed(&.{byte}, &operation, threaded.io());
@@ -1169,8 +1328,9 @@ test "operation progress retains only bounded recent messages" {
     try std.testing.expectEqualStrings("two", progress.messages[0][0..progress.lengths[0]]);
     try std.testing.expectEqualStrings("five", progress.messages[3][0..progress.lengths[3]]);
     var stream: ProgressStream = .{};
+    defer stream.deinit();
     stream.feed("[JSON]", null, undefined);
-    for (0..256 * 1024 + 1) |_| stream.feed("a", null, undefined);
+    for (0..ProgressStream.max_frame_bytes + 1) |_| stream.feed("a", null, undefined);
     try std.testing.expect(stream.failed);
 }
 
@@ -1218,6 +1378,7 @@ test "operation stream distinguishes transaction done failure and cancellation" 
         defer std.testing.allocator.free(encoded);
         _ = std.base64.standard.Encoder.encode(encoded, json);
         var stream: ProgressStream = .{};
+        defer stream.deinit();
         stream.feed("[JSON]", null, undefined);
         stream.feed(encoded, null, undefined);
         stream.feed("[/JSON]", null, undefined);
@@ -1225,4 +1386,56 @@ test "operation stream distinguishes transaction done failure and cancellation" 
         try std.testing.expectEqual(std.mem.eql(u8, event_type, "TransactionFailed"), stream.failed);
         try std.testing.expectEqual(std.mem.eql(u8, event_type, "TransactionCancelled"), stream.transaction_cancelled);
     }
+}
+
+test "operation AUR installs and upgrades require interactive review" {
+    var env: std.process.Environ.Map = .init(std.testing.allocator);
+    defer env.deinit();
+    var request: OperationRequest = .{
+        .action = .install,
+        .shelly_bin = "shelly",
+        .environ_map = &env,
+        .name = "demo",
+        .backend = "aur",
+        .password = "",
+    };
+    const install = try operationArgv(std.testing.allocator, request);
+    defer std.testing.allocator.free(install);
+    const expected_install = [_][]const u8{ "sudo", "-n", "shelly", "install", "aur", "demo", "--ui-mode" };
+    try std.testing.expectEqual(expected_install.len, install.len);
+    for (expected_install, install) |expected, actual| try std.testing.expectEqualStrings(expected, actual);
+    request.action = .upgrade;
+    const upgrade = try operationArgv(std.testing.allocator, request);
+    defer std.testing.allocator.free(upgrade);
+    const expected_upgrade = [_][]const u8{ "sudo", "-n", "shelly", "upgrade", "aur", "--ui-mode" };
+    try std.testing.expectEqual(expected_upgrade.len, upgrade.len);
+    for (expected_upgrade, upgrade) |expected, actual| try std.testing.expectEqualStrings(expected, actual);
+}
+
+test "operation questions reject stale duplicate and wrong-kind answers" {
+    var threaded: std.Io.Threaded = .init(std.testing.allocator, .{});
+    defer threaded.deinit();
+    var env: std.process.Environ.Map = .init(std.testing.allocator);
+    defer env.deinit();
+    var operation: Operation = .{
+        .arena = .init(std.testing.allocator),
+        .request = .{ .shelly_bin = "unused", .environ_map = &env, .name = "demo", .backend = "aur", .password = "" },
+        // Validation failures must occur before this sentinel descriptor is used.
+        .input = .{ .handle = -1, .flags = .{ .nonblocking = false } },
+    };
+    defer operation.arena.deinit();
+    const json =
+        \\{"$kind":"q.yesno","QuestionId":"1","QuestionText":"Continue?"}
+    ;
+    const first = try decodeJson(std.testing.allocator, json);
+    try operation.queueQuestion(threaded.io(), first);
+    var question = operation.takeQuestion(threaded.io()).?;
+    defer question.deinit();
+    var duplicate = try decodeJson(std.testing.allocator, json);
+    defer duplicate.deinit();
+    try std.testing.expectError(error.QuestionAlreadyPending, operation.queueQuestion(threaded.io(), duplicate));
+    try std.testing.expectError(error.StaleQuestion, operation.sendAnswer(threaded.io(), "2", .{ .yes_no = true }));
+    try std.testing.expectError(error.WrongAnswerKind, operation.sendAnswer(threaded.io(), "1", .{ .pkgbuild = true }));
+    operation.expected_answer = null;
+    try std.testing.expectError(error.NoPendingQuestion, operation.sendAnswer(threaded.io(), "1", .{ .yes_no = true }));
 }

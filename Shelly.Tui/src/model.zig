@@ -79,7 +79,7 @@ const SudoPrompt = struct {
 
     progress: shelly_operation.Progress = .{},
 
-    const State = enum { entering, running, succeeded, failed };
+    const State = enum { entering, running, succeeded, failed, declined };
 
     fn operationView(self: *const SudoPrompt) ?operation_view.View {
         return .{
@@ -92,6 +92,7 @@ const SudoPrompt = struct {
                 .running => .running,
                 .succeeded => .succeeded,
                 .failed => .failed,
+                .declined => .declined,
             },
         };
     }
@@ -153,6 +154,11 @@ pub const Model = struct {
 
     /// The currently running install, if any.
     install_job: ?*shelly_operation.Operation = null,
+    operation_question: ?shelly_operation.OwnedMessage = null,
+    review_prompt: ?*SudoPrompt = null,
+    answer_input: std.ArrayList(u8) = .empty,
+    answer_error: []const u8 = "",
+    refresh_aur_after_operation: bool = false,
     /// Result of the last finished operation; owned by `gpa` unless empty.
     updates_job: ?*UpdatesJob = null,
     updates_thread: ?std.Thread = null,
@@ -225,6 +231,9 @@ pub const Model = struct {
 
     pub fn deinit(self: *Model) void {
         const gpa = self.gpa;
+        if (self.operation_question) |*question| question.deinit();
+        if (self.review_prompt) |prompt| prompt.deinit(gpa);
+        self.answer_input.deinit(gpa);
         if (self.pkgbuild_thread) |thread| thread.join();
         if (self.pkgbuild_job) |job| {
             if (job.result) |*result| result.deinit();
@@ -316,8 +325,24 @@ pub const Model = struct {
                                 switch (action) {
                                     .close => self.closePkgbuild(),
                                     .retry => if (self.pkgbuild_job == null) try self.openPkgbuild(ctx, self.pkgbuild_name),
+                                    .approve => try self.answerOperationQuestion(true),
+                                    .decline => try self.answerOperationQuestion(false),
                                 }
                                 return ctx.consumeAndRedraw();
+                            }
+                            if (self.operation_question) |question| {
+                                if (question.value.question == .select_one or question.value.question == .select_many) {
+                                    if (key.matches(vaxis.Key.backspace, .{})) {
+                                        popGrapheme(&self.answer_input);
+                                        self.answer_error = "";
+                                    } else if (key.text) |text| {
+                                        for (text) |byte| {
+                                            if ((std.ascii.isDigit(byte) or byte == ',' or byte == ' ') and self.answer_input.items.len < 1024)
+                                                try self.answer_input.append(self.gpa, byte);
+                                        }
+                                        self.answer_error = "";
+                                    }
+                                }
                             }
                             if (self.pkgbuild_document != null and self.pkgbuild_job == null)
                                 try self.pkgbuild_scroll.handleEvent(ctx, event);
@@ -330,6 +355,7 @@ pub const Model = struct {
                         switch (action) {
                             .refresh => try self.startUpdates(ctx),
                             .upgrade_system => try self.upgradeSystemFromUpdates(),
+                            .upgrade_aur => try self.upgradeFromUpdates(.aur),
                         }
                         return ctx.consumeAndRedraw();
                     }
@@ -378,7 +404,11 @@ pub const Model = struct {
                     try self.startUpdates(ctx);
                     self.refresh_after_upgrade = false;
                 }
-                if (loading or searching or installing or self.loading or self.updates_job != null or self.pkgbuild_job != null) {
+                if (self.refresh_aur_after_operation and self.aur_job == null) {
+                    if (self.aur_query.len > 0) try self.startAurSearch(ctx, self.aur_query);
+                    self.refresh_aur_after_operation = false;
+                }
+                if (loading or searching or installing or self.loading or self.updates_job != null or self.pkgbuild_job != null or self.aur_job != null) {
                     try ctx.tick(100, self.widget());
                 }
                 return ctx.consumeAndRedraw();
@@ -495,6 +525,7 @@ pub const Model = struct {
             self.gpa.free(job.name);
             self.gpa.destroy(job);
         }
+        if (self.operation_question != null) return;
         if (!std.mem.eql(u8, job.name, self.pkgbuild_name)) {
             // The user selected a different package while this request was running.
             if (self.overlay != null and self.overlay.? == .pkgbuild)
@@ -529,6 +560,13 @@ pub const Model = struct {
             .scroll = &self.pkgbuild_scroll,
             .loading = self.pkgbuild_job != null,
             .failure = self.pkgbuild_failure,
+            .review = self.operation_question != null,
+            .choices = if (self.operation_question) |message|
+                message.value.question == .select_one or message.value.question == .select_many
+            else
+                false,
+            .answer_input = self.answer_input.items,
+            .answer_error = self.answer_error,
         };
     }
 
@@ -601,12 +639,18 @@ pub const Model = struct {
     }
 
     fn upgradeSystemFromUpdates(self: *Model) !void {
-        if (self.install_job != null or self.overlay != null or !self.updatesView().canUpgrade()) return;
+        return self.upgradeFromUpdates(.standard);
+    }
+
+    fn upgradeFromUpdates(self: *Model, backend: InstallBackend) !void {
+        if (self.install_job != null or self.overlay != null) return;
+        if (backend == .standard and !self.updatesView().canUpgrade()) return;
+        if (backend == .aur and !self.updatesView().canUpgradeAur()) return;
         const prompt = try self.gpa.create(SudoPrompt);
         errdefer self.gpa.destroy(prompt);
         prompt.* = .{
-            .name = try self.gpa.dupe(u8, "system packages"),
-            .backend = .standard,
+            .name = try self.gpa.dupe(u8, if (backend == .aur) "AUR packages" else "system packages"),
+            .backend = backend,
             .action = .upgrade,
             .password = .empty,
         };
@@ -784,6 +828,9 @@ pub const Model = struct {
         self.aur_job = null;
         self.gpa.destroy(job);
 
+        if (self.overlay) |overlay| {
+            if (overlay == .aur) self.overlay = null;
+        }
         if (self.aur_parsed) |*old| old.deinit();
         self.aur_parsed = null;
         self.aur_packages = &.{};
@@ -847,6 +894,96 @@ pub const Model = struct {
         self.overlay = null;
     }
 
+    fn showOperationQuestion(self: *Model, message: shelly_operation.OwnedMessage) !void {
+        const overlay = self.overlay orelse return error.NoOperationDialog;
+        if (overlay != .sudo) return error.NoOperationDialog;
+        const question = message.value.question;
+        var document = try pkgbuild_view.Document.fromQuestion(self.gpa, question);
+        errdefer document.deinit();
+        const name = try self.gpa.dupe(u8, if (question == .pkgbuild) question.pkgbuild.package_name else overlay.sudo.name);
+        if (self.pkgbuild_document) |*old| old.deinit();
+        if (self.pkgbuild_name.len > 0) self.gpa.free(self.pkgbuild_name);
+        self.pkgbuild_name = name;
+        self.pkgbuild_document = document;
+        self.pkgbuild_failure = null;
+        self.pkgbuild_scroll.scroll = .{};
+        self.pkgbuild_scroll.cursor = 0;
+        self.pkgbuild_scroll.item_count = @intCast(document.lines.len);
+        self.operation_question = message;
+        self.review_prompt = overlay.sudo;
+        self.answer_input.clearRetainingCapacity();
+        self.answer_error = "";
+        self.overlay = .pkgbuild;
+    }
+
+    fn finishOperationQuestion(self: *Model) void {
+        if (self.operation_question) |*question| question.deinit();
+        self.operation_question = null;
+        if (self.pkgbuild_document) |*document| document.deinit();
+        self.pkgbuild_document = null;
+        self.answer_input.clearRetainingCapacity();
+        self.answer_error = "";
+        if (self.review_prompt) |prompt| self.overlay = .{ .sudo = prompt };
+        self.review_prompt = null;
+    }
+
+    fn answerOperationQuestion(self: *Model, approve: bool) !void {
+        const message = self.operation_question orelse return;
+        const job = self.install_job orelse return;
+        const question = message.value.question;
+        var indices: std.ArrayList(usize) = .empty;
+        defer indices.deinit(self.gpa);
+        const answer: shelly_operation.Answer = switch (question) {
+            .pkgbuild => .{ .pkgbuild = approve },
+            .yes_no => .{ .yes_no = approve },
+            .transaction => .{ .transaction = approve },
+            .select_one => |request| blk: {
+                if (!approve) return;
+                const input = std.mem.trim(u8, self.answer_input.items, " ");
+                const index = std.fmt.parseInt(usize, input, 10) catch {
+                    self.answer_error = "Enter one listed index.";
+                    return;
+                };
+                for (request.options) |option| {
+                    if (option.index == index) break :blk .{ .provider = index };
+                }
+                self.answer_error = "That index is not listed.";
+                return;
+            },
+            .select_many => |request| blk: {
+                if (!approve) return;
+                const input = std.mem.trim(u8, self.answer_input.items, " ");
+                if (input.len > 0) {
+                    var tokens = std.mem.splitScalar(u8, input, ',');
+                    while (tokens.next()) |token| {
+                        const index = std.fmt.parseInt(usize, std.mem.trim(u8, token, " "), 10) catch {
+                            self.answer_error = "Use listed indices separated by commas, or leave blank for none.";
+                            return;
+                        };
+                        var found = false;
+                        for (request.options) |option| {
+                            if (option.index == index) {
+                                found = true;
+                                break;
+                            }
+                        }
+                        if (!found or std.mem.indexOfScalar(usize, indices.items, index) != null) {
+                            self.answer_error = "Use unique listed indices.";
+                            return;
+                        }
+                        try indices.append(self.gpa, index);
+                    }
+                }
+                break :blk .{ .optional_dependencies = indices.items };
+            },
+        };
+        job.sendAnswer(runtime.io, shelly_operation.questionId(question), answer) catch {
+            self.answer_error = "Could not send the answer. The operation may have ended.";
+            return;
+        };
+        self.finishOperationQuestion();
+    }
+
     fn handleSudoKey(self: *Model, prompt: *SudoPrompt, ctx: *vxfw.EventContext, key: vaxis.Key) anyerror!void {
         if (prompt.operationView()) |view| {
             if (view.handleKey(key) == .close) self.closeOverlay();
@@ -856,6 +993,8 @@ pub const Model = struct {
         if (key.matches(vaxis.Key.enter, .{})) {
             if (prompt.password.items.len == 0) return ctx.consumeEvent();
             try self.startElevatedInstall(ctx, prompt);
+            @memset(prompt.password.items, 0);
+            prompt.password.clearRetainingCapacity();
             prompt.state = .running;
             return ctx.consumeAndRedraw();
         }
@@ -905,6 +1044,19 @@ pub const Model = struct {
     fn pollInstall(self: *Model) !bool {
         const job = self.install_job orelse return false;
         const result = job.poll();
+        if (result == null and self.operation_question == null) {
+            if (job.takeQuestion(runtime.io)) |message| {
+                self.showOperationQuestion(message) catch |err| {
+                    var owned = message;
+                    owned.deinit();
+                    job.closeInput(runtime.io);
+                    const detail = try std.fmt.allocPrint(self.gpa, "Could not display operation review: {s}", .{@errorName(err)});
+                    defer self.gpa.free(detail);
+                    try self.setNotice(detail);
+                };
+            }
+        }
+        if (result != null and self.operation_question != null) self.finishOperationQuestion();
         if (self.overlay) |overlay| {
             if (overlay == .sudo) overlay.sudo.progress = job.snapshot(runtime.io);
         }
@@ -913,7 +1065,8 @@ pub const Model = struct {
 
         const failed = completed.failed;
         self.install_job = null;
-        if (job.request.action == .upgrade) self.refresh_after_upgrade = true;
+        if (job.request.action == .upgrade or std.mem.eql(u8, job.request.backend, "aur")) self.refresh_after_upgrade = true;
+        if (std.mem.eql(u8, job.request.backend, "aur")) self.refresh_aur_after_operation = true;
 
         // Native and AUR operations change the same installed package database.
         if (!failed and job.request.action != .upgrade) {
@@ -936,8 +1089,8 @@ pub const Model = struct {
         if (self.overlay) |overlay| {
             switch (overlay) {
                 .sudo => |prompt| {
-                    if (failed) {
-                        prompt.state = .failed;
+                    if (failed or completed.declined) {
+                        prompt.state = if (completed.declined) .declined else .failed;
                         if (prompt.detail.len > 0) self.gpa.free(prompt.detail);
                         prompt.detail = if (completed.error_detail.len > 0)
                             self.gpa.dupe(u8, completed.error_detail) catch ""
@@ -951,7 +1104,9 @@ pub const Model = struct {
             }
         }
 
-        const message = if (failed)
+        const message = if (completed.declined)
+            try std.fmt.allocPrint(self.gpa, "Declined {s} for {f}.", .{ @tagName(job.request.action), diagnostics.safe(job.request.name) })
+        else if (failed)
             try std.fmt.allocPrint(self.gpa, "Could not {s} {f}.", .{ @tagName(job.request.action), diagnostics.safe(job.request.name) })
         else
             try std.fmt.allocPrint(self.gpa, "{s} {s}", .{ job.request.action.completed(), job.request.name });
@@ -1193,9 +1348,15 @@ pub const Model = struct {
             pos += 3;
         }
         const body = try std.fmt.allocPrint(arena, "{s} '{s}'?{s}\n\nPassword: {s}\n\n{s}", .{
-            prompt.action.verb(),                                                                                                                                                                               prompt.name,
-            if (prompt.action == .remove) "\nUnused dependencies and configuration will be kept." else if (prompt.action == .upgrade) "\nFull system upgrade. AUR, Flatpak and AppImage are excluded." else "", mask[0..pos],
-            commands.authentication_hint,
+            prompt.action.verb(), prompt.name,
+            if (prompt.action == .remove) "\nUnused dependencies and configuration will be kept." else if (prompt.action == .upgrade)
+                if (prompt.backend == .aur)
+                    "\nUpgrade AUR packages and required dependencies. PKGBUILDs require review."
+                else
+                    "\nFull system upgrade. AUR, Flatpak and AppImage are excluded."
+            else
+                "",
+            mask[0..pos],         commands.authentication_hint,
         });
 
         const box_width = @min(max.width -| 2, @as(u16, 70));
@@ -1595,4 +1756,53 @@ test "PKGBUILD preview discards stale results and joins unpolled jobs" {
     model.pkgbuild_job = pending;
     model.pkgbuild_thread = try std.Thread.spawn(.{}, Worker.finish, .{pending});
     // Model.deinit joins and frees this unconsumed result.
+}
+
+test "AUR updates open a separate AUR upgrade prompt" {
+    const model = try Model.init(std.testing.allocator);
+    defer model.deinit();
+    model.updates_checked = true;
+    model.updates_parsed = try std.json.parseFromSlice(CheckUpdates, std.testing.allocator,
+        \\{"Packages":[],"Aur":[{"Name":"foreign","Version":"1","NewVersion":"2"}]}
+    , .{ .allocate = .alloc_always });
+    try std.testing.expect(model.updatesView().handleKey(.{ .codepoint = 'u' }) == null);
+    try std.testing.expectEqual(commands.Updates.upgrade_aur, model.updatesView().handleKey(.{ .codepoint = 'a' }).?);
+    try model.upgradeFromUpdates(.aur);
+    try std.testing.expectEqual(InstallBackend.aur, model.overlay.?.sudo.backend);
+    try std.testing.expectEqual(shelly_operation.Action.upgrade, model.overlay.?.sudo.action);
+}
+
+test "operation PKGBUILD review owns each revision and returns to progress" {
+    const model = try Model.init(std.testing.allocator);
+    defer model.deinit();
+    const prompt = try std.testing.allocator.create(SudoPrompt);
+    prompt.* = .{
+        .name = try std.testing.allocator.dupe(u8, "demo"),
+        .backend = .aur,
+        .password = .empty,
+        .state = .running,
+    };
+    model.overlay = .{ .sudo = prompt };
+    const first = try shelly_operation.decodeJson(std.testing.allocator,
+        \\{"$kind":"q.pkgbuilddiff","QuestionId":"1","PackageName":"demo","OldPkgbuild":"pkgver=1","NewPkgbuild":"pkgver=2","DiffLines":["-pkgver=1","+pkgver=2"],"SourceFiles":{"demo.install":"post_install() {}"}}
+    );
+    try model.showOperationQuestion(first);
+    try std.testing.expect(model.overlay.? == .pkgbuild);
+    try std.testing.expect(model.pkgbuildView().review);
+    try std.testing.expectEqual(pkgbuild_view.Action.approve, model.pkgbuildView().handleKey(.{ .codepoint = 'y' }).?);
+    const text = try std.mem.join(std.testing.allocator, "\n", model.pkgbuild_document.?.lines);
+    defer std.testing.allocator.free(text);
+    try std.testing.expect(std.mem.indexOf(u8, text, "pkgver=1") != null);
+    try std.testing.expect(std.mem.indexOf(u8, text, "pkgver=2") != null);
+    try std.testing.expect(std.mem.indexOf(u8, text, "demo.install") != null);
+    model.finishOperationQuestion();
+    try std.testing.expect(model.overlay.?.sudo == prompt);
+    try std.testing.expect(model.operation_question == null);
+    const second = try shelly_operation.decodeJson(std.testing.allocator,
+        \\{"$kind":"q.pkgbuilddiff","QuestionId":"2","PackageName":"demo","OldPkgbuild":"","NewPkgbuild":"pkgver=3"}
+    );
+    try model.showOperationQuestion(second);
+    try std.testing.expectEqualStrings("2", shelly_operation.questionId(model.operation_question.?.value.question));
+    try std.testing.expectEqual(pkgbuild_view.Action.decline, model.pkgbuildView().handleKey(.{ .codepoint = 'n' }).?);
+    // Model.deinit owns the suspended progress prompt and outstanding review.
 }
