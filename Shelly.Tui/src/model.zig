@@ -1,4 +1,7 @@
 const std = @import("std");
+const packages_view = @import("views/packages_view.zig");
+const aur_view = @import("views/aur_view.zig");
+const updates_view = @import("views/updates_view.zig");
 const operation_view = @import("views/operation_view.zig");
 const shelly_operation = @import("services/shelly_operation.zig");
 const diagnostics = @import("diagnostics");
@@ -756,6 +759,30 @@ pub const Model = struct {
 
     // -- drawing -----------------------------------------------------------
 
+    fn packagesView(self: *Model) packages_view.View {
+        return .{
+            .text_field = &self.text_field,
+            .list_view = &self.list_view,
+            .selected_list_view = &self.selected_list_view,
+            .loading = self.loading,
+            .load_failed = self.load_failed,
+            .query = self.query,
+            .filtered_count = self.filtered.items.len,
+            .package_count = self.packages.len,
+        };
+    }
+
+    fn aurView(self: *Model) aur_view.View {
+        return .{
+            .aur_field = &self.aur_field,
+            .aur_list = &self.aur_list,
+            .searching = self.aur_job != null,
+            .aur_failed = self.aur_failed,
+            .aur_query = self.aur_query,
+            .result_count = self.aur_packages.len,
+        };
+    }
+
     fn typeErasedDrawFn(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
         const self: *Model = @ptrCast(@alignCast(ptr));
         const arena = ctx.arena;
@@ -784,98 +811,10 @@ pub const Model = struct {
             )),
         });
 
-        const right_w: u16 = @max(24, max.width / 4); // pick a panel width
-        const left_w: u16 = max.width -| right_w;
         switch (self.active) {
-            .packages => {
-                // Row 1: search prompt + field
-                var prompt: vxfw.Text = .{ .text = "❯", .style = .{ .fg = .{ .index = 4 } } };
-                try children.append(arena, .{
-                    .origin = .{ .row = 1, .col = 0 },
-                    .surface = try prompt.draw(ctx.withConstraints(
-                        ctx.min,
-                        .{ .width = 2, .height = 1 },
-                    )),
-                });
-                try children.append(arena, .{
-                    .origin = .{ .row = 1, .col = 2 },
-                    .surface = try self.text_field.draw(ctx.withConstraints(
-                        ctx.min,
-                        .{ .width = max.width -| 2, .height = 1 },
-                    )),
-                });
-
-                // Rows 2..height-2: package list
-                try children.append(arena, .{
-                    .origin = .{ .row = 2, .col = 0 },
-                    .surface = try self.list_view.draw(ctx.withConstraints(
-                        .{ .width = 0, .height = 0 },
-                        .{ .width = left_w -| 1, .height = max.height - 3 },
-                    )),
-                });
-                try children.append(arena, .{
-                    .origin = .{ .row = 2, .col = left_w },
-                    .surface = try self.selected_list_view.draw(ctx.withConstraints(.{ .width = 0, .height = 0 }, .{ .width = right_w, .height = max.height - 3 })),
-                });
-
-                if (self.loading or self.load_failed) {
-                    var message: vxfw.Text = if (self.loading)
-                        .{ .text = "Loading packages…", .style = .{ .fg = .{ .index = 245 } } }
-                    else
-                        .{ .text = "Could not load the package list.", .style = .{ .fg = .{ .index = 1 } } };
-                    try children.append(arena, .{
-                        .origin = .{ .row = 3, .col = 2 },
-                        .surface = try message.draw(ctx.withConstraints(
-                            ctx.min,
-                            .{ .width = max.width -| 2, .height = 1 },
-                        )),
-                        .z_index = 1,
-                    });
-                }
-            },
-            .aur => {
-                // Row 1: search prompt + field
-                var prompt: vxfw.Text = .{ .text = "❯", .style = .{ .fg = .{ .index = 4 } } };
-                try children.append(arena, .{
-                    .origin = .{ .row = 1, .col = 0 },
-                    .surface = try prompt.draw(ctx.withConstraints(
-                        ctx.min,
-                        .{ .width = 2, .height = 1 },
-                    )),
-                });
-                try children.append(arena, .{
-                    .origin = .{ .row = 1, .col = 2 },
-                    .surface = try self.aur_field.draw(ctx.withConstraints(
-                        ctx.min,
-                        .{ .width = max.width -| 2, .height = 1 },
-                    )),
-                });
-
-                // Rows 2..height-2: results
-                try children.append(arena, .{
-                    .origin = .{ .row = 2, .col = 0 },
-                    .surface = try self.aur_list.draw(ctx.withConstraints(
-                        .{ .width = 0, .height = 0 },
-                        .{ .width = max.width, .height = max.height - 3 },
-                    )),
-                });
-
-                if (try self.aurMessage(arena)) |message| {
-                    var message_text: vxfw.Text = .{
-                        .text = message.text,
-                        .style = .{ .fg = .{ .index = if (message.red) @as(u8, 1) else 245 } },
-                    };
-                    try children.append(arena, .{
-                        .origin = .{ .row = 3, .col = 2 },
-                        .surface = try message_text.draw(ctx.withConstraints(
-                            ctx.min,
-                            .{ .width = max.width -| 2, .height = 1 },
-                        )),
-                        .z_index = 1,
-                    });
-                }
-            },
-            .upgrade => {},
+            .packages => try self.packagesView().appendContent(ctx, &children),
+            .aur => try self.aurView().appendContent(ctx, &children),
+            .upgrade => try updates_view.appendContent(ctx, &children),
         }
 
         // Bottom row: status bar
@@ -910,25 +849,6 @@ pub const Model = struct {
         };
     }
 
-    fn aurMessage(self: *const Model, arena: Allocator) Allocator.Error!?struct { text: []const u8, red: bool } {
-        if (self.aur_job != null) {
-            return .{
-                .text = try std.fmt.allocPrint(arena, "Searching AUR for '{s}'…", .{self.aur_query}),
-                .red = false,
-            };
-        }
-        if (self.aur_failed) {
-            return .{ .text = "Could not search the configured AUR service.", .red = true };
-        }
-        if (self.aur_query.len == 0) {
-            return .{ .text = "Type a search term and press Enter to query the AUR.", .red = false };
-        }
-        if (self.aur_packages.len == 0) {
-            return .{ .text = "No AUR packages matched.", .red = false };
-        }
-        return null;
-    }
-
     fn drawTabBar(self: *Model, arena: Allocator) Allocator.Error!vxfw.Widget {
         const spans = try arena.alloc(vxfw.RichText.TextSpan, Tab.all.len);
         for (Tab.all, 0..) |tab, i| {
@@ -948,36 +868,16 @@ pub const Model = struct {
         return bar.widget();
     }
 
-    fn statusText(self: *const Model, arena: Allocator) Allocator.Error![]const u8 {
+    fn statusText(self: *Model, arena: Allocator) Allocator.Error![]const u8 {
         if (self.install_job) |job| {
             return try std.fmt.allocPrint(arena, "{s} {s}…", .{ job.request.action.ongoing(), job.request.name });
         }
         if (self.notice.len > 0) return self.notice;
-        switch (self.active) {
-            .packages => {
-                if (self.loading) return "Loading packages…";
-                if (self.load_failed) return "Could not load the package list.";
-                if (self.query.len > 0) {
-                    return try std.fmt.allocPrint(arena, "{d} of {d} packages match", .{
-                        self.filtered.items.len, self.packages.len,
-                    });
-                }
-                return try std.fmt.allocPrint(arena, "{d} packages", .{self.packages.len});
-            },
-            .aur => {
-                if (self.aur_job != null) {
-                    return try std.fmt.allocPrint(arena, "Searching AUR for '{s}'…", .{self.aur_query});
-                }
-                if (self.aur_failed) return "Could not search the configured AUR service.";
-                if (self.aur_query.len == 0) return "AUR — type a query and press Enter";
-                return try std.fmt.allocPrint(arena, "{d} AUR results for '{s}'", .{
-                    self.aur_packages.len, self.aur_query,
-                });
-            },
-            .upgrade => {
-                return try std.fmt.allocPrint(arena, "Not implemented yet", .{});
-            },
-        }
+        return switch (self.active) {
+            .packages => self.packagesView().statusText(arena),
+            .aur => self.aurView().statusText(arena),
+            .upgrade => updates_view.statusText(),
+        };
     }
 
     fn drawDetailsOverlay(self: *const Model, ctx: vxfw.DrawContext, arena: Allocator, max: vxfw.Size, overlay: Overlay) Allocator.Error!?vxfw.SubSurface {
@@ -987,14 +887,14 @@ pub const Model = struct {
             .package => |pkg| {
                 title = try std.fmt.allocPrint(arena, "{s} {s}", .{ pkg.Name, pkg.Version });
                 body = try std.fmt.allocPrint(arena, "{s}\n\n{s}", .{
-                    try packageDetailsText(arena, pkg),
+                    try packages_view.detailsText(arena, pkg),
                     if (pkg.Installed) "I: install/reinstall    R: remove    Esc: close" else "I: install    Esc: close",
                 });
             },
             .aur => |pkg| {
                 title = try std.fmt.allocPrint(arena, "{s} {s} (AUR)", .{ pkg.Name, pkg.Version });
                 body = try std.fmt.allocPrint(arena, "{s}\n\n{s}", .{
-                    try aurDetailsText(arena, pkg),
+                    try aur_view.detailsText(arena, pkg),
                     if (pkg.Installed) "I: install/reinstall    R: remove    Esc: close" else "I: install    Esc: close",
                 });
             },
@@ -1087,54 +987,14 @@ pub const Model = struct {
         const pkg = self.filtered.items[idx];
         return .{
             .userdata = @constCast(pkg),
-            .drawFn = drawPackageRow,
+            .drawFn = packages_view.drawPackageRow,
         };
     }
 
-    fn drawPackageRow(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
-        const pkg: *const Package = @ptrCast(@alignCast(ptr));
-        const arena = ctx.arena;
-
-        var spans: std.ArrayList(vxfw.RichText.TextSpan) = .empty;
-        if (pkg.Installed) {
-            try spans.append(arena, .{ .text = "● ", .style = .{ .fg = .{ .index = 2 } } });
-        } else {
-            try spans.append(arena, .{ .text = "  " });
-        }
-        try spans.append(arena, .{ .text = pkg.Name, .style = .{ .bold = true } });
-        try spans.append(arena, .{ .text = "  " });
-        try spans.append(arena, .{ .text = pkg.Version, .style = .{ .fg = .{ .index = 245 } } });
-        if (pkg.Description.len > 0) {
-            try spans.append(arena, .{ .text = " — " });
-            try spans.append(arena, .{
-                .text = pkg.Description,
-                .style = .{ .fg = .{ .index = 245 } },
-            });
-        }
-
-        const rich = try arena.create(vxfw.RichText);
-        rich.* = .{
-            .text = spans.items,
-            .softwrap = false,
-            .overflow = .ellipsis,
-        };
-        return rich.draw(ctx);
-    }
     fn buildSelectedRow(ptr: *const anyopaque, idx: usize, _: usize) ?vxfw.Widget {
         const self: *const Model = @ptrCast(@alignCast(ptr));
         if (idx >= self.selected_packages.items.len) return null;
-        return .{ .userdata = @ptrCast(&self.selected_packages.items[idx]), .drawFn = drawSelectedRow };
-    }
-
-    fn drawSelectedRow(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
-        const name_ptr: *const []const u8 = @ptrCast(@alignCast(ptr));
-        const name = name_ptr.*;
-        const arena = ctx.arena;
-        var spans: std.ArrayList(vxfw.RichText.TextSpan) = .empty;
-        try spans.append(arena, .{ .text = name });
-        const rich = try arena.create(vxfw.RichText);
-        rich.* = .{ .text = spans.items, .softwrap = false, .overflow = .ellipsis };
-        return rich.draw(ctx);
+        return .{ .userdata = @ptrCast(&self.selected_packages.items[idx]), .drawFn = packages_view.drawSelectedRow };
     }
 
     fn buildAurRow(ptr: *const anyopaque, idx: usize, _: usize) ?vxfw.Widget {
@@ -1143,131 +1003,12 @@ pub const Model = struct {
         const pkg = &self.aur_packages[idx];
         return .{
             .userdata = @constCast(pkg),
-            .drawFn = drawAurRow,
+            .drawFn = aur_view.drawAurRow,
         };
-    }
-
-    fn drawAurRow(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
-        const pkg: *const AurPackage = @ptrCast(@alignCast(ptr));
-        const arena = ctx.arena;
-
-        var spans: std.ArrayList(vxfw.RichText.TextSpan) = .empty;
-        try spans.append(arena, .{ .text = "  " });
-        try spans.append(arena, .{ .text = pkg.Name, .style = .{ .bold = true } });
-        try spans.append(arena, .{ .text = "  " });
-        try spans.append(arena, .{
-            .text = pkg.Version,
-            .style = .{ .fg = .{ .index = if (pkg.OutOfDate != null) @as(u8, 1) else 245 } },
-        });
-        try spans.append(arena, .{
-            .text = try std.fmt.allocPrint(arena, " ▲ {d}", .{pkg.NumVotes}),
-            .style = .{ .fg = .{ .index = 245 } },
-        });
-        if (pkg.Description) |description| {
-            if (description.len > 0) {
-                try spans.append(arena, .{ .text = " — " });
-                try spans.append(arena, .{
-                    .text = description,
-                    .style = .{ .fg = .{ .index = 245 } },
-                });
-            }
-        }
-
-        const rich = try arena.create(vxfw.RichText);
-        rich.* = .{
-            .text = spans.items,
-            .softwrap = false,
-            .overflow = .ellipsis,
-        };
-        return rich.draw(ctx);
     }
 
     // -- details -----------------------------------------------------------
 
-    fn packageDetailsText(arena: Allocator, pkg: *const Package) Allocator.Error![]const u8 {
-        var lines: std.ArrayList([]const u8) = .empty;
-
-        try lines.append(arena, if (pkg.Description.len > 0) pkg.Description else "No description.");
-        try lines.append(arena, "");
-
-        try lines.append(arena, try std.fmt.allocPrint(arena, "Repository:     {s}", .{pkg.Repository}));
-        try lines.append(arena, try std.fmt.allocPrint(arena, "Version:        {s}", .{pkg.Version}));
-        try lines.append(arena, try std.fmt.allocPrint(arena, "Installed:      {s}", .{if (pkg.Installed) "yes" else "no"}));
-        if (pkg.Url) |url| {
-            try lines.append(arena, try std.fmt.allocPrint(arena, "URL:            {s}", .{url}));
-        }
-        try appendDetailList(arena, &lines, "Licenses:     ", pkg.Licenses);
-        try appendDetailList(arena, &lines, "Groups:       ", pkg.Groups);
-        try appendDetailList(arena, &lines, "Depends:      ", pkg.Depends);
-        try appendDetailList(arena, &lines, "Opt depends:  ", pkg.OptDepends);
-        try appendDetailList(arena, &lines, "Provides:     ", pkg.Provides);
-        try appendDetailList(arena, &lines, "Conflicts:    ", pkg.Conflicts);
-        try appendDetailList(arena, &lines, "Replaces:     ", pkg.Replaces);
-        try lines.append(arena, try std.fmt.allocPrint(arena, "Download size:  {s}", .{try formatSize(arena, pkg.DownloadSize)}));
-        try lines.append(arena, try std.fmt.allocPrint(arena, "Installed size: {s}", .{try formatSize(arena, pkg.InstalledSize)}));
-        if (pkg.BuildDate.len > 0) {
-            try lines.append(arena, try std.fmt.allocPrint(arena, "Build date:     {s}", .{pkg.BuildDate}));
-        }
-
-        return try std.mem.join(arena, "\n", lines.items);
-    }
-
-    fn aurDetailsText(arena: Allocator, pkg: *const AurPackage) Allocator.Error![]const u8 {
-        var lines: std.ArrayList([]const u8) = .empty;
-
-        try lines.append(arena, pkg.Description orelse "No description.");
-        try lines.append(arena, "");
-
-        try lines.append(arena, try std.fmt.allocPrint(arena, "Installed:       {s}", .{if (pkg.Installed) "yes" else "no"}));
-        try lines.append(arena, try std.fmt.allocPrint(arena, "Version:         {s}", .{pkg.Version}));
-        try lines.append(arena, try std.fmt.allocPrint(arena, "Package base:    {s}", .{pkg.PackageBase}));
-        try lines.append(arena, try std.fmt.allocPrint(arena, "Votes:           {d}", .{pkg.NumVotes}));
-        try lines.append(arena, try std.fmt.allocPrint(arena, "Popularity:      {d:.2}", .{pkg.Popularity}));
-        try lines.append(arena, try std.fmt.allocPrint(arena, "Maintainer:      {s}", .{pkg.Maintainer orelse "—"}));
-        try lines.append(arena, try std.fmt.allocPrint(arena, "Out of date:     {s}", .{if (pkg.OutOfDate != null) "yes" else "no"}));
-        if (pkg.Url) |url| {
-            try lines.append(arena, try std.fmt.allocPrint(arena, "URL:             {s}", .{url}));
-        }
-        if (pkg.License) |licenses| try appendDetailList(arena, &lines, "Licenses:     ", licenses);
-        if (pkg.Depends) |depends| try appendDetailList(arena, &lines, "Depends:       ", depends);
-        if (pkg.MakeDepends) |make_depends| try appendDetailList(arena, &lines, "Make deps:     ", make_depends);
-        try lines.append(arena, try std.fmt.allocPrint(arena, "First submitted: {s}", .{try formatEpoch(arena, pkg.FirstSubmitted)}));
-        try lines.append(arena, try std.fmt.allocPrint(arena, "Last modified:   {s}", .{try formatEpoch(arena, pkg.LastModified)}));
-
-        return try std.mem.join(arena, "\n", lines.items);
-    }
-
-    fn appendDetailList(arena: Allocator, lines: *std.ArrayList([]const u8), comptime label: []const u8, items: []const []const u8) Allocator.Error!void {
-        if (items.len == 0) return;
-        try lines.append(arena, try std.fmt.allocPrint(arena, "{s}{s}", .{
-            label, try std.mem.join(arena, ", ", items),
-        }));
-    }
-
-    fn formatSize(arena: Allocator, bytes: i64) Allocator.Error![]const u8 {
-        if (bytes <= 0) return "—";
-        const units = [_][]const u8{ "B", "KiB", "MiB", "GiB", "TiB" };
-        var value: f64 = @floatFromInt(bytes);
-        var unit: usize = 0;
-        while (value >= 1024.0 and unit < units.len - 1) {
-            value /= 1024.0;
-            unit += 1;
-        }
-        if (unit == 0) return try std.fmt.allocPrint(arena, "{d} B", .{bytes});
-        return try std.fmt.allocPrint(arena, "{d:.1} {s}", .{ value, units[unit] });
-    }
-
-    fn formatEpoch(arena: Allocator, seconds: i64) Allocator.Error![]const u8 {
-        if (seconds <= 0) return "—";
-        const epoch: std.time.epoch.EpochSeconds = .{ .secs = @intCast(seconds) };
-        const year_day = epoch.getEpochDay().calculateYearDay();
-        const month_day = year_day.calculateMonthDay();
-        return try std.fmt.allocPrint(arena, "{d}-{d:0>2}-{d:0>2}", .{
-            year_day.year,
-            month_day.month.numeric(),
-            month_day.day_index + 1,
-        });
-    }
 };
 
 /// A clickable tab bar. Only widgets with an event handler participate in
@@ -1333,5 +1074,35 @@ test "tab switching requests focus on a widget in the active page" {
             .upgrade => model.widget(),
         };
         try std.testing.expect(ctx.cmds.items[0].request_focus.eql(expected));
+    }
+}
+
+test "tab views preserve input widgets and render without background work" {
+    vxfw.DrawContext.init(.unicode);
+    const model = try Model.init(std.testing.allocator);
+    defer model.deinit();
+    for ([_]vxfw.Size{ .{ .width = 80, .height = 24 }, .{ .width = 40, .height = 12 } }) |size| {
+        for (Tab.all) |tab| {
+            model.active = tab;
+            var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+            defer arena.deinit();
+            const surface = try model.widget().draw(.{
+                .arena = arena.allocator(),
+                .min = .{},
+                .max = .{ .width = size.width, .height = size.height },
+                .cell_size = .{ .width = 10, .height = 20 },
+            });
+            try std.testing.expectEqual(size, surface.size);
+            const input = switch (tab) {
+                .packages => model.text_field.widget(),
+                .aur => model.aur_field.widget(),
+                .upgrade => model.widget(),
+            };
+            var found = surface.widget.eql(input);
+            for (surface.children) |child| {
+                found = found or child.surface.widget.eql(input);
+            }
+            try std.testing.expect(found);
+        }
     }
 }
