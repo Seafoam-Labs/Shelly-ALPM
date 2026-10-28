@@ -586,16 +586,7 @@ fn runStandard(
     operation_context: *PackageManager.OperationContext,
     invocation: *const parser.Invocation,
 ) !void {
-    if (!invocation.globals.ui_mode) {
-        const result = elevation.runAsInvokingUser(
-            context,
-            &.{ "news", "standard" },
-        ) catch null;
-
-        if (result == null) {
-            _ = news.showUnread(context) catch {};
-        }
-    }
+    news.showBeforeUpgrade(context, invocation.globals.ui_mode);
     const manager = try PackageManager.Manager.init(context.allocator, context.environ, .{ .config_path = context.config_path, .use_root = true, .operation_context = operation_context });
     defer manager.deinit();
     manager.setOperationContext(operation_context);
