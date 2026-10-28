@@ -14,6 +14,8 @@ const runtime = @import("runtime.zig");
 const Package = @import("models/packages.zig").Package;
 const AurPackage = @import("models/packages.zig").AurPackage;
 
+const CheckUpdates = @import("models/sync.zig").CheckUpdates;
+
 const Allocator = std.mem.Allocator;
 const InstallBackend = shelly_cli.ShellyCli.InstallBackend;
 
@@ -45,6 +47,12 @@ const LoadState = struct {
 
 const AurSearchJob = struct {
     result: ?std.json.Parsed([]AurPackage) = null,
+    failed: bool = false,
+    done: std.atomic.Value(bool) = .init(false),
+};
+
+const UpdatesJob = struct {
+    result: ?std.json.Parsed(CheckUpdates) = null,
     failed: bool = false,
     done: std.atomic.Value(bool) = .init(false),
 };
@@ -129,6 +137,13 @@ pub const Model = struct {
     /// The currently running install, if any.
     install_job: ?*shelly_operation.Operation = null,
     /// Result of the last finished operation; owned by `gpa` unless empty.
+    updates_job: ?*UpdatesJob = null,
+    updates_thread: ?std.Thread = null,
+    updates_parsed: ?std.json.Parsed(CheckUpdates) = null,
+    updates_checked: bool = false,
+    updates_failed: bool = false,
+    updates_list: vxfw.ListView,
+
     notice: []const u8 = "",
 
     selected_list_view: vxfw.ListView,
@@ -146,6 +161,10 @@ pub const Model = struct {
         errdefer gpa.destroy(model);
 
         model.* = .{
+            .updates_list = .{ .children = .{ .builder = .{
+                .userdata = model,
+                .buildFn = Model.buildUpdateRow,
+            } } },
             .gpa = gpa,
             .load = load,
             .filtered = .empty,
@@ -184,6 +203,12 @@ pub const Model = struct {
 
     pub fn deinit(self: *Model) void {
         const gpa = self.gpa;
+        if (self.updates_thread) |thread| thread.join();
+        if (self.updates_job) |job| {
+            if (job.result) |*result| result.deinit();
+            gpa.destroy(job);
+        }
+        if (self.updates_parsed) |*parsed| parsed.deinit();
         if (self.load_thread) |thread| {
             thread.join();
             self.load_thread = null;
@@ -257,19 +282,25 @@ pub const Model = struct {
                         },
                     }
                 }
-                if (key.matches(vaxis.Key.space, .{})) {
-                    try self.toggleSelectedList();
+                if (self.active == .upgrade and key.matches('r', .{})) {
+                    try self.startUpdates(ctx);
+                    return ctx.consumeAndRedraw();
+                }
+                if (self.active == .packages and key.matches(vaxis.Key.space, .{})) {
+                    if (self.list_view.cursor < self.filtered.items.len) try self.toggleSelectedList();
                     return ctx.consumeAndRedraw();
                 }
 
                 if (key.matches(vaxis.Key.tab, .{})) {
                     self.switchTab(1);
                     try self.focusActiveTab(ctx);
+                    try self.ensureUpdates(ctx);
                     return ctx.consumeAndRedraw();
                 }
                 if (key.matches(vaxis.Key.tab, .{ .shift = true })) {
                     self.switchTab(-1);
                     try self.focusActiveTab(ctx);
+                    try self.ensureUpdates(ctx);
                     return ctx.consumeAndRedraw();
                 }
                 // Alt+<n> jumps straight to tab n
@@ -299,7 +330,8 @@ pub const Model = struct {
                 const loading = try self.pollLoad();
                 const searching = try self.pollAurSearch();
                 const installing = try self.pollInstall();
-                if (loading or searching or installing) {
+                self.pollUpdates();
+                if (loading or searching or installing or self.updates_job != null) {
                     try ctx.tick(100, self.widget());
                 }
                 return ctx.consumeAndRedraw();
@@ -348,11 +380,13 @@ pub const Model = struct {
                 if (key.matches(vaxis.Key.left, .{})) {
                     self.switchTab(-1);
                     try self.focusActiveTab(ctx);
+                    try self.ensureUpdates(ctx);
                     return ctx.consumeAndRedraw();
                 }
                 if (key.matches(vaxis.Key.right, .{})) {
                     self.switchTab(1);
                     try self.focusActiveTab(ctx);
+                    try self.ensureUpdates(ctx);
                     return ctx.consumeAndRedraw();
                 }
                 for (Tab.all, 1..) |tab, number| {
@@ -366,8 +400,12 @@ pub const Model = struct {
                 return switch (self.active) {
                     .packages => self.list_view.handleEvent(ctx, event),
                     .aur => self.aur_list.handleEvent(ctx, event),
-                    .upgrade => {},
+                    .upgrade => self.updates_list.handleEvent(ctx, event),
                 };
+            },
+            .mouse => {
+                if (self.active == .upgrade and self.overlay == null)
+                    return self.updates_list.handleEvent(ctx, event);
             },
             else => {},
         }
@@ -387,6 +425,7 @@ pub const Model = struct {
         if (tab == self.active) return;
         self.active = tab;
         try self.focusActiveTab(ctx);
+        try self.ensureUpdates(ctx);
     }
 
     fn focusActiveTab(self: *Model, ctx: *vxfw.EventContext) !void {
@@ -398,6 +437,68 @@ pub const Model = struct {
     }
 
     // -- background jobs ---------------------------------------------------
+
+    fn ensureUpdates(self: *Model, ctx: *vxfw.EventContext) !void {
+        if (self.active == .upgrade and !self.updates_checked and self.updates_job == null)
+            try self.startUpdates(ctx);
+    }
+
+    fn startUpdates(self: *Model, ctx: *vxfw.EventContext) !void {
+        if (self.updates_job != null) return;
+        try ctx.tick(100, self.widget());
+        const job = try self.gpa.create(UpdatesJob);
+        errdefer self.gpa.destroy(job);
+        job.* = .{};
+        const thread = try std.Thread.spawn(.{}, checkUpdatesThread, .{job});
+        self.updates_thread = thread;
+        self.updates_job = job;
+        self.updates_checked = true;
+        self.updates_failed = false;
+    }
+
+    fn checkUpdatesThread(job: *UpdatesJob) void {
+        var threaded: std.Io.Threaded = .init(std.heap.page_allocator, .{});
+        defer threaded.deinit();
+        const cli: ShellyCli = .{ .allocator = std.heap.page_allocator, .io = threaded.io() };
+        job.result = cli.check_updates(false) catch {
+            job.failed = true;
+            job.done.store(true, .release);
+            return;
+        };
+        job.done.store(true, .release);
+    }
+
+    fn pollUpdates(self: *Model) void {
+        const job = self.updates_job orelse return;
+        if (!job.done.load(.acquire)) return;
+        self.updates_thread.?.join();
+        self.updates_thread = null;
+        self.updates_job = null;
+        defer self.gpa.destroy(job);
+        self.updates_failed = job.failed;
+        if (job.result) |parsed| {
+            if (self.updates_parsed) |*old| old.deinit();
+            self.updates_parsed = parsed;
+            self.updates_list.item_count = @intCast(parsed.value.count());
+            self.updates_list.jumpToItem(0);
+        }
+    }
+
+    fn updatesView(self: *Model) updates_view.View {
+        return .{
+            .list = &self.updates_list,
+            .data = if (self.updates_parsed) |*parsed| &parsed.value else null,
+            .loading = self.updates_job != null,
+            .failed = self.updates_failed,
+            .checked = self.updates_checked,
+        };
+    }
+
+    fn buildUpdateRow(ptr: *const anyopaque, index: usize, _: usize) ?vxfw.Widget {
+        const self: *const Model = @ptrCast(@alignCast(ptr));
+        const parsed = self.updates_parsed orelse return null;
+        return updates_view.row(&parsed.value, index);
+    }
 
     fn startLoad(self: *Model, ctx: *vxfw.EventContext) !void {
         self.load_thread = try std.Thread.spawn(.{}, loadPackages, .{self.load});
@@ -814,7 +915,7 @@ pub const Model = struct {
         switch (self.active) {
             .packages => try self.packagesView().appendContent(ctx, &children),
             .aur => try self.aurView().appendContent(ctx, &children),
-            .upgrade => try updates_view.appendContent(ctx, &children),
+            .upgrade => try self.updatesView().appendContent(ctx, &children),
         }
 
         // Bottom row: status bar
@@ -872,11 +973,12 @@ pub const Model = struct {
         if (self.install_job) |job| {
             return try std.fmt.allocPrint(arena, "{s} {s}…", .{ job.request.action.ongoing(), job.request.name });
         }
+        if (self.active == .upgrade) return self.updatesView().statusText(arena);
         if (self.notice.len > 0) return self.notice;
         return switch (self.active) {
             .packages => self.packagesView().statusText(arena),
             .aur => self.aurView().statusText(arena),
-            .upgrade => updates_view.statusText(),
+            .upgrade => self.updatesView().statusText(arena),
         };
     }
 
@@ -1105,4 +1207,75 @@ test "tab views preserve input widgets and render without background work" {
             try std.testing.expect(found);
         }
     }
+}
+
+test "updates view renders source rows and distinguishes query states" {
+    vxfw.DrawContext.init(.unicode);
+    const model = try Model.init(std.testing.allocator);
+    defer model.deinit();
+    model.active = .upgrade;
+    model.updates_checked = true;
+    model.updates_parsed = try std.json.parseFromSlice(CheckUpdates, std.testing.allocator,
+        \\{"Packages":[{"Name":"native","CurrentVersion":"1","NewVersion":"2"}],"Aur":[{"Name":"aur","Version":"2","NewVersion":"3"}],"Flatpak":[{"Id":"org.test.App","NewVersion":"4","InstallLevel":1}],"AppImage":[{"Name":"image","Version":"5","IsUpdateAvailable":true}]}
+    , .{ .allocate = .alloc_always });
+    model.updates_list.item_count = 4;
+    try std.testing.expectEqual(@as(usize, 4), model.updates_parsed.?.value.count());
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    for ([_]vxfw.Size{ .{ .width = 80, .height = 24 }, .{ .width = 40, .height = 12 } }) |size| {
+        const ctx: vxfw.DrawContext = .{
+            .arena = arena.allocator(),
+            .min = .{},
+            .max = .{ .width = size.width, .height = size.height },
+            .cell_size = .{ .width = 10, .height = 20 },
+        };
+        _ = try model.widget().draw(ctx);
+        for (0..4) |index| {
+            const widget = Model.buildUpdateRow(model, index, 0) orelse return error.MissingUpdateRow;
+            _ = try widget.draw(ctx.withConstraints(.{}, .{ .width = size.width, .height = 1 }));
+        }
+        try std.testing.expect(Model.buildUpdateRow(model, 4, 0) == null);
+    }
+    var view = model.updatesView();
+    view.failed = true;
+    try std.testing.expectEqualStrings("Update check failed — R: retry", try view.statusText(arena.allocator()));
+    view.loading = true;
+    try std.testing.expectEqualStrings("Checking for updates…", try view.statusText(arena.allocator()));
+}
+
+test "updates polling transfers results and cleans unconsumed results" {
+    const model = try Model.init(std.testing.allocator);
+    defer model.deinit();
+    const Worker = struct {
+        fn complete(job: *UpdatesJob) void {
+            job.done.store(true, .release);
+        }
+    };
+    const job = try std.testing.allocator.create(UpdatesJob);
+    job.* = .{ .result = try std.json.parseFromSlice(CheckUpdates, std.testing.allocator,
+        \\{"Packages":[{"Name":"test","CurrentVersion":"1","NewVersion":"2"}]}
+    , .{ .allocate = .alloc_always }) };
+    model.updates_job = job;
+    model.updates_thread = try std.Thread.spawn(.{}, Worker.complete, .{job});
+    job.done.store(true, .release);
+    model.pollUpdates();
+    try std.testing.expect(model.updates_job == null);
+    try std.testing.expectEqual(@as(?u32, 1), model.updates_list.item_count);
+    try std.testing.expectEqualStrings("test", model.updates_parsed.?.value.Packages[0].Name);
+
+    // A failed refresh must remain a failure, retaining the previous owned data.
+    const failed = try std.testing.allocator.create(UpdatesJob);
+    failed.* = .{ .failed = true };
+    model.updates_job = failed;
+    model.updates_thread = try std.Thread.spawn(.{}, Worker.complete, .{failed});
+    failed.done.store(true, .release);
+    model.pollUpdates();
+    try std.testing.expect(model.updates_failed);
+    try std.testing.expectEqualStrings("test", model.updates_parsed.?.value.Packages[0].Name);
+
+    // deinit owns an unpolled worker and its result.
+    const pending = try std.testing.allocator.create(UpdatesJob);
+    pending.* = .{ .result = try std.json.parseFromSlice(CheckUpdates, std.testing.allocator, "{}", .{}) };
+    model.updates_job = pending;
+    model.updates_thread = try std.Thread.spawn(.{}, Worker.complete, .{pending});
 }

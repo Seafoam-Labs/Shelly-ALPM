@@ -271,7 +271,7 @@ pub const ShellyCli = struct {
     }
 
     pub fn check_updates(self: ShellyCli, show_hidden: bool) !std.json.Parsed(CheckUpdates) {
-        const result = try self.run(if (show_hidden) &.{ "-P", "--show-hidden" } else &.{"-P"});
+        const result = try self.runSilently(if (show_hidden) &.{ "-P", "--show-hidden" } else &.{"-P"});
         defer self.allocator.free(result.stdout);
         defer self.allocator.free(result.stderr);
 

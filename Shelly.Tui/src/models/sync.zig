@@ -4,9 +4,10 @@ pub const CheckUpdates = struct {
     Packages: []CheckUpdatesPackage = &.{},
     Aur: []CheckUpdatesAur = &.{},
     Flatpak: []CheckUpdatesFlatpak = &.{},
+    AppImage: []@import("appimage.zig").AppImageUpdate = &.{},
 
     pub fn count(self: *const CheckUpdates) usize {
-        return self.Packages.len + self.Aur.len + self.Flatpak.len;
+        return self.Packages.len + self.Aur.len + self.Flatpak.len + self.AppImage.len;
     }
 };
 
@@ -42,6 +43,7 @@ pub const CheckUpdatesFlatpak = struct {
     Id: []const u8 = "",
     Name: []const u8 = "",
     Version: []const u8 = "",
+    NewVersion: []const u8 = "",
     Arch: []const u8 = "",
     Branch: []const u8 = "",
     LatestCommit: []const u8 = "",
