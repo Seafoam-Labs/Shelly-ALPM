@@ -16,7 +16,6 @@ pub fn build(b: *std.Build) void {
     // between Debug, ReleaseSafe, ReleaseFast, and ReleaseSmall. Here we do not
     // set a preferred release mode, allowing the user to decide how to optimize.
     const optimize = b.standardOptimizeOption(.{});
-    const enable_libalpm = b.option(bool, "libalpm", "Include libalpm alongside RLPM") orelse true;
     const diagnostics = b.dependency("shelly_diagnostics", .{ .target = target, .optimize = optimize }).module("diagnostics");
     // It's also possible to define more custom flags to toggle optional features
     // of this build script using `b.option()`. All defined flags (including
@@ -62,6 +61,8 @@ pub fn build(b: *std.Build) void {
     // don't need and to put everything under a single module.
     const exe = b.addExecutable(.{
         .name = "Shelly_Tui",
+        .use_lld = true,
+        .use_llvm = true,
         .root_module = b.createModule(.{
             // b.createModule defines a new module just like b.addModule but,
             // unlike b.addModule, it does not expose the module to consumers of
@@ -96,15 +97,6 @@ pub fn build(b: *std.Build) void {
     mod.addImport("vaxis", vaxis_module);
     exe.root_module.addImport("vaxis", vaxis_module);
 
-    const package_manager_dependency = b.dependency("package_manager", .{
-        .libalpm = enable_libalpm,
-        .target = target,
-        .optimize = optimize,
-    });
-    const package_manager = package_manager_dependency.module("PackageManager");
-    mod.addImport("PackageManager", package_manager);
-    exe.root_module.addImport("PackageManager", package_manager);
-
     // This declares intent for the executable to be installed into the
     // install prefix when running `zig build` (i.e. when executing the default
     // step). By default the install prefix is `zig-out/` but can be overridden
@@ -133,14 +125,14 @@ pub fn build(b: *std.Build) void {
 
     // This allows the user to pass arguments to the application in the build
     // command itself, like this: `zig build run -- arg1 arg2 etc`
-    if (b.args) |args| {
-        run_cmd.addArgs(args);
-    }
+    run_cmd.addPassthruArgs();
 
     // Creates an executable that will run `test` blocks from the provided module.
     // Here `mod` needs to define a target, which is why earlier we made sure to
     // set the releative field.
     const mod_tests = b.addTest(.{
+        .use_lld = true,
+        .use_llvm = true,
         .root_module = mod,
     });
 
@@ -151,6 +143,8 @@ pub fn build(b: *std.Build) void {
     // root module. Note that test executables only test one module at a time,
     // hence why we have to create two separate ones.
     const exe_tests = b.addTest(.{
+        .use_lld = true,
+        .use_llvm = true,
         .root_module = exe.root_module,
     });
 

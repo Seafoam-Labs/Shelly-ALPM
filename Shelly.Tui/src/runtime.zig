@@ -1,4 +1,6 @@
 const std = @import("std");
+const builtin = @import("builtin");
+pub const is_debug = builtin.mode == .debug;
 const xdg_paths = @import("xdg_paths.zig").xdg_paths;
 
 // src/shellpers/runtime.zig

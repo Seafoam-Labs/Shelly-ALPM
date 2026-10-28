@@ -169,7 +169,10 @@ test "decodeBase64 round-trips" {
 }
 
 test "decodeBase64 fails on invalid input" {
-    try testing.expect(std.meta.isError(JsonPackFrame.decodeBase64(testing.allocator, "not!base64!")));
+    if (JsonPackFrame.decodeBase64(testing.allocator, "not!base64!")) |bytes| {
+        defer testing.allocator.free(bytes);
+        return error.TestExpectedError;
+    } else |_| {}
 }
 
 const TestPayload = struct {

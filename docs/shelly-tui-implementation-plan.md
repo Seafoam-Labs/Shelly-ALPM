@@ -10,6 +10,13 @@ The target is the latest `development`. CLI/package-manager changes affecting th
 - Source assessment: `613b58e544b5b8a490be4d6ee51188e67f40420e`; code matches that development commit. Branch differences were documentation only.
 - Full runtime compatibility audit: pending.
 
+## Build toolchain
+
+- Zig 0.17.0 or newer; from `Shelly.Tui`: `zig build run`.
+- Vaxis is pinned to `b24be454926b012316cb44d9f0e95da45d6bc3d9`, the latest upstream main commit checked on 2026-10-28. Pins are updated deliberately.
+- LLVM/LLD is used for linking. The TUI communicates through the CLI and does not link the package-manager backend.
+- Zig 0.16 support and compiler-specific package directories have been dropped.
+
 ## Architecture
 
 `Vaxis views → application state → CLI client → Shelly CLI / workflows`
@@ -76,8 +83,8 @@ The intended flow is browse → details → review/provider questions → execut
 
 - [Startup](/home/vinnyqf/RiderProjects/Shelly-ALPM/Shelly.Tui/src/main.zig)
 - [Model, workers, views, and authentication](/home/vinnyqf/RiderProjects/Shelly-ALPM/Shelly.Tui/src/model.zig)
-- [CLI client](/home/vinnyqf/RiderProjects/Shelly-ALPM/Shelly.Tui/src/shelly_cli.zig)
-- [Operation protocol and install lifecycle](/home/vinnyqf/RiderProjects/Shelly-ALPM/Shelly.Tui/src/shelly_operation.zig)
+- [CLI client](/home/vinnyqf/RiderProjects/Shelly-ALPM/Shelly.Tui/src/services/shelly_cli.zig)
+- [Operation protocol and install lifecycle](/home/vinnyqf/RiderProjects/Shelly-ALPM/Shelly.Tui/src/services/shelly_operation.zig)
 - [CLI catalog](/home/vinnyqf/RiderProjects/Shelly-ALPM/Shelly.Cli.Zig/src/cli/catalog.zig)
 - [CLI questions and outcomes](/home/vinnyqf/RiderProjects/Shelly-ALPM/Shelly.Cli.Zig/src/output/ui_operation.zig)
 - [CLI wire formats](/home/vinnyqf/RiderProjects/Shelly-ALPM/Shelly.Cli.Zig/src/output/config.zig)

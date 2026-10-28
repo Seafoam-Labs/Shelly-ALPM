@@ -25,7 +25,7 @@
     .fingerprint = 0x97067e87ce56fd1d, // Changing this has security and trust implications.
     // Tracks the earliest Zig version that the package considers to be a
     // supported use case.
-    .minimum_zig_version = "0.16.0",
+    .minimum_zig_version = "0.17.0",
     // This field is optional.
     // Each dependency must either provide a `url` and `hash`, or a `path`.
     // `zig build --fetch` can be used to fetch all dependencies of a package, recursively.
@@ -34,11 +34,8 @@
     .dependencies = .{
         .shelly_diagnostics = .{ .path = "../Shelly.Diagnostics" },
         .vaxis = .{
-            .url = "git+https://github.com/rockorager/libvaxis#82cec0db8fc57c32f2ce4c1c3fc377052f4c86ba",
-            .hash = "vaxis-0.6.0-BWNV_KwYCgB-L5MNRY8I8HGbKDE6KOxDPAVSaZ8-3lJ8",
-        },
-        .package_manager = .{
-            .path = "../Shelly.PackageManager",
+            .url = "git+https://github.com/rockorager/libvaxis#b24be454926b012316cb44d9f0e95da45d6bc3d9",
+            .hash = "vaxis-0.6.0-BWNV_E4QDQChkJdI41RehZ8CS67EJbCTy43904zntvcY",
         },
     },
     .paths = .{

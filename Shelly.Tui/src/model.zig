@@ -3,12 +3,13 @@ const commands = @import("commands.zig");
 const packages_view = @import("views/packages_view.zig");
 const aur_view = @import("views/aur_view.zig");
 const updates_view = @import("views/updates_view.zig");
+const pkgbuild_view = @import("views/pkgbuild_view.zig");
+const PkgBuild = @import("models/pkgbuild.zig").PkgBuild;
 const operation_view = @import("views/operation_view.zig");
 const shelly_operation = @import("services/shelly_operation.zig");
 const diagnostics = @import("diagnostics");
 const vaxis = @import("vaxis");
 const vxfw = vaxis.vxfw;
-const builtin = @import("builtin");
 const shelly_cli = @import("services/shelly_cli.zig");
 const ShellyCli = shelly_cli.ShellyCli;
 const runtime = @import("runtime.zig");
@@ -58,6 +59,13 @@ const UpdatesJob = struct {
     done: std.atomic.Value(bool) = .init(false),
 };
 
+const PkgbuildJob = struct {
+    name: []const u8,
+    result: ?std.json.Parsed([]PkgBuild) = null,
+    failure: ?anyerror = null,
+    done: std.atomic.Value(bool) = .init(false),
+};
+
 /// Modal password prompt used to elevate installs through sudo.
 const SudoPrompt = struct {
     /// Package being installed; owned by `gpa`.
@@ -102,6 +110,7 @@ const Overlay = union(enum) {
     package: *const Package,
     aur: *const AurPackage,
     sudo: *SudoPrompt,
+    pkgbuild,
 };
 
 pub const Model = struct {
@@ -135,6 +144,13 @@ pub const Model = struct {
 
     /// Modal package details.
     overlay: ?Overlay = null,
+    pkgbuild_name: []const u8 = "",
+    pkgbuild_job: ?*PkgbuildJob = null,
+    pkgbuild_thread: ?std.Thread = null,
+    pkgbuild_document: ?pkgbuild_view.Document = null,
+    pkgbuild_failure: ?anyerror = null,
+    pkgbuild_scroll: vxfw.ScrollView,
+
     /// The currently running install, if any.
     install_job: ?*shelly_operation.Operation = null,
     /// Result of the last finished operation; owned by `gpa` unless empty.
@@ -166,6 +182,10 @@ pub const Model = struct {
             .updates_list = .{ .children = .{ .builder = .{
                 .userdata = model,
                 .buildFn = Model.buildUpdateRow,
+            } } },
+            .pkgbuild_scroll = .{ .children = .{ .builder = .{
+                .userdata = model,
+                .buildFn = Model.buildPkgbuildLine,
             } } },
             .gpa = gpa,
             .load = load,
@@ -205,6 +225,14 @@ pub const Model = struct {
 
     pub fn deinit(self: *Model) void {
         const gpa = self.gpa;
+        if (self.pkgbuild_thread) |thread| thread.join();
+        if (self.pkgbuild_job) |job| {
+            if (job.result) |*result| result.deinit();
+            gpa.free(job.name);
+            gpa.destroy(job);
+        }
+        if (self.pkgbuild_document) |*document| document.deinit();
+        if (self.pkgbuild_name.len > 0) gpa.free(self.pkgbuild_name);
         if (self.updates_thread) |thread| thread.join();
         if (self.updates_job) |job| {
             if (job.result) |*result| result.deinit();
@@ -273,6 +301,7 @@ pub const Model = struct {
                                     .close => self.closeOverlay(),
                                     .install => try self.operationFromOverlay(.install),
                                     .remove => try self.operationFromOverlay(.remove),
+                                    .preview => if (overlay == .aur) try self.openPkgbuild(ctx, overlay.aur.Name),
                                 }
                                 return ctx.consumeAndRedraw();
                             }
@@ -280,6 +309,19 @@ pub const Model = struct {
                         },
                         .sudo => |prompt| {
                             return self.handleSudoKey(prompt, ctx, key);
+                        },
+                        .pkgbuild => {
+                            const view = self.pkgbuildView();
+                            if (view.handleKey(key)) |action| {
+                                switch (action) {
+                                    .close => self.closePkgbuild(),
+                                    .retry => if (self.pkgbuild_job == null) try self.openPkgbuild(ctx, self.pkgbuild_name),
+                                }
+                                return ctx.consumeAndRedraw();
+                            }
+                            if (self.pkgbuild_document != null and self.pkgbuild_job == null)
+                                try self.pkgbuild_scroll.handleEvent(ctx, event);
+                            return ctx.consumeAndRedraw();
                         },
                     }
                 }
@@ -330,12 +372,13 @@ pub const Model = struct {
                 const searching = try self.pollAurSearch();
                 const installing = try self.pollInstall();
                 self.pollUpdates();
+                try self.pollPkgbuild(ctx);
                 if (self.refresh_after_upgrade and !self.loading and self.updates_job == null) {
                     try self.reloadPackages(ctx);
                     try self.startUpdates(ctx);
                     self.refresh_after_upgrade = false;
                 }
-                if (loading or searching or installing or self.loading or self.updates_job != null) {
+                if (loading or searching or installing or self.loading or self.updates_job != null or self.pkgbuild_job != null) {
                     try ctx.tick(100, self.widget());
                 }
                 return ctx.consumeAndRedraw();
@@ -361,6 +404,10 @@ pub const Model = struct {
                 };
             },
             .mouse => {
+                if (self.overlay) |overlay| {
+                    if (overlay == .pkgbuild and self.pkgbuild_document != null and self.pkgbuild_job == null)
+                        return self.pkgbuild_scroll.handleEvent(ctx, event);
+                }
                 if (self.active == .upgrade and self.overlay == null)
                     return self.updates_list.handleEvent(ctx, event);
             },
@@ -372,10 +419,12 @@ pub const Model = struct {
 
     fn switchTab(self: *Model, delta: i32) void {
         const count: i32 = @intCast(Tab.all.len);
-        var next: i32 = @intFromEnum(self.active);
-        next = @rem(next + delta, count);
+        const current: i32 = for (Tab.all, 0..) |tab, index| {
+            if (tab == self.active) break @intCast(index);
+        } else unreachable;
+        var next = @rem(current + delta, count);
         if (next < 0) next += count;
-        self.active = @enumFromInt(@as(std.meta.Tag(Tab), @intCast(next)));
+        self.active = Tab.all[@intCast(next)];
     }
 
     fn setTab(self: *Model, tab: Tab, ctx: *vxfw.EventContext) !void {
@@ -394,6 +443,100 @@ pub const Model = struct {
     }
 
     // -- background jobs ---------------------------------------------------
+
+    fn openPkgbuild(self: *Model, ctx: *vxfw.EventContext, name: []const u8) !void {
+        // Duplicate before releasing the old name, including retry of the same target.
+        const owned = try self.gpa.dupe(u8, name);
+        if (self.pkgbuild_name.len > 0) self.gpa.free(self.pkgbuild_name);
+        self.pkgbuild_name = owned;
+        if (self.pkgbuild_document) |*document| document.deinit();
+        self.pkgbuild_document = null;
+        self.pkgbuild_failure = null;
+        self.pkgbuild_scroll.scroll = .{};
+        self.pkgbuild_scroll.cursor = 0;
+        self.pkgbuild_scroll.item_count = 0;
+        self.overlay = .pkgbuild;
+        if (self.pkgbuild_job == null) self.startPkgbuild(ctx) catch |err| {
+            self.pkgbuild_failure = err;
+        };
+    }
+
+    fn startPkgbuild(self: *Model, ctx: *vxfw.EventContext) !void {
+        try ctx.tick(100, self.widget());
+        const job = try self.gpa.create(PkgbuildJob);
+        errdefer self.gpa.destroy(job);
+        job.* = .{ .name = try self.gpa.dupe(u8, self.pkgbuild_name) };
+        errdefer self.gpa.free(job.name);
+        const thread = try std.Thread.spawn(.{}, fetchPkgbuildThread, .{job});
+        self.pkgbuild_thread = thread;
+        self.pkgbuild_job = job;
+    }
+
+    fn fetchPkgbuildThread(job: *PkgbuildJob) void {
+        var threaded: std.Io.Threaded = .init(std.heap.page_allocator, .{});
+        defer threaded.deinit();
+        const cli: ShellyCli = .{ .allocator = std.heap.page_allocator, .io = threaded.io() };
+        job.result = cli.fetch_pkgbuild(job.name) catch |err| {
+            job.failure = err;
+            job.done.store(true, .release);
+            return;
+        };
+        job.done.store(true, .release);
+    }
+
+    fn pollPkgbuild(self: *Model, ctx: *vxfw.EventContext) !void {
+        const job = self.pkgbuild_job orelse return;
+        if (!job.done.load(.acquire)) return;
+        self.pkgbuild_thread.?.join();
+        self.pkgbuild_thread = null;
+        self.pkgbuild_job = null;
+        defer {
+            if (job.result) |*result| result.deinit();
+            self.gpa.free(job.name);
+            self.gpa.destroy(job);
+        }
+        if (!std.mem.eql(u8, job.name, self.pkgbuild_name)) {
+            // The user selected a different package while this request was running.
+            if (self.overlay != null and self.overlay.? == .pkgbuild)
+                self.startPkgbuild(ctx) catch |err| {
+                    self.pkgbuild_failure = err;
+                };
+            return;
+        }
+        self.pkgbuild_failure = job.failure;
+        if (job.result) |result| {
+            self.pkgbuild_document = pkgbuild_view.Document.init(self.gpa, result.value) catch |err| {
+                self.pkgbuild_failure = err;
+                return;
+            };
+            self.pkgbuild_scroll.item_count = @intCast(self.pkgbuild_document.?.lines.len);
+        }
+    }
+
+    fn closePkgbuild(self: *Model) void {
+        self.overlay = null;
+        for (self.aur_packages) |*pkg| {
+            if (std.mem.eql(u8, pkg.Name, self.pkgbuild_name)) {
+                self.overlay = .{ .aur = pkg };
+                break;
+            }
+        }
+    }
+
+    fn pkgbuildView(self: *Model) pkgbuild_view.View {
+        return .{
+            .name = self.pkgbuild_name,
+            .scroll = &self.pkgbuild_scroll,
+            .loading = self.pkgbuild_job != null,
+            .failure = self.pkgbuild_failure,
+        };
+    }
+
+    fn buildPkgbuildLine(ptr: *const anyopaque, index: usize, _: usize) ?vxfw.Widget {
+        const self: *const Model = @ptrCast(@alignCast(ptr));
+        if (self.pkgbuild_document) |*document| return pkgbuild_view.row(document, index);
+        return null;
+    }
 
     fn ensureUpdates(self: *Model, ctx: *vxfw.EventContext) !void {
         if (self.active == .upgrade and !self.updates_checked and self.updates_job == null)
@@ -670,7 +813,7 @@ pub const Model = struct {
                 name = pkg.Name;
                 backend = .aur;
             },
-            .sudo => return,
+            .sudo, .pkgbuild => return,
         }
         const prompt = try self.gpa.create(SudoPrompt);
         errdefer self.gpa.destroy(prompt);
@@ -744,7 +887,7 @@ pub const Model = struct {
     }
 
     fn shellyBin() []const u8 {
-        return if (builtin.mode == .Debug)
+        return if (runtime.is_debug)
             "../Shelly.Cli.Zig/zig-out/bin/shelly"
         else
             "shelly";
@@ -945,6 +1088,7 @@ pub const Model = struct {
             const overlay_child: ?vxfw.SubSurface = switch (overlay) {
                 .package, .aur => try self.drawDetailsOverlay(ctx, arena, max, overlay),
                 .sudo => |prompt| try self.drawSudoPrompt(ctx, arena, max, prompt),
+                .pkgbuild => try self.pkgbuildView().draw(ctx),
             };
             if (overlay_child) |child| {
                 try children.append(arena, child);
@@ -1006,10 +1150,10 @@ pub const Model = struct {
                 title = try std.fmt.allocPrint(arena, "{s} {s} (AUR)", .{ pkg.Name, pkg.Version });
                 body = try std.fmt.allocPrint(arena, "{s}\n\n{s}", .{
                     try aur_view.detailsText(arena, pkg),
-                    commands.detailsHint(pkg.Installed),
+                    commands.aurDetailsHint(pkg.Installed),
                 });
             },
-            .sudo => return null,
+            .sudo, .pkgbuild => return null,
         }
         if (self.install_job) |job| {
             body = try std.fmt.allocPrint(arena, "{s}\n\n{s} {s}…", .{ body, job.request.action.ongoing(), job.request.name });
@@ -1322,6 +1466,10 @@ test "shared commands quit from every tab and modal" {
         try Model.typeErasedCaptureHandler(model, &ctx, .{ .key_press = .{ .codepoint = vaxis.Key.escape } });
         try std.testing.expect(ctx.quit);
     }
+    model.overlay = .pkgbuild;
+    ctx.quit = false;
+    try Model.typeErasedCaptureHandler(model, &ctx, .{ .key_press = .{ .codepoint = vaxis.Key.escape } });
+    try std.testing.expect(ctx.quit);
     model.overlay = null;
     try std.testing.expect(commands.global(.{ .codepoint = vaxis.Key.left }, Tab.all.len) == null);
     try std.testing.expect(commands.global(.{ .codepoint = '1' }, Tab.all.len) == null);
@@ -1365,4 +1513,86 @@ test "package refresh replaces borrowed data and preserves selection" {
     try std.testing.expectEqualStrings("native", model.selected_packages.items[0]);
     try std.testing.expect(model.selected_packages.items[0].ptr == model.packages[0].Name.ptr);
     try std.testing.expectEqual(@as(u32, 0), model.list_view.cursor);
+}
+
+test "PKGBUILD preview renders scrolls and returns to AUR details" {
+    vxfw.DrawContext.init(.unicode);
+    const model = try Model.init(std.testing.allocator);
+    defer model.deinit();
+    model.active = .aur;
+    var package = [_]AurPackage{.{ .Name = "demo" }};
+    model.aur_packages = &package;
+    model.pkgbuild_name = try std.testing.allocator.dupe(u8, "demo");
+    const line = "echo a long source line with content and more content and more content and more content\n";
+    var source_buffer: [line.len * 80]u8 = undefined;
+    for (0..80) |index| @memcpy(source_buffer[index * line.len ..][0..line.len], line);
+    const source = &source_buffer;
+    model.pkgbuild_document = try pkgbuild_view.Document.init(std.testing.allocator, &.{.{ .Name = "demo", .PkgBuild = source }});
+    model.pkgbuild_scroll.item_count = @intCast(model.pkgbuild_document.?.lines.len);
+    model.overlay = .pkgbuild;
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    for ([_]vxfw.Size{ .{ .width = 80, .height = 24 }, .{ .width = 40, .height = 12 } }) |size| {
+        const ctx: vxfw.DrawContext = .{
+            .arena = arena.allocator(),
+            .min = .{},
+            .max = .{ .width = size.width, .height = size.height },
+            .cell_size = .{ .width = 10, .height = 20 },
+        };
+        const first = (try model.pkgbuildView().draw(ctx)).?;
+        var state_view = model.pkgbuildView();
+        state_view.loading = true;
+        try std.testing.expectEqual(first.surface.size, (try state_view.draw(ctx)).?.surface.size);
+        state_view.loading = false;
+        state_view.failure = error.CommandFailed;
+        try std.testing.expectEqual(first.surface.size, (try state_view.draw(ctx)).?.surface.size);
+        var events: vxfw.EventContext = .{ .io = undefined, .alloc = std.testing.allocator, .cmds = .empty };
+        defer events.cmds.deinit(std.testing.allocator);
+        for (0..6) |_| {
+            try Model.typeErasedCaptureHandler(model, &events, .{ .key_press = .{ .codepoint = vaxis.Key.down } });
+            _ = try model.pkgbuildView().draw(ctx);
+        }
+        try std.testing.expect(model.pkgbuild_scroll.scroll.top > 0);
+        const after = (try model.pkgbuildView().draw(ctx)).?;
+        try std.testing.expectEqual(first.surface.size, after.surface.size);
+    }
+    model.closePkgbuild();
+    try std.testing.expect(model.overlay.? == .aur);
+    try std.testing.expectEqualStrings("demo", model.overlay.?.aur.Name);
+}
+
+test "PKGBUILD preview discards stale results and joins unpolled jobs" {
+    const model = try Model.init(std.testing.allocator);
+    defer model.deinit();
+    model.pkgbuild_name = try std.testing.allocator.dupe(u8, "new-target");
+    const Worker = struct {
+        fn finish(job: *PkgbuildJob) void {
+            job.done.store(true, .release);
+        }
+    };
+    const job = try std.testing.allocator.create(PkgbuildJob);
+    job.* = .{
+        .name = try std.testing.allocator.dupe(u8, "old-target"),
+        .result = try std.json.parseFromSlice([]PkgBuild, std.testing.allocator,
+            \\[{"Name":"old-target","PkgBuild":"echo old"}]
+        , .{ .allocate = .alloc_always }),
+    };
+    model.pkgbuild_job = job;
+    model.pkgbuild_thread = try std.Thread.spawn(.{}, Worker.finish, .{job});
+    job.done.store(true, .release);
+    var ctx: vxfw.EventContext = .{ .io = undefined, .alloc = std.testing.allocator, .cmds = .empty };
+    defer ctx.cmds.deinit(std.testing.allocator);
+    try model.pollPkgbuild(&ctx);
+    try std.testing.expect(model.pkgbuild_document == null);
+    try std.testing.expect(model.pkgbuild_job == null);
+    const pending = try std.testing.allocator.create(PkgbuildJob);
+    pending.* = .{
+        .name = try std.testing.allocator.dupe(u8, "new-target"),
+        .result = try std.json.parseFromSlice([]PkgBuild, std.testing.allocator,
+            \\[{"Name":"new-target","PkgBuild":"echo new"}]
+        , .{ .allocate = .alloc_always }),
+    };
+    model.pkgbuild_job = pending;
+    model.pkgbuild_thread = try std.Thread.spawn(.{}, Worker.finish, .{pending});
+    // Model.deinit joins and frees this unconsumed result.
 }

@@ -14,7 +14,6 @@ const CheckUpdates = @import("../models/sync.zig").CheckUpdates;
 const JsonPackFrame = @import("ui_decode.zig").JsonPackFrame;
 const RunResult = std.process.RunResult;
 const runtime = @import("../runtime.zig");
-const builtin = @import("builtin");
 const log = std.log.scoped(.shelly_cli);
 
 fn containsPackageName(packages: []const Package, name: []const u8) bool {
@@ -88,7 +87,7 @@ pub const ShellyCli = struct {
     }
 
     fn runInner(self: ShellyCli, args: []const []const u8, comptime silent: bool) !RunResult {
-        const shelly_bin = if (builtin.mode == .Debug)
+        const shelly_bin = if (runtime.is_debug)
             "../Shelly.Cli.Zig/zig-out/bin/shelly"
         else
             "shelly";
@@ -227,7 +226,7 @@ pub const ShellyCli = struct {
             .atoll_preview => &.{ "search", "aur", name, "--pkgbuild", "--aur-url", "https://atoll.seafoam-labs.org" },
             .atoll_scan => &.{ "search", "aur", name, "--pkgbuild", "--scan-pkgbuild", "--aur-url", "https://atoll.seafoam-labs.org" },
         };
-        const result = try self.run(args);
+        const result = try self.runSilently(args);
         defer self.allocator.free(result.stderr);
         defer self.allocator.free(result.stdout);
 

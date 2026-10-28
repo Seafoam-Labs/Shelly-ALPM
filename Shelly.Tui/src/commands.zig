@@ -19,9 +19,10 @@ pub fn global(key: vaxis.Key, tab_count: usize) ?Global {
     return null;
 }
 
-pub const Detail = enum { close, install, remove };
+pub const Detail = enum { close, install, remove, preview };
 pub fn detail(key: vaxis.Key) ?Detail {
     if (key.matches('q', .{})) return .close;
+    if (key.matches('p', .{})) return .preview;
     if (key.matches('i', .{})) return .install;
     if (key.matches('r', .{})) return .remove;
     return null;
@@ -52,3 +53,15 @@ pub fn updates(key: vaxis.Key) ?Updates {
     return null;
 }
 pub const updates_hint = "U: upgrade system    R: refresh";
+
+pub fn closesPreview(key: vaxis.Key) bool {
+    return key.matches('q', .{});
+}
+
+pub fn aurDetailsHint(installed: bool) []const u8 {
+    return if (installed)
+        "P: PKGBUILD    I: reinstall    R: remove    Q: close    Esc: quit"
+    else
+        "P: PKGBUILD    I: install    Q: close    Esc: quit";
+}
+pub const preview_hint = "↑↓/←→: scroll  Ctrl+D/U: page  R: retry  Q: back  Esc: quit";
