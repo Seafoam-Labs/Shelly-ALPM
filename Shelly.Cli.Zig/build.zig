@@ -175,6 +175,7 @@ pub fn build(b: *std.Build) void {
             "updpkgsums",
             "compression presets",
             "review-only accepts Heroic array trimming",
+            "review-only accepts issue 2088 indexed trimming",
             "review-only accepts filesystem here-strings",
             "sync deps",
             "dependency plan",

@@ -55,6 +55,16 @@ Bootstrap uses the selected profile too; the default profile retains its legacy
 `/var/log/pacman.log` bootstrap log. Profiles supply defaults, not a migration:
 building a new profile does not move an existing database or keyring.
 
+The CLI also disables Arch Linux news at build time for the `devario` profile.
+Standard and combined upgrades skip the news subprocess and feed fetch, and
+news commands are omitted from help, generated manuals, and shell completions.
+Explicit `shelly news`, `shelly news standard`, and `-N` invocations report that
+news is unavailable, without fetching the feed or accessing its cache. Use
+`shelly search standard news` to search for a package named `news`.
+The `pacman` profile retains Arch news, including when built with
+`-Dlibalpm=false`. Runtime backend selection and `--config` do not change this
+build-time policy.
+
 Pacfile, cache-cleanup, and archive-cache fallback options use the same profile.
 Explicit caller options and configuration still override those defaults.
 `shelly --config /path/to/config utility --repair-db` resolves `DBPath` from that
@@ -166,12 +176,19 @@ archives retain the two-way diff fallback; unreadable owner metadata is an error
 GPG and a populated host trust database remain necessary for signature verification.
 
 `packaging/devario/PKGBUILD` builds the release tag matching `pkgver` (currently
-`v3.1.8`). `packaging/devario/shelly-git/PKGBUILD` tracks the `development` branch.
+`v3.1.9`). `packaging/devario/shelly-git/PKGBUILD` tracks the `development` branch.
 Both use `-Dlibalpm=false -Dpath-profile=devario`, including the matching key tool
 and backend tests. Neither recipe applies downstream patches
 or requires `devario-alpm-runtime`. Their checks include native pacfile ownership,
 helper path defaults, BUILDINFO database selection, and sandbox allow-list
 regressions.
+
+All three Devario Shelly recipes require sources containing the Devario Arch
+news build policy. Before generating documentation, `build()` verifies that
+the compiled CLI rejects `news --help` as unavailable on Devario. This check
+also runs with `--no-check`, so older sources cannot silently ship a CLI with
+Arch news enabled. A release tag must contain the news change before it can
+pass this check.
 
 ```sh
 shelly build ./packaging/devario/PKGBUILD
@@ -179,8 +196,9 @@ shelly build ./packaging/devario/PKGBUILD
 
 The separate root `PKGBUILD-devario` is a historical pinned recipe. Its current
 `bcbba6aa` pin predates path-profile support even though the recipe passes that
-option. Refresh that pin to a published commit containing these fixes before
-using it for a release. The release and development recipes above do not use that pin.
+option. Refresh that pin to a published commit containing these fixes and the
+Devario news build policy before using it for a release. The release and
+development recipes above do not use that pin.
 Use `--config` for runtime configuration overrides; the former downstream
 `SHELLY_ALPM_CONFIG` variable is not supported.
 

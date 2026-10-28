@@ -1051,6 +1051,7 @@ fn isChildOf(command: *const spec.Command, parent: *const spec.Command) bool {
 }
 
 test "renders Bash Fish and Zsh scripts from the native catalog" {
+    const news_enabled = @import("../build_features.zig").arch_news_enabled;
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const manifest = try spec.Manifest.load(arena.allocator());
@@ -1093,7 +1094,7 @@ test "renders Bash Fish and Zsh scripts from the native catalog" {
             try std.testing.expect(std.mem.indexOf(u8, script, "-U*) action=\"upgrade\"; selector=\"all\"; consumed=1 ;;") != null);
             try std.testing.expect(std.mem.indexOf(u8, script, "-B*) action=\"backup\"; selector=\"utility\"; consumed=1 ;;") != null);
             // Standalone modifier extensions are offered alongside their bare shortcode.
-            try std.testing.expect(std.mem.indexOf(u8, script, "-Na") != null);
+            try std.testing.expectEqual(news_enabled, std.mem.indexOf(u8, script, "-Na") != null);
             try std.testing.expect(std.mem.indexOf(u8, script, "-Be") != null);
         }
         if (expected.shell == .fish) {
@@ -1108,9 +1109,9 @@ test "renders Bash Fish and Zsh scripts from the native catalog" {
             try std.testing.expect(std.mem.indexOf(u8, script, "__shelly_shortcode_token -Sa' -a '-Sad'") != null);
             // Bare action shortcodes are offered as top-level candidates.
             try std.testing.expect(std.mem.indexOf(u8, script, "-a '-U'") != null);
-            try std.testing.expect(std.mem.indexOf(u8, script, "-a '-N'") != null);
+            try std.testing.expectEqual(news_enabled, std.mem.indexOf(u8, script, "-a '-N'") != null);
             // Standalone modifier extensions are conditioned on the bare token.
-            try std.testing.expect(std.mem.indexOf(u8, script, "__shelly_shortcode_token -N' -a '-Na'") != null);
+            try std.testing.expectEqual(news_enabled, std.mem.indexOf(u8, script, "__shelly_shortcode_token -N' -a '-Na'") != null);
             // Bare shortcodes exclude their typed siblings from their option condition.
             try std.testing.expect(std.mem.indexOf(u8, script, "__shelly_shortcut -Ux -U; and not __shelly_shortcut -Us -Ui -Ua -Uf") != null);
             // Standalone shortcodes whose action also has typed variants are still offered.
@@ -1126,7 +1127,7 @@ test "renders Bash Fish and Zsh scripts from the native catalog" {
             try std.testing.expect(std.mem.indexOf(u8, script, "'-Sad:") != null);
             // Bare action shortcodes and standalone extensions are generated.
             try std.testing.expect(std.mem.indexOf(u8, script, "'-U:") != null);
-            try std.testing.expect(std.mem.indexOf(u8, script, "'-Na:") != null);
+            try std.testing.expectEqual(news_enabled, std.mem.indexOf(u8, script, "'-Na:") != null);
             try std.testing.expect(std.mem.indexOf(u8, script, "-U*) action=upgrade; selector=all; consumed=1 ;;") != null);
             try std.testing.expect(std.mem.indexOf(u8, script, "-B*) action=backup; selector=utility; consumed=1 ;;") != null);
             // Repeated and single positional arguments are represented.

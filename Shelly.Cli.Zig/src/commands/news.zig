@@ -7,6 +7,8 @@ const parser = @import("../cli/parser.zig");
 const runtime = @import("../runtime/context.zig");
 const spec = @import("../cli/spec.zig");
 const xdg = @import("../runtime/xdg.zig");
+const elevation = @import("../runtime/elevation.zig");
+const features = @import("../build_features.zig");
 
 const command_path = "shelly news standard";
 const arch_linux_feed = "https://archlinux.org/feeds/news/";
@@ -41,11 +43,37 @@ pub fn dispatch(
     invocation: *const parser.Invocation,
 ) !?u8 {
     if (!std.mem.eql(u8, invocation.command.path, command_path)) return null;
+    if (!features.arch_news_enabled) {
+        try context.stderr.writeAll(features.arch_news_unavailable ++ "\n");
+        return 1;
+    }
     return try executeWithFetcher(context, invocation, Real{});
 }
 
 pub fn showUnread(context: *runtime.RuntimeContext) !u8 {
     return execute(context, .{}, Real{});
+}
+
+const UpgradeNewsRunner = struct {
+    fn runAsInvokingUser(_: @This(), context: *runtime.RuntimeContext) !?u8 {
+        return elevation.runAsInvokingUser(context, &.{ "news", "standard" });
+    }
+
+    fn showUnread(_: @This(), context: *runtime.RuntimeContext) !u8 {
+        return execute(context, .{}, Real{});
+    }
+};
+
+pub fn showBeforeUpgrade(context: *runtime.RuntimeContext, ui_mode: bool) void {
+    showBeforeUpgradeWithRunner(context, ui_mode, UpgradeNewsRunner{});
+}
+
+fn showBeforeUpgradeWithRunner(context: *runtime.RuntimeContext, ui_mode: bool, runner: anytype) void {
+    if (!features.arch_news_enabled or ui_mode) return;
+    const result = runner.runAsInvokingUser(context) catch null;
+    if (result == null) {
+        _ = runner.showUnread(context) catch {};
+    }
 }
 
 fn executeWithFetcher(
@@ -65,6 +93,7 @@ fn execute(
     options: ExecutionOptions,
     fetcher: anytype,
 ) anyerror!u8 {
+    if (!features.arch_news_enabled) return 0;
     const raw_feed = fetcher.call(context, arch_linux_feed) catch |err| {
         try writeFailure(context, options, err);
         return 1;
@@ -607,6 +636,7 @@ const TestFetcher = struct {
 };
 
 test "news is a standalone -N command with all and help modifiers" {
+    if (!features.arch_news_enabled) return error.SkipZigTest;
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -650,6 +680,7 @@ test "news parses RSS in chronological order and converts descriptions to Markdo
 }
 
 test "news caches the full feed and subsequently displays only unseen entries" {
+    if (!features.arch_news_enabled) return error.SkipZigTest;
     var temporary = std.testing.tmpDir(.{});
     defer temporary.cleanup();
     var absolute_buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
@@ -709,6 +740,7 @@ test "news caches the full feed and subsequently displays only unseen entries" {
 }
 
 test "news all emits the full feed as a UI frame even when entries were viewed" {
+    if (!features.arch_news_enabled) return error.SkipZigTest;
     var temporary = std.testing.tmpDir(.{});
     defer temporary.cleanup();
     var absolute_buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
@@ -747,4 +779,128 @@ test "news all emits the full feed as a UI frame even when entries were viewed" 
     try std.testing.expect(std.mem.endsWith(u8, stdout.writer.buffered(), "[/JSON]\n"));
     try std.testing.expectEqual(@as(usize, 1), fetcher.calls);
     try std.testing.expectEqual(@as(usize, 0), stderr.writer.buffered().len);
+}
+
+test "news availability controls the manifest help docs and every shell completion" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const manifest = try spec.Manifest.load(allocator);
+    try std.testing.expectEqual(features.arch_news_enabled, manifest.findByPath("shelly news") != null);
+    try std.testing.expectEqual(features.arch_news_enabled, manifest.findByPath(command_path) != null);
+
+    var rendered = std.Io.Writer.Allocating.init(allocator);
+    try @import("../cli/help.zig").render(allocator, &manifest, manifest.root(), &rendered.writer);
+    try std.testing.expectEqual(features.arch_news_enabled, std.mem.indexOf(u8, rendered.written(), "shelly news") != null);
+    try std.testing.expectEqual(features.arch_news_enabled, std.mem.indexOf(u8, rendered.written(), "-N") != null);
+    rendered.clearRetainingCapacity();
+    try @import("../cli/documentation.zig").render(allocator, &manifest, &rendered.writer);
+    try std.testing.expectEqual(features.arch_news_enabled, std.mem.indexOf(u8, rendered.written(), "shelly news") != null);
+    try std.testing.expectEqual(features.arch_news_enabled, std.mem.indexOf(u8, rendered.written(), "-N") != null);
+
+    const completions = @import("../cli/completions.zig");
+    for (std.enums.values(completions.Shell)) |shell| {
+        rendered.clearRetainingCapacity();
+        try completions.render(&manifest, shell, &rendered.writer);
+        try std.testing.expectEqual(features.arch_news_enabled, std.mem.indexOf(u8, rendered.written(), "news") != null);
+        if (!features.arch_news_enabled)
+            try std.testing.expect(std.mem.indexOf(u8, rendered.written(), "-N") == null);
+    }
+}
+
+test "Devario news invocations fail before dispatch instead of searching for packages" {
+    if (features.arch_news_enabled) return error.SkipZigTest;
+    var tc: @import("test_support.zig").TestContext = undefined;
+    tc.init();
+    defer tc.deinit();
+    tc.context.io = .failing;
+    tc.context.dispatcher.call = struct {
+        fn call(_: ?*anyopaque, _: *runtime.RuntimeContext, _: *const parser.Invocation) !u8 {
+            return error.UnexpectedDispatch;
+        }
+    }.call;
+
+    const cases = [_][]const []const u8{
+        &.{"news"},
+        &.{ "news", "standard" },
+        &.{ "news", "--help" },
+        &.{ "news", "--json", "--all" },
+        &.{ "news", "--ui-mode" },
+        &.{"-N"},
+        &.{"-Na"},
+        &.{"-Nh"},
+        &.{ "-N", "--help" },
+        &.{ "--config", "/unused.conf", "news" },
+        &.{ "--config=/unused.conf", "-Na" },
+        &.{ "--json", "news" },
+        &.{ "--no-confirm", "-N" },
+    };
+    for (cases) |arguments| {
+        tc.stderr.clearRetainingCapacity();
+        try std.testing.expectEqual(@as(u8, 1), try @import("../cli/app.zig").run(&tc.context, arguments));
+        try std.testing.expect(std.mem.indexOf(u8, tc.stderr.written(), features.arch_news_unavailable) != null);
+    }
+
+    const manifest = try spec.Manifest.load(tc.context.allocator);
+    const search = try parser.parse(tc.context.allocator, &manifest, &.{ "search", "standard", "news" });
+    try std.testing.expect(search == .dispatch);
+    try std.testing.expectEqualStrings("shelly search standard", search.dispatch.command.path);
+    try expectArguments(&.{"news"}, search.dispatch.positionals);
+    const escaped = try parser.parse(tc.context.allocator, &manifest, &.{ "--", "news" });
+    try std.testing.expect(escaped == .dispatch);
+    try std.testing.expectEqualStrings("shelly", escaped.dispatch.command.path);
+    try expectArguments(&.{"news"}, escaped.dispatch.positionals);
+}
+
+test "Devario news execution performs no fetch cache access or output" {
+    if (features.arch_news_enabled) return error.SkipZigTest;
+    var tc: @import("test_support.zig").TestContext = undefined;
+    tc.init();
+    defer tc.deinit();
+    // No filesystem or network is available to this execution path.
+    tc.context.io = .failing;
+    tc.context.allocator = std.testing.failing_allocator;
+    var fetcher: TestFetcher = .{};
+    for ([_]ExecutionOptions{ .{}, .{ .show_all = true }, .{ .json = true }, .{ .ui_mode = true } }) |options| {
+        try std.testing.expectEqual(@as(u8, 0), try execute(&tc.context, options, &fetcher));
+    }
+    try std.testing.expectEqual(@as(u8, 0), try showUnread(&tc.context));
+    try std.testing.expectEqual(@as(usize, 0), fetcher.calls);
+    try std.testing.expectEqual(@as(usize, 0), tc.stdout.written().len);
+    try std.testing.expectEqual(@as(usize, 0), tc.stderr.written().len);
+}
+
+test "upgrade news respects the distribution profile and UI mode including fallback" {
+    const Runner = struct {
+        result: ?u8,
+        fail: bool = false,
+        subprocess_calls: usize = 0,
+        fallback_calls: usize = 0,
+
+        fn runAsInvokingUser(self: *@This(), _: *runtime.RuntimeContext) !?u8 {
+            self.subprocess_calls += 1;
+            if (self.fail) return error.TestSpawnFailed;
+            return self.result;
+        }
+
+        fn showUnread(self: *@This(), _: *runtime.RuntimeContext) !u8 {
+            self.fallback_calls += 1;
+            return 0;
+        }
+    };
+    var tc: @import("test_support.zig").TestContext = undefined;
+    tc.init();
+    defer tc.deinit();
+    tc.context.io = .failing;
+    for ([_]bool{ false, true }) |ui_mode| {
+        for ([_]?u8{ null, 0, 1 }) |result| {
+            for ([_]bool{ false, true }) |fail| {
+                var runner: Runner = .{ .result = result, .fail = fail };
+                showBeforeUpgradeWithRunner(&tc.context, ui_mode, &runner);
+                const enabled = features.arch_news_enabled and !ui_mode;
+                try std.testing.expectEqual(@as(usize, @intFromBool(enabled)), runner.subprocess_calls);
+                try std.testing.expectEqual(@as(usize, @intFromBool(enabled and (result == null or fail))), runner.fallback_calls);
+            }
+        }
+    }
 }
