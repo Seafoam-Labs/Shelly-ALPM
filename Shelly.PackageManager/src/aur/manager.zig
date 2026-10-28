@@ -4695,13 +4695,14 @@ test "AUR dependency planning preserves approval before explicit pkgver refresh"
     }
 }
 
-test "AUR dependency planning installs recursive tools before prepare and stops when dependency installation is declined" {
+test "AUR dependency planning installs recursive tools before prepare and stops on decline or cancellation" {
     const allocator = std.testing.allocator;
     const io = std.testing.io;
-    for ([_]bool{ false, true }) |decline_install| {
+    const Outcome = enum { install, decline_plan, cancel_dependency_install };
+    for ([_]Outcome{ .install, .decline_plan, .cancel_dependency_install }) |outcome| {
         var paths = try createAurManagerFixturePaths(allocator, io);
         defer paths.deinit(allocator);
-        const names = [_][]const u8{ "fixture-leaf", "fixture-tool", "fixture-app" };
+        const names = [_][:0]const u8{ "fixture-leaf", "fixture-tool", "fixture-app" };
         for (names, 0..) |name, index| {
             try createAurFixtureRepository(allocator, io, paths.remote_root, name, null);
             const remote = try std.fmt.allocPrint(allocator, "{s}/{s}.git", .{ paths.remote_root, name });
@@ -4743,33 +4744,56 @@ test "AUR dependency planning installs recursive tools before prepare and stops 
         var context = operation_api.OperationContext.init(allocator, io);
         defer context.deinit();
         const Answers = struct {
-            decline_install: bool,
+            outcome: Outcome,
+            context: *operation_api.OperationContext,
+            plan_confirmations: usize = 0,
+            dependency_cancellations: usize = 0,
+
             fn answer(data: ?*anyopaque, question: operation_api.Question) operation_api.QuestionResponse {
                 const self: *@This() = @ptrCast(@alignCast(data.?));
-                if (self.decline_install and question.envelope.backend == .alpm and question.kind == .confirm_transaction)
-                    return .declined;
+                if (question.envelope.backend == .aur and question.kind == .confirm_transaction) {
+                    self.plan_confirmations += 1;
+                    if (self.outcome == .decline_plan) return .declined;
+                }
                 return .accepted;
             }
+
+            fn info(data: ?*anyopaque, args: events.InformationalArgs) void {
+                const self: *@This() = @ptrCast(@alignCast(data.?));
+                if (self.outcome != .cancel_dependency_install or args.event_type != .aur_install_start) return;
+                if (!std.mem.eql(u8, args.package_name orelse return, "fixture-leaf")) return;
+                // libalpm installs local archives without another confirmation.
+                // Cancel at the shared install boundary to cover both backends.
+                self.dependency_cancellations += 1;
+                self.context.cancel();
+            }
         };
-        var answers = Answers{ .decline_install = decline_install };
+        var answers = Answers{ .outcome = outcome, .context = &context };
         context.setQuestionHandler(.{ .function = Answers.answer, .data = &answers });
+        _ = try manager.dispatcher.addInformationalHandler(.{ .function = Answers.info, .data = &answers });
         manager.setOperationContext(&context);
         defer manager.setOperationContext(null);
-        if (decline_install) {
-            // Declining the leaf's install must prevent both dependents from
-            // entering prepare(), even though all PKGBUILDs were reviewed.
+        if (outcome != .install) {
+            // Neither declining the plan nor cancelling the leaf's install may
+            // install packages or allow dependents to enter prepare().
             try std.testing.expectError(error.Cancelled, manager.installPackages(&.{"fixture-app"}));
-            try std.testing.expect(!manager.alpm.is_package_installed("fixture-app"));
+            for (names) |name| try std.testing.expect(!manager.alpm.is_package_installed(name));
         } else {
             try manager.installPackages(&.{"fixture-app"});
             var installed = (try manager.alpm.get_single_installed_package("fixture-app")).?;
             defer installed.deinit(allocator);
             try std.testing.expectEqualStrings("2-1", installed.version().?);
         }
+        try std.testing.expectEqual(@as(usize, 1), answers.plan_confirmations);
+        try std.testing.expectEqual(@as(usize, if (outcome == .cancel_dependency_install) 1 else 0), answers.dependency_cancellations);
+        if (outcome == .decline_plan) {
+            try std.testing.expectError(error.FileNotFound, paths.temporary.dir.access(io, "phases", .{}));
+            continue;
+        }
         const phases = try paths.temporary.dir.readFileAlloc(io, "phases", allocator, .unlimited);
         defer allocator.free(phases);
         try std.testing.expectEqualStrings(
-            if (decline_install) "fixture-leaf\n" else "fixture-leaf\nfixture-tool\nfixture-app\n",
+            if (outcome == .cancel_dependency_install) "fixture-leaf\n" else "fixture-leaf\nfixture-tool\nfixture-app\n",
             phases,
         );
     }
