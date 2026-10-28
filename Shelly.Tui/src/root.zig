@@ -24,5 +24,5 @@ test "basic add functionality" {
 }
 
 test {
-    _ = @import("ui_decode.zig");
+    _ = @import("services/ui_decode.zig");
 }

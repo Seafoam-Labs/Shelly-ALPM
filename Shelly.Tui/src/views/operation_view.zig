@@ -5,10 +5,10 @@ const vxfw = vaxis.vxfw;
 
 pub const View = struct {
     name: []const u8,
-    action: @import("shelly_operation.zig").Action = .install,
+    action: @import("../services/shelly_operation.zig").Action = .install,
     state: enum { running, succeeded, failed },
     detail: []const u8 = "",
-    progress: @import("shelly_operation.zig").Progress = .{},
+    progress: @import("../services/shelly_operation.zig").Progress = .{},
 
     pub const Action = enum { none, close };
 

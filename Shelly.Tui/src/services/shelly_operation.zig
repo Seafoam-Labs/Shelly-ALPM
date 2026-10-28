@@ -2,8 +2,8 @@
 const std = @import("std");
 const diagnostics = @import("diagnostics");
 const JsonPackFrame = @import("ui_decode.zig").JsonPackFrame;
-const Scope = @import("flatpak.zig").InstallLevel;
-const UpdateType = @import("appimage.zig").UpdateType;
+const Scope = @import("../models/flatpak.zig").InstallLevel;
+const UpdateType = @import("../models/appimage.zig").UpdateType;
 
 pub const Action = enum {
     install,
