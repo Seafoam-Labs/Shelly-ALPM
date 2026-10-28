@@ -17,7 +17,35 @@ pub const WordValue = struct {
     unresolved: bool = false,
 };
 
-pub const ArrayElement = struct { name: []const u8, index: usize };
+pub const ArrayTrim = struct {
+    operation: []const u8 = "",
+    pattern: []const u8 = "",
+
+    pub fn apply(self: ArrayTrim, value: []const u8) ![]const u8 {
+        // The matcher consumes bytes; '?' must not split a multibyte character.
+        if (std.mem.indexOfScalar(u8, self.pattern, '?') != null)
+            for (value) |byte| {
+                if (byte >= 0x80) return error.UnsupportedArrayExpansion;
+            };
+        return apply_parameter_expansion(value, self.operation, self.pattern);
+    }
+};
+
+/// Share the supported pattern subset for indexed elements and whole arrays.
+pub fn parse_array_trim(rest: []const u8) !ArrayTrim {
+    if (rest.len == 0) return .{};
+    if (rest[0] != '#' and rest[0] != '%') return error.UnsupportedArrayExpansion;
+    const op_len: usize = if (rest.len > 1 and rest[1] == rest[0]) 2 else 1;
+    const pattern = rest[op_len..];
+    // These forms require additional Bash pattern/expansion semantics.
+    for (pattern) |c| {
+        if (c >= 0x80 or std.mem.indexOfScalar(u8, "\\\"'$`[](){}", c) != null)
+            return error.UnsupportedArrayExpansion;
+    }
+    return .{ .operation = rest[0..op_len], .pattern = pattern };
+}
+
+pub const ArrayElement = struct { name: []const u8, index: usize, trim: ArrayTrim };
 
 /// A single element is a scalar word part, unlike the multiword [@] form.
 /// Deliberately exclude Bash arithmetic, negative indices and base prefixes.
@@ -25,14 +53,18 @@ pub fn match_array_element(text: []const u8) !?ArrayElement {
     if (!std.mem.startsWith(u8, text, "${") or !std.mem.endsWith(u8, text, "}")) return null;
     const end = shell_scan.scan_word_chars(text, 2);
     if (end == 2 or text[end] != '[' or std.mem.startsWith(u8, text[end..], "[@]")) return null;
-    if (!std.mem.endsWith(u8, text, "]}")) return error.UnsupportedArrayExpansion;
-    const index = text[end + 1 .. text.len - 2];
+    const close = std.mem.indexOfScalarPos(u8, text, end + 1, ']') orelse return error.UnsupportedArrayExpansion;
+    const index = text[end + 1 .. close];
     if (index.len == 0 or (index.len > 1 and index[0] == '0')) return error.UnsupportedArrayExpansion;
     for (index) |c| if (!std.ascii.isDigit(c)) return error.UnsupportedArrayExpansion;
     // Bash arithmetic uses signed integers; an overflowing positive literal
     // must not be mistaken for an ordinary out-of-range element.
     const number = std.fmt.parseInt(i64, index, 10) catch return error.UnsupportedArrayExpansion;
-    return .{ .name = text[2..end], .index = std.math.cast(usize, number) orelse return error.UnsupportedArrayExpansion };
+    return .{
+        .name = text[2..end],
+        .index = std.math.cast(usize, number) orelse return error.UnsupportedArrayExpansion,
+        .trim = try parse_array_trim(text[close + 1 .. text.len - 1]),
+    };
 }
 
 /// Expand each original expression once. Substituted bytes are data, never a
@@ -62,8 +94,11 @@ fn resolve_word_parameter(self: PkgbuildParser, text: []const u8, vars: *std.Str
     if (std.mem.startsWith(u8, text, "$(("))
         return .{ .value = try replace_arithmetic(self, text, vars) };
     if (try match_array_element(text)) |element| {
-        if (try fields.resolve_array_element(self, vars, element.name, element.index)) |value|
-            return .{ .value = value };
+        if (try fields.resolve_array_element(self, vars, element.name, element.index)) |value| {
+            if (element.trim.operation.len == 0) return .{ .value = value };
+            defer self.allocator.free(value);
+            return .{ .value = try self.allocator.dupe(u8, try element.trim.apply(value)) };
+        }
         return .{ .value = try self.allocator.dupe(u8, text), .unresolved = true };
     }
     const braced = std.mem.startsWith(u8, text, "${");
