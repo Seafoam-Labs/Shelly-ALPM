@@ -8,17 +8,30 @@ const UpdateType = @import("../models/appimage.zig").UpdateType;
 pub const Action = enum {
     install,
     remove,
+    upgrade,
 
     pub fn verb(self: Action) []const u8 {
-        return if (self == .install) "Install" else "Remove";
+        return switch (self) {
+            .install => "Install",
+            .remove => "Remove",
+            .upgrade => "Upgrade",
+        };
     }
 
     pub fn ongoing(self: Action) []const u8 {
-        return if (self == .install) "Installing" else "Removing";
+        return switch (self) {
+            .install => "Installing",
+            .remove => "Removing",
+            .upgrade => "Upgrading",
+        };
     }
 
     pub fn completed(self: Action) []const u8 {
-        return if (self == .install) "Installed" else "Removed";
+        return switch (self) {
+            .install => "Installed",
+            .remove => "Removed",
+            .upgrade => "Upgraded",
+        };
     }
 };
 
@@ -69,6 +82,8 @@ const ProgressStream = struct {
     failed: bool = false,
     error_text: [512]u8 = @splat(0),
     error_len: usize = 0,
+    transaction_done: bool = false,
+    transaction_cancelled: bool = false,
 
     fn feed(self: *ProgressStream, bytes: []const u8, operation: ?*Operation, io: std.Io) void {
         for (bytes) |byte| {
@@ -102,6 +117,11 @@ const ProgressStream = struct {
             switch (message.value) {
                 .question => self.failed = true,
                 .event => |event| {
+                    if (event == .info) {
+                        if (std.mem.eql(u8, event.info.event_type, "TransactionDone")) self.transaction_done = true;
+                        if (std.mem.eql(u8, event.info.event_type, "TransactionFailed")) self.failed = true;
+                        if (std.mem.eql(u8, event.info.event_type, "TransactionCancelled")) self.transaction_cancelled = true;
+                    }
                     if (event == .err) {
                         self.failed = true;
                         self.error_len = @min(event.err.message.len, self.error_text.len);
@@ -208,11 +228,34 @@ pub const OperationResult = struct {
     }
 };
 
-/// Blocking prototype install path. The caller schedules background execution.
-/// Retains sudo password input and automatic confirmation until the interactive
-/// transport and terminal authentication replace this path.
+/// Blocking package operation using the current sudo password flow.
+/// The worker streams feedback; CLI questions still use automatic confirmation.
 pub fn elevatedInstall(io: std.Io, alloc: std.mem.Allocator, request: OperationRequest) OperationResult {
     return runInstall(io, alloc, request, null);
+}
+
+fn operationArgv(alloc: std.mem.Allocator, request: OperationRequest) ![][]const u8 {
+    const keep_dependencies = request.action == .remove and std.mem.eql(u8, request.backend, "standard");
+    if (request.action == .upgrade and !std.mem.eql(u8, request.backend, "standard"))
+        return error.UnsupportedUpgradeSource;
+    const argv = try alloc.alloc([]const u8, if (request.action == .upgrade) 9 else if (keep_dependencies) 11 else 10);
+    argv[0] = request.sudo_bin;
+    argv[1] = "-S";
+    argv[2] = "-p";
+    argv[3] = "";
+    argv[4] = request.shelly_bin;
+    argv[5] = @tagName(request.action);
+    argv[6] = request.backend;
+    if (request.action == .upgrade) {
+        argv[7] = "--no-confirm";
+        argv[8] = "--ui-mode";
+    } else {
+        argv[7] = request.name;
+        argv[8] = "--no-confirm";
+        argv[9] = "--ui-mode";
+        if (keep_dependencies) argv[10] = "--no-cascade";
+    }
+    return argv;
 }
 
 fn runInstall(io: std.Io, alloc: std.mem.Allocator, request: OperationRequest, operation: ?*Operation) OperationResult {
@@ -222,23 +265,12 @@ fn runInstall(io: std.Io, alloc: std.mem.Allocator, request: OperationRequest, o
         result.error_detail = alloc.dupe(u8, "Removal currently supports system and AUR packages only.") catch "";
         return result;
     }
-    const keep_dependencies = request.action == .remove and std.mem.eql(u8, request.backend, "standard");
-    const argv = alloc.alloc([]const u8, if (keep_dependencies) 11 else 10) catch {
+    const argv = operationArgv(alloc, request) catch {
         result.failed = true;
+        result.error_detail = alloc.dupe(u8, "Could not prepare the requested package operation.") catch "";
         return result;
     };
     defer alloc.free(argv);
-    argv[0] = request.sudo_bin;
-    argv[1] = "-S";
-    argv[2] = "-p";
-    argv[3] = "";
-    argv[4] = request.shelly_bin;
-    argv[5] = @tagName(request.action);
-    argv[6] = request.backend;
-    argv[7] = request.name;
-    argv[8] = "--no-confirm";
-    argv[9] = "--ui-mode";
-    if (keep_dependencies) argv[10] = "--no-cascade";
 
     var child = std.process.spawn(io, .{
         .argv = argv,
@@ -309,13 +341,18 @@ fn runInstall(io: std.Io, alloc: std.mem.Allocator, request: OperationRequest, o
         return result;
     };
 
-    if (term != .exited or term.exited != 0 or read_failed or stream.failed) {
-        const detail = if (stream.error_len > 0)
+    const missing_completion = request.action == .upgrade and !stream.transaction_done;
+    if (term != .exited or term.exited != 0 or read_failed or stream.failed or stream.transaction_cancelled or missing_completion) {
+        const detail = if (stream.transaction_cancelled)
+            "The operation was cancelled. Refresh package state before retrying."
+        else if (stream.error_len > 0)
             stream.error_text[0..stream.error_len]
         else if (read_failed)
             "Could not read operation output; the final status could not be confirmed."
         else if (stream.failed)
             "Operation output contained an invalid, incomplete, or unsupported message. Check package state before retrying."
+        else if (missing_completion and term == .exited and term.exited == 0)
+            "The command exited without confirming completion. Check package state before retrying."
         else if (stderr_len > 0)
             std.mem.trim(u8, stderr_tail[0..stderr_len], " \t\r\n")
         else
@@ -1151,4 +1188,41 @@ test "operation rejects removal from unsupported sources before launching" {
     defer result.deinit(std.testing.allocator);
     try std.testing.expect(result.failed);
     try std.testing.expectEqualStrings("Removal currently supports system and AUR packages only.", result.error_detail);
+}
+
+test "operation native upgrade has no package operand or other sources" {
+    var env: std.process.Environ.Map = .init(std.testing.allocator);
+    defer env.deinit();
+    var request: OperationRequest = .{
+        .action = .upgrade,
+        .shelly_bin = "shelly",
+        .environ_map = &env,
+        .name = "system packages",
+        .backend = "standard",
+        .password = "",
+    };
+    const args = try operationArgv(std.testing.allocator, request);
+    defer std.testing.allocator.free(args);
+    const expected = [_][]const u8{ "sudo", "-S", "-p", "", "shelly", "upgrade", "standard", "--no-confirm", "--ui-mode" };
+    try std.testing.expectEqual(expected.len, args.len);
+    for (expected, args) |want, actual| try std.testing.expectEqualStrings(want, actual);
+    request.backend = "all";
+    try std.testing.expectError(error.UnsupportedUpgradeSource, operationArgv(std.testing.allocator, request));
+}
+
+test "operation stream distinguishes transaction done failure and cancellation" {
+    for ([_][]const u8{ "TransactionDone", "TransactionFailed", "TransactionCancelled" }) |event_type| {
+        const json = try std.fmt.allocPrint(std.testing.allocator, "{{\"$kind\":\"alpm.info\",\"EventType\":\"{s}\"}}", .{event_type});
+        defer std.testing.allocator.free(json);
+        const encoded = try std.testing.allocator.alloc(u8, std.base64.standard.Encoder.calcSize(json.len));
+        defer std.testing.allocator.free(encoded);
+        _ = std.base64.standard.Encoder.encode(encoded, json);
+        var stream: ProgressStream = .{};
+        stream.feed("[JSON]", null, undefined);
+        stream.feed(encoded, null, undefined);
+        stream.feed("[/JSON]", null, undefined);
+        try std.testing.expectEqual(std.mem.eql(u8, event_type, "TransactionDone"), stream.transaction_done);
+        try std.testing.expectEqual(std.mem.eql(u8, event_type, "TransactionFailed"), stream.failed);
+        try std.testing.expectEqual(std.mem.eql(u8, event_type, "TransactionCancelled"), stream.transaction_cancelled);
+    }
 }

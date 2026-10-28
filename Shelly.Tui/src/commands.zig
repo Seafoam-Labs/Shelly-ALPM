@@ -44,3 +44,11 @@ pub fn detailsHint(installed: bool) []const u8 {
 
 pub const result_hint = "Enter/Q: close    Esc: quit";
 pub const authentication_hint = "Enter: confirm and run with sudo    Esc: quit";
+
+pub const Updates = enum { refresh, upgrade_system };
+pub fn updates(key: vaxis.Key) ?Updates {
+    if (refreshes(key)) return .refresh;
+    if (key.matches('u', .{})) return .upgrade_system;
+    return null;
+}
+pub const updates_hint = "U: upgrade system    R: refresh";

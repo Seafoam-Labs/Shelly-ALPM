@@ -141,6 +141,7 @@ pub const Model = struct {
     updates_job: ?*UpdatesJob = null,
     updates_thread: ?std.Thread = null,
     updates_parsed: ?std.json.Parsed(CheckUpdates) = null,
+    refresh_after_upgrade: bool = false,
     updates_checked: bool = false,
     updates_failed: bool = false,
     updates_list: vxfw.ListView,
@@ -282,9 +283,14 @@ pub const Model = struct {
                         },
                     }
                 }
-                if (self.active == .upgrade and commands.refreshes(key)) {
-                    try self.startUpdates(ctx);
-                    return ctx.consumeAndRedraw();
+                if (self.active == .upgrade) {
+                    if (self.updatesView().handleKey(key)) |action| {
+                        switch (action) {
+                            .refresh => try self.startUpdates(ctx),
+                            .upgrade_system => try self.upgradeSystemFromUpdates(),
+                        }
+                        return ctx.consumeAndRedraw();
+                    }
                 }
                 if (self.active == .packages and key.matches(vaxis.Key.space, .{})) {
                     if (self.list_view.cursor < self.filtered.items.len) try self.toggleSelectedList();
@@ -324,7 +330,12 @@ pub const Model = struct {
                 const searching = try self.pollAurSearch();
                 const installing = try self.pollInstall();
                 self.pollUpdates();
-                if (loading or searching or installing or self.updates_job != null) {
+                if (self.refresh_after_upgrade and !self.loading and self.updates_job == null) {
+                    try self.reloadPackages(ctx);
+                    try self.startUpdates(ctx);
+                    self.refresh_after_upgrade = false;
+                }
+                if (loading or searching or installing or self.loading or self.updates_job != null) {
                     try ctx.tick(100, self.widget());
                 }
                 return ctx.consumeAndRedraw();
@@ -390,7 +401,7 @@ pub const Model = struct {
     }
 
     fn startUpdates(self: *Model, ctx: *vxfw.EventContext) !void {
-        if (self.updates_job != null) return;
+        if (self.updates_job != null or self.install_job != null) return;
         try ctx.tick(100, self.widget());
         const job = try self.gpa.create(UpdatesJob);
         errdefer self.gpa.destroy(job);
@@ -446,6 +457,28 @@ pub const Model = struct {
         return updates_view.row(&parsed.value, index);
     }
 
+    fn upgradeSystemFromUpdates(self: *Model) !void {
+        if (self.install_job != null or self.overlay != null or !self.updatesView().canUpgrade()) return;
+        const prompt = try self.gpa.create(SudoPrompt);
+        errdefer self.gpa.destroy(prompt);
+        prompt.* = .{
+            .name = try self.gpa.dupe(u8, "system packages"),
+            .backend = .standard,
+            .action = .upgrade,
+            .password = .empty,
+        };
+        self.overlay = .{ .sudo = prompt };
+    }
+
+    fn reloadPackages(self: *Model, ctx: *vxfw.EventContext) !void {
+        if (self.load_thread) |thread| thread.join();
+        self.load_thread = null;
+        self.load.* = .{};
+        try self.startLoad(ctx);
+        self.loading = true;
+        self.load_failed = false;
+    }
+
     fn startLoad(self: *Model, ctx: *vxfw.EventContext) !void {
         self.load_thread = try std.Thread.spawn(.{}, loadPackages, .{self.load});
         try ctx.tick(100, self.widget());
@@ -490,10 +523,43 @@ pub const Model = struct {
         self.loading = false;
         self.load_failed = failed;
         if (parsed) |p| {
+            var old = self.parsed;
+            defer if (old) |*owner| owner.deinit();
+            const selected = if (self.list_view.cursor < self.filtered.items.len)
+                self.filtered.items[self.list_view.cursor]
+            else
+                null;
+            if (self.overlay) |overlay| {
+                if (overlay == .package) self.overlay = null;
+            }
+            var previous_selection = self.selected_packages;
+            defer previous_selection.deinit(self.gpa);
+            self.selected_packages = .empty;
             self.parsed = p;
             self.packages = p.value;
+            for (previous_selection.items) |name| {
+                for (self.packages) |pkg| {
+                    if (std.mem.eql(u8, pkg.Name, name)) {
+                        try self.selected_packages.append(self.gpa, pkg.Name);
+                        break;
+                    }
+                }
+            }
+            self.selected_list_view.item_count = @intCast(self.selected_packages.items.len);
+            try self.rebuildFilter();
+            if (selected) |previous| {
+                for (self.filtered.items, 0..) |pkg, index| {
+                    if (std.mem.eql(u8, pkg.Name, previous.Name) and
+                        std.mem.eql(u8, pkg.Repository, previous.Repository))
+                    {
+                        self.list_view.jumpToItem(@intCast(index));
+                        break;
+                    }
+                }
+            }
+        } else {
+            try self.rebuildFilter();
         }
-        try self.rebuildFilter();
         return false;
     }
 
@@ -704,9 +770,10 @@ pub const Model = struct {
 
         const failed = completed.failed;
         self.install_job = null;
+        if (job.request.action == .upgrade) self.refresh_after_upgrade = true;
 
         // Native and AUR operations change the same installed package database.
-        if (!failed) {
+        if (!failed and job.request.action != .upgrade) {
             for (self.packages) |*pkg| {
                 if (std.mem.eql(u8, pkg.Name, job.request.name)) {
                     pkg.Installed = job.request.action == .install;
@@ -714,7 +781,7 @@ pub const Model = struct {
                 }
             }
         }
-        if (!failed) {
+        if (!failed and job.request.action != .upgrade) {
             if (self.aur_parsed) |parsed| {
                 for (parsed.value) |*pkg| {
                     if (std.mem.eql(u8, pkg.Name, job.request.name))
@@ -982,8 +1049,8 @@ pub const Model = struct {
             pos += 3;
         }
         const body = try std.fmt.allocPrint(arena, "{s} '{s}'?{s}\n\nPassword: {s}\n\n{s}", .{
-            prompt.action.verb(),                                                                          prompt.name,
-            if (prompt.action == .remove) "\nUnused dependencies and configuration will be kept." else "", mask[0..pos],
+            prompt.action.verb(),                                                                                                                                                                               prompt.name,
+            if (prompt.action == .remove) "\nUnused dependencies and configuration will be kept." else if (prompt.action == .upgrade) "\nFull system upgrade. AUR, Flatpak and AppImage are excluded." else "", mask[0..pos],
             commands.authentication_hint,
         });
 
@@ -1258,4 +1325,44 @@ test "shared commands quit from every tab and modal" {
     model.overlay = null;
     try std.testing.expect(commands.global(.{ .codepoint = vaxis.Key.left }, Tab.all.len) == null);
     try std.testing.expect(commands.global(.{ .codepoint = '1' }, Tab.all.len) == null);
+}
+
+test "updates action opens a native-only upgrade prompt" {
+    const model = try Model.init(std.testing.allocator);
+    defer model.deinit();
+    model.updates_checked = true;
+    model.updates_parsed = try std.json.parseFromSlice(CheckUpdates, std.testing.allocator,
+        \\{"Packages":[{"Name":"native","CurrentVersion":"1","NewVersion":"2"}],"Aur":[{"Name":"foreign"}]}
+    , .{ .allocate = .alloc_always });
+    const action = model.updatesView().handleKey(.{ .codepoint = 'u' });
+    try std.testing.expectEqual(commands.Updates.upgrade_system, action.?);
+    try model.upgradeSystemFromUpdates();
+    const prompt = model.overlay.?.sudo;
+    try std.testing.expectEqual(shelly_operation.Action.upgrade, prompt.action);
+    try std.testing.expectEqual(InstallBackend.standard, prompt.backend);
+    try std.testing.expectEqualStrings("system packages", prompt.name);
+    model.closeOverlay();
+    model.updates_failed = true;
+    try std.testing.expect(model.updatesView().handleKey(.{ .codepoint = 'u' }) == null);
+}
+
+test "package refresh replaces borrowed data and preserves selection" {
+    const model = try Model.init(std.testing.allocator);
+    defer model.deinit();
+    model.parsed = try std.json.parseFromSlice([]Package, std.testing.allocator,
+        \\[{"Name":"native","Repository":"repo","Version":"1","Installed":true}]
+    , .{ .allocate = .alloc_always });
+    model.packages = model.parsed.?.value;
+    try model.rebuildFilter();
+    try model.selected_packages.append(std.testing.allocator, model.packages[0].Name);
+    model.load.result = try std.json.parseFromSlice([]Package, std.testing.allocator,
+        \\[{"Name":"native","Repository":"repo","Version":"2","Installed":true}]
+    , .{ .allocate = .alloc_always });
+    model.load.done.store(true, .release);
+    model.loading = true;
+    _ = try model.pollLoad();
+    try std.testing.expectEqualStrings("2", model.packages[0].Version);
+    try std.testing.expectEqualStrings("native", model.selected_packages.items[0]);
+    try std.testing.expect(model.selected_packages.items[0].ptr == model.packages[0].Name.ptr);
+    try std.testing.expectEqual(@as(u32, 0), model.list_view.cursor);
 }
