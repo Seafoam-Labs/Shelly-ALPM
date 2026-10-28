@@ -70,6 +70,19 @@ pub fn dispatch(
         if (diagnostic) |*value| value.deinit();
     }
 
+    if (optionEnabled(invocation, "--metadata-only")) {
+        if (!optionEnabled(invocation, "--makesrcinfo")) {
+            try context.stderr.writeAll("--metadata-only requires --makesrcinfo.\n");
+            try context.stderr.flush();
+            return 2;
+        }
+        if (metadataOnlyConflict(invocation)) |conflict| {
+            try context.stderr.print("Cannot combine --metadata-only with {s}.\n", .{conflict});
+            try context.stderr.flush();
+            return 2;
+        }
+    }
+
     if (optionEnabled(invocation, "--updpkgsums")) {
         if (checksumUpdateConflict(invocation)) |conflict| {
             try context.stderr.print("Cannot combine --updpkgsums with {s}.\n", .{conflict});
@@ -943,6 +956,20 @@ fn executeJson(
     return 0;
 }
 
+fn metadataOnlyConflict(invocation: *const parser.Invocation) ?[]const u8 {
+    for (invocation.options) |option| {
+        for (@import("../cli/catalog/builder.zig").variants[0].options) |build_option| {
+            if (std.mem.eql(u8, option.name, build_option.name)) break;
+        } else continue; // Global configuration and output options are valid.
+        for ([_][]const u8{
+            "--makesrcinfo", "--metadata-only", "--reviewed", "--review-digest",
+        }) |allowed| {
+            if (std.mem.eql(u8, option.name, allowed)) break;
+        } else return option.name;
+    }
+    return null;
+}
+
 fn checksumUpdateConflict(invocation: *const parser.Invocation) ?[]const u8 {
     for (invocation.options) |option| {
         for (@import("../cli/catalog/builder.zig").variants[0].options) |build_option| {
@@ -1139,6 +1166,8 @@ const SrcinfoReal = struct {
             defer context.allocator.free(updated);
             try operation.checkCancelled();
             try transaction.?.commit(updated, generated.written());
+        } else if (optionEnabled(invocation, "--metadata-only")) {
+            try builder.writeDependencySrcinfoWithOperation(&operation, self.writer);
         } else try builder.writeSrcinfoWithOperation(&operation, self.writer);
         completion = .success;
     }
@@ -3665,6 +3694,68 @@ test "makesrcinfo updates pkgver with clean stdout and preserves existing source
     const updated = try temporary.dir.readFileAlloc(std.testing.io, "PKGBUILD", std.testing.allocator, .unlimited);
     defer std.testing.allocator.free(updated);
     try std.testing.expect(std.mem.indexOf(u8, updated, "pkgver='2'\n") != null);
+}
+
+test "makesrcinfo metadata-only reports missing dependencies without running prepare" {
+    const spec = @import("../cli/spec.zig");
+    var test_context: test_support.TestContext = .{};
+    test_context.init();
+    defer test_context.deinit();
+    var temporary = std.testing.tmpDir(.{});
+    defer temporary.cleanup();
+    const allocator = test_context.arena.allocator();
+    const directory = try temporary.dir.realPathFileAlloc(std.testing.io, ".", allocator);
+    const path = try std.fs.path.join(allocator, &.{ directory, "PKGBUILD" });
+    const content =
+        \\pkgname=demo
+        \\pkgver=1
+        \\pkgrel=7
+        \\arch=('any')
+        \\makedepends=('fixture-missing-tool')
+        \\source=('https://example.invalid/unreachable.tar')
+        \\sha256sums=('SKIP')
+        \\prepare() { echo prepare-must-not-run >&2; exit 42; }
+        \\pkgver() { echo pkgver-must-not-run >&2; exit 42; }
+        \\package() { exit 42; }
+    ;
+    try temporary.dir.writeFile(std.testing.io, .{ .sub_path = "PKGBUILD", .data = content });
+    const environ = try testEnvironWithHome(std.testing.allocator, directory);
+    defer environ.block.deinit(std.testing.allocator);
+    test_context.context.environ = environ;
+    const manifest = try spec.Manifest.load(allocator);
+    const parsed = try parser.parse(allocator, &manifest, &.{ "build", "--makesrcinfo", "--metadata-only", "--reviewed", "--no-confirm", path });
+    try std.testing.expectEqual(@as(?u8, 0), try dispatch(&test_context.context, &parsed.dispatch));
+    const output = test_context.stdout.written();
+    try std.testing.expect(std.mem.indexOf(u8, output, "pkgver = 1\n\tpkgrel = 7\n") != null);
+    try std.testing.expect(std.mem.indexOf(u8, output, "makedepends = fixture-missing-tool\n") != null);
+    try std.testing.expect(std.mem.indexOf(u8, test_context.stderr.written(), "must-not-run") == null);
+    const after = try temporary.dir.readFileAlloc(std.testing.io, "PKGBUILD", allocator, .unlimited);
+    try std.testing.expectEqualStrings(content, after);
+}
+
+test "makesrcinfo metadata-only rejects conflicting modes before reading PKGBUILD" {
+    const spec = @import("../cli/spec.zig");
+    const cases = [_][]const []const u8{
+        &.{ "build", "--metadata-only" },
+        &.{ "build", "--metadata-only", "--makesrcinfo", "--updpkgsums" },
+        &.{ "build", "--metadata-only", "--makesrcinfo", "--review-only" },
+        &.{ "build", "--metadata-only", "--makesrcinfo", "--resolve-dependencies" },
+        &.{ "build", "--metadata-only", "--makesrcinfo", "--dependency-plan", "missing.json" },
+        &.{ "build", "--metadata-only", "--makesrcinfo", "--sync-deps" },
+        &.{ "build", "--metadata-only", "--makesrcinfo", "--install" },
+        &.{ "build", "--metadata-only", "--makesrcinfo", "--isolated" },
+        &.{ "build", "--metadata-only", "--makesrcinfo", "--apply-pkgver", "2" },
+    };
+    for (cases) |arguments| {
+        var test_context: test_support.TestContext = .{};
+        test_context.init();
+        defer test_context.deinit();
+        const manifest = try spec.Manifest.load(test_context.arena.allocator());
+        const parsed = try parser.parse(test_context.arena.allocator(), &manifest, arguments);
+        try std.testing.expectEqual(@as(?u8, 2), try dispatch(&test_context.context, &parsed.dispatch));
+        try std.testing.expectEqual(@as(usize, 0), test_context.stdout.written().len);
+        try std.testing.expect(std.mem.indexOf(u8, test_context.stderr.written(), "--metadata-only") != null);
+    }
 }
 
 test "makesrcinfo honors noverify and emits no stdout on preparation failure" {

@@ -446,6 +446,19 @@ pub const PackageBuilder = struct {
         );
     }
 
+    const MetadataMode = enum { evaluate_only, refresh_version, update_checksums };
+
+    /// Evaluates reviewed dependency declarations without acquiring sources,
+    /// invoking lifecycle functions, or updating the PKGBUILD. Build tools may
+    /// not be installed yet when the AUR coordinator calls this entry point.
+    pub fn writeDependencySrcinfoWithOperation(
+        self: *PackageBuilder,
+        operation: *op_context.Operation,
+        writer: *std.Io.Writer,
+    ) !void {
+        try self.writeMetadataWithOperation(operation, writer, .evaluate_only);
+    }
+
     /// Resolves reviewed top-level PKGBUILD metadata in the normal lifecycle
     /// sandbox. When pkgver() exists, prepares sources and updates the version
     /// before writing SRCINFO. Never invokes build(), check(), or package().
@@ -454,16 +467,17 @@ pub const PackageBuilder = struct {
         operation: *op_context.Operation,
         writer: *std.Io.Writer,
     ) !void {
-        try self.writeMetadataWithOperation(operation, writer, false);
+        try self.writeMetadataWithOperation(operation, writer, .refresh_version);
     }
 
     /// Caller supplies a staged PKGBUILD. Uses the same generator and pkgver
     /// lifecycle as --makesrcinfo, refreshing sums before and after pkgver.
     pub fn updateChecksumsWithOperation(self: *PackageBuilder, operation: *op_context.Operation, writer: *std.Io.Writer) !void {
-        try self.writeMetadataWithOperation(operation, writer, true);
+        try self.writeMetadataWithOperation(operation, writer, .update_checksums);
     }
 
-    fn writeMetadataWithOperation(self: *PackageBuilder, operation: *op_context.Operation, writer: *std.Io.Writer, update_checksums: bool) !void {
+    fn writeMetadataWithOperation(self: *PackageBuilder, operation: *op_context.Operation, writer: *std.Io.Writer, mode: MetadataMode) !void {
+        const update_checksums = mode == .update_checksums;
         errdefer |err| {
             // Step failures already publish their command and exit status.
             // Publish early metadata errors too, so session logs retain them.
@@ -543,7 +557,7 @@ pub const PackageBuilder = struct {
             try steps.validateBuildDirectories(self);
             try self.refreshChecksums(operation, &resolved_review, &evaluated);
         }
-        if (self.hasSharedPhase("pkgver")) {
+        if (mode != .evaluate_only and self.hasSharedPhase("pkgver")) {
             try steps.validateBuildDirectories(self);
             try self.prepareVersion(operation, &resolved_review, true, update_checksums);
             // Source the updated file again for SRCINFO's scalar/array overrides.

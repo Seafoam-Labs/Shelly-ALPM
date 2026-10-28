@@ -6261,6 +6261,52 @@ test "PackageBuilder SRCINFO without pkgver skips source acquisition and lifecyc
     try testing.expectError(error.FileNotFound, fixture.temporary.dir.access(io, "src", .{}));
 }
 
+test "PackageBuilder dependency SRCINFO skips sources and lifecycle even with pkgver" {
+    const allocator = testing.allocator;
+    const io = testing.io;
+    const content =
+        \\pkgname=demo
+        \\pkgver=1
+        \\pkgrel=7
+        \\arch=('any')
+        \\source=('https://example.invalid/unreachable.tar')
+        \\sha256sums=('SKIP')
+        \\makedepends=('fixture-tool')
+        \\_enabled=1
+        \\[[ $_enabled ]] && makedepends+=('conditional-tool')
+        \\verify() { exit 42; }
+        \\prepare() { exit 42; }
+        \\pkgver() { exit 42; }
+        \\build() { exit 42; }
+        \\check() { exit 42; }
+        \\package() { exit 42; }
+    ;
+    var fixture = try Fixture.create(allocator, content, null, null);
+    defer fixture.destroy();
+    try fixture.temporary.dir.writeFile(io, .{ .sub_path = "PKGBUILD", .data = content });
+    const path = try std.fs.path.join(allocator, &.{ fixture.build_dir, "PKGBUILD" });
+    defer allocator.free(path);
+    var review = try builder_mod.preparePkgbuildReview(allocator, io, fixture.build_dir, content, fixture.package_builds);
+    defer review.deinit();
+    fixture.builder.options.pkgbuild_path = path;
+    fixture.builder.options.reviewed_pkgbuild_digest = review.digest;
+    fixture.builder.options.sources_prepared = false;
+    try fixture.temporary.dir.deleteTree(io, "src");
+    var operation = fixture.operation_context.begin(.{ .backend = .aur, .kind = .build });
+    defer operation.finish(.success);
+    var output: std.Io.Writer.Allocating = .init(allocator);
+    defer output.deinit();
+    try fixture.builder.writeDependencySrcinfoWithOperation(&operation, &output.writer);
+    try testing.expect(std.mem.indexOf(u8, output.written(), "pkgver = 1\n\tpkgrel = 7\n") != null);
+    try testing.expect(std.mem.indexOf(u8, output.written(), "makedepends = fixture-tool\n") != null);
+    try testing.expect(std.mem.indexOf(u8, output.written(), "makedepends = conditional-tool\n") != null);
+    try testing.expectError(error.FileNotFound, fixture.temporary.dir.access(io, "src", .{}));
+    const after = try fixture.temporary.dir.readFileAlloc(io, "PKGBUILD", allocator, .unlimited);
+    defer allocator.free(after);
+    try testing.expectEqualStrings(content, after);
+    try testing.expectEqualSlices(u8, &review.digest, &fixture.builder.options.reviewed_pkgbuild_digest.?);
+}
+
 test "PackageBuilder writes dynamic pkgver and refreshes all split metadata" {
     const allocator = testing.allocator;
     const io = testing.io;
