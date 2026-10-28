@@ -2,6 +2,7 @@
 //! Fields are implementation state; use methods and treat plan() as immutable.
 
 const std = @import("std");
+const trackReturnError = @import("diagnostics").captureError;
 const Owner = @import("Owner.zig");
 const Package = @import("Package.zig");
 const Ref = @import("PackageRef.zig");
@@ -179,36 +180,44 @@ fn mutable(self: *Transaction) !void {
 /// Frontend name/relation syntax is resolved during prepare. Exact repeated
 /// text is rejected; package identity duplicates are also checked by Resolver.
 pub fn addTarget(self: *Transaction, text: []const u8) !void {
-    try self.mutable();
+    var returned_error: ?anyerror = null;
+    try trackReturnError(self.mutable(), &returned_error);
     defer self.owner.busy = false;
-    errdefer |err| self.recordFailure(err);
+    errdefer {
+        const err = returned_error.?;
+        self.recordFailure(err);
+    }
 
-    if (text.len == 0 or std.mem.indexOfScalar(u8, text, 0) != null) return error.InvalidOption;
+    if (text.len == 0 or std.mem.indexOfScalar(u8, text, 0) != null) return trackReturnError(error.InvalidOption, &returned_error);
     for (self.targets.items) |target|
         if (target == .text and std.mem.eql(u8, target.text, text))
-            return error.DuplicateTarget;
+            return trackReturnError(error.DuplicateTarget, &returned_error);
 
-    const owned = try self.storage.allocator().dupe(u8, text);
-    try self.targets.append(self.owner.allocator, .{ .text = owned });
+    const owned = try trackReturnError(self.storage.allocator().dupe(u8, text), &returned_error);
+    try trackReturnError(self.targets.append(self.owner.allocator, .{ .text = owned }), &returned_error);
 }
 
 /// Adopt exact existing paths without extracting over them. Must precede prepare.
 pub fn addMigration(self: *Transaction, request: Migration.Request) !void {
-    try self.mutable();
+    var returned_error: ?anyerror = null;
+    try trackReturnError(self.mutable(), &returned_error);
     defer self.owner.busy = false;
-    errdefer |err| self.recordFailure(err);
+    errdefer {
+        const err = returned_error.?;
+        self.recordFailure(err);
+    }
 
-    if (self.flags.database_only or self.flags.download_only) return error.InvalidMigrationFlags;
+    if (self.flags.database_only or self.flags.download_only) return trackReturnError(error.InvalidMigrationFlags, &returned_error);
 
-    try Migration.validatePath(request.path);
+    try trackReturnError(Migration.validatePath(request.path), &returned_error);
 
-    if (request.package.len == 0) return error.InvalidMigrationTarget;
+    if (request.package.len == 0) return trackReturnError(error.InvalidMigrationTarget, &returned_error);
     for (self.migration_requests.items) |previous|
-        if (std.mem.eql(u8, previous.path, request.path)) return error.DuplicateMigration;
+        if (std.mem.eql(u8, previous.path, request.path)) return trackReturnError(error.DuplicateMigration, &returned_error);
 
     const a = self.storage.allocator();
-    const owned = try Plan.copyValue(Migration.Request, a, request);
-    try self.migration_requests.append(a, owned);
+    const owned = try trackReturnError(Plan.copyValue(Migration.Request, a, request), &returned_error);
+    try trackReturnError(self.migration_requests.append(a, owned), &returned_error);
 }
 
 fn resolveMigrations(self: *Transaction) !void {
@@ -242,18 +251,22 @@ fn resolveMigrations(self: *Transaction) !void {
 }
 
 pub fn addPackage(self: *Transaction, reference: Ref) !void {
-    try self.mutable();
+    var returned_error: ?anyerror = null;
+    try trackReturnError(self.mutable(), &returned_error);
     defer self.owner.busy = false;
-    errdefer |err| self.recordFailure(err);
-    const package = try self.owner.transactionPackage(reference);
+    errdefer {
+        const err = returned_error.?;
+        self.recordFailure(err);
+    }
+    const package = try trackReturnError(self.owner.transactionPackage(reference), &returned_error);
 
-    if (package.origin != .sync) return error.UnsupportedPackageOrigin;
+    if (package.origin != .sync) return trackReturnError(error.UnsupportedPackageOrigin, &returned_error);
     for (self.targets.items) |target|
         if (target == .reference and std.meta.eql(target.reference, reference))
             return;
 
-    try self.checkName(package.name);
-    try self.targets.append(self.owner.allocator, .{ .reference = reference });
+    try trackReturnError(self.checkName(package.name), &returned_error);
+    try trackReturnError(self.targets.append(self.owner.allocator, .{ .reference = reference }), &returned_error);
 }
 
 fn checkName(self: *Transaction, name: []const u8) !void {
@@ -271,35 +284,43 @@ fn checkName(self: *Transaction, name: []const u8) !void {
 /// On success the caller is reset to null. On every rejection/allocation error
 /// the caller retains the complete package, including its sealed descriptor.
 pub fn takeArchive(self: *Transaction, input: *?Package) !void {
-    try self.mutable();
+    var returned_error: ?anyerror = null;
+    try trackReturnError(self.mutable(), &returned_error);
     defer self.owner.busy = false;
-    errdefer |err| self.recordFailure(err);
-    const package = &(input.* orelse return error.InvalidPackageOwnership);
+    errdefer {
+        const err = returned_error.?;
+        self.recordFailure(err);
+    }
+    const package = &(input.* orelse return trackReturnError(error.InvalidPackageOwnership, &returned_error));
 
     if (package.origin != .archive or package.archive_arena == null)
-        return error.InvalidPackageOwnership;
+        return trackReturnError(error.InvalidPackageOwnership, &returned_error);
 
-    try self.checkName(package.name);
+    try trackReturnError(self.checkName(package.name), &returned_error);
 
-    const owned = try self.owner.allocator.create(Package);
+    const owned = try trackReturnError(self.owner.allocator.create(Package), &returned_error);
     errdefer self.owner.allocator.destroy(owned);
-    try self.targets.append(self.owner.allocator, .{ .archive = owned });
+    try trackReturnError(self.targets.append(self.owner.allocator, .{ .archive = owned }), &returned_error);
     owned.* = package.*;
     input.* = null;
 }
 
 pub fn remove(self: *Transaction, name: []const u8) !void {
-    try self.mutable();
+    var returned_error: ?anyerror = null;
+    try trackReturnError(self.mutable(), &returned_error);
     defer self.owner.busy = false;
-    errdefer |err| self.recordFailure(err);
+    errdefer {
+        const err = returned_error.?;
+        self.recordFailure(err);
+    }
 
     for (self.removals.items) |existing|
         if (std.mem.eql(u8, existing, name)) return;
 
-    if (!self.owner.local.?.packages.by_name.contains(name)) return error.TargetNotFound;
+    if (!self.owner.local.?.packages.by_name.contains(name)) return trackReturnError(error.TargetNotFound, &returned_error);
 
-    const owned = try self.storage.allocator().dupe(u8, name);
-    try self.removals.append(self.owner.allocator, owned);
+    const owned = try trackReturnError(self.storage.allocator().dupe(u8, name), &returned_error);
+    try trackReturnError(self.removals.append(self.owner.allocator, owned), &returned_error);
 }
 
 pub fn systemUpgrade(self: *Transaction, allow_downgrade: bool) !void {
@@ -532,7 +553,7 @@ fn downloadRequests(
     const reviewed = &self.owned_plan.?;
 
     for (reviewed.additions) |addition| {
-        const candidate = &reviewed.candidates[@intFromEnum(addition.package)];
+        const candidate = &reviewed.candidates[@backingInt(addition.package)];
         const package = &candidate.package;
 
         if (package.origin != .sync) continue;
@@ -553,14 +574,18 @@ fn downloadRequests(
 }
 
 pub fn downloadSize(self: *Transaction) !Downloads.Sizes {
-    try self.begin(.prepared);
-    errdefer |err| self.recordFailure(err);
+    var returned_error: ?anyerror = null;
+    try trackReturnError(self.begin(.prepared), &returned_error);
+    errdefer {
+        const err = returned_error.?;
+        self.recordFailure(err);
+    }
     defer self.owner.busy = false;
-    try self.checkSnapshot();
+    try trackReturnError(self.checkSnapshot(), &returned_error);
 
     var requests: std.ArrayList(Downloads.Request) = .empty;
     defer requests.deinit(self.owner.allocator);
-    try self.downloadRequests(&requests);
+    try trackReturnError(self.downloadRequests(&requests), &returned_error);
 
-    return Downloads.sizes(self.owner, self.io, requests.items);
+    return trackReturnError(Downloads.sizes(self.owner, self.io, requests.items), &returned_error);
 }

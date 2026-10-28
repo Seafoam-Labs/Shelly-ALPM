@@ -276,11 +276,11 @@ pub const AtollAurPage = extern struct {
     }
 
     fn votes_text(buf: []u8, pkg: *const AurPackageObject) [:0]const u8 {
-        return std.fmt.bufPrintZ(buf, "{d}", .{pkg.getNumVotes()}) catch "";
+        return std.fmt.bufPrintSentinel(buf, "{d}", .{pkg.getNumVotes()}, 0) catch "";
     }
 
     fn popularity_text(buf: []u8, pkg: *const AurPackageObject) [:0]const u8 {
-        return std.fmt.bufPrintZ(buf, "{d:.2}", .{pkg.getPopularity()}) catch "";
+        return std.fmt.bufPrintSentinel(buf, "{d:.2}", .{pkg.getPopularity()}, 0) catch "";
     }
 
     fn on_selection_changed(_: *gobject.Object, _: *gobject.ParamSpec, self: *Self) callconv(.c) void {
@@ -378,7 +378,7 @@ pub const AtollAurPage = extern struct {
                 const desc_label = gobject.ext.cast(gtk.Label, desc_w) orelse return;
 
                 var buf: [256]u8 = undefined;
-                const markup = std.fmt.bufPrintZ(&buf, "<b>{s}</b>", .{pkg.getName()}) catch pkg.getName();
+                const markup = std.fmt.bufPrintSentinel(&buf, "<b>{s}</b>", .{pkg.getName()}, 0) catch pkg.getName();
                 gtk.Label.setMarkup(name_label, markup);
                 gtk.Widget.setVisible(ood_w, @intFromBool(pkg.isOutOfDate()));
                 gtk.Widget.setVisible(installed_w, @intFromBool(pkg.isInstalled()));
@@ -522,7 +522,7 @@ pub const AtollAurPage = extern struct {
         } else if (p.installed_mode) {
             gtk.Button.setLabel(
                 p.install_button,
-                std.fmt.bufPrintZ(&buf, "{s} {d} {s}", .{ translations._("Remove"), count, translations._("Package(s)") }) catch translations._("Remove Selected"),
+                std.fmt.bufPrintSentinel(&buf, "{s} {d} {s}", .{ translations._("Remove"), count, translations._("Package(s)") }, 0) catch translations._("Remove Selected"),
             );
             gtk.Widget.setSensitive(btn, 1);
             gtk.Widget.addCssClass(btn, "destructive-action");
@@ -530,7 +530,7 @@ pub const AtollAurPage = extern struct {
         } else {
             gtk.Button.setLabel(
                 p.install_button,
-                std.fmt.bufPrintZ(&buf, "{s} {d} {s}", .{ translations._("Install"), count, translations._("Package(s)") }) catch translations._("Install Selected"),
+                std.fmt.bufPrintSentinel(&buf, "{s} {d} {s}", .{ translations._("Install"), count, translations._("Package(s)") }, 0) catch translations._("Install Selected"),
             );
             gtk.Widget.setSensitive(btn, 1);
             gtk.Widget.addCssClass(btn, "suggested-action");
@@ -850,11 +850,7 @@ pub const AtollAurPage = extern struct {
         if (!browsing) return;
 
         var buf: [64]u8 = undefined;
-        const label = std.fmt.bufPrintZ(
-            &buf,
-            "{s} {d} {s} {d}",
-            .{ translations._("Page"), p.current_page, translations._("of"), p.total_pages },
-        ) catch return;
+        const label = std.fmt.bufPrintSentinel(&buf, "{s} {d} {s} {d}", .{ translations._("Page"), p.current_page, translations._("of"), p.total_pages }, 0) catch return;
         gtk.Label.setLabel(p.page_label, label);
 
         gtk.Widget.setSensitive(

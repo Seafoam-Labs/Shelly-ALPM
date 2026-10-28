@@ -688,13 +688,11 @@ test "removal failure retains installed record and pending work" {
 }
 
 test "audit writes configured log and absolute symlinks cannot alter external attributes" {
-    const c = @cImport({
-        @cInclude("sys/stat.h");
-    });
+    const c = @import("rlpm_c");
 
     var f = try Fixture.init();
     defer f.deinit();
-    const outside_relative = "outside/" ++ ("long-path-" ** 12) ++ "/sentinel";
+    const outside_relative = "outside/" ++ ("long-path-long-path-long-path-long-path-long-path-long-path-long-path-long-path-long-path-long-path-long-path-long-path-") ++ "/sentinel";
     try f.write(outside_relative, "external sentinel");
 
     const outside = try f.tmp.dir.realPathFileAlloc(io, outside_relative, a);
@@ -748,14 +746,7 @@ test "audit writes configured log and absolute symlinks cannot alter external at
 }
 
 const Durability = rlpm.Transaction.Executor.PayloadDurability;
-const linux = @cImport({
-    @cUndef("_FORTIFY_SOURCE");
-    @cDefine("_FORTIFY_SOURCE", "0");
-    @cDefine("_GNU_SOURCE", "1");
-    @cInclude("fcntl.h");
-    @cInclude("unistd.h");
-    @cInclude("errno.h");
-});
+const linux = @import("rlpm_c");
 
 test "payload tracker holds readable descriptors before writes and releases allocations" {
     var f = try Fixture.init();
@@ -790,7 +781,7 @@ test "payload tracker holds readable descriptors before writes and releases allo
         }
     };
 
-    try std.testing.checkAllAllocationFailures(a, Allocation.run, .{parent});
+    try @import("allocation_failures.zig").checkAllAllocationFailures(a, Allocation.run, .{parent});
     try std.testing.expectEqual(Durability.test_hooks.opened, Durability.test_hooks.closed);
 }
 

@@ -30,7 +30,7 @@ pub const ShellyCli = struct {
     }
 
     fn runInner(self: ShellyCli, args: []const []const u8, comptime silent: bool) !RunResult {
-        const shelly_bin = if (builtin.mode == .Debug)
+        const shelly_bin = if (builtin.optimize == .debug)
             "../Shelly.Cli.Zig/zig-out/bin/shelly"
         else
             "shelly";

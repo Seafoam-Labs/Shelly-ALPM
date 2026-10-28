@@ -1,10 +1,7 @@
 const std = @import("std");
 pub const compression_policy = @import("compression.zig");
 
-const c = @cImport({
-    @cInclude("archive.h");
-    @cInclude("archive_entry.h");
-});
+const c = @import("archive_c");
 
 // These POSIX file type constants are macros which Zig 0.16's C translator
 // cannot expand from archive_entry.h on every libc version.
@@ -148,7 +145,7 @@ pub const Writer = struct {
         virtual_metadata: VirtualMetadata,
         options: Options,
     ) !Writer {
-        const output_path_z = try allocator.dupeZ(u8, output_path);
+        const output_path_z = try allocator.dupeSentinel(u8, output_path, 0);
         errdefer allocator.free(output_path_z);
 
         const handle = c.archive_write_new() orelse return Error.ArchiveCreateFailed;
@@ -212,7 +209,7 @@ pub fn writeMtreeWithMetadata(
     output_path: []const u8,
     virtual_metadata: VirtualMetadata,
 ) !void {
-    const output_path_z = try allocator.dupeZ(u8, output_path);
+    const output_path_z = try allocator.dupeSentinel(u8, output_path, 0);
     defer allocator.free(output_path_z);
 
     const handle = c.archive_write_new() orelse return Error.ArchiveCreateFailed;
@@ -259,7 +256,7 @@ fn writeDirectory(
         const archive_entry = c.archive_entry_new() orelse
             return Error.ArchiveEntryCreateFailed;
         defer c.archive_entry_free(archive_entry);
-        const archive_path_z = try allocator.dupeZ(u8, file_entry.path);
+        const archive_path_z = try allocator.dupeSentinel(u8, file_entry.path, 0);
         defer allocator.free(archive_path_z);
 
         const file_type: c_uint = switch (file_entry.kind) {
@@ -283,7 +280,7 @@ fn writeDirectory(
             .sym_link => {
                 var target_buffer: [std.fs.max_path_bytes]u8 = undefined;
                 const target_len = try file_entry.dir.readLink(io, file_entry.basename, &target_buffer);
-                const target_z = try allocator.dupeZ(u8, target_buffer[0..target_len]);
+                const target_z = try allocator.dupeSentinel(u8, target_buffer[0..target_len], 0);
                 defer allocator.free(target_z);
                 c.archive_entry_set_symlink(archive_entry, target_z.ptr);
                 c.archive_entry_set_size(archive_entry, 0);
@@ -431,7 +428,7 @@ pub const CompressedReader = struct {
 
     pub fn init(allocator: std.mem.Allocator, io: std.Io, path: []const u8, compression: StandaloneCompression) !CompressedReader {
         if (compression == .gzip) return .{ .gzip = try GzipReader.init(allocator, io, path) };
-        const path_z = try allocator.dupeZ(u8, path);
+        const path_z = try allocator.dupeSentinel(u8, path, 0);
         errdefer allocator.free(path_z);
         const handle = c.archive_read_new() orelse return Error.ArchiveCreateFailed;
         errdefer _ = c.archive_read_free(handle);
@@ -575,7 +572,7 @@ pub const Reader = struct {
         support_all: bool,
         allow_unrecognized: bool,
     ) !?Reader {
-        const path_z = try allocator.dupeZ(u8, path);
+        const path_z = try allocator.dupeSentinel(u8, path, 0);
         errdefer allocator.free(path_z);
 
         const handle = c.archive_read_new() orelse return Error.ArchiveCreateFailed;
@@ -809,7 +806,7 @@ fn writeFixtureWithFormat(
     format: FixtureFormat,
     entries: []const FixtureEntry,
 ) !void {
-    const path_z = try allocator.dupeZ(u8, path);
+    const path_z = try allocator.dupeSentinel(u8, path, 0);
     defer allocator.free(path_z);
 
     const handle = c.archive_write_new() orelse return Error.ArchiveCreateFailed;
@@ -980,7 +977,10 @@ test "compression presets round trip all formats with contents and virtual metad
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
     try tmp.dir.createDirPath(io, "tree/bin");
-    const payload = "repeatable binary payload\x00\xff\n" ** 2048;
+    const pattern = "repeatable binary payload\x00\xff\n";
+    var payload_bytes: [pattern.len * 2048]u8 = undefined;
+    for (0..2048) |i| @memcpy(payload_bytes[i * pattern.len ..][0..pattern.len], pattern);
+    const payload = &payload_bytes;
     try tmp.dir.writeFile(io, .{ .sub_path = "tree/bin/demo", .data = payload });
     try tmp.dir.symLink(io, "demo", "tree/bin/link", .{});
     const source = try tmp.dir.realPathFileAlloc(io, "tree", allocator);
@@ -1032,7 +1032,7 @@ test "compression presets round trip all formats with contents and virtual metad
                 defer file.close(io);
                 try std.testing.expectEqual(first_header.len, try file.readPositionalAll(io, &first_header, 0));
                 const expected = [_][]const u8{ "BZh1", "BZh3", "BZh5", "BZh7", "BZh9" };
-                try std.testing.expectEqualStrings(expected[@intFromEnum(preset) - 1], &first_header);
+                try std.testing.expectEqualStrings(expected[@backingInt(preset) - 1], &first_header);
             }
         }
     }

@@ -126,6 +126,8 @@ pub fn build(b: *std.Build) void {
     exe.root_module.addImport("diagnostics", diagnostics);
 
     exe.root_module.addImport("ShellyHttp", shelly_http.module("ShellyHttp"));
+    // Preserve GModule's --export-dynamic requirement explicitly.
+    exe.rdynamic = true;
     b.installArtifact(exe);
 
     // Compile the gresource bundle to C source.
@@ -188,7 +190,7 @@ pub fn build(b: *std.Build) void {
 
     const run_cmd = b.addRunArtifact(exe);
     run_cmd.step.dependOn(b.getInstallStep());
-    if (b.args) |args| run_cmd.addArgs(args);
+    run_cmd.addPassthruArgs();
 
     const run_step = b.step("run", "Run the app");
     run_step.dependOn(&run_cmd.step);
@@ -205,7 +207,7 @@ pub fn build(b: *std.Build) void {
     });
     valgrind_cmd.addPrefixedFileArg("--suppressions=", b.path("valgrind/glib-gtk.supp"));
     valgrind_cmd.addArtifactArg(exe);
-    if (b.args) |args| valgrind_cmd.addArgs(args);
+    valgrind_cmd.addPassthruArgs();
 
     const valgrind_step = b.step("valgrind", "Run the app under Valgrind (memcheck) to check for memory leaks");
     valgrind_step.dependOn(&valgrind_cmd.step);

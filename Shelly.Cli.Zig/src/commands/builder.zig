@@ -1,4 +1,5 @@
 const std = @import("std");
+const trackReturnError = @import("diagnostics").captureError;
 const diagnostics = @import("diagnostics");
 const PackageManager = @import("PackageManager");
 const runtime = @import("../runtime/context.zig");
@@ -621,6 +622,7 @@ fn prepareReviewOnly(
     operation_context: *PackageManager.OperationContext,
     invocation: *const parser.Invocation,
 ) !ReviewOnlyResult {
+    var returned_error: ?anyerror = null;
     var operation = operation_context.begin(.{
         .backend = .aur,
         .kind = .build,
@@ -628,35 +630,36 @@ fn prepareReviewOnly(
     });
     var completion: PackageManager.OperationCompletionStatus = .failed;
     defer operation.finish(completion);
-    errdefer |err| {
+    errdefer {
+        const err = returned_error.?;
         const message = preparationErrorMessage(context, err) catch null;
         defer if (message) |value| context.allocator.free(value);
         operation.reportError(err, message orelse buildErrorMessage(err), "preparation", null, false);
     }
-    var request = try parseBuildRequest(context, invocation);
+    var request = try trackReturnError(parseBuildRequest(context, invocation), &returned_error);
     defer request.deinit(context);
-    const content = try std.Io.Dir.cwd().readFileAlloc(
+    const content = try trackReturnError(std.Io.Dir.cwd().readFileAlloc(
         context.io,
         request.pkgbuild_path,
         context.allocator,
         .limited(32 * 1024 * 1024),
-    );
+    ), &returned_error);
     defer context.allocator.free(content);
-    var static_review = try PackageManager.builder.pkgbuild_review.prepareWithDiagnostic(
+    var static_review = try trackReturnError(PackageManager.builder.pkgbuild_review.prepareWithDiagnostic(
         context.allocator,
         context.io,
         request.build_directory,
         content,
         request.package_builds,
         context.preparation_diagnostic,
-    );
+    ), &returned_error);
     defer static_review.deinit();
-    const requested_names = try context.allocator.alloc([]const u8, request.package_builds.len);
+    const requested_names = try trackReturnError(context.allocator.alloc([]const u8, request.package_builds.len), &returned_error);
     defer context.allocator.free(requested_names);
     for (request.package_builds, requested_names) |package_build, *name|
-        name.* = package_build.pkg_name orelse return error.MissingPackageName;
+        name.* = package_build.pkg_name orelse return trackReturnError(error.MissingPackageName, &returned_error);
 
-    const builder = try PackageBuilder.init(
+    const builder = try trackReturnError(PackageBuilder.init(
         context.allocator,
         request.package_builds,
         operation_context,
@@ -681,72 +684,72 @@ fn prepareReviewOnly(
         },
         context.environ,
         context.io,
-    );
+    ), &returned_error);
     defer builder.deinit();
-    var final_review = try builder.prepareFinalReviewWithOperation(&operation);
+    var final_review = try trackReturnError(builder.prepareFinalReviewWithOperation(&operation), &returned_error);
     errdefer final_review.deinit();
-    try final_review.verifyCurrent(
+    try trackReturnError(final_review.verifyCurrent(
         context.allocator,
         context.io,
         request.pkgbuild_path,
         request.build_directory,
-    );
+    ), &returned_error);
     var dependency_plan: ?SyncDependencyPlan = null;
     errdefer if (dependency_plan) |*plan| plan.deinit(context.allocator);
     if (optionEnabled(invocation, "--review-dependencies") and !optionEnabled(invocation, "--review-build-environment")) {
-        var repositories = try ReviewRepositories.init(
+        var repositories = try trackReturnError(ReviewRepositories.init(
             context,
             operation_context,
             optionEnabled(invocation, "--review-host-dependencies"),
             null,
-        );
+        ), &returned_error);
         defer repositories.deinit(context);
         const manager = repositories.manager;
         if (optionEnabled(invocation, "--review-host-dependencies")) {
             var resolver_context: AlpmResolverContext = .{ .manager = manager };
-            dependency_plan = try resolveSyncDependencies(
+            dependency_plan = try trackReturnError(resolveSyncDependencies(
                 context.allocator,
                 builder.package_builds,
                 request.no_check,
                 resolver_context.backend(),
-            );
+            ), &returned_error);
         } else {
             var resolver_context: IsolatedResolverContext = .{ .manager = manager };
-            dependency_plan = try resolveSyncDependencies(
+            dependency_plan = try trackReturnError(resolveSyncDependencies(
                 context.allocator,
                 builder.package_builds,
                 request.no_check,
                 resolver_context.backend(),
-            );
+            ), &returned_error);
         }
     }
     const environment_plan = if (optionEnabled(invocation, "--resolve-dependencies") or optionEnabled(invocation, "--review-build-environment"))
-        try prepareEnvironmentPlan(context, invocation, &request, builder.package_builds, final_review.digest, final_review.arena.allocator())
+        try trackReturnError(prepareEnvironmentPlan(context, invocation, &request, builder.package_builds, final_review.digest, final_review.arena.allocator()), &returned_error)
     else
         null;
-    const package_names = try context.allocator.alloc([]u8, builder.package_builds.len);
+    const package_names = try trackReturnError(context.allocator.alloc([]u8, builder.package_builds.len), &returned_error);
     var copied_names: usize = 0;
     errdefer {
         for (package_names[0..copied_names]) |name| context.allocator.free(name);
         context.allocator.free(package_names);
     }
     for (builder.package_builds, package_names) |package_build, *name| {
-        name.* = try context.allocator.dupe(
+        name.* = try trackReturnError(context.allocator.dupe(
             u8,
-            package_build.pkg_name orelse return error.MissingPackageName,
-        );
+            package_build.pkg_name orelse return trackReturnError(error.MissingPackageName, &returned_error),
+        ), &returned_error);
         copied_names += 1;
     }
     const package_base_value = builder.package_builds[0].variables.get("pkgbase") orelse
-        builder.package_builds[0].pkg_name orelse return error.MissingPackageName;
-    const package_base = try context.allocator.dupe(u8, package_base_value);
+        builder.package_builds[0].pkg_name orelse return trackReturnError(error.MissingPackageName, &returned_error);
+    const package_base = try trackReturnError(context.allocator.dupe(u8, package_base_value), &returned_error);
     errdefer context.allocator.free(package_base);
     const review_allocator = final_review.arena.allocator();
     var source_pgp_fingerprints: std.ArrayList([]const u8) = .empty;
     for (builder.package_builds) |package_build| {
         for (package_build.valid_pgp_keys orelse &.{}) |fingerprint| {
             if (!containsString(source_pgp_fingerprints.items, fingerprint))
-                try source_pgp_fingerprints.append(review_allocator, try review_allocator.dupe(u8, fingerprint));
+                try trackReturnError(source_pgp_fingerprints.append(review_allocator, try trackReturnError(review_allocator.dupe(u8, fingerprint), &returned_error)), &returned_error);
         }
     }
     completion = .success;
@@ -756,7 +759,7 @@ fn prepareReviewOnly(
         .review = final_review,
         .dependency_plan = dependency_plan,
         .environment_plan = environment_plan,
-        .source_pgp_fingerprints = try source_pgp_fingerprints.toOwnedSlice(review_allocator),
+        .source_pgp_fingerprints = try trackReturnError(source_pgp_fingerprints.toOwnedSlice(review_allocator), &returned_error),
     };
 }
 
@@ -2103,7 +2106,7 @@ fn renderIsolatedConfiguration(
     try writeTomlString(writer, "extension", configuration.package.extension);
     if (configuration.package.carch) |carch| try writeTomlString(writer, "carch", carch);
     if (configuration.package.compression_level) |preset|
-        try writer.print("compression_level = {d}\n", .{@intFromEnum(preset)});
+        try writer.print("compression_level = {d}\n", .{@backingInt(preset)});
     try writeTomlArray(writer, "options", configuration.package.options);
     try writeTomlArray(writer, "strip_binaries", configuration.package.strip_binaries);
     try writeTomlArray(writer, "strip_shared", configuration.package.strip_shared);
@@ -2282,7 +2285,7 @@ fn runHostBuildCoordinator(
                 targets.deinit(context.allocator);
             }
             for (plan.repo_dependencies) |dependency|
-                try targets.append(context.allocator, try context.allocator.dupeZ(u8, dependency.name));
+                try targets.append(context.allocator, try context.allocator.dupeSentinel(u8, dependency.name, 0));
             try alpm.install_packages(targets.items, .{ .alldeps = true });
         }
     }
@@ -2740,7 +2743,7 @@ fn appendCleanupCandidate(
     targets: *std.ArrayList([:0]const u8),
 ) !void {
     if (!installed_as_dependency or baseline.contains(name)) return;
-    const owned_name = try allocator.dupeZ(u8, name);
+    const owned_name = try allocator.dupeSentinel(u8, name, 0);
     targets.append(allocator, owned_name) catch |err| {
         allocator.free(owned_name);
         return err;
@@ -3489,7 +3492,7 @@ test "coordinator build options preserve selected packages and reviewed digest" 
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const manifest = try spec.Manifest.load(arena.allocator());
-    const encoded = "5a" ** std.crypto.hash.sha2.Sha256.digest_length;
+    const encoded = "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a";
     const outcome = try parser.parse(arena.allocator(), &manifest, &.{
         "build",
         "--coordinator-child",
@@ -3515,7 +3518,7 @@ test "coordinator build options preserve selected packages and reviewed digest" 
     try std.testing.expectEqualStrings("/tmp/PKGBUILD", outcome.dispatch.positionals[0]);
 
     const digest = try parseReviewDigest(encoded);
-    try std.testing.expectEqualSlices(u8, &([_]u8{0x5a} ** digest.len), &digest);
+    try std.testing.expectEqualSlices(u8, &(@as([digest.len]u8, @splat(0x5a))), &digest);
     try std.testing.expectError(error.InvalidReviewDigest, parseReviewDigest("abc"));
 }
 
@@ -3653,7 +3656,7 @@ test "makesrcinfo updates pkgver with clean stdout and preserves existing source
         package_builds,
     );
     defer review.deinit();
-    const wrong_digest = "5a" ** std.crypto.hash.sha2.Sha256.digest_length;
+    const wrong_digest = "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a";
     const mismatched = try parser.parse(
         test_context.arena.allocator(),
         &manifest,
@@ -4066,7 +4069,7 @@ test "isolated builds elevate only the outer coordinator" {
         "--isolated",
         "--coordinator-child",
         "--review-digest",
-        "5a" ** std.crypto.hash.sha2.Sha256.digest_length,
+        "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a",
     });
     try std.testing.expect(isolatedRequested(&outer.dispatch));
     try std.testing.expect(shouldElevateBuildCoordinator(&outer.dispatch, false));
@@ -4139,7 +4142,7 @@ test "isolated child arguments remove host coordinator flags and replace the pat
         "--no-check",
         "/host/reviewed/PKGBUILD",
     };
-    const digest = "5a" ** std.crypto.hash.sha2.Sha256.digest_length;
+    const digest = "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a";
     const child = try buildIsolatedChildArguments(
         std.testing.allocator,
         &arguments,
@@ -4166,7 +4169,7 @@ test "isolated source key transport preserves approval policy and guest verifica
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
     const manifest = try @import("../cli/spec.zig").Manifest.load(arena.allocator());
-    const digest = "5a" ** std.crypto.hash.sha2.Sha256.digest_length;
+    const digest = "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a";
     const unattended = try parser.parse(arena.allocator(), &manifest, &.{ "build", "--isolated", "--no-confirm", "--package", "demo", "/host/PKGBUILD" });
     const arguments = try sourcePgpPreparationArguments(allocator, &unattended.dispatch, "/host/PKGBUILD", digest);
     defer allocator.free(arguments);
@@ -4217,7 +4220,7 @@ test "isolated source key preparation checks the digest and refuses unapproved i
     var operations = PackageManager.OperationContext.init(allocator, io);
     defer operations.deinit();
     const manifest = try @import("../cli/spec.zig").Manifest.load(context.arena.allocator());
-    const wrong = try parser.parse(context.arena.allocator(), &manifest, &.{ "build", "--prepare-isolated-source-keys", "--no-confirm", "--review-digest", "5a" ** 32, path });
+    const wrong = try parser.parse(context.arena.allocator(), &manifest, &.{ "build", "--prepare-isolated-source-keys", "--no-confirm", "--review-digest", "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a", path });
     try std.testing.expectError(error.ReviewedPkgbuildChanged, prepareSourcePgpKeyExport(&context.context, &wrong.dispatch, &operations));
     const digest = PackageManager.builder.pkgbuild_review.digestPreparedReview(content, @as([]const PackageManager.builder.pkgbuild_review.ReviewedFile, &.{}));
     const hex = std.fmt.bytesToHex(digest, .lower);
@@ -4246,7 +4249,7 @@ test "isolated child arguments keep host repository configuration outside the gu
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
     const manifest = try @import("../cli/spec.zig").Manifest.load(arena.allocator());
-    const digest = "ab" ** 32;
+    const digest = "abababababababababababababababababababababababababababababababab";
     const host_config = "/var/lib/remora/build/.jobs/2883/dependency-environment/pacman.conf";
     const cases = [_][]const []const u8{
         &.{ "--config", host_config, "build", "--isolated", "--check", "/host/PKGBUILD" },
@@ -4345,7 +4348,7 @@ test "compression presets parse both spellings override config and survive child
             defer configuration.deinit();
             const parsed = try parser.parse(arena.allocator(), &manifest, args);
             try applyCompressionOverride(configuration, &parsed.dispatch);
-            try std.testing.expectEqual(level, @intFromEnum(configuration.package.compression_level.?));
+            try std.testing.expectEqual(level, @backingInt(configuration.package.compression_level.?));
             const rendered = try renderIsolatedConfiguration(allocator, configuration);
             defer allocator.free(rendered);
             const guest = try ShellyBuildConfiguration.initFromBuffers(allocator, rendered, null);
@@ -4356,7 +4359,7 @@ test "compression presets parse both spellings override config and survive child
             defer allocator.free(host_args);
             const host = try parser.parse(arena.allocator(), &manifest, host_args);
             try std.testing.expectEqual(configuration.package.compression_level, try compressionOverride(&host.dispatch));
-            const guest_args = try buildIsolatedChildArguments(allocator, args, "/tmp/PKGBUILD", "ab" ** 32, false);
+            const guest_args = try buildIsolatedChildArguments(allocator, args, "/tmp/PKGBUILD", "abababababababababababababababababababababababababababababababab", false);
             defer allocator.free(guest_args);
             const child = try parser.parse(arena.allocator(), &manifest, guest_args);
             try std.testing.expectEqual(configuration.package.compression_level, try compressionOverride(&child.dispatch));
@@ -4702,7 +4705,7 @@ test "build JSON success owns one artifact and emits the versioned envelope" {
         .package_name = "demo",
         .path = "/var/lib/remora/jobs/42/packages/demo-1-1-any.pkg.tar.zst",
     }};
-    const digest = [_]u8{0x5a} ** std.crypto.hash.sha2.Sha256.digest_length;
+    const digest = @as([std.crypto.hash.sha2.Sha256.digest_length]u8, @splat(0x5a));
     try runner.ownResult(allocator, "demo", digest, true, &native);
     var output: std.Io.Writer.Allocating = .init(allocator);
     defer output.deinit();
@@ -4835,8 +4838,8 @@ test "automation review mismatch retains package context without accepting the d
     const allocator = std.testing.allocator;
     var runner: Real = .{};
     defer runner.deinit(allocator);
-    const reviewed = [_]u8{0x5a} ** std.crypto.hash.sha2.Sha256.digest_length;
-    const supplied = [_]u8{0xa5} ** std.crypto.hash.sha2.Sha256.digest_length;
+    const reviewed = @as([std.crypto.hash.sha2.Sha256.digest_length]u8, @splat(0x5a));
+    const supplied = @as([std.crypto.hash.sha2.Sha256.digest_length]u8, @splat(0xa5));
 
     try std.testing.expectError(
         error.ReviewedPkgbuildChanged,
@@ -4857,7 +4860,7 @@ test "accepted automation review remains in later coordinator failure JSON" {
     const allocator = std.testing.allocator;
     var runner: Real = .{};
     defer runner.deinit(allocator);
-    const digest = [_]u8{0x5a} ** std.crypto.hash.sha2.Sha256.digest_length;
+    const digest = @as([std.crypto.hash.sha2.Sha256.digest_length]u8, @splat(0x5a));
     try acceptAutomationReview(&runner, allocator, "evaluated-base", digest, digest, false);
     try runner.setFailure(allocator, error.SyncDbFailed);
 
@@ -4868,7 +4871,7 @@ test "accepted automation review remains in later coordinator failure JSON" {
     try std.testing.expect(std.mem.indexOf(
         u8,
         output.written(),
-        "\"reviewDigest\":\"" ++ ("5a" ** std.crypto.hash.sha2.Sha256.digest_length) ++ "\"",
+        "\"reviewDigest\":\"" ++ ("5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a") ++ "\"",
     ) != null);
 }
 
@@ -4892,7 +4895,7 @@ test "coordinator review arguments select host or isolated dependency state" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const manifest = try spec.Manifest.load(arena.allocator());
-    const digest_text = "5a" ** std.crypto.hash.sha2.Sha256.digest_length;
+    const digest_text = "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a";
     const outcome = try parser.parse(arena.allocator(), &manifest, &.{
         "build",
         "--sync-deps",
@@ -4932,7 +4935,7 @@ test "coordinator review arguments select host or isolated dependency state" {
 
 test "isolated argument rewriting removes JSON and both package destination spellings" {
     const allocator = std.testing.allocator;
-    const digest = "5a" ** std.crypto.hash.sha2.Sha256.digest_length;
+    const digest = "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a";
     const separate = [_][]const u8{
         "build", "--isolated", "--json", "--package-destination", "/host/job", "--no-check", "/host/PKGBUILD",
     };
@@ -5267,7 +5270,7 @@ test "dependency plan CLI resolves bootstrap and checks with either native confi
         try targets.appendSlice(allocator, PackageManager.Manager.bootstrap.build_root.packages);
         try targets.appendSlice(allocator, &.{ "recipe-tool", "check-tool" });
         for (targets.items) |name| {
-            const desc = try std.fmt.allocPrint(allocator, "%NAME%\n{s}\n\n%VERSION%\n1-1\n\n%ARCH%\nany\n\n%FILENAME%\n{s}-1-1-any.pkg.tar\n\n%SHA256SUM%\n{s}\n\n", .{ name, name, "ab" ** 32 });
+            const desc = try std.fmt.allocPrint(allocator, "%NAME%\n{s}\n\n%VERSION%\n1-1\n\n%ARCH%\nany\n\n%FILENAME%\n{s}-1-1-any.pkg.tar\n\n%SHA256SUM%\n{s}\n\n", .{ name, name, "abababababababababababababababababababababababababababababababab" });
             defer allocator.free(desc);
             const entry = try std.fmt.allocPrint(allocator, "{s}-1-1/desc", .{name});
             defer allocator.free(entry);
@@ -5359,7 +5362,7 @@ test "dependency plan flags reject host installation and stay out of the guest" 
         &.{ "build", "--isolated", "--dependency-plan", "/host/plan.json", "/host/PKGBUILD" },
         &.{ "build", "--isolated", "--dependency-plan=/host/plan.json", "/host/PKGBUILD" },
     }) |args| {
-        const guest = try buildIsolatedChildArguments(a, args, "/host/PKGBUILD", "ab" ** 32, false);
+        const guest = try buildIsolatedChildArguments(a, args, "/host/PKGBUILD", "abababababababababababababababababababababababababababababababab", false);
         for (guest) |arg| try std.testing.expect(std.mem.indexOf(u8, arg, "dependency-plan") == null);
     }
 }
@@ -5495,7 +5498,7 @@ test "dependency plan validation reports all bad hashes and accepts complete pla
     }
     diagnostic.?.deinit();
     diagnostic = null;
-    for (&packages) |*package| package.sha256 = "ab" ** 32;
+    for (&packages) |*package| package.sha256 = "abababababababababababababababababababababababababababababababab";
     const digest = try plan.digest(allocator);
     defer allocator.free(digest);
     plan.planDigest = digest;

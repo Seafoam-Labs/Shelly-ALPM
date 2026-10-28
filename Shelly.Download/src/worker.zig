@@ -9,8 +9,8 @@ pub fn run(init: std.process.Init) !void {
     const bytes = try input.interface.allocRemaining(a, .limited(1024 * 1024));
     const parsed = try std.json.parseFromSlice(protocol.Request, a, bytes, .{});
     const request = parsed.value;
-    const user = try a.dupeZ(u8, request.user);
-    const directory = try a.dupeZ(u8, request.directory);
+    const user = try a.dupeSentinel(u8, request.user, 0);
+    const directory = try a.dupeSentinel(u8, request.directory, 0);
     download.Sandbox.apply(user, directory, request.filesystem, request.syscalls) catch return finish(init.io, .sandbox);
     download.HttpClient.setDefaultProxyEnvironment(init.environ_map);
     var core = download.CoreDownloader.init(init.gpa, init.io, .{ .timeout_in_seconds = request.timeout, .response_header_timeout_in_seconds = request.timeout, .response_body_timeout_in_seconds = request.timeout, .max_retries = 1, .retry_delay_secs = 0, .maximum_size = request.maximum, .conditional_mtime = request.mtime, .resume_path = request.partial, .final_permissions = .fromMode(0o644) });
@@ -53,6 +53,6 @@ fn progress(ctx: ?*anyopaque, event: download.DownloadEvent) void {
 }
 fn finish(io: std.Io, result: protocol.Result) !void {
     var bytes: [17]u8 = @splat(0);
-    bytes[0] = @intFromEnum(result) + 1;
+    bytes[0] = @backingInt(result) + 1;
     try std.Io.File.stdout().writeStreamingAll(io, &bytes);
 }

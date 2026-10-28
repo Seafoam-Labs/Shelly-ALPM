@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Build the Flatpak backend and CLI, then build this project and optionally run it.
 # Usage: ./build.sh [--build-only] [zig build args...]
-# Example: ./build.sh -Doptimize=ReleaseFast
+# Example: ./build.sh -Doptimize=fast
 set -euo pipefail
 cd "$(dirname "$0")"
 

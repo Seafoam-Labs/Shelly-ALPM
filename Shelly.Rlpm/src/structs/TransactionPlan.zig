@@ -167,12 +167,12 @@ pub fn deinit(self: *Plan) void {
 }
 
 pub fn package(self: *const Plan, id: Id) *const Package {
-    return &self.candidates[@intFromEnum(id)].package;
+    return &self.candidates[@backingInt(id)].package;
 }
 
 pub fn findReference(self: *const Plan, reference: PackageRef) ?Id {
     for (self.candidates, 0..) |candidate, index| {
-        if (std.meta.eql(candidate.reference, reference)) return @enumFromInt(index);
+        if (std.meta.eql(candidate.reference, reference)) return @fromBackingInt(@intCast(index));
     }
 
     return null;
@@ -195,16 +195,16 @@ pub fn check(self: *const Plan) !void {
 pub fn copyMetadata(allocator: std.mem.Allocator, source: Package) !Package {
     var result: Package = undefined;
 
-    inline for (std.meta.fields(Package)) |field| {
-        if (comptime std.mem.eql(u8, field.name, "archive_arena") or
+    inline for (@typeInfo(Package).@"struct".field_names, @typeInfo(Package).@"struct".field_types) |field_name, field_type| {
+        if (comptime std.mem.eql(u8, field_name, "archive_arena") or
             std.mem.eql(
                 u8,
-                field.name,
+                field_name,
                 "verified_archive",
             ))
         {
-            @field(result, field.name) = null;
-        } else @field(result, field.name) = try copyValue(field.type, allocator, @field(source, field.name));
+            @field(result, field_name) = null;
+        } else @field(result, field_name) = try copyValue(field_type, allocator, @field(source, field_name));
     }
 
     return result;
@@ -230,11 +230,11 @@ pub fn copyValue(comptime T: type, allocator: std.mem.Allocator, value: T) error
         .@"struct" => {
             var result: T = undefined;
 
-            inline for (std.meta.fields(T)) |field|
-                @field(result, field.name) = try copyValue(
-                    field.type,
+            inline for (@typeInfo(T).@"struct".field_names, @typeInfo(T).@"struct".field_types) |field_name, field_type|
+                @field(result, field_name) = try copyValue(
+                    field_type,
                     allocator,
-                    @field(value, field.name),
+                    @field(value, field_name),
                 );
 
             return result;

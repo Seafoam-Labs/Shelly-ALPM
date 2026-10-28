@@ -35,7 +35,8 @@ ccache = false
 distcc = false
 distcc_hosts = []
 extra_path = []
-env = {}
+
+[build.env]
 
 [package]
 packager = "Unknown Packager"
@@ -241,7 +242,8 @@ LANG = "C.UTF-8"
 
 The default is an empty table. Omitting `env` in the user configuration keeps
 the system table; specifying it replaces the entire system table. Set
-`env = {}` under `[build]` to clear configured assignments. Clearing this table
+an empty `[build.env]` section to clear configured assignments. The upstream
+TOML parser currently rejects empty inline tables (`env = {}`). Clearing this table
 does not remove variables already present in the build user's environment.
 An empty string explicitly sets an empty value; it does not unset the variable.
 

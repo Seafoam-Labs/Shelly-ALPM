@@ -2,17 +2,7 @@
 
 const std = @import("std");
 
-const c = @cImport({
-    @cUndef("_FORTIFY_SOURCE");
-    @cDefine("_FORTIFY_SOURCE", "0");
-    @cInclude("unistd.h");
-    @cInclude("stdlib.h");
-    @cInclude("fcntl.h");
-    @cInclude("sys/stat.h");
-    @cInclude("sys/socket.h");
-    @cInclude("netinet/in.h");
-    @cInclude("signal.h");
-});
+const c = @import("rlpm_c");
 
 pub fn main(init: std.process.Init) !void {
     const args = try init.minimal.args.toSlice(init.arena.allocator());
@@ -45,8 +35,11 @@ pub fn main(init: std.process.Init) !void {
         address.sin_port = std.mem.nativeToBig(u16, try std.fmt.parseInt(u16, args[2], 10));
         address.sin_addr.s_addr = std.mem.nativeToBig(u32, 0x7f000001);
 
-        const connected = c.connect(socket, @ptrCast(&address), @sizeOf(@TypeOf(address))) == 0;
+        const connected = connect(socket, @ptrCast(&address), @sizeOf(@TypeOf(address))) == 0;
         const output: []const u8 = if (connected) "connected\n" else "isolated\n";
         _ = c.write(1, output.ptr, output.len);
     } else return error.InvalidArguments;
 }
+
+// POSIX pointer signature, independent of glibc's GNU transparent-union typedef.
+extern "c" fn connect(socket: c_int, address: *const c.struct_sockaddr, length: c.socklen_t) c_int;

@@ -813,7 +813,7 @@ test "every allocation failure releases archives root descriptors manifest and l
         .none,
     );
     defer archive.deinit();
-    try std.testing.checkAllAllocationFailures(a, allocationPreflight, .{ &f, archive.path });
+    try @import("allocation_failures.zig").checkAllAllocationFailures(a, allocationPreflight, .{ &f, archive.path });
     try std.testing.expectError(error.FileNotFound, f.tmp.dir.access(io, "db/db.lck", .{}));
 }
 

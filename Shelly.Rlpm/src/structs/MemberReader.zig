@@ -6,10 +6,7 @@ const ArchiveReader = @import("ArchiveReader.zig");
 
 const MemberReader = @This();
 
-const c = @cImport({
-    @cInclude("stdio.h");
-    @cInclude("errno.h");
-});
+const c = @import("rlpm_c");
 
 stream: union(enum) { archive: ArchiveReader, file: *c.FILE },
 

@@ -149,7 +149,7 @@ pub const Manager = struct {
         if (comptime selection.libalpm_enabled) {
             if (selection.selectedDefault() == .libalpm) return Native.compare_package_versions(a, b);
         }
-        return @intFromEnum(rlpm_module.Version.compareStrings(a, b));
+        return @backingInt(rlpm_module.Version.compareStrings(a, b));
     }
     pub const version_compare = compare_package_versions;
     pub fn toggle_hidden_packages(self: *Manager) bool {
@@ -635,8 +635,8 @@ fn mapQuery(err: anyerror) QueryError {
 }
 fn mapTransaction(err: anyerror) TransactionError {
     if (err == error.DatabaseLocked or err == error.LockExists) return error.TransInitFailed;
-    inline for (@typeInfo(TransactionError).error_set.?) |field| {
-        if (err == @field(TransactionError, field.name)) return @field(TransactionError, field.name);
+    inline for (@typeInfo(TransactionError).error_set.error_names.?) |field| {
+        if (err == @field(TransactionError, field)) return @field(TransactionError, field);
     }
     return error.CommitFailed;
 }

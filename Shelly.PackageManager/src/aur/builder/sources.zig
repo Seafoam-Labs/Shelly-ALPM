@@ -3,6 +3,7 @@
 //! extraction into the staging tree.
 
 const std = @import("std");
+const trackReturnError = @import("diagnostics").captureError;
 const events = @import("../events.zig");
 const op_context = @import("operation_context");
 const archive = @import("archive");
@@ -769,18 +770,19 @@ fn extractSourceArchiveIfRecognized(
     source_index: usize,
     extracted_files: *ExtractedSourceFiles,
 ) !bool {
+    var returned_error: ?anyerror = null;
     const DirectoryTimestamp = struct {
         path: []u8,
         mtime: std.Io.Timestamp,
     };
 
-    var reader = (try archive.Reader.initAllIfRecognized(self.allocator, archive_path)) orelse return false;
+    var reader = (try trackReturnError(archive.Reader.initAllIfRecognized(self.allocator, archive_path), &returned_error)) orelse return trackReturnError(false, &returned_error);
     defer reader.deinit();
-    const first_entry = switch (try reader.probe()) {
-        .not_archive => return false,
+    const first_entry = switch (try trackReturnError(reader.probe(), &returned_error)) {
+        .not_archive => return trackReturnError(false, &returned_error),
         .archive => |entry| entry,
     };
-    if (reader.isPlainSourceFile()) return false;
+    if (reader.isPlainSourceFile()) return trackReturnError(false, &returned_error);
     var directory_timestamps: std.ArrayList(DirectoryTimestamp) = .empty;
     var members: SourceArchiveMembers = .{};
     defer members.deinit(self.allocator);
@@ -793,108 +795,111 @@ fn extractSourceArchiveIfRecognized(
     var total_size: u64 = 0;
     var next_entry = first_entry;
     while (next_entry) |entry| {
-        try operation.checkCancelled();
+        try trackReturnError(operation.checkCancelled(), &returned_error);
         entry_block: {
-            errdefer |err| reportArchiveEntryFailure(self, operation, archive_path, entry.path, entry.link_target, err);
+            errdefer {
+                const err = returned_error.?;
+                reportArchiveEntryFailure(self, operation, archive_path, entry.path, entry.link_target, err);
+            }
             entry_count += 1;
             if (entry_count > 1_000_000 or entry.size > 4 * 1024 * 1024 * 1024)
-                return error.SourceArchiveTooLarge;
+                return trackReturnError(error.SourceArchiveTooLarge, &returned_error);
             if (isArchiveRootDirectoryEntry(entry.kind, entry.path)) {
-                try reader.skip();
+                try trackReturnError(reader.skip(), &returned_error);
                 break :entry_block;
             }
-            const relative = try archive.normalizePosixEntryPath(self.allocator, entry.path);
+            const relative = try trackReturnError(archive.normalizePosixEntryPath(self.allocator, entry.path), &returned_error);
             defer self.allocator.free(relative);
-            try extracted_files.checkReservedPath(relative, entry.kind, source_index);
-            const destination = try std.fs.path.join(self.allocator, &.{ destination_root, relative });
+            try trackReturnError(extracted_files.checkReservedPath(relative, entry.kind, source_index), &returned_error);
+            const destination = try trackReturnError(std.fs.path.join(self.allocator, &.{ destination_root, relative }), &returned_error);
             defer self.allocator.free(destination);
-            try members.add(self.allocator, relative, entry.kind, entry.link_target);
+            try trackReturnError(members.add(self.allocator, relative, entry.kind, entry.link_target), &returned_error);
             switch (entry.kind) {
                 .directory => {
-                    try ensureSafeArchivePath(self, destination_root, relative, true);
+                    try trackReturnError(ensureSafeArchivePath(self, destination_root, relative, true), &returned_error);
                     if (entry.mtime) |mtime| {
-                        const owned_path = try self.allocator.dupe(u8, destination);
+                        const owned_path = try trackReturnError(self.allocator.dupe(u8, destination), &returned_error);
                         errdefer self.allocator.free(owned_path);
-                        try directory_timestamps.append(self.allocator, .{
+                        try trackReturnError(directory_timestamps.append(self.allocator, .{
                             .path = owned_path,
                             .mtime = mtime,
-                        });
+                        }), &returned_error);
                     }
                 },
                 .regular_file => {
-                    try ensureSafeArchivePath(self, destination_root, relative, false);
+                    try trackReturnError(ensureSafeArchivePath(self, destination_root, relative, false), &returned_error);
                     if (extracted_files.regular_files.contains(relative)) {
-                        const stat = try std.Io.Dir.cwd().statFile(self.io, destination, .{ .follow_symlinks = false });
-                        if (stat.kind != .file) return error.UnsafeSourceArchivePath;
+                        const stat = try trackReturnError(std.Io.Dir.cwd().statFile(self.io, destination, .{ .follow_symlinks = false }), &returned_error);
+                        if (stat.kind != .file) return trackReturnError(error.UnsafeSourceArchivePath, &returned_error);
                         // Later archive entries replace earlier regular files,
                         // including read-only originals. Recreate the inode so
                         // existing hard links retain their original contents.
-                        try std.Io.Dir.cwd().deleteFile(self.io, destination);
+                        try trackReturnError(std.Io.Dir.cwd().deleteFile(self.io, destination), &returned_error);
                     } else {
-                        try rejectExistingDestination(self.io, destination);
+                        try trackReturnError(rejectExistingDestination(self.io, destination), &returned_error);
                     }
-                    var output = try std.Io.Dir.cwd().createFile(self.io, destination, .{
+                    var output = try trackReturnError(std.Io.Dir.cwd().createFile(self.io, destination, .{
                         .exclusive = true,
                         .permissions = std.Io.File.Permissions.fromMode(entry.permissions & 0o777),
-                    });
+                    }), &returned_error);
                     defer output.close(self.io);
                     var writer = output.writer(self.io, &.{});
                     var entry_size: u64 = 0;
                     while (true) {
-                        const amount = try reader.read(&buffer);
+                        const amount = try trackReturnError(reader.read(&buffer), &returned_error);
                         if (amount == 0) break;
                         entry_size += amount;
                         total_size += amount;
                         if (entry_size > 4 * 1024 * 1024 * 1024 or total_size > 16 * 1024 * 1024 * 1024)
-                            return error.SourceArchiveTooLarge;
-                        try writer.interface.writeAll(buffer[0..amount]);
+                            return trackReturnError(error.SourceArchiveTooLarge, &returned_error);
+                        try trackReturnError(writer.interface.writeAll(buffer[0..amount]), &returned_error);
                     }
-                    try writer.interface.flush();
-                    if (entry.mtime) |mtime| try output.setTimestamps(self.io, .{
+                    try trackReturnError(writer.interface.flush(), &returned_error);
+                    if (entry.mtime) |mtime| try trackReturnError(output.setTimestamps(self.io, .{
                         .modify_timestamp = .{ .new = mtime },
-                    });
-                    try extracted_files.recordRegularFile(self.allocator, relative, source_index);
+                    }), &returned_error);
+                    try trackReturnError(extracted_files.recordRegularFile(self.allocator, relative, source_index), &returned_error);
                 },
                 .symbolic_link => {
-                    const target = entry.link_target orelse return error.UnsafeSourceArchiveLink;
-                    const safe_target = try source_spec.archiveLinkTarget(self.allocator, relative, target);
+                    const target = entry.link_target orelse return trackReturnError(error.UnsafeSourceArchiveLink, &returned_error);
+                    const safe_target = try trackReturnError(source_spec.archiveLinkTarget(self.allocator, relative, target), &returned_error);
                     defer self.allocator.free(safe_target);
-                    try ensureSafeArchivePath(self, destination_root, relative, false);
-                    try rejectExistingDestination(self.io, destination);
-                    try std.Io.Dir.cwd().symLink(self.io, safe_target, destination, .{});
-                    if (entry.mtime) |mtime| try std.Io.Dir.cwd().setTimestamps(
+                    try trackReturnError(ensureSafeArchivePath(self, destination_root, relative, false), &returned_error);
+                    try trackReturnError(rejectExistingDestination(self.io, destination), &returned_error);
+                    try trackReturnError(std.Io.Dir.cwd().symLink(self.io, safe_target, destination, .{}), &returned_error);
+                    if (entry.mtime) |mtime| try trackReturnError(std.Io.Dir.cwd().setTimestamps(
                         self.io,
                         destination,
                         .{
                             .follow_symlinks = false,
                             .modify_timestamp = .{ .new = mtime },
                         },
-                    );
+                    ), &returned_error);
                 },
                 .hard_link => {
                     // Reserve the destination now; resolve targets only after all
                     // archive members have been recorded (including forward links).
-                    try ensureSafeArchivePath(self, destination_root, relative, false);
-                    try rejectExistingDestination(self.io, destination);
-                    try reader.skip();
+                    try trackReturnError(ensureSafeArchivePath(self, destination_root, relative, false), &returned_error);
+                    try trackReturnError(rejectExistingDestination(self.io, destination), &returned_error);
+                    try trackReturnError(reader.skip(), &returned_error);
                 },
-                .other => return error.UnsupportedSourceArchiveEntry,
+                .other => return trackReturnError(error.UnsupportedSourceArchiveEntry, &returned_error),
             }
         }
-        next_entry = try reader.next();
+        next_entry = try trackReturnError(reader.next(), &returned_error);
     }
-    try members.resolve(self, operation, archive_path, destination_root);
+    try trackReturnError(members.resolve(self, operation, archive_path, destination_root), &returned_error);
 
     // Creating children changes directory mtimes. Restore recorded directory
     // timestamps only after the complete tree exists. Archive order is retained
     // so a repeated directory entry keeps the metadata from its last occurrence.
     for (directory_timestamps.items) |timestamp| {
-        try std.Io.Dir.cwd().setTimestamps(self.io, timestamp.path, .{
+        try trackReturnError(std.Io.Dir.cwd().setTimestamps(self.io, timestamp.path, .{
             .follow_symlinks = false,
             .modify_timestamp = .{ .new = timestamp.mtime },
-        });
+        }), &returned_error);
     }
-    return true;
+    return trackReturnError(true, &returned_error);
 }
 
 /// Only completed regular archive entries are eligible for replacement. Raw
@@ -979,6 +984,7 @@ const SourceArchiveMembers = struct {
     }
 
     fn resolve(self: *SourceArchiveMembers, builder: *PackageBuilder, operation: *op_context.Operation, archive_path: []const u8, root: []const u8) !void {
+        var returned_error: ?anyerror = null;
         // Iterative DFS visits each link once. No recursive stack growth or
         // repeated full scans for long chains supplied by an untrusted archive.
         var chain: std.ArrayList(usize) = .empty;
@@ -986,38 +992,41 @@ const SourceArchiveMembers = struct {
         const paths = self.entries.keys();
         const members = self.entries.values();
         for (members, 0..) |member, start| {
-            try operation.checkCancelled();
+            try trackReturnError(operation.checkCancelled(), &returned_error);
             if (member.kind != .hard_link or member.state == .resolved) continue;
             var index = start;
-            errdefer |err| reportArchiveEntryFailure(builder, operation, archive_path, paths[index], members[index].target, err);
+            errdefer {
+                const err = returned_error.?;
+                reportArchiveEntryFailure(builder, operation, archive_path, paths[index], members[index].target, err);
+            }
             while (members[index].kind == .hard_link and members[index].state != .resolved) {
-                try operation.checkCancelled();
-                if (members[index].state == .visiting) return error.CyclicSourceArchiveHardLink;
+                try trackReturnError(operation.checkCancelled(), &returned_error);
+                if (members[index].state == .visiting) return trackReturnError(error.CyclicSourceArchiveHardLink, &returned_error);
                 members[index].state = .visiting;
-                try chain.append(builder.allocator, index);
+                try trackReturnError(chain.append(builder.allocator, index), &returned_error);
                 const target_index = self.entries.getIndex(members[index].target.?) orelse
-                    return error.MissingSourceArchiveHardLinkTarget;
+                    return trackReturnError(error.MissingSourceArchiveHardLinkTarget, &returned_error);
                 switch (members[target_index].kind) {
                     .regular_file, .hard_link => index = target_index,
-                    else => return error.UnsafeSourceArchiveLink,
+                    else => return trackReturnError(error.UnsafeSourceArchiveLink, &returned_error),
                 }
             }
             while (chain.pop()) |link_index| {
                 index = link_index;
-                try operation.checkCancelled();
+                try trackReturnError(operation.checkCancelled(), &returned_error);
                 const target = members[index].target.?;
                 // Inspect every component without following symlinks, even
                 // though the target is also required to belong to this archive.
-                try ensureSafeArchivePath(builder, root, target, false);
-                try ensureSafeArchivePath(builder, root, paths[index], false);
-                const source = try std.fs.path.join(builder.allocator, &.{ root, target });
+                try trackReturnError(ensureSafeArchivePath(builder, root, target, false), &returned_error);
+                try trackReturnError(ensureSafeArchivePath(builder, root, paths[index], false), &returned_error);
+                const source = try trackReturnError(std.fs.path.join(builder.allocator, &.{ root, target }), &returned_error);
                 defer builder.allocator.free(source);
-                const destination = try std.fs.path.join(builder.allocator, &.{ root, paths[index] });
+                const destination = try trackReturnError(std.fs.path.join(builder.allocator, &.{ root, paths[index] }), &returned_error);
                 defer builder.allocator.free(destination);
-                const stat = try std.Io.Dir.cwd().statFile(builder.io, source, .{ .follow_symlinks = false });
-                if (stat.kind != .file) return error.UnsafeSourceArchiveLink;
-                try rejectExistingDestination(builder.io, destination);
-                try std.Io.Dir.hardLink(.cwd(), source, .cwd(), destination, builder.io, .{ .follow_symlinks = false });
+                const stat = try trackReturnError(std.Io.Dir.cwd().statFile(builder.io, source, .{ .follow_symlinks = false }), &returned_error);
+                if (stat.kind != .file) return trackReturnError(error.UnsafeSourceArchiveLink, &returned_error);
+                try trackReturnError(rejectExistingDestination(builder.io, destination), &returned_error);
+                try trackReturnError(std.Io.Dir.hardLink(.cwd(), source, .cwd(), destination, builder.io, .{ .follow_symlinks = false }), &returned_error);
                 // Mode and timestamps belong to the shared inode. Applying
                 // the link header's metadata would change the original file.
                 members[index].state = .resolved;
@@ -1115,7 +1124,7 @@ fn ensureSafeArchivePath(
 
 fn raiseSourceMessage(self: *PackageBuilder, package_build: *const PackageBuild, message: []const u8) void {
     const operation = self.active_operation orelse return;
-    operation.status(.information, message, "aur_build_output", @intFromEnum(events.EventType.aur_build_output));
+    operation.status(.information, message, "aur_build_output", @backingInt(events.EventType.aur_build_output));
     operation.progress(.{
         .stage = "sources",
         .message = package_build.pkg_name orelse message,

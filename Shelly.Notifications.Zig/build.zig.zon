@@ -25,7 +25,7 @@
     .fingerprint = 0x2fc3efc0021fd041, // Changing this has security and trust implications.
     // Tracks the earliest Zig version that the package considers to be a
     // supported use case.
-    .minimum_zig_version = "0.16.0",
+    .minimum_zig_version = "0.17.0",
     // This field is optional.
     // Each dependency must either provide a `url` and `hash`, or a `path`.
     // `zig build --fetch` can be used to fetch all dependencies of a package, recursively.
@@ -33,17 +33,13 @@
     // internet connectivity.
     .dependencies = .{
         .shelly_diagnostics = .{ .path = "../Shelly.Diagnostics" },
-        .zsn = .{
-            .url = "git+https://github.com/Seafoam-Labs/zsn.git#1d771e10e68021cb9e0a5c61fb3b8cd155aa8ce7",
-            .hash = "zsn-0.0.0-_ggIZuSTAADQvhE6jytwhB3OVnASHKFlck31LHML3F2t",
-        },
         .zeit = .{
-            .url = "git+https://github.com/rockorager/zeit?ref=v0.9.0#b1c1c2fcbc71fd7799a316bbcf0ff88d06d80ccc",
-            .hash = "zeit-0.9.0-5I6bk2m9AgBSMH8-L6rYJkwuQAyhXplnfxnvTSGzVHUR",
+            .url = "https://codeload.github.com/rockorager/zeit/tar.gz/06bb7b462b4218770fb5438ebe6b0c0c5ef18888",
+            .hash = "zeit-0.10.0-5I6bkxS-AgAaI3lI3RsXsWnPw7sMCqJKoFnSB8_QRAoo",
         },
         .conch = .{
-            .url = "git+https://github.com/Seafoam-Labs/conch#ff5a43afabaa6b5b64353882a0fef5d99e384a98",
-            .hash = "conch-0.0.1-k9bFohfwAAD62iVaTVSy1ttNFCdUawAV_gJQ5-z2qIsO",
+            .url = "https://codeload.github.com/Seafoam-Labs/conch/tar.gz/d29b2a15ac827e7b45221a311fc1da47ed773c17",
+            .hash = "conch-0.0.1-k9bFohfwAAAvWbp6NOeVUz4UUGj60pMyIAojfVZONswg",
         },
     },
     .paths = .{

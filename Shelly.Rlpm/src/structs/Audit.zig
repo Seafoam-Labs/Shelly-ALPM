@@ -5,14 +5,7 @@ const std = @import("std");
 const Tx = @import("Transaction.zig");
 const Diagnostic = @import("Diagnostic.zig");
 
-const c = @cImport({
-    @cUndef("_FORTIFY_SOURCE");
-    @cDefine("_FORTIFY_SOURCE", "0");
-    @cInclude("time.h");
-    @cInclude("syslog.h");
-    @cInclude("fcntl.h");
-    @cInclude("unistd.h");
-});
+const c = @import("rlpm_c");
 
 pub fn log(tx: *Tx, comptime fmt: []const u8, args: anytype) void {
     write(tx, fmt, args) catch |err| {
