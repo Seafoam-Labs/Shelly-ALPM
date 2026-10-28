@@ -103,7 +103,7 @@ pub const ShellyUtilitiesPage = extern struct {
         const cli = ShellyCli{ .allocator = arena.allocator(), .io = threaded.io(), .failure_detail = &failure_detail };
         const parsed = cli.repair_db() catch |err| {
             std.log.err("Could not remove the package database lock. {0s}\n\nTechnical details: {1s}", .{ diagnostics.cause(err), @errorName(err) });
-            const message = arena.allocator().dupeZ(u8, failure_detail orelse "Could not remove the package database lock. Shelly returned no error details. Review the command output before retrying.") catch return;
+            const message = arena.allocator().dupeSentinel(u8, failure_detail orelse "Could not remove the package database lock. Shelly returned no error details. Review the command output before retrying.", 0) catch return;
             self.priv().toast.show(.@"error", message);
             return;
         };
@@ -113,7 +113,7 @@ pub const ShellyUtilitiesPage = extern struct {
         if (response.isSuccess()) {
             self.priv().toast.show(.success, translations._("Database lock removed successfully"));
         } else {
-            const message = arena.allocator().dupeZ(u8, response.text()) catch return;
+            const message = arena.allocator().dupeSentinel(u8, response.text(), 0) catch return;
             self.priv().toast.show(.@"error", message);
         }
     }

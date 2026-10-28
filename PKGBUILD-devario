@@ -38,7 +38,7 @@ makedepends=(
   'go-md2man'
   'pkgconf'
   'ripgrep'
-  'zig>=0.16'
+  'zig>=0.17.0'
 )
 optdepends=(
   'fish: Fish shell completions'
@@ -74,34 +74,30 @@ _check_arch_news_disabled() {
 build() {
   cd "$srcdir/${_source_dir}"
 
-  (cd Shelly.Ui.Gtk && zig build --verbose \
+  (cd Shelly.Ui.Gtk && ZIG_GLOBAL_CACHE_DIR="${srcdir}/zig-global-cache" zig build --verbose \
     --prefix "$srcdir/${_source_dir}/out" \
     --cache-dir "$srcdir/zig-cache" \
-    --global-cache-dir "$srcdir/zig-global-cache" \
     -Dflatpak-backend-package=shelly-flatpak-backend \
     -Dcpu=baseline \
-    -Doptimize=ReleaseSafe)
+    -Doptimize=safe)
 
-  (cd Shelly.Cli.Zig && zig build -Dlibalpm=false -Dpath-profile=devario --verbose \
+  (cd Shelly.Cli.Zig && ZIG_GLOBAL_CACHE_DIR="${srcdir}/zig-global-cache" zig build -Dlibalpm=false -Dpath-profile=devario --verbose \
     --prefix "$srcdir/${_source_dir}/out-cli" \
     --cache-dir "$srcdir/zig-cache" \
-    --global-cache-dir "$srcdir/zig-global-cache" \
     -Dcpu=baseline \
-    -Doptimize=ReleaseSmall)
+    -Doptimize=small)
 
-  (cd Shelly.Key && zig build -Dpath-profile=devario --verbose \
+  (cd Shelly.Key && ZIG_GLOBAL_CACHE_DIR="${srcdir}/zig-global-cache" zig build -Dpath-profile=devario --verbose \
     --prefix "$srcdir/${_source_dir}/out-key" \
     --cache-dir "$srcdir/zig-cache" \
-    --global-cache-dir "$srcdir/zig-global-cache" \
     -Dcpu=baseline \
-    -Doptimize=ReleaseSmall)
+    -Doptimize=small)
 
-  (cd Shelly.Notifications.Zig && zig build --verbose \
+  (cd Shelly.Notifications.Zig && ZIG_GLOBAL_CACHE_DIR="${srcdir}/zig-global-cache" zig build --verbose \
     --prefix "$srcdir/${_source_dir}/out-notifications" \
     --cache-dir "$srcdir/zig-cache" \
-    --global-cache-dir "$srcdir/zig-global-cache" \
     -Dcpu=baseline \
-    -Doptimize=ReleaseSmall)
+    -Doptimize=small)
 
   # Generate documentation with fresh settings, independent of the builder's backend selection.
   (
@@ -137,19 +133,15 @@ check() {
   cd "$srcdir/${_source_dir}"
 
   # Keep checks on the same native backend and path profile as the shipped CLI.
-  (cd Shelly.Cli.Zig && zig build test -Dlibalpm=false -Dpath-profile=devario \
-    --cache-dir "$srcdir/zig-cache" \
-    --global-cache-dir "$srcdir/zig-global-cache")
-  (cd Shelly.PackageManager && zig build native-backend-test rlpm-adapter-test bootstrap-test -Dlibalpm=false \
+  (cd Shelly.Cli.Zig && ZIG_GLOBAL_CACHE_DIR="${srcdir}/zig-global-cache" zig build test -Dlibalpm=false -Dpath-profile=devario \
+    --cache-dir "$srcdir/zig-cache")
+  (cd Shelly.PackageManager && ZIG_GLOBAL_CACHE_DIR="${srcdir}/zig-global-cache" zig build native-backend-test rlpm-adapter-test bootstrap-test -Dlibalpm=false \
     -Dpath-profile=devario \
-    --cache-dir "$srcdir/zig-cache" \
-    --global-cache-dir "$srcdir/zig-global-cache")
-  (cd Shelly.Rlpm && zig build test -Dpath-profile=devario \
-    --cache-dir "$srcdir/zig-cache" \
-    --global-cache-dir "$srcdir/zig-global-cache")
-  (cd Shelly.Key && zig build test -Dpath-profile=devario \
-    --cache-dir "$srcdir/zig-cache" \
-    --global-cache-dir "$srcdir/zig-global-cache")
+    --cache-dir "$srcdir/zig-cache")
+  (cd Shelly.Rlpm && ZIG_GLOBAL_CACHE_DIR="${srcdir}/zig-global-cache" zig build test -Dpath-profile=devario \
+    --cache-dir "$srcdir/zig-cache")
+  (cd Shelly.Key && ZIG_GLOBAL_CACHE_DIR="${srcdir}/zig-global-cache" zig build test -Dpath-profile=devario \
+    --cache-dir "$srcdir/zig-cache")
 }
 
 package() {

@@ -743,9 +743,9 @@ fn addBuildPlanRepository(fixture: *Fixture, scenario: struct { missing: bool = 
 fn resolveBuildPlan(fixture: *Fixture, manager: *pm.Manager, requirements: []const pm.Manager.build_plan.Requirement) !pm.Manager.build_plan.Plan {
     const a = fixture.arena.allocator();
     return pm.Manager.build_plan.resolve(a, t.io, manager, .{
-        .reviewDigest = "ab" ** 32,
+        .reviewDigest = "abababababababababababababababababababababababababababababababab",
         .configurationDigest = try pm.Manager.build_plan.configurationDigest(a, manager.config),
-        .buildPolicyDigest = "cd" ** 32,
+        .buildPolicyDigest = "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
         .backend = @tagName(manager.backend()),
         .bootstrapProfile = "test",
         .architectures = &.{"x86_64"},
@@ -788,7 +788,7 @@ test "dependency plan uses native closure and pins provisioning on both backends
         const targets = try a.alloc([:0]const u8, plan.packages.len);
         for (plan.packages, targets) |package, *target| target.* = try std.fmt.allocPrintSentinel(a, "{s}/{s}", .{ package.repository, package.name }, 0);
         const altered = try a.dupe(pm.Manager.build_transaction.Package, plan.packages);
-        altered[0].sha256 = "00" ** 32;
+        altered[0].sha256 = "0000000000000000000000000000000000000000000000000000000000000000";
         try t.expectError(error.DependencyPlanMismatch, manager.install_build_packages(targets, altered));
         try t.expectError(error.FileNotFound, fixture.temp.dir.statFile(t.io, "root/usr/share/recipe-tool", .{}));
         try manager.install_build_packages(targets, plan.packages);
@@ -796,7 +796,7 @@ test "dependency plan uses native closure and pins provisioning on both backends
         defer pm.Manager.OwnedPackage.deinitSlice(t.allocator, installed);
         try t.expectEqual(plan.packages.len, installed.len);
         for (plan.packages) |package| {
-            var actual = (try manager.get_single_installed_package(try a.dupeZ(u8, package.name))).?;
+            var actual = (try manager.get_single_installed_package(try a.dupeSentinel(u8, package.name, 0))).?;
             defer actual.deinit(t.allocator);
             try t.expectEqualStrings(package.version, actual.version_value);
         }
@@ -1080,7 +1080,7 @@ fn setupUpgrade(fixture: *Fixture, updates: bool) !*pm.Manager {
 
 fn expectUpgradeVersion(fixture: *Fixture, manager: *pm.Manager, version: []const u8) !void {
     for (old_upgrade_packages) |package| {
-        var installed = (try manager.get_single_installed_package(try fixture.arena.allocator().dupeZ(u8, package.name))).?;
+        var installed = (try manager.get_single_installed_package(try fixture.arena.allocator().dupeSentinel(u8, package.name, 0))).?;
         defer installed.deinit(t.allocator);
         try t.expectEqualStrings(version, installed.version_value);
         const contents = try fixture.temp.dir.readFileAlloc(t.io, try std.fmt.allocPrint(fixture.arena.allocator(), "root/usr/share/{s}", .{package.name}), t.allocator, .limited(64));

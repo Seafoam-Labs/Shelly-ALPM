@@ -2,6 +2,7 @@
 //! (review check, sources, lifecycle steps, package assembly) through the
 //! focused sibling modules and keeps the public builder API.
 const std = @import("std");
+const trackReturnError = @import("diagnostics").captureError;
 const diagnostics = @import("diagnostics");
 const user_errors = @import("../../shared/user_errors.zig");
 const builtin = @import("builtin");
@@ -384,7 +385,7 @@ pub const PackageBuilder = struct {
         if (self.shellybuild_config.package.compression_level) |preset| {
             const format = try @import("archive").compression_policy.Format.fromPath(self.shellybuild_config.package.extension);
             const message = try std.fmt.allocPrint(self.allocator, "preset {d} ({s}), {s} level {s}", .{
-                @intFromEnum(preset), @tagName(preset), format.filterName(), preset.backendLevel(format),
+                @backingInt(preset), @tagName(preset), format.filterName(), preset.backendLevel(format),
             });
             defer self.allocator.free(message);
             try log.writeRecord("compression", message);
@@ -477,8 +478,10 @@ pub const PackageBuilder = struct {
     }
 
     fn writeMetadataWithOperation(self: *PackageBuilder, operation: *op_context.Operation, writer: *std.Io.Writer, mode: MetadataMode) !void {
+        var returned_error: ?anyerror = null;
         const update_checksums = mode == .update_checksums;
-        errdefer |err| {
+        errdefer {
+            const err = returned_error.?;
             // Step failures already publish their command and exit status.
             // Publish early metadata errors too, so session logs retain them.
             if (err != error.Cancelled and err != error.StepFailed) {
@@ -493,58 +496,58 @@ pub const PackageBuilder = struct {
             }
         }
         const reviewed_digest = self.options.reviewed_pkgbuild_digest orelse
-            return error.UnreviewedBuilderRequest;
+            return trackReturnError(error.UnreviewedBuilderRequest, &returned_error);
         const pkgbuild_path = self.options.pkgbuild_path orelse
-            return error.UnreviewedBuilderRequest;
-        const current_pkgbuild = try std.Io.Dir.cwd().readFileAlloc(
+            return trackReturnError(error.UnreviewedBuilderRequest, &returned_error);
+        const current_pkgbuild = try trackReturnError(std.Io.Dir.cwd().readFileAlloc(
             self.io,
             pkgbuild_path,
             self.allocator,
             .limited(32 * 1024 * 1024),
-        );
+        ), &returned_error);
         defer self.allocator.free(current_pkgbuild);
-        var current_review = try preparePkgbuildReview(
+        var current_review = try trackReturnError(preparePkgbuildReview(
             self.allocator,
             self.io,
             self.options.start_directory,
             current_pkgbuild,
             self.package_builds,
-        );
+        ), &returned_error);
         defer current_review.deinit();
         if (!std.mem.eql(u8, &reviewed_digest, &current_review.digest))
-            return error.ReviewedPkgbuildChanged;
+            return trackReturnError(error.ReviewedPkgbuildChanged, &returned_error);
         if (!package_file.installScriptsMatch(self, current_review.install_scripts))
-            return error.ReviewedPkgbuildChanged;
+            return trackReturnError(error.ReviewedPkgbuildChanged, &returned_error);
         if (!package_file.reviewedFilesMatch(self, current_review.reviewed_files))
-            return error.ReviewedPkgbuildChanged;
+            return trackReturnError(error.ReviewedPkgbuildChanged, &returned_error);
 
-        if (self.active_operation != null) return error.BuildAlreadyRunning;
+        if (self.active_operation != null) return trackReturnError(error.BuildAlreadyRunning, &returned_error);
         self.active_operation = operation;
         defer self.active_operation = null;
-        try security.secureBuilderProcess();
-        try self.prepareBuildEnvironment(operation);
-        try self.requireSandboxAvailability();
-        try self.resolveSourceDateEpoch();
+        try trackReturnError(security.secureBuilderProcess(), &returned_error);
+        try trackReturnError(self.prepareBuildEnvironment(operation), &returned_error);
+        try trackReturnError(self.requireSandboxAvailability(), &returned_error);
+        try trackReturnError(self.resolveSourceDateEpoch(), &returned_error);
 
-        var evaluated = try self.resolveEvaluatedBuilds(operation);
+        var evaluated = try trackReturnError(self.resolveEvaluatedBuilds(operation), &returned_error);
         defer evaluated.deinit(self.allocator);
-        var resolved_review = try preparePkgbuildReview(
+        var resolved_review = try trackReturnError(preparePkgbuildReview(
             self.allocator,
             self.io,
             self.options.start_directory,
             current_pkgbuild,
             self.package_builds,
-        );
+        ), &returned_error);
         defer resolved_review.deinit();
         if (!std.mem.eql(u8, &reviewed_digest, &resolved_review.digest))
-            return error.ReviewedPkgbuildChanged;
-        try resolved_review.verifyCurrent(
+            return trackReturnError(error.ReviewedPkgbuildChanged, &returned_error);
+        try trackReturnError(resolved_review.verifyCurrent(
             self.allocator,
             self.io,
             pkgbuild_path,
             self.options.start_directory,
-        );
-        try self.validatePackageFunctions();
+        ), &returned_error);
+        try trackReturnError(self.validatePackageFunctions(), &returned_error);
         const original_install_scripts = self.options.install_scripts;
         const original_reviewed_files = self.options.reviewed_files;
         defer {
@@ -554,33 +557,33 @@ pub const PackageBuilder = struct {
         self.options.install_scripts = resolved_review.install_scripts;
         self.options.reviewed_files = resolved_review.reviewed_files;
         if (update_checksums) {
-            try steps.validateBuildDirectories(self);
-            try self.refreshChecksums(operation, &resolved_review, &evaluated);
+            try trackReturnError(steps.validateBuildDirectories(self), &returned_error);
+            try trackReturnError(self.refreshChecksums(operation, &resolved_review, &evaluated), &returned_error);
         }
         if (mode != .evaluate_only and self.hasSharedPhase("pkgver")) {
-            try steps.validateBuildDirectories(self);
-            try self.prepareVersion(operation, &resolved_review, true, update_checksums);
+            try trackReturnError(steps.validateBuildDirectories(self), &returned_error);
+            try trackReturnError(self.prepareVersion(operation, &resolved_review, true, update_checksums), &returned_error);
             // Source the updated file again for SRCINFO's scalar/array overrides.
             // Never reuse the snapshot taken before pkgver() ran.
-            const refreshed = try self.resolveEvaluatedBuilds(operation);
+            const refreshed = try trackReturnError(self.resolveEvaluatedBuilds(operation), &returned_error);
             evaluated.deinit(self.allocator);
             evaluated = refreshed;
-            if (update_checksums) try self.refreshChecksums(operation, &resolved_review, &evaluated);
+            if (update_checksums) try trackReturnError(self.refreshChecksums(operation, &resolved_review, &evaluated), &returned_error);
         }
-        try resolved_review.verifyCurrent(self.allocator, self.io, pkgbuild_path, self.options.start_directory);
-        const final_pkgbuild = try std.Io.Dir.cwd().readFileAlloc(
+        try trackReturnError(resolved_review.verifyCurrent(self.allocator, self.io, pkgbuild_path, self.options.start_directory), &returned_error);
+        const final_pkgbuild = try trackReturnError(std.Io.Dir.cwd().readFileAlloc(
             self.io,
             pkgbuild_path,
             self.allocator,
             .limited(32 * 1024 * 1024),
-        );
+        ), &returned_error);
         defer self.allocator.free(final_pkgbuild);
-        var final_review = try preparePkgbuildReview(self.allocator, self.io, self.options.start_directory, final_pkgbuild, self.package_builds);
+        var final_review = try trackReturnError(preparePkgbuildReview(self.allocator, self.io, self.options.start_directory, final_pkgbuild, self.package_builds), &returned_error);
         defer final_review.deinit();
         if (!std.mem.eql(u8, &resolved_review.digest, &final_review.digest))
-            return error.ReviewedPkgbuildChanged;
-        try self.validatePackageFunctions();
-        try srcinfo.writePkgbuild(
+            return trackReturnError(error.ReviewedPkgbuildChanged, &returned_error);
+        try trackReturnError(self.validatePackageFunctions(), &returned_error);
+        try trackReturnError(srcinfo.writePkgbuild(
             self.allocator,
             self.io,
             writer,
@@ -593,7 +596,7 @@ pub const PackageBuilder = struct {
                 .dynamic_array_overrides = &evaluated.arrays,
                 .dynamic_array_unsets = if (evaluated.unset_arrays.count() > 0) &evaluated.unset_arrays else null,
             },
-        );
+        ), &returned_error);
     }
 
     fn buildPackage(self: *PackageBuilder, operation: *op_context.Operation) ![]BuildArtifact {
@@ -873,6 +876,9 @@ pub const PackageBuilder = struct {
     ) !steps.DynamicMetadataOverrides {
         var evaluated = try steps.evaluateDynamicMetadata(self, operation);
         errdefer evaluated.deinit(self.allocator);
+        // Reparsing replaces package metadata (and its borrowed name). Keep the
+        // stage, but let failure logging use the current owned requested name.
+        self.failure_location.package_name = null;
         try self.resolveEvaluatedRequestedNames(
             if (evaluated.scalars.count() > 0) &evaluated.scalars else null,
             if (evaluated.unset_scalars.count() > 0) &evaluated.unset_scalars else null,

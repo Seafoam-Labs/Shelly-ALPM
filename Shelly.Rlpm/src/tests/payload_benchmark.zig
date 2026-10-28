@@ -8,9 +8,7 @@ const Fixture = @import("actions_fixture.zig");
 const Archive = @import("archive_fixture.zig");
 
 const E = rlpm.Transaction.Executor;
-const c = @cImport({
-    @cInclude("stdlib.h");
-});
+const c = @import("rlpm_c");
 
 const a = std.testing.allocator;
 const io = std.testing.io;
@@ -49,7 +47,7 @@ fn commit(
     std.debug.print(
         "payload-bench,{s},{s},{s},{s},{d},{d},{d},{d},{d},{d},{d}\n",
         .{
-            @tagName(builtin.mode),
+            @tagName(builtin.optimize),
             mode,
             workload,
             operation,

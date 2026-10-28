@@ -585,12 +585,12 @@ test "allocation failures release explicit and inherited migration plans metadat
 
     var input = try archive(false, false);
     defer input.deinit();
-    try std.testing.checkAllAllocationFailures(a, allocationPreflight, .{ &f, input.path, false });
+    try @import("allocation_failures.zig").checkAllAllocationFailures(a, allocationPreflight, .{ &f, input.path, false });
 
     var owner = try f.owner();
     defer owner.deinit() catch unreachable;
     try apply(&owner, input.path, .{ .package = name, .path = helper, .backup = true });
-    try std.testing.checkAllAllocationFailures(a, allocationPreflight, .{ &f, input.path, true });
+    try @import("allocation_failures.zig").checkAllAllocationFailures(a, allocationPreflight, .{ &f, input.path, true });
 }
 
 fn declaredArchive(declaration: []const u8, payload: bool, replacement: bool) !Archive {
@@ -831,5 +831,5 @@ fn declarationAllocations(allocator: std.mem.Allocator) !void {
 }
 
 test "migration declaration allocation failures release JSON and duplicate tracking" {
-    try std.testing.checkAllAllocationFailures(a, declarationAllocations, .{});
+    try @import("allocation_failures.zig").checkAllAllocationFailures(a, declarationAllocations, .{});
 }

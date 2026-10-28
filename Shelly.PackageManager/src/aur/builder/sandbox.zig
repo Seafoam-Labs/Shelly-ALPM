@@ -129,7 +129,7 @@ const create_ruleset_version_flag = 1;
 pub fn abiVersion() u32 {
     if (builtin.os.tag != .linux) return 0;
     const rc = std.os.linux.syscall3(.landlock_create_ruleset, 0, 0, create_ruleset_version_flag);
-    if (std.os.linux.errno(@intCast(rc)) != .SUCCESS) return 0;
+    if (std.os.linux.errno(rc) != .SUCCESS) return 0;
     return @intCast(rc);
 }
 
@@ -154,7 +154,7 @@ pub fn applyPolicy(allocator: std.mem.Allocator, policy: Policy) (SandboxError |
         @sizeOf(RulesetAttr),
         0,
     );
-    if (std.os.linux.errno(@intCast(ruleset_rc)) != .SUCCESS) return error.SandboxRuleFailed;
+    if (std.os.linux.errno(ruleset_rc) != .SUCCESS) return error.SandboxRuleFailed;
     const ruleset_fd: i32 = @intCast(ruleset_rc);
     defer _ = std.os.linux.close(ruleset_fd);
 
@@ -164,7 +164,7 @@ pub fn applyPolicy(allocator: std.mem.Allocator, policy: Policy) (SandboxError |
         try addPathRule(allocator, ruleset_fd, read_only_access, path);
 
     const restrict_rc = std.os.linux.syscall2(.landlock_restrict_self, @intCast(ruleset_fd), 0);
-    if (std.os.linux.errno(@intCast(restrict_rc)) != .SUCCESS) return error.SandboxRestrictFailed;
+    if (std.os.linux.errno(restrict_rc) != .SUCCESS) return error.SandboxRestrictFailed;
 }
 
 fn addPathRule(
@@ -173,10 +173,10 @@ fn addPathRule(
     allowed_access: u64,
     path: []const u8,
 ) (SandboxError || error{OutOfMemory})!void {
-    const path_z = try allocator.dupeZ(u8, path);
+    const path_z = try allocator.dupeSentinel(u8, path, 0);
     defer allocator.free(path_z);
     const fd_rc = std.os.linux.open(path_z.ptr, .{ .PATH = true, .CLOEXEC = true }, 0);
-    if (std.os.linux.errno(@intCast(fd_rc)) != .SUCCESS) return error.SandboxPathUnopenable;
+    if (std.os.linux.errno(fd_rc) != .SUCCESS) return error.SandboxPathUnopenable;
     const parent_fd: i32 = @intCast(fd_rc);
     defer _ = std.os.linux.close(parent_fd);
     var rule = PathBeneathAttr{
@@ -190,7 +190,7 @@ fn addPathRule(
         @intFromPtr(&rule),
         0,
     );
-    if (std.os.linux.errno(@intCast(rc)) == .INVAL) {
+    if (std.os.linux.errno(rc) == .INVAL) {
         // Non-directory target: directory-scoped rights are rejected. Retry
         // with the file-scoped subset (covers device nodes like /dev/null).
         rule.allowed_access = allowed_access & file_access_bits;
@@ -203,7 +203,7 @@ fn addPathRule(
             0,
         );
     }
-    if (std.os.linux.errno(@intCast(rc)) != .SUCCESS) return error.SandboxRuleFailed;
+    if (std.os.linux.errno(rc) != .SUCCESS) return error.SandboxRuleFailed;
 }
 
 pub const ParsedWrapper = struct {

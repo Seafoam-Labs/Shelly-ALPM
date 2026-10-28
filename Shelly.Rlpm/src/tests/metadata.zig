@@ -78,12 +78,12 @@ test "raw version comparisons preserve byte inputs under C locale" {
         _ = try std.fmt.hexToBytes(b, b_hex);
         try std.testing.expectEqual(
             expected.get("sign").?.integer,
-            @intFromEnum(rlpm.Version.compareStrings(a, b)),
+            @backingInt(rlpm.Version.compareStrings(a, b)),
         );
 
         try std.testing.expectEqual(
             -expected.get("sign").?.integer,
-            @intFromEnum(rlpm.Version.compareStrings(b, a)),
+            @backingInt(rlpm.Version.compareStrings(b, a)),
         );
     }
 }
@@ -203,7 +203,7 @@ test "archive modes, duplicate metadata, mtree inventory and provisions match li
             try std.testing.expect(package.validation.none);
             try std.testing.expectEqual(
                 expected.get("reason").?.integer,
-                @intFromEnum(package.install_reason.?),
+                @backingInt(package.install_reason.?),
             );
 
             try std.testing.expectEqual(full, package.files_loaded);
@@ -374,11 +374,11 @@ fn allocationArchive(failing: std.mem.Allocator, path: []const u8) !void {
 }
 
 test "conversion, full archive and stream operations clean up every failed allocation" {
-    try std.testing.checkAllAllocationFailures(allocator, allocationConversion, .{});
+    try @import("allocation_failures.zig").checkAllAllocationFailures(allocator, allocationConversion, .{});
 
     var fixture = try Fixture.init(&stream_entries, .zstd);
     defer fixture.deinit();
-    try std.testing.checkAllAllocationFailures(allocator, allocationArchive, .{fixture.path});
+    try @import("allocation_failures.zig").checkAllAllocationFailures(allocator, allocationArchive, .{fixture.path});
 }
 
 test "signature decoding and local file metadata match independent captures" {
@@ -398,7 +398,7 @@ test "signature decoding and local file metadata match independent captures" {
         defer parsed_reason.deinit(allocator);
         try std.testing.expectEqual(
             reason.object.get("reason").?.integer,
-            @intFromEnum(parsed_reason.reason.?),
+            @backingInt(parsed_reason.reason.?),
         );
     }
 

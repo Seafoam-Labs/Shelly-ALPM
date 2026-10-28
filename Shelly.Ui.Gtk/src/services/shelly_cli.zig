@@ -49,7 +49,7 @@ pub const ShellyCli = struct {
     io: Io,
 
     fn shellyBin() []const u8 {
-        return if (builtin.mode == .Debug)
+        return if (builtin.optimize == .debug)
             "../Shelly.Cli.Zig/zig-out/bin/shelly"
         else
             "shelly";
@@ -90,7 +90,7 @@ pub const ShellyCli = struct {
     }
 
     fn exec(self: ShellyCli, argv: []const []const u8) !RunResult {
-        if (builtin.mode == .Debug) {
+        if (builtin.optimize == .debug) {
             if (std.mem.join(self.allocator, " ", argv)) |command| {
                 defer self.allocator.free(command);
                 log.debug("argv: {s}", .{command});

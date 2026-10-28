@@ -453,8 +453,8 @@ pub const ArchiveManager = struct {
             .redirect_behavior = .init(10),
         }) catch return Error.RemoteListingFailed;
         defer request.deinit();
-        request.accept_encoding[@intFromEnum(std.http.ContentEncoding.gzip)] = false;
-        request.accept_encoding[@intFromEnum(std.http.ContentEncoding.deflate)] = false;
+        request.accept_encoding[@backingInt(std.http.ContentEncoding.gzip)] = false;
+        request.accept_encoding[@backingInt(std.http.ContentEncoding.deflate)] = false;
         request.sendBodiless() catch return Error.RemoteListingFailed;
         var redirect_buffer: [8 * 1024]u8 = undefined;
         var response = request.receiveHead(&redirect_buffer) catch return Error.RemoteListingFailed;
@@ -540,15 +540,15 @@ fn createCandidate(
     installed_version: ?[]const u8,
     size: ?u64,
 ) std.mem.Allocator.Error!DowngradeCandidate {
-    const name = try allocator.dupeZ(u8, entry.name);
+    const name = try allocator.dupeSentinel(u8, entry.name, 0);
     errdefer allocator.free(name);
-    const version = try allocator.dupeZ(u8, entry.version);
+    const version = try allocator.dupeSentinel(u8, entry.version, 0);
     errdefer allocator.free(version);
-    const release = try allocator.dupeZ(u8, entry.release);
+    const release = try allocator.dupeSentinel(u8, entry.release, 0);
     errdefer allocator.free(release);
-    const version_release = try allocator.dupeZ(u8, entry.version_release);
+    const version_release = try allocator.dupeSentinel(u8, entry.version_release, 0);
     errdefer allocator.free(version_release);
-    const architecture = try allocator.dupeZ(u8, entry.arch);
+    const architecture = try allocator.dupeSentinel(u8, entry.arch, 0);
     errdefer allocator.free(architecture);
     const filename = try allocator.dupe(u8, std.fs.path.basename(entry.full_path));
     errdefer allocator.free(filename);
@@ -628,7 +628,7 @@ fn candidateBefore(_: void, a: DowngradeCandidate, b: DowngradeCandidate) bool {
     if (a.source != .local_cache and b.source == .local_cache) return false;
     const filename_order = std.mem.order(u8, a.filename, b.filename);
     if (filename_order != .eq) return filename_order == .gt;
-    return @intFromEnum(a.source) < @intFromEnum(b.source);
+    return @backingInt(a.source) < @backingInt(b.source);
 }
 
 fn isValidPackageName(name: []const u8) bool {

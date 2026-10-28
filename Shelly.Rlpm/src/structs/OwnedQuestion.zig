@@ -19,8 +19,8 @@ pub fn init(allocator: std.mem.Allocator, source: C.Question) !OwnedQuestion {
         inline else => |value, tag| blk: {
             var copied: @TypeOf(value) = undefined;
 
-            inline for (std.meta.fields(@TypeOf(value))) |field| {
-                if (comptime std.mem.eql(u8, field.name, "views")) {
+            inline for (@typeInfo(@TypeOf(value)).@"struct".field_names, @typeInfo(@TypeOf(value)).@"struct".field_types) |field_name, field_type| {
+                if (comptime std.mem.eql(u8, field_name, "views")) {
                     const views = try a.alloc(C.PackageView, value.views.len);
 
                     for (views, value.views) |*out, view| {
@@ -30,12 +30,12 @@ pub fn init(allocator: std.mem.Allocator, source: C.Question) !OwnedQuestion {
                     }
 
                     copied.views = views;
-                } else if (@typeInfo(field.type) == .error_set) {
-                    @field(copied, field.name) = @field(value, field.name);
-                } else @field(copied, field.name) = try Plan.copyValue(
-                    field.type,
+                } else if (@typeInfo(field_type) == .error_set) {
+                    @field(copied, field_name) = @field(value, field_name);
+                } else @field(copied, field_name) = try Plan.copyValue(
+                    field_type,
                     a,
-                    @field(value, field.name),
+                    @field(value, field_name),
                 );
             }
 

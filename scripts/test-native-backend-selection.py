@@ -93,10 +93,20 @@ sys.exit(93)
         self.assert_variant(result, commands, "true")
 
     def test_explicit_false_bypasses_probe(self):
-        result, commands = self.run_selection("false", "ReleaseSafe", metadata=True)
+        result, commands = self.run_selection("false", "safe", metadata=True)
         self.assert_variant(result, commands, "false")
         self.assertEqual(len(commands), 1)
-        self.assertIn("-Doptimize=ReleaseSafe", commands[0])
+        self.assertIn("-Doptimize=safe", commands[0])
+
+    def test_devario_profile_is_forwarded(self):
+        result, commands = self.run_selection("false", "safe", "devario")
+        self.assert_variant(result, commands, "false")
+        self.assertIn("-Dpath-profile=devario", commands[0])
+
+    def test_invalid_profile_fails_before_building(self):
+        result, commands = self.run_selection("false", "debug", "unknown")
+        self.assertEqual(result.returncode, 2)
+        self.assertEqual(commands, [])
 
     def test_invalid_mode_fails_before_building(self):
         result, commands = self.run_selection("unknown")

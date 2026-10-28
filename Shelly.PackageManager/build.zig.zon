@@ -25,7 +25,7 @@
     .fingerprint = 0x3f35f0a24634533b, // Changing this has security and trust implications.
     // Tracks the earliest Zig version that the package considers to be a
     // supported use case.
-    .minimum_zig_version = "0.16.0",
+    .minimum_zig_version = "0.17.0",
     // This field is optional.
     // Each dependency must either provide a `url` and `hash`, or a `path`.
     // `zig build --fetch` can be used to fetch all dependencies of a package, recursively.
@@ -43,20 +43,20 @@
             .path = "../Shelly.Flatpak.Backend",
         },
         .goose = .{
-            .url = "git+https://github.com/luxluth/goose.git?ref=master#387de965800bf0f6116d51f45a9412cba0801975",
-            .hash = "goose-1.0.0-e9MzMGKcAgD7vlp_acJYt6g430wQcrAxUKWHEEF0_Hcc",
+            .url = "https://codeload.github.com/luxluth/goose/tar.gz/8e24c3c864a27d26d8cf6f9dfee92951eb47a7a7",
+            .hash = "goose-4.0.1-e9MzMJg3BABXxlhF04kBiycvfMTgQNn4VuI3I7yU6PWw",
         },
         .@"zig-time" = .{
-            .url = "git+https://github.com/deatil/zig-time?ref=main#ea9fb647bb5d855b3e6a20c302a41ebd2d74478b",
-            .hash = "zig_time-1.3.3-FD_-CkW4AQBIycdlOnmzXXTDQHt73McH_oB0fDbk3jnG",
+            .url = "https://codeload.github.com/deatil/zig-time/tar.gz/2cb1717067ba31114f89f37464880dd392c74003",
+            .hash = "zig_time-1.3.6-FD_-Cou8AQDc9HunLAYTCKIe9gZGfq1tXwjZ5gNPWwnp",
         },
         .@"zig-xml" = .{
-            .url = "git+https://github.com/ianprime0509/zig-xml#6a446191d2509788959766b60a13b8626d9ad078",
-            .hash = "xml-0.2.0-ZTbP3x07AgAwDNgFEj9liF24YjojTKyznD3-Njf9w5HT",
+            .url = "https://codeload.github.com/ianprime0509/zig-xml/tar.gz/4beab29d68ab308af4bd12a4fc4187c24fdad0d6",
+            .hash = "xml-0.2.2-ZTbP35N4AgAN3HBgWmBp_LAQ0MIPKW17GAGMwx4DHGYK",
         },
         .toml = .{
-            .url = "git+https://github.com/sam701/zig-toml.git#8685923e32e8b8a795eb2715684236975a70faed",
-            .hash = "toml-0.3.0-bV14BRmKAQAWR0FT0KUKFwVJTImaFhWjSe6HfSMtNZOH",
+            .url = "https://codeload.github.com/sam701/zig-toml/tar.gz/4a13e49ce7d19ac2df8b87962d9f23c0f5dd5bdd",
+            .hash = "toml-0.3.0-bV14BRmkAQDSILPPyXc31aAXPtJa1Uh8Frug3i6InAUc",
         },
     },
     .paths = .{

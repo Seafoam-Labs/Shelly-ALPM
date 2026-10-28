@@ -45,10 +45,10 @@ pub const PkgInfo = struct {
     checkdepends: []const []const u8 = &.{},
 
     pub fn deinit(self: *PkgInfo, allocator: std.mem.Allocator) void {
-        inline for (@typeInfo(PkgInfo).@"struct".fields) |field| switch (field.type) {
-            []const u8 => allocator.free(@field(self, field.name)),
-            []const []const u8 => freeValues(allocator, @field(self, field.name)),
-            else => @compileError("PkgInfo field is not owned text: " ++ field.name),
+        inline for (@typeInfo(PkgInfo).@"struct".field_names, @typeInfo(PkgInfo).@"struct".field_types) |field_name, field_type| switch (field_type) {
+            []const u8 => allocator.free(@field(self, field_name)),
+            []const []const u8 => freeValues(allocator, @field(self, field_name)),
+            else => @compileError("PkgInfo field is not owned text: " ++ field_name),
         };
         self.* = undefined;
     }
@@ -61,12 +61,12 @@ pub const PkgInfo = struct {
         key: []const u8,
         value: []const u8,
     ) Allocator.Error!bool {
-        inline for (@typeInfo(PkgInfo).@"struct".fields) |field| {
-            if (field.type != []const u8) continue;
-            if (std.mem.eql(u8, key, field.name)) {
+        inline for (@typeInfo(PkgInfo).@"struct".field_names, @typeInfo(PkgInfo).@"struct".field_types) |field_name, field_type| {
+            if (field_type != []const u8) continue;
+            if (std.mem.eql(u8, key, field_name)) {
                 const owned = try normalizeValue(allocator, value);
-                allocator.free(@field(self, field.name));
-                @field(self, field.name) = owned;
+                allocator.free(@field(self, field_name));
+                @field(self, field_name) = owned;
                 return true;
             }
         }
@@ -117,8 +117,8 @@ const ValueLists = struct {
     }
 
     fn deinit(self: *ValueLists, allocator: std.mem.Allocator) void {
-        inline for (@typeInfo(ValueLists).@"struct".fields) |field| {
-            const list = &@field(self, field.name);
+        inline for (@typeInfo(ValueLists).@"struct".field_names) |field_name| {
+            const list = &@field(self, field_name);
             freeList(allocator, list);
         }
     }
@@ -126,9 +126,9 @@ const ValueLists = struct {
     /// Moves every list into `info`, whose field names match. A list that was
     /// already moved is empty, so `deinit` stays safe to call afterwards.
     fn moveAll(self: *ValueLists, allocator: std.mem.Allocator, info: *PkgInfo) Allocator.Error!void {
-        inline for (@typeInfo(ValueLists).@"struct".fields) |field| {
-            var list = &@field(self, field.name);
-            @field(info, field.name) = try list.toOwnedSlice(allocator);
+        inline for (@typeInfo(ValueLists).@"struct".field_names) |field_name| {
+            var list = &@field(self, field_name);
+            @field(info, field_name) = try list.toOwnedSlice(allocator);
         }
     }
 };

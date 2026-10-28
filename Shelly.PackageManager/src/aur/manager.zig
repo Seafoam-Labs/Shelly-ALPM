@@ -1,4 +1,5 @@
 const std = @import("std");
+const trackReturnError = @import("diagnostics").captureError;
 const diagnostics = @import("diagnostics");
 
 const alpm_module = @import("../alpm/manager.zig");
@@ -202,9 +203,9 @@ pub fn collectVersionUpdates(
     for (aur_packages) |package| {
         for (installed) |local| {
             if (!std.mem.eql(u8, package.name, local.name)) continue;
-            const remote_version = try allocator.dupeZ(u8, package.version);
+            const remote_version = try allocator.dupeSentinel(u8, package.version, 0);
             defer allocator.free(remote_version);
-            const local_version = try allocator.dupeZ(u8, local.version);
+            const local_version = try allocator.dupeSentinel(u8, local.version, 0);
             defer allocator.free(local_version);
             // Match pacman, including versions with an empty epoch emitted by
             // older native builders, so equal versions do not trigger rebuilds.
@@ -577,7 +578,7 @@ pub const Manager = struct {
     ) !void {
         if (!reverse_dependencies.required_by and !reverse_dependencies.optional_for) return;
         for (packages) |*package| {
-            const name_z = try self.allocator.dupeZ(u8, package.name);
+            const name_z = try self.allocator.dupeSentinel(u8, package.name, 0);
             defer self.allocator.free(name_z);
             if (!self.alpm.is_package_installed(name_z)) continue;
             var local_package = try self.alpm.get_single_installed_package(name_z) orelse continue;
@@ -1317,7 +1318,7 @@ pub const Manager = struct {
         try self.checkCancelled();
         const candidate = try srcinfo.packageVersion(self.allocator, generated, name) orelse return false;
         defer self.allocator.free(candidate);
-        const terminated_name = try self.allocator.dupeZ(u8, name);
+        const terminated_name = try self.allocator.dupeSentinel(u8, name, 0);
         defer self.allocator.free(terminated_name);
         var installed = try self.alpm.get_single_installed_package(terminated_name) orelse return false;
         defer installed.deinit(self.allocator);
@@ -1480,7 +1481,7 @@ pub const Manager = struct {
             for (plan.selected_optional orelse &.{}) |raw| {
                 const parsed = dependency_resolver.parseOptionalDependency(raw);
                 if (self.isDeclinedPackage(parsed.name)) continue;
-                const name_z = try allocator.dupeZ(u8, parsed.name);
+                const name_z = try allocator.dupeSentinel(u8, parsed.name, 0);
                 const repository_name = self.alpm.find_remote_satisfier_for_dependency(name_z) catch null;
                 try appendTransactionPackage(&packages, allocator, .{
                     .name = repository_name orelse parsed.name,
@@ -1725,7 +1726,7 @@ pub const Manager = struct {
             for (terminated.items) |name| self.allocator.free(name);
             terminated.deinit(self.allocator);
         }
-        for (names) |name| try terminated.append(self.allocator, try self.allocator.dupeZ(u8, name));
+        for (names) |name| try terminated.append(self.allocator, try self.allocator.dupeSentinel(u8, name, 0));
         try self.alpm.install_packages(terminated.items, flags);
     }
 
@@ -1735,7 +1736,7 @@ pub const Manager = struct {
             for (terminated.items) |name| self.allocator.free(name);
             terminated.deinit(self.allocator);
         }
-        for (names) |name| try terminated.append(self.allocator, try self.allocator.dupeZ(u8, name));
+        for (names) |name| try terminated.append(self.allocator, try self.allocator.dupeSentinel(u8, name, 0));
         try self.alpm.remove_packages_with_confirmation(terminated.items, flags, keep_optional_dependencies, confirmation);
     }
 
@@ -1759,7 +1760,7 @@ pub const Manager = struct {
         var installed: std.ArrayList([]const u8) = .empty;
         defer installed.deinit(self.allocator);
         for (build_only) |name| {
-            const name_z = self.allocator.dupeZ(u8, name) catch continue;
+            const name_z = self.allocator.dupeSentinel(u8, name, 0) catch continue;
             const is_installed = self.alpm.is_package_installed(name_z);
             self.allocator.free(name_z);
             if (is_installed) installed.append(self.allocator, name) catch continue;
@@ -1794,7 +1795,7 @@ pub const Manager = struct {
             const parsed = dependency_resolver.parseOptionalDependency(raw);
             if (!dependency_resolver.isValidPackageName(parsed.name)) continue;
             if (self.isDeclinedPackage(parsed.name)) continue;
-            const name_z = try self.allocator.dupeZ(u8, parsed.name);
+            const name_z = try self.allocator.dupeSentinel(u8, parsed.name, 0);
             defer self.allocator.free(name_z);
             try options.append(self.allocator, .{
                 .name = parsed.name,
@@ -1832,7 +1833,7 @@ pub const Manager = struct {
             try self.checkCancelled();
             const parsed = dependency_resolver.parseOptionalDependency(raw);
             if (self.isDeclinedPackage(parsed.name)) continue;
-            const name_z = try self.allocator.dupeZ(u8, parsed.name);
+            const name_z = try self.allocator.dupeSentinel(u8, parsed.name, 0);
             defer self.allocator.free(name_z);
             if (self.alpm.find_remote_satisfier_for_dependency(name_z)) |satisfier| {
                 if (!containsConst(repo_names.items, satisfier)) try repo_names.append(self.allocator, satisfier);
@@ -1847,7 +1848,7 @@ pub const Manager = struct {
             defer recoverable_errors.deinit();
             if (self.installRepoPackagesConst(repo_names.items, .{})) |_| {
                 for (repo_names.items) |name| {
-                    const name_z = try self.allocator.dupeZ(u8, name);
+                    const name_z = try self.allocator.dupeSentinel(u8, name, 0);
                     defer self.allocator.free(name_z);
                     self.alpm.update_package_reason(name_z, .Dependency) catch |err| switch (err) {
                         error.Cancelled, error.OutOfMemory => return err,
@@ -1872,7 +1873,8 @@ pub const Manager = struct {
     }
 
     fn installOptionalAurDependency(self: *Self, parent: []const u8, name: []const u8) anyerror!void {
-        const message = try std.fmt.allocPrint(self.allocator, "Could not install optional dependency '{0f}' for '{1f}'. The primary package is installed. Retry this dependency separately if needed.", .{ diagnostics.safe(name), diagnostics.safe(parent) });
+        var returned_error: ?anyerror = null;
+        const message = try trackReturnError(std.fmt.allocPrint(self.allocator, "Could not install optional dependency '{0f}' for '{1f}'. The primary package is installed. Retry this dependency separately if needed.", .{ diagnostics.safe(name), diagnostics.safe(parent) }), &returned_error);
         defer self.allocator.free(message);
         var recovery: operation_api.RecoverableErrors = .{ .message = message };
         var scope = OperationScope.init(self, .install, name);
@@ -1881,7 +1883,8 @@ pub const Manager = struct {
         if (scope.operation) |*operation| operation.recoverable_errors = &recovery;
         scope.attach();
         defer scope.finish(.success);
-        errdefer |err| {
+        errdefer {
+            const err = returned_error.?;
             if (scope.operation) |*operation| {
                 operation.reportError(err, diagnostics.cause(err), "aur", null, false);
             } else if (err != error.Cancelled and err != error.OutOfMemory) {
@@ -1889,15 +1892,15 @@ pub const Manager = struct {
             }
             scope.finish(if (err == error.Cancelled) .cancelled else .failed);
         }
-        const providers = try self.aur_client.findProviders(name);
+        const providers = try trackReturnError(self.aur_client.findProviders(name), &returned_error);
         defer rpc.deinitStrings(self.allocator, providers);
-        const chosen = try self.chooseProvider(name, providers) orelse return error.OptionalDependencyProviderNotSelected;
-        try self.checkCancelled();
+        const chosen = try trackReturnError(self.chooseProvider(name, providers), &returned_error) orelse return trackReturnError(error.OptionalDependencyProviderNotSelected, &returned_error);
+        try trackReturnError(self.checkCancelled(), &returned_error);
         if (self.isDeclinedPackage(chosen)) return;
-        try self.installPackages(&.{chosen});
-        const chosen_z = try self.allocator.dupeZ(u8, chosen);
+        try trackReturnError(self.installPackages(&.{chosen}), &returned_error);
+        const chosen_z = try trackReturnError(self.allocator.dupeSentinel(u8, chosen, 0), &returned_error);
         defer self.allocator.free(chosen_z);
-        try self.alpm.update_package_reason(chosen_z, .Dependency);
+        try trackReturnError(self.alpm.update_package_reason(chosen_z, .Dependency), &returned_error);
     }
 
     fn chooseProvider(self: *Self, dependency: []const u8, provider_names: []const []u8) !?[]const u8 {
@@ -1906,7 +1909,7 @@ pub const Manager = struct {
         var options: std.ArrayList(events.ProviderOption) = .empty;
         defer options.deinit(self.allocator);
         for (provider_names) |name| {
-            const name_z = try self.allocator.dupeZ(u8, name);
+            const name_z = try self.allocator.dupeSentinel(u8, name, 0);
             defer self.allocator.free(name_z);
             try options.append(self.allocator, .{
                 .name = name,
@@ -3183,7 +3186,7 @@ pub const Manager = struct {
     fn availabilityFailureMessage(self: *Self, name: []const u8, err: anyerror) ![]u8 {
         var repository_match = false;
         if (err == error.AurPackageNotFound) {
-            const name_z = try self.allocator.dupeZ(u8, name);
+            const name_z = try self.allocator.dupeSentinel(u8, name, 0);
             defer self.allocator.free(name_z);
             if (self.alpm.find_remote_satisfier_for_dependency_details(name_z)) |match| {
                 repository_match = !match.via_provides and std.mem.eql(u8, match.real_name, name);
@@ -3600,7 +3603,7 @@ fn artifactsFromPaths(
     }
     for (paths, artifacts) |path, *artifact| {
         const package_name = packageNameForArtifact(path, requested_names) orelse requested_names[0];
-        const owned_path = try allocator.dupeZ(u8, path);
+        const owned_path = try allocator.dupeSentinel(u8, path, 0);
         errdefer allocator.free(owned_path);
         const owned_name = try allocator.dupe(u8, package_name);
         errdefer allocator.free(owned_name);
@@ -3640,14 +3643,14 @@ fn forwardBuildLine(data: ?*anyopaque, stream: builder.StreamKind, line: []const
 test "AUR isolated arguments retain review and version policies without bypassing the coordinator" {
     var arguments: std.ArrayList([]const u8) = .empty;
     defer arguments.deinit(std.testing.allocator);
-    try appendShellyBuildArguments(std.testing.allocator, &arguments, "/cache/demo/PKGBUILD", &.{ "demo", "demo-docs" }, "ab" ** 32, true, false, null, true, true);
+    try appendShellyBuildArguments(std.testing.allocator, &arguments, "/cache/demo/PKGBUILD", &.{ "demo", "demo-docs" }, "abababababababababababababababababababababababababababababababab", true, false, null, true, true);
     try std.testing.expect(containsConst(arguments.items, "--isolated"));
     try std.testing.expect(containsConst(arguments.items, "--sync-deps"));
     try std.testing.expect(!containsConst(arguments.items, "--coordinator-child"));
     try std.testing.expect(!containsConst(arguments.items, "--install"));
     try std.testing.expect(!containsConst(arguments.items, "--skip-source-pgp-verification"));
     try std.testing.expect(containsConst(arguments.items, "--review-digest"));
-    try std.testing.expect(containsConst(arguments.items, "ab" ** 32));
+    try std.testing.expect(containsConst(arguments.items, "abababababababababababababababababababababababababababababababab"));
     try std.testing.expect(containsConst(arguments.items, "demo-docs"));
     try std.testing.expect(containsConst(arguments.items, "--no-check"));
     try std.testing.expect(containsConst(arguments.items, "--nosign"));
@@ -3656,7 +3659,7 @@ test "AUR isolated arguments retain review and version policies without bypassin
 }
 
 test "coordinator child build arguments bind review package set and policies" {
-    const digest = "5a" ** std.crypto.hash.sha2.Sha256.digest_length;
+    const digest = "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a";
     const sign_key = "CE4814F7337B98A2527A32F8FCEBF9274CA93649";
     var upgrade: std.ArrayList([]const u8) = .empty;
     defer upgrade.deinit(std.testing.allocator);
@@ -3983,7 +3986,7 @@ fn runFixtureCommand(
 fn writeFixtureFile(io: std.Io, path: []const u8, content: []const u8, executable: bool) !void {
     var file = try std.Io.Dir.cwd().createFile(io, path, .{
         .permissions = if (executable)
-            @as(std.Io.File.Permissions, @enumFromInt(0o755))
+            @as(std.Io.File.Permissions, @fromBackingInt(@intCast(0o755)))
         else
             .default_file,
     });
@@ -6707,7 +6710,7 @@ test "AUR upgrades skip declined reviews and continue independent packages" {
         try std.testing.expectEqual(case.skipped.len, capture.skip_count);
         try std.testing.expectEqual(@as(usize, if (case.skipped.len == 0) 0 else 1), capture.summaries);
         for (names) |name| {
-            const name_z = try paths.dupeZ(u8, name);
+            const name_z = try paths.dupeSentinel(u8, name, 0);
             try std.testing.expectEqual(containsConst(case.installed, name), manager.alpm.is_package_installed(name_z));
         }
         const built = std.Io.Dir.cwd().readFileAlloc(io, marker, paths, .limited(4096)) catch |err| switch (err) {
@@ -7022,7 +7025,7 @@ test "AUR package preparation failure does not stop valid packages" {
     try std.testing.expectEqual(@as(usize, 1), capture.valid_completed);
     try std.testing.expectEqual(operation_api.CompletionStatus.failed, capture.completion.?);
 
-    const valid_name = try allocator.dupeZ(u8, "valid-after-invalid");
+    const valid_name = try allocator.dupeSentinel(u8, "valid-after-invalid", 0);
     defer allocator.free(valid_name);
     try std.testing.expect(manager.alpm.is_package_installed(valid_name));
 }
@@ -7210,10 +7213,10 @@ test "build-only dependencies are removed after a failed build" {
     try std.testing.expectEqual(@as(usize, 1), capture.cleanup_starts);
     try std.testing.expectEqual(@as(usize, 1), capture.cleanup_dones);
 
-    const makedep_z = try allocator.dupeZ(u8, "makedep-tool");
+    const makedep_z = try allocator.dupeSentinel(u8, "makedep-tool", 0);
     defer allocator.free(makedep_z);
     try std.testing.expect(!manager.alpm.is_package_installed(makedep_z));
-    const failpkg_z = try allocator.dupeZ(u8, "failpkg");
+    const failpkg_z = try allocator.dupeSentinel(u8, "failpkg", 0);
     defer allocator.free(failpkg_z);
     try std.testing.expect(!manager.alpm.is_package_installed(failpkg_z));
 }

@@ -1,5 +1,6 @@
 //! RLPM implementation of the native package facade. No libalpm imports.
 const std = @import("std");
+const trackReturnError = @import("diagnostics").captureError;
 const build_transaction = @import("../alpm/build_transaction.zig");
 const os_utilities = @import("../alpm/distribution-hooks/os_utilities.zig");
 const update_notice = @import("../alpm/distribution-hooks/CachyOS/update_notice.zig");
@@ -13,7 +14,7 @@ const op = @import("operation_context");
 const Adapter = @import("rlpm_operation_adapter");
 const downloader = @import("../shared/downloader.zig");
 const mapping = @import("configuration.zig");
-var default_family = std.atomic.Value(u8).init(@intFromEnum(downloader.AddressFamilyPolicy.prefer_ipv4));
+var default_family = std.atomic.Value(u8).init(@backingInt(downloader.AddressFamilyPolicy.prefer_ipv4));
 var default_parallel = std.atomic.Value(u8).init(100);
 
 pub const Manager = struct {
@@ -88,10 +89,10 @@ pub const Manager = struct {
         return self.threaded.io();
     }
     pub fn setDefaultDownloadAddressFamilyPolicy(value: downloader.AddressFamilyPolicy) void {
-        default_family.store(@intFromEnum(value), .release);
+        default_family.store(@backingInt(value), .release);
     }
     pub fn defaultDownloadAddressFamilyPolicy() downloader.AddressFamilyPolicy {
-        return @enumFromInt(default_family.load(.acquire));
+        return @fromBackingInt(@intCast(default_family.load(.acquire)));
     }
     pub fn setDefaultParallelDownloadCount(value: u8) void {
         default_parallel.store(if (value == 0) 100 else value, .release);
@@ -206,7 +207,7 @@ pub const Manager = struct {
                 self.allocator.free(values);
             }
             for (refs, values) |r, *value| {
-                value.* = try self.allocator.dupeZ(u8, (try self.owner.packageMetadata(self.io(), r, .{})).name);
+                value.* = try self.allocator.dupeSentinel(u8, (try self.owner.packageMetadata(self.io(), r, .{})).name, 0);
                 count += 1;
             }
             @field(result, field ++ "_value") = values;
@@ -331,7 +332,7 @@ pub const Manager = struct {
     }
     pub fn get_package_from_provides(self: *Manager, text: [:0]const u8) ![:0]const u8 {
         const ref = try self.satisfies(self.owner.localDatabase().?, try rlpm.PackageRelation.parse(text), false) orelse return error.PkgNotFound;
-        return self.names.allocator().dupeZ(u8, (try self.owner.package(ref)).name);
+        return self.names.allocator().dupeSentinel(u8, (try self.owner.package(ref)).name, 0);
     }
     pub fn find_remote_satisfier_for_dependency_details(self: *Manager, text: [:0]const u8) !contract.DependencySatisfier {
         const dep = try rlpm.PackageRelation.parse(text);
@@ -339,7 +340,7 @@ pub const Manager = struct {
             if (!db.configurationView().usage.install) continue;
             if (try self.satisfies(db.identity.?, dep, literal)) |ref| {
                 const pkg = try self.owner.package(ref);
-                return .{ .real_name = try self.names.allocator().dupeZ(u8, pkg.name), .via_provides = !std.mem.eql(u8, dep.name, pkg.name) };
+                return .{ .real_name = try self.names.allocator().dupeSentinel(u8, pkg.name, 0), .via_provides = !std.mem.eql(u8, dep.name, pkg.name) };
             }
         };
         return error.PkgNotFound;
@@ -374,21 +375,25 @@ pub const Manager = struct {
         return self.executeBuild(mode, targets, flags, confirmation, null);
     }
     fn executeBuild(self: *Manager, mode: Mode, targets: []const []const u8, flags: types.TransFlag, confirmation: contract.RemovalConfirmation, build_request: ?build_transaction.Request) anyerror!void {
+        var returned_error: ?anyerror = null;
         const error_generation = self.dispatcher.errorGeneration();
         // Failures before a transaction exists also need their original cause
         // delivered before the facade maps it to its compatibility error set.
-        errdefer |err| if (err != error.Cancelled and self.dispatcher.errorGeneration() == error_generation) {
-            const message = @import("diagnostics").format(self.allocator, err, .{ .operation = "the RLPM transaction" }) catch null;
-            defer if (message) |value| self.allocator.free(value);
-            self.dispatcher.raiseError(.{ .message = message orelse @errorName(err) });
-        };
-        if (self.temporary) return error.CommitFailed;
-        try self.checkCancelled();
+        errdefer {
+            const err = returned_error.?;
+            if (err != error.Cancelled and self.dispatcher.errorGeneration() == error_generation) {
+                const message = @import("diagnostics").format(self.allocator, err, .{ .operation = "the RLPM transaction" }) catch null;
+                defer if (message) |value| self.allocator.free(value);
+                self.dispatcher.raiseError(.{ .message = message orelse @errorName(err) });
+            }
+        }
+        if (self.temporary) return trackReturnError(error.CommitFailed, &returned_error);
+        try trackReturnError(self.checkCancelled(), &returned_error);
         var fallback = op.OperationContext.init(self.allocator, self.io());
         defer fallback.deinit();
         const context = self.operation_context orelse &fallback;
         const output_subscription = if (self.dispatcher.operationEvents.items.len != 0)
-            try context.subscribe(.{ .function = events.Dispatcher.forwardOperationEvent, .data = &self.dispatcher })
+            try trackReturnError(context.subscribe(.{ .function = events.Dispatcher.forwardOperationEvent, .data = &self.dispatcher }), &returned_error)
         else
             null;
         defer if (output_subscription) |subscription| {
@@ -405,10 +410,10 @@ pub const Manager = struct {
         self.dispatcher.setOperation(&operation);
         defer self.dispatcher.setOperation(previous_operation);
         var adapter: Adapter = undefined;
-        try adapter.init(&self.owner, &operation);
+        try trackReturnError(adapter.init(&self.owner, &operation), &returned_error);
         adapter.failure_handler = .{ .function = forwardTransactionFailure, .data = self };
         defer adapter.deinit() catch unreachable;
-        var native_flags = try rlpm.TransactionFlags.fromBits(@bitCast(flags));
+        var native_flags = try trackReturnError(rlpm.TransactionFlags.fromBits(@bitCast(flags)), &returned_error);
         native_flags.no_hooks = native_flags.no_hooks or self.hooks_disabled;
         if (flags.dbonly) native_flags.no_dependencies = true;
         const tx = self.owner.initializeTransaction(self.io(), native_flags) catch |err| {
@@ -423,63 +428,66 @@ pub const Manager = struct {
                 defer if (message) |value| self.allocator.free(value);
                 self.dispatcher.raiseError(.{ .message = message orelse @errorName(err) });
             }
-            return @as(anyerror!void, err);
+            return trackReturnError(@as(anyerror!void, err), &returned_error);
         };
         var transaction_active = true;
         defer if (transaction_active) self.owner.releaseTransaction() catch unreachable;
-        errdefer |err| operation.finish(if (err == error.Cancelled) .cancelled else .failed);
+        errdefer {
+            const err = returned_error.?;
+            operation.finish(if (err == error.Cancelled) .cancelled else .failed);
+        }
         var optional_names: std.ArrayList([]const u8) = .empty;
         defer optional_names.deinit(self.allocator);
         for (targets) |target| switch (mode) {
-            .install, .upgrade => try tx.addTarget(target),
+            .install, .upgrade => try trackReturnError(tx.addTarget(target), &returned_error),
             .archive => {
-                var package: ?rlpm.Package = try self.owner.loadPackage(self.io(), target, .local_file, .{ .mode = .full });
+                var package: ?rlpm.Package = try trackReturnError(self.owner.loadPackage(self.io(), target, .local_file, .{ .mode = .full }), &returned_error);
                 defer if (package) |*p| p.deinit();
-                try tx.takeArchive(&package);
+                try trackReturnError(tx.takeArchive(&package), &returned_error);
             },
-            .remove => try tx.remove(target),
+            .remove => try trackReturnError(tx.remove(target), &returned_error),
         };
-        if (mode == .upgrade) try tx.systemUpgrade(false);
-        if ((mode == .install or mode == .upgrade) and build_request == null) try self.selectOptional(tx, targets, flags, &optional_names);
+        if (mode == .upgrade) try trackReturnError(tx.systemUpgrade(false), &returned_error);
+        if ((mode == .install or mode == .upgrade) and build_request == null) try trackReturnError(self.selectOptional(tx, targets, flags, &optional_names), &returned_error);
         tx.prepare() catch |err| {
             if (build_request) |request| if (request.issues) |output| {
                 if (tx.plan()) |failed| {
                     var issues: std.ArrayList(build_transaction.Issue) = .empty;
                     for (failed.issues) |issue| switch (issue) {
-                        .missing => |missing| try issues.append(request.allocator, .{
-                            .requirement = try missing.dependency.formatAlloc(request.allocator),
-                            .requiredBy = try request.allocator.dupe(u8, failed.package(missing.requiring).name),
+                        .missing => |missing| try trackReturnError(issues.append(request.allocator, .{
+                            .requirement = try trackReturnError(missing.dependency.formatAlloc(request.allocator), &returned_error),
+                            .requiredBy = try trackReturnError(request.allocator.dupe(u8, failed.package(missing.requiring).name), &returned_error),
                             .code = "unsatisfied_dependency",
-                        }),
-                        .target => |target| try issues.append(request.allocator, .{
-                            .requirement = try request.allocator.dupe(u8, target),
+                        }), &returned_error),
+                        .target => |target| try trackReturnError(issues.append(request.allocator, .{
+                            .requirement = try trackReturnError(request.allocator.dupe(u8, target), &returned_error),
                             .requiredBy = "environment",
                             .code = "not_in_repositories",
-                        }),
-                        .conflict => |conflict| try issues.append(request.allocator, .{
-                            .requirement = try conflict.reason.formatAlloc(request.allocator),
-                            .requiredBy = try request.allocator.dupe(u8, failed.package(conflict.first).name),
+                        }), &returned_error),
+                        .conflict => |conflict| try trackReturnError(issues.append(request.allocator, .{
+                            .requirement = try trackReturnError(conflict.reason.formatAlloc(request.allocator), &returned_error),
+                            .requiredBy = try trackReturnError(request.allocator.dupe(u8, failed.package(conflict.first).name), &returned_error),
                             .code = "conflicting_dependencies",
-                        }),
+                        }), &returned_error),
                         else => {},
                     };
-                    output.* = try issues.toOwnedSlice(request.allocator);
+                    output.* = try trackReturnError(issues.toOwnedSlice(request.allocator), &returned_error);
                 }
             };
-            return @as(anyerror!void, err);
+            return trackReturnError(@as(anyerror!void, err), &returned_error);
         };
         const plan = tx.plan() orelse {
             operation.finish(.success);
             return;
         };
         if (build_request) |request| {
-            if (plan.removals.len != 0) return error.DependencyPlanMismatch;
+            if (plan.removals.len != 0) return trackReturnError(error.DependencyPlanMismatch, &returned_error);
             var snapshots: std.ArrayList(build_transaction.Package) = .empty;
             for (plan.additions) |addition| {
                 const package = plan.package(addition.package);
-                try snapshots.append(request.allocator, try build_transaction.fromOwned(request.allocator, try owned(request.allocator, package), package.sha256_sum));
+                try trackReturnError(snapshots.append(request.allocator, try trackReturnError(build_transaction.fromOwned(request.allocator, try trackReturnError(owned(request.allocator, package), &returned_error), package.sha256_sum), &returned_error)), &returned_error);
             }
-            try request.finish(try snapshots.toOwnedSlice(request.allocator));
+            try trackReturnError(request.finish(try trackReturnError(snapshots.toOwnedSlice(request.allocator), &returned_error)), &returned_error);
             if (request.output != null) {
                 operation.finish(.success);
                 return;
@@ -489,25 +497,25 @@ pub const Manager = struct {
             const name = plan.package(id).name;
             for (self.config.hold_packages.items) |held| if (std.mem.eql(u8, held, name)) {
                 const answer = self.dispatcher.raiseQuestion(self.io(), .{ .question = "Remove a held package?", .question_type = 0, .arguments = &.{name}, .options = &.{ "Yes", "No" } });
-                if (answer.answer != 1) return error.PrepareFailed;
+                if (answer.answer != 1) return trackReturnError(error.PrepareFailed, &returned_error);
             };
         };
         // Archive migration metadata and ownership are available only after preflight.
-        if (tx.state == .prepared and !tx.flags.download_only) try tx.preflight();
-        if (self.operation_context != null and (mode != .remove or confirmation == .required)) try self.confirmPlan(&operation, plan, mode);
+        if (tx.state == .prepared and !tx.flags.download_only) try trackReturnError(tx.preflight(), &returned_error);
+        if (self.operation_context != null and (mode != .remove or confirmation == .required)) try trackReturnError(self.confirmPlan(&operation, plan, mode), &returned_error);
         if (tx.manifest()) |manifest| for (manifest.adoptions.items) |item| {
-            const message = try std.fmt.allocPrint(self.allocator, "Preserve {s}: {s} -> {s} ({s})", .{
+            const message = try trackReturnError(std.fmt.allocPrint(self.allocator, "Preserve {s}: {s} -> {s} ({s})", .{
                 item.path,                       if (item.source) |id| plan.package(id).name else "unowned",
                 plan.package(item.package).name, @tagName(item.origin),
-            });
+            }), &returned_error);
             defer self.allocator.free(message);
             self.dispatcher.raiseInformational(.{ .event_type = .validation_complete, .message = message, .code = "migration_planned" });
         };
         if (tx.state == .prepared) {
             defer self.reportActionFailures(tx);
-            try tx.commit();
+            try trackReturnError(tx.commit(), &returned_error);
             if (tx.execution.adoptions_planned != 0) {
-                const message = try std.fmt.allocPrint(self.allocator, "Preserved and adopted {d} file(s).", .{tx.execution.adoptions_committed});
+                const message = try trackReturnError(std.fmt.allocPrint(self.allocator, "Preserved and adopted {d} file(s).", .{tx.execution.adoptions_committed}), &returned_error);
                 defer self.allocator.free(message);
                 self.dispatcher.raiseInformational(.{ .event_type = .validation_complete, .message = message, .code = "migration_committed" });
             }
@@ -516,11 +524,11 @@ pub const Manager = struct {
         // Empty/--needed plans have no commit lifecycle event. Finish before
         // releasing them so the adapter does not report a cancellation.
         operation.finish(.success);
-        try self.owner.releaseTransaction();
+        try trackReturnError(self.owner.releaseTransaction(), &returned_error);
         transaction_active = false;
         if (!flags.downloadonly) for (optional_names.items) |name| {
-            const ref = try self.owner.queryPackage(self.io(), self.owner.localDatabase().?, name) orelse continue;
-            try self.owner.setInstallReason(self.io(), ref, .dependency);
+            const ref = try trackReturnError(self.owner.queryPackage(self.io(), self.owner.localDatabase().?, name), &returned_error) orelse continue;
+            try trackReturnError(self.owner.setInstallReason(self.io(), ref, .dependency), &returned_error);
         };
     }
     fn forwardTransactionFailure(data: ?*anyopaque, message: []const u8) void {
@@ -556,7 +564,7 @@ pub const Manager = struct {
             var names: std.ArrayList([]const u8) = .empty;
             var choices: std.ArrayList(events.ProviderOption) = .empty;
             for (pkg.optional_depends) |dep| {
-                const name = try a.dupeZ(u8, dep.name);
+                const name = try a.dupeSentinel(u8, dep.name, 0);
                 _ = self.find_remote_satisfier_for_dependency(name) catch |err| {
                     if (err == error.PkgNotFound) continue;
                     return err;
@@ -565,7 +573,7 @@ pub const Manager = struct {
                 try choices.append(a, .{ .name = name, .description = dep.description orelse "No description found", .is_installed = try self.is_dependency_satisfied_by_installed_packages(name) });
             }
             if (names.items.len == 0) continue;
-            const answer = self.dispatcher.raiseQuestion(self.io(), .{ .question = try std.fmt.allocPrint(a, "Select an optional dependency for {s}", .{pkg.name}), .question_type = @intFromEnum(types.QuestionType.select_optional_dependencies), .options = names.items, .provider_options = choices.items });
+            const answer = self.dispatcher.raiseQuestion(self.io(), .{ .question = try std.fmt.allocPrint(a, "Select an optional dependency for {s}", .{pkg.name}), .question_type = @backingInt(types.QuestionType.select_optional_dependencies), .options = names.items, .provider_options = choices.items });
             var selected: std.ArrayList([]const u8) = .empty;
             for (answer.selected_indices) |index| {
                 if (index < names.items.len) try selected.append(a, names.items[index]);
@@ -574,7 +582,7 @@ pub const Manager = struct {
                 try selected.append(a, name);
             };
             for (selected.items) |name| {
-                const name_z = try a.dupeZ(u8, name);
+                const name_z = try a.dupeSentinel(u8, name, 0);
                 if (try self.is_dependency_satisfied_by_installed_packages(name_z)) continue;
                 const real = try self.find_remote_satisfier_for_dependency(name_z);
                 tx.addTarget(real) catch |err| {
@@ -742,7 +750,7 @@ pub const Manager = struct {
             self.allocator.free(result);
         }
         for (arches, result) |v, *item| {
-            item.* = try self.allocator.dupeZ(u8, v);
+            item.* = try self.allocator.dupeSentinel(u8, v, 0);
             count += 1;
         }
         return result;
@@ -881,7 +889,7 @@ pub const Manager = struct {
             const packages = try self.get_installed_packages_with_reverse_dependencies(.{ .required_by = true, .optional_for = true });
             defer types.OwnedPackage.deinitSlice(self.allocator, packages);
             for (packages) |pkg| if (pkg.reason_value == .Dependency and pkg.required_by_value.len == 0 and pkg.optional_for_value.len == 0) {
-                const name = try self.allocator.dupeZ(u8, pkg.name_value);
+                const name = try self.allocator.dupeSentinel(u8, pkg.name_value, 0);
                 names.append(self.allocator, name) catch |err| {
                     self.allocator.free(name);
                     return err;
@@ -903,7 +911,7 @@ pub const Manager = struct {
                     package.deinit();
                 } else |err| {
                     if (err == error.OutOfMemory) return err;
-                    const name = try self.allocator.dupeZ(u8, entry.basename);
+                    const name = try self.allocator.dupeSentinel(u8, entry.basename, 0);
                     names.append(self.allocator, name) catch |append_err| {
                         self.allocator.free(name);
                         return append_err;
@@ -931,18 +939,18 @@ fn legacyEvent(data: ?*anyopaque, event: rlpm.Callbacks.Event) void {
 }
 fn owned(a: std.mem.Allocator, package: *const rlpm.Package) !types.OwnedPackage {
     var result: types.OwnedPackage = undefined;
-    inline for (std.meta.fields(types.OwnedPackage)) |field| {
-        @field(result, field.name) = if (field.type == [:0]u8) @constCast("") else if (field.type == [][:0]u8) &.{} else std.mem.zeroes(field.type);
+    inline for (@typeInfo(types.OwnedPackage).@"struct".field_names, @typeInfo(types.OwnedPackage).@"struct".field_types) |field_name, field_type| {
+        @field(result, field_name) = if (field_type == [:0]u8) @constCast("") else if (field_type == [][:0]u8) &.{} else std.mem.zeroes(field_type);
     }
     errdefer result.deinit(a);
-    result.name_value = try a.dupeZ(u8, package.name);
-    result.base_value = try a.dupeZ(u8, package.base orelse package.name);
-    result.version_value = try a.dupeZ(u8, package.version.raw);
-    result.file_name_value = try a.dupeZ(u8, package.repository_filename orelse "");
+    result.name_value = try a.dupeSentinel(u8, package.name, 0);
+    result.base_value = try a.dupeSentinel(u8, package.base orelse package.name, 0);
+    result.version_value = try a.dupeSentinel(u8, package.version.raw, 0);
+    result.file_name_value = try a.dupeSentinel(u8, package.repository_filename orelse "", 0);
     inline for (.{ "description", "url", "architecture" }) |field| if (@field(package, field)) |text| {
-        @field(result, field ++ "_value") = try a.dupeZ(u8, text);
+        @field(result, field ++ "_value") = try a.dupeSentinel(u8, text, 0);
     };
-    result.repository_value = try a.dupeZ(u8, if (package.origin == .local) package.installed_database orelse "local" else package.database_name);
+    result.repository_value = try a.dupeSentinel(u8, if (package.origin == .local) package.installed_database orelse "local" else package.database_name, 0);
     result.download_size_value = @intCast(package.download_size orelse package.compressed_size orelse 0);
     result.install_size_value = @intCast(package.installed_size orelse 0);
     result.build_date_value = package.build_date orelse 0;
@@ -961,10 +969,10 @@ fn owned(a: std.mem.Allocator, package: *const rlpm.Package) !types.OwnedPackage
             a.free(values);
         }
         for (source, values) |item, *value| {
-            if (comptime std.mem.eql(u8, field, "licenses") or std.mem.eql(u8, field, "groups")) value.* = try a.dupeZ(u8, item) else {
+            if (comptime std.mem.eql(u8, field, "licenses") or std.mem.eql(u8, field, "groups")) value.* = try a.dupeSentinel(u8, item, 0) else {
                 const text = try item.formatAlloc(a);
                 defer a.free(text);
-                value.* = try a.dupeZ(u8, text);
+                value.* = try a.dupeSentinel(u8, text, 0);
             }
             count += 1;
         }

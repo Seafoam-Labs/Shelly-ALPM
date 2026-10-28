@@ -26,7 +26,7 @@ pub const AppRunner = struct {
 
     pub fn setActivationToken(self: *AppRunner, token: []const u8) !void {
         if (self.activation_token) |old| self.allocator.free(old);
-        self.activation_token = try self.allocator.dupeZ(u8, token);
+        self.activation_token = try self.allocator.dupeSentinel(u8, token, 0);
     }
 
     pub fn takeActivationToken(self: *AppRunner) ?[]const u8 {

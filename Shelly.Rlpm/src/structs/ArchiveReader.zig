@@ -6,12 +6,7 @@ const PackageFile = @import("PackageFile.zig");
 
 const ArchiveReader = @This();
 
-pub const c = @cImport({
-    @cInclude("archive.h");
-    @cInclude("archive_entry.h");
-    @cInclude("sys/stat.h");
-    @cInclude("errno.h");
-});
+pub const c = @import("rlpm_c");
 
 pub const Format = enum { tar, mtree };
 handle: *c.struct_archive,

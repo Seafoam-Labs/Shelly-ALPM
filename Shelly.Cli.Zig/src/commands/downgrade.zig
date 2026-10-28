@@ -42,7 +42,7 @@ const Real = struct {
         manager.setOperationContext(operation_context);
         defer manager.setOperationContext(null);
 
-        const package_name_z = try context.allocator.dupeZ(u8, package_name);
+        const package_name_z = try context.allocator.dupeSentinel(u8, package_name, 0);
         defer context.allocator.free(package_name_z);
         var installed = try manager.get_single_installed_package(package_name_z) orelse
             return DowngradeError.PackageNotInstalled;

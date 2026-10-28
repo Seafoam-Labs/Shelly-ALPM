@@ -57,7 +57,7 @@ pub const Manager = struct {
         errdefer scope.fail();
         try scope.checkCancelled();
 
-        const name_z = try self.allocator.dupeZ(u8, remote_name);
+        const name_z = try self.allocator.dupeSentinel(u8, remote_name, 0);
         defer self.allocator.free(name_z);
         const cancellable: *raw.GCancellable = raw.g_cancellable_new();
         defer raw.g_object_unref(cancellable);
@@ -184,7 +184,7 @@ pub const Manager = struct {
         requested_arch: ?[]const u8,
         scope_value: flatpak.Scope,
     ) !?wire.CatalogLocation {
-        const name_z = try self.allocator.dupeZ(u8, remote_name);
+        const name_z = try self.allocator.dupeSentinel(u8, remote_name, 0);
         defer self.allocator.free(name_z);
         const cancellable: *raw.GCancellable = raw.g_cancellable_new();
         defer raw.g_object_unref(cancellable);
@@ -278,7 +278,7 @@ pub const Manager = struct {
     ) !?wire.CatalogLocation {
         const arch = requested_arch orelse
             std.mem.span(raw.flatpak_get_default_arch());
-        const arch_z = try self.allocator.dupeZ(u8, arch);
+        const arch_z = try self.allocator.dupeSentinel(u8, arch, 0);
         defer self.allocator.free(arch_z);
         const directory = raw.flatpak_remote_get_appstream_dir(
             remote,

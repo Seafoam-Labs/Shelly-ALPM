@@ -590,9 +590,9 @@ fn enrichFlatpakRemoteInfo(
     defer manager.deinit();
     for (packages) |*package| {
         if (package.scope == .unknown or package.remote.len == 0 or package.id.len == 0) continue;
-        const remote = try context.allocator.dupeZ(u8, package.remote);
+        const remote = try context.allocator.dupeSentinel(u8, package.remote, 0);
         defer context.allocator.free(remote);
-        const id = try context.allocator.dupeZ(u8, package.id);
+        const id = try context.allocator.dupeSentinel(u8, package.id, 0);
         defer context.allocator.free(id);
         var info = manager.get_remote_ref_info_flatpak(
             remote,
@@ -1169,7 +1169,7 @@ fn optionalDependencyInstalledStates(
             installed.* = false;
             continue;
         }
-        const dependency_z = try allocator.dupeZ(u8, dependency);
+        const dependency_z = try allocator.dupeSentinel(u8, dependency, 0);
         defer allocator.free(dependency_z);
         installed.* = manager.is_dependency_satisfied_by_installed_packages(dependency_z) catch false;
     }

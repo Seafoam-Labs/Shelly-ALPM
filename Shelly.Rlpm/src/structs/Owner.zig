@@ -3,6 +3,7 @@
 //! publishing its address. Borrowed views end at the next mutating operation.
 
 const std = @import("std");
+const trackReturnError = @import("diagnostics").captureError;
 const Database = @import("Database.zig");
 const DatabaseConfiguration = @import("DatabaseConfiguration.zig");
 const OwnerConfiguration = @import("OwnerConfiguration.zig");
@@ -101,7 +102,7 @@ fn allocateIdentity() !DatabaseRef.OwnerId {
 
         if (next_owner_id.cmpxchgWeak(current, next, .monotonic, .monotonic)) |actual| {
             current = actual;
-        } else return @enumFromInt(current);
+        } else return @fromBackingInt(@intCast(current));
     }
 }
 
@@ -188,7 +189,7 @@ fn registerInternal(self: *Owner, configuration: DatabaseConfiguration) !Databas
 
     const next = std.math.add(u64, self.next_database_id, 1) catch return error.IdentityExhausted;
 
-    if (self.next_database_id == @intFromEnum(DatabaseRef.Id.archive)) return error.IdentityExhausted;
+    if (self.next_database_id == @backingInt(DatabaseRef.Id.archive)) return error.IdentityExhausted;
 
     const path = try self.syncPath(self.allocator, self.configuration, configuration.database_name);
     defer self.allocator.free(path);
@@ -199,7 +200,7 @@ fn registerInternal(self: *Owner, configuration: DatabaseConfiguration) !Databas
         self.configuration.default_signature_policy,
     );
     errdefer db.deinit();
-    const reference: DatabaseRef = .{ .owner = self.id, .id = @enumFromInt(self.next_database_id) };
+    const reference: DatabaseRef = .{ .owner = self.id, .id = @fromBackingInt(@intCast(self.next_database_id)) };
     db.identity = reference;
     try self.sync_databases.append(self.allocator, db);
     self.next_database_id = next;
@@ -478,7 +479,7 @@ pub fn newVersion(self: *Owner, io: std.Io, target: *const Package) !?PackageRef
         };
 
         const id = db.packages.by_name.get(target.name) orelse continue;
-        const candidate = &db.packages.packages.items[@intFromEnum(id)];
+        const candidate = &db.packages.packages.items[@backingInt(id)];
 
         if (Version.compareStrings(candidate.version.raw, target.version.raw) != .greaterThan)
             return null;
@@ -543,7 +544,7 @@ pub fn findPackage(self: *const Owner, reference: DatabaseRef, name: []const u8)
 pub fn packageReference(self: *const Owner, reference: DatabaseRef, id: Database.PackageId) !PackageRef {
     const db = try self.loadedDatabase(reference);
 
-    if (@intFromEnum(id) >= db.packages.packages.items.len) return error.StalePackageReference;
+    if (@backingInt(id) >= db.packages.packages.items.len) return error.StalePackageReference;
 
     return .{
         .database = reference,
@@ -556,10 +557,10 @@ pub fn package(self: *const Owner, reference: PackageRef) !*const Package {
     const db = try self.database(reference.database);
 
     if (reference.generation != db.generation or !db.status.package_cache_loaded or
-        @intFromEnum(reference.id) >= db.packages.packages.items.len)
+        @backingInt(reference.id) >= db.packages.packages.items.len)
         return error.StalePackageReference;
 
-    return &db.packages.packages.items[@intFromEnum(reference.id)];
+    return &db.packages.packages.items[@backingInt(reference.id)];
 }
 
 pub fn findGroup(self: *Owner, io: std.Io, reference: DatabaseRef, name: []const u8) !?*const Group {
@@ -571,7 +572,7 @@ pub fn findGroup(self: *Owner, io: std.Io, reference: DatabaseRef, name: []const
 
     const id = db.groups.by_name.get(name) orelse return null;
 
-    return &db.groups.groups.items[@intFromEnum(id)];
+    return &db.groups.groups.items[@backingInt(id)];
 }
 
 /// Lazy query variants take Io explicitly; snapshot accessors never hide I/O.
@@ -640,10 +641,10 @@ fn loadPackageInternal(
 
         if (db.kind != .sync) return error.UnsupportedPackageOrigin;
         if (reference.generation != db.generation or !db.status.package_cache_loaded or
-            @intFromEnum(reference.id) >= db.packages.packages.items.len)
+            @backingInt(reference.id) >= db.packages.packages.items.len)
             return error.StalePackageReference;
 
-        expected = &db.packages.packages.items[@intFromEnum(reference.id)];
+        expected = &db.packages.packages.items[@backingInt(reference.id)];
     }
 
     var snapshot = try ImmutableFile.copy(io, path);
@@ -753,7 +754,7 @@ pub fn packageMetadata(
     const db = try self.mutableDatabase(reference.database);
     db.loadMetadata(io, reference.id, request) catch |err| return self.fail(.query, err, reference.database);
 
-    return &db.packages.packages.items[@intFromEnum(reference.id)];
+    return &db.packages.packages.items[@backingInt(reference.id)];
 }
 
 pub fn groupIds(self: *Owner, io: std.Io, reference: DatabaseRef) ![]const Database.GroupId {
@@ -978,7 +979,7 @@ fn searchOne(
     for (db.packages.ordered.items) |id| {
         try self.checkCancelled();
 
-        const pkg = &db.packages.packages.items[@intFromEnum(id)];
+        const pkg = &db.packages.packages.items[@backingInt(id)];
 
         if (seen.contains(pkg.name) or !try searcher.matches(pkg)) continue;
 
@@ -1020,8 +1021,8 @@ fn groupPackagesInternal(
 
         const group_id = db.groups.by_name.get(name) orelse continue;
 
-        for (db.groups.groups.items[@intFromEnum(group_id)].packages.items) |id| {
-            const pkg = &db.packages.packages.items[@intFromEnum(id)];
+        for (db.groups.groups.items[@backingInt(group_id)].packages.items) |id| {
+            const pkg = &db.packages.packages.items[@backingInt(id)];
 
             if (seen.contains(pkg.name)) continue;
 
@@ -1110,8 +1111,8 @@ fn reverseInternal(
 
             return std.mem.lessThan(
                 u8,
-                first.packages.packages.items[@intFromEnum(a.id)].name,
-                second.packages.packages.items[@intFromEnum(b.id)].name,
+                first.packages.packages.items[@backingInt(a.id)].name,
+                second.packages.packages.items[@backingInt(b.id)].name,
             );
         }
     }.less);
@@ -1133,7 +1134,7 @@ fn reverseOne(
     try db.loadDescriptions(io);
 
     for (db.packages.ordered.items) |id| {
-        const pkg = &db.packages.packages.items[@intFromEnum(id)];
+        const pkg = &db.packages.packages.items[@backingInt(id)];
 
         if (seen.contains(pkg.name)) continue;
         for (if (optional) pkg.optional_depends else pkg.depends) |relation| {
@@ -1173,7 +1174,7 @@ fn resolveInternal(self: *Owner, io: std.Io, request: Resolver.Request) !Transac
             const db = try self.resolveDatabase(reference.database);
 
             if (db.generation != reference.generation or !db.status.package_cache_loaded or
-                @intFromEnum(reference.id) >= db.packages.packages.items.len)
+                @backingInt(reference.id) >= db.packages.packages.items.len)
                 return error.StalePackageReference;
         };
 
@@ -1247,7 +1248,7 @@ fn resolutionEntries(
         // Incomplete local metadata cannot safely participate in a solve.
         try db.loadMetadata(io, id, .{});
 
-        const pkg = &db.packages.packages.items[@intFromEnum(id)];
+        const pkg = &db.packages.packages.items[@backingInt(id)];
 
         if (pkg.metadata_error) |err| return err;
 
@@ -1483,10 +1484,10 @@ pub fn transactionPackage(self: *Owner, reference: PackageRef) !*const Package {
     const db = try self.resolveDatabase(reference.database);
 
     if (db.generation != reference.generation or !db.status.package_cache_loaded or
-        @intFromEnum(reference.id) >= db.packages.packages.items.len)
+        @backingInt(reference.id) >= db.packages.packages.items.len)
         return error.StalePackageReference;
 
-    return &db.packages.packages.items[@intFromEnum(reference.id)];
+    return &db.packages.packages.items[@backingInt(reference.id)];
 }
 
 pub fn resolveTransaction(
@@ -1554,25 +1555,27 @@ pub fn refreshDatabases(self: *Owner, io: std.Io, force: bool) !Downloads.Refres
 
 /// Bounded acquisition of a URL batch; the caller owns the returned FileSet.
 pub fn fetchPackageUrls(self: *Owner, io: std.Io, urls: []const []const u8) !Downloads.FileSet {
-    try self.begin(.download);
+    var returned_error: ?anyerror = null;
+    try trackReturnError(self.begin(.download), &returned_error);
     defer self.busy = false;
-    errdefer |err| {
+    errdefer {
+        const err = returned_error.?;
         self.last_diagnostic = Diagnostic.init(.download, err, null);
     }
 
     var arena = std.heap.ArenaAllocator.init(self.allocator);
     defer arena.deinit();
-    const requests = try arena.allocator().alloc(Downloads.Request, urls.len);
+    const requests = try trackReturnError(arena.allocator().alloc(Downloads.Request, urls.len), &returned_error);
 
     for (urls, requests) |url, *request|
         request.* = .{
-            .name = try Downloads.urlFilename(arena.allocator(), url),
+            .name = try trackReturnError(Downloads.urlFilename(arena.allocator(), url), &returned_error),
             .url = url,
             .servers = &.{},
             .policy = self.configuration.effectiveRemoteSignaturePolicy(),
         };
 
-    return .{ .allocator = self.allocator, .files = try Downloads.acquire(self, io, requests) };
+    return .{ .allocator = self.allocator, .files = try trackReturnError(Downloads.acquire(self, io, requests), &returned_error) };
 }
 
 /// Persist a local install reason atomically under db.lck. Invalidates local
@@ -1583,67 +1586,71 @@ pub fn setInstallReason(
     reference: PackageRef,
     reason: Package.InstallReason,
 ) !void {
-    try self.begin(.transaction);
+    var returned_error: ?anyerror = null;
+    try trackReturnError(self.begin(.transaction), &returned_error);
     defer self.busy = false;
-    errdefer |err| self.last_diagnostic = Diagnostic.init(.transaction, err, null);
+    errdefer {
+        const err = returned_error.?;
+        self.last_diagnostic = Diagnostic.init(.transaction, err, null);
+    }
 
-    if (reason == .unknown) return error.InvalidOption;
-    if (self.configuration.local_database_mode == .read_only) return error.ReadOnlyDatabase;
+    if (reason == .unknown) return trackReturnError(error.InvalidOption, &returned_error);
+    if (self.configuration.local_database_mode == .read_only) return trackReturnError(error.ReadOnlyDatabase, &returned_error);
 
-    const borrowed = try self.transactionPackage(reference);
+    const borrowed = try trackReturnError(self.transactionPackage(reference), &returned_error);
 
-    if (borrowed.origin != .local) return error.UnsupportedPackageOrigin;
+    if (borrowed.origin != .local) return trackReturnError(error.UnsupportedPackageOrigin, &returned_error);
 
     var arena = std.heap.ArenaAllocator.init(self.allocator);
     defer arena.deinit();
     const a = arena.allocator();
-    const name = try a.dupe(u8, borrowed.name);
-    const version = try a.dupe(u8, borrowed.version.raw);
-    var lock = try DatabaseLock.acquire(self.allocator, self.lock_file);
+    const name = try trackReturnError(a.dupe(u8, borrowed.name), &returned_error);
+    const version = try trackReturnError(a.dupe(u8, borrowed.version.raw), &returned_error);
+    var lock = try trackReturnError(DatabaseLock.acquire(self.allocator, self.lock_file), &returned_error);
     var lock_held = true;
     defer if (lock_held) lock.release(self.allocator) catch |err| {
         self.last_diagnostic = Diagnostic.init(.transaction, err, null);
     };
 
     const local = &self.local.?;
-    try local.reloadDatabase(io, self.configuration.gpg_directory);
+    try trackReturnError(local.reloadDatabase(io, self.configuration.gpg_directory), &returned_error);
 
-    const id = local.packages.by_name.get(name) orelse return error.StalePackageReference;
-    try local.loadMetadata(io, id, .{});
+    const id = local.packages.by_name.get(name) orelse return trackReturnError(error.StalePackageReference, &returned_error);
+    try trackReturnError(local.loadMetadata(io, id, .{}), &returned_error);
 
-    var candidate = local.packages.packages.items[@intFromEnum(id)];
+    var candidate = local.packages.packages.items[@backingInt(id)];
 
-    if (!std.mem.eql(u8, candidate.version.raw, version)) return error.StalePackageReference;
+    if (!std.mem.eql(u8, candidate.version.raw, version)) return trackReturnError(error.StalePackageReference, &returned_error);
     if (candidate.install_reason == reason) {
         lock_held = false;
-        try lock.release(self.allocator);
+        try trackReturnError(lock.release(self.allocator), &returned_error);
         return;
     }
 
     candidate.install_reason = reason;
 
-    var held_database = try RootPath.init(self.configuration.database_path);
+    var held_database = try trackReturnError(RootPath.init(self.configuration.database_path), &returned_error);
     defer held_database.deinit();
-    var guard = try Publication.DirectoryLock.acquire(local.path, true, false);
+    var guard = try trackReturnError(Publication.DirectoryLock.acquire(local.path, true, false), &returned_error);
     defer guard.deinit();
-    const record = try Writer.recordName(a, &candidate);
-    const path = try std.fmt.allocPrint(a, "local/{s}/desc", .{record});
-    var stage = try Ops.Stage.init(&held_database, io, path);
+    const record = try trackReturnError(Writer.recordName(a, &candidate), &returned_error);
+    const path = try trackReturnError(std.fmt.allocPrint(a, "local/{s}/desc", .{record}), &returned_error);
+    var stage = try trackReturnError(Ops.Stage.init(&held_database, io, path), &returned_error);
     var stage_held = true;
     defer if (stage_held) stage.deinit() catch |err| {
         self.last_diagnostic = Diagnostic.init(.transaction, err, null);
     };
 
-    try Ops.write(stage.fd, "entry", try Writer.description(a, &candidate));
-    try lock.validate();
+    try trackReturnError(Ops.write(stage.fd, "entry", try trackReturnError(Writer.description(a, &candidate), &returned_error)), &returned_error);
+    try trackReturnError(lock.validate(), &returned_error);
 
     // Invalidate even when rename succeeds but its following fsync fails.
     defer local.invalidateCache() catch {};
-    try stage.publish();
+    try trackReturnError(stage.publish(), &returned_error);
     stage_held = false;
-    try stage.deinit();
+    try trackReturnError(stage.deinit(), &returned_error);
     lock_held = false;
-    try lock.release(self.allocator);
+    try trackReturnError(lock.release(self.allocator), &returned_error);
 }
 
 /// Recover an interrupted local-record publication before opening an Owner.

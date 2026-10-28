@@ -375,9 +375,9 @@ pub const UpdatePage = extern struct {
         var system_buffer: [64]u8 = undefined;
         var aur_buffer: [64]u8 = undefined;
         var flatpak_buffer: [64]u8 = undefined;
-        gtk.Button.setLabel(p.native_toggle.as(gtk.Button), std.fmt.bufPrintZ(&system_buffer, "{s} · {d}", .{ translations._("System"), system_count }) catch translations._("System"));
-        gtk.Button.setLabel(p.aur_toggle.as(gtk.Button), std.fmt.bufPrintZ(&aur_buffer, "{s} · {d}", .{ translations._("AUR"), aur_count }) catch translations._("AUR"));
-        gtk.Button.setLabel(p.flatpak_toggle.as(gtk.Button), std.fmt.bufPrintZ(&flatpak_buffer, "{s} · {d}", .{ translations._("Flatpak"), flatpak_count }) catch translations._("Flatpak"));
+        gtk.Button.setLabel(p.native_toggle.as(gtk.Button), std.fmt.bufPrintSentinel(&system_buffer, "{s} · {d}", .{ translations._("System"), system_count }, 0) catch translations._("System"));
+        gtk.Button.setLabel(p.aur_toggle.as(gtk.Button), std.fmt.bufPrintSentinel(&aur_buffer, "{s} · {d}", .{ translations._("AUR"), aur_count }, 0) catch translations._("AUR"));
+        gtk.Button.setLabel(p.flatpak_toggle.as(gtk.Button), std.fmt.bufPrintSentinel(&flatpak_buffer, "{s} · {d}", .{ translations._("Flatpak"), flatpak_count }, 0) catch translations._("Flatpak"));
     }
 
     fn on_row_setup(_: *gtk.SignalListItemFactory, item: *gobject.Object, self: *Self) callconv(.c) void {
@@ -540,11 +540,7 @@ pub const UpdatePage = extern struct {
         }.cb);
 
         var buffer: [96]u8 = undefined;
-        const text = std.fmt.bufPrintZ(
-            &buffer,
-            "{d} {s} {d} {s}",
-            .{ included, translations._("of"), total, translations._("updates included") },
-        ) catch translations._("Updates included");
+        const text = std.fmt.bufPrintSentinel(&buffer, "{d} {s} {d} {s}", .{ included, translations._("of"), total, translations._("updates included") }, 0) catch translations._("Updates included");
         gtk.Label.setLabel(p.selected_label, text);
     }
 

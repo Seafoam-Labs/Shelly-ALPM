@@ -50,7 +50,7 @@ pub const libalpm = struct {
 
             if (alpm.alpm_db_get_usage(self.ptr, &usage) != 0) return false;
 
-            return (usage & @as(c_int, @intCast(@intFromEnum(required)))) != 0;
+            return (usage & @as(c_int, @intCast(@backingInt(required)))) != 0;
         }
 
         pub fn getPackage(self: Database, pkg_name: [:0]const u8) ?Package {
@@ -157,7 +157,7 @@ pub const libalpm = struct {
             while (i < siglist.count) : (i += 1) {
                 const r = siglist.results[i];
                 if (r.status != alpm.ALPM_SIGSTATUS_VALID) {
-                    std.log.warn("Could not verify the signature for repository database {0f}. Review signature status {1d} and validity {2d}.", .{ diagnostics.safe(self.name() orelse "?"), @intFromEnum(r.status), @intFromEnum(r.validity) });
+                    std.log.warn("Could not verify the signature for repository database {0f}. Review signature status {1d} and validity {2d}.", .{ diagnostics.safe(self.name() orelse "?"), @backingInt(r.status), @backingInt(r.validity) });
                 }
             }
             return false;
@@ -311,13 +311,13 @@ pub const libalpm = struct {
             package: Package,
             reverse_dependencies: ReverseDependencyOptions,
         ) std.mem.Allocator.Error!OwnedPackage {
-            const name_value = try allocator.dupeZ(u8, package.name() orelse "");
+            const name_value = try allocator.dupeSentinel(u8, package.name() orelse "", 0);
             errdefer allocator.free(name_value);
 
-            const base_value = try allocator.dupeZ(u8, package.base() orelse package.name() orelse "");
+            const base_value = try allocator.dupeSentinel(u8, package.base() orelse package.name() orelse "", 0);
             errdefer allocator.free(base_value);
 
-            const version_value = try allocator.dupeZ(u8, package.version() orelse "");
+            const version_value = try allocator.dupeSentinel(u8, package.version() orelse "", 0);
             errdefer allocator.free(version_value);
 
             const description_value = try dupeOptional(allocator, package.description());
@@ -329,7 +329,7 @@ pub const libalpm = struct {
             const repository_value = try dupeOptional(allocator, package.repository());
             errdefer if (repository_value) |value| allocator.free(value);
 
-            const file_name_value = try allocator.dupeZ(u8, package.file_name());
+            const file_name_value = try allocator.dupeSentinel(u8, package.file_name(), 0);
             errdefer allocator.free(file_name_value);
 
             const replaces_value = try dupeDependencies(allocator, package.replaces());
@@ -393,7 +393,7 @@ pub const libalpm = struct {
         }
 
         fn dupeOptional(allocator: std.mem.Allocator, value: ?[:0]const u8) std.mem.Allocator.Error!?[:0]u8 {
-            return if (value) |text| try allocator.dupeZ(u8, text) else null;
+            return if (value) |text| try allocator.dupeSentinel(u8, text, 0) else null;
         }
 
         fn dupeStrings(allocator: std.mem.Allocator, iterator_value: anytype) std.mem.Allocator.Error![][:0]u8 {
@@ -404,7 +404,7 @@ pub const libalpm = struct {
                 values.deinit(allocator);
             }
             while (iterator.next()) |value| {
-                const owned = try allocator.dupeZ(u8, value);
+                const owned = try allocator.dupeSentinel(u8, value, 0);
                 values.append(allocator, owned) catch |err| {
                     allocator.free(owned);
                     return err;
@@ -448,7 +448,7 @@ pub const libalpm = struct {
             while (node != null) : (node = node.*.next) {
                 const data = node.*.data orelse continue;
                 const value = asStr(data) orelse continue;
-                const owned = try allocator.dupeZ(u8, value);
+                const owned = try allocator.dupeSentinel(u8, value, 0);
                 values.append(allocator, owned) catch |err| {
                     allocator.free(owned);
                     return err;
@@ -503,14 +503,14 @@ pub const libalpm = struct {
 
         /// Comparison value of the dependency
         pub fn comparison(self: Dependency) Comparator {
-            return @enumFromInt(self.ptr.mod);
+            return @fromBackingInt(@intCast(self.ptr.mod));
         }
 
         pub fn computed_dependency_string(self: Dependency, allocator: std.mem.Allocator) ?[:0]const u8 {
             const computed = alpm.alpm_dep_compute_string(self.ptr);
             if (computed == null) return null;
             defer std.c.free(computed);
-            return allocator.dupeZ(u8, std.mem.span(computed)) catch {
+            return allocator.dupeSentinel(u8, std.mem.span(computed), 0) catch {
                 return null;
             };
         }
@@ -908,12 +908,12 @@ test "FileType.fromMode returns unknown for an unrecognized type" {
 
 test "Comparator variants match libalpm dependency mode constants" {
     const C = libalpm.Dependency.Comparator;
-    try testing.expectEqual(@as(c_int, raw.ALPM_DEP_MOD_ANY), @as(c_int, @intFromEnum(C.any)));
-    try testing.expectEqual(@as(c_int, raw.ALPM_DEP_MOD_EQ), @as(c_int, @intFromEnum(C.equal)));
-    try testing.expectEqual(@as(c_int, raw.ALPM_DEP_MOD_GE), @as(c_int, @intFromEnum(C.great_equal)));
-    try testing.expectEqual(@as(c_int, raw.ALPM_DEP_MOD_LE), @as(c_int, @intFromEnum(C.less_equal)));
-    try testing.expectEqual(@as(c_int, raw.ALPM_DEP_MOD_GT), @as(c_int, @intFromEnum(C.greater_than)));
-    try testing.expectEqual(@as(c_int, raw.ALPM_DEP_MOD_LT), @as(c_int, @intFromEnum(C.less_than)));
+    try testing.expectEqual(@as(c_int, raw.ALPM_DEP_MOD_ANY), @as(c_int, @backingInt(C.any)));
+    try testing.expectEqual(@as(c_int, raw.ALPM_DEP_MOD_EQ), @as(c_int, @backingInt(C.equal)));
+    try testing.expectEqual(@as(c_int, raw.ALPM_DEP_MOD_GE), @as(c_int, @backingInt(C.great_equal)));
+    try testing.expectEqual(@as(c_int, raw.ALPM_DEP_MOD_LE), @as(c_int, @backingInt(C.less_equal)));
+    try testing.expectEqual(@as(c_int, raw.ALPM_DEP_MOD_GT), @as(c_int, @backingInt(C.greater_than)));
+    try testing.expectEqual(@as(c_int, raw.ALPM_DEP_MOD_LT), @as(c_int, @backingInt(C.less_than)));
 }
 
 test "SigLevel packed struct preserves and combines libalpm signature bits" {

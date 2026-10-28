@@ -268,7 +268,7 @@ pub fn formatDependency(allocator: std.mem.Allocator, dependency: ParsedDependen
 
 pub fn formatDependencyZ(allocator: std.mem.Allocator, dependency: ParsedDependency) ![:0]u8 {
     if (dependency.operator.len == 0 or dependency.version.len == 0)
-        return allocator.dupeZ(u8, dependency.name);
+        return allocator.dupeSentinel(u8, dependency.name, 0);
     return std.fmt.allocPrintSentinel(allocator, "{s}{s}{s}", .{ dependency.name, dependency.operator, dependency.version }, 0);
 }
 

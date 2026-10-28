@@ -1,9 +1,6 @@
 const std = @import("std");
 
-const c = @cImport({
-    @cInclude("libintl.h");
-    @cInclude("locale.h");
-});
+const c = @import("gettext_c");
 
 const DOMAIN = "shelly-notifications";
 

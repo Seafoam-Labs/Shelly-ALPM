@@ -14,7 +14,7 @@ makedepends=(
   'gnupg'
   'git'
   'pkgconf'
-  'zig=0.16.0'
+  'zig=0.17.0'
   'flatpak'
   'ripgrep'
   'go-md2man'
@@ -48,17 +48,17 @@ build() {
   (cd Shelly.Flatpak.Backend && zig build --verbose \
     --prefix "${srcdir}/zig-out-flatpak-backend" \
     -Dcpu=baseline \
-    -Doptimize=ReleaseSafe)
+    -Doptimize=safe)
 
   (cd Shelly.Cli.Zig && zig build -Dlibalpm="${_shelly_libalpm}" --verbose \
     --prefix "${srcdir}/zig-out" \
     -Dcpu=baseline \
-    -Doptimize=ReleaseSmall)
+    -Doptimize=small)
 
   (cd Shelly.Key && zig build --verbose \
     --prefix "${srcdir}/zig-out-key" \
     -Dcpu=baseline \
-    -Doptimize=ReleaseSmall)
+    -Doptimize=small)
 
   for shell in bash fish zsh; do
     "${srcdir}/zig-out/bin/shelly" utility --completions "${shell}" \
