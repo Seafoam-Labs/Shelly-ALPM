@@ -282,6 +282,7 @@ test {
     _ = @import("services/flathub_api.zig");
     _ = @import("services/atoll_api.zig");
     _ = @import("models/aur_package.zig");
+    _ = @import("models/packages.zig");
     _ = @import("g_objects/aur_package_object.zig");
     _ = @import("models/search_result.zig");
     _ = @import("g_objects/search_result_object.zig");
