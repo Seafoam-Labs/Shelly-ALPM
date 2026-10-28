@@ -1,11 +1,12 @@
 # Maintainer: Devario maintainers
 # RLPM-only upstream build for Devario; no libalpm or pacman dependency.
 # Uses Devario runtime paths (/etc/shelly.conf and /var/lib/shelly).
+# The devario profile also compiles out Arch news, including upgrade-time fetches.
 
 pkgname=shelly
 pkgver=3.1.9
 pkgrel=1
-# Update this pin to the published commit introducing -Dpath-profile before release.
+# Update this pin to a published commit with path-profile and Devario news support before release.
 _commit=bcbba6aaaf003aefdbe30b75023142c75e96e604
 pkgdesc="Shelly for Devario with the native RLPM backend"
 arch=('x86_64')
@@ -58,6 +59,18 @@ source=("shelly::git+https://github.com/Seafoam-Labs/Shelly-ALPM.git#commit=${_c
 sha256sums=('SKIP')
 _source_dir=shelly
 
+_check_arch_news_disabled() {
+  local news_help
+  if news_help=$("$1" news --help 2>&1); then
+    printf 'Devario packages must be built without Arch news. Use sources with the Devario news build policy.\n' >&2
+    return 1
+  fi
+  if [[ $news_help != *'Arch Linux news is unavailable in Devario builds.'* ]]; then
+    printf 'Could not verify that Arch news is disabled:\n%s\n' "$news_help" >&2
+    return 1
+  fi
+}
+
 build() {
   cd "$srcdir/${_source_dir}"
 
@@ -92,15 +105,18 @@ build() {
 
   # Generate documentation with fresh settings, independent of the builder's backend selection.
   (
+    set -o pipefail
     export XDG_CONFIG_HOME="$srcdir/shelly-build-config"
     export XDG_CACHE_HOME="$srcdir/shelly-build-cache"
     export XDG_DATA_HOME="$srcdir/shelly-build-data"
     export XDG_STATE_HOME="$srcdir/shelly-build-state"
-    ./out-cli/bin/shelly utility --completions bash > shelly.bash
-    ./out-cli/bin/shelly utility --completions fish > shelly.fish
-    ./out-cli/bin/shelly utility --completions zsh > _shelly
+    # Enforce the news policy even when package check() is skipped.
+    _check_arch_news_disabled ./out-cli/bin/shelly || return 1
+    ./out-cli/bin/shelly utility --completions bash > shelly.bash || return 1
+    ./out-cli/bin/shelly utility --completions fish > shelly.fish || return 1
+    ./out-cli/bin/shelly utility --completions zsh > _shelly || return 1
     ./out-cli/bin/shelly utility --docs | go-md2man > shelly.1
-  )
+  ) || return 1
   sed -i "s|^\\.TH .*|.TH \"SHELLY\" \"1\" \"\" \"Shelly ${pkgver}\" \"Shelly CLI Manual\"|" shelly.1
   printf '\n.SH AUTHORS\nSeafoam Labs.\n' >> shelly.1
 

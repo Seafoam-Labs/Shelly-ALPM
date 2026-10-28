@@ -13,6 +13,7 @@ const ShellyCli = @import("../services/shelly_cli.zig").ShellyCli;
 const SizeConverter = @import("../helpers/size_converts.zig").SizeConverter;
 const IconResolver = @import("../services/icon_resolver.zig").IconResolver;
 const Package = @import("../models/packages.zig").Package;
+const repositoryPackageList = @import("../models/packages.zig").repositoryPackageList;
 const runtime = @import("../services/runtime.zig");
 const c_string = @import("../helpers/c_string.zig");
 const ShellyConfig = @import("../models/shelly_config.zig").ShellyConfig;
@@ -734,7 +735,9 @@ pub const PackagePage = extern struct {
         p.generation += 1;
         show_loading(self);
         self.update_selection_ui();
-        _ = gtk.Widget.grabFocus(p.search_entry.as(gtk.Widget));
+        // The page is the focus stop, so a page switch lands on its group name
+        // and Tab reaches the search entry from there.
+        _ = a11y.focusFirst(self.as(gtk.Widget));
         const thread = std.Thread.spawn(.{}, load_worker, .{ self, p.generation, p.show_hidden }) catch return;
         gtk.Widget.setVisible(p.no_results_overlay.as(gtk.Widget), 0);
         thread.detach();
@@ -825,46 +828,21 @@ pub const PackagePage = extern struct {
         const icli = ShellyCli{ .allocator = alloc, .io = threaded.io() };
         const installed = icli.get_installed_packages() catch null;
 
-        var all: std.ArrayListUnmanaged(Package) = .empty;
-        all.appendSlice(alloc, parsed.value) catch {};
-
-        if (installed) |inst| {
-            var map: std.StringHashMapUnmanaged(*const Package) = .empty;
-            for (inst.value) |*pkg| {
-                map.put(alloc, pkg.Name, pkg) catch {};
-            }
-
-            var matched: std.StringHashMapUnmanaged(void) = .empty;
-            for (all.items) |*pkg| {
-                if (map.get(pkg.Name)) |ipkg| {
-                    pkg.Installed = true;
-                    pkg.InstallDate = ipkg.InstallDate;
-                    pkg.Explicit = std.mem.eql(u8, ipkg.InstallReason, "Explicit");
-                    matched.put(alloc, pkg.Name, {}) catch {};
-                } else {
-                    pkg.Installed = false;
-                }
-            }
-
-            for (inst.value) |ipkg| {
-                if (!matched.contains(ipkg.Name)) {
-                    var extra = ipkg;
-                    extra.Installed = true;
-                    extra.Explicit = std.mem.eql(u8, ipkg.InstallReason, "Explicit");
-                    all.append(alloc, extra) catch {};
-                }
-            }
-        }
+        const packages = repositoryPackageList(alloc, parsed.value, if (installed) |inst| inst.value else null) catch {
+            arena_ptr.deinit();
+            std.heap.c_allocator.destroy(arena_ptr);
+            return;
+        };
 
         var set: std.StringHashMapUnmanaged(void) = .empty;
-        for (all.items) |pkg| {
+        for (packages) |pkg| {
             for (pkg.Groups) |g| set.put(alloc, g, {}) catch {};
         }
         var list: std.ArrayListUnmanaged([]const u8) = .empty;
         var it = set.keyIterator();
         while (it.next()) |k| list.append(alloc, k.*) catch {};
 
-        post_result(page, all.items, list.items, arena_ptr, generation);
+        post_result(page, packages, list.items, arena_ptr, generation);
     }
 
     fn post_result(

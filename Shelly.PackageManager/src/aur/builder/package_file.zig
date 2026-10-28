@@ -488,7 +488,7 @@ fn writePackageInfo(
         }
     }
     try writeKeyValue(writer, "pkgver", full_version);
-    if (package_build.pkg_desc) |value| try writeKeyValue(writer, "pkgdesc", value);
+    if (package_build.pkg_desc) |value| try writeDescription(writer, value);
     if (package_build.url) |value| try writeKeyValue(writer, "url", value);
     try writer.print("builddate = {d}\n", .{build_date});
     try writeKeyValue(writer, "packager", self.shellybuild_config.package.packager);
@@ -665,6 +665,16 @@ fn writeKeyValue(writer: *std.Io.Writer, key: []const u8, value: []const u8) !vo
     if (value.len == 0) return;
     if (std.mem.indexOfScalar(u8, value, '\n') != null) return error.InvalidPackageMetadata;
     try writer.print("{s} = {s}\n", .{ key, value });
+}
+
+/// makepkg collapses whitespace runs in pkgdesc to one space and trims the
+/// ends, so a description wrapped over several lines remains a single field.
+fn writeDescription(writer: *std.Io.Writer, value: []const u8) !void {
+    var words = std.mem.tokenizeAny(u8, value, &std.ascii.whitespace);
+    const first = words.next() orelse return;
+    try writer.print("pkgdesc = {s}", .{first});
+    while (words.next()) |word| try writer.print(" {s}", .{word});
+    try writer.writeByte('\n');
 }
 
 fn writeKeyValues(

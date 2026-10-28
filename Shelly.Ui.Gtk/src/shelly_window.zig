@@ -483,6 +483,7 @@ pub const ShellyWindow = extern struct {
 
     fn on_nav_click(_: *gtk.Button, nb: *NavButton) callconv(.c) void {
         gtk.Stack.setVisibleChildName(nb.stack, nb.name);
+        focusVisiblePage(nb.window);
         set_active_nav(nb.window, nb);
     }
 
@@ -499,6 +500,17 @@ pub const ShellyWindow = extern struct {
 
     fn sync_active_nav(self: *ShellyWindow) void {
         if (self.activeNavButton()) |nb| set_active_nav(self, nb);
+    }
+
+    /// Moves the keyboard into the page the content stack is showing. A page
+    /// change otherwise leaves focus on the nav button that caused it, so Tab
+    /// walks the remaining nav buttons and the page is never announced. Each
+    /// page root is a focusable named group, which gives focus a place to land
+    /// even when the page's content holds no control.
+    fn focusVisiblePage(self: *ShellyWindow) void {
+        const p = self.private();
+        if (gtk.Stack.getVisibleChild(p.content_stack)) |page|
+            _ = a11y.focusFirst(page);
     }
 
     /// The button for the page the content stack is showing, in the layout the user
@@ -536,14 +548,13 @@ pub const ShellyWindow = extern struct {
 
     pub fn applyDefaultPage(self: *ShellyWindow) void {
         const p = self.private();
-        const svc = runtime.config orelse {
+        defer {
             sync_active_nav(self);
-            return;
-        };
-        const cfg = svc.get() catch {
-            sync_active_nav(self);
-            return;
-        };
+            focusVisiblePage(self);
+        }
+
+        const svc = runtime.config orelse return;
+        const cfg = svc.get() catch return;
 
         if (tabStackName(cfg.DefaultPageDropDown)) |name| {
             if (gtk.Stack.getChildByName(p.content_stack, name)) |child| {
@@ -553,7 +564,6 @@ pub const ShellyWindow = extern struct {
                 }
             }
         }
-        sync_active_nav(self);
     }
 
     fn on_settings(btn: *gtk.Button, self: *ShellyWindow) callconv(.c) void {
@@ -562,6 +572,9 @@ pub const ShellyWindow = extern struct {
         if (gtk.Widget.getAncestor(btn.as(gtk.Widget), gtk.Popover.getGObjectType())) |pop| {
             gtk.Popover.popdown(@ptrCast(@alignCast(pop)));
         }
+        // After popdown, so closing the popover cannot pull focus back to the
+        // menu button that opened it.
+        focusVisiblePage(self);
     }
 
     fn on_utilities(btn: *gtk.Button, self: *ShellyWindow) callconv(.c) void {
@@ -570,6 +583,7 @@ pub const ShellyWindow = extern struct {
         if (gtk.Widget.getAncestor(btn.as(gtk.Widget), gtk.Popover.getGObjectType())) |pop| {
             gtk.Popover.popdown(@ptrCast(@alignCast(pop)));
         }
+        focusVisiblePage(self);
     }
 
     fn populate_stack(self: *ShellyWindow) void {

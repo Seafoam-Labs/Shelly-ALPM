@@ -23,6 +23,8 @@
         <child>
           <object class="GtkBox" id="page_welcome">
             <property name="accessible-role">group</property>
+            <property name="focusable">true</property>
+            <property name="focus-on-click">false</property>
             <accessibility>
               <property name="label" translatable="yes">Welcome to Shelly v3</property>
             </accessibility>
@@ -90,6 +92,8 @@
         <child>
           <object class="GtkBox" id="page_sources">
             <property name="accessible-role">group</property>
+            <property name="focusable">true</property>
+            <property name="focus-on-click">false</property>
             <accessibility>
               <property name="label" translatable="yes">Select Your Sources</property>
             </accessibility>
@@ -296,6 +300,8 @@
         <child>
           <object class="GtkBox" id="page_appearance">
             <property name="accessible-role">group</property>
+            <property name="focusable">true</property>
+            <property name="focus-on-click">false</property>
             <accessibility>
               <property name="label" translatable="yes">Look and Feel</property>
             </accessibility>

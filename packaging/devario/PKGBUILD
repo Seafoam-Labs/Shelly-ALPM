@@ -17,6 +17,7 @@ url='https://github.com/Seafoam-Labs/Shelly-ALPM'
 license=('GPL-3.0-only')
 
 # Devario uses the RLPM-only native backend and Shelly-owned runtime paths.
+# The devario profile also compiles out Arch news, including upgrade-time fetches.
 _shelly_libalpm=false
 _shelly_path_profile=devario
 _shelly_native_depends=()
@@ -60,6 +61,18 @@ _zig_build() {
     "$@"
 }
 
+_check_arch_news_disabled() {
+  local news_help
+  if news_help=$("$1" news --help 2>&1); then
+    printf 'Devario packages must be built without Arch news. Use sources with the Devario news build policy.\n' >&2
+    return 1
+  fi
+  if [[ $news_help != *'Arch Linux news is unavailable in Devario builds.'* ]]; then
+    printf 'Could not verify that Arch news is disabled:\n%s\n' "$news_help" >&2
+    return 1
+  fi
+}
+
 prepare() {
   cd "${_srcdir}"
 
@@ -101,16 +114,19 @@ build() {
   # Generate documentation with a fresh configuration, independent of the
   # builder's own Shelly settings.
   (
+    set -o pipefail
     export XDG_CONFIG_HOME="${srcdir}/doc-config"
     export XDG_CACHE_HOME="${srcdir}/doc-cache"
     export XDG_DATA_HOME="${srcdir}/doc-data"
     export XDG_STATE_HOME="${srcdir}/doc-state"
     local shelly="${srcdir}/out-cli/bin/shelly" shell
+    # Enforce the news policy even when package check() is skipped.
+    _check_arch_news_disabled "${shelly}" || return 1
     for shell in bash fish zsh; do
-      "${shelly}" utility --completions "${shell}" > "${srcdir}/shelly.${shell}"
+      "${shelly}" utility --completions "${shell}" > "${srcdir}/shelly.${shell}" || return 1
     done
     "${shelly}" utility --docs | go-md2man > "${srcdir}/shelly.1"
-  )
+  ) || return 1
   sed -i "s|^\\.TH .*|.TH \"SHELLY\" \"1\" \"\" \"Shelly ${pkgver}\" \"Shelly CLI Manual\"|" \
     "${srcdir}/shelly.1"
   printf '\n.SH AUTHORS\nSeafoam Labs.\n' >> "${srcdir}/shelly.1"

@@ -7,6 +7,7 @@ const std = @import("std");
 const rlpm = @import("Shelly_Rlpm");
 const op = @import("operation_context");
 const output = @import("native_output");
+const ProcessingUpdate = @FieldType(rlpm.Callbacks.Download, "processing");
 owner: *rlpm.Owner,
 operation: *op.Operation,
 previous: rlpm.Callbacks,
@@ -15,6 +16,11 @@ active_package: ?[]u8 = null,
 active_reference: ?rlpm.PackageRef = null,
 active_action: ?output.PackageAction = null,
 downloads: std.StringHashMapUnmanaged(op.Operation) = .empty,
+// Acceptance runs serially on the owner thread after transfer workers join.
+processing: ?struct {
+    operation: op.Operation,
+    stage: @FieldType(ProcessingUpdate, "stage"),
+} = null,
 failure_handler: ?struct {
     function: *const fn (?*anyopaque, []const u8) void,
     data: ?*anyopaque,
@@ -48,6 +54,7 @@ pub fn deinit(self: *Adapter) !void {
     _ = self.operation.context.unsubscribeCancellation(self.cancellation_subscription);
     self.operation.context.waitForCancellationCallbacks();
     self.clearPackage();
+    self.finishProcessing(self.processingFailureStatus());
     var downloads = self.downloads.iterator();
     while (downloads.next()) |entry| {
         entry.value_ptr.finish(if (self.operation.isCancelled()) .cancelled else .failed);
@@ -233,13 +240,13 @@ fn event(data: ?*anyopaque, value: rlpm.Callbacks.Event) void {
     const self = from(data);
     switch (value) {
         .lifecycle => |result| switch (result.state) {
-            .completed => self.operation.finish(.success),
-            .interrupted => self.operation.finish(.cancelled),
+            .completed => self.finishTransaction(.success),
+            .interrupted => self.finishTransaction(.cancelled),
             .failed => {
                 if (result.cause) |err| self.reportFailure(err);
-                self.operation.finish(.failed);
+                self.finishTransaction(.failed);
             },
-            .released => self.operation.finish(if (result.cause != null and result.cause.? != error.Cancelled) .failed else .cancelled),
+            .released => self.finishTransaction(if (result.cause != null and result.cause.? != error.Cancelled) .failed else .cancelled),
             else => {},
         },
         .phase => |phase| {
@@ -392,19 +399,7 @@ fn download(data: ?*anyopaque, value: rlpm.Callbacks.Download) void {
             if (update.result != .failed) downloadStatus(operation, update.name, if (update.result == .updated) "Package retrieval completed" else "Download skipped", if (update.result == .updated) "download.complete" else "download.skipped");
             self.finishDownload(update.name, update.result != .failed);
         },
-        .processing => |update| {
-            const stage: []const u8 = switch (update.stage) {
-                .verification => "Verifying downloads",
-                .publication => "Publishing downloads",
-            };
-            if (update.boundary == .start) downloadStatus(self.operation, update.name, stage, "acquisition.processing");
-            self.operation.progress(.{
-                .stage = stage,
-                .message = update.name,
-                .completed = if (update.boundary == .done) update.position else update.position -| 1,
-                .total = update.total,
-            });
-        },
+        .processing => |update| self.processingProgress(update),
         .completed => |update| {
             // Acceptance failures never reopen an already completed transfer.
             // The transaction/sync caller supplies the detailed error.
@@ -412,6 +407,54 @@ fn download(data: ?*anyopaque, value: rlpm.Callbacks.Download) void {
         },
     }
     if (self.previous.download) |callback| callback(self.previous.download_context, value);
+}
+fn processingProgress(self: *Adapter, update: ProcessingUpdate) void {
+    const stage: []const u8 = switch (update.stage) {
+        .verification => "Verifying downloads",
+        .publication => "Publishing downloads",
+    };
+    if (update.boundary == .start) {
+        self.finishProcessing(self.processingFailureStatus());
+        const name_copy = self.operation.context.allocator.dupe(u8, update.name) catch return;
+        self.processing = .{
+            .operation = self.operation.child(.{
+                .backend = .alpm,
+                .kind = self.operation.envelope.kind,
+                .subject = name_copy,
+            }),
+            .stage = update.stage,
+        };
+    }
+    const active = if (self.processing) |*value| value else return;
+    if (active.stage != update.stage or
+        !std.mem.eql(u8, active.operation.envelope.subject.?, update.name)) return;
+
+    if (update.boundary == .start) downloadStatus(&active.operation, update.name, stage, "acquisition.processing");
+    active.operation.progress(.{
+        .stage = stage,
+        .message = update.name,
+        .completed = if (update.boundary == .done) update.position else update.position -| 1,
+        .total = update.total,
+    });
+    // Counts describe the batch, so a finished file can still be below 100%.
+    // End its operation explicitly instead of retaining the bar until the
+    // enclosing install/update transaction (including hooks) completes.
+    if (update.boundary != .start)
+        self.finishProcessing(if (update.boundary == .done) .success else self.processingFailureStatus());
+}
+fn processingFailureStatus(self: *const Adapter) op.CompletionStatus {
+    return if (self.operation.isCancelled()) .cancelled else .failed;
+}
+fn finishProcessing(self: *Adapter, status: op.CompletionStatus) void {
+    if (self.processing) |*active| {
+        active.operation.finish(status);
+        self.operation.context.allocator.free(active.operation.envelope.subject.?);
+        self.processing = null;
+    }
+}
+fn finishTransaction(self: *Adapter, status: op.CompletionStatus) void {
+    self.finishProcessing(if (status == .cancelled) .cancelled else self.processingFailureStatus());
+    self.operation.finish(status);
 }
 fn downloadStatus(operation: *op.Operation, file: []const u8, label: []const u8, code: []const u8) void {
     const message = std.fmt.allocPrint(operation.context.allocator, "{s}: {s}", .{ label, file }) catch return;
@@ -953,4 +996,123 @@ test "preflight file conflicts reach operation and legacy error handlers" {
         "\"unowned\": \"demo\" conflicts with an existing filesystem entry.\n\nTechnical details: FileConflicts",
         capture.operation_message.written(),
     );
+}
+
+test "processing children finish on failure cancellation teardown and terminal lifecycle" {
+    const t = std.testing;
+    const Capture = struct {
+        live: usize = 0,
+        completed: usize = 0,
+        status: ?op.CompletionStatus = null,
+        child_id: ?op.OperationId = null,
+        progress_id: ?op.OperationId = null,
+        parent_finished_with_child: bool = false,
+        fn receive(data: ?*anyopaque, value: op.Event) void {
+            const self: *@This() = @ptrCast(@alignCast(data.?));
+            switch (value) {
+                .started => |started| if (started.envelope.parent_id != null) {
+                    self.live += 1;
+                    self.child_id = started.envelope.operation_id;
+                },
+                .progress => |p| self.progress_id = p.envelope.operation_id,
+                .completed => |completed| {
+                    if (completed.envelope.parent_id != null) {
+                        self.live -= 1;
+                        self.completed += 1;
+                        self.status = completed.status;
+                    } else if (self.live != 0) self.parent_finished_with_child = true;
+                },
+                else => {},
+            }
+        }
+    };
+    const Mode = enum { done, failed, cancel_failed, teardown, cancel_teardown, completed, interrupted, released, transaction_failed };
+    for (std.enums.values(Mode)) |mode| {
+        var temporary = t.tmpDir(.{});
+        defer temporary.cleanup();
+        const path = try temporary.dir.realPathFileAlloc(t.io, ".", t.allocator);
+        defer t.allocator.free(path);
+        var owner = try rlpm.Owner.init(t.io, t.allocator, .{ .root = path, .database_path = path }, &.{});
+        defer owner.deinit() catch unreachable;
+        var context = op.OperationContext.init(t.allocator, t.io);
+        defer context.deinit();
+        var capture: Capture = .{};
+        _ = try context.subscribe(.{ .function = Capture.receive, .data = &capture });
+        var operation = context.begin(.{ .backend = .alpm, .kind = .update });
+        defer operation.finish(.success);
+        var adapter: Adapter = undefined;
+        try adapter.init(&owner, &operation);
+        var attached = true;
+        defer if (attached) adapter.deinit() catch unreachable;
+        const cb = owner.options().callbacks;
+        var borrowed_name = "demo.pkg.tar".*;
+        cb.download.?(cb.download_context, .{ .processing = .{ .name = &borrowed_name, .stage = .verification, .boundary = .start, .position = 1, .total = 29 } });
+        try t.expectEqual(@as(usize, 1), capture.live);
+        try t.expectEqual(capture.child_id, capture.progress_id);
+        try t.expect(capture.child_id.? != operation.envelope.operation_id);
+        @memset(&borrowed_name, 'x');
+        try t.expectEqualStrings("demo.pkg.tar", adapter.processing.?.operation.envelope.subject.?);
+        if (mode == .cancel_failed or mode == .cancel_teardown) context.cancel();
+        switch (mode) {
+            .done, .failed, .cancel_failed => cb.download.?(cb.download_context, .{ .processing = .{ .name = "demo.pkg.tar", .stage = .verification, .boundary = if (mode == .done) .done else .failed, .position = 1, .total = 29 } }),
+            .teardown, .cancel_teardown => {
+                try adapter.deinit();
+                attached = false;
+            },
+            .completed, .interrupted, .released, .transaction_failed => cb.event.?(cb.event_context, .{ .lifecycle = .{
+                .state = switch (mode) {
+                    .completed => .completed,
+                    .interrupted => .interrupted,
+                    .released => .released,
+                    else => .failed,
+                },
+            } }),
+        }
+        try t.expectEqual(@as(usize, 0), capture.live);
+        try t.expectEqual(@as(usize, 1), capture.completed);
+        const expected: op.CompletionStatus = switch (mode) {
+            .done => .success,
+            .cancel_failed, .cancel_teardown, .interrupted, .released => .cancelled,
+            else => .failed,
+        };
+        try t.expectEqual(expected, capture.status.?);
+        try t.expect(!capture.parent_finished_with_child);
+        if (mode == .done or mode == .failed or mode == .cancel_failed or mode == .teardown or mode == .cancel_teardown)
+            try t.expect(!operation.completed);
+    }
+}
+
+test "processing retry uses a fresh child and skipped transfers create no processing child" {
+    const t = std.testing;
+    var temporary = t.tmpDir(.{});
+    defer temporary.cleanup();
+    const path = try temporary.dir.realPathFileAlloc(t.io, ".", t.allocator);
+    defer t.allocator.free(path);
+    var owner = try rlpm.Owner.init(t.io, t.allocator, .{ .root = path, .database_path = path }, &.{});
+    defer owner.deinit() catch unreachable;
+    var context = op.OperationContext.init(t.allocator, t.io);
+    defer context.deinit();
+    var operation = context.begin(.{ .backend = .alpm, .kind = .sync });
+    defer operation.finish(.success);
+    var adapter: Adapter = undefined;
+    try adapter.init(&owner, &operation);
+    defer adapter.deinit() catch unreachable;
+    const cb = owner.options().callbacks;
+    cb.download.?(cb.download_context, .{ .transferred = .{ .name = "cached.db", .attempt = 1, .downloaded = 0, .result = .unchanged } });
+    try t.expect(adapter.processing == null);
+    try t.expectEqual(@as(usize, 0), adapter.downloads.count());
+    var previous_id: ?op.OperationId = null;
+    for (0..2) |attempt| {
+        cb.download.?(cb.download_context, .{ .processing = .{ .name = "core.db", .stage = .verification, .boundary = .start, .position = 1, .total = 2 } });
+        const id = adapter.processing.?.operation.envelope.operation_id;
+        try t.expect(previous_id == null or previous_id.? != id);
+        previous_id = id;
+        // A mismatched completion must not finish the current step.
+        cb.download.?(cb.download_context, .{ .processing = .{ .name = "core.db", .stage = .publication, .boundary = .done, .position = 1, .total = 2 } });
+        try t.expect(adapter.processing != null);
+        cb.download.?(cb.download_context, .{ .processing = .{ .name = "core.db", .stage = .verification, .boundary = if (attempt == 0) .failed else .done, .position = 1, .total = 2 } });
+        try t.expect(adapter.processing == null);
+    }
+    try t.expect(!operation.completed);
+    try t.expectEqual(@as(usize, 1), context.active_operations.load(.acquire));
 }

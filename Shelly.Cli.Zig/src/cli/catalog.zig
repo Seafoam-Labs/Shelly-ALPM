@@ -1,5 +1,6 @@
 const std = @import("std");
 const build_options = @import("build_options");
+const features = @import("../build_features.zig");
 const core = @import("catalog/types.zig");
 
 const backup = @import("catalog/backup.zig");
@@ -99,7 +100,7 @@ pub const variants = search.variants ++
     upgrade.variants ++
     downgrade.variants ++
     mark.variants ++
-    news.variants ++
+    (if (features.arch_news_enabled) news.variants else .{}) ++
     list_updates.variants ++
     list.variants ++
     backup.variants ++
