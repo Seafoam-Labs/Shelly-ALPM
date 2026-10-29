@@ -145,4 +145,11 @@ The intended flow is browse → details → review/provider questions → execut
 - Catalog details: I selects a remote/scope, then confirms installation. Installed details: R requests removal while keeping configuration and unused dependencies. Updates: F upgrades system and user Flatpaks.
 - Operations stream progress and questions through the existing review UI, require completion messages, and refresh Flatpak/update state afterward. System install/removal uses sudo authentication; user operations and upgrades run as the invoking user. System upgrades may require a Flatpak authorization agent.
 - Flatpak removal delegates ID/name resolution to the CLI, as GTK does. The TUI-only ambiguity/identity guard was removed; exact scope/ref targeting remains a CLI/backend gap. No CLI changes are included.
-- After guard removal, Zig 0.17 build/test and 33 focused tests pass. Earlier fake-process coverage remains recorded; guard-specific rejection tests were removed. Live operation checks remain open.
+- After guard removal, Zig 0.17 build/test and 33 focused tests pass. Earlier fake-process coverage remains recorded; guard-specific rejection tests were removed. Flatpak flows were subsequently user-validated.
+
+### Combined upgrade (2026-10-29)
+
+- G on Updates runs `upgrade all --no-appimage`, with `--no-flatpak` when the optional backend is unavailable. U/A/F remain source-specific. The full action synchronizes again even when the cached check reports no updates.
+- One authenticated CLI coordinator retains interactive transaction/provider/PKGBUILD review and streams progress. Nested source completion cannot stand in for coordinator completion. Failures may follow completed source changes; native, AUR, Flatpak, and update state are refreshed as applicable.
+- Zig 0.17 build/test and 37 focused tests pass. Six fake-process scenarios cover combined success, missing Flatpak, partial failure, missing outer completion, decline, and authentication failure, including inherited child stdin/stdout. No real combined upgrade was run.
+- AppImage operations remain deferred until after UI/UX work. Existing AppImage update rows are informational only.

@@ -46,16 +46,17 @@ pub fn detailsHint(installed: bool) []const u8 {
 pub const result_hint = "Enter/Q: close    Esc: quit";
 pub const authentication_hint = "Enter: confirm and run with sudo    Esc: quit";
 
-pub const Updates = enum { refresh, upgrade_system, upgrade_aur, upgrade_flatpak };
+pub const Updates = enum { refresh, upgrade_all, upgrade_system, upgrade_aur, upgrade_flatpak };
 pub fn updates(key: vaxis.Key) ?Updates {
     if (refreshes(key)) return .refresh;
+    if (key.matches('g', .{})) return .upgrade_all;
     if (key.matches('u', .{})) return .upgrade_system;
     if (key.matches('a', .{})) return .upgrade_aur;
     if (key.matches('f', .{})) return .upgrade_flatpak;
     return null;
 }
-pub const updates_hint = "U: system    A: AUR    R: refresh";
-pub const flatpak_updates_hint = "U: system    A: AUR    F: Flatpak    R: refresh";
+pub const updates_hint = "G: all    U: system    A: AUR    R: refresh";
+pub const flatpak_updates_hint = "G: all    U: system    A: AUR    F: Flatpak    R: refresh";
 
 pub fn closesPreview(key: vaxis.Key) bool {
     return key.matches('q', .{});

@@ -21,7 +21,7 @@ const flatpak = @import("models/flatpak.zig");
 const CheckUpdates = @import("models/sync.zig").CheckUpdates;
 
 const Allocator = std.mem.Allocator;
-const InstallBackend = shelly_cli.ShellyCli.InstallBackend;
+const OperationBackend = shelly_operation.Backend;
 
 pub const Tab = enum {
     packages,
@@ -87,9 +87,10 @@ const PkgbuildJob = struct {
 const SudoPrompt = struct {
     /// Package being installed; owned by `gpa`.
     name: []const u8,
-    backend: InstallBackend,
+    backend: OperationBackend,
     action: shelly_operation.Action = .install,
     elevated: bool = true,
+    include_flatpak: bool = true,
     flatpak_target: ?shelly_operation.FlatpakTarget = null,
     password: std.ArrayList(u8),
     state: State = .entering,
@@ -104,6 +105,7 @@ const SudoPrompt = struct {
         return .{
             .name = self.name,
             .elevated = self.elevated,
+            .combined = self.backend == .all,
             .action = self.action,
             .detail = self.detail,
             .progress = self.progress,
@@ -203,6 +205,7 @@ pub const Model = struct {
     updates_thread: ?std.Thread = null,
     updates_parsed: ?std.json.Parsed(CheckUpdates) = null,
     refresh_after_upgrade: bool = false,
+    refresh_updates_after_operation: bool = false,
     updates_checked: bool = false,
     updates_failed: bool = false,
     updates_list: vxfw.ListView,
@@ -477,6 +480,7 @@ pub const Model = struct {
                     if (self.updatesView().handleKey(key)) |action| {
                         switch (action) {
                             .refresh => try self.startUpdates(ctx),
+                            .upgrade_all => try self.upgradeFromUpdates(.all),
                             .upgrade_system => try self.upgradeSystemFromUpdates(),
                             .upgrade_aur => try self.upgradeFromUpdates(.aur),
                             .upgrade_flatpak => try self.upgradeFromUpdates(.flatpak),
@@ -527,12 +531,11 @@ pub const Model = struct {
                 self.pollUpdates();
                 try self.pollFlatpak();
                 try self.pollPkgbuild(ctx);
-                if (self.refresh_after_upgrade and !self.loading and self.updates_job == null) {
+                if (self.refresh_after_upgrade and !self.loading) {
                     try self.reloadPackages(ctx);
-                    try self.startUpdates(ctx);
                     self.refresh_after_upgrade = false;
                 }
-                if (self.refresh_flatpak_after_operation and self.flatpak_job == null and self.updates_job == null) {
+                if (self.refresh_flatpak_after_operation and self.flatpak_job == null) {
                     if (self.flatpak_installed_only) {
                         if (self.flatpak_catalog) |*parsed| parsed.deinit();
                         self.flatpak_catalog = null;
@@ -541,8 +544,11 @@ pub const Model = struct {
                         self.flatpak_installed = null;
                     }
                     try self.startFlatpak(ctx);
-                    try self.startUpdates(ctx);
                     self.refresh_flatpak_after_operation = false;
+                }
+                if (self.refresh_updates_after_operation and self.updates_job == null) {
+                    try self.startUpdates(ctx);
+                    self.refresh_updates_after_operation = false;
                 }
                 if (self.refresh_aur_after_operation and self.aur_job == null) {
                     if (self.aur_installed_only or self.aur_query.len > 0) try self.startAurSearch(ctx, self.aur_query);
@@ -898,8 +904,9 @@ pub const Model = struct {
         return self.upgradeFromUpdates(.standard);
     }
 
-    fn upgradeFromUpdates(self: *Model, backend: InstallBackend) !void {
+    fn upgradeFromUpdates(self: *Model, backend: OperationBackend) !void {
         if (self.install_job != null or self.overlay != null) return;
+        if (backend == .all and !self.updatesView().canUpgradeAll()) return;
         if (backend == .standard and !self.updatesView().canUpgrade()) return;
         if (backend == .aur and !self.updatesView().canUpgradeAur()) return;
         if (backend == .flatpak) {
@@ -909,9 +916,10 @@ pub const Model = struct {
         const prompt = try self.gpa.create(SudoPrompt);
         errdefer self.gpa.destroy(prompt);
         prompt.* = .{
-            .name = try self.gpa.dupe(u8, if (backend == .aur) "AUR packages" else "system packages"),
+            .name = try self.gpa.dupe(u8, if (backend == .all) if (self.flatpak_available) "system packages, AUR and Flatpaks" else "system packages and AUR" else if (backend == .aur) "AUR packages" else "system packages"),
             .backend = backend,
             .action = .upgrade,
+            .include_flatpak = self.flatpak_available,
             .password = .empty,
         };
         self.overlay = .{ .sudo = prompt };
@@ -1131,7 +1139,7 @@ pub const Model = struct {
         if (self.install_job != null) return; // one install at a time
         const overlay = self.overlay orelse return;
         var name: []const u8 = undefined;
-        var backend: InstallBackend = undefined;
+        var backend: OperationBackend = undefined;
         switch (overlay) {
             .package => |pkg| {
                 if (action == .remove and !pkg.Installed) return;
@@ -1327,6 +1335,7 @@ pub const Model = struct {
             .backend = @tagName(prompt.backend),
             .password = prompt.password.items,
             .flatpak = prompt.flatpak_target,
+            .include_flatpak = prompt.include_flatpak,
         });
     }
 
@@ -1371,9 +1380,11 @@ pub const Model = struct {
         const failed = completed.failed;
         self.install_job = null;
         const is_flatpak = std.mem.eql(u8, job.request.backend, "flatpak");
-        if (is_flatpak) self.refresh_flatpak_after_operation = true;
+        const is_combined = std.mem.eql(u8, job.request.backend, "all");
+        if (is_flatpak or (is_combined and job.request.include_flatpak)) self.refresh_flatpak_after_operation = true;
+        if (job.request.action == .upgrade or is_flatpak or std.mem.eql(u8, job.request.backend, "aur")) self.refresh_updates_after_operation = true;
         if (!is_flatpak and (job.request.action == .upgrade or std.mem.eql(u8, job.request.backend, "aur"))) self.refresh_after_upgrade = true;
-        if (std.mem.eql(u8, job.request.backend, "aur")) self.refresh_aur_after_operation = true;
+        if (is_combined or std.mem.eql(u8, job.request.backend, "aur")) self.refresh_aur_after_operation = true;
 
         // Native and AUR operations change the same installed package database.
         if (!is_flatpak and !failed and job.request.action != .upgrade) {
@@ -1692,7 +1703,9 @@ pub const Model = struct {
             try std.fmt.allocPrint(arena, "\nScope: {s}\nRemote: {f}\nBranch: {f}\nArchitecture: {f}", .{ @tagName(target.scope), diagnostics.safe(target.remote), diagnostics.safe(if (target.branch.len > 0) target.branch else "remote default"), diagnostics.safe(if (target.arch.len > 0) target.arch else "remote default") })
         else
             "";
-        const note: []const u8 = if (prompt.backend == .flatpak)
+        const note: []const u8 = if (prompt.backend == .all)
+            if (prompt.include_flatpak) "\nFull upgrade: system packages, AUR, and system/user Flatpaks. AppImages are excluded. PKGBUILDs require review." else "\nFull upgrade: system packages and AUR. Flatpak backend is unavailable. AppImages are excluded. PKGBUILDs require review."
+        else if (prompt.backend == .flatpak)
             if (prompt.action == .upgrade) "\nUpdates both system and user Flatpaks as the invoking user. System changes may require a Flatpak authorization agent." else if (prompt.action == .remove) "\nConfiguration and unused dependencies will be kept." else "\nInstall from the selected remote and scope. Shelly handles dependencies and review."
         else if (prompt.action == .remove) "\nUnused dependencies and configuration will be kept." else if (prompt.action == .upgrade)
             if (prompt.backend == .aur) "\nUpgrade AUR packages and required dependencies. PKGBUILDs require review." else "\nFull system upgrade. AUR, Flatpak and AppImage are excluded."
@@ -1995,7 +2008,7 @@ test "updates action opens a native-only upgrade prompt" {
     try model.upgradeSystemFromUpdates();
     const prompt = model.overlay.?.sudo;
     try std.testing.expectEqual(shelly_operation.Action.upgrade, prompt.action);
-    try std.testing.expectEqual(InstallBackend.standard, prompt.backend);
+    try std.testing.expectEqual(OperationBackend.standard, prompt.backend);
     try std.testing.expectEqualStrings("system packages", prompt.name);
     model.closeOverlay();
     model.updates_failed = true;
@@ -2115,7 +2128,7 @@ test "AUR updates open a separate AUR upgrade prompt" {
     try std.testing.expect(model.updatesView().handleKey(.{ .codepoint = 'u' }) == null);
     try std.testing.expectEqual(commands.Updates.upgrade_aur, model.updatesView().handleKey(.{ .codepoint = 'a' }).?);
     try model.upgradeFromUpdates(.aur);
-    try std.testing.expectEqual(InstallBackend.aur, model.overlay.?.sudo.backend);
+    try std.testing.expectEqual(OperationBackend.aur, model.overlay.?.sudo.backend);
     try std.testing.expectEqual(shelly_operation.Action.upgrade, model.overlay.?.sudo.action);
 }
 
@@ -2421,4 +2434,55 @@ test "Flatpak operation completion refreshes Flatpak data without changing nativ
     try std.testing.expect(model.refresh_flatpak_after_operation);
     try std.testing.expect(!model.refresh_after_upgrade);
     try std.testing.expect(!packages[0].Installed);
+}
+
+test "combined update shortcut opens an authenticated prompt even for an empty cached check" {
+    const allocator = std.testing.allocator;
+    const model = try Model.init(allocator);
+    defer model.deinit();
+    model.updates_parsed = try std.json.parseFromSlice(CheckUpdates, allocator, "{}", .{});
+    const key: vaxis.Key = .{ .codepoint = 'g' };
+    try std.testing.expectEqual(commands.Updates.upgrade_all, model.updatesView().handleKey(key).?);
+    try model.upgradeFromUpdates(.all);
+    const prompt = model.overlay.?.sudo;
+    try std.testing.expectEqual(OperationBackend.all, prompt.backend);
+    try std.testing.expect(prompt.elevated);
+    try std.testing.expect(!prompt.include_flatpak);
+    try std.testing.expectEqualStrings("system packages and AUR", prompt.name);
+    model.closeOverlay();
+    model.flatpak_available = true;
+    try model.upgradeFromUpdates(.all);
+    try std.testing.expect(model.overlay.?.sudo.include_flatpak);
+    vxfw.DrawContext.init(.unicode);
+    var arena = std.heap.ArenaAllocator.init(allocator);
+    defer arena.deinit();
+    _ = try Model.drawSudoPrompt(model, .{ .arena = arena.allocator(), .min = .{}, .max = .{ .width = 80, .height = 24 }, .cell_size = .{ .width = 10, .height = 20 } }, arena.allocator(), .{ .width = 80, .height = 24 }, model.overlay.?.sudo);
+    model.closeOverlay();
+    model.updates_failed = true;
+    try std.testing.expect(model.updatesView().handleKey(key) == null);
+    try model.upgradeFromUpdates(.all);
+    try std.testing.expect(model.overlay == null);
+}
+
+test "combined operation completion refreshes every included source after partial failure" {
+    const allocator = std.testing.allocator;
+    var env: std.process.Environ.Map = .init(allocator);
+    defer env.deinit();
+    for ([_]bool{ false, true }) |include_flatpak| {
+        const model = try Model.init(allocator);
+        defer model.deinit();
+        const job = try std.heap.page_allocator.create(shelly_operation.Operation);
+        job.* = .{
+            .arena = .init(std.heap.page_allocator),
+            .done = .init(true),
+            .result = .{ .failed = true },
+            .request = .{ .action = .upgrade, .shelly_bin = "unused", .environ_map = &env, .backend = "all", .name = "combined upgrade", .password = "", .include_flatpak = include_flatpak },
+        };
+        model.install_job = job;
+        try std.testing.expect(!try model.pollInstall());
+        try std.testing.expect(model.refresh_after_upgrade);
+        try std.testing.expect(model.refresh_aur_after_operation);
+        try std.testing.expect(model.refresh_updates_after_operation);
+        try std.testing.expectEqual(include_flatpak, model.refresh_flatpak_after_operation);
+    }
 }

@@ -7,6 +7,7 @@ const vxfw = vaxis.vxfw;
 pub const View = struct {
     name: []const u8,
     elevated: bool = true,
+    combined: bool = false,
     action: @import("../services/shelly_operation.zig").Action = .install,
     state: enum { running, succeeded, failed, declined },
     detail: []const u8 = "",
@@ -27,7 +28,7 @@ pub const View = struct {
             .running => try std.fmt.allocPrint(arena, "{s} '{f}'{s}…", .{ self.action.ongoing(), diagnostics.safe(self.name), if (self.elevated) " as root" else "" }),
             .succeeded => try std.fmt.allocPrint(arena, "✔ {s} '{f}' successfully.\n\n{s}", .{ self.action.completed(), diagnostics.safe(self.name), commands.result_hint }),
             .declined => try std.fmt.allocPrint(arena, "Declined {s} for '{f}'.\nSome dependency changes may already have completed.\n\n{s}", .{ @tagName(self.action), diagnostics.safe(self.name), commands.result_hint }),
-            .failed => try std.fmt.allocPrint(arena, "Could not {s} {f}.\n\n{f}\n\n{s}", .{ @tagName(self.action), diagnostics.safe(self.name), diagnostics.safe(if (self.detail.len > 0) self.detail else "Shelly returned no error details."), commands.result_hint }),
+            .failed => try std.fmt.allocPrint(arena, "Could not {s} {f}.\n\n{f}{s}\n\n{s}", .{ @tagName(self.action), diagnostics.safe(self.name), diagnostics.safe(if (self.detail.len > 0) self.detail else "Shelly returned no error details."), if (self.combined) "\nSome sources may already have completed. Package state will be refreshed." else "", commands.result_hint }),
         };
         const percentage = if (self.progress.percent) |percent|
             try std.fmt.allocPrint(arena, " ({d}%)", .{percent})

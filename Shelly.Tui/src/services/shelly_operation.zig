@@ -6,6 +6,8 @@ const flatpak_models = @import("../models/flatpak.zig");
 const Scope = @import("../models/flatpak.zig").InstallLevel;
 const UpdateType = @import("../models/appimage.zig").UpdateType;
 
+pub const Backend = enum { standard, aur, flatpak, appimage, all };
+
 pub const Action = enum {
     install,
     remove,
@@ -76,6 +78,7 @@ pub const OperationRequest = struct {
     backend: []const u8,
     password: []const u8,
     flatpak: ?FlatpakTarget = null,
+    include_flatpak: bool = true,
 };
 
 /// Fixed-size, owned display data; safe to copy between the worker and UI.
@@ -117,6 +120,7 @@ const ProgressStream = struct {
     error_text: [512]u8 = @splat(0),
     error_len: usize = 0,
     transaction_done: bool = false,
+    transaction_depth: usize = 0,
     transaction_cancelled: bool = false,
 
     fn deinit(self: *ProgressStream) void {
@@ -173,15 +177,26 @@ const ProgressStream = struct {
                 },
                 .event => |event| {
                     if (event == .info) {
-                        if (std.mem.eql(u8, event.info.event_type, "TransactionDone")) self.transaction_done = true;
+                        if (std.mem.eql(u8, event.info.event_type, "TransactionStart")) {
+                            if (self.transaction_depth == 0) self.transaction_done = false;
+                            self.transaction_depth += 1;
+                        }
+                        if (std.mem.eql(u8, event.info.event_type, "TransactionDone")) {
+                            self.transaction_depth -|= 1;
+                            if (self.transaction_depth == 0) self.transaction_done = true;
+                        }
                         if (std.mem.eql(u8, event.info.event_type, "TransactionFailed")) {
                             self.failed = true;
+                            self.transaction_depth -|= 1;
                             if (self.error_len == 0) {
                                 self.error_len = @min(event.info.message.len, self.error_text.len);
                                 @memcpy(self.error_text[0..self.error_len], event.info.message[0..self.error_len]);
                             }
                         }
-                        if (std.mem.eql(u8, event.info.event_type, "TransactionCancelled")) self.transaction_cancelled = true;
+                        if (std.mem.eql(u8, event.info.event_type, "TransactionCancelled")) {
+                            self.transaction_cancelled = true;
+                            self.transaction_depth -|= 1;
+                        }
                     }
                     if (event == .err) {
                         self.failed = true;
@@ -378,7 +393,11 @@ pub fn elevatedInstall(io: std.Io, alloc: std.mem.Allocator, request: OperationR
 }
 
 fn interactive(request: OperationRequest) bool {
-    return (std.mem.eql(u8, request.backend, "aur") and request.action != .remove) or isFlatpak(request);
+    return (std.mem.eql(u8, request.backend, "aur") and request.action != .remove) or isFlatpak(request) or combined(request);
+}
+
+fn combined(request: OperationRequest) bool {
+    return request.action == .upgrade and std.mem.eql(u8, request.backend, "all");
 }
 
 fn isFlatpak(request: OperationRequest) bool {
@@ -390,8 +409,9 @@ fn elevated(request: OperationRequest) bool {
 }
 
 fn operationArgv(alloc: std.mem.Allocator, request: OperationRequest) ![][]const u8 {
+    if (std.mem.eql(u8, request.backend, "all") and request.action != .upgrade) return error.UnsupportedCombinedAction;
     const keep_dependencies = request.action == .remove and std.mem.eql(u8, request.backend, "standard");
-    if (request.action == .upgrade and !std.mem.eql(u8, request.backend, "standard") and !std.mem.eql(u8, request.backend, "aur") and !isFlatpak(request))
+    if (request.action == .upgrade and !std.mem.eql(u8, request.backend, "standard") and !std.mem.eql(u8, request.backend, "aur") and !isFlatpak(request) and !combined(request))
         return error.UnsupportedUpgradeSource;
     if (isFlatpak(request) and request.action != .upgrade) {
         const target = request.flatpak orelse return error.MissingFlatpakTarget;
@@ -410,6 +430,10 @@ fn operationArgv(alloc: std.mem.Allocator, request: OperationRequest) ![][]const
         try argv.appendSlice(alloc, &.{ "--remote", target.remote });
         if (target.branch.len > 0) try argv.appendSlice(alloc, &.{ "--branch", target.branch });
         if (target.kind == .runtime) try argv.append(alloc, "--runtime");
+    }
+    if (combined(request)) {
+        try argv.append(alloc, "--no-appimage");
+        if (!request.include_flatpak) try argv.append(alloc, "--no-flatpak");
     }
     if (!interactive(request)) try argv.append(alloc, "--no-confirm");
     try argv.append(alloc, "--ui-mode");
@@ -553,7 +577,7 @@ fn runInstall(io: std.Io, alloc: std.mem.Allocator, request: OperationRequest, o
         result.declined = op.user_declined;
         if (op.expected_answer != null) stream.failed = true;
     }
-    const missing_completion = (request.action == .upgrade or interactive(request)) and !stream.transaction_done;
+    const missing_completion = (request.action == .upgrade or interactive(request)) and (!stream.transaction_done or stream.transaction_depth != 0);
     if (term != .exited or term.exited != 0 or read_failed or stream.failed or stream.transaction_cancelled or missing_completion or result.declined) {
         const detail = if (stream.transaction_cancelled)
             "The operation was cancelled. Refresh package state before retrying."
@@ -1420,7 +1444,7 @@ test "operation native upgrade has no package operand or other sources" {
     const expected = [_][]const u8{ "sudo", "-S", "-p", "", "shelly", "upgrade", "standard", "--no-confirm", "--ui-mode" };
     try std.testing.expectEqual(expected.len, args.len);
     for (expected, args) |want, actual| try std.testing.expectEqualStrings(want, actual);
-    request.backend = "all";
+    request.backend = "appimage";
     try std.testing.expectError(error.UnsupportedUpgradeSource, operationArgv(std.testing.allocator, request));
 }
 
@@ -1543,4 +1567,53 @@ test "operation Flatpak target owns its reference fields" {
     remote[0] = 'X';
     try std.testing.expectEqualStrings("test", copy.remote);
     try std.testing.expectEqualStrings("app/org.example.App/x86_64/beta", copy.reference);
+}
+
+test "operation combined upgrade is interactive and always excludes AppImages" {
+    const allocator = std.testing.allocator;
+    var env: std.process.Environ.Map = .init(allocator);
+    defer env.deinit();
+    var request: OperationRequest = .{ .action = .upgrade, .shelly_bin = "shelly", .environ_map = &env, .name = "all supported packages", .backend = "all", .password = "" };
+    const included = try operationArgv(allocator, request);
+    defer allocator.free(included);
+    const expected = [_][]const u8{ "sudo", "-n", "shelly", "upgrade", "all", "--no-appimage", "--ui-mode" };
+    try std.testing.expectEqual(expected.len, included.len);
+    for (expected, included) |want, actual| try std.testing.expectEqualStrings(want, actual);
+    request.include_flatpak = false;
+    const excluded = try operationArgv(allocator, request);
+    defer allocator.free(excluded);
+    const expected_excluded = [_][]const u8{ "sudo", "-n", "shelly", "upgrade", "all", "--no-appimage", "--no-flatpak", "--ui-mode" };
+    try std.testing.expectEqual(expected_excluded.len, excluded.len);
+    for (expected_excluded, excluded) |want, actual| try std.testing.expectEqualStrings(want, actual);
+    request.action = .install;
+    try std.testing.expectError(error.UnsupportedCombinedAction, operationArgv(allocator, request));
+}
+
+test "operation combined stream waits for the outer transaction and retains partial failure" {
+    const Fixture = struct {
+        fn event(stream: *ProgressStream, event_type: []const u8) !void {
+            const allocator = std.testing.allocator;
+            const json = try std.fmt.allocPrint(allocator, "{{\"$kind\":\"alpm.info\",\"EventType\":\"{s}\"}}", .{event_type});
+            defer allocator.free(json);
+            const encoded = try allocator.alloc(u8, std.base64.standard.Encoder.calcSize(json.len));
+            defer allocator.free(encoded);
+            _ = std.base64.standard.Encoder.encode(encoded, json);
+            const frame = try std.fmt.allocPrint(allocator, "[JSON]{s}[/JSON]", .{encoded});
+            defer allocator.free(frame);
+            stream.feed(frame, null, undefined);
+        }
+    };
+    var stream: ProgressStream = .{};
+    defer stream.deinit();
+    try Fixture.event(&stream, "TransactionStart");
+    try Fixture.event(&stream, "TransactionStart");
+    try Fixture.event(&stream, "TransactionDone");
+    try std.testing.expect(!stream.transaction_done);
+    try std.testing.expectEqual(@as(usize, 1), stream.transaction_depth);
+    try Fixture.event(&stream, "TransactionStart");
+    try Fixture.event(&stream, "TransactionFailed");
+    try Fixture.event(&stream, "TransactionDone");
+    try std.testing.expect(stream.failed);
+    try std.testing.expect(stream.transaction_done);
+    try std.testing.expectEqual(@as(usize, 0), stream.transaction_depth);
 }
