@@ -141,6 +141,16 @@ pub const ShellyCli = struct {
         return containsPackageName(parsed.value, name);
     }
 
+    /// Read-only usability probe through the CLI's backend loader. An empty
+    /// remote list succeeds; missing/incompatible backends or query errors fail.
+    pub fn probe_flatpak(self: ShellyCli) !void {
+        const result = try self.runSilently(&.{ "list", "flatpak", "remote" });
+        defer self.allocator.free(result.stdout);
+        defer self.allocator.free(result.stderr);
+        const remotes = try decodeQuery([]Remote, self.allocator, result.stdout, false);
+        defer remotes.deinit();
+    }
+
     pub fn get_remotes(self: ShellyCli) !std.json.Parsed([]Remote) {
         const result = try self.run(&.{ "list", "flatpak", "remote" });
         defer self.allocator.free(result.stdout);
@@ -150,14 +160,14 @@ pub const ShellyCli = struct {
     }
 
     pub fn get_installed_flatpaks(self: ShellyCli) !std.json.Parsed([]Flatpak) {
-        const result = try self.run(&.{"-Lf"});
+        const result = try self.runSilently(&.{"-Lf"});
         defer self.allocator.free(result.stdout);
         defer self.allocator.free(result.stderr);
         return decodeQuery([]Flatpak, self.allocator, result.stdout, false);
     }
 
     pub fn get_remote_appstream_apps(self: ShellyCli) !std.json.Parsed([]AppstreamApp) {
-        const result = try self.run(&.{ "list", "flatpak", "remote", "all" });
+        const result = try self.runSilently(&.{ "list", "flatpak", "remote", "all" });
         defer self.allocator.free(result.stdout);
         defer self.allocator.free(result.stderr);
 
@@ -371,4 +381,17 @@ test "query decoding rejects trailing errors and unsupported questions" {
     const question = try queryTestFrame(allocator, "{\"$kind\":\"q.yesno\",\"QuestionId\":\"1\"}");
     defer allocator.free(question);
     try std.testing.expectError(error.UnsupportedFrame, decodeQuery([]Package, allocator, question, true));
+}
+
+test "Flatpak probe decoding accepts empty remotes but rejects backend failure" {
+    const allocator = std.testing.allocator;
+    const empty = try queryTestFrame(allocator, "[]");
+    defer allocator.free(empty);
+    const remotes = try decodeQuery([]Remote, allocator, empty, false);
+    defer remotes.deinit();
+    try std.testing.expectEqual(@as(usize, 0), remotes.value.len);
+    const failure = try queryTestFrame(allocator, "{\"$kind\":\"alpm.error\",\"ErrorMessage\":\"Flatpak backend unavailable\"}");
+    defer allocator.free(failure);
+    try std.testing.expectError(error.CommandFailed, decodeQuery([]Remote, allocator, failure, false));
+    try std.testing.expectError(error.NoDataFrame, decodeQuery([]Remote, allocator, "", false));
 }

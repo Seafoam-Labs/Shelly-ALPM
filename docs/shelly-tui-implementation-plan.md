@@ -125,4 +125,17 @@ The intended flow is browse → details → review/provider questions → execut
 
 - Ctrl+L toggles installed-only browsing on both package pages. Text filters remain available; Enter opens details and existing removal actions.
 - System browsing filters installed flags. AUR browsing uses `list aur`, independently of remote search; completed AUR operations refresh the active list.
-- AUR workers are joined and unconsumed results freed on exit. Zig 0.17 build/tests and focused filtering/selection tests pass; live installed-list/removal checks remain open.
+- AUR workers are joined and unconsumed results freed on exit. Zig 0.17 build/tests and focused filtering/selection tests pass; AUR install/removal were user-validated; live installed-list checks remain open.
+
+### Optional Flatpak tab (2026-10-29)
+
+- Flatpak appears only after `list flatpak remote --ui-mode` succeeds, including an empty remote list. Missing/incompatible backends and query failures keep the tab hidden; probe errors remain separate from native package loading.
+- Probing runs in the background at startup and package refresh. Navigation, shortcuts, and mouse selection share the available-tab list. Source settings remain deferred.
+- Tests cover hidden/visible navigation, rendering, empty remotes, backend errors, and independent native loading failure. Live backend-present/absent checks remain open.
+- Availability-gate build/test and six focused tests pass. The stale remote-info fixture was corrected during browsing implementation below.
+
+### Flatpak browsing (2026-10-29)
+
+- Configured-remote catalog browsing, Ctrl+L installed applications/runtimes, local filtering, Enter details, and Ctrl+R refresh. Installed identity retains scope, kind, architecture, branch, remote, and refs; refresh preserves selection by identity.
+- Queries run in joined workers. Errors and empty lists remain distinct; details are read-only. Catalogs use existing AppStream metadata; installation status and permissions are not inferred.
+- Zig 0.17 build/test and 12 focused tests pass, including scoped duplicates, refresh ownership, cleanup, rendering at 80×24/40×12, and wire decoding. Live CLI queries returned 3,369 catalog entries and 43 installed references; interactive browsing verification remains open.

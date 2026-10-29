@@ -1,6 +1,7 @@
 const std = @import("std");
 const commands = @import("commands.zig");
 const packages_view = @import("views/packages_view.zig");
+const flatpak_view = @import("views/flatpak_view.zig");
 const aur_view = @import("views/aur_view.zig");
 const updates_view = @import("views/updates_view.zig");
 const pkgbuild_view = @import("views/pkgbuild_view.zig");
@@ -16,6 +17,7 @@ const runtime = @import("runtime.zig");
 const Package = @import("models/packages.zig").Package;
 const AurPackage = @import("models/packages.zig").AurPackage;
 
+const flatpak = @import("models/flatpak.zig");
 const CheckUpdates = @import("models/sync.zig").CheckUpdates;
 
 const Allocator = std.mem.Allocator;
@@ -25,14 +27,18 @@ pub const Tab = enum {
     packages,
     aur,
     upgrade,
+    flatpak,
 
-    pub const all: []const Tab = &.{ .packages, .aur, .upgrade };
+    pub const always: []const Tab = &.{ .packages, .aur, .upgrade };
+
+    pub const all: []const Tab = &.{ .packages, .aur, .upgrade, .flatpak };
 
     pub fn title(self: Tab) []const u8 {
         return switch (self) {
             .packages => "Packages",
             .aur => "AUR",
             .upgrade => "Upgrade",
+            .flatpak => "Flatpak",
         };
     }
 };
@@ -42,6 +48,8 @@ pub const Tab = enum {
 /// after the result fields are written, so the UI can read them with an
 /// acquire load and no lock.
 const LoadState = struct {
+    flatpak_available: bool = false,
+    flatpak_probe_error: ?anyerror = null,
     result: ?std.json.Parsed([]Package) = null,
     failed: bool = false,
     done: std.atomic.Value(bool) = .init(false),
@@ -51,6 +59,14 @@ const AurSearchJob = struct {
     installed_only: bool = false,
     result: ?std.json.Parsed([]AurPackage) = null,
     failed: bool = false,
+    done: std.atomic.Value(bool) = .init(false),
+};
+
+const FlatpakJob = struct {
+    installed_only: bool,
+    catalog: ?std.json.Parsed([]flatpak.AppstreamApp) = null,
+    installed: ?std.json.Parsed([]flatpak.Flatpak) = null,
+    failure: ?anyerror = null,
     done: std.atomic.Value(bool) = .init(false),
 };
 
@@ -111,6 +127,7 @@ const SudoPrompt = struct {
 const Overlay = union(enum) {
     package: *const Package,
     aur: *const AurPackage,
+    flatpak: flatpak_view.Row,
     sudo: *SudoPrompt,
     pkgbuild,
 };
@@ -119,6 +136,17 @@ pub const Model = struct {
     gpa: Allocator,
 
     active: Tab = .packages,
+    flatpak_available: bool = false,
+    flatpak_probe_error: ?anyerror = null,
+    flatpak_job: ?*FlatpakJob = null,
+    flatpak_thread: ?std.Thread = null,
+    flatpak_catalog: ?std.json.Parsed([]flatpak.AppstreamApp) = null,
+    flatpak_installed: ?std.json.Parsed([]flatpak.Flatpak) = null,
+    flatpak_failure: ?anyerror = null,
+    flatpak_installed_only: bool = false,
+    flatpak_rows: std.ArrayList(flatpak_view.Row) = .empty,
+    flatpak_field: vxfw.TextField,
+    flatpak_list: vxfw.ListView,
 
     /// All known packages, borrowed from `parsed`.
     packages: []Package = &.{},
@@ -190,6 +218,8 @@ pub const Model = struct {
         errdefer gpa.destroy(model);
 
         model.* = .{
+            .flatpak_field = .{ .buf = .init(gpa), .userdata = model, .onChange = onFlatpakQueryChange },
+            .flatpak_list = .{ .children = .{ .builder = .{ .userdata = model, .buildFn = buildFlatpakRow } } },
             .updates_list = .{ .children = .{ .builder = .{
                 .userdata = model,
                 .buildFn = Model.buildUpdateRow,
@@ -237,6 +267,16 @@ pub const Model = struct {
 
     pub fn deinit(self: *Model) void {
         const gpa = self.gpa;
+        if (self.flatpak_thread) |thread| thread.join();
+        if (self.flatpak_job) |job| {
+            if (job.catalog) |*parsed| parsed.deinit();
+            if (job.installed) |*parsed| parsed.deinit();
+            gpa.destroy(job);
+        }
+        if (self.flatpak_catalog) |*parsed| parsed.deinit();
+        if (self.flatpak_installed) |*parsed| parsed.deinit();
+        self.flatpak_rows.deinit(gpa);
+        self.flatpak_field.deinit();
         if (self.operation_question) |*question| question.deinit();
         if (self.review_prompt) |prompt| prompt.deinit(gpa);
         self.answer_input.deinit(gpa);
@@ -303,7 +343,7 @@ pub const Model = struct {
         const self: *Model = @ptrCast(@alignCast(ptr));
         switch (event) {
             .key_press => |key| {
-                const command = commands.global(key, Tab.all.len);
+                const command = commands.global(key, self.visibleTabs().len);
                 if (command) |action| {
                     if (action == .quit) {
                         ctx.quit = true;
@@ -312,6 +352,10 @@ pub const Model = struct {
                 }
                 if (self.overlay) |overlay| {
                     switch (overlay) {
+                        .flatpak => {
+                            if (commands.closesPreview(key)) self.closeOverlay();
+                            return ctx.consumeAndRedraw();
+                        },
                         .package, .aur => {
                             if (commands.detail(key)) |action| {
                                 switch (action) {
@@ -358,11 +402,27 @@ pub const Model = struct {
                         },
                     }
                 }
+                if (self.active == .flatpak) {
+                    if (commands.togglesInstalled(key)) {
+                        if (self.flatpak_job == null) {
+                            self.flatpak_installed_only = !self.flatpak_installed_only;
+                            self.flatpak_rows.clearRetainingCapacity();
+                            self.flatpak_list.item_count = 0;
+                            self.flatpak_list.jumpToItem(0);
+                            try self.startFlatpak(ctx);
+                        }
+                        return ctx.consumeAndRedraw();
+                    }
+                    if (commands.refreshesList(key)) {
+                        try self.startFlatpak(ctx);
+                        return ctx.consumeAndRedraw();
+                    }
+                }
                 if (self.active == .aur and self.aur_installed_only and commands.refreshesList(key)) {
                     if (self.aur_job == null) try self.startAurSearch(ctx, "");
                     return ctx.consumeAndRedraw();
                 }
-                if (commands.togglesInstalled(key) and self.active != .upgrade) {
+                if (commands.togglesInstalled(key) and (self.active == .packages or self.active == .aur)) {
                     if (self.active == .packages) {
                         self.installed_only = !self.installed_only;
                         try self.rebuildFilter();
@@ -397,8 +457,9 @@ pub const Model = struct {
                             self.switchTab(if (action == .next_tab) 1 else -1);
                             try self.focusActiveTab(ctx);
                             try self.ensureUpdates(ctx);
+                            try self.ensureFlatpak(ctx);
                         },
-                        .select_tab => |index| try self.setTab(Tab.all[index], ctx),
+                        .select_tab => |index| try self.setTab(self.visibleTabs()[index], ctx),
                     }
                     return ctx.consumeAndRedraw();
                 }
@@ -419,10 +480,13 @@ pub const Model = struct {
                 return self.focusActiveTab(ctx);
             },
             .tick => {
+                const previous_tab = self.active;
                 const loading = try self.pollLoad();
+                if (previous_tab != self.active) try self.focusActiveTab(ctx);
                 const searching = try self.pollAurSearch();
                 const installing = try self.pollInstall();
                 self.pollUpdates();
+                try self.pollFlatpak();
                 try self.pollPkgbuild(ctx);
                 if (self.refresh_after_upgrade and !self.loading and self.updates_job == null) {
                     try self.reloadPackages(ctx);
@@ -433,7 +497,7 @@ pub const Model = struct {
                     if (self.aur_installed_only or self.aur_query.len > 0) try self.startAurSearch(ctx, self.aur_query);
                     self.refresh_aur_after_operation = false;
                 }
-                if (loading or searching or installing or self.loading or self.updates_job != null or self.pkgbuild_job != null or self.aur_job != null) {
+                if (loading or searching or installing or self.loading or self.updates_job != null or self.pkgbuild_job != null or self.aur_job != null or self.flatpak_job != null) {
                     try ctx.tick(100, self.widget());
                 }
                 return ctx.consumeAndRedraw();
@@ -442,6 +506,10 @@ pub const Model = struct {
                 // Enter opens the details of the selected package. On the
                 // AUR tab Enter is consumed by the search field instead.
                 if (key.matches(vaxis.Key.enter, .{})) {
+                    if (self.active == .flatpak and self.flatpak_job == null and self.flatpak_failure == null and self.flatpak_list.cursor < self.flatpak_rows.items.len) {
+                        self.overlay = .{ .flatpak = self.flatpak_rows.items[self.flatpak_list.cursor] };
+                        return ctx.consumeAndRedraw();
+                    }
                     if (self.active == .packages and
                         self.filtered.items.len > 0 and
                         @as(usize, self.list_view.cursor) < self.filtered.items.len)
@@ -456,6 +524,7 @@ pub const Model = struct {
                     .packages => self.list_view.handleEvent(ctx, event),
                     .aur => self.aur_list.handleEvent(ctx, event),
                     .upgrade => self.updates_list.handleEvent(ctx, event),
+                    .flatpak => self.flatpak_list.handleEvent(ctx, event),
                 };
             },
             .mouse => {
@@ -472,21 +541,28 @@ pub const Model = struct {
 
     // -- tabs --------------------------------------------------------------
 
+    fn visibleTabs(self: *const Model) []const Tab {
+        return if (self.flatpak_available) Tab.all else Tab.always;
+    }
+
     fn switchTab(self: *Model, delta: i32) void {
-        const count: i32 = @intCast(Tab.all.len);
-        const current: i32 = for (Tab.all, 0..) |tab, index| {
+        const tabs = self.visibleTabs();
+        const count: i32 = @intCast(tabs.len);
+        const current: i32 = for (tabs, 0..) |tab, index| {
             if (tab == self.active) break @intCast(index);
         } else unreachable;
         var next = @rem(current + delta, count);
         if (next < 0) next += count;
-        self.active = Tab.all[@intCast(next)];
+        self.active = tabs[@intCast(next)];
     }
 
     fn setTab(self: *Model, tab: Tab, ctx: *vxfw.EventContext) !void {
+        if (tab == .flatpak and !self.flatpak_available) return;
         if (tab == self.active) return;
         self.active = tab;
         try self.focusActiveTab(ctx);
         try self.ensureUpdates(ctx);
+        try self.ensureFlatpak(ctx);
     }
 
     fn focusActiveTab(self: *Model, ctx: *vxfw.EventContext) !void {
@@ -494,7 +570,110 @@ pub const Model = struct {
             .packages => try ctx.requestFocus(self.text_field.widget()),
             .aur => try ctx.requestFocus(self.aur_field.widget()),
             .upgrade => try ctx.requestFocus(self.widget()),
+            .flatpak => try ctx.requestFocus(self.flatpak_field.widget()),
         }
+    }
+
+    fn ensureFlatpak(self: *Model, ctx: *vxfw.EventContext) !void {
+        if (self.active != .flatpak or !self.flatpak_available or self.flatpak_job != null or self.flatpak_failure != null) return;
+        if (if (self.flatpak_installed_only) self.flatpak_installed == null else self.flatpak_catalog == null)
+            try self.startFlatpak(ctx);
+    }
+
+    fn startFlatpak(self: *Model, ctx: *vxfw.EventContext) !void {
+        if (!self.flatpak_available or self.flatpak_job != null) return;
+        try ctx.tick(100, self.widget());
+        const job = try self.gpa.create(FlatpakJob);
+        errdefer self.gpa.destroy(job);
+        job.* = .{ .installed_only = self.flatpak_installed_only };
+        const thread = try std.Thread.spawn(.{}, flatpakThread, .{job});
+        self.flatpak_job = job;
+        self.flatpak_thread = thread;
+        self.flatpak_failure = null;
+    }
+
+    fn flatpakThread(job: *FlatpakJob) void {
+        defer job.done.store(true, .release);
+        var threaded: std.Io.Threaded = .init(std.heap.page_allocator, .{});
+        defer threaded.deinit();
+        const cli: ShellyCli = .{ .allocator = std.heap.page_allocator, .io = threaded.io() };
+        if (job.installed_only) {
+            job.installed = cli.get_installed_flatpaks() catch |err| {
+                job.failure = err;
+                return;
+            };
+        } else {
+            job.catalog = cli.get_remote_appstream_apps() catch |err| {
+                job.failure = err;
+                return;
+            };
+        }
+    }
+
+    fn pollFlatpak(self: *Model) !void {
+        const job = self.flatpak_job orelse return;
+        if (!job.done.load(.acquire)) return;
+        if (self.flatpak_thread) |thread| thread.join();
+        self.flatpak_thread = null;
+        self.flatpak_job = null;
+        defer self.gpa.destroy(job);
+        var old_catalog = self.flatpak_catalog;
+        var old_installed = self.flatpak_installed;
+        defer if (!job.installed_only) {
+            if (old_catalog) |*parsed| parsed.deinit();
+        };
+        defer if (job.installed_only) {
+            if (old_installed) |*parsed| parsed.deinit();
+        };
+        if (self.overlay) |overlay| {
+            if (overlay == .flatpak) self.overlay = null;
+        }
+        self.flatpak_failure = job.failure;
+        if (job.installed_only) self.flatpak_installed = job.installed else self.flatpak_catalog = job.catalog;
+        try self.rebuildFlatpakFilter();
+    }
+
+    fn onFlatpakQueryChange(ptr: ?*anyopaque, _: *vxfw.EventContext, _: []const u8) anyerror!void {
+        const self: *Model = @ptrCast(@alignCast(ptr orelse return));
+        try self.rebuildFlatpakFilter();
+    }
+
+    fn rebuildFlatpakFilter(self: *Model) Allocator.Error!void {
+        const selected: ?flatpak_view.Row = if (self.flatpak_list.cursor < self.flatpak_rows.items.len) self.flatpak_rows.items[self.flatpak_list.cursor] else null;
+        self.flatpak_rows.clearRetainingCapacity();
+        const query = try self.flatpak_field.buf.dupe();
+        defer self.gpa.free(query);
+        if (self.flatpak_failure == null) {
+            if (self.flatpak_installed_only) {
+                if (self.flatpak_installed) |parsed| for (parsed.value) |*app| {
+                    const row: flatpak_view.Row = .{ .installed = app };
+                    if (row.matches(query)) try self.flatpak_rows.append(self.gpa, row);
+                };
+            } else {
+                if (self.flatpak_catalog) |parsed| for (parsed.value) |*app| {
+                    const row: flatpak_view.Row = .{ .catalog = app };
+                    if (row.matches(query)) try self.flatpak_rows.append(self.gpa, row);
+                };
+            }
+        }
+        self.flatpak_list.item_count = @intCast(self.flatpak_rows.items.len);
+        self.flatpak_list.jumpToItem(0);
+        if (selected) |previous| for (self.flatpak_rows.items, 0..) |row, index| {
+            if (row.sameIdentity(previous)) {
+                self.flatpak_list.jumpToItem(@intCast(index));
+                break;
+            }
+        };
+    }
+
+    fn buildFlatpakRow(ptr: *const anyopaque, index: usize, _: usize) ?vxfw.Widget {
+        const self: *const Model = @ptrCast(@alignCast(ptr));
+        if (index >= self.flatpak_rows.items.len) return null;
+        return self.flatpak_rows.items[index].widget();
+    }
+
+    fn flatpakView(self: *Model) flatpak_view.View {
+        return .{ .field = &self.flatpak_field, .list = &self.flatpak_list, .installed_only = self.flatpak_installed_only, .loading = self.flatpak_job != null, .failure = self.flatpak_failure, .checked = if (self.flatpak_installed_only) self.flatpak_installed != null else self.flatpak_catalog != null, .count = self.flatpak_rows.items.len };
     }
 
     // -- background jobs ---------------------------------------------------
@@ -704,6 +883,12 @@ pub const Model = struct {
         defer threaded.deinit();
 
         const cli: ShellyCli = .{ .allocator = alloc, .io = threaded.io() };
+        // Empty remotes are valid. Failure is recorded separately from absence
+        // of installed applications.
+        cli.probe_flatpak() catch |err| {
+            load.flatpak_probe_error = err;
+        };
+        load.flatpak_available = load.flatpak_probe_error == null;
         const parsed = cli.get_packages(false) catch {
             load.failed = true;
             load.done.store(true, .release);
@@ -729,6 +914,9 @@ pub const Model = struct {
         if (!self.loading) return false;
         if (!self.load.done.load(.acquire)) return true;
 
+        self.flatpak_available = self.load.flatpak_available;
+        self.flatpak_probe_error = self.load.flatpak_probe_error;
+        if (!self.flatpak_available and self.active == .flatpak) self.active = .packages;
         const failed = self.load.failed;
         const parsed = self.load.result;
         self.load.result = null;
@@ -899,7 +1087,7 @@ pub const Model = struct {
                 name = pkg.Name;
                 backend = .aur;
             },
-            .sudo, .pkgbuild => return,
+            .sudo, .pkgbuild, .flatpak => return,
         }
         const prompt = try self.gpa.create(SudoPrompt);
         errdefer self.gpa.destroy(prompt);
@@ -1288,6 +1476,7 @@ pub const Model = struct {
             .packages => try self.packagesView().appendContent(ctx, &children),
             .aur => try self.aurView().appendContent(ctx, &children),
             .upgrade => try self.updatesView().appendContent(ctx, &children),
+            .flatpak => try self.flatpakView().appendContent(ctx, &children),
         }
 
         // Bottom row: status bar
@@ -1306,7 +1495,7 @@ pub const Model = struct {
         // Modal overlay on top of everything
         if (self.overlay) |overlay| {
             const overlay_child: ?vxfw.SubSurface = switch (overlay) {
-                .package, .aur => try self.drawDetailsOverlay(ctx, arena, max, overlay),
+                .package, .aur, .flatpak => try self.drawDetailsOverlay(ctx, arena, max, overlay),
                 .sudo => |prompt| try self.drawSudoPrompt(ctx, arena, max, prompt),
                 .pkgbuild => try self.pkgbuildView().draw(ctx),
             };
@@ -1324,8 +1513,9 @@ pub const Model = struct {
     }
 
     fn drawTabBar(self: *Model, arena: Allocator) Allocator.Error!vxfw.Widget {
-        const spans = try arena.alloc(vxfw.RichText.TextSpan, Tab.all.len);
-        for (Tab.all, 0..) |tab, i| {
+        const tabs = self.visibleTabs();
+        const spans = try arena.alloc(vxfw.RichText.TextSpan, tabs.len);
+        for (tabs, 0..) |tab, i| {
             spans[i] = .{
                 .text = try std.fmt.allocPrint(arena, " {d}:{s} ", .{ i + 1, tab.title() }),
                 .style = if (tab == self.active)
@@ -1352,6 +1542,7 @@ pub const Model = struct {
             .packages => self.packagesView().statusText(arena),
             .aur => self.aurView().statusText(arena),
             .upgrade => self.updatesView().statusText(arena),
+            .flatpak => self.flatpakView().statusText(arena),
         };
     }
 
@@ -1372,6 +1563,10 @@ pub const Model = struct {
                     try aur_view.detailsText(arena, pkg),
                     commands.aurDetailsHint(pkg.Installed),
                 });
+            },
+            .flatpak => |row| {
+                title = try std.fmt.allocPrint(arena, "{f} (Flatpak)", .{diagnostics.safe(row.title())});
+                body = try row.details(arena);
             },
             .sudo, .pkgbuild => return null,
         }
@@ -1524,7 +1719,7 @@ const TabBar = struct {
                     // Labels are ASCII, so byte length == display width
                     const width: i16 = @intCast(span.text.len);
                     if (mouse.col < col + width) {
-                        try self.model.setTab(Tab.all[i], ctx);
+                        try self.model.setTab(self.model.visibleTabs()[i], ctx);
                         return ctx.consumeAndRedraw();
                     }
                     col += width;
@@ -1538,6 +1733,7 @@ const TabBar = struct {
 test "tab switching requests focus on a widget in the active page" {
     var model: Model = undefined;
     model.active = .packages;
+    model.flatpak_available = false;
     var ctx: vxfw.EventContext = .{
         .io = undefined,
         .alloc = std.testing.allocator,
@@ -1554,6 +1750,7 @@ test "tab switching requests focus on a widget in the active page" {
             .packages => model.text_field.widget(),
             .aur => model.aur_field.widget(),
             .upgrade => model.widget(),
+            .flatpak => model.flatpak_field.widget(),
         };
         try std.testing.expect(ctx.cmds.items[0].request_focus.eql(expected));
     }
@@ -1579,6 +1776,7 @@ test "tab views preserve input widgets and render without background work" {
                 .packages => model.text_field.widget(),
                 .aur => model.aur_field.widget(),
                 .upgrade => model.widget(),
+                .flatpak => model.flatpak_field.widget(),
             };
             var found = surface.widget.eql(input);
             for (surface.children) |child| {
@@ -1911,4 +2109,147 @@ test "installed AUR list filters locally and opens the displayed package" {
     model.aur_field.buf.clearRetainingCapacity();
     try model.rebuildAurFilter();
     try std.testing.expectEqual(@as(usize, 2), model.aur_filtered.items.len);
+}
+
+test "Flatpak availability gates tab navigation shortcuts and rendering" {
+    vxfw.DrawContext.init(.unicode);
+    const model = try Model.init(std.testing.allocator);
+    defer model.deinit();
+    var events: vxfw.EventContext = .{ .io = undefined, .alloc = std.testing.allocator, .cmds = .empty };
+    defer events.cmds.deinit(std.testing.allocator);
+    try std.testing.expectEqual(@as(usize, 3), model.visibleTabs().len);
+    try model.setTab(.flatpak, &events);
+    try std.testing.expectEqual(Tab.packages, model.active);
+    try std.testing.expect(commands.global(.{ .codepoint = '4', .mods = .{ .alt = true } }, model.visibleTabs().len) == null);
+    model.active = .upgrade;
+    model.switchTab(1);
+    try std.testing.expectEqual(Tab.packages, model.active);
+
+    model.flatpak_available = true;
+    try std.testing.expectEqual(@as(usize, 4), model.visibleTabs().len);
+    model.active = .upgrade;
+    model.switchTab(1);
+    try std.testing.expectEqual(Tab.flatpak, model.active);
+    try model.focusActiveTab(&events);
+    try std.testing.expect(events.cmds.items[events.cmds.items.len - 1].request_focus.eql(model.flatpak_field.widget()));
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const bar = try model.drawTabBar(arena.allocator());
+    const tabs: *TabBar = @ptrCast(@alignCast(bar.userdata));
+    try std.testing.expectEqual(@as(usize, 4), tabs.rich.text.len);
+    try std.testing.expectEqualStrings(" 4:Flatpak ", tabs.rich.text[3].text);
+    _ = try model.widget().draw(.{
+        .arena = arena.allocator(),
+        .min = .{},
+        .max = .{ .width = 80, .height = 24 },
+        .cell_size = .{ .width = 10, .height = 20 },
+    });
+    model.flatpak_available = false;
+    model.active = .packages;
+    const hidden = try model.drawTabBar(arena.allocator());
+    const hidden_tabs: *TabBar = @ptrCast(@alignCast(hidden.userdata));
+    try std.testing.expectEqual(@as(usize, 3), hidden_tabs.rich.text.len);
+}
+
+test "Flatpak probe result is independent of native list failure and revokes access" {
+    const model = try Model.init(std.testing.allocator);
+    defer model.deinit();
+    model.load.failed = true;
+    model.load.flatpak_available = true;
+    model.load.done.store(true, .release);
+    _ = try model.pollLoad();
+    try std.testing.expect(model.flatpak_available and model.load_failed);
+    model.active = .flatpak;
+    model.loading = true;
+    model.load.flatpak_available = false;
+    model.load.flatpak_probe_error = error.CommandFailed;
+    _ = try model.pollLoad();
+    try std.testing.expect(!model.flatpak_available);
+    try std.testing.expectEqual(Tab.packages, model.active);
+    try std.testing.expectEqual(error.CommandFailed, model.flatpak_probe_error.?);
+}
+
+test "Flatpak browsing preserves scoped identity through refresh and filters locally" {
+    const allocator = std.testing.allocator;
+    const model = try Model.init(allocator);
+    defer model.deinit();
+    model.flatpak_available = true;
+    model.active = .flatpak;
+    model.flatpak_installed_only = true;
+    model.flatpak_installed = try std.json.parseFromSlice([]flatpak.Flatpak, allocator,
+        \\[{"Id":"org.example.Editor","InstallLevel":0,"Arch":"x86_64","Branch":"stable","Remote":"flathub"},{"Id":"org.example.Editor","InstallLevel":1,"Arch":"x86_64","Branch":"stable","Remote":"flathub"}]
+    , .{ .allocate = .alloc_always });
+    try model.rebuildFlatpakFilter();
+    try std.testing.expectEqual(@as(usize, 2), model.flatpak_rows.items.len);
+    try std.testing.expect(!model.flatpak_rows.items[0].sameIdentity(model.flatpak_rows.items[1]));
+    model.flatpak_list.jumpToItem(1);
+    model.overlay = .{ .flatpak = model.flatpak_rows.items[1] };
+    const replacement = try allocator.create(FlatpakJob);
+    replacement.* = .{ .installed_only = true, .done = .init(true), .installed = try std.json.parseFromSlice([]flatpak.Flatpak, allocator,
+        \\[{"Id":"org.example.Editor","InstallLevel":1,"Arch":"x86_64","Branch":"stable","Remote":"flathub"},{"Id":"org.example.Editor","InstallLevel":0,"Arch":"x86_64","Branch":"stable","Remote":"flathub"}]
+    , .{ .allocate = .alloc_always }) };
+    model.flatpak_job = replacement;
+    try model.pollFlatpak();
+    try std.testing.expect(model.overlay == null);
+    try std.testing.expectEqual(@as(usize, 0), model.flatpak_list.cursor);
+    try std.testing.expectEqual(flatpak.InstallLevel.user, model.flatpak_rows.items[0].installed.InstallLevel);
+    try model.flatpak_field.buf.insertSliceAtCursor("EDITOR");
+    try model.rebuildFlatpakFilter();
+    try std.testing.expectEqual(@as(usize, 2), model.flatpak_rows.items.len);
+    model.flatpak_field.buf.clearRetainingCapacity();
+    try model.flatpak_field.buf.insertSliceAtCursor("missing");
+    try model.rebuildFlatpakFilter();
+    try std.testing.expectEqual(@as(usize, 0), model.flatpak_rows.items.len);
+}
+
+test "Flatpak browsing separates failure empty results and unconsumed job cleanup" {
+    const allocator = std.testing.allocator;
+    const model = try Model.init(allocator);
+    defer model.deinit();
+    const empty = try allocator.create(FlatpakJob);
+    empty.* = .{ .installed_only = false, .done = .init(true), .catalog = try std.json.parseFromSlice([]flatpak.AppstreamApp, allocator, "[]", .{}) };
+    model.flatpak_job = empty;
+    try model.pollFlatpak();
+    try std.testing.expect(model.flatpakView().checked);
+    try std.testing.expect(model.flatpakView().failure == null);
+    const failed = try allocator.create(FlatpakJob);
+    failed.* = .{ .installed_only = false, .done = .init(true), .failure = error.CommandFailed };
+    model.flatpak_job = failed;
+    try model.pollFlatpak();
+    try std.testing.expectEqual(error.CommandFailed, model.flatpakView().failure.?);
+    try std.testing.expect(!model.flatpakView().checked);
+    const unconsumed = try allocator.create(FlatpakJob);
+    unconsumed.* = .{ .installed_only = true, .installed = try std.json.parseFromSlice([]flatpak.Flatpak, allocator, "[{\"Id\":\"org.example.App\"}]", .{ .allocate = .alloc_always }) };
+    model.flatpak_job = unconsumed;
+    const Worker = struct {
+        fn finish(job: *FlatpakJob) void {
+            job.done.store(true, .release);
+        }
+    };
+    model.flatpak_thread = try std.Thread.spawn(.{}, Worker.finish, .{unconsumed});
+}
+
+test "Flatpak catalog details retain remote scopes and Enter opens the selected app" {
+    const allocator = std.testing.allocator;
+    const model = try Model.init(allocator);
+    defer model.deinit();
+    model.active = .flatpak;
+    model.flatpak_available = true;
+    model.flatpak_catalog = try std.json.parseFromSlice([]flatpak.AppstreamApp, allocator,
+        \\[{"Id":"org.example.App","Name":"Example","Summary":"An editor","Remotes":[{"Name":"flathub","Scope":0},{"Name":"flathub","Scope":1}]}]
+    , .{ .allocate = .alloc_always });
+    try model.rebuildFlatpakFilter();
+    var events: vxfw.EventContext = .{ .io = undefined, .alloc = allocator, .cmds = .empty };
+    defer events.cmds.deinit(allocator);
+    try Model.typeErasedEventHandler(model, &events, .{ .key_press = .{ .codepoint = vaxis.Key.enter } });
+    try std.testing.expectEqualStrings("org.example.App", model.overlay.?.flatpak.title());
+    var arena = std.heap.ArenaAllocator.init(allocator);
+    defer arena.deinit();
+    const details = try model.overlay.?.flatpak.details(arena.allocator());
+    try std.testing.expect(std.mem.indexOf(u8, details, "flathub (system)") != null);
+    try std.testing.expect(std.mem.indexOf(u8, details, "flathub (user)") != null);
+    vxfw.DrawContext.init(.unicode);
+    for ([_]vxfw.Size{ .{ .width = 80, .height = 24 }, .{ .width = 40, .height = 12 } }) |size| {
+        _ = try model.widget().draw(.{ .arena = arena.allocator(), .min = .{}, .max = .{ .width = size.width, .height = size.height }, .cell_size = .{ .width = 10, .height = 20 } });
+    }
 }

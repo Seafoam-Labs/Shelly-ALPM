@@ -17,6 +17,11 @@ pub const FlatpakKind = enum(u8) {
 };
 
 pub const Flatpak = struct {
+    Arch: []const u8 = "",
+    Branch: []const u8 = "",
+    Summary: []const u8 = "",
+    Ref: []const u8 = "",
+    FullRef: []const u8 = "",
     Id: []const u8 = "",
     Name: []const u8 = "",
     Version: []const u8 = "",
@@ -141,12 +146,11 @@ test "AppStream app metadata defaults missing optional fields" {
 
 test "parse Flatpak remote info metadata" {
     const json =
-        \\{"DownloadSize":150997939,"InstalledSize":470429696,"Permissions":["Context=shared:network","Context=sockets:wayland"]}
+        \\{"hits":[{"id":"org.example.App","download_size":150997939,"installed_size":470429696,"permissions":["Context=shared:network","Context=sockets:wayland"]}]}
     ;
     const parsed = try std.json.parseFromSlice(FlatpakSearchResponse, std.testing.allocator, json, .{});
     defer parsed.deinit();
-
-    try std.testing.expectEqual(@as(i64, 150997939), parsed.value.DownloadSize);
-    try std.testing.expectEqual(@as(i64, 470429696), parsed.value.InstalledSize);
-    try std.testing.expectEqual(@as(usize, 2), parsed.value.Permissions.len);
+    try std.testing.expectEqual(@as(i64, 150997939), parsed.value.hits[0].download_size);
+    try std.testing.expectEqual(@as(i64, 470429696), parsed.value.hits[0].installed_size);
+    try std.testing.expectEqual(@as(usize, 2), parsed.value.hits[0].permissions.?.len);
 }
