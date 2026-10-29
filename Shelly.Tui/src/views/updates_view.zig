@@ -13,6 +13,7 @@ pub const View = struct {
     loading: bool,
     failed: bool,
     checked: bool,
+    flatpak_available: bool = false,
 
     pub fn canUpgrade(self: View) bool {
         return !self.loading and !self.failed and self.data != null and self.data.?.Packages.len > 0;
@@ -22,18 +23,23 @@ pub const View = struct {
         return !self.loading and !self.failed and self.data != null and self.data.?.Aur.len > 0;
     }
 
+    pub fn canUpgradeFlatpak(self: View) bool {
+        return self.flatpak_available and !self.loading and !self.failed and self.data != null and self.data.?.Flatpak.len > 0;
+    }
+
     pub fn handleKey(self: View, key: vaxis.Key) ?commands.Updates {
         const action = commands.updates(key) orelse return null;
         if (action == .upgrade_system and !self.canUpgrade()) return null;
         if (action == .upgrade_aur and !self.canUpgradeAur()) return null;
+        if (action == .upgrade_flatpak and !self.canUpgradeFlatpak()) return null;
         return action;
     }
 
     pub fn statusText(self: View, arena: Allocator) Allocator.Error![]const u8 {
         if (self.loading) return "Checking for updates…";
         if (self.failed) return "Update check failed — R: retry";
-        if (self.data) |data| return std.fmt.allocPrint(arena, "{d} updates ({d} system, {d} AUR) — {s}", .{
-            data.count(), data.Packages.len, data.Aur.len, if (self.canUpgrade() or self.canUpgradeAur()) commands.updates_hint else "R: refresh",
+        if (self.data) |data| return std.fmt.allocPrint(arena, "{d} updates ({d} system, {d} AUR, {d} Flatpak) — {s}", .{
+            data.count(), data.Packages.len, data.Aur.len, data.Flatpak.len, if (self.canUpgrade() or self.canUpgradeAur() or self.canUpgradeFlatpak()) if (self.flatpak_available) commands.flatpak_updates_hint else commands.updates_hint else "R: refresh",
         });
         return "R: check for updates";
     }

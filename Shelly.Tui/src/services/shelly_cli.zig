@@ -71,6 +71,8 @@ fn decodeQuery(comptime T: type, allocator: std.mem.Allocator, output: []const u
 }
 
 pub const ShellyCli = struct {
+    binary: ?[]const u8 = null,
+    environment: ?*const std.process.Environ.Map = null,
     allocator: std.mem.Allocator,
     io: Io,
 
@@ -87,7 +89,7 @@ pub const ShellyCli = struct {
     }
 
     fn runInner(self: ShellyCli, args: []const []const u8, comptime silent: bool) !RunResult {
-        const shelly_bin = if (runtime.is_debug)
+        const shelly_bin = self.binary orelse if (runtime.is_debug)
             "../Shelly.Cli.Zig/zig-out/bin/shelly"
         else
             "shelly";
@@ -100,7 +102,7 @@ pub const ShellyCli = struct {
 
         const result = try std.process.run(self.allocator, self.io, .{
             .argv = argv,
-            .environ_map = runtime.environ_map,
+            .environ_map = self.environment orelse runtime.environ_map,
         });
         errdefer self.allocator.free(result.stdout);
         errdefer self.allocator.free(result.stderr);

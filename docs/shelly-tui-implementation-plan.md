@@ -139,3 +139,10 @@ The intended flow is browse → details → review/provider questions → execut
 - Configured-remote catalog browsing, Ctrl+L installed applications/runtimes, local filtering, Enter details, and Ctrl+R refresh. Installed identity retains scope, kind, architecture, branch, remote, and refs; refresh preserves selection by identity.
 - Queries run in joined workers. Errors and empty lists remain distinct; details are read-only. Catalogs use existing AppStream metadata; installation status and permissions are not inferred.
 - Zig 0.17 build/test and 12 focused tests pass, including scoped duplicates, refresh ownership, cleanup, rendering at 80×24/40×12, and wire decoding. Live CLI queries returned 3,369 catalog entries and 43 installed references; interactive browsing verification remains open.
+
+### Flatpak operations (2026-10-29)
+
+- Catalog details: I selects a remote/scope, then confirms installation. Installed details: R requests removal while keeping configuration and unused dependencies. Updates: F upgrades system and user Flatpaks.
+- Operations stream progress and questions through the existing review UI, require completion messages, and refresh Flatpak/update state afterward. System install/removal uses sudo authentication; user operations and upgrades run as the invoking user. System upgrades may require a Flatpak authorization agent.
+- Flatpak removal delegates ID/name resolution to the CLI, as GTK does. The TUI-only ambiguity/identity guard was removed; exact scope/ref targeting remains a CLI/backend gap. No CLI changes are included.
+- After guard removal, Zig 0.17 build/test and 33 focused tests pass. Earlier fake-process coverage remains recorded; guard-specific rejection tests were removed. Live operation checks remain open.

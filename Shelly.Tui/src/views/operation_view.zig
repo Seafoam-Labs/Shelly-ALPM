@@ -6,6 +6,7 @@ const vxfw = vaxis.vxfw;
 
 pub const View = struct {
     name: []const u8,
+    elevated: bool = true,
     action: @import("../services/shelly_operation.zig").Action = .install,
     state: enum { running, succeeded, failed, declined },
     detail: []const u8 = "",
@@ -23,7 +24,7 @@ pub const View = struct {
         const arena = ctx.arena;
         const max = ctx.max.size();
         const outcome = switch (self.state) {
-            .running => try std.fmt.allocPrint(arena, "{s} '{f}' as root…", .{ self.action.ongoing(), diagnostics.safe(self.name) }),
+            .running => try std.fmt.allocPrint(arena, "{s} '{f}'{s}…", .{ self.action.ongoing(), diagnostics.safe(self.name), if (self.elevated) " as root" else "" }),
             .succeeded => try std.fmt.allocPrint(arena, "✔ {s} '{f}' successfully.\n\n{s}", .{ self.action.completed(), diagnostics.safe(self.name), commands.result_hint }),
             .declined => try std.fmt.allocPrint(arena, "Declined {s} for '{f}'.\nSome dependency changes may already have completed.\n\n{s}", .{ @tagName(self.action), diagnostics.safe(self.name), commands.result_hint }),
             .failed => try std.fmt.allocPrint(arena, "Could not {s} {f}.\n\n{f}\n\n{s}", .{ @tagName(self.action), diagnostics.safe(self.name), diagnostics.safe(if (self.detail.len > 0) self.detail else "Shelly returned no error details."), commands.result_hint }),

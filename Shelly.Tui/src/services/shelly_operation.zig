@@ -2,6 +2,7 @@
 const std = @import("std");
 const diagnostics = @import("diagnostics");
 const JsonPackFrame = @import("ui_decode.zig").JsonPackFrame;
+const flatpak_models = @import("../models/flatpak.zig");
 const Scope = @import("../models/flatpak.zig").InstallLevel;
 const UpdateType = @import("../models/appimage.zig").UpdateType;
 
@@ -35,6 +36,37 @@ pub const Action = enum {
     }
 };
 
+pub const FlatpakTarget = struct {
+    scope: Scope,
+    remote: []const u8 = "",
+    arch: []const u8 = "",
+    branch: []const u8 = "",
+    reference: []const u8 = "",
+    kind: flatpak_models.FlatpakKind = .app,
+
+    pub fn clone(self: FlatpakTarget, alloc: std.mem.Allocator) !FlatpakTarget {
+        var result = self;
+        result.remote = if (self.remote.len > 0) try alloc.dupe(u8, self.remote) else "";
+        errdefer if (result.remote.len > 0) alloc.free(result.remote);
+        result.arch = if (self.arch.len > 0) try alloc.dupe(u8, self.arch) else "";
+        errdefer if (result.arch.len > 0) alloc.free(result.arch);
+        result.branch = if (self.branch.len > 0) try alloc.dupe(u8, self.branch) else "";
+        errdefer if (result.branch.len > 0) alloc.free(result.branch);
+        result.reference = if (self.reference.len > 0) try alloc.dupe(u8, self.reference) else "";
+        return result;
+    }
+
+    pub fn deinit(self: FlatpakTarget, alloc: std.mem.Allocator) void {
+        inline for (.{ "remote", "arch", "branch", "reference" }) |field| {
+            if (@field(self, field).len > 0) alloc.free(@field(self, field));
+        }
+    }
+};
+
+pub fn flatpakNeedsElevation(action: Action, target: ?FlatpakTarget) bool {
+    return action != .upgrade and target != null and target.?.scope == .system;
+}
+
 pub const OperationRequest = struct {
     action: Action = .install,
     sudo_bin: []const u8 = "sudo",
@@ -43,6 +75,7 @@ pub const OperationRequest = struct {
     name: []const u8,
     backend: []const u8,
     password: []const u8,
+    flatpak: ?FlatpakTarget = null,
 };
 
 /// Fixed-size, owned display data; safe to copy between the worker and UI.
@@ -183,7 +216,7 @@ pub const Operation = struct {
         const id = questionId(question);
         self.progress_mutex.lockUncancelable(io);
         defer self.progress_mutex.unlock(io);
-        if (!interactiveAur(self.request) or self.input == null or self.input_closing) return error.InputClosed;
+        if (!interactive(self.request) or self.input == null or self.input_closing) return error.InputClosed;
         if (self.expected_answer != null or self.pending != null) return error.QuestionAlreadyPending;
         if (id.len > self.expected_id.len) return error.InvalidQuestionId;
         @memcpy(self.expected_id[0..id.len], id);
@@ -291,6 +324,7 @@ pub const Operation = struct {
         self.request.shelly_bin = try alloc.dupe(u8, request.shelly_bin);
         self.request.name = try alloc.dupe(u8, request.name);
         self.request.backend = try alloc.dupe(u8, request.backend);
+        if (request.flatpak) |target| self.request.flatpak = try target.clone(alloc);
         self.request.password = try alloc.dupe(u8, request.password);
         errdefer @memset(@constCast(self.request.password), 0);
         self.thread = try std.Thread.spawn(.{}, run, .{self});
@@ -343,29 +377,47 @@ pub fn elevatedInstall(io: std.Io, alloc: std.mem.Allocator, request: OperationR
     return runInstall(io, alloc, request, null);
 }
 
-fn interactiveAur(request: OperationRequest) bool {
-    return std.mem.eql(u8, request.backend, "aur") and request.action != .remove;
+fn interactive(request: OperationRequest) bool {
+    return (std.mem.eql(u8, request.backend, "aur") and request.action != .remove) or isFlatpak(request);
+}
+
+fn isFlatpak(request: OperationRequest) bool {
+    return std.mem.eql(u8, request.backend, "flatpak");
+}
+
+fn elevated(request: OperationRequest) bool {
+    return !isFlatpak(request) or flatpakNeedsElevation(request.action, request.flatpak);
 }
 
 fn operationArgv(alloc: std.mem.Allocator, request: OperationRequest) ![][]const u8 {
     const keep_dependencies = request.action == .remove and std.mem.eql(u8, request.backend, "standard");
-    if (request.action == .upgrade and !std.mem.eql(u8, request.backend, "standard") and !std.mem.eql(u8, request.backend, "aur"))
+    if (request.action == .upgrade and !std.mem.eql(u8, request.backend, "standard") and !std.mem.eql(u8, request.backend, "aur") and !isFlatpak(request))
         return error.UnsupportedUpgradeSource;
+    if (isFlatpak(request) and request.action != .upgrade) {
+        const target = request.flatpak orelse return error.MissingFlatpakTarget;
+        if (request.action == .install and (target.remote.len == 0 or target.arch.len > 0)) return error.UnsupportedFlatpakInstallTarget;
+    }
     var argv: std.ArrayList([]const u8) = .empty;
     errdefer argv.deinit(alloc);
-    if (interactiveAur(request)) {
-        try argv.appendSlice(alloc, &.{ request.sudo_bin, "-n", request.shelly_bin, @tagName(request.action), request.backend });
-    } else {
-        try argv.appendSlice(alloc, &.{ request.sudo_bin, "-S", "-p", "", request.shelly_bin, @tagName(request.action), request.backend });
+    if (elevated(request)) {
+        if (interactive(request)) try argv.appendSlice(alloc, &.{ request.sudo_bin, "-n" }) else try argv.appendSlice(alloc, &.{ request.sudo_bin, "-S", "-p", "" });
     }
+    try argv.appendSlice(alloc, &.{ request.shelly_bin, @tagName(request.action), request.backend });
     if (request.action != .upgrade) try argv.append(alloc, request.name);
-    if (!interactiveAur(request)) try argv.append(alloc, "--no-confirm");
+    if (isFlatpak(request) and request.action == .install) {
+        const target = request.flatpak.?;
+        if (target.scope == .user) try argv.append(alloc, "--user");
+        try argv.appendSlice(alloc, &.{ "--remote", target.remote });
+        if (target.branch.len > 0) try argv.appendSlice(alloc, &.{ "--branch", target.branch });
+        if (target.kind == .runtime) try argv.append(alloc, "--runtime");
+    }
+    if (!interactive(request)) try argv.append(alloc, "--no-confirm");
     try argv.append(alloc, "--ui-mode");
     if (keep_dependencies) try argv.append(alloc, "--no-cascade");
     return argv.toOwnedSlice(alloc);
 }
 
-/// Authenticate with a password-only stdin. 
+/// Authenticate with a password-only stdin.
 fn authorize(io: std.Io, alloc: std.mem.Allocator, request: OperationRequest) !?[]const u8 {
     var child = try std.process.spawn(io, .{
         .argv = &.{ request.sudo_bin, "-S", "-p", "", "-v" },
@@ -393,20 +445,20 @@ fn authorize(io: std.Io, alloc: std.mem.Allocator, request: OperationRequest) !?
 
 fn runInstall(io: std.Io, alloc: std.mem.Allocator, request: OperationRequest, operation: ?*Operation) OperationResult {
     var result: OperationResult = .{};
-    if (interactiveAur(request) and operation == null) {
+    if (interactive(request) and operation == null) {
         result.failed = true;
-        result.error_detail = alloc.dupe(u8, "Interactive AUR operations require an operation handle.") catch "";
+        result.error_detail = alloc.dupe(u8, "Interactive operations require an operation handle.") catch "";
         return result;
     }
-    if (request.action == .remove and !std.mem.eql(u8, request.backend, "standard") and !std.mem.eql(u8, request.backend, "aur")) {
+    if (request.action == .remove and !std.mem.eql(u8, request.backend, "standard") and !std.mem.eql(u8, request.backend, "aur") and !isFlatpak(request)) {
         result.failed = true;
-        result.error_detail = alloc.dupe(u8, "Removal currently supports system and AUR packages only.") catch "";
+        result.error_detail = alloc.dupe(u8, "Removal currently supports system, AUR and Flatpak packages only.") catch "";
         return result;
     }
-    if (interactiveAur(request)) {
+    if (interactive(request) and elevated(request)) {
         const failure = authorize(io, alloc, request) catch {
             result.failed = true;
-            result.error_detail = alloc.dupe(u8, "Could not validate authorization for the AUR operation.") catch "";
+            result.error_detail = alloc.dupe(u8, "Could not validate authorization for the operation.") catch "";
             return result;
         };
         if (failure) |detail| {
@@ -430,13 +482,13 @@ fn runInstall(io: std.Io, alloc: std.mem.Allocator, request: OperationRequest, o
         .stdout = .pipe,
         .stderr = .pipe,
     }) catch {
-        result.error_detail = alloc.dupe(u8, "Could not start sudo to authorize the requested package operation.") catch "";
+        result.error_detail = alloc.dupe(u8, "Could not start the requested package operation.") catch "";
         result.failed = true;
         return result;
     };
     defer child.kill(io);
 
-    if (operation != null and interactiveAur(request)) {
+    if (operation != null and interactive(request)) {
         operation.?.registerInput(io, child.stdin.?);
         child.stdin = null;
     } else {
@@ -496,10 +548,12 @@ fn runInstall(io: std.Io, alloc: std.mem.Allocator, request: OperationRequest, o
     };
 
     if (operation) |op| {
+        op.progress_mutex.lockUncancelable(io);
+        defer op.progress_mutex.unlock(io);
         result.declined = op.user_declined;
         if (op.expected_answer != null) stream.failed = true;
     }
-    const missing_completion = (request.action == .upgrade or interactiveAur(request)) and !stream.transaction_done;
+    const missing_completion = (request.action == .upgrade or interactive(request)) and !stream.transaction_done;
     if (term != .exited or term.exited != 0 or read_failed or stream.failed or stream.transaction_cancelled or missing_completion or result.declined) {
         const detail = if (stream.transaction_cancelled)
             "The operation was cancelled. Refresh package state before retrying."
@@ -1342,12 +1396,12 @@ test "operation rejects removal from unsupported sources before launching" {
         .shelly_bin = "unused",
         .environ_map = &env,
         .name = "test",
-        .backend = "flatpak",
+        .backend = "appimage",
         .password = "",
     });
     defer result.deinit(std.testing.allocator);
     try std.testing.expect(result.failed);
-    try std.testing.expectEqualStrings("Removal currently supports system and AUR packages only.", result.error_detail);
+    try std.testing.expectEqualStrings("Removal currently supports system, AUR and Flatpak packages only.", result.error_detail);
 }
 
 test "operation native upgrade has no package operand or other sources" {
@@ -1438,4 +1492,55 @@ test "operation questions reject stale duplicate and wrong-kind answers" {
     try std.testing.expectError(error.WrongAnswerKind, operation.sendAnswer(threaded.io(), "1", .{ .pkgbuild = true }));
     operation.expected_answer = null;
     try std.testing.expectError(error.NoPendingQuestion, operation.sendAnswer(threaded.io(), "1", .{ .yes_no = true }));
+}
+
+test "operation Flatpak arguments preserve install scope and keep user and upgrade processes unprivileged" {
+    const allocator = std.testing.allocator;
+    var env: std.process.Environ.Map = .init(allocator);
+    defer env.deinit();
+    var request: OperationRequest = .{
+        .shelly_bin = "shelly",
+        .environ_map = &env,
+        .name = "org.example.App",
+        .backend = "flatpak",
+        .password = "",
+        .flatpak = .{ .scope = .user, .remote = "chosen remote", .branch = "beta", .kind = .runtime },
+    };
+    const user = try operationArgv(allocator, request);
+    defer allocator.free(user);
+    const expected = [_][]const u8{ "shelly", "install", "flatpak", "org.example.App", "--user", "--remote", "chosen remote", "--branch", "beta", "--runtime", "--ui-mode" };
+    try std.testing.expectEqual(expected.len, user.len);
+    for (expected, user) |want, actual| try std.testing.expectEqualStrings(want, actual);
+    request.flatpak.?.scope = .system;
+    const system = try operationArgv(allocator, request);
+    defer allocator.free(system);
+    try std.testing.expectEqualStrings("sudo", system[0]);
+    try std.testing.expectEqualStrings("-n", system[1]);
+    for (system) |arg| try std.testing.expect(!std.mem.eql(u8, arg, "--user") and !std.mem.eql(u8, arg, "--no-confirm"));
+    request.action = .remove;
+    request.flatpak.?.scope = .user;
+    const remove = try operationArgv(allocator, request);
+    defer allocator.free(remove);
+    const expected_remove = [_][]const u8{ "shelly", "remove", "flatpak", "org.example.App", "--ui-mode" };
+    try std.testing.expectEqual(expected_remove.len, remove.len);
+    for (expected_remove, remove) |want, actual| try std.testing.expectEqualStrings(want, actual);
+    request.action = .upgrade;
+    request.flatpak = null;
+    const upgrade = try operationArgv(allocator, request);
+    defer allocator.free(upgrade);
+    const expected_upgrade = [_][]const u8{ "shelly", "upgrade", "flatpak", "--ui-mode" };
+    try std.testing.expectEqual(expected_upgrade.len, upgrade.len);
+    for (expected_upgrade, upgrade) |want, actual| try std.testing.expectEqualStrings(want, actual);
+    request.action = .install;
+    try std.testing.expectError(error.MissingFlatpakTarget, operationArgv(allocator, request));
+}
+
+test "operation Flatpak target owns its reference fields" {
+    const allocator = std.testing.allocator;
+    var remote = [_]u8{ 't', 'e', 's', 't' };
+    const copy = try (FlatpakTarget{ .scope = .user, .remote = &remote, .arch = "x86_64", .branch = "beta", .reference = "app/org.example.App/x86_64/beta" }).clone(allocator);
+    defer copy.deinit(allocator);
+    remote[0] = 'X';
+    try std.testing.expectEqualStrings("test", copy.remote);
+    try std.testing.expectEqualStrings("app/org.example.App/x86_64/beta", copy.reference);
 }

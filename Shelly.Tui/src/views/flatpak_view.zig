@@ -1,4 +1,5 @@
 const std = @import("std");
+const commands = @import("../commands.zig");
 const diagnostics = @import("diagnostics");
 const vxfw = @import("vaxis").vxfw;
 const data = @import("../models/flatpak.zig");
@@ -42,14 +43,14 @@ pub const Row = union(enum) {
 
     pub fn details(self: Row, arena: Allocator) Allocator.Error![]const u8 {
         return switch (self) {
-            .installed => |app| std.fmt.allocPrint(arena, "{f}\n\nName: {f}\nID: {f}\nVersion: {f}\nScope: {s}\nKind: {s}\nArchitecture: {f}\nBranch: {f}\nRemote: {f}\nRef: {f}\nFull ref: {f}\nInstalled size: {s}\n\nRead only — Q: close    Esc: quit", .{ diagnostics.safe(app.Summary), diagnostics.safe(app.Name), diagnostics.safe(app.Id), diagnostics.safe(app.Version), @tagName(app.InstallLevel), @tagName(app.Kind), diagnostics.safe(app.Arch), diagnostics.safe(app.Branch), diagnostics.safe(app.Remote), diagnostics.safe(app.Ref), diagnostics.safe(app.FullRef), try formatSize(arena, app.InstalledSize) }),
+            .installed => |app| std.fmt.allocPrint(arena, "{f}\n\nName: {f}\nID: {f}\nVersion: {f}\nScope: {s}\nKind: {s}\nArchitecture: {f}\nBranch: {f}\nRemote: {f}\nRef: {f}\nFull ref: {f}\nInstalled size: {s}\n\n{s}", .{ diagnostics.safe(app.Summary), diagnostics.safe(app.Name), diagnostics.safe(app.Id), diagnostics.safe(app.Version), @tagName(app.InstallLevel), @tagName(app.Kind), diagnostics.safe(app.Arch), diagnostics.safe(app.Branch), diagnostics.safe(app.Remote), diagnostics.safe(app.Ref), diagnostics.safe(app.FullRef), try formatSize(arena, app.InstalledSize), commands.flatpak_installed_hint }),
             .catalog => |app| blk: {
                 var remotes: std.ArrayList(u8) = .empty;
                 for (app.Remotes, 0..) |remote, i| {
                     const text = try std.fmt.allocPrint(arena, "{s}{f} ({s})", .{ if (i == 0) "" else ", ", diagnostics.safe(remote.Name), @tagName(remote.Scope) });
                     try remotes.appendSlice(arena, text);
                 }
-                break :blk std.fmt.allocPrint(arena, "{f}\n\nName: {f}\nID: {f}\nType: {f}\nDeveloper: {f}\nLicense: {f}\nVerified: {s}\nRemotes: {s}\n\n{f}\n\nCatalog metadata — installation status and permissions are not queried.\nQ: close    Esc: quit", .{ diagnostics.safe(app.Summary), diagnostics.safe(app.Name), diagnostics.safe(app.Id), diagnostics.safe(app.Type), diagnostics.safe(app.DeveloperName), diagnostics.safe(app.ProjectLicense), if (app.IsVerified) "yes" else "no", remotes.items, diagnostics.safe(app.Description) });
+                break :blk std.fmt.allocPrint(arena, "{f}\n\nName: {f}\nID: {f}\nType: {f}\nDeveloper: {f}\nLicense: {f}\nVerified: {s}\nRemotes: {s}\n\n{f}\n\nCatalog metadata — installation status and permissions are not queried.\n{s}", .{ diagnostics.safe(app.Summary), diagnostics.safe(app.Name), diagnostics.safe(app.Id), diagnostics.safe(app.Type), diagnostics.safe(app.DeveloperName), diagnostics.safe(app.ProjectLicense), if (app.IsVerified) "yes" else "no", remotes.items, diagnostics.safe(app.Description), commands.flatpak_catalog_hint });
             },
         };
     }
@@ -97,4 +98,26 @@ fn drawInstalled(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Su
     const app: *const data.Flatpak = @ptrCast(@alignCast(ptr));
     var label: vxfw.Text = .{ .text = try std.fmt.allocPrint(ctx.arena, "[{s}/{s}] {f}/{f}/{f}  {f}  ({f})", .{ @tagName(app.InstallLevel), @tagName(app.Kind), diagnostics.safe(app.Id), diagnostics.safe(app.Arch), diagnostics.safe(app.Branch), diagnostics.safe(app.Version), diagnostics.safe(app.Remote) }), .softwrap = false, .overflow = .ellipsis };
     return label.draw(ctx);
+}
+
+pub fn drawInstallChoices(ctx: vxfw.DrawContext, app: *const data.AppstreamApp, selected: usize) Allocator.Error!?vxfw.SubSurface {
+    const size = ctx.max.size();
+    const width = @min(size.width -| 2, @as(u16, 80));
+    const height = @min(size.height -| 2, @as(u16, 22));
+    if (width < 20 or height < 6) return null;
+    var lines: std.ArrayList(u8) = .empty;
+    const heading = try std.fmt.allocPrint(ctx.arena, "Install {f}\nChoose a remote and installation scope.\n\n", .{diagnostics.safe(app.Id)});
+    try lines.appendSlice(ctx.arena, heading);
+    const capacity = @max(@as(usize, 1), height -| 8);
+    const start = selected -| (capacity / 2);
+    for (start..@min(app.Remotes.len, start + capacity)) |index| {
+        const remote = app.Remotes[index];
+        try lines.appendSlice(ctx.arena, try std.fmt.allocPrint(ctx.arena, "{s} {f} — {s}\n", .{ if (index == selected) ">" else " ", diagnostics.safe(remote.Name), @tagName(remote.Scope) }));
+    }
+    try lines.appendSlice(ctx.arena, "\n" ++ commands.flatpak_choice_hint);
+    var text: vxfw.Text = .{ .text = lines.items };
+    const labels = [_]vxfw.Border.BorderLabel{.{ .text = "Flatpak installation", .alignment = .top_left }};
+    var border: vxfw.Border = .{ .child = text.widget(), .labels = &labels };
+    const surface = try border.widget().draw(ctx.withConstraints(.{}, .{ .width = width, .height = height }));
+    return .{ .origin = .{ .row = @divFloor(@as(i17, size.height) - surface.size.height, 2), .col = @divFloor(@as(i17, size.width) - surface.size.width, 2) }, .surface = surface, .z_index = 2 };
 }

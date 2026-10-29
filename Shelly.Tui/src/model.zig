@@ -89,6 +89,8 @@ const SudoPrompt = struct {
     name: []const u8,
     backend: InstallBackend,
     action: shelly_operation.Action = .install,
+    elevated: bool = true,
+    flatpak_target: ?shelly_operation.FlatpakTarget = null,
     password: std.ArrayList(u8),
     state: State = .entering,
     /// Failure detail shown after a failed attempt; owned by `gpa`.
@@ -101,6 +103,7 @@ const SudoPrompt = struct {
     fn operationView(self: *const SudoPrompt) ?operation_view.View {
         return .{
             .name = self.name,
+            .elevated = self.elevated,
             .action = self.action,
             .detail = self.detail,
             .progress = self.progress,
@@ -119,6 +122,7 @@ const SudoPrompt = struct {
         @memset(self.password.items, 0);
         self.password.deinit(gpa);
         gpa.free(self.name);
+        if (self.flatpak_target) |target| target.deinit(gpa);
         if (self.detail.len > 0) gpa.free(self.detail);
         gpa.destroy(self);
     }
@@ -128,6 +132,7 @@ const Overlay = union(enum) {
     package: *const Package,
     aur: *const AurPackage,
     flatpak: flatpak_view.Row,
+    flatpak_install: struct { app: *const flatpak.AppstreamApp, selected: usize = 0 },
     sudo: *SudoPrompt,
     pkgbuild,
 };
@@ -147,6 +152,7 @@ pub const Model = struct {
     flatpak_rows: std.ArrayList(flatpak_view.Row) = .empty,
     flatpak_field: vxfw.TextField,
     flatpak_list: vxfw.ListView,
+    refresh_flatpak_after_operation: bool = false,
 
     /// All known packages, borrowed from `parsed`.
     packages: []Package = &.{},
@@ -352,8 +358,40 @@ pub const Model = struct {
                 }
                 if (self.overlay) |overlay| {
                     switch (overlay) {
-                        .flatpak => {
-                            if (commands.closesPreview(key)) self.closeOverlay();
+                        .flatpak => |row| {
+                            if (commands.detail(key)) |action| {
+                                switch (action) {
+                                    .close => self.closeOverlay(),
+                                    .install => if (row == .catalog and self.install_job == null) {
+                                        if (row.catalog.Remotes.len == 0) try self.setNotice("No configured remote is available for this catalog entry.") else self.overlay = .{ .flatpak_install = .{ .app = row.catalog } };
+                                    },
+                                    .remove => if (row == .installed) try self.openFlatpakPrompt(.remove, row.installed.Id, .{
+                                        .scope = row.installed.InstallLevel,
+                                        .remote = row.installed.Remote,
+                                        .arch = row.installed.Arch,
+                                        .branch = row.installed.Branch,
+                                        .kind = row.installed.Kind,
+                                        .reference = row.installed.FullRef,
+                                    }),
+                                    .preview => {},
+                                }
+                            }
+                            return ctx.consumeAndRedraw();
+                        },
+                        .flatpak_install => |choice| {
+                            if (commands.choice(key)) |action| switch (action) {
+                                .close => self.overlay = .{ .flatpak = .{ .catalog = choice.app } },
+                                .previous => self.overlay.?.flatpak_install.selected = if (choice.selected == 0) choice.app.Remotes.len - 1 else choice.selected - 1,
+                                .next => self.overlay.?.flatpak_install.selected = (choice.selected + 1) % choice.app.Remotes.len,
+                                .confirm => {
+                                    const remote = choice.app.Remotes[choice.selected];
+                                    try self.openFlatpakPrompt(.install, choice.app.Id, .{
+                                        .scope = remote.Scope,
+                                        .remote = remote.Name,
+                                        .kind = if (std.mem.eql(u8, choice.app.Type, "runtime")) .runtime else .app,
+                                    });
+                                },
+                            };
                             return ctx.consumeAndRedraw();
                         },
                         .package, .aur => {
@@ -441,6 +479,7 @@ pub const Model = struct {
                             .refresh => try self.startUpdates(ctx),
                             .upgrade_system => try self.upgradeSystemFromUpdates(),
                             .upgrade_aur => try self.upgradeFromUpdates(.aur),
+                            .upgrade_flatpak => try self.upgradeFromUpdates(.flatpak),
                         }
                         return ctx.consumeAndRedraw();
                     }
@@ -492,6 +531,18 @@ pub const Model = struct {
                     try self.reloadPackages(ctx);
                     try self.startUpdates(ctx);
                     self.refresh_after_upgrade = false;
+                }
+                if (self.refresh_flatpak_after_operation and self.flatpak_job == null and self.updates_job == null) {
+                    if (self.flatpak_installed_only) {
+                        if (self.flatpak_catalog) |*parsed| parsed.deinit();
+                        self.flatpak_catalog = null;
+                    } else {
+                        if (self.flatpak_installed) |*parsed| parsed.deinit();
+                        self.flatpak_installed = null;
+                    }
+                    try self.startFlatpak(ctx);
+                    try self.startUpdates(ctx);
+                    self.refresh_flatpak_after_operation = false;
                 }
                 if (self.refresh_aur_after_operation and self.aur_job == null) {
                     if (self.aur_installed_only or self.aur_query.len > 0) try self.startAurSearch(ctx, self.aur_query);
@@ -626,7 +677,7 @@ pub const Model = struct {
             if (old_installed) |*parsed| parsed.deinit();
         };
         if (self.overlay) |overlay| {
-            if (overlay == .flatpak) self.overlay = null;
+            if (overlay == .flatpak or overlay == .flatpak_install) self.overlay = null;
         }
         self.flatpak_failure = job.failure;
         if (job.installed_only) self.flatpak_installed = job.installed else self.flatpak_catalog = job.catalog;
@@ -833,6 +884,7 @@ pub const Model = struct {
             .loading = self.updates_job != null,
             .failed = self.updates_failed,
             .checked = self.updates_checked,
+            .flatpak_available = self.flatpak_available,
         };
     }
 
@@ -850,6 +902,10 @@ pub const Model = struct {
         if (self.install_job != null or self.overlay != null) return;
         if (backend == .standard and !self.updatesView().canUpgrade()) return;
         if (backend == .aur and !self.updatesView().canUpgradeAur()) return;
+        if (backend == .flatpak) {
+            if (self.updatesView().canUpgradeFlatpak()) try self.openFlatpakPrompt(.upgrade, "Flatpak applications and runtimes (system + user)", null);
+            return;
+        }
         const prompt = try self.gpa.create(SudoPrompt);
         errdefer self.gpa.destroy(prompt);
         prompt.* = .{
@@ -1087,7 +1143,7 @@ pub const Model = struct {
                 name = pkg.Name;
                 backend = .aur;
             },
-            .sudo, .pkgbuild, .flatpak => return,
+            .sudo, .pkgbuild, .flatpak, .flatpak_install => return,
         }
         const prompt = try self.gpa.create(SudoPrompt);
         errdefer self.gpa.destroy(prompt);
@@ -1096,6 +1152,23 @@ pub const Model = struct {
             .backend = backend,
             .action = action,
             .password = .empty,
+        };
+        self.overlay = .{ .sudo = prompt };
+    }
+
+    fn openFlatpakPrompt(self: *Model, action: shelly_operation.Action, name: []const u8, target: ?shelly_operation.FlatpakTarget) !void {
+        if (!self.flatpak_available or self.install_job != null) return;
+        const prompt = try self.gpa.create(SudoPrompt);
+        errdefer self.gpa.destroy(prompt);
+        const owned_name = try self.gpa.dupe(u8, name);
+        errdefer self.gpa.free(owned_name);
+        prompt.* = .{
+            .name = owned_name,
+            .backend = .flatpak,
+            .action = action,
+            .password = .empty,
+            .elevated = shelly_operation.flatpakNeedsElevation(action, target),
+            .flatpak_target = if (target) |value| try value.clone(self.gpa) else null,
         };
         self.overlay = .{ .sudo = prompt };
     }
@@ -1218,11 +1291,15 @@ pub const Model = struct {
         }
 
         if (key.matches(vaxis.Key.enter, .{})) {
-            if (prompt.password.items.len == 0) return ctx.consumeEvent();
+            if (prompt.elevated and prompt.password.items.len == 0) return ctx.consumeEvent();
             try self.startElevatedInstall(ctx, prompt);
             @memset(prompt.password.items, 0);
             prompt.password.clearRetainingCapacity();
             prompt.state = .running;
+            return ctx.consumeAndRedraw();
+        }
+        if (!prompt.elevated) {
+            if (commands.closesPreview(key)) self.closeOverlay();
             return ctx.consumeAndRedraw();
         }
         if (key.matches(vaxis.Key.backspace, .{})) {
@@ -1249,6 +1326,7 @@ pub const Model = struct {
             .action = prompt.action,
             .backend = @tagName(prompt.backend),
             .password = prompt.password.items,
+            .flatpak = prompt.flatpak_target,
         });
     }
 
@@ -1292,11 +1370,13 @@ pub const Model = struct {
 
         const failed = completed.failed;
         self.install_job = null;
-        if (job.request.action == .upgrade or std.mem.eql(u8, job.request.backend, "aur")) self.refresh_after_upgrade = true;
+        const is_flatpak = std.mem.eql(u8, job.request.backend, "flatpak");
+        if (is_flatpak) self.refresh_flatpak_after_operation = true;
+        if (!is_flatpak and (job.request.action == .upgrade or std.mem.eql(u8, job.request.backend, "aur"))) self.refresh_after_upgrade = true;
         if (std.mem.eql(u8, job.request.backend, "aur")) self.refresh_aur_after_operation = true;
 
         // Native and AUR operations change the same installed package database.
-        if (!failed and job.request.action != .upgrade) {
+        if (!is_flatpak and !failed and job.request.action != .upgrade) {
             for (self.packages) |*pkg| {
                 if (std.mem.eql(u8, pkg.Name, job.request.name)) {
                     pkg.Installed = job.request.action == .install;
@@ -1304,7 +1384,7 @@ pub const Model = struct {
                 }
             }
         }
-        if (!failed and job.request.action != .upgrade) {
+        if (!is_flatpak and !failed and job.request.action != .upgrade) {
             if (self.aur_parsed) |parsed| {
                 for (parsed.value) |*pkg| {
                     if (std.mem.eql(u8, pkg.Name, job.request.name))
@@ -1498,6 +1578,7 @@ pub const Model = struct {
                 .package, .aur, .flatpak => try self.drawDetailsOverlay(ctx, arena, max, overlay),
                 .sudo => |prompt| try self.drawSudoPrompt(ctx, arena, max, prompt),
                 .pkgbuild => try self.pkgbuildView().draw(ctx),
+                .flatpak_install => |choice| try flatpak_view.drawInstallChoices(ctx, choice.app, choice.selected),
             };
             if (overlay_child) |child| {
                 try children.append(arena, child);
@@ -1568,7 +1649,7 @@ pub const Model = struct {
                 title = try std.fmt.allocPrint(arena, "{f} (Flatpak)", .{diagnostics.safe(row.title())});
                 body = try row.details(arena);
             },
-            .sudo, .pkgbuild => return null,
+            .sudo, .pkgbuild, .flatpak_install => return null,
         }
         if (self.install_job) |job| {
             body = try std.fmt.allocPrint(arena, "{s}\n\n{s} {s}…", .{ body, job.request.action.ongoing(), job.request.name });
@@ -1607,24 +1688,27 @@ pub const Model = struct {
             @memcpy(mask[pos .. pos + 3], "●");
             pos += 3;
         }
-        const body = try std.fmt.allocPrint(arena, "{s} '{s}'?{s}\n\nPassword: {s}\n\n{s}", .{
-            prompt.action.verb(), prompt.name,
-            if (prompt.action == .remove) "\nUnused dependencies and configuration will be kept." else if (prompt.action == .upgrade)
-                if (prompt.backend == .aur)
-                    "\nUpgrade AUR packages and required dependencies. PKGBUILDs require review."
-                else
-                    "\nFull system upgrade. AUR, Flatpak and AppImage are excluded."
-            else
-                "",
-            mask[0..pos],         commands.authentication_hint,
-        });
+        const target_text = if (prompt.flatpak_target) |target|
+            try std.fmt.allocPrint(arena, "\nScope: {s}\nRemote: {f}\nBranch: {f}\nArchitecture: {f}", .{ @tagName(target.scope), diagnostics.safe(target.remote), diagnostics.safe(if (target.branch.len > 0) target.branch else "remote default"), diagnostics.safe(if (target.arch.len > 0) target.arch else "remote default") })
+        else
+            "";
+        const note: []const u8 = if (prompt.backend == .flatpak)
+            if (prompt.action == .upgrade) "\nUpdates both system and user Flatpaks as the invoking user. System changes may require a Flatpak authorization agent." else if (prompt.action == .remove) "\nConfiguration and unused dependencies will be kept." else "\nInstall from the selected remote and scope. Shelly handles dependencies and review."
+        else if (prompt.action == .remove) "\nUnused dependencies and configuration will be kept." else if (prompt.action == .upgrade)
+            if (prompt.backend == .aur) "\nUpgrade AUR packages and required dependencies. PKGBUILDs require review." else "\nFull system upgrade. AUR, Flatpak and AppImage are excluded."
+        else
+            "";
+        const body = if (prompt.elevated)
+            try std.fmt.allocPrint(arena, "{s} '{f}'?{s}{s}\n\nPassword: {s}\n\n{s}", .{ prompt.action.verb(), diagnostics.safe(prompt.name), target_text, note, mask[0..pos], commands.authentication_hint })
+        else
+            try std.fmt.allocPrint(arena, "{s} '{f}'?{s}{s}\n\n{s}", .{ prompt.action.verb(), diagnostics.safe(prompt.name), target_text, note, commands.confirmation_hint });
 
         const box_width = @min(max.width -| 2, @as(u16, 70));
         const box_height = @min(max.height -| 2, @as(u16, 20));
         if (box_width < 30 or box_height < 8) return null;
 
         var text: vxfw.Text = .{ .text = body };
-        const labels = [_]vxfw.Border.BorderLabel{.{ .text = "Administrator privileges", .alignment = .top_left }};
+        const labels = [_]vxfw.Border.BorderLabel{.{ .text = if (prompt.elevated) "Administrator privileges" else "Confirm Flatpak operation", .alignment = .top_left }};
         var border: vxfw.Border = .{
             .child = text.widget(),
             .labels = &labels,
@@ -2252,4 +2336,89 @@ test "Flatpak catalog details retain remote scopes and Enter opens the selected 
     for ([_]vxfw.Size{ .{ .width = 80, .height = 24 }, .{ .width = 40, .height = 12 } }) |size| {
         _ = try model.widget().draw(.{ .arena = arena.allocator(), .min = .{}, .max = .{ .width = size.width, .height = size.height }, .cell_size = .{ .width = 10, .height = 20 } });
     }
+}
+
+test "Flatpak install chooses remote scope and owns confirmation target" {
+    const allocator = std.testing.allocator;
+    const model = try Model.init(allocator);
+    defer model.deinit();
+    model.flatpak_available = true;
+    const app: flatpak.AppstreamApp = .{
+        .Id = "org.example.App",
+        .Name = "Example",
+        .Remotes = &.{ .{ .Name = "system-remote", .Scope = .system }, .{ .Name = "user-remote", .Scope = .user } },
+    };
+    model.overlay = .{ .flatpak = .{ .catalog = &app } };
+    var events: vxfw.EventContext = .{ .io = undefined, .alloc = allocator, .cmds = .empty };
+    defer events.cmds.deinit(allocator);
+    try Model.typeErasedCaptureHandler(model, &events, .{ .key_press = .{ .codepoint = 'i' } });
+    try std.testing.expect(model.overlay.? == .flatpak_install);
+    try Model.typeErasedCaptureHandler(model, &events, .{ .key_press = .{ .codepoint = vaxis.Key.down } });
+    try std.testing.expectEqual(@as(usize, 1), model.overlay.?.flatpak_install.selected);
+    vxfw.DrawContext.init(.unicode);
+    var arena = std.heap.ArenaAllocator.init(allocator);
+    defer arena.deinit();
+    const picker = try flatpak_view.drawInstallChoices(.{ .arena = arena.allocator(), .min = .{}, .max = .{ .width = 80, .height = 24 }, .cell_size = .{ .width = 10, .height = 20 } }, &app, 1);
+    try std.testing.expect(picker != null);
+    try Model.typeErasedCaptureHandler(model, &events, .{ .key_press = .{ .codepoint = vaxis.Key.enter } });
+    const prompt = model.overlay.?.sudo;
+    try std.testing.expect(!prompt.elevated);
+    try std.testing.expectEqual(flatpak.InstallLevel.user, prompt.flatpak_target.?.scope);
+    try std.testing.expectEqualStrings("user-remote", prompt.flatpak_target.?.remote);
+    try std.testing.expectEqualStrings("org.example.App", prompt.name);
+    try std.testing.expect(model.install_job == null);
+    model.closeOverlay();
+    try model.openFlatpakPrompt(.install, app.Id, .{ .scope = .system, .remote = "system-remote" });
+    try std.testing.expect(model.overlay.?.sudo.elevated);
+}
+
+test "Flatpak removal copies exact identity and updates require backend availability" {
+    const allocator = std.testing.allocator;
+    const model = try Model.init(allocator);
+    defer model.deinit();
+    model.flatpak_available = true;
+    var apps = try std.json.parseFromSlice([]flatpak.Flatpak, allocator,
+        \\[{"Id":"org.example.App","Remote":"flathub","InstallLevel":1,"Kind":0,"Arch":"x86_64","Branch":"beta","FullRef":"app/org.example.App/x86_64/beta"}]
+    , .{ .allocate = .alloc_always });
+    model.overlay = .{ .flatpak = .{ .installed = &apps.value[0] } };
+    var events: vxfw.EventContext = .{ .io = undefined, .alloc = allocator, .cmds = .empty };
+    defer events.cmds.deinit(allocator);
+    try Model.typeErasedCaptureHandler(model, &events, .{ .key_press = .{ .codepoint = 'r' } });
+    apps.deinit();
+    const prompt = model.overlay.?.sudo;
+    try std.testing.expectEqual(shelly_operation.Action.remove, prompt.action);
+    try std.testing.expectEqualStrings("app/org.example.App/x86_64/beta", prompt.flatpak_target.?.reference);
+    try std.testing.expect(!prompt.elevated);
+    model.closeOverlay();
+    model.updates_parsed = try std.json.parseFromSlice(CheckUpdates, allocator, "{\"Flatpak\":[{\"Id\":\"org.example.App\"}]}", .{ .allocate = .alloc_always });
+    try std.testing.expectEqual(commands.Updates.upgrade_flatpak, model.updatesView().handleKey(.{ .codepoint = 'f' }).?);
+    try model.upgradeFromUpdates(.flatpak);
+    try std.testing.expectEqual(shelly_operation.Action.upgrade, model.overlay.?.sudo.action);
+    try std.testing.expect(!model.overlay.?.sudo.elevated);
+    model.closeOverlay();
+    model.flatpak_available = false;
+    try std.testing.expect(model.updatesView().handleKey(.{ .codepoint = 'f' }) == null);
+    try model.upgradeFromUpdates(.flatpak);
+    try std.testing.expect(model.overlay == null);
+}
+
+test "Flatpak operation completion refreshes Flatpak data without changing native flags" {
+    const allocator = std.testing.allocator;
+    const model = try Model.init(allocator);
+    defer model.deinit();
+    var packages = [_]Package{.{ .Name = "org.example.App", .Installed = false }};
+    model.packages = &packages;
+    var env: std.process.Environ.Map = .init(allocator);
+    defer env.deinit();
+    const job = try std.heap.page_allocator.create(shelly_operation.Operation);
+    job.* = .{
+        .arena = .init(std.heap.page_allocator),
+        .done = .init(true),
+        .request = .{ .shelly_bin = "unused", .environ_map = &env, .backend = "flatpak", .name = "org.example.App", .password = "" },
+    };
+    model.install_job = job;
+    try std.testing.expect(!try model.pollInstall());
+    try std.testing.expect(model.refresh_flatpak_after_operation);
+    try std.testing.expect(!model.refresh_after_upgrade);
+    try std.testing.expect(!packages[0].Installed);
 }
