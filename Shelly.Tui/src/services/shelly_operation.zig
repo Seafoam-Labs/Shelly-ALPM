@@ -79,6 +79,7 @@ pub const OperationRequest = struct {
     password: []const u8,
     flatpak: ?FlatpakTarget = null,
     include_flatpak: bool = true,
+    include_aur: bool = true,
 };
 
 /// Fixed-size, owned display data; safe to copy between the worker and UI.
@@ -433,6 +434,7 @@ fn operationArgv(alloc: std.mem.Allocator, request: OperationRequest) ![][]const
     }
     if (combined(request)) {
         try argv.append(alloc, "--no-appimage");
+        if (!request.include_aur) try argv.append(alloc, "--no-aur");
         if (!request.include_flatpak) try argv.append(alloc, "--no-flatpak");
     }
     if (!interactive(request)) try argv.append(alloc, "--no-confirm");
@@ -1616,4 +1618,22 @@ test "operation combined stream waits for the outer transaction and retains part
     try std.testing.expect(stream.failed);
     try std.testing.expect(stream.transaction_done);
     try std.testing.expectEqual(@as(usize, 0), stream.transaction_depth);
+}
+
+test "settings disable AUR and Flatpak in combined upgrade arguments" {
+    const allocator = std.testing.allocator;
+    var env: std.process.Environ.Map = .init(allocator);
+    defer env.deinit();
+    const argv = try operationArgv(allocator, .{ .action = .upgrade, .shelly_bin = "shelly", .environ_map = &env, .name = "enabled sources", .backend = "all", .password = "", .include_aur = false, .include_flatpak = false });
+    defer allocator.free(argv);
+    var aur = false;
+    var flatpak = false;
+    var appimage = false;
+    for (argv) |arg| {
+        aur = aur or std.mem.eql(u8, arg, "--no-aur");
+        flatpak = flatpak or std.mem.eql(u8, arg, "--no-flatpak");
+        appimage = appimage or std.mem.eql(u8, arg, "--no-appimage");
+        try std.testing.expect(!std.mem.eql(u8, arg, "--no-repo"));
+    }
+    try std.testing.expect(aur and flatpak and appimage);
 }

@@ -99,3 +99,13 @@ pub fn choice(key: vaxis.Key) ?Choice {
     return null;
 }
 pub const flatpak_choice_hint = "↑↓: select remote/scope    Enter: confirm    Q: back";
+
+pub const SettingsAction = enum { previous, next, toggle, reload };
+pub fn settings(key: vaxis.Key) ?SettingsAction {
+    if (key.matches(vaxis.Key.up, .{})) return .previous;
+    if (key.matches(vaxis.Key.down, .{})) return .next;
+    if (key.matches(vaxis.Key.enter, .{}) or key.matches(vaxis.Key.space, .{})) return .toggle;
+    if (key.matches('r', .{})) return .reload;
+    return null;
+}
+pub const settings_hint = "↑↓: select    Enter/Space: toggle and save    R: reload    Esc: quit";

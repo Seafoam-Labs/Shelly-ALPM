@@ -68,11 +68,15 @@ pub const View = struct {
     list: *vxfw.ListView,
     installed_only: bool,
     loading: bool,
+    checking_backend: bool = false,
+    backend_failure: ?anyerror = null,
     failure: ?anyerror,
     checked: bool,
     count: usize,
 
     pub fn statusText(self: View, arena: Allocator) Allocator.Error![]const u8 {
+        if (self.checking_backend) return "Checking Flatpak backend…";
+        if (self.backend_failure) |err| return std.fmt.allocPrint(arena, "Flatpak backend check failed: {s} — Ctrl+R: retry", .{@errorName(err)});
         if (self.loading) return "Loading Flatpaks…";
         if (self.failure) |err| return std.fmt.allocPrint(arena, "Flatpak query failed: {s} — Ctrl+R: retry", .{@errorName(err)});
         return std.fmt.allocPrint(arena, "{d} {s} — Enter: details  Ctrl+L: {s}  Ctrl+R: refresh", .{ self.count, if (self.installed_only) "installed Flatpaks" else "catalog apps", if (self.installed_only) "catalog" else "installed" });
@@ -81,7 +85,7 @@ pub const View = struct {
     pub fn appendContent(self: View, ctx: vxfw.DrawContext, children: *std.ArrayList(vxfw.SubSurface)) Allocator.Error!void {
         const size = ctx.max.size();
         try children.append(ctx.arena, .{ .origin = .{ .row = 1, .col = 0 }, .surface = try self.field.draw(ctx.withConstraints(.{}, .{ .width = size.width, .height = 1 })) });
-        const message: ?[]const u8 = if (self.loading) "Loading Flatpaks…" else if (self.failure != null) "Could not load Flatpaks. Ctrl+R: retry; Ctrl+L: change list." else if (!self.checked) "Flatpak list not loaded yet." else if (self.count == 0) "No Flatpaks match. Catalogs reflect configured remotes and cached metadata." else null;
+        const message: ?[]const u8 = if (self.checking_backend) "Checking Flatpak backend…" else if (self.backend_failure != null) "Flatpak is enabled, but its backend could not be used. Install the Shelly Flatpak backend, then Ctrl+R to retry." else if (self.loading) "Loading Flatpaks…" else if (self.failure != null) "Could not load Flatpaks. Ctrl+R: retry; Ctrl+L: change list." else if (!self.checked) "Flatpak list not loaded yet." else if (self.count == 0) "No Flatpaks match. Catalogs reflect configured remotes and cached metadata." else null;
         const content_ctx = ctx.withConstraints(.{}, .{ .width = size.width, .height = size.height -| 3 });
         var label: vxfw.Text = .{ .text = message orelse "" };
         try children.append(ctx.arena, .{ .origin = .{ .row = 2, .col = 0 }, .surface = if (message != null) try label.draw(content_ctx) else try self.list.draw(content_ctx) });

@@ -14,6 +14,7 @@ pub const View = struct {
     failed: bool,
     checked: bool,
     flatpak_available: bool = false,
+    aur_enabled: bool = true,
 
     /// A full upgrade synchronizes sources again, even when the cached check is empty.
     pub fn canUpgradeAll(self: View) bool {
@@ -25,7 +26,7 @@ pub const View = struct {
     }
 
     pub fn canUpgradeAur(self: View) bool {
-        return !self.loading and !self.failed and self.data != null and self.data.?.Aur.len > 0;
+        return self.aur_enabled and !self.loading and !self.failed and self.data != null and self.data.?.Aur.len > 0;
     }
 
     pub fn canUpgradeFlatpak(self: View) bool {
@@ -44,8 +45,11 @@ pub const View = struct {
     pub fn statusText(self: View, arena: Allocator) Allocator.Error![]const u8 {
         if (self.loading) return "Checking for updates…";
         if (self.failed) return "Update check failed — R: retry";
+        const hints = if (self.aur_enabled)
+            if (self.flatpak_available) commands.flatpak_updates_hint else commands.updates_hint
+        else if (self.flatpak_available) "G: all    U: system    F: Flatpak    R: refresh" else "G: all    U: system    R: refresh";
         if (self.data) |data| return std.fmt.allocPrint(arena, "{d} updates ({d} system, {d} AUR, {d} Flatpak) — {s}", .{
-            data.count(), data.Packages.len, data.Aur.len, data.Flatpak.len, if (self.canUpgradeAll()) if (self.flatpak_available) commands.flatpak_updates_hint else commands.updates_hint else "R: refresh",
+            data.count(), data.Packages.len, data.Aur.len, data.Flatpak.len, if (self.canUpgradeAll()) hints else "R: refresh",
         });
         return "R: check for updates";
     }

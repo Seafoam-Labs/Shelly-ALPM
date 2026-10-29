@@ -1,4 +1,7 @@
 const std = @import("std");
+const Settings = @import("models/settings.zig").Settings;
+const settings_service = @import("services/settings.zig");
+const settings_view = @import("views/settings_view.zig");
 const commands = @import("commands.zig");
 const packages_view = @import("views/packages_view.zig");
 const flatpak_view = @import("views/flatpak_view.zig");
@@ -28,10 +31,11 @@ pub const Tab = enum {
     aur,
     upgrade,
     flatpak,
+    settings,
 
-    pub const always: []const Tab = &.{ .packages, .aur, .upgrade };
+    pub const always: []const Tab = &.{ .packages, .upgrade, .settings };
 
-    pub const all: []const Tab = &.{ .packages, .aur, .upgrade, .flatpak };
+    pub const all: []const Tab = &.{ .packages, .aur, .upgrade, .flatpak, .settings };
 
     pub fn title(self: Tab) []const u8 {
         return switch (self) {
@@ -39,6 +43,7 @@ pub const Tab = enum {
             .aur => "AUR",
             .upgrade => "Upgrade",
             .flatpak => "Flatpak",
+            .settings => "Settings",
         };
     }
 };
@@ -48,8 +53,6 @@ pub const Tab = enum {
 /// after the result fields are written, so the UI can read them with an
 /// acquire load and no lock.
 const LoadState = struct {
-    flatpak_available: bool = false,
-    flatpak_probe_error: ?anyerror = null,
     result: ?std.json.Parsed([]Package) = null,
     failed: bool = false,
     done: std.atomic.Value(bool) = .init(false),
@@ -62,6 +65,11 @@ const AurSearchJob = struct {
     done: std.atomic.Value(bool) = .init(false),
 };
 
+const FlatpakProbeJob = struct {
+    failure: ?anyerror = null,
+    done: std.atomic.Value(bool) = .init(false),
+};
+
 const FlatpakJob = struct {
     installed_only: bool,
     catalog: ?std.json.Parsed([]flatpak.AppstreamApp) = null,
@@ -71,6 +79,8 @@ const FlatpakJob = struct {
 };
 
 const UpdatesJob = struct {
+    aur_enabled: bool = false,
+    flatpak_enabled: bool = false,
     result: ?std.json.Parsed(CheckUpdates) = null,
     failed: bool = false,
     done: std.atomic.Value(bool) = .init(false),
@@ -91,6 +101,7 @@ const SudoPrompt = struct {
     action: shelly_operation.Action = .install,
     elevated: bool = true,
     include_flatpak: bool = true,
+    include_aur: bool = true,
     flatpak_target: ?shelly_operation.FlatpakTarget = null,
     password: std.ArrayList(u8),
     state: State = .entering,
@@ -143,6 +154,14 @@ pub const Model = struct {
     gpa: Allocator,
 
     active: Tab = .packages,
+    settings: Settings = .{},
+    settings_store: ?settings_service.Store = null,
+    settings_failure: ?anyerror = null,
+    settings_selected: usize = 0,
+    visible_tabs: [5]Tab = undefined,
+    flatpak_checked: bool = false,
+    flatpak_probe_job: ?*FlatpakProbeJob = null,
+    flatpak_probe_thread: ?std.Thread = null,
     flatpak_available: bool = false,
     flatpak_probe_error: ?anyerror = null,
     flatpak_job: ?*FlatpakJob = null,
@@ -276,6 +295,9 @@ pub const Model = struct {
 
     pub fn deinit(self: *Model) void {
         const gpa = self.gpa;
+        if (self.settings_store) |store| store.deinit();
+        if (self.flatpak_probe_thread) |thread| thread.join();
+        if (self.flatpak_probe_job) |job| gpa.destroy(job);
         if (self.flatpak_thread) |thread| thread.join();
         if (self.flatpak_job) |job| {
             if (job.catalog) |*parsed| parsed.deinit();
@@ -443,6 +465,16 @@ pub const Model = struct {
                         },
                     }
                 }
+                if (self.active == .settings) {
+                    if (commands.settings(key)) |action| {
+                        switch (action) {
+                            .previous, .next => self.settings_selected = 1 - self.settings_selected,
+                            .toggle => if (self.install_job == null) try self.toggleSetting(ctx),
+                            .reload => if (self.install_job == null) try self.reloadSettings(ctx),
+                        }
+                        return ctx.consumeAndRedraw();
+                    }
+                }
                 if (self.active == .flatpak) {
                     if (commands.togglesInstalled(key)) {
                         if (self.flatpak_job == null) {
@@ -455,7 +487,7 @@ pub const Model = struct {
                         return ctx.consumeAndRedraw();
                     }
                     if (commands.refreshesList(key)) {
-                        try self.startFlatpak(ctx);
+                        if (!self.flatpak_available or self.flatpak_failure != null) try self.startFlatpakProbe(ctx) else try self.startFlatpak(ctx);
                         return ctx.consumeAndRedraw();
                     }
                 }
@@ -516,6 +548,7 @@ pub const Model = struct {
         switch (event) {
             .init => {
                 try self.startLoad(ctx);
+                if (self.settings.flatpak_enabled) try self.startFlatpakProbe(ctx);
                 ctx.redraw = true;
                 return self.focusActiveTab(ctx);
             },
@@ -523,12 +556,12 @@ pub const Model = struct {
                 return self.focusActiveTab(ctx);
             },
             .tick => {
-                const previous_tab = self.active;
                 const loading = try self.pollLoad();
-                if (previous_tab != self.active) try self.focusActiveTab(ctx);
+                try self.pollFlatpakProbe(ctx);
                 const searching = try self.pollAurSearch();
                 const installing = try self.pollInstall();
                 self.pollUpdates();
+                try self.ensureUpdates(ctx);
                 try self.pollFlatpak();
                 try self.pollPkgbuild(ctx);
                 if (self.refresh_after_upgrade and !self.loading) {
@@ -554,7 +587,7 @@ pub const Model = struct {
                     if (self.aur_installed_only or self.aur_query.len > 0) try self.startAurSearch(ctx, self.aur_query);
                     self.refresh_aur_after_operation = false;
                 }
-                if (loading or searching or installing or self.loading or self.updates_job != null or self.pkgbuild_job != null or self.aur_job != null or self.flatpak_job != null) {
+                if (loading or searching or installing or self.loading or self.updates_job != null or self.pkgbuild_job != null or self.aur_job != null or self.flatpak_job != null or self.flatpak_probe_job != null) {
                     try ctx.tick(100, self.widget());
                 }
                 return ctx.consumeAndRedraw();
@@ -582,6 +615,7 @@ pub const Model = struct {
                     .aur => self.aur_list.handleEvent(ctx, event),
                     .upgrade => self.updates_list.handleEvent(ctx, event),
                     .flatpak => self.flatpak_list.handleEvent(ctx, event),
+                    .settings => {},
                 };
             },
             .mouse => {
@@ -596,10 +630,151 @@ pub const Model = struct {
         }
     }
 
+    /// Read the small preference file before the first frame, never CLI/catalog data.
+    pub fn loadSettings(self: *Model, io: std.Io, env: *const std.process.Environ.Map) void {
+        self.settings_store = settings_service.Store.init(self.gpa, env) catch |err| {
+            self.settings_failure = err;
+            self.setNotice("Could not load TUI settings; using system-only defaults. Open Settings for details.") catch {};
+            return;
+        };
+        const saved = self.settings_store.?.load(io) catch |err| {
+            self.settings_failure = err;
+            self.setNotice("Could not load TUI settings; using system-only defaults. Open Settings for details.") catch {};
+            return;
+        };
+        self.applySettings(saved);
+    }
+
+    fn applySettings(self: *Model, saved: Settings) void {
+        if (self.settings.aur_enabled != saved.aur_enabled) {
+            if (self.overlay) |overlay| {
+                if (overlay == .aur) self.closeOverlay();
+            }
+            self.aur_filtered.clearRetainingCapacity();
+            self.aur_packages = &.{};
+            if (self.aur_parsed) |*parsed| parsed.deinit();
+            self.aur_parsed = null;
+            self.aur_list.item_count = 0;
+            self.aur_list.jumpToItem(0);
+        }
+        if (self.settings.flatpak_enabled != saved.flatpak_enabled) {
+            if (self.overlay) |overlay| {
+                if (overlay == .flatpak or overlay == .flatpak_install) self.closeOverlay();
+            }
+            self.flatpak_rows.clearRetainingCapacity();
+            if (self.flatpak_catalog) |*parsed| parsed.deinit();
+            if (self.flatpak_installed) |*parsed| parsed.deinit();
+            self.flatpak_catalog = null;
+            self.flatpak_installed = null;
+            self.flatpak_list.item_count = 0;
+            self.flatpak_list.jumpToItem(0);
+            self.flatpak_checked = false;
+            self.flatpak_available = false;
+            self.flatpak_probe_error = null;
+        }
+        self.settings = saved;
+        self.settings_failure = null;
+        self.updates_checked = false;
+        if (self.updates_parsed) |*parsed| {
+            if (!saved.aur_enabled) parsed.value.Aur = &.{};
+            if (!saved.flatpak_enabled) parsed.value.Flatpak = &.{};
+            self.updates_list.item_count = @intCast(parsed.value.count());
+            self.updates_list.jumpToItem(0);
+        }
+        if (!self.tabEnabled(self.active)) {
+            self.closeOverlay();
+            self.active = .packages;
+        }
+    }
+
+    fn toggleSetting(self: *Model, ctx: *vxfw.EventContext) !void {
+        const store = self.settings_store orelse {
+            self.settings_failure = error.SettingsNotInitialized;
+            return;
+        };
+        var saved = self.settings;
+        if (self.settings_selected == 0) saved.aur_enabled = !saved.aur_enabled else saved.flatpak_enabled = !saved.flatpak_enabled;
+        store.save(runtime.io, saved) catch |err| {
+            self.settings_failure = err;
+            return;
+        };
+        self.applySettings(saved);
+        if (saved.flatpak_enabled and !self.flatpak_checked) try self.startFlatpakProbe(ctx);
+        try self.focusActiveTab(ctx);
+    }
+
+    fn reloadSettings(self: *Model, ctx: *vxfw.EventContext) !void {
+        const store = self.settings_store orelse return;
+        const saved = store.load(runtime.io) catch |err| {
+            self.settings_failure = err;
+            return;
+        };
+        self.applySettings(saved);
+        if (saved.flatpak_enabled and !self.flatpak_checked) try self.startFlatpakProbe(ctx);
+        try self.focusActiveTab(ctx);
+    }
+
+    fn settingsView(self: *Model) settings_view.View {
+        return .{ .settings = self.settings, .selected = self.settings_selected, .path = if (self.settings_store) |store| store.path else "Settings could not be initialized", .failure = self.settings_failure, .flatpak_checked = self.flatpak_checked, .flatpak_available = self.flatpak_available, .checking = self.flatpak_probe_job != null, .busy = self.install_job != null };
+    }
+
+    fn startFlatpakProbe(self: *Model, ctx: *vxfw.EventContext) !void {
+        if (!self.settings.flatpak_enabled or self.flatpak_probe_job != null) return;
+        try ctx.tick(100, self.widget());
+        const job = try self.gpa.create(FlatpakProbeJob);
+        errdefer self.gpa.destroy(job);
+        job.* = .{};
+        const thread = try std.Thread.spawn(.{}, flatpakProbeThread, .{job});
+        self.flatpak_probe_job = job;
+        self.flatpak_probe_thread = thread;
+        self.flatpak_probe_error = null;
+        self.flatpak_failure = null;
+    }
+
+    fn flatpakProbeThread(job: *FlatpakProbeJob) void {
+        defer job.done.store(true, .release);
+        var threaded: std.Io.Threaded = .init(std.heap.page_allocator, .{});
+        defer threaded.deinit();
+        const cli: ShellyCli = .{ .allocator = std.heap.page_allocator, .io = threaded.io() };
+        cli.probe_flatpak() catch |err| {
+            job.failure = err;
+        };
+    }
+
+    fn pollFlatpakProbe(self: *Model, ctx: *vxfw.EventContext) !void {
+        const job = self.flatpak_probe_job orelse return;
+        if (!job.done.load(.acquire)) return;
+        if (self.flatpak_probe_thread) |thread| thread.join();
+        self.flatpak_probe_thread = null;
+        self.flatpak_probe_job = null;
+        self.flatpak_checked = true;
+        self.flatpak_probe_error = job.failure;
+        self.flatpak_available = job.failure == null;
+        self.gpa.destroy(job);
+        if (self.settings.flatpak_enabled) {
+            self.updates_checked = false;
+            if (self.flatpak_available and self.active == .flatpak) try self.startFlatpak(ctx);
+        }
+    }
+
     // -- tabs --------------------------------------------------------------
 
-    fn visibleTabs(self: *const Model) []const Tab {
-        return if (self.flatpak_available) Tab.all else Tab.always;
+    fn tabEnabled(self: *const Model, tab: Tab) bool {
+        return switch (tab) {
+            .aur => self.settings.aur_enabled,
+            .flatpak => self.settings.flatpak_enabled,
+            else => true,
+        };
+    }
+
+    fn visibleTabs(self: *Model) []const Tab {
+        var count: usize = 0;
+        for (Tab.all) |tab| {
+            if (!self.tabEnabled(tab)) continue;
+            self.visible_tabs[count] = tab;
+            count += 1;
+        }
+        return self.visible_tabs[0..count];
     }
 
     fn switchTab(self: *Model, delta: i32) void {
@@ -614,7 +789,7 @@ pub const Model = struct {
     }
 
     fn setTab(self: *Model, tab: Tab, ctx: *vxfw.EventContext) !void {
-        if (tab == .flatpak and !self.flatpak_available) return;
+        if (!self.tabEnabled(tab)) return;
         if (tab == self.active) return;
         self.active = tab;
         try self.focusActiveTab(ctx);
@@ -626,19 +801,21 @@ pub const Model = struct {
         switch (self.active) {
             .packages => try ctx.requestFocus(self.text_field.widget()),
             .aur => try ctx.requestFocus(self.aur_field.widget()),
-            .upgrade => try ctx.requestFocus(self.widget()),
+            .upgrade, .settings => try ctx.requestFocus(self.widget()),
             .flatpak => try ctx.requestFocus(self.flatpak_field.widget()),
         }
     }
 
     fn ensureFlatpak(self: *Model, ctx: *vxfw.EventContext) !void {
-        if (self.active != .flatpak or !self.flatpak_available or self.flatpak_job != null or self.flatpak_failure != null) return;
+        if (self.active != .flatpak or !self.settings.flatpak_enabled) return;
+        if (!self.flatpak_checked and self.flatpak_probe_job == null) try self.startFlatpakProbe(ctx);
+        if (!self.flatpak_available or self.flatpak_job != null or self.flatpak_failure != null) return;
         if (if (self.flatpak_installed_only) self.flatpak_installed == null else self.flatpak_catalog == null)
             try self.startFlatpak(ctx);
     }
 
     fn startFlatpak(self: *Model, ctx: *vxfw.EventContext) !void {
-        if (!self.flatpak_available or self.flatpak_job != null) return;
+        if (!self.settings.flatpak_enabled or !self.flatpak_available or self.flatpak_job != null) return;
         try ctx.tick(100, self.widget());
         const job = try self.gpa.create(FlatpakJob);
         errdefer self.gpa.destroy(job);
@@ -730,7 +907,7 @@ pub const Model = struct {
     }
 
     fn flatpakView(self: *Model) flatpak_view.View {
-        return .{ .field = &self.flatpak_field, .list = &self.flatpak_list, .installed_only = self.flatpak_installed_only, .loading = self.flatpak_job != null, .failure = self.flatpak_failure, .checked = if (self.flatpak_installed_only) self.flatpak_installed != null else self.flatpak_catalog != null, .count = self.flatpak_rows.items.len };
+        return .{ .field = &self.flatpak_field, .list = &self.flatpak_list, .installed_only = self.flatpak_installed_only, .loading = self.flatpak_job != null, .checking_backend = self.flatpak_probe_job != null, .backend_failure = self.flatpak_probe_error, .failure = self.flatpak_failure, .checked = if (self.flatpak_installed_only) self.flatpak_installed != null else self.flatpak_catalog != null, .count = self.flatpak_rows.items.len };
     }
 
     // -- background jobs ---------------------------------------------------
@@ -847,7 +1024,7 @@ pub const Model = struct {
         try ctx.tick(100, self.widget());
         const job = try self.gpa.create(UpdatesJob);
         errdefer self.gpa.destroy(job);
-        job.* = .{};
+        job.* = .{ .aur_enabled = self.settings.aur_enabled, .flatpak_enabled = self.settings.flatpak_enabled and self.flatpak_available };
         const thread = try std.Thread.spawn(.{}, checkUpdatesThread, .{job});
         self.updates_thread = thread;
         self.updates_job = job;
@@ -859,7 +1036,7 @@ pub const Model = struct {
         var threaded: std.Io.Threaded = .init(std.heap.page_allocator, .{});
         defer threaded.deinit();
         const cli: ShellyCli = .{ .allocator = std.heap.page_allocator, .io = threaded.io() };
-        job.result = cli.check_updates(false) catch {
+        job.result = cli.check_updates_for_sources(job.aur_enabled, job.flatpak_enabled) catch {
             job.failed = true;
             job.done.store(true, .release);
             return;
@@ -874,6 +1051,11 @@ pub const Model = struct {
         self.updates_thread = null;
         self.updates_job = null;
         defer self.gpa.destroy(job);
+        if (job.aur_enabled != self.settings.aur_enabled or job.flatpak_enabled != (self.settings.flatpak_enabled and self.flatpak_available)) {
+            if (job.result) |*parsed| parsed.deinit();
+            self.updates_checked = false;
+            return;
+        }
         self.updates_failed = job.failed;
         if (job.result) |parsed| {
             if (self.updates_parsed) |*old| old.deinit();
@@ -890,7 +1072,8 @@ pub const Model = struct {
             .loading = self.updates_job != null,
             .failed = self.updates_failed,
             .checked = self.updates_checked,
-            .flatpak_available = self.flatpak_available,
+            .aur_enabled = self.settings.aur_enabled,
+            .flatpak_available = self.settings.flatpak_enabled and self.flatpak_available,
         };
     }
 
@@ -916,10 +1099,11 @@ pub const Model = struct {
         const prompt = try self.gpa.create(SudoPrompt);
         errdefer self.gpa.destroy(prompt);
         prompt.* = .{
-            .name = try self.gpa.dupe(u8, if (backend == .all) if (self.flatpak_available) "system packages, AUR and Flatpaks" else "system packages and AUR" else if (backend == .aur) "AUR packages" else "system packages"),
+            .name = try self.gpa.dupe(u8, if (backend == .all) "all enabled package sources" else if (backend == .aur) "AUR packages" else "system packages"),
             .backend = backend,
             .action = .upgrade,
-            .include_flatpak = self.flatpak_available,
+            .include_flatpak = self.settings.flatpak_enabled and self.flatpak_available,
+            .include_aur = self.settings.aur_enabled,
             .password = .empty,
         };
         self.overlay = .{ .sudo = prompt };
@@ -947,12 +1131,6 @@ pub const Model = struct {
         defer threaded.deinit();
 
         const cli: ShellyCli = .{ .allocator = alloc, .io = threaded.io() };
-        // Empty remotes are valid. Failure is recorded separately from absence
-        // of installed applications.
-        cli.probe_flatpak() catch |err| {
-            load.flatpak_probe_error = err;
-        };
-        load.flatpak_available = load.flatpak_probe_error == null;
         const parsed = cli.get_packages(false) catch {
             load.failed = true;
             load.done.store(true, .release);
@@ -978,9 +1156,6 @@ pub const Model = struct {
         if (!self.loading) return false;
         if (!self.load.done.load(.acquire)) return true;
 
-        self.flatpak_available = self.load.flatpak_available;
-        self.flatpak_probe_error = self.load.flatpak_probe_error;
-        if (!self.flatpak_available and self.active == .flatpak) self.active = .packages;
         const failed = self.load.failed;
         const parsed = self.load.result;
         self.load.result = null;
@@ -1030,6 +1205,7 @@ pub const Model = struct {
     fn onAurSubmit(maybe_ptr: ?*anyopaque, ctx: *vxfw.EventContext, str: []const u8) anyerror!void {
         const ptr = maybe_ptr orelse return;
         const self: *Model = @ptrCast(@alignCast(ptr));
+        if (!self.settings.aur_enabled) return;
         const query = std.mem.trim(u8, str, " \t");
 
         if (self.aur_job != null) return;
@@ -1055,6 +1231,7 @@ pub const Model = struct {
     }
 
     fn startAurSearch(self: *Model, ctx: *vxfw.EventContext, query: []const u8) !void {
+        if (!self.settings.aur_enabled) return;
         try ctx.tick(100, self.widget());
         const job = try self.gpa.create(AurSearchJob);
         errdefer self.gpa.destroy(job);
@@ -1119,6 +1296,10 @@ pub const Model = struct {
         const failed = job.failed;
         self.aur_job = null;
         self.gpa.destroy(job);
+        if (!self.settings.aur_enabled) {
+            if (parsed) |owner| owner.deinit();
+            return false;
+        }
 
         if (self.overlay) |overlay| {
             if (overlay == .aur) self.overlay = null;
@@ -1147,6 +1328,7 @@ pub const Model = struct {
                 backend = .standard;
             },
             .aur => |pkg| {
+                if (!self.settings.aur_enabled) return;
                 if (action == .remove and !pkg.Installed) return;
                 name = pkg.Name;
                 backend = .aur;
@@ -1165,7 +1347,7 @@ pub const Model = struct {
     }
 
     fn openFlatpakPrompt(self: *Model, action: shelly_operation.Action, name: []const u8, target: ?shelly_operation.FlatpakTarget) !void {
-        if (!self.flatpak_available or self.install_job != null) return;
+        if (!self.settings.flatpak_enabled or !self.flatpak_available or self.install_job != null) return;
         const prompt = try self.gpa.create(SudoPrompt);
         errdefer self.gpa.destroy(prompt);
         const owned_name = try self.gpa.dupe(u8, name);
@@ -1336,6 +1518,7 @@ pub const Model = struct {
             .password = prompt.password.items,
             .flatpak = prompt.flatpak_target,
             .include_flatpak = prompt.include_flatpak,
+            .include_aur = prompt.include_aur,
         });
     }
 
@@ -1384,7 +1567,7 @@ pub const Model = struct {
         if (is_flatpak or (is_combined and job.request.include_flatpak)) self.refresh_flatpak_after_operation = true;
         if (job.request.action == .upgrade or is_flatpak or std.mem.eql(u8, job.request.backend, "aur")) self.refresh_updates_after_operation = true;
         if (!is_flatpak and (job.request.action == .upgrade or std.mem.eql(u8, job.request.backend, "aur"))) self.refresh_after_upgrade = true;
-        if (is_combined or std.mem.eql(u8, job.request.backend, "aur")) self.refresh_aur_after_operation = true;
+        if ((is_combined and job.request.include_aur) or std.mem.eql(u8, job.request.backend, "aur")) self.refresh_aur_after_operation = true;
 
         // Native and AUR operations change the same installed package database.
         if (!is_flatpak and !failed and job.request.action != .upgrade) {
@@ -1568,6 +1751,7 @@ pub const Model = struct {
             .aur => try self.aurView().appendContent(ctx, &children),
             .upgrade => try self.updatesView().appendContent(ctx, &children),
             .flatpak => try self.flatpakView().appendContent(ctx, &children),
+            .settings => try self.settingsView().appendContent(ctx, &children),
         }
 
         // Bottom row: status bar
@@ -1619,6 +1803,7 @@ pub const Model = struct {
         const bar = try arena.create(TabBar);
         bar.* = .{
             .model = self,
+            .tabs = try arena.dupe(Tab, tabs),
             .rich = .{ .text = spans, .softwrap = false },
         };
         return bar.widget();
@@ -1635,6 +1820,7 @@ pub const Model = struct {
             .aur => self.aurView().statusText(arena),
             .upgrade => self.updatesView().statusText(arena),
             .flatpak => self.flatpakView().statusText(arena),
+            .settings => "Settings — source preferences are saved for future sessions",
         };
     }
 
@@ -1704,7 +1890,9 @@ pub const Model = struct {
         else
             "";
         const note: []const u8 = if (prompt.backend == .all)
-            if (prompt.include_flatpak) "\nFull upgrade: system packages, AUR, and system/user Flatpaks. AppImages are excluded. PKGBUILDs require review." else "\nFull upgrade: system packages and AUR. Flatpak backend is unavailable. AppImages are excluded. PKGBUILDs require review."
+            if (prompt.include_aur)
+                if (prompt.include_flatpak) "\nFull upgrade: system packages, AUR, and system/user Flatpaks. AppImages are excluded. PKGBUILDs require review." else "\nFull upgrade: system packages and AUR. Flatpak is disabled or unavailable. AppImages are excluded. PKGBUILDs require review."
+            else if (prompt.include_flatpak) "\nFull upgrade: system packages and system/user Flatpaks. AUR and AppImages are excluded." else "\nFull system upgrade. AUR, Flatpak and AppImages are excluded."
         else if (prompt.backend == .flatpak)
             if (prompt.action == .upgrade) "\nUpdates both system and user Flatpaks as the invoking user. System changes may require a Flatpak authorization agent." else if (prompt.action == .remove) "\nConfiguration and unused dependencies will be kept." else "\nInstall from the selected remote and scope. Shelly handles dependencies and review."
         else if (prompt.action == .remove) "\nUnused dependencies and configuration will be kept." else if (prompt.action == .upgrade)
@@ -1789,6 +1977,7 @@ pub const Model = struct {
 /// hit testing, so this wraps the RichText instead of using it bare.
 const TabBar = struct {
     model: *Model,
+    tabs: []const Tab,
     rich: vxfw.RichText,
 
     pub fn widget(self: *TabBar) vxfw.Widget {
@@ -1816,7 +2005,7 @@ const TabBar = struct {
                     // Labels are ASCII, so byte length == display width
                     const width: i16 = @intCast(span.text.len);
                     if (mouse.col < col + width) {
-                        try self.model.setTab(self.model.visibleTabs()[i], ctx);
+                        try self.model.setTab(self.tabs[i], ctx);
                         return ctx.consumeAndRedraw();
                     }
                     col += width;
@@ -1831,6 +2020,7 @@ test "tab switching requests focus on a widget in the active page" {
     var model: Model = undefined;
     model.active = .packages;
     model.flatpak_available = false;
+    model.settings = .{};
     var ctx: vxfw.EventContext = .{
         .io = undefined,
         .alloc = std.testing.allocator,
@@ -1846,7 +2036,7 @@ test "tab switching requests focus on a widget in the active page" {
         const expected = switch (model.active) {
             .packages => model.text_field.widget(),
             .aur => model.aur_field.widget(),
-            .upgrade => model.widget(),
+            .upgrade, .settings => model.widget(),
             .flatpak => model.flatpak_field.widget(),
         };
         try std.testing.expect(ctx.cmds.items[0].request_focus.eql(expected));
@@ -1872,7 +2062,7 @@ test "tab views preserve input widgets and render without background work" {
             const input = switch (tab) {
                 .packages => model.text_field.widget(),
                 .aur => model.aur_field.widget(),
-                .upgrade => model.widget(),
+                .upgrade, .settings => model.widget(),
                 .flatpak => model.flatpak_field.widget(),
             };
             var found = surface.widget.eql(input);
@@ -2121,6 +2311,7 @@ test "PKGBUILD preview discards stale results and joins unpolled jobs" {
 test "AUR updates open a separate AUR upgrade prompt" {
     const model = try Model.init(std.testing.allocator);
     defer model.deinit();
+    model.settings.aur_enabled = true;
     model.updates_checked = true;
     model.updates_parsed = try std.json.parseFromSlice(CheckUpdates, std.testing.allocator,
         \\{"Packages":[],"Aur":[{"Name":"foreign","Version":"1","NewVersion":"2"}]}
@@ -2188,6 +2379,7 @@ test "installed package filters combine local text and installed state" {
 test "installed AUR list filters locally and opens the displayed package" {
     const model = try Model.init(std.testing.allocator);
     defer model.deinit();
+    model.settings.aur_enabled = true;
     const packages = [_]AurPackage{
         .{ .Name = "first", .Installed = true },
         .{ .Name = "editor-git", .Installed = true },
@@ -2208,61 +2400,47 @@ test "installed AUR list filters locally and opens the displayed package" {
     try std.testing.expectEqual(@as(usize, 2), model.aur_filtered.items.len);
 }
 
-test "Flatpak availability gates tab navigation shortcuts and rendering" {
-    vxfw.DrawContext.init(.unicode);
+test "settings determine source visibility before backend or native loading finishes" {
     const model = try Model.init(std.testing.allocator);
     defer model.deinit();
+    try std.testing.expectEqualSlices(Tab, &.{ .packages, .upgrade, .settings }, model.visibleTabs());
     var events: vxfw.EventContext = .{ .io = undefined, .alloc = std.testing.allocator, .cmds = .empty };
     defer events.cmds.deinit(std.testing.allocator);
-    try std.testing.expectEqual(@as(usize, 3), model.visibleTabs().len);
-    try model.setTab(.flatpak, &events);
+    try model.setTab(.aur, &events);
     try std.testing.expectEqual(Tab.packages, model.active);
-    try std.testing.expect(commands.global(.{ .codepoint = '4', .mods = .{ .alt = true } }, model.visibleTabs().len) == null);
-    model.active = .upgrade;
-    model.switchTab(1);
-    try std.testing.expectEqual(Tab.packages, model.active);
-
-    model.flatpak_available = true;
-    try std.testing.expectEqual(@as(usize, 4), model.visibleTabs().len);
-    model.active = .upgrade;
-    model.switchTab(1);
-    try std.testing.expectEqual(Tab.flatpak, model.active);
+    model.applySettings(.{ .aur_enabled = true, .flatpak_enabled = true });
+    try std.testing.expect(!model.flatpak_available);
+    try std.testing.expect(model.loading);
+    try std.testing.expectEqualSlices(Tab, Tab.all, model.visibleTabs());
+    model.active = .flatpak;
     try model.focusActiveTab(&events);
     try std.testing.expect(events.cmds.items[events.cmds.items.len - 1].request_focus.eql(model.flatpak_field.widget()));
-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena.deinit();
-    const bar = try model.drawTabBar(arena.allocator());
-    const tabs: *TabBar = @ptrCast(@alignCast(bar.userdata));
-    try std.testing.expectEqual(@as(usize, 4), tabs.rich.text.len);
-    try std.testing.expectEqualStrings(" 4:Flatpak ", tabs.rich.text[3].text);
-    _ = try model.widget().draw(.{
-        .arena = arena.allocator(),
-        .min = .{},
-        .max = .{ .width = 80, .height = 24 },
-        .cell_size = .{ .width = 10, .height = 20 },
-    });
-    model.flatpak_available = false;
-    model.active = .packages;
-    const hidden = try model.drawTabBar(arena.allocator());
-    const hidden_tabs: *TabBar = @ptrCast(@alignCast(hidden.userdata));
-    try std.testing.expectEqual(@as(usize, 3), hidden_tabs.rich.text.len);
+    model.applySettings(.{});
+    try std.testing.expectEqual(Tab.packages, model.active);
+    try std.testing.expectEqualSlices(Tab, Tab.always, model.visibleTabs());
 }
 
-test "Flatpak probe result is independent of native list failure and revokes access" {
-    const model = try Model.init(std.testing.allocator);
+test "Flatpak probe publishes independently and failure does not hide an enabled tab" {
+    const allocator = std.testing.allocator;
+    const model = try Model.init(allocator);
     defer model.deinit();
-    model.load.failed = true;
-    model.load.flatpak_available = true;
-    model.load.done.store(true, .release);
-    _ = try model.pollLoad();
-    try std.testing.expect(model.flatpak_available and model.load_failed);
+    model.settings.flatpak_enabled = true;
+    var events: vxfw.EventContext = .{ .io = undefined, .alloc = allocator, .cmds = .empty };
+    defer events.cmds.deinit(allocator);
+    const ready = try allocator.create(FlatpakProbeJob);
+    ready.* = .{ .done = .init(true) };
+    model.flatpak_probe_job = ready;
+    try model.pollFlatpakProbe(&events);
+    try std.testing.expect(model.loading and !model.load.done.load(.acquire));
+    try std.testing.expect(model.flatpak_available);
     model.active = .flatpak;
-    model.loading = true;
-    model.load.flatpak_available = false;
-    model.load.flatpak_probe_error = error.CommandFailed;
-    _ = try model.pollLoad();
+    const failed = try allocator.create(FlatpakProbeJob);
+    failed.* = .{ .done = .init(true), .failure = error.CommandFailed };
+    model.flatpak_probe_job = failed;
+    try model.pollFlatpakProbe(&events);
     try std.testing.expect(!model.flatpak_available);
-    try std.testing.expectEqual(Tab.packages, model.active);
+    try std.testing.expectEqual(Tab.flatpak, model.active);
+    try std.testing.expect(model.tabEnabled(.flatpak));
     try std.testing.expectEqual(error.CommandFailed, model.flatpak_probe_error.?);
 }
 
@@ -2270,6 +2448,7 @@ test "Flatpak browsing preserves scoped identity through refresh and filters loc
     const allocator = std.testing.allocator;
     const model = try Model.init(allocator);
     defer model.deinit();
+    model.settings.flatpak_enabled = true;
     model.flatpak_available = true;
     model.active = .flatpak;
     model.flatpak_installed_only = true;
@@ -2331,6 +2510,7 @@ test "Flatpak catalog details retain remote scopes and Enter opens the selected 
     const model = try Model.init(allocator);
     defer model.deinit();
     model.active = .flatpak;
+    model.settings.flatpak_enabled = true;
     model.flatpak_available = true;
     model.flatpak_catalog = try std.json.parseFromSlice([]flatpak.AppstreamApp, allocator,
         \\[{"Id":"org.example.App","Name":"Example","Summary":"An editor","Remotes":[{"Name":"flathub","Scope":0},{"Name":"flathub","Scope":1}]}]
@@ -2355,6 +2535,7 @@ test "Flatpak install chooses remote scope and owns confirmation target" {
     const allocator = std.testing.allocator;
     const model = try Model.init(allocator);
     defer model.deinit();
+    model.settings.flatpak_enabled = true;
     model.flatpak_available = true;
     const app: flatpak.AppstreamApp = .{
         .Id = "org.example.App",
@@ -2389,6 +2570,7 @@ test "Flatpak removal copies exact identity and updates require backend availabi
     const allocator = std.testing.allocator;
     const model = try Model.init(allocator);
     defer model.deinit();
+    model.settings.flatpak_enabled = true;
     model.flatpak_available = true;
     var apps = try std.json.parseFromSlice([]flatpak.Flatpak, allocator,
         \\[{"Id":"org.example.App","Remote":"flathub","InstallLevel":1,"Kind":0,"Arch":"x86_64","Branch":"beta","FullRef":"app/org.example.App/x86_64/beta"}]
@@ -2448,8 +2630,9 @@ test "combined update shortcut opens an authenticated prompt even for an empty c
     try std.testing.expectEqual(OperationBackend.all, prompt.backend);
     try std.testing.expect(prompt.elevated);
     try std.testing.expect(!prompt.include_flatpak);
-    try std.testing.expectEqualStrings("system packages and AUR", prompt.name);
+    try std.testing.expectEqualStrings("all enabled package sources", prompt.name);
     model.closeOverlay();
+    model.settings.flatpak_enabled = true;
     model.flatpak_available = true;
     try model.upgradeFromUpdates(.all);
     try std.testing.expect(model.overlay.?.sudo.include_flatpak);
@@ -2476,7 +2659,7 @@ test "combined operation completion refreshes every included source after partia
             .arena = .init(std.heap.page_allocator),
             .done = .init(true),
             .result = .{ .failed = true },
-            .request = .{ .action = .upgrade, .shelly_bin = "unused", .environ_map = &env, .backend = "all", .name = "combined upgrade", .password = "", .include_flatpak = include_flatpak },
+            .request = .{ .action = .upgrade, .shelly_bin = "unused", .environ_map = &env, .backend = "all", .name = "combined upgrade", .password = "", .include_flatpak = include_flatpak, .include_aur = true },
         };
         model.install_job = job;
         try std.testing.expect(!try model.pollInstall());
@@ -2485,4 +2668,63 @@ test "combined operation completion refreshes every included source after partia
         try std.testing.expect(model.refresh_updates_after_operation);
         try std.testing.expectEqual(include_flatpak, model.refresh_flatpak_after_operation);
     }
+}
+
+test "settings persist before source visibility changes and failed saves keep the active choice" {
+    const allocator = std.testing.allocator;
+    const io = std.testing.io;
+    runtime.io = io;
+    var temporary = std.testing.tmpDir(.{});
+    defer temporary.cleanup();
+    const directory = try temporary.dir.realPathFileAlloc(io, ".", allocator);
+    defer allocator.free(directory);
+    var env: std.process.Environ.Map = .init(allocator);
+    defer env.deinit();
+    try env.put("XDG_CONFIG_HOME", directory);
+    const model = try Model.init(allocator);
+    defer model.deinit();
+    model.loadSettings(io, &env);
+    try std.testing.expect(model.settings.eql(.{}));
+    model.active = .settings;
+    var ctx: vxfw.EventContext = .{ .io = io, .alloc = allocator, .cmds = .empty };
+    defer ctx.cmds.deinit(allocator);
+    try model.toggleSetting(&ctx);
+    try std.testing.expect(model.settings.aur_enabled);
+    const restarted = try Model.init(allocator);
+    defer restarted.deinit();
+    restarted.loadSettings(io, &env);
+    try std.testing.expect(restarted.settings.aur_enabled);
+    try std.testing.expect(restarted.tabEnabled(.aur));
+    try std.testing.expect(restarted.flatpak_probe_job == null);
+    var file = try std.Io.Dir.cwd().createFile(io, model.settings_store.?.path, .{ .truncate = true });
+    try file.writeStreamingAll(io, "{\"AurEnabled\":\"invalid\"}");
+    file.close(io);
+    try model.toggleSetting(&ctx);
+    try std.testing.expectEqual(error.InvalidSettings, model.settings_failure.?);
+    try std.testing.expect(model.settings.aur_enabled);
+}
+
+test "settings changes reject late update results and disabled source data" {
+    const allocator = std.testing.allocator;
+    const model = try Model.init(allocator);
+    defer model.deinit();
+    model.settings = .{ .aur_enabled = true, .flatpak_enabled = true };
+    model.flatpak_available = true;
+    model.updates_parsed = try std.json.parseFromSlice(CheckUpdates, allocator, "{\"Packages\":[{\"Name\":\"native\"}],\"Aur\":[{\"Name\":\"aur\"}],\"Flatpak\":[{\"Id\":\"org.example.App\"}]}", .{ .allocate = .alloc_always });
+    model.applySettings(.{});
+    try std.testing.expectEqual(@as(usize, 1), model.updates_parsed.?.value.count());
+    try std.testing.expect(!model.updatesView().canUpgradeAur());
+    try std.testing.expect(!model.updatesView().canUpgradeFlatpak());
+    const job = try allocator.create(UpdatesJob);
+    job.* = .{ .aur_enabled = true, .flatpak_enabled = true, .done = .init(true), .result = try std.json.parseFromSlice(CheckUpdates, allocator, "{\"Aur\":[{\"Name\":\"stale\"}]}", .{ .allocate = .alloc_always }) };
+    const Worker = struct {
+        fn finish(value: *UpdatesJob) void {
+            value.done.store(true, .release);
+        }
+    };
+    model.updates_job = job;
+    model.updates_thread = try std.Thread.spawn(.{}, Worker.finish, .{job});
+    model.pollUpdates();
+    try std.testing.expect(!model.updates_checked);
+    try std.testing.expectEqualStrings("native", model.updates_parsed.?.value.Packages[0].Name);
 }

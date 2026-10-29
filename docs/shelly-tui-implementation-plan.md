@@ -49,7 +49,7 @@ Implementation starts with the existing query client's foundation, then one nati
 | TUI-03 | State/view separation, responsive queries, stable selection, and refresh. | Not started |
 | TUI-04 | Reviewed native install/remove with accurate outcomes on both engines. | Not started |
 | TUI-05 | Remaining native actions, AUR, AppImage, and Flatpak. | In progress: AUR install/upgrade review wired; live verification and remaining sources pending. |
-| TUI-06 | Maintenance/settings/advanced coverage, packaging, and release checks. | Not started |
+| TUI-06 | Maintenance/settings/advanced coverage, packaging, and release checks. | In progress: persisted TUI source settings; remaining settings, maintenance, and release checks pending. |
 
 ## TUI-01 findings
 
@@ -129,8 +129,8 @@ The intended flow is browse → details → review/provider questions → execut
 
 ### Optional Flatpak tab (2026-10-29)
 
-- Flatpak appears only after `list flatpak remote --ui-mode` succeeds, including an empty remote list. Missing/incompatible backends and query failures keep the tab hidden; probe errors remain separate from native package loading.
-- Probing runs in the background at startup and package refresh. Navigation, shortcuts, and mouse selection share the available-tab list. Source settings remain deferred.
+- Initial implementation gated Flatpak visibility on a successful `list flatpak remote --ui-mode`. Saved source preferences now control visibility; backend readiness is handled separately (see Settings below).
+- Navigation, shortcuts, and mouse selection share the visible-tab list. The backend probe now runs independently of native loading, only for enabled Flatpak support, and can be retried.
 - Tests cover hidden/visible navigation, rendering, empty remotes, backend errors, and independent native loading failure. Live backend-present/absent checks remain open.
 - Availability-gate build/test and six focused tests pass. The stale remote-info fixture was corrected during browsing implementation below.
 
@@ -153,3 +153,10 @@ The intended flow is browse → details → review/provider questions → execut
 - One authenticated CLI coordinator retains interactive transaction/provider/PKGBUILD review and streams progress. Nested source completion cannot stand in for coordinator completion. Failures may follow completed source changes; native, AUR, Flatpak, and update state are refreshed as applicable.
 - Zig 0.17 build/test and 37 focused tests pass. Six fake-process scenarios cover combined success, missing Flatpak, partial failure, missing outer completion, decline, and authentication failure, including inherited child stdin/stdout. No real combined upgrade was run.
 - AppImage operations remain deferred until after UI/UX work. Existing AppImage update rows are informational only.
+
+### Settings and startup source visibility (2026-10-29)
+
+- Settings saves independent TUI preferences to `$XDG_CONFIG_HOME/shelly/tui-settings.json` (fallback: `~/.config`). AUR and Flatpak default off; system packages remain enabled. Arrow keys select, Enter/Space toggles and saves, R reloads.
+- Saved preferences control tabs from the first frame, source-specific update queries, and combined-upgrade exclusions. Enabled Flatpak remains visible while its independent backend probe runs or reports an error. Disabled-source and stale update results are discarded.
+- Saves are atomic, preserve unknown keys, and leave invalid files intact. Failed saves do not apply unsaved preferences. GTK settings and shared CLI configuration are unchanged; shared CLI option editing/backend installation remain separate work.
+- Zig 0.17 build/test and 43 focused tests pass. Four fake-CLI cases verify enabled-source query selection. An isolated PTY smoke verified immediate saved tabs, keyboard saving, unknown-key preservation, and clean exit without touching real preferences.

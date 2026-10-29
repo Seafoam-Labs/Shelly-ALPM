@@ -281,6 +281,30 @@ pub const ShellyCli = struct {
         defer self.allocator.free(result.stderr);
     }
 
+    fn sourceUpdates(self: ShellyCli, comptime T: type, source: []const u8) !std.json.Parsed([]T) {
+        const result = try self.runSilently(&.{ "list-updates", source });
+        defer self.allocator.free(result.stdout);
+        defer self.allocator.free(result.stderr);
+        return decodeQuery([]T, self.allocator, result.stdout, false);
+    }
+
+    /// Query only enabled sources, without changing shared CLI configuration.
+    pub fn check_updates_for_sources(self: ShellyCli, aur_enabled: bool, flatpak_enabled: bool) !std.json.Parsed(CheckUpdates) {
+        const sync = @import("../models/sync.zig");
+        const native = try self.sourceUpdates(sync.CheckUpdatesPackage, "standard");
+        defer native.deinit();
+        var aur: ?std.json.Parsed([]sync.CheckUpdatesAur) = null;
+        defer if (aur) |*parsed| parsed.deinit();
+        var flatpak: ?std.json.Parsed([]sync.CheckUpdatesFlatpak) = null;
+        defer if (flatpak) |*parsed| parsed.deinit();
+        if (aur_enabled) aur = try self.sourceUpdates(sync.CheckUpdatesAur, "aur");
+        if (flatpak_enabled) flatpak = try self.sourceUpdates(sync.CheckUpdatesFlatpak, "flatpak");
+        const combined: CheckUpdates = .{ .Packages = native.value, .Aur = if (aur) |parsed| parsed.value else &.{}, .Flatpak = if (flatpak) |parsed| parsed.value else &.{} };
+        const json = try std.json.Stringify.valueAlloc(self.allocator, combined, .{});
+        defer self.allocator.free(json);
+        return std.json.parseFromSlice(CheckUpdates, self.allocator, json, .{ .allocate = .alloc_always });
+    }
+
     pub fn check_updates(self: ShellyCli, show_hidden: bool) !std.json.Parsed(CheckUpdates) {
         const result = try self.runSilently(if (show_hidden) &.{ "-P", "--show-hidden" } else &.{"-P"});
         defer self.allocator.free(result.stdout);
