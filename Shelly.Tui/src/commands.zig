@@ -75,3 +75,11 @@ pub fn review(key: vaxis.Key) ?Review {
 }
 pub const review_hint = "↑↓/←→: scroll  Y: approve  N/Q: decline  Esc: quit";
 pub const choice_hint = "Enter indices, comma-separated for multiple choices; Enter: send";
+
+pub fn togglesInstalled(key: vaxis.Key) bool {
+    return key.matches('l', .{ .ctrl = true });
+}
+
+pub fn refreshesList(key: vaxis.Key) bool {
+    return key.matches('r', .{ .ctrl = true });
+}

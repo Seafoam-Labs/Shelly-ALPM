@@ -48,6 +48,7 @@ const LoadState = struct {
 };
 
 const AurSearchJob = struct {
+    installed_only: bool = false,
     result: ?std.json.Parsed([]AurPackage) = null,
     failed: bool = false,
     done: std.atomic.Value(bool) = .init(false),
@@ -142,6 +143,10 @@ pub const Model = struct {
     /// Last executed AUR query; owned by `gpa` unless empty.
     aur_query: []const u8 = "",
     aur_failed: bool = false,
+    installed_only: bool = false,
+    aur_installed_only: bool = false,
+    aur_thread: ?std.Thread = null,
+    aur_filtered: std.ArrayList(*const AurPackage) = .empty,
 
     /// Modal package details.
     overlay: ?Overlay = null,
@@ -218,6 +223,7 @@ pub const Model = struct {
                 .buf = .init(gpa),
                 .userdata = model,
                 .onSubmit = Model.onAurSubmit,
+                .onChange = Model.onAurQueryChange,
             },
             .selected_list_view = .{
                 .children = .{ .builder = .{
@@ -259,14 +265,16 @@ pub const Model = struct {
         self.filtered.deinit(gpa);
         self.selected_packages.deinit(gpa);
         if (self.query.len > 0) gpa.free(self.query);
+        if (self.aur_thread) |thread| thread.join();
+        if (self.aur_job) |job| {
+            if (job.result) |*result| result.deinit();
+            gpa.destroy(job);
+        }
+        self.aur_filtered.deinit(gpa);
         if (self.aur_query.len > 0) gpa.free(self.aur_query);
         if (self.notice.len > 0) gpa.free(self.notice);
         if (self.parsed) |*parsed| parsed.deinit();
         if (self.aur_parsed) |*parsed| parsed.deinit();
-        // Finished jobs are reaped by the pollers; anything still running at
-        // exit is intentionally leaked because its worker thread may still
-        // hold a reference.
-        if (self.aur_job) |job| if (job.done.load(.acquire)) gpa.destroy(job);
         if (self.install_job) |operation| operation.deinit();
         if (self.overlay) |overlay| {
             switch (overlay) {
@@ -350,6 +358,23 @@ pub const Model = struct {
                         },
                     }
                 }
+                if (self.active == .aur and self.aur_installed_only and commands.refreshesList(key)) {
+                    if (self.aur_job == null) try self.startAurSearch(ctx, "");
+                    return ctx.consumeAndRedraw();
+                }
+                if (commands.togglesInstalled(key) and self.active != .upgrade) {
+                    if (self.active == .packages) {
+                        self.installed_only = !self.installed_only;
+                        try self.rebuildFilter();
+                    } else if (self.aur_job == null) {
+                        self.aur_installed_only = !self.aur_installed_only;
+                        try self.startAurSearch(ctx, "");
+                        self.aur_filtered.clearRetainingCapacity();
+                        self.aur_list.item_count = 0;
+                        self.aur_list.jumpToItem(0);
+                    }
+                    return ctx.consumeAndRedraw();
+                }
                 if (self.active == .upgrade) {
                     if (self.updatesView().handleKey(key)) |action| {
                         switch (action) {
@@ -405,7 +430,7 @@ pub const Model = struct {
                     self.refresh_after_upgrade = false;
                 }
                 if (self.refresh_aur_after_operation and self.aur_job == null) {
-                    if (self.aur_query.len > 0) try self.startAurSearch(ctx, self.aur_query);
+                    if (self.aur_installed_only or self.aur_query.len > 0) try self.startAurSearch(ctx, self.aur_query);
                     self.refresh_aur_after_operation = false;
                 }
                 if (loading or searching or installing or self.loading or self.updates_job != null or self.pkgbuild_job != null or self.aur_job != null) {
@@ -755,13 +780,19 @@ pub const Model = struct {
         const self: *Model = @ptrCast(@alignCast(ptr));
         const query = std.mem.trim(u8, str, " \t");
 
+        if (self.aur_job != null) return;
+        if (self.aur_installed_only) {
+            if (self.aur_list.cursor < self.aur_filtered.items.len)
+                self.overlay = .{ .aur = self.aur_filtered.items[self.aur_list.cursor] };
+            return ctx.consumeAndRedraw();
+        }
         // Enter with an unchanged query opens the selected result instead
         // of repeating the search
-        if (self.aur_packages.len > 0 and
+        if (self.aur_filtered.items.len > 0 and
             (query.len == 0 or std.mem.eql(u8, query, self.aur_query)))
         {
-            if (@as(usize, self.aur_list.cursor) < self.aur_packages.len) {
-                self.overlay = .{ .aur = &self.aur_packages[self.aur_list.cursor] };
+            if (@as(usize, self.aur_list.cursor) < self.aur_filtered.items.len) {
+                self.overlay = .{ .aur = self.aur_filtered.items[self.aur_list.cursor] };
                 return ctx.consumeAndRedraw();
             }
             return;
@@ -772,19 +803,20 @@ pub const Model = struct {
     }
 
     fn startAurSearch(self: *Model, ctx: *vxfw.EventContext, query: []const u8) !void {
+        try ctx.tick(100, self.widget());
         const job = try self.gpa.create(AurSearchJob);
         errdefer self.gpa.destroy(job);
-        job.* = .{};
+        job.* = .{ .installed_only = self.aur_installed_only };
 
         const duped = try self.gpa.dupe(u8, query);
+        errdefer self.gpa.free(duped);
+        const thread = try std.Thread.spawn(.{}, aurSearchThread, .{ job, duped });
         if (self.aur_query.len > 0) self.gpa.free(self.aur_query);
         self.aur_query = duped;
         self.aur_failed = false;
         self.aur_job = job;
 
-        const thread = try std.Thread.spawn(.{}, aurSearchThread, .{ job, duped });
-        thread.detach();
-        try ctx.tick(100, self.widget());
+        self.aur_thread = thread;
     }
 
     fn aurSearchThread(job: *AurSearchJob, query: []const u8) void {
@@ -793,12 +825,18 @@ pub const Model = struct {
         defer threaded.deinit();
 
         const cli: ShellyCli = .{ .allocator = alloc, .io = threaded.io() };
-        const parsed = cli.search_aur(query) catch {
+        const parsed = (if (job.installed_only) cli.list_aur_installed() else if (query.len == 0) std.json.parseFromSlice([]AurPackage, alloc, "[]", .{}) else cli.search_aur(query)) catch {
             job.failed = true;
             job.done.store(true, .release);
             return;
         };
 
+        if (job.installed_only) {
+            for (parsed.value) |*pkg| pkg.Installed = true;
+            job.result = parsed;
+            job.done.store(true, .release);
+            return;
+        }
         const installed = cli.get_installed_packages() catch {
             parsed.deinit();
             job.failed = true;
@@ -823,6 +861,8 @@ pub const Model = struct {
         const job = self.aur_job orelse return false;
         if (!job.done.load(.acquire)) return true;
 
+        if (self.aur_thread) |thread| thread.join();
+        self.aur_thread = null;
         const parsed = job.result;
         const failed = job.failed;
         self.aur_job = null;
@@ -839,8 +879,7 @@ pub const Model = struct {
             self.aur_parsed = p;
             self.aur_packages = p.value;
         }
-        self.aur_list.item_count = @intCast(self.aur_packages.len);
-        self.aur_list.jumpToItem(0);
+        try self.rebuildAurFilter();
         return false;
     }
 
@@ -1085,6 +1124,7 @@ pub const Model = struct {
                 }
             }
         }
+        if (self.installed_only) try self.rebuildFilter();
         // Reflect the outcome in the sudo prompt if it is still open
         if (self.overlay) |overlay| {
             switch (overlay) {
@@ -1136,9 +1176,32 @@ pub const Model = struct {
         try self.rebuildFilter();
     }
 
+    fn onAurQueryChange(ptr: ?*anyopaque, _: *vxfw.EventContext, _: []const u8) anyerror!void {
+        const self: *Model = @ptrCast(@alignCast(ptr orelse return));
+        if (self.aur_installed_only) try self.rebuildAurFilter();
+    }
+
+    fn rebuildAurFilter(self: *Model) Allocator.Error!void {
+        self.aur_filtered.clearRetainingCapacity();
+        if (self.aur_job != null) {
+            self.aur_list.item_count = 0;
+            self.aur_list.jumpToItem(0);
+            return;
+        }
+        const query = try self.aur_field.buf.dupe();
+        defer self.gpa.free(query);
+        for (self.aur_packages) |*pkg| {
+            if (!self.aur_installed_only or query.len == 0 or containsFold(pkg.Name, query) or containsFold(pkg.Description orelse "", query))
+                try self.aur_filtered.append(self.gpa, pkg);
+        }
+        self.aur_list.item_count = @intCast(self.aur_filtered.items.len);
+        self.aur_list.jumpToItem(0);
+    }
+
     fn rebuildFilter(self: *Model) Allocator.Error!void {
         self.filtered.clearRetainingCapacity();
         for (self.packages) |*pkg| {
+            if (self.installed_only and !pkg.Installed) continue;
             if (self.query.len == 0 or
                 containsFold(pkg.Name, self.query) or
                 containsFold(pkg.Description, self.query))
@@ -1177,6 +1240,7 @@ pub const Model = struct {
             .query = self.query,
             .filtered_count = self.filtered.items.len,
             .package_count = self.packages.len,
+            .installed_only = self.installed_only,
         };
     }
 
@@ -1187,7 +1251,8 @@ pub const Model = struct {
             .searching = self.aur_job != null,
             .aur_failed = self.aur_failed,
             .aur_query = self.aur_query,
-            .result_count = self.aur_packages.len,
+            .result_count = self.aur_filtered.items.len,
+            .installed_only = self.aur_installed_only,
         };
     }
 
@@ -1416,8 +1481,8 @@ pub const Model = struct {
 
     fn buildAurRow(ptr: *const anyopaque, idx: usize, _: usize) ?vxfw.Widget {
         const self: *const Model = @ptrCast(@alignCast(ptr));
-        if (idx >= self.aur_packages.len) return null;
-        const pkg = &self.aur_packages[idx];
+        if (idx >= self.aur_filtered.items.len) return null;
+        const pkg = self.aur_filtered.items[idx];
         return .{
             .userdata = @constCast(pkg),
             .drawFn = aur_view.drawAurRow,
@@ -1805,4 +1870,45 @@ test "operation PKGBUILD review owns each revision and returns to progress" {
     try std.testing.expectEqualStrings("2", shelly_operation.questionId(model.operation_question.?.value.question));
     try std.testing.expectEqual(pkgbuild_view.Action.decline, model.pkgbuildView().handleKey(.{ .codepoint = 'n' }).?);
     // Model.deinit owns the suspended progress prompt and outstanding review.
+}
+
+test "installed package filters combine local text and installed state" {
+    const model = try Model.init(std.testing.allocator);
+    defer model.deinit();
+    var packages = [_]Package{
+        .{ .Name = "editor", .Installed = true },
+        .{ .Name = "editor-extra", .Installed = false },
+        .{ .Name = "shell", .Installed = true },
+    };
+    model.packages = &packages;
+    model.installed_only = true;
+    try model.setQuery("editor");
+    try std.testing.expectEqual(@as(usize, 1), model.filtered.items.len);
+    try std.testing.expectEqualStrings("editor", model.filtered.items[0].Name);
+    model.installed_only = false;
+    try model.rebuildFilter();
+    try std.testing.expectEqual(@as(usize, 2), model.filtered.items.len);
+}
+
+test "installed AUR list filters locally and opens the displayed package" {
+    const model = try Model.init(std.testing.allocator);
+    defer model.deinit();
+    const packages = [_]AurPackage{
+        .{ .Name = "first", .Installed = true },
+        .{ .Name = "editor-git", .Installed = true },
+    };
+    model.aur_packages = &packages;
+    model.aur_installed_only = true;
+    try model.aur_field.buf.insertSliceAtCursor("EDITOR");
+    try model.rebuildAurFilter();
+    try std.testing.expectEqual(@as(usize, 1), model.aur_filtered.items.len);
+    try std.testing.expectEqualStrings("editor-git", model.aur_filtered.items[0].Name);
+    var ctx: vxfw.EventContext = .{ .io = undefined, .alloc = std.testing.allocator, .cmds = .empty };
+    defer ctx.cmds.deinit(std.testing.allocator);
+    try Model.onAurSubmit(model, &ctx, "EDITOR");
+    try std.testing.expectEqualStrings("editor-git", model.overlay.?.aur.Name);
+    model.overlay = null;
+    model.aur_field.buf.clearRetainingCapacity();
+    try model.rebuildAurFilter();
+    try std.testing.expectEqual(@as(usize, 2), model.aur_filtered.items.len);
 }

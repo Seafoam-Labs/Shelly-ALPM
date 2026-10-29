@@ -9,6 +9,7 @@ const formatEpoch = @import("detail_format.zig").formatEpoch;
 /// Borrows display state and widgets owned by the application.
 /// Query execution and user-action handling remain in Model.
 pub const View = struct {
+    installed_only: bool = false,
     aur_field: *vxfw.TextField,
     aur_list: *vxfw.ListView,
     searching: bool,
@@ -61,6 +62,8 @@ pub const View = struct {
         }
     }
     fn aurMessage(self: View, arena: Allocator) Allocator.Error!?struct { text: []const u8, red: bool } {
+        if (self.searching and self.installed_only) return .{ .text = "Loading installed AUR packages…", .red = false };
+        if (self.aur_failed and self.installed_only) return .{ .text = "Could not load installed AUR packages. Ctrl+R: retry.", .red = true };
         if (self.searching) {
             return .{
                 .text = try std.fmt.allocPrint(arena, "Searching AUR for '{s}'…", .{self.aur_query}),
@@ -70,6 +73,7 @@ pub const View = struct {
         if (self.aur_failed) {
             return .{ .text = "Could not search the configured AUR service.", .red = true };
         }
+        if (self.installed_only) return if (self.result_count == 0) .{ .text = "No installed AUR packages match the filter.", .red = false } else null;
         if (self.aur_query.len == 0) {
             return .{ .text = "Type a search term and press Enter to query the AUR.", .red = false };
         }
@@ -79,12 +83,15 @@ pub const View = struct {
         return null;
     }
     pub fn statusText(self: View, arena: Allocator) Allocator.Error![]const u8 {
+        if (self.searching and self.installed_only) return "Loading installed AUR packages…";
+        if (self.aur_failed and self.installed_only) return "Installed AUR query failed — Ctrl+R: retry";
         if (self.searching) {
             return try std.fmt.allocPrint(arena, "Searching AUR for '{s}'…", .{self.aur_query});
         }
         if (self.aur_failed) return "Could not search the configured AUR service.";
-        if (self.aur_query.len == 0) return "AUR — type a query and press Enter";
-        return try std.fmt.allocPrint(arena, "{d} AUR results for '{s}'", .{
+        if (self.installed_only) return std.fmt.allocPrint(arena, "{d} installed AUR packages — Ctrl+L: search AUR — Ctrl+R: refresh", .{self.result_count});
+        if (self.aur_query.len == 0) return "AUR — Enter: search — Ctrl+L: installed";
+        return try std.fmt.allocPrint(arena, "{d} AUR results for '{s}' — Ctrl+L: installed", .{
             self.result_count, self.aur_query,
         });
     }

@@ -9,6 +9,7 @@ const formatSize = @import("detail_format.zig").formatSize;
 /// Borrows display state and widgets owned by the application.
 /// Query execution and user-action handling remain in Model.
 pub const View = struct {
+    installed_only: bool = false,
     text_field: *vxfw.TextField,
     list_view: *vxfw.ListView,
     selected_list_view: *vxfw.ListView,
@@ -71,12 +72,13 @@ pub const View = struct {
     pub fn statusText(self: View, arena: Allocator) Allocator.Error![]const u8 {
         if (self.loading) return "Loading packages…";
         if (self.load_failed) return "Could not load the package list.";
+        if (self.installed_only) return std.fmt.allocPrint(arena, "{d} installed packages match — Ctrl+L: all", .{self.filtered_count});
         if (self.query.len > 0) {
-            return try std.fmt.allocPrint(arena, "{d} of {d} packages match", .{
+            return try std.fmt.allocPrint(arena, "{d} of {d} packages match — Ctrl+L: installed", .{
                 self.filtered_count, self.package_count,
             });
         }
-        return try std.fmt.allocPrint(arena, "{d} packages", .{self.package_count});
+        return try std.fmt.allocPrint(arena, "{d} packages — Ctrl+L: installed", .{self.package_count});
     }
 };
 

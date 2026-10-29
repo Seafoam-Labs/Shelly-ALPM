@@ -120,3 +120,9 @@ The intended flow is browse → details → review/provider questions → execut
 - Browsing previews remain separate from operation approval. Operation reviews use the CLI's exact source, findings, attachments, and question ID.
 - Fake-process checks cover install/upgrade, repeated questions, stale answers, decline, authorization failure, missing completion, heavy stderr, and shutdown during review. Live mutations and sudo policies remain unverified.
 - Native transaction review, cancellation, and terminal recovery remain open.
+
+### Installed package browsing (2026-10-29)
+
+- Ctrl+L toggles installed-only browsing on both package pages. Text filters remain available; Enter opens details and existing removal actions.
+- System browsing filters installed flags. AUR browsing uses `list aur`, independently of remote search; completed AUR operations refresh the active list.
+- AUR workers are joined and unconsumed results freed on exit. Zig 0.17 build/tests and focused filtering/selection tests pass; live installed-list/removal checks remain open.
