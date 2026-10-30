@@ -34,14 +34,8 @@ pub const View = struct {
         const search_height: u16 = if (bordered_search) 3 else 1;
         const content_row = 1 + search_height;
         const height = max.height -| (content_row + 1);
-
-        const search_labels = [_]Border.BorderLabel{.{
-            .text = "Search packages",
-            .alignment = .top_left,
-        }};
         var search_border: Border = .{
             .child = self.text_field.widget(),
-            .labels = &search_labels,
             .style = if (!self.list_active and !self.details_active) .{ .fg = .{ .index = 4 } } else .{},
         };
         try children.append(arena, .{
