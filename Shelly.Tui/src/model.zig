@@ -1686,8 +1686,6 @@ pub const Model = struct {
         defer installed_names.deinit(self.gpa);
         var available_names: std.ArrayList([]const u8) = .empty;
         defer available_names.deinit(self.gpa);
-        var installed: usize = 0;
-        var available: usize = 0;
         var excluded: usize = 0;
         const highlighted = self.selectedPackage();
         for (packages) |pkg| {
@@ -1709,10 +1707,8 @@ pub const Model = struct {
             if (duplicate) continue;
             try targets.append(self.gpa, pkg.Name);
             if (pkg.Installed) {
-                installed += 1;
                 try installed_names.append(self.gpa, pkg.Name);
             } else {
-                available += 1;
                 try available_names.append(self.gpa, pkg.Name);
             }
         }
@@ -1728,15 +1724,16 @@ pub const Model = struct {
             if (group.names.len == 0) continue;
             const names = try std.mem.join(self.gpa, ", ", group.names);
             defer self.gpa.free(names);
-            const line = try std.fmt.allocPrint(self.gpa, "{s}: {f}\n", .{ group.label, diagnostics.safe(names) });
+            const line = try std.fmt.allocPrint(self.gpa, "{s} ({d}): {f}\n", .{ group.label, group.names.len, diagnostics.safe(names) });
             defer self.gpa.free(line);
             try review.appendSlice(self.gpa, line);
         }
-        const summary = if (action == .remove)
-            try std.fmt.allocPrint(self.gpa, "Remove {d} installed packages.\n{d} uninstalled selections excluded.\nUnused dependencies and configuration will be kept.\n", .{ installed, excluded })
-        else
-            try std.fmt.allocPrint(self.gpa, "Install {d} available packages; reinstall {d} installed packages.\n", .{ available, installed });
-        defer self.gpa.free(summary);
+        if (excluded > 0) {
+            const note = try std.fmt.allocPrint(self.gpa, "{d} uninstalled selections excluded.\n", .{excluded});
+            defer self.gpa.free(note);
+            try review.appendSlice(self.gpa, note);
+        }
+        if (action == .remove) try review.appendSlice(self.gpa, "Unused dependencies and configuration will be kept.\n");
         const prompt = try self.gpa.create(SudoPrompt);
         prompt.* = .{ .name = "", .backend = backend, .action = action, .password = .empty };
         errdefer prompt.deinit(self.gpa);
@@ -1752,7 +1749,7 @@ pub const Model = struct {
             try owned.append(self.gpa, copy);
         }
         prompt.targets = try owned.toOwnedSlice(self.gpa);
-        prompt.review_text = try std.mem.concat(self.gpa, u8, &.{ summary, review.items });
+        prompt.review_text = try self.gpa.dupe(u8, review.items);
         self.overlay = .{ .sudo = prompt };
     }
 
@@ -3666,8 +3663,8 @@ test "native batch selection survives filtering and confirms mixed targets" {
     var prompt = model.overlay.?.sudo;
     try std.testing.expectEqualStrings("available", prompt.targets[0]);
     try std.testing.expectEqualStrings("installed", prompt.targets[1]);
-    try std.testing.expect(std.mem.indexOf(u8, prompt.review_text, "Install 1 available packages; reinstall 1 installed packages.") != null);
-    try std.testing.expect(std.mem.indexOf(u8, prompt.review_text, "Reinstall: installed") != null);
+    try std.testing.expect(std.mem.indexOf(u8, prompt.review_text, "Install (1): available") != null);
+    try std.testing.expect(std.mem.indexOf(u8, prompt.review_text, "Reinstall (1): installed") != null);
     // Confirmation owns its targets, independently of the source records.
     packages[0].Name = "changed-source-name";
     try std.testing.expectEqualStrings("available", prompt.targets[0]);
@@ -3678,7 +3675,7 @@ test "native batch selection survives filtering and confirms mixed targets" {
     try std.testing.expectEqual(@as(usize, 1), prompt.targets.len);
     try std.testing.expectEqualStrings("installed", prompt.targets[0]);
     try std.testing.expect(std.mem.indexOf(u8, prompt.review_text, "1 uninstalled selections excluded.") != null);
-    try std.testing.expect(std.mem.indexOf(u8, prompt.review_text, "Remove: installed") != null);
+    try std.testing.expect(std.mem.indexOf(u8, prompt.review_text, "Remove (1): installed") != null);
     model.closeOverlay();
     model.clearCompletedSelection(&.{"installed"});
     try std.testing.expectEqual(@as(usize, 1), model.selected_packages.items.len);
@@ -3692,7 +3689,7 @@ test "native batch confirmation scrolls long reviews and keeps password entry vi
     vxfw.DrawContext.init(.unicode);
     const model = try Model.init(std.testing.allocator);
     defer model.deinit();
-    var packages: [30]Package = undefined;
+    var packages: [60]Package = undefined;
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     for (&packages, 0..) |*pkg, i| pkg.* = .{ .Name = try std.fmt.allocPrint(arena.allocator(), "package-{d}", .{i}) };
@@ -3717,7 +3714,7 @@ test "native batch confirmation scrolls long reviews and keeps password entry vi
     try std.testing.expectEqual(@as(usize, 0), prompt.password.items.len);
     try Model.typeErasedCaptureHandler(model, &ctx, .{ .key_press = .{ .codepoint = 'q', .mods = .{ .ctrl = true } } });
     try std.testing.expect(model.overlay == null);
-    try std.testing.expectEqual(@as(usize, 30), model.selected_packages.items.len);
+    try std.testing.expectEqual(@as(usize, 60), model.selected_packages.items.len);
 }
 
 test "native batch completion refreshes actual state and clears only successful targets" {
@@ -4142,7 +4139,7 @@ test "AUR batch selections own names across searches and preserve per-package re
     try std.testing.expectEqual(@as(usize, 2), prompt.targets.len);
     try std.testing.expectEqualStrings("first", prompt.targets[0]);
     try std.testing.expectEqualStrings("second", prompt.targets[1]);
-    try std.testing.expect(std.mem.indexOf(u8, prompt.review_text, "Install 1 available packages; reinstall 1 installed packages.") != null);
+    try std.testing.expect(std.mem.indexOf(u8, prompt.review_text, "Install (1): first") != null);
     model.clearAurSelection(); // Confirmation owns its target copies.
     try std.testing.expectEqualStrings("first", prompt.targets[0]);
     prompt.state = .running;

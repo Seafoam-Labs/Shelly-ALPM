@@ -144,16 +144,19 @@ pub const Panel = struct {
             var text: vxfw.Text = .{ .text = "Enlarge the terminal to view the operation." };
             return text.draw(ctx);
         }
-        const title = try std.fmt.allocPrint(ctx.arena, "{s} {f} — {s}", .{
-            view.action.verb(), diagnostics.safe(view.name),
-            switch (view.state) {
-                .entering => if (view.elevated) "Authorization" else "Confirmation",
-                .running => "Running",
-                .succeeded => "Complete",
-                .failed => "Failed",
-                .declined => "Declined",
-            },
-        });
+        const title = if (view.state == .entering)
+            (if (view.elevated) "Authentication" else "Confirmation")
+        else
+            try std.fmt.allocPrint(ctx.arena, "{s} {f} — {s}", .{
+                view.action.verb(), diagnostics.safe(view.name),
+                switch (view.state) {
+                    .entering => if (view.elevated) "Authentication" else "Confirmation",
+                    .running => "Running",
+                    .succeeded => "Complete",
+                    .failed => "Failed",
+                    .declined => "Declined",
+                },
+            });
         const labels = [_]Border.BorderLabel{.{ .text = title, .alignment = .top_left }};
         var border: Border = .{ .child = .{ .userdata = self, .drawFn = drawContent }, .labels = &labels };
         return border.draw(ctx.withConstraints(size, .{ .width = size.width, .height = size.height }));
