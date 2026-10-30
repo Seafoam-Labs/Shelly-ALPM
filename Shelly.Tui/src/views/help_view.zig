@@ -37,8 +37,8 @@ pub const Panel = struct {
     pub fn text(self: *const Panel, arena: Allocator) Allocator.Error![]const u8 {
         var lines: std.ArrayList([]const u8) = .empty;
         const heading: []const u8 = switch (self.context.mode) {
-            .search => "Packages — search",
-            .packages => "Packages — list",
+            .search => "Packages browsing",
+            .packages => "Packages list",
             .details => "Package details",
             .aur => "AUR browsing",
             .flatpak => "Flatpak browsing",

@@ -333,10 +333,8 @@ pub const View = struct {
             if (self.choices)
                 if (self.answer_error.len > 0) self.answer_error else if (self.optional_dependencies) "Check the dependencies to install; none is also valid." else "Select one provider and press Enter."
             else if (self.answer_error.len > 0) self.answer_error else "Approval applies only to this CLI request."
-        else if (self.loading or self.failure != null or (self.scroll.item_count orelse 0) == 0)
-            "Read-only preview; operation review is separate."
         else
-            try std.fmt.allocPrint(ctx.arena, "{s}: wrap {s} · Read-only", .{ try commands.label(ctx.arena, .toggle_wrap), if (self.wrap) "on" else "off" }), .softwrap = false };
+            try std.fmt.allocPrint(ctx.arena, "{s}: wrap {s}", .{ try commands.label(ctx.arena, .toggle_wrap), if (self.wrap) "on" else "off" }), .softwrap = false };
         try children.append(ctx.arena, .{
             .origin = .{ .row = inner_height - 1, .col = 0 },
             .surface = try note.draw(ctx.withConstraints(.{}, .{ .width = inner_width, .height = 1 })),
