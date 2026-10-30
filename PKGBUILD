@@ -25,8 +25,8 @@ source=("${pkgname}-${pkgver}.tar.gz::https://github.com/Seafoam-Labs/Shelly-ALP
         'com.shellyorg.shelly-notifications.desktop'
         'shelly-flatpak-integrate')
 
-sha256sums=('6ee7b2ff8ea57dd6481696787b260f56a31eff4cbcd408d6bcf06c0c49a707d5'
-            '9f551f28d79748c7e255a35cb577081b3263e65d290b4809e10066ed17ce30e5'
+sha256sums=('6ac44dff19a40069d35d7f5c7c86ae3ef1409b910f525c9fa464534706f43166'
+            '4c30072655b7aa24c6b8472fc3c1b2be40bdda5bc7cc4a1a9bae26bf37fe957f'
             '4b7cb0e42eb322de9eb616d22ca05823f91d178db5b8b67497d497ed495aca9c'
             'cf0dc0a6d1865b9010054b36941e7bf4d445c3e7549219889f07ab08283c5c0f'
             '07bca40395c180578450c523ea052b036aa8197d8a871efcce55f937c101c323')
