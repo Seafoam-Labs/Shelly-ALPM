@@ -4,7 +4,7 @@
 # The devario profile also compiles out Arch news, including upgrade-time fetches.
 
 pkgname=shelly
-pkgver=3.1.9
+pkgver=3.1.10
 pkgrel=1
 # Update this pin to a published commit with path-profile and Devario news support before release.
 _commit=bcbba6aaaf003aefdbe30b75023142c75e96e604
