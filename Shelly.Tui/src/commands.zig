@@ -15,6 +15,7 @@ pub const Id = enum {
     search,
     select,
     mark,
+    clear_selection,
     install,
     remove,
     preview,
@@ -50,6 +51,7 @@ pub const Bindings = struct {
     search: vaxis.Key = .{ .codepoint = '/' },
     select: vaxis.Key = .{ .codepoint = vaxis.Key.enter },
     mark: vaxis.Key = .{ .codepoint = vaxis.Key.space },
+    clear_selection: vaxis.Key = .{ .codepoint = 'u', .mods = .{ .ctrl = true } },
     install: vaxis.Key = .{ .codepoint = 'i' },
     remove: vaxis.Key = .{ .codepoint = 'r' },
     preview: vaxis.Key = .{ .codepoint = 'p' },
@@ -291,6 +293,8 @@ pub fn entries(arena: std.mem.Allocator, context: Context) std.mem.Allocator.Err
     var list: std.ArrayList(Entry) = .empty;
     switch (context.mode) {
         .search, .packages => {
+            if (context.mode == .packages and context.selected_count > 0)
+                try add(arena, &list, .clear_selection, "Clear", "Clear all package selections, including entries hidden by filters");
             if (context.mode == .search) {
                 try add(arena, &list, .previous, "Browse", "Move from search into the package list");
                 try add(arena, &list, .next, "Browse", "Move from search into the package list");

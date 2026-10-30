@@ -567,6 +567,12 @@ pub const Model = struct {
                 }
                 if (self.active == .packages and command == null) {
                     if (self.package_list_active) {
+                        if (commands.matches(key, .clear_selection)) {
+                            self.selected_packages.clearRetainingCapacity();
+                            self.selected_list_view.item_count = 0;
+                            try self.setNotice("");
+                            return ctx.consumeAndRedraw();
+                        }
                         if (commands.packageAction(key)) |action| {
                             try self.openNativePrompt(if (action == .install) .install else .remove);
                             return ctx.consumeAndRedraw();
@@ -3648,4 +3654,44 @@ test "help preserves authentication input and follows operation stages" {
     try std.testing.expect(!model.help_open);
     try std.testing.expect(model.overlay.?.sudo == prompt);
     try std.testing.expectEqualStrings("fixture-secret", prompt.password.items);
+}
+
+test "clear selection includes filtered packages and preserves search and cursor" {
+    const original = commands.bindings;
+    defer commands.bindings = original;
+    const model = try Model.init(std.testing.allocator);
+    defer model.deinit();
+    var packages = [_]Package{ .{ .Name = "visible" }, .{ .Name = "hidden", .Installed = true } };
+    model.packages = &packages;
+    model.loading = false;
+    try model.rebuildFilter();
+    try model.selected_packages.appendSlice(std.testing.allocator, &.{ "visible", "hidden" });
+    try model.setQuery("visible");
+    var ctx: vxfw.EventContext = .{ .io = undefined, .alloc = std.testing.allocator, .cmds = .empty };
+    defer ctx.cmds.deinit(std.testing.allocator);
+    const clear: vxfw.Event = .{ .key_press = .{ .codepoint = 'u', .mods = .{ .ctrl = true } } };
+    // The search field retains Ctrl+U for editing its text.
+    try Model.typeErasedCaptureHandler(model, &ctx, clear);
+    try std.testing.expectEqual(@as(usize, 2), model.selected_packages.items.len);
+    model.package_list_active = true;
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const help = try commands.entries(arena.allocator(), model.commandContext());
+    var advertised = false;
+    for (help) |entry| if (entry.id == .clear_selection) {
+        advertised = true;
+    };
+    try std.testing.expect(advertised);
+    const cursor = model.list_view.cursor;
+    try Model.typeErasedCaptureHandler(model, &ctx, clear);
+    try std.testing.expectEqual(@as(usize, 0), model.selected_packages.items.len);
+    try std.testing.expectEqualStrings("visible", model.query);
+    try std.testing.expectEqual(cursor, model.list_view.cursor);
+    try std.testing.expect(model.package_list_active);
+    for (try commands.entries(arena.allocator(), model.commandContext())) |entry|
+        try std.testing.expect(entry.id != .clear_selection);
+    try model.selected_packages.append(std.testing.allocator, "hidden");
+    commands.bindings.clear_selection = .{ .codepoint = 'k', .mods = .{ .ctrl = true } };
+    try Model.typeErasedCaptureHandler(model, &ctx, .{ .key_press = .{ .codepoint = 'k', .mods = .{ .ctrl = true } } });
+    try std.testing.expectEqual(@as(usize, 0), model.selected_packages.items.len);
 }

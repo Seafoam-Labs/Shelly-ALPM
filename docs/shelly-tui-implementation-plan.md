@@ -165,7 +165,7 @@ The intended flow is browse → details → review/provider questions → execut
 
 - Enter toggles selection; Right focuses details. I installs/reinstalls selected packages; R removes only installed selections. With no selection, actions use the highlighted package. Checkboxes and installed indicators are separate; selections survive filtering.
 - Confirmation lists all targets, install/reinstall counts, and excluded removal entries in a scrollable review. One CLI operation receives separate target arguments. State refreshes after every attempt; success clears completed selections, while skipped entries and failed selections remain.
-- Zig 0.17 build/test and 57 model/service/view tests pass. Six fake-process cases cover install/remove success, failure, and authorization failure. No real batch mutation was run. AUR/Flatpak batching remains deferred.
+- Zig 0.17 build/test and 57 model/service/view tests pass. Six fake-process cases cover install/remove success, failure, and authorization failure. Maintainer subsequently verified live native batch installation and removal. AUR/Flatpak batching remains deferred.
 
 ### Reserved operation panel (2026-10-30)
 
@@ -178,3 +178,7 @@ The intended flow is browse → details → review/provider questions → execut
 - F1 opens/closes scrollable help in the native details pane, or the content area on narrow terminals and other pages. Selection, details scroll, password input, and active operations are preserved. Help follows operation-stage changes while open.
 - Footer hints and help use live binding definitions in `commands.zig`; key labels are rebuilt when drawn. Future Settings keybinding persistence/loading remains separate work.
 - Build/test and 67 model/service/view tests pass, including live binding changes and focus/input restoration. A fake-command PTY check covers F1 during search, authentication, progress, completion, and resizing; no real package mutations were run.
+
+### Clear package selection (2026-10-30)
+
+- Ctrl+U clears native selections while the package list is focused, including filtered-out entries. Search keeps Ctrl+U for text editing; detail/review panes keep their scrolling behavior. The live binding registry supplies help/footer hints.
