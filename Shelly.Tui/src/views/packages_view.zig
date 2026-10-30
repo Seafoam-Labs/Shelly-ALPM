@@ -36,7 +36,7 @@ pub const View = struct {
         const height = max.height -| (content_row + 1);
         var search_border: Border = .{
             .child = self.text_field.widget(),
-            .style = if (!self.list_active and !self.details_active) .{ .fg = .{ .index = 4 } } else .{},
+            .style = if (!self.list_active and !self.details_active) .{ .fg = .{ .index = 7 }, .bold = true } else .{},
         };
         try children.append(arena, .{
             .origin = .{ .row = 1, .col = 0 },
@@ -68,7 +68,7 @@ pub const View = struct {
             var border: Border = .{
                 .child = content,
                 .labels = &labels,
-                .style = if (self.list_active and !self.details_active) .{ .fg = .{ .index = 4 } } else .{},
+                .style = if (self.list_active and !self.details_active) .{ .fg = .{ .index = 7 }, .bold = true } else .{},
             };
             try children.append(arena, .{
                 .origin = .{ .row = @intCast(content_row), .col = 0 },
@@ -94,7 +94,7 @@ pub const View = struct {
             var border: Border = .{
                 .child = if (self.selected != null and !self.loading and !self.load_failed) self.details_scroll.widget() else empty.widget(),
                 .labels = &labels,
-                .style = if (self.details_active) .{ .fg = .{ .index = 4 } } else .{},
+                .style = if (self.details_active) .{ .fg = .{ .index = 7 }, .bold = true } else .{},
             };
             try children.append(arena, .{
                 .origin = .{ .row = @intCast(content_row), .col = if (split) left_w else 0 },

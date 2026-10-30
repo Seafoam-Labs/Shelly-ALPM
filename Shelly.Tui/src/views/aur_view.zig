@@ -21,7 +21,7 @@ pub const View = struct {
         const max = ctx.max.size();
 
         // Row 1: search prompt + field
-        var prompt: vxfw.Text = .{ .text = "❯", .style = .{ .fg = .{ .index = 4 } } };
+        var prompt: vxfw.Text = .{ .text = "❯", .style = .{ .fg = .{ .index = 7 } } };
         try children.append(arena, .{
             .origin = .{ .row = 1, .col = 0 },
             .surface = try prompt.draw(ctx.withConstraints(

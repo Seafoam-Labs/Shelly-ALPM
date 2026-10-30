@@ -1881,7 +1881,7 @@ pub const Model = struct {
             spans[i] = .{
                 .text = try std.fmt.allocPrint(arena, " {d} {s} ", .{ i + 1, tab.title() }),
                 .style = if (tab == self.active)
-                    .{ .bold = true, .reverse = true, .fg = .{ .index = 4 } }
+                    .{ .bold = true, .reverse = true, .fg = .{ .index = 7 } }
                 else
                     .{ .fg = .{ .index = 245 } },
             };
@@ -2141,7 +2141,7 @@ const TabBar = struct {
         var col: u16 = @intCast(self.start_col);
         for (spans) |span| {
             const selected = span.style.reverse;
-            const selected_style: vaxis.Style = .{ .bg = .{ .index = 4 }, .fg = .{ .index = 0 }, .bold = true };
+            const selected_style: vaxis.Style = .{ .bg = .{ .index = 7 }, .fg = .{ .index = 0 }, .bold = true };
             for (span.text, 0..) |_, offset| {
                 surface.writeCell(col + @as(u16, @intCast(offset)), @intCast(self.label_row), .{
                     .char = .{ .grapheme = span.text[offset .. offset + 1], .width = 1 },
