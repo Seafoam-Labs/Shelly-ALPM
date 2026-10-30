@@ -1,4 +1,5 @@
 const std = @import("std");
+const Border = @import("border.zig");
 const vaxis = @import("vaxis");
 const vxfw = vaxis.vxfw;
 const Allocator = std.mem.Allocator;
@@ -34,11 +35,11 @@ pub const View = struct {
         const content_row = 1 + search_height;
         const height = max.height -| (content_row + 1);
 
-        const search_labels = [_]vxfw.Border.BorderLabel{.{
+        const search_labels = [_]Border.BorderLabel{.{
             .text = "Search packages",
             .alignment = .top_left,
         }};
-        var search_border: vxfw.Border = .{
+        var search_border: Border = .{
             .child = self.text_field.widget(),
             .labels = &search_labels,
             .style = if (!self.list_active and !self.details_active) .{ .fg = .{ .index = 4 } } else .{},
@@ -65,12 +66,12 @@ pub const View = struct {
                 null;
             const list_width = left_w -| @as(u16, if (split) 1 else 0);
             var label: vxfw.Text = .{ .text = message orelse "" };
-            const labels = [_]vxfw.Border.BorderLabel{.{
+            const labels = [_]Border.BorderLabel{.{
                 .text = if (self.installed_only) "Installed packages" else "Packages",
                 .alignment = .top_left,
             }};
             const content = if (message != null) label.widget() else self.list_view.widget();
-            var border: vxfw.Border = .{
+            var border: Border = .{
                 .child = content,
                 .labels = &labels,
                 .style = if (self.list_active and !self.details_active) .{ .fg = .{ .index = 4 } } else .{},
@@ -88,7 +89,7 @@ pub const View = struct {
         }
 
         if ((split or self.details_active) and right_w >= 2 and height >= 2) {
-            const labels = [_]vxfw.Border.BorderLabel{.{
+            const labels = [_]Border.BorderLabel{.{
                 .text = if (self.selected) |pkg|
                     try std.fmt.allocPrint(arena, "{f}", .{diagnostics.safe(pkg.Name)})
                 else
@@ -96,7 +97,7 @@ pub const View = struct {
                 .alignment = .top_left,
             }};
             var empty: vxfw.Text = .{ .text = if (self.loading) "Loading packages…" else if (self.load_failed) "Package details unavailable." else "Select a package to see details." };
-            var border: vxfw.Border = .{
+            var border: Border = .{
                 .child = if (self.selected != null and !self.loading and !self.load_failed) self.details_scroll.widget() else empty.widget(),
                 .labels = &labels,
                 .style = if (self.details_active) .{ .fg = .{ .index = 4 } } else .{},
@@ -213,9 +214,8 @@ fn appendSection(arena: Allocator, lines: *std.ArrayList([]const u8), title: []c
 /// ScrollView builds this single wrapped document on demand in the frame arena.
 pub fn drawDetails(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
     const pkg: *const Package = @ptrCast(@alignCast(ptr));
-    const body = try std.fmt.allocPrint(ctx.arena, "{f}\n\n{s}", .{
+    const body = try std.fmt.allocPrint(ctx.arena, "{f}", .{
         diagnostics.safe(try detailsText(ctx.arena, pkg)),
-        if (pkg.Installed) "I: install/reinstall   R: remove" else "I: install",
     });
     var text: vxfw.Text = .{ .text = body, .softwrap = true };
     // ScrollView allows horizontal overflow and supplies its viewport width

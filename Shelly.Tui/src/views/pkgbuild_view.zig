@@ -1,4 +1,5 @@
 const std = @import("std");
+const Border = @import("border.zig");
 const vaxis = @import("vaxis");
 const vxfw = vaxis.vxfw;
 const commands = @import("../commands.zig");
@@ -229,11 +230,11 @@ pub const View = struct {
         };
         const holder = try ctx.arena.create(FixedContent);
         holder.* = .{ .surface = content };
-        const labels = [_]vxfw.Border.BorderLabel{.{
+        const labels = [_]Border.BorderLabel{.{
             .text = if (self.review) "Operation review" else "PKGBUILD preview",
             .alignment = .top_left,
         }};
-        const border = try ctx.arena.create(vxfw.Border);
+        const border = try ctx.arena.create(Border);
         border.* = .{ .child = holder.widget(), .labels = &labels };
         const surface = try border.draw(ctx.withConstraints(
             .{ .width = width, .height = height },

@@ -1,4 +1,5 @@
 const std = @import("std");
+const Border = @import("views/border.zig");
 const Settings = @import("models/settings.zig").Settings;
 const settings_service = @import("services/settings.zig");
 const settings_view = @import("views/settings_view.zig");
@@ -1813,23 +1814,30 @@ pub const Model = struct {
 
         var children: std.ArrayList(vxfw.SubSurface) = .empty;
 
-        // Row 0: tab bar
+        const navigation_height: u16 = if (max.width >= 2 and max.height >= 8) 3 else 1;
+        const content_offset = navigation_height - 1;
+
+        // Navigation occupies its own rows above every page.
         const tab_bar = try self.drawTabBar(arena);
         try children.append(arena, .{
             .origin = .{ .row = 0, .col = 0 },
             .surface = try tab_bar.draw(ctx.withConstraints(
                 ctx.min,
-                .{ .width = max.width, .height = 1 },
+                .{ .width = max.width, .height = navigation_height },
             )),
         });
 
+        const content_start = children.items.len;
+        const content_ctx = ctx.withConstraints(.{}, .{ .width = max.width, .height = max.height - content_offset });
         switch (self.active) {
-            .packages => try self.packagesView().appendContent(ctx, &children),
-            .aur => try self.aurView().appendContent(ctx, &children),
-            .upgrade => try self.updatesView().appendContent(ctx, &children),
-            .flatpak => try self.flatpakView().appendContent(ctx, &children),
-            .settings => try self.settingsView().appendContent(ctx, &children),
+            .packages => try self.packagesView().appendContent(content_ctx, &children),
+            .aur => try self.aurView().appendContent(content_ctx, &children),
+            .upgrade => try self.updatesView().appendContent(content_ctx, &children),
+            .flatpak => try self.flatpakView().appendContent(content_ctx, &children),
+            .settings => try self.settingsView().appendContent(content_ctx, &children),
         }
+
+        for (children.items[content_start..]) |*child| child.origin.row += @intCast(content_offset);
 
         // Bottom row: status bar
         var status: vxfw.Text = .{
@@ -1871,9 +1879,9 @@ pub const Model = struct {
         const spans = try arena.alloc(vxfw.RichText.TextSpan, tabs.len);
         for (tabs, 0..) |tab, i| {
             spans[i] = .{
-                .text = try std.fmt.allocPrint(arena, " {d}:{s} ", .{ i + 1, tab.title() }),
+                .text = try std.fmt.allocPrint(arena, " {d} {s} ", .{ i + 1, tab.title() }),
                 .style = if (tab == self.active)
-                    .{ .bold = true, .reverse = true }
+                    .{ .bold = true, .reverse = true, .fg = .{ .index = 4 } }
                 else
                     .{ .fg = .{ .index = 245 } },
             };
@@ -1935,8 +1943,8 @@ pub const Model = struct {
         if (box_width < 20 or box_height < 6) return null;
 
         var text: vxfw.Text = .{ .text = body };
-        const labels = [_]vxfw.Border.BorderLabel{.{ .text = title, .alignment = .top_left }};
-        var border: vxfw.Border = .{
+        const labels = [_]Border.BorderLabel{.{ .text = title, .alignment = .top_left }};
+        var border: Border = .{
             .child = text.widget(),
             .labels = &labels,
         };
@@ -1987,8 +1995,8 @@ pub const Model = struct {
         if (box_width < 30 or box_height < 8) return null;
 
         var text: vxfw.Text = .{ .text = body };
-        const labels = [_]vxfw.Border.BorderLabel{.{ .text = if (prompt.elevated) "Administrator privileges" else "Confirm Flatpak operation", .alignment = .top_left }};
-        var border: vxfw.Border = .{
+        const labels = [_]Border.BorderLabel{.{ .text = if (prompt.elevated) "Administrator privileges" else "Confirm Flatpak operation", .alignment = .top_left }};
+        var border: Border = .{
             .child = text.widget(),
             .labels = &labels,
         };
@@ -2063,12 +2071,14 @@ pub const Model = struct {
 
 };
 
-/// A clickable tab bar. Only widgets with an event handler participate in
-/// hit testing, so this wraps the RichText instead of using it bare.
+/// A compact centered bar with a filled highlight for the selected tab.
 const TabBar = struct {
     model: *Model,
     tabs: []const Tab,
     rich: vxfw.RichText,
+    first_visible: usize = 0,
+    start_col: i16 = 0,
+    label_row: i16 = 0,
 
     pub fn widget(self: *TabBar) vxfw.Widget {
         return .{
@@ -2080,7 +2090,68 @@ const TabBar = struct {
 
     fn drawFn(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
         const self: *TabBar = @ptrCast(@alignCast(ptr));
-        return self.rich.draw(ctx);
+        const size = ctx.max.size();
+        const framed = size.height >= 3 and size.width >= 8;
+        const padding: usize = if (framed) 4 else 0;
+        const width = size.width -| @as(u16, if (framed) 8 else 0);
+        const caps: usize = 0;
+        var active: usize = 0;
+        for (self.tabs, 0..) |tab, index| {
+            if (tab == self.model.active) active = index;
+        }
+        var first: usize = 0;
+        var end = self.tabs.len;
+        var total: usize = (self.tabs.len -| 1) + caps;
+        for (self.rich.text) |span| total += span.text.len;
+        while (total > width and end - first > 1) {
+            if (active - first > end - 1 - active) {
+                total -= self.rich.text[first].text.len + 1;
+                first += 1;
+            } else {
+                end -= 1;
+                total -= self.rich.text[end].text.len + 1;
+            }
+        }
+        const spans = try ctx.arena.dupe(vxfw.RichText.TextSpan, self.rich.text[first..end]);
+        if (total > width) {
+            const label = std.mem.trim(u8, spans[0].text, " ");
+            spans[0].text = label[0..@min(width -| caps, label.len)];
+            total = spans[0].text.len + caps;
+        }
+        self.first_visible = first;
+        self.rich.text = spans;
+        const island_width: u16 = @intCast(total + padding);
+        const island_col = (size.width - island_width) / 2;
+        self.start_col = @intCast(island_col + padding / 2);
+        self.label_row = if (size.height >= 3) 1 else 0;
+        const surface = try vxfw.Surface.init(ctx.arena, self.widget(), size);
+        @memset(surface.buffer, .{});
+        if (framed) {
+            const edge = island_col + island_width - 1;
+            surface.writeCell(island_col, 0, .{ .char = .{ .grapheme = "┌", .width = 1 } });
+            surface.writeCell(edge, 0, .{ .char = .{ .grapheme = "┐", .width = 1 } });
+            surface.writeCell(island_col, 2, .{ .char = .{ .grapheme = "└", .width = 1 } });
+            surface.writeCell(edge, 2, .{ .char = .{ .grapheme = "┘", .width = 1 } });
+            surface.writeCell(island_col, 1, .{ .char = .{ .grapheme = "│", .width = 1 } });
+            surface.writeCell(edge, 1, .{ .char = .{ .grapheme = "│", .width = 1 } });
+            for (island_col + 1..edge) |col| {
+                for ([_]u16{ 0, 2 }) |row| surface.writeCell(@intCast(col), row, .{ .char = .{ .grapheme = "─", .width = 1 } });
+            }
+        }
+        var col: u16 = @intCast(self.start_col);
+        for (spans) |span| {
+            const selected = span.style.reverse;
+            const selected_style: vaxis.Style = .{ .bg = .{ .index = 4 }, .fg = .{ .index = 0 }, .bold = true };
+            for (span.text, 0..) |_, offset| {
+                surface.writeCell(col + @as(u16, @intCast(offset)), @intCast(self.label_row), .{
+                    .char = .{ .grapheme = span.text[offset .. offset + 1], .width = 1 },
+                    .style = if (selected) selected_style else span.style,
+                });
+            }
+            col += @intCast(span.text.len);
+            col +|= 1;
+        }
+        return surface;
     }
 
     fn handleEvent(ptr: *anyopaque, ctx: *vxfw.EventContext, event: vxfw.Event) anyerror!void {
@@ -2089,16 +2160,16 @@ const TabBar = struct {
             // Mouse coordinates arrive local to this surface
             .mouse => |mouse| {
                 if (mouse.button != .left or mouse.type != .press) return;
-                if (mouse.col < 0) return;
-                var col: i16 = 0;
+                if (mouse.row != self.label_row or mouse.col < self.start_col) return;
+                var col = self.start_col;
                 for (self.rich.text, 0..) |span, i| {
                     // Labels are ASCII, so byte length == display width
                     const width: i16 = @intCast(span.text.len);
-                    if (mouse.col < col + width) {
-                        try self.model.setTab(self.tabs[i], ctx);
+                    if (mouse.col >= col and mouse.col < col + width) {
+                        try self.model.setTab(self.tabs[self.first_visible + i], ctx);
                         return ctx.consumeAndRedraw();
                     }
-                    col += width;
+                    col += width + 1;
                 }
             },
             else => {},
@@ -2963,4 +3034,63 @@ test "package list actions open prompts while search letters stay editable" {
     try std.testing.expectEqualStrings("installed", model.overlay.?.sudo.name);
     try std.testing.expectEqual(shelly_operation.Action.remove, model.overlay.?.sudo.action);
     try std.testing.expect(model.install_job == null);
+}
+
+test "tab bar centers labels and retains the active tab on narrow terminals" {
+    vxfw.DrawContext.init(.unicode);
+    const model = try Model.init(std.testing.allocator);
+    defer model.deinit();
+    model.settings = .{ .aur_enabled = true, .flatpak_enabled = true };
+    model.active = .settings;
+    for ([_]u16{ 120, 80, 40, 18, 3 }) |width| {
+        var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+        defer arena.deinit();
+        const widget = try model.drawTabBar(arena.allocator());
+        const surface = try widget.draw(.{
+            .arena = arena.allocator(),
+            .min = .{},
+            .max = .{ .width = width, .height = 3 },
+            .cell_size = .{ .width = 10, .height = 20 },
+        });
+        try std.testing.expectEqual(width, surface.size.width);
+        try std.testing.expectEqual(@as(u16, 3), surface.size.height);
+        const bar: *TabBar = @ptrCast(@alignCast(widget.userdata));
+        try std.testing.expect(bar.first_visible + bar.rich.text.len > 4);
+        var total: usize = bar.rich.text.len -| 1;
+        for (bar.rich.text) |span| total += span.text.len;
+        const padding: usize = if (width >= 8) 4 else 0;
+        try std.testing.expectEqual(@as(i16, @intCast((width - total - padding) / 2 + padding / 2)), bar.start_col);
+        try std.testing.expect(bar.rich.text[bar.rich.text.len - 1].style.reverse);
+        if (width >= 8) {
+            var corners: usize = 0;
+            var caps: usize = 0;
+            for (surface.buffer) |cell| {
+                if (std.mem.eql(u8, cell.char.grapheme, "┌") or std.mem.eql(u8, cell.char.grapheme, "┐")) corners += 1;
+                if (std.mem.eql(u8, cell.char.grapheme, "◖") or std.mem.eql(u8, cell.char.grapheme, "◗")) caps += 1;
+            }
+            try std.testing.expectEqual(@as(usize, 2), corners);
+            try std.testing.expectEqual(@as(usize, 0), caps);
+        }
+    }
+}
+
+test "centered tab mouse targets exclude borders and padding" {
+    vxfw.DrawContext.init(.unicode);
+    const model = try Model.init(std.testing.allocator);
+    defer model.deinit();
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const widget = try model.drawTabBar(arena.allocator());
+    _ = try widget.draw(.{ .arena = arena.allocator(), .min = .{}, .max = .{ .width = 100, .height = 3 }, .cell_size = .{ .width = 10, .height = 20 } });
+    const bar: *TabBar = @ptrCast(@alignCast(widget.userdata));
+    var ctx: vxfw.EventContext = .{ .io = undefined, .alloc = std.testing.allocator, .cmds = .empty };
+    defer ctx.cmds.deinit(std.testing.allocator);
+    var col = bar.start_col;
+    for (bar.rich.text[0 .. bar.rich.text.len - 1]) |span| col += @intCast(span.text.len + 1);
+    try TabBar.handleEvent(bar, &ctx, .{ .mouse = .{ .button = .left, .type = .press, .col = @intCast(col), .row = 0, .mods = .{} } });
+    try std.testing.expectEqual(Tab.packages, model.active);
+    try TabBar.handleEvent(bar, &ctx, .{ .mouse = .{ .button = .left, .type = .press, .col = 0, .row = 1, .mods = .{} } });
+    try std.testing.expectEqual(Tab.packages, model.active);
+    try TabBar.handleEvent(bar, &ctx, .{ .mouse = .{ .button = .left, .type = .press, .col = @intCast(col), .row = 1, .mods = .{} } });
+    try std.testing.expectEqual(Tab.settings, model.active);
 }

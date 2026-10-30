@@ -1,4 +1,5 @@
 const std = @import("std");
+const Border = @import("border.zig");
 const commands = @import("../commands.zig");
 const diagnostics = @import("diagnostics");
 const vxfw = @import("vaxis").vxfw;
@@ -120,8 +121,8 @@ pub fn drawInstallChoices(ctx: vxfw.DrawContext, app: *const data.AppstreamApp, 
     }
     try lines.appendSlice(ctx.arena, "\n" ++ commands.flatpak_choice_hint);
     var text: vxfw.Text = .{ .text = lines.items };
-    const labels = [_]vxfw.Border.BorderLabel{.{ .text = "Flatpak installation", .alignment = .top_left }};
-    var border: vxfw.Border = .{ .child = text.widget(), .labels = &labels };
+    const labels = [_]Border.BorderLabel{.{ .text = "Flatpak installation", .alignment = .top_left }};
+    var border: Border = .{ .child = text.widget(), .labels = &labels };
     const surface = try border.widget().draw(ctx.withConstraints(.{}, .{ .width = width, .height = height }));
     return .{ .origin = .{ .row = @divFloor(@as(i17, size.height) - surface.size.height, 2), .col = @divFloor(@as(i17, size.width) - surface.size.width, 2) }, .surface = surface, .z_index = 2 };
 }

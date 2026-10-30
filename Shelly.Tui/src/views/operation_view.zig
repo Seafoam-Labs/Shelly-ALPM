@@ -1,4 +1,5 @@
 const std = @import("std");
+const Border = @import("border.zig");
 const commands = @import("../commands.zig");
 const diagnostics = @import("diagnostics");
 const vaxis = @import("vaxis");
@@ -49,12 +50,12 @@ pub const View = struct {
         if (box_width < 30 or box_height < 8) return null;
 
         var text: vxfw.Text = .{ .text = body };
-        const labels = [_]vxfw.Border.BorderLabel{.{ .text = switch (self.action) {
+        const labels = [_]Border.BorderLabel{.{ .text = switch (self.action) {
             .install => "Installation",
             .remove => "Removal",
             .upgrade => "Package upgrade",
         }, .alignment = .top_left }};
-        var border: vxfw.Border = .{
+        var border: Border = .{
             .child = text.widget(),
             .labels = &labels,
         };
