@@ -1,4 +1,5 @@
 const std = @import("std");
+const trackReturnError = @import("diagnostics").captureError;
 const build_transaction = @import("build_transaction.zig");
 const diagnostics = @import("diagnostics");
 const restart_checks = @import("restarts.zig");
@@ -24,7 +25,7 @@ const multi_server_setup_timeout_seconds: u32 = 1;
 const database_file_permissions = std.Io.File.Permissions.fromMode(0o644);
 const database_directory_permissions = std.Io.File.Permissions.fromMode(0o755);
 var default_download_address_family_policy = std.atomic.Value(u8).init(
-    @intFromEnum(downloader.AddressFamilyPolicy.prefer_ipv4),
+    @backingInt(downloader.AddressFamilyPolicy.prefer_ipv4),
 );
 var default_parallel_download_count = std.atomic.Value(u8).init(download_queue.default_limit);
 
@@ -79,12 +80,12 @@ pub const Manager = struct {
 
     /// Sets the address-family policy inherited by managers created afterwards.
     pub fn setDefaultDownloadAddressFamilyPolicy(policy: downloader.AddressFamilyPolicy) void {
-        default_download_address_family_policy.store(@intFromEnum(policy), .release);
+        default_download_address_family_policy.store(@backingInt(policy), .release);
     }
 
     /// Returns the current process-wide policy for newly created managers.
     pub fn defaultDownloadAddressFamilyPolicy() downloader.AddressFamilyPolicy {
-        return @enumFromInt(default_download_address_family_policy.load(.acquire));
+        return @fromBackingInt(@intCast(default_download_address_family_policy.load(.acquire)));
     }
 
     /// Sets the limit inherited by subsequently created managers, including
@@ -232,7 +233,7 @@ pub const Manager = struct {
     }
 
     pub fn load_archive(self: *Manager, path: []const u8) !libalpm.OwnedPackage {
-        const path_z = try self.allocator.dupeZ(u8, path);
+        const path_z = try self.allocator.dupeSentinel(u8, path, 0);
         defer self.allocator.free(path_z);
         var package: ?*rawLibalpm.alpm_pkg_t = null;
         if (rawLibalpm.alpm_pkg_load(self.handle, path_z, 1, @bitCast(self.config.local_file_signature_level), &package) != 0) return error.PackageLoadFailed;
@@ -780,7 +781,7 @@ pub const Manager = struct {
             defer self.allocator.free(prompt);
             const response = self.dispatcher.raiseQuestion(self.io(), .{
                 .question = prompt,
-                .question_type = @intFromEnum(libalpm.QuestionType.select_optional_dependencies),
+                .question_type = @backingInt(libalpm.QuestionType.select_optional_dependencies),
                 .options = names.items,
                 .provider_options = options.items,
             });
@@ -795,7 +796,7 @@ pub const Manager = struct {
             }
 
             for (selected_names.items) |selected| {
-                const selected_z = try self.allocator.dupeZ(u8, selected);
+                const selected_z = try self.allocator.dupeSentinel(u8, selected, 0);
                 defer self.allocator.free(selected_z);
                 if (rawLibalpm.alpm_find_satisfier(rawLibalpm.alpm_db_get_pkgcache(rawLibalpm.alpm_get_localdb(self.handle)), selected_z.ptr) != null) continue;
                 var node = sync_databases;
@@ -930,7 +931,7 @@ pub const Manager = struct {
                 if (std.ascii.eqlIgnoreCase(hold_pkg, pkg)) {
                     const prompt = try std.fmt.allocPrint(self.allocator, "Are you sure you want to remove {s}? It is listed as a held package.", .{pkg});
                     defer self.allocator.free(prompt);
-                    const response = self.askYesNo(self.io(), @intFromEnum(libalpm.QuestionType.remove_packages), prompt);
+                    const response = self.askYesNo(self.io(), @backingInt(libalpm.QuestionType.remove_packages), prompt);
                     if (!response) {
                         self.dispatcher.raiseError(.{ .message = "Removal cancelled because permission to remove held packages was declined." });
                         return TransactionError.PrepareFailed;
@@ -1137,7 +1138,7 @@ pub const Manager = struct {
         try self.checkOperationCancelled();
         const local_database = rawLibalpm.alpm_get_localdb(self.handle) orelse return TransactionError.DatabaseReadFailed;
         const pkg = rawLibalpm.alpm_db_get_pkg(local_database, pkg_name) orelse return TransactionError.PackageFetchFailed;
-        if (rawLibalpm.alpm_pkg_set_reason(pkg, @intCast(@intFromEnum(reason))) != 0) return TransactionError.SetReasonFailed;
+        if (rawLibalpm.alpm_pkg_set_reason(pkg, @intCast(@backingInt(reason))) != 0) return TransactionError.SetReasonFailed;
     }
 
     pub fn install_local_packages(self: *Manager, paths: []const []const u8, flags: TransFlag) TransactionError!void {
@@ -1153,7 +1154,7 @@ pub const Manager = struct {
         defer package_ptrs.deinit(self.allocator);
         const sig_level = rawLibalpm.ALPM_SIG_PACKAGE_OPTIONAL | rawLibalpm.ALPM_SIG_DATABASE_OPTIONAL;
         for (paths) |path| {
-            const path_z = self.allocator.dupeZ(u8, path) catch {
+            const path_z = self.allocator.dupeSentinel(u8, path, 0) catch {
                 for (package_ptrs.items) |pkg| _ = rawLibalpm.alpm_pkg_free(pkg.ptr);
                 return TransactionError.OutOfMemory;
             };
@@ -1270,15 +1271,19 @@ pub const Manager = struct {
     }
 
     pub fn find_remote_satisfier_for_dependency(self: *Manager, dependency: [:0]const u8) QueryError![:0]const u8 {
-        if (self.handle == null) return error.NoHandle;
+        var returned_error: ?anyerror = null;
+        if (self.handle == null) return trackReturnError(error.NoHandle, &returned_error);
         var operation_scope = OperationScope.init(self, .search, dependency);
         operation_scope.attach();
         defer operation_scope.finish(.success);
         // A repository miss lets callers continue with AUR resolution. Preserve
         // PkgNotFound for control flow without emitting a fatal operation event.
-        errdefer |err| if (err != error.PkgNotFound) operation_scope.fail();
-        try self.checkOperationCancelled();
-        return (try self.find_remote_satisfier_for_dependency_details(dependency)).real_name;
+        errdefer {
+            const err = returned_error.?;
+            if (err != error.PkgNotFound) operation_scope.fail();
+        }
+        try trackReturnError(self.checkOperationCancelled(), &returned_error);
+        return trackReturnError((try trackReturnError(self.find_remote_satisfier_for_dependency_details(dependency), &returned_error)).real_name, &returned_error);
     }
 
     /// Finds a remote dependency satisfier and reports whether the match was
@@ -1288,12 +1293,16 @@ pub const Manager = struct {
         self: *Manager,
         dependency: [:0]const u8,
     ) QueryError!DependencySatisfier {
-        if (self.handle == null) return error.NoHandle;
+        var returned_error: ?anyerror = null;
+        if (self.handle == null) return trackReturnError(error.NoHandle, &returned_error);
         var operation_scope = OperationScope.init(self, .search, dependency);
         operation_scope.attach();
         defer operation_scope.finish(.success);
-        errdefer |err| if (err != error.PkgNotFound) operation_scope.fail();
-        try self.checkOperationCancelled();
+        errdefer {
+            const err = returned_error.?;
+            if (err != error.PkgNotFound) operation_scope.fail();
+        }
+        try trackReturnError(self.checkOperationCancelled(), &returned_error);
         const requested_name = dependencyName(dependency);
 
         // Search every configured repository for a literal package before
@@ -1302,10 +1311,10 @@ pub const Manager = struct {
         // or a later repository (for example, gcc-go's `provides=go` shadowing
         // the real `go` package).
         const parsed_dependency = rawLibalpm.alpm_dep_from_string(dependency.ptr) orelse
-            return error.PkgNotFound;
+            return trackReturnError(error.PkgNotFound, &returned_error);
         defer rawLibalpm.alpm_dep_free(parsed_dependency);
-        const requested_name_z = self.allocator.dupeZ(u8, requested_name) catch
-            return error.OutOfMemory;
+        const requested_name_z = self.allocator.dupeSentinel(u8, requested_name, 0) catch
+            return trackReturnError(error.OutOfMemory, &returned_error);
         defer self.allocator.free(requested_name_z);
 
         var sync_dbs = rawLibalpm.alpm_get_syncdbs(self.handle);
@@ -1338,7 +1347,7 @@ pub const Manager = struct {
                 .via_provides = !std.mem.eql(u8, real_name, requested_name),
             };
         }
-        return error.PkgNotFound;
+        return trackReturnError(error.PkgNotFound, &returned_error);
     }
 
     pub fn install_dependencies_only(self: *Manager, package_name: [:0]const u8, include_make_deps: bool, flags: TransFlag) TransactionError!void {
@@ -1474,7 +1483,7 @@ pub const Manager = struct {
             defer libalpm.OwnedPackage.deinitSlice(self.allocator, orphans);
 
             for (orphans) |orphan| {
-                const target_name = self.allocator.dupeZ(u8, orphan.name() orelse "") catch return TransactionError.OutOfMemory;
+                const target_name = self.allocator.dupeSentinel(u8, orphan.name() orelse "", 0) catch return TransactionError.OutOfMemory;
                 target_names.append(self.allocator, target_name) catch {
                     self.allocator.free(target_name);
                     return TransactionError.OutOfMemory;
@@ -1511,7 +1520,7 @@ pub const Manager = struct {
                 _ = rawLibalpm.alpm_pkg_free(pkg_ptr);
                 if (pkg_load != -1) continue;
 
-                const name = self.allocator.dupeZ(u8, entry.basename) catch return TransactionError.OutOfMemory;
+                const name = self.allocator.dupeSentinel(u8, entry.basename, 0) catch return TransactionError.OutOfMemory;
                 target_names.append(self.allocator, name) catch {
                     self.allocator.free(name);
                     return TransactionError.OutOfMemory;
@@ -1808,7 +1817,7 @@ pub const Manager = struct {
             const data = arches.*.data orelse continue;
             const arch: [:0]const u8 =
                 std.mem.span(@as([*c]const u8, @ptrCast(data)));
-            const owned_arch = self.allocator.dupeZ(u8, arch) catch return QueryError.OutOfMemory;
+            const owned_arch = self.allocator.dupeSentinel(u8, arch, 0) catch return QueryError.OutOfMemory;
             arch_list.append(self.allocator, owned_arch) catch
                 {
                     self.allocator.free(owned_arch);
@@ -2501,9 +2510,9 @@ pub const Manager = struct {
         var architecture_arena = std.heap.ArenaAllocator.init(self.allocator);
         defer architecture_arena.deinit();
         const architectures = try architecture_utils.expand(architecture_arena.allocator(), config.architectures.items, config.architecture);
-        const resolved_arch_z = try architecture_arena.allocator().dupeZ(u8, architectures.items[0]);
+        const resolved_arch_z = try architecture_arena.allocator().dupeSentinel(u8, architectures.items[0], 0);
         for (architectures.items) |architecture| {
-            const value = try architecture_arena.allocator().dupeZ(u8, architecture);
+            const value = try architecture_arena.allocator().dupeSentinel(u8, architecture, 0);
             self.check("add_arch", rawLibalpm.alpm_option_add_architecture(h, value.ptr));
         }
 
@@ -2786,7 +2795,7 @@ pub const Manager = struct {
     // Use the translated C callback's va_list type so this follows the target
     // ABI on both x86_64 and aarch64.
     const LogCallback = @typeInfo(@typeInfo(rawLibalpm.alpm_cb_log).optional.child).pointer.child;
-    const LogArguments = @typeInfo(LogCallback).@"fn".params[3].type.?;
+    const LogArguments = @typeInfo(LogCallback).@"fn".param_types[3].?;
 
     fn provisioningLogCallback(
         ctx: ?*anyopaque,
@@ -3096,10 +3105,10 @@ pub const Manager = struct {
         var details: std.ArrayList(u8) = .empty;
         defer details.deinit(self.allocator);
 
-        const max_err = @intFromEnum(libalpm.Error.SandboxFailed);
+        const max_err = @backingInt(libalpm.Error.SandboxFailed);
         if (error_number < 0 or error_number > max_err) {
             try details.print(self.allocator, "Could not complete the requested operation. libalpm returned an unrecognized error. Include the technical details when reporting this problem. Native error: {0d}.\n", .{error_number});
-        } else switch (@as(libalpm.Error, @enumFromInt(error_number))) {
+        } else switch (@as(libalpm.Error, @fromBackingInt(@intCast(error_number)))) {
             .Ok => {},
             .Memory => try details.appendSlice(self.allocator, "Could not complete the requested operation because Shelly ran out of memory. Close other applications and try again.\n"),
             .System => try details.appendSlice(self.allocator, "Could not complete the requested operation because an operating-system operation failed.\n"),
@@ -4253,7 +4262,7 @@ test "fetchCallback accepts prepared cache entries and rejects missing artifacts
     defer temporary.cleanup();
     var absolute_buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
     const absolute_length = try temporary.dir.realPath(testing.io, &absolute_buffer);
-    const cache_path = try testing.allocator.dupeZ(u8, absolute_buffer[0..absolute_length]);
+    const cache_path = try testing.allocator.dupeSentinel(u8, absolute_buffer[0..absolute_length], 0);
     defer testing.allocator.free(cache_path);
     var cached_file = try temporary.dir.createFile(testing.io, "prepared.pkg.tar.zst", .{});
     cached_file.close(testing.io);
@@ -4913,7 +4922,7 @@ test "askYesNo maps shared confirmation responses" {
     defer operation.finish(.success);
     mgr.dispatcher.setOperation(&operation);
 
-    const question_type = @intFromEnum(libalpm.QuestionType.install_ignore);
+    const question_type = @backingInt(libalpm.QuestionType.install_ignore);
     try testing.expect(mgr.askYesNo(tio, question_type, "proceed?"));
     responder.response = .declined;
     try testing.expect(!mgr.askYesNo(tio, question_type, "proceed?"));
@@ -5049,7 +5058,7 @@ test "handleErrorMessage emits a known error description" {
         .data = @ptrCast(&cap),
     }) catch unreachable;
 
-    try mgr.handleErrorMessage(@intFromEnum(libalpm.Error.Memory), null);
+    try mgr.handleErrorMessage(@backingInt(libalpm.Error.Memory), null);
 
     try testing.expect(std.mem.indexOf(u8, cap.text(), "Could not complete the requested operation because Shelly ran out of memory. Close other applications and try again.") != null);
 }
@@ -5064,7 +5073,7 @@ test "handleErrorMessage emits the expected database lock error" {
         .data = @ptrCast(&cap),
     });
 
-    try mgr.handleErrorMessage(@intFromEnum(libalpm.Error.HandleLock), null);
+    try mgr.handleErrorMessage(@backingInt(libalpm.Error.HandleLock), null);
 
     try testing.expect(std.mem.startsWith(u8, cap.text(), "Could not start the package operation because the package database is locked."));
     try testing.expect(std.mem.indexOf(u8, cap.text(), "Lock file: /var/lib/pacman/db.lck") != null);
@@ -5082,7 +5091,7 @@ test "handleErrorMessage handles the Ok error without details" {
         .data = @ptrCast(&cap),
     }) catch unreachable;
 
-    try mgr.handleErrorMessage(@intFromEnum(libalpm.Error.Ok), null);
+    try mgr.handleErrorMessage(@backingInt(libalpm.Error.Ok), null);
 
     // Ok produces no extra detail line, but the strerror header is still emitted.
     try testing.expect(cap.len != 0);
@@ -5120,7 +5129,7 @@ test "handleErrorMessage propagates allocation failures without dispatching" {
 
         try testing.expectError(
             error.OutOfMemory,
-            mgr.handleErrorMessage(@intFromEnum(libalpm.Error.Memory), null),
+            mgr.handleErrorMessage(@backingInt(libalpm.Error.Memory), null),
         );
         try testing.expectEqual(@as(usize, 0), cap.len);
         try testing.expect(failing.has_induced_failure);
@@ -5140,19 +5149,19 @@ test "handleErrorMessage tolerates a null list for list-based errors" {
 
     // These branches walk `data_ptr`; a null list means the loop body never
     // runs, so only the strerror header is emitted and nothing crashes.
-    try mgr.handleErrorMessage(@intFromEnum(libalpm.Error.UnsatisfiedDeps), null);
+    try mgr.handleErrorMessage(@backingInt(libalpm.Error.UnsatisfiedDeps), null);
     try testing.expect(cap.len != 0);
 
     cap.len = 0;
-    try mgr.handleErrorMessage(@intFromEnum(libalpm.Error.ConflictingDeps), null);
+    try mgr.handleErrorMessage(@backingInt(libalpm.Error.ConflictingDeps), null);
     try testing.expect(cap.len != 0);
 
     cap.len = 0;
-    try mgr.handleErrorMessage(@intFromEnum(libalpm.Error.FileConflicts), null);
+    try mgr.handleErrorMessage(@backingInt(libalpm.Error.FileConflicts), null);
     try testing.expect(cap.len != 0);
 
     cap.len = 0;
-    try mgr.handleErrorMessage(@intFromEnum(libalpm.Error.PkgInvalidName), null);
+    try mgr.handleErrorMessage(@backingInt(libalpm.Error.PkgInvalidName), null);
     try testing.expect(cap.len != 0);
 }
 
@@ -5171,7 +5180,7 @@ test "handleErrorMessage includes invalid package names from a populated list" {
         .data = @ptrCast(&invalid_name),
     };
 
-    try mgr.handleErrorMessage(@intFromEnum(libalpm.Error.PkgInvalidName), &node);
+    try mgr.handleErrorMessage(@backingInt(libalpm.Error.PkgInvalidName), &node);
 
     try testing.expect(std.mem.indexOf(u8, cap.text(), "bad name\n") != null);
 }
@@ -5199,7 +5208,7 @@ test "handleErrorMessage formats populated unsatisfied dependency details" {
         .data = @ptrCast(&missing),
     };
 
-    try mgr.handleErrorMessage(@intFromEnum(libalpm.Error.UnsatisfiedDeps), &node);
+    try mgr.handleErrorMessage(@backingInt(libalpm.Error.UnsatisfiedDeps), &node);
 
     try testing.expect(std.mem.indexOf(
         u8,
@@ -5227,7 +5236,7 @@ test "handleErrorMessage formats populated file conflict details" {
         .data = @ptrCast(&conflict),
     };
 
-    try mgr.handleErrorMessage(@intFromEnum(libalpm.Error.FileConflicts), &node);
+    try mgr.handleErrorMessage(@backingInt(libalpm.Error.FileConflicts), &node);
 
     try testing.expect(std.mem.indexOf(
         u8,
@@ -5323,7 +5332,7 @@ test "handleErrorMessage emits descriptions for every scalar libalpm error" {
 
     for (cases) |case| {
         cap.len = 0;
-        try mgr.handleErrorMessage(@intFromEnum(case.err), null);
+        try mgr.handleErrorMessage(@backingInt(case.err), null);
         try testing.expect(std.mem.indexOf(u8, cap.text(), case.detail) != null);
     }
 }
@@ -5507,7 +5516,7 @@ test "database lock error uses the configured database directory" {
     mgr.config.database_path = "/custom/pacman database/";
     var cap = ErrorCapture{};
     _ = try mgr.dispatcher.addErrorHandler(.{ .function = captureError, .data = @ptrCast(&cap) });
-    try mgr.handleErrorMessage(@intFromEnum(libalpm.Error.HandleLock), null);
+    try mgr.handleErrorMessage(@backingInt(libalpm.Error.HandleLock), null);
     try testing.expect(std.mem.indexOf(u8, cap.text(), "Lock file: /custom/pacman database/db.lck") != null);
     try testing.expect(std.mem.indexOf(u8, cap.text(), "sudo rm -- '/custom/pacman database/db.lck'") != null);
     try testing.expect(std.mem.indexOf(u8, cap.text(), "/var/lib/pacman") == null);
@@ -5532,7 +5541,7 @@ test "dependency errors explain the dependent package during removal" {
         .depend = &dependency,
     };
     var node: rawLibalpm.alpm_list_t = .{ .data = @ptrCast(&missing) };
-    try mgr.handleErrorMessage(@intFromEnum(libalpm.Error.UnsatisfiedDeps), &node);
+    try mgr.handleErrorMessage(@backingInt(libalpm.Error.UnsatisfiedDeps), &node);
     try testing.expect(std.mem.indexOf(u8, cap.text(), "Could not remove the selected packages because \"installed-app\" still requires \"libexample\"") != null);
     try testing.expect(std.mem.indexOf(u8, cap.text(), "Could not install") == null);
 }

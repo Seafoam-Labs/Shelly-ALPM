@@ -140,9 +140,9 @@ pub fn loadArchive(allocator: std.mem.Allocator, path: []const u8, options: Load
 
     while (true) {
         const entry = (try reader.next()) orelse {
-            inline for (std.meta.fields(Members)) |field|
-                if (@field(members, field.name) == .unknown) {
-                    @field(members, field.name) = .absent;
+            inline for (@typeInfo(Members).@"struct".field_names) |field_name|
+                if (@field(members, field_name) == .unknown) {
+                    @field(members, field_name) = .absent;
                 };
 
             break;

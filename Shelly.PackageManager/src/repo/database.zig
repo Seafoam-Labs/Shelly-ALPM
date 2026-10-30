@@ -1156,9 +1156,9 @@ fn deletableOldFilename(filename: []const u8) bool {
 }
 
 fn compareVersions(allocator: Allocator, a: []const u8, b: []const u8) Allocator.Error!c_int {
-    const a_z = try allocator.dupeZ(u8, a);
+    const a_z = try allocator.dupeSentinel(u8, a, 0);
     defer allocator.free(a_z);
-    const b_z = try allocator.dupeZ(u8, b);
+    const b_z = try allocator.dupeSentinel(u8, b, 0);
     defer allocator.free(b_z);
     return alpm_manager.Manager.compare_package_versions(a_z, b_z);
 }
@@ -1495,7 +1495,7 @@ fn testEnviron() !std.process.Environ {
 }
 
 test "desc writes repo-add section order and omits empty sections" {
-    const sha = "a" ** 64;
+    const sha = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
     var info = try pkginfo.parse(testing.allocator, full_pkginfo);
     defer info.deinit(testing.allocator);
     const desc = try buildDesc(

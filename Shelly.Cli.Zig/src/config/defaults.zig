@@ -6,7 +6,7 @@ pub const json =
     \\  "FileSizeDisplay": "Megabytes",
     \\  "ParallelDownloadCount": 100,
     \\  "DownloadAddressFamilyPolicy": "PreferIPv4",
-    \\  "ProgressBarStyle": "Blocks",
+    \\  "ProgressBarStyle": "Shell",
     \\  "ProgressBarWidth": 24,
     \\  "OutputMode": "singlepane",
     \\  "AppImageInstallPath": null,

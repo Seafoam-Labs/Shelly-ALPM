@@ -217,7 +217,6 @@ pub const AppImagePage = extern struct {
         self.consumePendingInstall();
     }
 
-
     pub fn onUnmap(self: *Self) void {
         const p = self.priv();
         if (!p.loaded or p.environment_dirty) return;
@@ -547,7 +546,7 @@ pub const AppImagePage = extern struct {
 
         set_app_icon(p.detail_icon, &app);
 
-        gtk.DropDown.setSelected(p.update_type_drop, @intFromEnum(app.UpdateType));
+        gtk.DropDown.setSelected(p.update_type_drop, @backingInt(app.UpdateType));
 
         switch (app.UpdateType) {
             .GitHub, .GitLab, .Codeberg => {
@@ -576,7 +575,7 @@ pub const AppImagePage = extern struct {
         for (app.EnvironmentVariables) |variable| {
             environment_text.writer.print("{s}={s}\n", .{ variable.Key, variable.Value }) catch return;
         }
-        const environment_z = std.heap.c_allocator.dupeZ(u8, environment_text.written()) catch return;
+        const environment_z = std.heap.c_allocator.dupeSentinel(u8, environment_text.written(), 0) catch return;
         defer std.heap.c_allocator.free(environment_z);
         p.environment_loading = true;
         gtk.TextBuffer.setText(gtk.TextView.getBuffer(p.environment_view), environment_z, -1);
@@ -597,8 +596,8 @@ pub const AppImagePage = extern struct {
 
     fn selectedUpdateType(p: *Private) UpdateType {
         const selected = gtk.DropDown.getSelected(p.update_type_drop);
-        if (selected <= @intFromEnum(UpdateType.Forgejo)) {
-            return @enumFromInt(@as(u8, @intCast(selected)));
+        if (selected <= @backingInt(UpdateType.Forgejo)) {
+            return @fromBackingInt(@intCast(@as(u8, @intCast(selected))));
         }
         return .None;
     }

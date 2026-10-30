@@ -320,7 +320,7 @@ pub const FlatpakInstallView = extern struct {
                 var markup_buffer: [512]u8 = undefined;
                 const escaped = glib.markupEscapeText(object.getName(), -1);
                 defer glib.free(escaped);
-                const markup = std.fmt.bufPrintZ(&markup_buffer, "<b>{s}</b>", .{escaped}) catch object.getName();
+                const markup = std.fmt.bufPrintSentinel(&markup_buffer, "<b>{s}</b>", .{escaped}, 0) catch object.getName();
                 gtk.Label.setMarkup(name_label, markup);
                 gtk.Label.setLabel(summary_label, object.getSummary());
 
@@ -589,8 +589,8 @@ pub const FlatpakInstallView = extern struct {
         }
 
         for (app.getReleases()) |release| {
-            const version = std.heap.c_allocator.dupeZ(u8, release.Version) catch continue;
-            const note = std.heap.c_allocator.dupeZ(u8, release.Description) catch {
+            const version = std.heap.c_allocator.dupeSentinel(u8, release.Version, 0) catch continue;
+            const note = std.heap.c_allocator.dupeSentinel(u8, release.Description, 0) catch {
                 std.heap.c_allocator.free(version);
                 continue;
             };
@@ -700,7 +700,7 @@ pub const FlatpakInstallView = extern struct {
         var version_buffer: [256]u8 = undefined;
         const releases = app.getReleases();
         const version = if (releases.len > 0 and releases[0].Version.len > 0) releases[0].Version else translations._("Unknown");
-        gtk.Label.setLabel(p.overlay_version_label, std.fmt.bufPrintZ(&version_buffer, "{s}: {s}", .{ translations._("Version"), version }) catch translations._("Version: Unknown"));
+        gtk.Label.setLabel(p.overlay_version_label, std.fmt.bufPrintSentinel(&version_buffer, "{s}: {s}", .{ translations._("Version"), version }, 0) catch translations._("Version: Unknown"));
 
         const remotes = app.getRemotes();
         if (remotes.len > 0) {
@@ -711,14 +711,14 @@ pub const FlatpakInstallView = extern struct {
 
         var license_buffer: [256]u8 = undefined;
         const license = if (app.getProjectLicense().len > 0) app.getProjectLicense() else translations._("Unknown");
-        gtk.Label.setLabel(p.overlay_license_label, std.fmt.bufPrintZ(&license_buffer, "{s}: {s}", .{ translations._("License"), license }) catch translations._("License: Unknown"));
+        gtk.Label.setLabel(p.overlay_license_label, std.fmt.bufPrintSentinel(&license_buffer, "{s}: {s}", .{ translations._("License"), license }, 0) catch translations._("License: Unknown"));
         gtk.Label.setLabel(p.overlay_summary_label, if (app.getSummary().len > 0) app.getSummary() else translations._("No summary available"));
         const addon_count = app.getAddons().len;
         gtk.Widget.setVisible(p.overlay_show_plugin_button.as(gtk.Widget), @intFromBool(addon_count > 0));
         gtk.Widget.setSensitive(p.overlay_show_plugin_button.as(gtk.Widget), 1);
         if (addon_count > 0) {
             var addons_buffer: [128]u8 = undefined;
-            gtk.Button.setLabel(p.overlay_show_plugin_button, std.fmt.bufPrintZ(&addons_buffer, "{s} ({d})", .{ translations._("Addons"), addon_count }) catch translations._("Addons"));
+            gtk.Button.setLabel(p.overlay_show_plugin_button, std.fmt.bufPrintSentinel(&addons_buffer, "{s} ({d})", .{ translations._("Addons"), addon_count }, 0) catch translations._("Addons"));
         }
         self.populateRemotes(app);
         self.setDescription(app.getDescription());
@@ -745,11 +745,7 @@ pub const FlatpakInstallView = extern struct {
         std.log.debug("remotes {d}", .{remotes.len});
         for (remotes) |remote| {
             var buffer: [512]u8 = undefined;
-            const label = std.fmt.bufPrintZ(
-                &buffer,
-                "{s} ({s})",
-                .{ remote.Name, if (remote.Scope == .user) translations._("user") else translations._("system") },
-            ) catch continue;
+            const label = std.fmt.bufPrintSentinel(&buffer, "{s} ({s})", .{ remote.Name, if (remote.Scope == .user) translations._("user") else translations._("system") }, 0) catch continue;
             gtk.StringList.append(strings, label);
         }
         p.suppress_remote_notify = true;
@@ -781,12 +777,12 @@ pub const FlatpakInstallView = extern struct {
             self.markRemoteInfoUnavailable(app);
             return;
         };
-        const owned_remote = std.heap.c_allocator.dupeZ(u8, remote) catch {
+        const owned_remote = std.heap.c_allocator.dupeSentinel(u8, remote, 0) catch {
             std.heap.c_allocator.destroy(load);
             self.markRemoteInfoUnavailable(app);
             return;
         };
-        const owned_app_id = std.heap.c_allocator.dupeZ(u8, app.getId()) catch {
+        const owned_app_id = std.heap.c_allocator.dupeSentinel(u8, app.getId(), 0) catch {
             std.heap.c_allocator.free(owned_remote);
             std.heap.c_allocator.destroy(load);
             self.markRemoteInfoUnavailable(app);
@@ -868,11 +864,7 @@ pub const FlatpakInstallView = extern struct {
                 var label_buffer: [192]u8 = undefined;
                 const download = SizeConverter.convert_null_term(&download_buffer, load.download_size);
                 const installed = SizeConverter.convert_null_term(&installed_buffer, load.installed_size);
-                const label = std.fmt.bufPrintZ(
-                    &label_buffer,
-                    "{s}: {s}  •  {s}: {s}",
-                    .{ translations._("Download"), download, translations._("Installed"), installed },
-                ) catch translations._("Size: Unavailable");
+                const label = std.fmt.bufPrintSentinel(&label_buffer, "{s}: {s}  •  {s}: {s}", .{ translations._("Download"), download, translations._("Installed"), installed }, 0) catch translations._("Size: Unavailable");
                 gtk.Label.setLabel(p.overlay_size_label, label);
                 load.app.setPermissions(load.permissions);
             }
@@ -953,7 +945,7 @@ pub const FlatpakInstallView = extern struct {
             gtk.Widget.setTooltipText(picture.as(gtk.Widget), translations._("Could not load this application screenshot."));
             return;
         };
-        const owned_url = std.heap.c_allocator.dupeZ(u8, url) catch {
+        const owned_url = std.heap.c_allocator.dupeSentinel(u8, url, 0) catch {
             std.heap.c_allocator.destroy(load);
             gtk.Widget.setTooltipText(picture.as(gtk.Widget), translations._("Could not load this application screenshot."));
             return;
@@ -1226,9 +1218,9 @@ pub const FlatpakInstallView = extern struct {
         const remote = remotes[0];
         var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
         const path = if (remote.Scope == .user)
-            std.fmt.bufPrintZ(&path_buffer, "{s}/flatpak/appstream/{s}/x86_64/active/icons/64x64/{s}.png", .{ g_get_user_data_dir(), remote.Name, object.getId() }) catch null
+            std.fmt.bufPrintSentinel(&path_buffer, "{s}/flatpak/appstream/{s}/x86_64/active/icons/64x64/{s}.png", .{ g_get_user_data_dir(), remote.Name, object.getId() }, 0) catch null
         else
-            std.fmt.bufPrintZ(&path_buffer, "/var/lib/flatpak/appstream/{s}/x86_64/active/icons/64x64/{s}.png", .{ remote.Name, object.getId() }) catch null;
+            std.fmt.bufPrintSentinel(&path_buffer, "/var/lib/flatpak/appstream/{s}/x86_64/active/icons/64x64/{s}.png", .{ remote.Name, object.getId() }, 0) catch null;
 
         if (path) |value| {
             if (g_file_test(value.ptr, 1 << 4) != 0) {

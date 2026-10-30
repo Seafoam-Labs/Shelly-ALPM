@@ -27,8 +27,8 @@ const bits = [_]u5{ 0, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 14, 15, 16, 17 };
 pub fn toBits(self: Flags) u32 {
     var result: u32 = 0;
 
-    inline for (std.meta.fields(Flags), bits) |field, bit| {
-        if (@field(self, field.name)) result |= @as(u32, 1) << bit;
+    inline for (@typeInfo(Flags).@"struct".field_names, bits) |field_name, bit| {
+        if (@field(self, field_name)) result |= @as(u32, 1) << bit;
     }
 
     return result;
@@ -38,10 +38,10 @@ pub fn fromBits(value: u32) !Flags {
     var result: Flags = .{};
     var known: u32 = 0;
 
-    inline for (std.meta.fields(Flags), bits) |field, bit| {
+    inline for (@typeInfo(Flags).@"struct".field_names, bits) |field_name, bit| {
         const mask = @as(u32, 1) << bit;
         known |= mask;
-        @field(result, field.name) = value & mask != 0;
+        @field(result, field_name) = value & mask != 0;
     }
 
     if (value & ~known != 0) return error.InvalidTransactionFlags;

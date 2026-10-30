@@ -39,8 +39,8 @@ pub fn fetch(
     const directory = try Downloads.uniquePath(a, io, "/tmp", "rlpm-download");
     try Publication.privateDirectory(directory);
     defer std.Io.Dir.cwd().deleteTree(io, directory) catch {};
-    const directory_z = try a.dupeZ(u8, directory);
-    const user = try a.dupeZ(u8, owner.configuration.sandbox_user.?);
+    const directory_z = try a.dupeSentinel(u8, directory, 0);
+    const user = try a.dupeSentinel(u8, owner.configuration.sandbox_user.?, 0);
 
     if (rlpm_worker_directory(directory_z, user) != 0) return error.DownloadSandboxFailed;
 
@@ -48,7 +48,7 @@ pub fn fetch(
     const payload_directory = try std.fs.path.join(a, &.{ directory, "payload" });
     try Publication.privateDirectory(payload_directory);
 
-    if (rlpm_worker_directory(try a.dupeZ(u8, payload_directory), user) != 0)
+    if (rlpm_worker_directory(try a.dupeSentinel(u8, payload_directory, 0), user) != 0)
         return error.DownloadSandboxFailed;
 
     const output = try std.fs.path.join(a, &.{ payload_directory, std.fs.path.basename(path) });
@@ -58,13 +58,13 @@ pub fn fetch(
     // Restore a prior partial into the sandbox with the worker's credentials.
     if (allow_resume) {
         if (Publication.copy(io, parent_partial, partial)) {
-            if (rlpm_worker_directory(try a.dupeZ(u8, partial), user) != 0) return error.DownloadSandboxFailed;
+            if (rlpm_worker_directory(try a.dupeSentinel(u8, partial, 0), user) != 0) return error.DownloadSandboxFailed;
         } else |err| if (err != error.FileNotFound) return err;
     }
 
     if (mtime != null) {
         if (Publication.copy(io, path, output)) {
-            if (rlpm_worker_directory(try a.dupeZ(u8, output), user) != 0) return error.DownloadSandboxFailed;
+            if (rlpm_worker_directory(try a.dupeSentinel(u8, output, 0), user) != 0) return error.DownloadSandboxFailed;
         } else |err| if (err != error.FileNotFound) return err;
     }
 

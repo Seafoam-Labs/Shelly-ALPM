@@ -176,7 +176,7 @@ fn parserAllocations(gpa: std.mem.Allocator) !void {
 }
 
 test "structured status results release all allocations on failure" {
-    try std.testing.checkAllAllocationFailures(allocator, parserAllocations, .{});
+    try @import("allocation_failures.zig").checkAllAllocationFailures(allocator, parserAllocations, .{});
 }
 
 test "checksum helpers stream files and prefer SHA256 over MD5" {
@@ -734,7 +734,7 @@ fn verifyAllocations(gpa: std.mem.Allocator) !void {
 }
 
 test "verification and reimport release every allocation on failure" {
-    try std.testing.checkAllAllocationFailures(allocator, verifyAllocations, .{});
+    try @import("allocation_failures.zig").checkAllAllocationFailures(allocator, verifyAllocations, .{});
 }
 
 test "repository package validation uses effective policy and actual cached bytes" {
@@ -819,7 +819,7 @@ test "kernel seals prohibit rewriting a verified snapshot" {
     var snapshot = try rlpm.ImmutableFile.fromBytes("verified");
     defer snapshot.deinit();
     try std.testing.expectEqual(-1, native.pwrite(snapshot.fd, "X", 1, 0));
-    try std.testing.expectEqual(@intFromEnum(native.E.PERM), native._errno().*);
+    try std.testing.expectEqual(@backingInt(native.E.PERM), native._errno().*);
     try std.testing.expectEqualStrings(
         &rlpm.Checksum.bytes(.sha256, "verified"),
         &try rlpm.Checksum.file(

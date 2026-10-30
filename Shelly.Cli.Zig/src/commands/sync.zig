@@ -277,7 +277,7 @@ fn runRealFlatpakRemoteMutation(
     invocation: *const parser.Invocation,
 ) !void {
     const operation = invocation.positionals[1];
-    const name = try context.allocator.dupeZ(u8, invocation.positionals[2]);
+    const name = try context.allocator.dupeSentinel(u8, invocation.positionals[2], 0);
     defer context.allocator.free(name);
     const scope: PackageManager.flatpak.Scope =
         if (booleanOption(invocation, "--system", true)) .system else .user;
@@ -289,7 +289,7 @@ fn runRealFlatpakRemoteMutation(
     defer manager.setOperationContext(null);
 
     if (std.mem.eql(u8, operation, "add")) {
-        const url = try context.allocator.dupeZ(u8, optionValue(invocation, "--remote-url").?);
+        const url = try context.allocator.dupeSentinel(u8, optionValue(invocation, "--remote-url").?, 0);
         defer context.allocator.free(url);
         if (!try manager.addRemote(
             name,

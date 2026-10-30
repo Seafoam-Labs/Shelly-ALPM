@@ -44,7 +44,7 @@ test "detached signatures accept the size boundary and reject larger files" {
     defer a.free(directory);
     const path = try std.fs.path.join(a, &.{ directory, "package" });
     defer a.free(path);
-    const bytes = [_]u8{0} ** (max_signature_size + 1);
+    const bytes = @as([max_signature_size + 1]u8, @splat(0));
     try temporary.dir.writeFile(io, .{ .sub_path = "package.sig", .data = bytes[0..max_signature_size] });
 
     const accepted = (try readDetached(a, io, path)).?;

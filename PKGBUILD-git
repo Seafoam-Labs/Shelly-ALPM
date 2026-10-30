@@ -2,12 +2,12 @@
 # Maintainer: Caroline Snyder <hirpeng@gmail.com>
 pkgbase=shelly-git
 pkgname=('shelly-git' 'shelly-flatpak-backend-git')
-pkgver='3.1.9r4993.gd89a833'
+pkgver='3.1.10r5047.ga1ba267'
 pkgrel=1
 arch=('x86_64' 'aarch64')
 url="https://github.com/Seafoam-Labs/Shelly-ALPM"
 license=('GPL-3.0-only')
-makedepends=('libarchive' 'curl' 'sqlite' 'gnupg' 'git' 'pkgconf' 'gtk4' 'zig=0.16.0' 'clang' 'gettext' 'flatpak' 'ripgrep' 'go-md2man')
+makedepends=('libarchive' 'curl' 'sqlite' 'gnupg' 'git' 'pkgconf' 'gtk4' 'zig=0.17.0' 'clang' 'gettext' 'flatpak' 'ripgrep' 'go-md2man')
 
 # Keep package metadata tied to the compiled native backend variant.
 _shelly_libalpm=${SHELLY_LIBALPM:-true}
@@ -25,7 +25,7 @@ source=("${pkgname}::git+https://github.com/Seafoam-Labs/Shelly-ALPM.git#branch=
         'shelly-flatpak-integrate')
 
 sha256sums=('SKIP'
-            '9f551f28d79748c7e255a35cb577081b3263e65d290b4809e10066ed17ce30e5'
+            '4c30072655b7aa24c6b8472fc3c1b2be40bdda5bc7cc4a1a9bae26bf37fe957f'
             '4b7cb0e42eb322de9eb616d22ca05823f91d178db5b8b67497d497ed495aca9c'
             'cf0dc0a6d1865b9010054b36941e7bf4d445c3e7549219889f07ab08283c5c0f'
             '07bca40395c180578450c523ea052b036aa8197d8a871efcce55f937c101c323')
@@ -33,7 +33,7 @@ sha256sums=('SKIP'
 pkgver() {
   cd "${srcdir}/${pkgname}"
 
-  printf '3.1.9r%s.g%s' \
+  printf '3.1.10r%s.g%s' \
     "$(git rev-list --count HEAD)" \
     "$(git rev-parse --short=7 HEAD)"
 }
@@ -41,41 +41,36 @@ pkgver() {
 build() {
   cd "$srcdir/${pkgname}"
 
-  (cd Shelly.Flatpak.Backend && zig build --verbose \
+  (cd Shelly.Flatpak.Backend && ZIG_GLOBAL_CACHE_DIR="${srcdir}/zig-global-cache" zig build --verbose \
     --prefix "${srcdir}/${pkgbase}/out-flatpak-backend" \
     --cache-dir "${srcdir}/zig-cache" \
-    --global-cache-dir "${srcdir}/zig-global-cache" \
     -Dcpu=baseline \
-    -Doptimize=ReleaseSafe)
+    -Doptimize=safe)
 
-  (cd Shelly.Ui.Gtk && zig build --verbose \
+  (cd Shelly.Ui.Gtk && ZIG_GLOBAL_CACHE_DIR="${srcdir}/zig-global-cache" zig build --verbose \
     --prefix "${srcdir}/${pkgname}/out" \
     --cache-dir "${srcdir}/zig-cache" \
-    --global-cache-dir "${srcdir}/zig-global-cache" \
     -Dflatpak-backend-package=shelly-flatpak-backend-git \
     -Dcpu=baseline \
-    -Doptimize=ReleaseSafe)
+    -Doptimize=safe)
 
-  (cd Shelly.Cli.Zig && zig build -Dlibalpm="${_shelly_libalpm}" --verbose \
+  (cd Shelly.Cli.Zig && ZIG_GLOBAL_CACHE_DIR="${srcdir}/zig-global-cache" zig build -Dlibalpm="${_shelly_libalpm}" --verbose \
     --prefix "${srcdir}/${pkgname}/out-cli" \
     --cache-dir "${srcdir}/zig-cache" \
-    --global-cache-dir "${srcdir}/zig-global-cache" \
     -Dcpu=baseline \
-    -Doptimize=ReleaseSmall)
+    -Doptimize=small)
 
-  (cd Shelly.Key && zig build --verbose \
+  (cd Shelly.Key && ZIG_GLOBAL_CACHE_DIR="${srcdir}/zig-global-cache" zig build --verbose \
     --prefix "${srcdir}/${pkgname}/out-key" \
     --cache-dir "${srcdir}/zig-cache" \
-    --global-cache-dir "${srcdir}/zig-global-cache" \
     -Dcpu=baseline \
-    -Doptimize=ReleaseSmall)
+    -Doptimize=small)
 
-    (cd Shelly.Notifications.Zig && zig build --verbose \
+    (cd Shelly.Notifications.Zig && ZIG_GLOBAL_CACHE_DIR="${srcdir}/zig-global-cache" zig build --verbose \
     --prefix "${srcdir}/${pkgbase}/out-notifications" \
     --cache-dir "${srcdir}/zig-cache" \
-    --global-cache-dir "${srcdir}/zig-global-cache" \
     -Dcpu=baseline \
-    -Doptimize=ReleaseSmall)
+    -Doptimize=small)
 
 
   ./out-cli/bin/shelly utility --completions bash > shelly.bash
@@ -103,15 +98,12 @@ build() {
 check() {
   cd "$srcdir/${pkgbase}"
 
-  (cd Shelly.Flatpak.Backend && zig build test abi-test integration-test \
-    --cache-dir "${srcdir}/zig-cache" \
-    --global-cache-dir "${srcdir}/zig-global-cache")
-  (cd Shelly.PackageManager && zig build -Dlibalpm="${_shelly_libalpm}" flatpak-test \
-    --cache-dir "${srcdir}/zig-cache" \
-    --global-cache-dir "${srcdir}/zig-global-cache")
-  (cd Shelly.Cli.Zig && zig build -Dlibalpm="${_shelly_libalpm}" test \
-    --cache-dir "${srcdir}/zig-cache" \
-    --global-cache-dir "${srcdir}/zig-global-cache")
+  (cd Shelly.Flatpak.Backend && ZIG_GLOBAL_CACHE_DIR="${srcdir}/zig-global-cache" zig build test abi-test integration-test \
+    --cache-dir "${srcdir}/zig-cache")
+  (cd Shelly.PackageManager && ZIG_GLOBAL_CACHE_DIR="${srcdir}/zig-global-cache" zig build -Dlibalpm="${_shelly_libalpm}" flatpak-test \
+    --cache-dir "${srcdir}/zig-cache")
+  (cd Shelly.Cli.Zig && ZIG_GLOBAL_CACHE_DIR="${srcdir}/zig-global-cache" zig build -Dlibalpm="${_shelly_libalpm}" test \
+    --cache-dir "${srcdir}/zig-cache")
 }
 
 package_shelly-git() {

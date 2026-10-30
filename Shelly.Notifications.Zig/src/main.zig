@@ -138,8 +138,8 @@ const Updates = struct {
     }
 
     fn queueNotif(self: *Updates, summary: []const u8, body: []const u8) void {
-        const s = self.allocator.dupeZ(u8, summary) catch return;
-        const b = self.allocator.dupeZ(u8, body) catch {
+        const s = self.allocator.dupeSentinel(u8, summary, 0) catch return;
+        const b = self.allocator.dupeSentinel(u8, body, 0) catch {
             self.allocator.free(s);
             return;
         };
@@ -307,7 +307,7 @@ const Worker = struct {
         self.updates.signalRefresh();
         if (count > 0) {
             var buf: [128]u8 = undefined;
-            const body = std.fmt.bufPrintZ(&buf, "{d} {s}", .{ count, trans("updates available") }) catch "0 updates";
+            const body = std.fmt.bufPrintSentinel(&buf, "{d} {s}", .{ count, trans("updates available") }, 0) catch "0 updates";
             self.updates.queueNotif(trans("Updates available"), body);
         }
     }

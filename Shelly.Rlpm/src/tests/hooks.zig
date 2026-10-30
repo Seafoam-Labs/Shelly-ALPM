@@ -234,5 +234,5 @@ fn allocations(allocator: std.mem.Allocator) !void {
 }
 
 test "parser and matcher release every allocation on failure" {
-    try std.testing.checkAllAllocationFailures(a, allocations, .{});
+    try @import("allocation_failures.zig").checkAllAllocationFailures(a, allocations, .{});
 }

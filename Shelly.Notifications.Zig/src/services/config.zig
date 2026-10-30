@@ -266,15 +266,15 @@ fn parseTolerant(allocator: std.mem.Allocator, source: std.json.Value) ShellyCon
         },
     };
 
-    inline for (@typeInfo(ShellyConfig).@"struct".fields) |field| {
-        if (obj.get(field.name)) |v| {
-            if (coerceValue(field.type, allocator, v)) |value| {
-                @field(config, field.name) = value;
+    inline for (@typeInfo(ShellyConfig).@"struct".field_names, @typeInfo(ShellyConfig).@"struct".field_types) |field_name, field_type| {
+        if (obj.get(field_name)) |v| {
+            if (coerceValue(field_type, allocator, v)) |value| {
+                @field(config, field_name) = value;
             } else {
                 // TODO: Change to warn after https://codeberg.org/ziglang/zig/issues/35189
                 log.info(
                     "Ignored invalid value for setting '{0f}' in the selected path; using the default. Expected the documented values.",
-                    .{diagnostics.safe(field.name)},
+                    .{diagnostics.safe(field_name)},
                 );
             }
         }
@@ -305,9 +305,9 @@ fn coerceValue(
         .@"enum" => switch (v) {
             .string => |s| std.meta.stringToEnum(T, s),
             .integer => |i| blk: {
-                const tag_count = @typeInfo(T).@"enum".fields.len;
+                const tag_count = @typeInfo(T).@"enum".field_names.len;
                 if (i >= 0 and i < tag_count) {
-                    break :blk @enumFromInt(@as(std.meta.Tag(T), @intCast(i)));
+                    break :blk @fromBackingInt(@intCast(@as(std.meta.Tag(T), @intCast(i))));
                 }
                 break :blk null;
             },

@@ -12,7 +12,7 @@ pub const DirectoryLock = struct {
 
     pub fn acquire(path: []const u8, exclusive: bool, nonblock: bool) !DirectoryLock {
         var buffer: [std.fs.max_path_bytes]u8 = undefined;
-        const terminated = try std.fmt.bufPrintZ(&buffer, "{s}", .{path});
+        const terminated = try std.fmt.bufPrintSentinel(&buffer, "{s}", .{path}, 0);
         const fd = rlpm_directory_lock(terminated, @intFromBool(exclusive), @intFromBool(nonblock));
 
         if (fd < 0) return error.CacheBusy;
@@ -32,7 +32,7 @@ pub const DirectoryLock = struct {
 pub fn privateDirectory(path: []const u8) !void {
     var buffer: [std.fs.max_path_bytes]u8 = undefined;
 
-    if (rlpm_private_directory(try std.fmt.bufPrintZ(&buffer, "{s}", .{path})) != 0)
+    if (rlpm_private_directory(try std.fmt.bufPrintSentinel(&buffer, "{s}", .{path}, 0)) != 0)
         return error.UnsafeStagingDirectory;
 }
 

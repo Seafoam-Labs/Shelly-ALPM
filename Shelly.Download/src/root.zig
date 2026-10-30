@@ -443,18 +443,18 @@ pub const CoreDownloader = struct {
         const status = response.head.status;
         if (status == .not_modified) return DownloadError.NotModified;
         if (status == .not_found) return DownloadError.NotFound;
-        if (@intFromEnum(status) == 416 and resume_offset != 0) {
+        if (@backingInt(status) == 416 and resume_offset != 0) {
             std.Io.Dir.cwd().deleteFile(self.io, self.configuration.resume_path.?) catch return error.FileError;
             return self.performDownload(url, destination_path, force);
         }
         switch (status.class()) {
             .success => {},
             .server_error => {
-                self.logErr("Could not download {0f} from {1f}: the server returned HTTP {2d}.", .{ diagnostics.safe(destination_path), diagnostics.safe(url), @intFromEnum(status) });
+                self.logErr("Could not download {0f} from {1f}: the server returned HTTP {2d}.", .{ diagnostics.safe(destination_path), diagnostics.safe(url), @backingInt(status) });
                 return DownloadError.NetworkError;
             },
             else => {
-                self.logErr("HTTP status {d} for {s}", .{ @intFromEnum(status), url });
+                self.logErr("HTTP status {d} for {s}", .{ @backingInt(status), url });
                 return DownloadError.HttpError;
             },
         }
@@ -588,11 +588,11 @@ pub const CoreDownloader = struct {
     }
 
     fn curlDownload(self: *CoreDownloader, url: []const u8, destination: []const u8, force: bool) DownloadError!void {
-        const url_z = self.allocator.dupeZ(u8, url) catch return error.FileError;
+        const url_z = self.allocator.dupeSentinel(u8, url, 0) catch return error.FileError;
         defer self.allocator.free(url_z);
         const part = (if (self.configuration.resume_path) |path| self.allocator.dupe(u8, path) else makePartPath(self.allocator, self.io, destination)) catch return error.FileError;
         defer self.allocator.free(part);
-        const path_z = self.allocator.dupeZ(u8, part) catch return error.FileError;
+        const path_z = self.allocator.dupeSentinel(u8, part, 0) catch return error.FileError;
         defer self.allocator.free(path_z);
         defer if (self.configuration.resume_path == null) std.Io.Dir.cwd().deleteFile(self.io, part) catch {};
         try self.emitEvent(.{ .event_type = .Start, .destination_path = destination });
@@ -1917,7 +1917,7 @@ test "downloads accept large response headers across redirects with owned and sh
     var threaded: std.Io.Threaded = .init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    const large_header = "X-Padding: " ++ ("x" ** (12 * 1024)) ++ "\r\n";
+    const large_header = "X-Padding: " ++ @as([12 * 1024]u8, @splat('x')) ++ "\r\n";
 
     for ([_]bool{ false, true }) |shared| {
         var temporary = std.testing.tmpDir(.{});

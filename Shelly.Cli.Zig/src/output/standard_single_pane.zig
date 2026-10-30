@@ -14,6 +14,7 @@ const parser = @import("../cli/parser.zig");
 const SizeDisplay = fmt.SizeDisplay;
 
 const ProgressStyle = enum {
+    shell,
     blocks,
     pacman,
     nerdfont,
@@ -21,7 +22,7 @@ const ProgressStyle = enum {
 
 const Settings = struct {
     size_display: SizeDisplay = .megabytes,
-    progress_style: ProgressStyle = .blocks,
+    progress_style: ProgressStyle = .shell,
     bar_width: usize = 20,
     collapse_pkgbuild_diff: bool = true,
 };
@@ -773,7 +774,7 @@ fn loadSettings(context: *runtime.RuntimeContext) !Settings {
     const config = manager.read() catch try config_model.Config.defaults(context.allocator);
     return .{
         .size_display = fmt.parseSizeDisplay(stringValue(&config, "FileSizeDisplay") orelse "Megabytes"),
-        .progress_style = parseProgressStyle(stringValue(&config, "ProgressBarStyle") orelse "Blocks"),
+        .progress_style = parseProgressStyle(stringValue(&config, "ProgressBarStyle") orelse "Shell"),
         .bar_width = integerValue(&config, "ProgressBarWidth") orelse 20,
         .collapse_pkgbuild_diff = boolValue(&config, "CollapsePkgbuildDiff") orelse true,
     };
@@ -798,7 +799,10 @@ fn integerValue(config: *const config_model.Config, key: []const u8) ?usize {
 }
 
 fn parseProgressStyle(value: []const u8) ProgressStyle {
-    return if (std.ascii.eqlIgnoreCase(value, "Pacman")) .pacman else if (std.ascii.eqlIgnoreCase(value, "Nerdfont")) .nerdfont else .blocks;
+    if (std.ascii.eqlIgnoreCase(value, "Blocks")) return .blocks;
+    if (std.ascii.eqlIgnoreCase(value, "Pacman")) return .pacman;
+    if (std.ascii.eqlIgnoreCase(value, "Nerdfont")) return .nerdfont;
+    return .shell;
 }
 
 fn convertSize(display: SizeDisplay, bytes: u64) f64 {
@@ -1074,6 +1078,21 @@ fn renderBar(
 ) !void {
     const filled = width * percentage / 100;
     switch (style) {
+        .shell => {
+            if (width == 0) return;
+            if (percentage >= 100) {
+                try writer.splatByteAll('=', width);
+                return;
+            }
+            // One cell for the two valves, opening and closing on progress updates.
+            // Keep the shell visible even before the first cell is filled.
+            const position = @min(filled, width - 1);
+            try writer.splatByteAll(' ', position);
+            try writer.writeByte(if (frame & 1 == 0) '<' else '=');
+            for (position + 1..width) |index| {
+                try writer.writeByte(if (index % 2 == 0) '.' else ' ');
+            }
+        },
         .blocks => {
             if (ascii_only) {
                 try writer.splatByteAll('#', filled);
@@ -1108,6 +1127,42 @@ fn renderBar(
                 }
             }
         },
+    }
+}
+
+test "single-pane shell style defaults and legacy selections" {
+    try std.testing.expectEqual(ProgressStyle.shell, (Settings{}).progress_style);
+    try std.testing.expectEqual(ProgressStyle.shell, parseProgressStyle("sHeLl"));
+    try std.testing.expectEqual(ProgressStyle.shell, parseProgressStyle("unknown"));
+    try std.testing.expectEqual(ProgressStyle.blocks, parseProgressStyle("blocks"));
+    try std.testing.expectEqual(ProgressStyle.pacman, parseProgressStyle("pacman"));
+    try std.testing.expectEqual(ProgressStyle.nerdfont, parseProgressStyle("nerdfont"));
+}
+
+test "single-pane shell opens and closes across progress including narrow bars" {
+    const Case = struct { percentage: u8, frame: usize, width: usize, expected: []const u8 };
+    const cases = [_]Case{
+        .{ .percentage = 0, .frame = 0, .width = 10, .expected = "< . . . . " },
+        .{ .percentage = 0, .frame = 1, .width = 10, .expected = "= . . . . " },
+        .{ .percentage = 50, .frame = 0, .width = 10, .expected = "     <. . " },
+        .{ .percentage = 50, .frame = 1, .width = 10, .expected = "     =. . " },
+        .{ .percentage = 99, .frame = 0, .width = 10, .expected = "         <" },
+        .{ .percentage = 100, .frame = 0, .width = 10, .expected = "==========" },
+        .{ .percentage = 100, .frame = 1, .width = 10, .expected = "==========" },
+        .{ .percentage = 0, .frame = 0, .width = 0, .expected = "" },
+        .{ .percentage = 100, .frame = 1, .width = 0, .expected = "" },
+        .{ .percentage = 0, .frame = 0, .width = 1, .expected = "<" },
+        .{ .percentage = 99, .frame = 1, .width = 1, .expected = "=" },
+        .{ .percentage = 100, .frame = 0, .width = 1, .expected = "=" },
+    };
+    // Shell is ASCII in both interactive and plain output modes.
+    for ([_]bool{ false, true }) |ascii_only| {
+        for (cases) |case| {
+            var output_buffer = std.Io.Writer.Allocating.init(std.testing.allocator);
+            defer output_buffer.deinit();
+            try renderBar(&output_buffer.writer, case.percentage, case.frame, .shell, case.width, ascii_only);
+            try std.testing.expectEqualStrings(case.expected, output_buffer.writer.buffered());
+        }
     }
 }
 

@@ -818,7 +818,7 @@ test "shellybuild env accepts literal strings and replaces the system table" {
     try std.testing.expectEqualStrings("", values.get("EMPTY").?);
     try std.testing.expectEqualStrings("C.UTF-8", values.get("LANG").?);
     try std.testing.expectEqualStrings("∂", values.get("_custom2").?);
-    const cleared = try ShellyBuildConfiguration.initFromBuffers(allocator, system, "[build]\nenv = {}\n");
+    const cleared = try ShellyBuildConfiguration.initFromBuffers(allocator, system, "[build.env]\n");
     defer cleared.deinit();
     try std.testing.expectEqual(@as(usize, 0), cleared.build.env.len);
 }
@@ -830,7 +830,7 @@ test "shellybuild env rejects invalid tables names values and reserved variables
         "[build]\nenv = []\n",
         "[build.env]\nBAD = 42\n",
         "[build.env]\nBAD = true\n",
-        "[build.env]\nBAD = {}\n",
+        "[build.env.BAD]\n",
         "[build.env]\nBAD = []\n",
         "[build.env]\n'' = 'bad'\n",
         "[build.env]\n'1BAD' = 'bad'\n",
@@ -856,5 +856,5 @@ test "shellybuild env rejects invalid tables names values and reserved variables
         try std.testing.expect(std.mem.indexOf(u8, diagnostic.written(), name) != null);
         try std.testing.expect(std.mem.indexOf(u8, diagnostic.written(), "private-value") == null);
     }
-    try std.testing.expectError(error.UnknownConfigurationKey, ShellyBuildConfiguration.initFromBuffers(allocator, "[build]\nenvv = {}\n", null));
+    try std.testing.expectError(error.UnknownConfigurationKey, ShellyBuildConfiguration.initFromBuffers(allocator, "[build.envv]\n", null));
 }

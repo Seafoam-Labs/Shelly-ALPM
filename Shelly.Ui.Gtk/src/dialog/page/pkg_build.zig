@@ -91,7 +91,7 @@ pub const PkgbuildReviewDialog = extern struct {
         p.ctx = ctx;
 
         var heading_buffer: [512]u8 = undefined;
-        const heading = std.fmt.bufPrintZ(&heading_buffer, "{s} {s}", .{ translations._("Review PKGBUILD changes for"), package_name }) catch translations._("Review PKGBUILD changes");
+        const heading = std.fmt.bufPrintSentinel(&heading_buffer, "{s} {s}", .{ translations._("Review PKGBUILD changes for"), package_name }, 0) catch translations._("Review PKGBUILD changes");
         gtk.Label.setLabel(p.heading_label, heading);
 
         const diff_view = gtk.TextView.new();
@@ -114,13 +114,9 @@ pub const PkgbuildReviewDialog = extern struct {
 
             var markup_buffer: [4096]u8 = undefined;
             const markup = if (pango_color(parsed.color orelse "")) |hex|
-                std.fmt.bufPrintZ(
-                    &markup_buffer,
-                    "<tt><span foreground=\"{s}\">{s}</span></tt>",
-                    .{ hex, escaped },
-                ) catch null
+                std.fmt.bufPrintSentinel(&markup_buffer, "<tt><span foreground=\"{s}\">{s}</span></tt>", .{ hex, escaped }, 0) catch null
             else
-                std.fmt.bufPrintZ(&markup_buffer, "<tt>{s}</tt>", .{escaped}) catch null;
+                std.fmt.bufPrintSentinel(&markup_buffer, "<tt>{s}</tt>", .{escaped}, 0) catch null;
 
             if (markup) |m| {
                 gtk.TextBuffer.insertMarkup(diff_buffer, &diff_iter, m, -1);
@@ -165,11 +161,7 @@ pub const PkgbuildReviewDialog = extern struct {
         if (has_warnings) {
             gtk.Image.setFromIconName(p.scan_icon, "dialog-warning-symbolic");
             var buffer: [128]u8 = undefined;
-            const text = std.fmt.bufPrintZ(
-                &buffer,
-                "{s} {d} {s}",
-                .{ translations._("Security scan completed -"), count, translations._("warning(s) found.") },
-            ) catch translations._("Security scan completed - warnings found.");
+            const text = std.fmt.bufPrintSentinel(&buffer, "{s} {d} {s}", .{ translations._("Security scan completed -"), count, translations._("warning(s) found.") }, 0) catch translations._("Security scan completed - warnings found.");
             gtk.Label.setLabel(p.scan_label, text);
             gtk.Widget.removeCssClass(p.scan_label.as(gtk.Widget), "success");
             gtk.Widget.addCssClass(p.scan_label.as(gtk.Widget), "warning");
@@ -232,11 +224,7 @@ pub const PkgbuildReviewDialog = extern struct {
 
             var title_buffer: [512]u8 = undefined;
             const severity_color = if (std.mem.eql(u8, warning.severity, "Critical")) "#c01c28" else "#e5a50a";
-            const title_markup = std.fmt.bufPrintZ(
-                &title_buffer,
-                "<b><span foreground=\"{s}\">{s} {s} {s}</span></b>",
-                .{ severity_color, escaped_tool, used_in, escaped_hook },
-            ) catch null;
+            const title_markup = std.fmt.bufPrintSentinel(&title_buffer, "<b><span foreground=\"{s}\">{s} {s} {s}</span></b>", .{ severity_color, escaped_tool, used_in, escaped_hook }, 0) catch null;
 
             if (title_markup) |markup| {
                 gtk.TextBuffer.insertMarkup(buffer, &iter, markup, -1);

@@ -770,7 +770,7 @@ fn collectModifiers(
     const action_code = command.actionCode orelse return buffer[0..0];
     const combined = actionSupportsCombinedTypes(action_code);
     var count: usize = 0;
-    var seen = [_]bool{false} ** 256;
+    var seen = @as([256]bool, @splat(false));
     for (command.options) |option| {
         if (count >= buffer.len) break;
         if (option.hidden) continue;
@@ -821,7 +821,7 @@ fn collectStandaloneModifiers(
 ) []const Modifier {
     const action_code = command.actionCode orelse return buffer[0..0];
     var count: usize = 0;
-    var seen = [_]bool{false} ** 256;
+    var seen = @as([256]bool, @splat(false));
     for (command.options) |option| {
         if (count >= buffer.len) break;
         if (option.hidden) continue;

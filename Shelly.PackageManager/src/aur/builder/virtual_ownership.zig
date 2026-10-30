@@ -211,7 +211,7 @@ fn fileIdentityAt(
     basename: []const u8,
 ) !FileIdentity {
     const linux = std.os.linux;
-    const basename_z = try allocator.dupeZ(u8, basename);
+    const basename_z = try allocator.dupeSentinel(u8, basename, 0);
     defer allocator.free(basename_z);
     var statx = std.mem.zeroes(linux.Statx);
     switch (linux.errno(linux.statx(

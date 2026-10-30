@@ -943,11 +943,11 @@ fn runFlatpak(
     const install_id = if (eol_replacement) |replacement| replacement.id else selected_id;
     const install_branch = if (eol_replacement) |replacement| replacement.branch else requested_branch;
 
-    const id_z = try context.allocator.dupeZ(u8, install_id);
+    const id_z = try context.allocator.dupeSentinel(u8, install_id, 0);
     defer context.allocator.free(id_z);
-    const remote_z = try context.allocator.dupeZ(u8, selected_remote);
+    const remote_z = try context.allocator.dupeSentinel(u8, selected_remote, 0);
     defer context.allocator.free(remote_z);
-    const branch_z = try context.allocator.dupeZ(u8, install_branch);
+    const branch_z = try context.allocator.dupeSentinel(u8, install_branch, 0);
     defer context.allocator.free(branch_z);
     if (!try manager.install_flatpak(
         id_z,
@@ -1003,7 +1003,7 @@ fn runFlatpakFile(
     defer context.allocator.free(current_directory);
     const absolute_path = try std.fs.path.resolve(context.allocator, &.{ current_directory, location });
     defer context.allocator.free(absolute_path);
-    const path_z = try context.allocator.dupeZ(u8, absolute_path);
+    const path_z = try context.allocator.dupeSentinel(u8, absolute_path, 0);
     defer context.allocator.free(path_z);
 
     var manager = PackageManager.FlatpakManager{ .allocator = context.allocator, .io = context.io };
@@ -1222,7 +1222,7 @@ fn sentinelStrings(allocator: std.mem.Allocator, values: []const []const u8) ![]
         allocator.free(result);
     }
     for (values, result) |value, *destination| {
-        destination.* = try allocator.dupeZ(u8, value);
+        destination.* = try allocator.dupeSentinel(u8, value, 0);
         initialized += 1;
     }
     return result;

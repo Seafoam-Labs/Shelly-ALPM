@@ -281,7 +281,7 @@ fn enumChoices(key: []const u8) ?[]const []const u8 {
         "SyncForce",
         "ListInstalled",
     };
-    if (std.mem.eql(u8, key, "ProgressBarStyle")) return &.{ "Blocks", "Pacman" };
+    if (std.mem.eql(u8, key, "ProgressBarStyle")) return &.{ "Shell", "Blocks", "Pacman" };
     if (std.mem.eql(u8, key, "DownloadAddressFamilyPolicy")) return &.{
         "PreferIPv4",
         "PreferIPv6",
@@ -327,6 +327,27 @@ test "defaults preserve reflection order and display conventions" {
         "https://aur.archlinux.org",
         (try config.getDisplay(arena.allocator(), "AurUrl")).?,
     );
+}
+
+test "config selection preserves progress styles and defaults to Shell" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var config = try Config.defaults(allocator);
+    // An older config without a style also inherits the new default.
+    try config.overlay(.empty);
+    try std.testing.expectEqualStrings("Shell", (try config.getDisplay(allocator, "ProgressBarStyle")).?);
+    try std.testing.expect(try config.set(allocator, "progressbarstyle", "sHeLl"));
+    try std.testing.expectEqualStrings("Shell", (try config.getDisplay(allocator, "ProgressBarStyle")).?);
+    for ([_][]const u8{ "Shell", "Blocks", "Pacman" }) |style| {
+        try std.testing.expect(try config.set(allocator, "ProgressBarStyle", style));
+        var saved: std.json.ObjectMap = .empty;
+        try saved.put(allocator, "ProgressBarStyle", config.values.get("ProgressBarStyle").?);
+        var reloaded = try Config.defaults(allocator);
+        try reloaded.overlay(saved);
+        try std.testing.expectEqualStrings(style, (try reloaded.getDisplay(allocator, "ProgressBarStyle")).?);
+    }
+    try std.testing.expectEqualStrings("Expected one of: Shell, Blocks, Pacman.", try valueHint(allocator, "ProgressBarStyle"));
 }
 
 test "updates typed and enumerated values case-insensitively" {

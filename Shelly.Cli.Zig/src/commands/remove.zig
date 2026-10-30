@@ -551,7 +551,7 @@ fn sentinelStrings(allocator: std.mem.Allocator, values: []const []const u8) ![]
         allocator.free(result);
     }
     for (values, result) |value, *destination| {
-        destination.* = try allocator.dupeZ(u8, value);
+        destination.* = try allocator.dupeSentinel(u8, value, 0);
         initialized += 1;
     }
     return result;

@@ -1,5 +1,29 @@
 const std = @import("std");
 
+/// Preserve the propagated cause for deferred diagnostics. Zig 0.17 errdefer
+/// no longer captures the returned error. Successful values pass through intact.
+pub fn captureError(value: anytype, failure: *?anyerror) @TypeOf(value) {
+    switch (@typeInfo(@TypeOf(value))) {
+        .error_union => return value catch |err| {
+            failure.* = err;
+            return err;
+        },
+        .error_set => failure.* = value,
+        else => {},
+    }
+    return value;
+}
+
+test "deferred diagnostics retain the propagated error and preserve success" {
+    var failure: ?anyerror = null;
+    try std.testing.expectEqual(@as(u32, 42), try captureError(@as(error{Failed}!u32, 42), &failure));
+    try std.testing.expectEqual(null, failure);
+    try std.testing.expectError(error.Failed, captureError(@as(error{Failed}!u32, error.Failed), &failure));
+    try std.testing.expectEqual(error.Failed, failure.?);
+    try std.testing.expectEqual(error.Cancelled, captureError(error.Cancelled, &failure));
+    try std.testing.expectEqual(error.Cancelled, failure.?);
+}
+
 pub const Context = struct {
     operation: []const u8 = "the package operation",
     action: []const u8 = "manage packages",
@@ -62,7 +86,14 @@ pub fn format(allocator: std.mem.Allocator, err: anyerror, context: Context) ![]
     if (context.stage) |stage| try out.writer.print("\nStage: {s}", .{stage});
     if (std.mem.indexOf(u8, explanation, "Technical details:") == null)
         try out.writer.print("\n\nTechnical details: {s}", .{@errorName(err)});
-    if (context.domain) |domain| try out.writer.print("\nBackend: {s}", .{domain});
+    if (context.domain) |domain| {
+        // Native backends may already supply a complete diagnostic block.
+        var lines = std.mem.splitScalar(u8, explanation, '\n');
+        const already_present = while (lines.next()) |line| {
+            if (std.mem.startsWith(u8, line, "Backend: ") and std.mem.eql(u8, line["Backend: ".len..], domain)) break true;
+        } else false;
+        if (!already_present) try out.writer.print("\nBackend: {s}", .{domain});
+    }
     if (context.native_code) |code| try out.writer.print("\nNative code: {d}", .{code});
     return sanitizeAlloc(allocator, out.written());
 }

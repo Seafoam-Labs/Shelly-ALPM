@@ -183,7 +183,7 @@ fn testGuestKeyring(use_keyboxd: bool) !void {
     var verified = try verifier.verifyDetached(signature, payload, &.{fingerprint});
     defer verified.deinit(allocator);
     try std.testing.expectEqualStrings(fingerprint, verified.primary_fingerprint);
-    try std.testing.expectError(error.InvalidPgpKey, verifier.verifyDetached(signature, payload, &.{"5A" ** 20}));
+    try std.testing.expectError(error.InvalidPgpKey, verifier.verifyDetached(signature, payload, &.{"5A5A5A5A5A5A5A5A5A5A5A5A5A5A5A5A5A5A5A5A"}));
     try temporary.dir.writeFile(io, .{ .sub_path = "payload.txt", .data = "tampered\n" });
     try std.testing.expectError(error.BadPgpSignature, verifier.verifyDetached(signature, payload, &.{fingerprint}));
 }

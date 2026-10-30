@@ -224,7 +224,7 @@ const Bucket = struct {
     absent: bool = false,
 };
 
-const Buckets = [std.meta.fields(Concern).len]Bucket;
+const Buckets = [@typeInfo(Concern).@"enum".field_names.len]Bucket;
 
 pub fn classify(allocator: std.mem.Allocator, entries: []const []const u8) !Summary {
     var buckets: Buckets = @splat(.{});
@@ -272,7 +272,7 @@ pub fn classify(allocator: std.mem.Allocator, entries: []const []const u8) !Summ
 }
 
 fn bucket(buckets: *Buckets, concern: Concern) *Bucket {
-    return &buckets[@intFromEnum(concern)];
+    return &buckets[@backingInt(concern)];
 }
 
 fn freeItems(allocator: std.mem.Allocator, buckets: *Buckets) void {
@@ -676,7 +676,7 @@ fn collectRows(allocator: std.mem.Allocator, buckets: *Buckets) ![]Row {
         if (!b.mentioned) continue;
         if (b.absent) {
             try rows.append(allocator, .{
-                .concern = @enumFromInt(index),
+                .concern = @fromBackingInt(@intCast(index)),
                 .tier = .low,
                 .state = .absent,
                 .items = &.{},
@@ -685,7 +685,7 @@ fn collectRows(allocator: std.mem.Allocator, buckets: *Buckets) ![]Row {
         }
         dedupeItems(allocator, &b.items);
         try rows.append(allocator, .{
-            .concern = @enumFromInt(index),
+            .concern = @fromBackingInt(@intCast(index)),
             .tier = if (b.granted) b.tier else .low,
             .state = .granted,
             .items = try b.items.toOwnedSlice(allocator),
@@ -696,7 +696,7 @@ fn collectRows(allocator: std.mem.Allocator, buckets: *Buckets) ![]Row {
         fn lessThan(_: void, a: Row, b: Row) bool {
             if (a.state != b.state) return a.state == .granted;
             if (a.tier != b.tier) return a.tier.rank() > b.tier.rank();
-            return @intFromEnum(a.concern) < @intFromEnum(b.concern);
+            return @backingInt(a.concern) < @backingInt(b.concern);
         }
     }.lessThan);
     return rows.toOwnedSlice(allocator);

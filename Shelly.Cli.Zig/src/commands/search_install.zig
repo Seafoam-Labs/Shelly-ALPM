@@ -218,7 +218,7 @@ fn appendAurPackages(
     for (packages) |package| {
         const description = package.description orelse "";
         if (matchScore(package.name, description, query) == 0) continue;
-        const name_z = try allocator.dupeZ(u8, package.name);
+        const name_z = try allocator.dupeSentinel(u8, package.name, 0);
         defer allocator.free(name_z);
         try appendUnique(allocator, candidates, .{
             .source = .aur,

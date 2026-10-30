@@ -236,7 +236,7 @@ fn allocationLifecycle(allocator: std.mem.Allocator, fixture: *Fixture) !void {
 test "transaction init and preparation allocation failures always release lock and resources" {
     var fixture = try Fixture.init();
     defer fixture.deinit();
-    try std.testing.checkAllAllocationFailures(a, allocationLifecycle, .{&fixture});
+    try @import("allocation_failures.zig").checkAllAllocationFailures(a, allocationLifecycle, .{&fixture});
     try std.testing.expect(!fixture.locked());
 }
 
@@ -245,7 +245,7 @@ test "another process contends with Owner in both lock acquisition orders" {
     defer fixture.deinit();
     var owner = try fixture.owner(a);
     defer owner.deinit() catch unreachable;
-    const path = try a.dupeZ(u8, owner.lock_file);
+    const path = try a.dupeSentinel(u8, owner.lock_file, 0);
     defer a.free(path);
     _ = try owner.initializeTransaction(io, .{});
     try std.testing.expectEqual(0, rlpm_test_contender(path));
@@ -332,9 +332,9 @@ test "OwnedQuestion snapshots metadata through source teardown and validates ans
     };
 
     const ref: rlpm.PackageRef = .{
-        .database = .{ .owner = @enumFromInt(1), .id = .archive },
+        .database = .{ .owner = @fromBackingInt(@intCast(1)), .id = .archive },
         .generation = 1,
-        .id = @enumFromInt(0),
+        .id = @fromBackingInt(@intCast(0)),
     };
 
     var question: rlpm.Callbacks.Question = .{
@@ -350,7 +350,7 @@ test "OwnedQuestion snapshots metadata through source teardown and validates ans
     arena.deinit();
     try std.testing.expectEqualStrings("temporary", owned.question.select_provider.views[0].package.name);
     try std.testing.expectEqualStrings("1-1", owned.question.select_provider.views[0].package.version.raw);
-    try std.testing.checkAllAllocationFailures(a, copyQuestion, .{owned.question});
+    try @import("allocation_failures.zig").checkAllAllocationFailures(a, copyQuestion, .{owned.question});
     owned.question.select_provider.selected = 10;
     try std.testing.expectError(
         error.InvalidAnswer,
@@ -594,7 +594,7 @@ test "archive transfer and preparation allocation failures preserve single owner
         .none,
     );
     defer archive.deinit();
-    try std.testing.checkAllAllocationFailures(a, allocationTransfer, .{ &fixture, archive.path });
+    try @import("allocation_failures.zig").checkAllAllocationFailures(a, allocationTransfer, .{ &fixture, archive.path });
     try std.testing.expect(!fixture.locked());
 }
 
@@ -693,7 +693,7 @@ test "transaction package references and system upgrade preserve CachyOS reposit
     try tx.addPackage(ref);
 
     var foreign = ref;
-    foreign.database.owner = @enumFromInt(@intFromEnum(ref.database.owner) + 1);
+    foreign.database.owner = @fromBackingInt(@intCast(@backingInt(ref.database.owner) + 1));
     try std.testing.expectError(error.ForeignOwner, tx.addPackage(foreign));
 
     const local = (try owner.findPackage(owner.localDatabase().?, "demo")).?;
