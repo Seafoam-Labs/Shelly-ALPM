@@ -17,7 +17,7 @@ url='https://github.com/Seafoam-Labs/Shelly-ALPM'
 license=('GPL-3.0-only')
 
 # Native package backend. true builds libalpm alongside RLPM and needs pacman;
-# false builds the RLPM-only CLI (as in PKGBUILD-devario), which works without
+# false builds the RLPM-only CLI (as in packaging/devario/PKGBUILD), which works without
 # libalpm. Override with SHELLY_LIBALPM=false makepkg.
 _shelly_libalpm=${SHELLY_LIBALPM:-true}
 case ${_shelly_libalpm} in
