@@ -28,12 +28,15 @@ pub const View = struct {
         const arena = ctx.arena;
         const max = ctx.max.size();
         const split = max.width >= 64;
-        const right_w: u16 = if (split) @min(44, max.width / 2) else max.width;
-        const left_w: u16 = if (split) max.width - right_w else max.width;
+        const left_w: u16 = if (split) @max(28, @as(u16, @intCast(@as(u32, max.width) * 2 / 5))) else max.width;
+        const right_w: u16 = if (split) max.width - left_w else max.width;
+        const list_width = left_w -| @as(u16, if (split) 1 else 0);
         const bordered_search = max.width >= 2 and max.height >= 8;
         const search_height: u16 = if (bordered_search) 3 else 1;
         const content_row = 1 + search_height;
         const height = max.height -| (content_row + 1);
+        const details_row: u16 = if (split) 1 else content_row;
+        const details_height = max.height -| (details_row + 1);
         var search_border: Border = .{
             .child = self.text_field.widget(),
             .style = if (!self.list_active and !self.details_active) .{ .fg = .{ .index = 7 }, .bold = true } else .{},
@@ -42,11 +45,11 @@ pub const View = struct {
             .origin = .{ .row = 1, .col = 0 },
             .surface = if (bordered_search)
                 try search_border.widget().draw(ctx.withConstraints(
-                    .{ .width = max.width, .height = search_height },
-                    .{ .width = max.width, .height = search_height },
+                    .{ .width = list_width, .height = search_height },
+                    .{ .width = list_width, .height = search_height },
                 ))
             else
-                try self.text_field.draw(ctx.withConstraints(.{}, .{ .width = max.width, .height = search_height })),
+                try self.text_field.draw(ctx.withConstraints(.{}, .{ .width = list_width, .height = search_height })),
         });
 
         if (split or !self.details_active) {
@@ -58,7 +61,6 @@ pub const View = struct {
                 "No packages match."
             else
                 null;
-            const list_width = left_w -| @as(u16, if (split) 1 else 0);
             var label: vxfw.Text = .{ .text = message orelse "" };
             const labels = [_]Border.BorderLabel{.{
                 .text = if (self.installed_only) "Installed packages" else "Packages",
@@ -82,7 +84,7 @@ pub const View = struct {
             });
         }
 
-        if ((split or self.details_active) and right_w >= 2 and height >= 2) {
+        if ((split or self.details_active) and right_w >= 2 and details_height >= 2) {
             const labels = [_]Border.BorderLabel{.{
                 .text = if (self.selected) |pkg|
                     try std.fmt.allocPrint(arena, "{f}", .{diagnostics.safe(pkg.Name)})
@@ -97,10 +99,10 @@ pub const View = struct {
                 .style = if (self.details_active) .{ .fg = .{ .index = 7 }, .bold = true } else .{},
             };
             try children.append(arena, .{
-                .origin = .{ .row = @intCast(content_row), .col = if (split) left_w else 0 },
+                .origin = .{ .row = @intCast(details_row), .col = if (split) left_w else 0 },
                 .surface = try border.widget().draw(ctx.withConstraints(
-                    .{ .width = right_w, .height = height },
-                    .{ .width = right_w, .height = height },
+                    .{ .width = right_w, .height = details_height },
+                    .{ .width = right_w, .height = details_height },
                 )),
             });
         }
@@ -152,7 +154,13 @@ pub fn drawPackageRow(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vx
         .softwrap = false,
         .overflow = .ellipsis,
     };
-    return rich.draw(ctx);
+    // ListView allows horizontal overflow. Constrain rows to its viewport
+    // so long descriptions are ellipsized instead of extending off screen.
+    const width = ctx.max.width orelse ctx.min.width;
+    return rich.draw(ctx.withConstraints(
+        .{ .width = width, .height = 0 },
+        .{ .width = width, .height = 1 },
+    ));
 }
 
 pub fn drawSelectedRow(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
@@ -205,20 +213,78 @@ fn appendSection(arena: Allocator, lines: *std.ArrayList([]const u8), title: []c
     }
 }
 
-/// ScrollView builds this single wrapped document on demand in the frame arena.
+const DetailField = struct {
+    label: []const u8,
+    value: []const u8,
+    gap: bool = false,
+};
+
+fn listField(arena: Allocator, fields: *std.ArrayList(DetailField), label: []const u8, items: []const []const u8) Allocator.Error!void {
+    if (items.len == 0) return;
+    try fields.append(arena, .{ .label = label, .value = try std.mem.join(arena, "\n", items), .gap = true });
+}
+
+/// Render a structured document for ScrollView. Values wrap independently of
+/// labels, so continuation lines keep their indentation after resizing.
 pub fn drawDetails(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
     const pkg: *const Package = @ptrCast(@alignCast(ptr));
-    const body = try std.fmt.allocPrint(ctx.arena, "{f}", .{
-        diagnostics.safe(try detailsText(ctx.arena, pkg)),
-    });
-    var text: vxfw.Text = .{ .text = body, .softwrap = true };
-    // ScrollView allows horizontal overflow and supplies its viewport width
-    // as the minimum. Wrap to that width instead of the unbounded maximum.
+    const arena = ctx.arena;
     const width = ctx.max.width orelse ctx.min.width;
-    return text.draw(ctx.withConstraints(
-        .{ .width = width, .height = 0 },
-        .{ .width = width, .height = null },
-    ));
+    const columns = width >= 36;
+    const label_width: u16 = if (columns) 12 else width;
+    const value_col: u16 = if (columns) 14 else 0;
+    const value_width = width - value_col;
+    var fields: std.ArrayList(DetailField) = .empty;
+    try fields.appendSlice(arena, &.{
+        .{ .label = "Description", .value = if (pkg.Description.len > 0) pkg.Description else "No description." },
+        .{ .label = "Version", .value = pkg.Version, .gap = true },
+        .{ .label = "Repository", .value = pkg.Repository },
+        .{ .label = "Installed", .value = if (pkg.Installed) "Yes" else "No" },
+    });
+    if (pkg.Licenses.len > 0) try fields.append(arena, .{ .label = "Licenses", .value = try std.mem.join(arena, ", ", pkg.Licenses) });
+    if (pkg.Groups.len > 0) try fields.append(arena, .{ .label = "Groups", .value = try std.mem.join(arena, ", ", pkg.Groups) });
+    if (pkg.Url) |url| try fields.append(arena, .{ .label = "URL", .value = url });
+    try fields.appendSlice(arena, &.{
+        .{ .label = "Download", .value = try formatSize(arena, pkg.DownloadSize), .gap = true },
+        .{ .label = "Disk usage", .value = try formatSize(arena, pkg.InstalledSize) },
+    });
+    if (pkg.BuildDate.len > 0) try fields.append(arena, .{ .label = "Build date", .value = pkg.BuildDate });
+    try listField(arena, &fields, "Dependencies", pkg.Depends);
+    try listField(arena, &fields, "Optional", pkg.OptDepends);
+    try listField(arena, &fields, "Provides", pkg.Provides);
+    try listField(arena, &fields, "Conflicts", pkg.Conflicts);
+    try listField(arena, &fields, "Replaces", pkg.Replaces);
+
+    var children: std.ArrayList(vxfw.SubSurface) = .empty;
+    var row: u16 = 0;
+    for (fields.items) |field| {
+        if (field.gap or (!columns and row > 0)) row += 1;
+        var label: vxfw.Text = .{ .text = field.label, .style = .{ .bold = true, .fg = .{ .index = 7 } } };
+        const label_surface = try label.draw(ctx.withConstraints(.{}, .{ .width = label_width, .height = null }));
+        try children.append(arena, .{ .origin = .{ .row = row, .col = 0 }, .surface = label_surface });
+        const value_row = row + if (columns) @as(u16, 0) else label_surface.size.height;
+        var value: vxfw.Text = .{ .text = try std.fmt.allocPrint(arena, "{f}", .{diagnostics.safe(field.value)}), .softwrap = true };
+        const value_surface = try value.draw(ctx.withConstraints(
+            .{ .width = value_width },
+            .{ .width = value_width, .height = null },
+        ));
+        try children.append(arena, .{ .origin = .{ .row = value_row, .col = value_col }, .surface = value_surface });
+        row = @max(row + label_surface.size.height, value_row + value_surface.size.height);
+    }
+    // Flatten the document into one scrollable surface; no frame-arena Text
+    // widgets need to survive the draw call.
+    const surface = try vxfw.Surface.init(arena, .{ .userdata = ptr, .drawFn = drawDetails }, .{ .width = width, .height = row });
+    @memset(surface.buffer, .{});
+    for (children.items) |child| {
+        const origin_row: usize = @intCast(child.origin.row);
+        const origin_col: usize = @intCast(child.origin.col);
+        for (0..child.surface.size.height) |line| {
+            const source = line * child.surface.size.width;
+            const target = (origin_row + line) * width + origin_col;
+            @memcpy(surface.buffer[target .. target + child.surface.size.width], child.surface.buffer[source .. source + child.surface.size.width]);
+        }
+    }
+    return surface;
 }
 
 test "details wrap long dependency names to the scroll viewport width" {
@@ -243,5 +309,55 @@ test "details wrap long dependency names to the scroll viewport width" {
                 try rendered.appendSlice(arena.allocator(), cell.char.grapheme);
         }
         try std.testing.expect(std.mem.indexOf(u8, rendered.items, pkg.Depends[0]) != null);
+    }
+}
+
+test "package rows truncate descriptions to the list viewport" {
+    vxfw.DrawContext.init(.unicode);
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var pkg: Package = .{ .Name = "example", .Version = "1", .Description = "A long description that should be truncated in the package list." };
+    const surface = try drawPackageRow(&pkg, .{
+        .arena = arena.allocator(),
+        .min = .{ .width = 28 },
+        .max = .{},
+        .cell_size = .{ .width = 10, .height = 20 },
+    });
+    try std.testing.expectEqual(@as(u16, 28), surface.size.width);
+    try std.testing.expectEqual(@as(u16, 1), surface.size.height);
+    var ellipsis = false;
+    for (surface.buffer) |cell| ellipsis = ellipsis or std.mem.eql(u8, cell.char.grapheme, "…");
+    try std.testing.expect(ellipsis);
+}
+
+test "structured details align wrapped values and stack fields in narrow panes" {
+    vxfw.DrawContext.init(.unicode);
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var pkg: Package = .{
+        .Description = "Description text that continues onto another line in the value column.",
+        .Depends = &.{ "dependency-one", "dependency-two" },
+    };
+    for ([_]u16{ 50, 24 }) |width| {
+        const surface = try drawDetails(&pkg, .{
+            .arena = arena.allocator(),
+            .min = .{ .width = width },
+            .max = .{},
+            .cell_size = .{ .width = 10, .height = 20 },
+        });
+        try std.testing.expect(surface.buffer[0].style.bold);
+        const value_col: usize = if (width >= 36) 14 else 0;
+        const value_row: usize = if (width >= 36) 0 else 1;
+        try std.testing.expectEqualStrings("D", surface.buffer[value_row * width + value_col].char.grapheme);
+        var rendered: std.ArrayList(u8) = .empty;
+        for (surface.buffer) |cell| try rendered.append(arena.allocator(), if (cell.char.grapheme.len == 1) cell.char.grapheme[0] else ' ');
+        for (pkg.Depends) |dependency| {
+            const index = std.mem.indexOf(u8, rendered.items, dependency).?;
+            try std.testing.expectEqual(value_col, index % width);
+        }
+        if (width >= 36) {
+            for (surface.buffer[width .. width + 14]) |cell|
+                try std.testing.expectEqualStrings(" ", cell.char.grapheme);
+        }
     }
 }

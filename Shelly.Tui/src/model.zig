@@ -2929,9 +2929,13 @@ test "packages split details follow selection and remain within the page on resi
             try std.testing.expect(child.origin.col >= 0 and child.origin.row >= 0);
             try std.testing.expect(@as(usize, @intCast(child.origin.col)) + child.surface.size.width <= size.width);
             try std.testing.expect(@as(usize, @intCast(child.origin.row)) + child.surface.size.height <= size.height - 1);
+            if (child.origin.col > 0) {
+                details_on_right = true;
+                try std.testing.expectEqual(@as(i17, 1), child.origin.row);
+                try std.testing.expectEqual(size.height - 2, child.surface.size.height);
+            }
             const content_row: i17 = if (size.width >= 2 and size.height >= 8) 4 else 2;
             if (child.origin.row == content_row) {
-                if (child.origin.col > 0) details_on_right = true;
                 if (child.surface.widget.eql(model.list_view.widget())) list_on_left = true;
                 for (child.surface.children) |nested| {
                     if (nested.surface.widget.eql(model.list_view.widget())) list_on_left = true;
