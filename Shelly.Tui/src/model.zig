@@ -165,7 +165,10 @@ const Overlay = union(enum) {
     pkgbuild,
 };
 
+const AurSelection = struct { name: []const u8, installed: bool };
+
 pub const Model = struct {
+    aur_selection: std.ArrayList(AurSelection) = .empty,
     gpa: Allocator,
 
     active: Tab = .packages,
@@ -371,6 +374,8 @@ pub const Model = struct {
         gpa.destroy(self.load);
         self.text_field.deinit();
         self.aur_field.deinit();
+        self.clearAurSelection();
+        self.aur_selection.deinit(gpa);
         self.filtered.deinit(gpa);
         self.selected_packages.deinit(gpa);
         if (self.query.len > 0) gpa.free(self.query);
@@ -565,6 +570,14 @@ pub const Model = struct {
                     }
                 }
                 if (self.active == .aur and self.aur_list_active) {
+                    if (commands.matches(key, .select) or commands.matches(key, .mark)) {
+                        try self.toggleAurSelection();
+                        return ctx.consumeAndRedraw();
+                    }
+                    if (commands.matches(key, .clear_selection)) {
+                        self.clearAurSelection();
+                        return ctx.consumeAndRedraw();
+                    }
                     if (commands.matches(key, .search)) {
                         self.aur_list_active = false;
                         return ctx.consumeAndRedraw();
@@ -578,7 +591,9 @@ pub const Model = struct {
                         return ctx.consumeAndRedraw();
                     }
                     if (commands.packageAction(key)) |action| {
-                        if (self.selectedAur()) |pkg| {
+                        if (action == .install) {
+                            try self.openAurInstallPrompt();
+                        } else if (self.selectedAur()) |pkg| {
                             if (action != .remove or pkg.Installed)
                                 try self.openPackagePrompt(pkg.Name, .aur, if (action == .install) .install else .remove);
                         }
@@ -1568,6 +1583,12 @@ pub const Model = struct {
         if (parsed) |p| {
             self.aur_parsed = p;
             self.aur_packages = p.value;
+            for (self.aur_selection.items) |*selected| for (p.value) |pkg| {
+                if (std.mem.eql(u8, selected.name, pkg.Name)) {
+                    selected.installed = pkg.Installed;
+                    break;
+                }
+            };
         }
         try self.rebuildAurFilter();
         return false;
@@ -1585,6 +1606,7 @@ pub const Model = struct {
             },
             .aur => |pkg| {
                 if (!self.settings.aur_enabled) return;
+                if (action == .install) return self.openAurInstallPrompt();
                 if (action == .remove and !pkg.Installed) return;
                 name = pkg.Name;
                 backend = .aur;
@@ -1592,6 +1614,43 @@ pub const Model = struct {
             .sudo, .pkgbuild, .flatpak, .flatpak_install => return,
         }
         try self.openPackagePrompt(name, backend, action);
+    }
+
+    fn aurMarked(self: *const Model, name: []const u8) bool {
+        for (self.aur_selection.items) |selected| if (std.mem.eql(u8, selected.name, name)) return true;
+        return false;
+    }
+
+    fn clearAurSelection(self: *Model) void {
+        for (self.aur_selection.items) |selected| self.gpa.free(selected.name);
+        self.aur_selection.clearRetainingCapacity();
+    }
+
+    fn clearCompletedAurSelection(self: *Model, targets: []const []const u8) void {
+        var index: usize = 0;
+        while (index < self.aur_selection.items.len) {
+            var completed = false;
+            for (targets) |target| if (std.mem.eql(u8, target, self.aur_selection.items[index].name)) {
+                completed = true;
+                break;
+            };
+            if (completed) {
+                self.gpa.free(self.aur_selection.orderedRemove(index).name);
+            } else index += 1;
+        }
+    }
+
+    fn toggleAurSelection(self: *Model) !void {
+        const pkg = self.selectedAur() orelse return;
+        for (self.aur_selection.items, 0..) |selected, index| {
+            if (std.mem.eql(u8, selected.name, pkg.Name)) {
+                self.gpa.free(self.aur_selection.orderedRemove(index).name);
+                return;
+            }
+        }
+        const name = try self.gpa.dupe(u8, pkg.Name);
+        errdefer self.gpa.free(name);
+        try self.aur_selection.append(self.gpa, .{ .name = name, .installed = pkg.Installed });
     }
 
     fn packageMarked(self: *const Model, name: []const u8) bool {
@@ -1603,6 +1662,22 @@ pub const Model = struct {
 
     fn openNativePrompt(self: *Model, action: shelly_operation.Action) !void {
         if (self.install_job != null or self.loading or self.load_failed) return;
+        return self.openPackageBatchPrompt(action, .standard, self.packages, false);
+    }
+
+    fn openAurInstallPrompt(self: *Model) !void {
+        if (!self.settings.aur_enabled or self.install_job != null) return;
+        var packages: std.ArrayList(Package) = .empty;
+        defer packages.deinit(self.gpa);
+        for (self.aur_selection.items) |selected| try packages.append(self.gpa, .{ .Name = selected.name, .Installed = selected.installed });
+        if (packages.items.len == 0) {
+            const pkg = self.selectedAur() orelse return;
+            try packages.append(self.gpa, .{ .Name = pkg.Name, .Installed = pkg.Installed });
+        }
+        try self.openPackageBatchPrompt(.install, .aur, packages.items, true);
+    }
+
+    fn openPackageBatchPrompt(self: *Model, action: shelly_operation.Action, backend: OperationBackend, packages: []const Package, include_all: bool) !void {
         var targets: std.ArrayList([]const u8) = .empty;
         defer targets.deinit(self.gpa);
         var review: std.ArrayList(u8) = .empty;
@@ -1615,8 +1690,8 @@ pub const Model = struct {
         var available: usize = 0;
         var excluded: usize = 0;
         const highlighted = self.selectedPackage();
-        for (self.packages) |pkg| {
-            const included = if (self.selected_packages.items.len > 0)
+        for (packages) |pkg| {
+            const included = if (include_all) true else if (self.selected_packages.items.len > 0)
                 self.packageMarked(pkg.Name)
             else if (highlighted) |item|
                 std.mem.eql(u8, item.Name, pkg.Name)
@@ -1663,7 +1738,7 @@ pub const Model = struct {
             try std.fmt.allocPrint(self.gpa, "Install {d} available packages; reinstall {d} installed packages.\n", .{ available, installed });
         defer self.gpa.free(summary);
         const prompt = try self.gpa.create(SudoPrompt);
-        prompt.* = .{ .name = "", .backend = .standard, .action = action, .password = .empty };
+        prompt.* = .{ .name = "", .backend = backend, .action = action, .password = .empty };
         errdefer prompt.deinit(self.gpa);
         prompt.name = if (targets.items.len == 1) try self.gpa.dupe(u8, targets.items[0]) else try std.fmt.allocPrint(self.gpa, "{d} packages", .{targets.items.len});
         var owned: std.ArrayList([]const u8) = .empty;
@@ -1920,11 +1995,13 @@ pub const Model = struct {
         self.install_job = null;
         const is_flatpak = std.mem.eql(u8, job.request.backend, "flatpak");
         const is_combined = std.mem.eql(u8, job.request.backend, "all");
-        const native_batch = job.request.targets.len > 0;
-        if (native_batch) {
+        const package_batch = job.request.targets.len > 0;
+        if (package_batch) {
             self.refresh_after_upgrade = true;
             self.refresh_updates_after_operation = true;
-            if (!failed and !completed.declined) self.clearCompletedSelection(job.request.targets);
+            if (!failed and !completed.declined) {
+                if (std.mem.eql(u8, job.request.backend, "aur")) self.clearCompletedAurSelection(job.request.targets) else self.clearCompletedSelection(job.request.targets);
+            }
         }
         if (is_flatpak or (is_combined and job.request.include_flatpak)) self.refresh_flatpak_after_operation = true;
         if (job.request.action == .upgrade or is_flatpak or std.mem.eql(u8, job.request.backend, "aur")) self.refresh_updates_after_operation = true;
@@ -1932,7 +2009,7 @@ pub const Model = struct {
         if ((is_combined and job.request.include_aur) or std.mem.eql(u8, job.request.backend, "aur")) self.refresh_aur_after_operation = true;
 
         // Native and AUR operations change the same installed package database.
-        if (!native_batch and !is_flatpak and !failed and !completed.declined and job.request.action != .upgrade) {
+        if (!package_batch and !is_flatpak and !failed and !completed.declined and job.request.action != .upgrade) {
             for (self.packages) |*pkg| {
                 if (std.mem.eql(u8, pkg.Name, job.request.name)) {
                     pkg.Installed = job.request.action == .install;
@@ -1940,7 +2017,7 @@ pub const Model = struct {
                 }
             }
         }
-        if (!native_batch and !is_flatpak and !failed and !completed.declined and job.request.action != .upgrade) {
+        if (!package_batch and !is_flatpak and !failed and !completed.declined and job.request.action != .upgrade) {
             if (self.aur_parsed) |parsed| {
                 for (parsed.value) |*pkg| {
                     if (std.mem.eql(u8, pkg.Name, job.request.name))
@@ -2273,6 +2350,10 @@ pub const Model = struct {
             .package => context.split_details = true,
             .aur => |pkg| {
                 context.mode = .details;
+                context.selected_count = self.aur_selection.items.len;
+                for (self.aur_selection.items) |selected| if (selected.installed) {
+                    context.selected_installed += 1;
+                };
                 context.installable = true;
                 context.removable = pkg.Installed;
                 context.preview = true;
@@ -2323,9 +2404,13 @@ pub const Model = struct {
                 context.mode = .aur;
                 context.installed_only = self.aur_installed_only;
                 context.browsing_list = self.aur_list_active;
-                context.installable = self.aur_list_active and self.selectedAur() != null;
-                context.removable = context.installable and self.selectedAur().?.Installed;
-                context.preview = context.installable;
+                context.selected_count = self.aur_selection.items.len;
+                for (self.aur_selection.items) |selected| if (selected.installed) {
+                    context.selected_installed += 1;
+                };
+                context.installable = self.aur_list_active and (self.selectedAur() != null or self.aur_selection.items.len > 0);
+                context.removable = self.aur_list_active and if (self.selectedAur()) |pkg| pkg.Installed else false;
+                context.preview = self.aur_list_active and self.selectedAur() != null;
             },
             .flatpak => {
                 context.mode = .flatpak;
@@ -2492,7 +2577,7 @@ pub const Model = struct {
         const pkg = self.aur_filtered.items[idx];
         return .{
             .userdata = @constCast(pkg),
-            .drawFn = aur_view.drawAurRow,
+            .drawFn = if (self.aurMarked(pkg.Name)) aur_view.drawSelectedAurRow else aur_view.drawAurRow,
         };
     }
 
@@ -4024,4 +4109,63 @@ test "dependency checkboxes navigate toggle and submit actual CLI indices" {
     try std.testing.expect(model.choiceOptions().?[0].is_selected);
     try std.testing.expect(!model.choiceOptions().?[1].is_selected);
     try std.testing.expectEqual(@as(usize, 0), model.answer_input.items.len);
+}
+
+test "AUR batch selections own names across searches and preserve per-package reviews" {
+    const model = try Model.init(std.testing.allocator);
+    defer model.deinit();
+    model.active = .aur;
+    model.settings.aur_enabled = true;
+    model.aur_list_active = true;
+    model.aur_parsed = try std.json.parseFromSlice([]AurPackage, std.testing.allocator,
+        \\[{"Name":"first","Installed":false},{"Name":"second","Installed":true}]
+    , .{ .allocate = .alloc_always });
+    model.aur_packages = model.aur_parsed.?.value;
+    try model.rebuildAurFilter();
+    var ctx: vxfw.EventContext = .{ .io = undefined, .alloc = std.testing.allocator, .cmds = .empty };
+    defer ctx.cmds.deinit(std.testing.allocator);
+    try Model.typeErasedCaptureHandler(model, &ctx, .{ .key_press = commands.bindings.select });
+    try std.testing.expect(model.overlay == null);
+    model.aur_list.jumpToItem(1);
+    try Model.typeErasedCaptureHandler(model, &ctx, .{ .key_press = commands.bindings.mark });
+    try std.testing.expectEqual(@as(usize, 2), model.aur_selection.items.len);
+    // Replace the entire query result, as a new search does.
+    model.aur_parsed.?.deinit();
+    model.aur_parsed = null;
+    model.aur_packages = &.{};
+    try model.rebuildAurFilter();
+    try std.testing.expectEqualStrings("first", model.aur_selection.items[0].name);
+    try Model.typeErasedCaptureHandler(model, &ctx, .{ .key_press = commands.bindings.install });
+    const prompt = model.overlay.?.sudo;
+    try std.testing.expectEqual(OperationBackend.aur, prompt.backend);
+    try std.testing.expectEqualSlices(u8, "2 packages", prompt.name);
+    try std.testing.expectEqual(@as(usize, 2), prompt.targets.len);
+    try std.testing.expectEqualStrings("first", prompt.targets[0]);
+    try std.testing.expectEqualStrings("second", prompt.targets[1]);
+    try std.testing.expect(std.mem.indexOf(u8, prompt.review_text, "Install 1 available packages; reinstall 1 installed packages.") != null);
+    model.clearAurSelection(); // Confirmation owns its target copies.
+    try std.testing.expectEqualStrings("first", prompt.targets[0]);
+    prompt.state = .running;
+    for ([_][]const u8{
+        \\{"$kind":"q.pkgbuilddiff","QuestionId":"201","PackageName":"first","OldPkgbuild":"","NewPkgbuild":"pkgname=first"}
+        ,
+        \\{"$kind":"q.pkgbuilddiff","QuestionId":"202","PackageName":"second","OldPkgbuild":"","NewPkgbuild":"pkgname=second"}
+    }, [_][]const u8{ "first", "second" }) |json, name| {
+        try model.showOperationQuestion(try shelly_operation.decodeJson(std.testing.allocator, json));
+        try std.testing.expectEqualStrings(name, model.pkgbuild_name);
+        try std.testing.expectEqual(@as(usize, 2), model.review_prompt.?.targets.len);
+        model.finishOperationQuestion();
+        try std.testing.expect(model.overlay.?.sudo == prompt);
+    }
+    model.closeOverlay();
+    const items = [_]AurPackage{.{ .Name = "third" }};
+    model.aur_packages = &items;
+    try model.rebuildAurFilter();
+    try model.toggleAurSelection();
+    try model.openAurInstallPrompt();
+    try std.testing.expectEqualStrings("third", model.overlay.?.sudo.targets[0]);
+    model.clearCompletedAurSelection(&.{"different"});
+    try std.testing.expectEqual(@as(usize, 1), model.aur_selection.items.len);
+    model.clearCompletedAurSelection(&.{"third"});
+    try std.testing.expectEqual(@as(usize, 0), model.aur_selection.items.len);
 }

@@ -119,10 +119,19 @@ pub const View = struct {
 };
 
 pub fn drawAurRow(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
+    return drawRow(ptr, ctx, false);
+}
+
+pub fn drawSelectedAurRow(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
+    return drawRow(ptr, ctx, true);
+}
+
+fn drawRow(ptr: *anyopaque, ctx: vxfw.DrawContext, selected: bool) Allocator.Error!vxfw.Surface {
     const pkg: *const AurPackage = @ptrCast(@alignCast(ptr));
     const arena = ctx.arena;
 
     var spans: std.ArrayList(vxfw.RichText.TextSpan) = .empty;
+    try spans.append(arena, .{ .text = if (selected) "[x] " else "[ ] ", .style = .{ .bold = selected } });
     try spans.append(arena, .{ .text = if (pkg.Installed) "● " else "  ", .style = .{ .fg = .{ .index = 2 } } });
     try spans.append(arena, .{ .text = pkg.Name, .style = .{ .bold = true } });
 

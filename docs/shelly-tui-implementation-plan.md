@@ -165,7 +165,7 @@ The intended flow is browse → details → review/provider questions → execut
 
 - Enter toggles selection; Right focuses details. I installs/reinstalls selected packages; R removes only installed selections. With no selection, actions use the highlighted package. Checkboxes and installed indicators are separate; selections survive filtering.
 - Confirmation lists all targets, install/reinstall counts, and excluded removal entries in a scrollable review. One CLI operation receives separate target arguments. State refreshes after every attempt; success clears completed selections, while skipped entries and failed selections remain.
-- Zig 0.17 build/test and 57 model/service/view tests pass. Six fake-process cases cover install/remove success, failure, and authorization failure. Maintainer subsequently verified live native batch installation and removal. AUR/Flatpak batching remains deferred.
+- Zig 0.17 build/test and 57 model/service/view tests pass. Six fake-process cases cover install/remove success, failure, and authorization failure. Maintainer subsequently verified live native batch installation and removal. AUR install batching is now supported; AUR removal and Flatpak batching remain deferred.
 
 ### Reserved operation panel (2026-10-30)
 
@@ -198,3 +198,9 @@ The intended flow is browse → details → review/provider questions → execut
 - Transaction reviews group requested packages and dependency roles with counts, showing names, versions, and origins without code gutters or raw source/role fields. Unknown roles remain visible. Zig 0.17 build and 50 focused tests pass.
 
 - CLI dependency questions now use selectable checkboxes: arrows navigate, Space toggles optional dependencies, and Enter submits. Providers are single-choice; CLI defaults and actual option indices are preserved. Empty optional selections are valid. Zig 0.17 build and 52 focused tests pass, including repeated questions and nonconsecutive indices.
+
+### AUR batch installation (2026-10-30)
+
+- Enter/Space select AUR results; Right opens details; I installs selected packages or the highlighted result. Owned selections survive filters and replacement search results, have independent checkboxes/installed indicators, and Ctrl+U clears them. R still removes the highlighted installed AUR package.
+- Native/AUR batch confirmations share target ownership and install/reinstall summaries. AUR targets stay separate in one interactive CLI command, preserving per-package PKGBUILD reviews and dependency questions. Successful completion clears only completed targets; failure/decline keeps selections and refreshes state.
+- Zig 0.17 build and 64 focused tests pass. Fake subprocess success/failure checks verify two targets and repeated PKGBUILD answers in one operation; no live package changes were run.

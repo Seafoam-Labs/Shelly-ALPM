@@ -414,7 +414,7 @@ fn elevated(request: OperationRequest) bool {
 }
 
 fn operationArgv(alloc: std.mem.Allocator, request: OperationRequest) ![][]const u8 {
-    if (request.targets.len > 0 and (!std.mem.eql(u8, request.backend, "standard") or request.action == .upgrade))
+    if (request.targets.len > 0 and !((std.mem.eql(u8, request.backend, "standard") and request.action != .upgrade) or (std.mem.eql(u8, request.backend, "aur") and request.action == .install)))
         return error.UnsupportedBatchAction;
     if (std.mem.eql(u8, request.backend, "all") and request.action != .upgrade) return error.UnsupportedCombinedAction;
     const keep_dependencies = request.action == .remove and std.mem.eql(u8, request.backend, "standard");
@@ -1674,4 +1674,18 @@ test "native batch operands stay separate in a single install or removal command
         try std.testing.expectEqualStrings("--no-confirm", argv[9]);
         if (action == .remove) try std.testing.expectEqualStrings("--no-cascade", argv[argv.len - 1]);
     }
+}
+
+test "AUR batch install retains separate operands and interactive review" {
+    var env: std.process.Environ.Map = .init(std.testing.allocator);
+    defer env.deinit();
+    const request: OperationRequest = .{ .shelly_bin = "shelly", .environ_map = &env, .name = "2 packages", .targets = &.{ "first", "second" }, .backend = "aur", .password = "" };
+    const argv = try operationArgv(std.testing.allocator, request);
+    defer std.testing.allocator.free(argv);
+    try std.testing.expectEqualStrings("install", argv[3]);
+    try std.testing.expectEqualStrings("aur", argv[4]);
+    try std.testing.expectEqualStrings("first", argv[5]);
+    try std.testing.expectEqualStrings("second", argv[6]);
+    try std.testing.expectEqualStrings("--ui-mode", argv[7]);
+    for (argv) |arg| try std.testing.expect(!std.mem.eql(u8, arg, "--no-confirm"));
 }
