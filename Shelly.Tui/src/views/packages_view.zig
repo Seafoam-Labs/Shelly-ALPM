@@ -1,5 +1,6 @@
 const std = @import("std");
 const Border = @import("border.zig");
+const help_view = @import("help_view.zig");
 const vaxis = @import("vaxis");
 const vxfw = vaxis.vxfw;
 const Allocator = std.mem.Allocator;
@@ -15,6 +16,7 @@ pub const View = struct {
     text_field: *vxfw.TextField,
     list_view: *vxfw.ListView,
     details_scroll: *vxfw.ScrollView,
+    help: ?*help_view.Panel = null,
     selected: ?*const Package,
     details_active: bool,
     list_active: bool,
@@ -29,6 +31,13 @@ pub const View = struct {
         const arena = ctx.arena;
         const max = ctx.max.size();
         const split = max.width >= 64;
+        if (!split) if (self.help) |panel| {
+            try children.append(arena, .{
+                .origin = .{ .row = 1, .col = 0 },
+                .surface = try panel.draw(ctx.withConstraints(.{}, .{ .width = max.width, .height = max.height -| 2 })),
+            });
+            return;
+        };
         const left_w: u16 = if (split) @max(28, @as(u16, @intCast(@as(u32, max.width) * 2 / 5))) else max.width;
         const right_w: u16 = if (split) max.width - left_w else max.width;
         const list_width = left_w -| @as(u16, if (split) 1 else 0);
@@ -83,6 +92,14 @@ pub const View = struct {
                 else
                     try content.draw(ctx.withConstraints(.{}, .{ .width = list_width, .height = height })),
             });
+        }
+
+        if (self.help) |panel| {
+            try children.append(arena, .{
+                .origin = .{ .row = @intCast(details_row), .col = @intCast(left_w) },
+                .surface = try panel.draw(ctx.withConstraints(.{}, .{ .width = right_w, .height = details_height })),
+            });
+            return;
         }
 
         if ((split or self.details_active) and right_w >= 2 and details_height >= 2) {

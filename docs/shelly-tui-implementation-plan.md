@@ -172,3 +172,9 @@ The intended flow is browse → details → review/provider questions → execut
 - Confirmation, authentication, progress, and results now share `operation_view.zig`, below browsing instead of floating over it. The component emits actions; Model retains passwords/state and starts service operations. Long reviews/output scroll while controls stay visible.
 - Panel height fits wrapped content up to a limit, placing controls directly below output. Short terminals temporarily replace browsing; PKGBUILD reviews retain their dedicated view. Operation focus remains on a visible widget, and result dismissal restores browsing focus.
 - Zig 0.17 build/test and 60 model/service/view tests pass. An isolated PTY test with fake commands covered masking, 80×24 → 40×12 → 80×24 resizing, progress/results, refresh, and clean exit. No real package mutations were run.
+
+### Contextual help and footer (2026-10-30)
+
+- F1 opens/closes scrollable help in the native details pane, or the content area on narrow terminals and other pages. Selection, details scroll, password input, and active operations are preserved. Help follows operation-stage changes while open.
+- Footer hints and help use live binding definitions in `commands.zig`; key labels are rebuilt when drawn. Future Settings keybinding persistence/loading remains separate work.
+- Build/test and 67 model/service/view tests pass, including live binding changes and focus/input restoration. A fake-command PTY check covers F1 during search, authentication, progress, completion, and resizing; no real package mutations were run.

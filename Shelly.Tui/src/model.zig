@@ -4,6 +4,8 @@ const Settings = @import("models/settings.zig").Settings;
 const settings_service = @import("services/settings.zig");
 const settings_view = @import("views/settings_view.zig");
 const commands = @import("commands.zig");
+const help_view = @import("views/help_view.zig");
+const footer_view = @import("views/footer_view.zig");
 const packages_view = @import("views/packages_view.zig");
 const flatpak_view = @import("views/flatpak_view.zig");
 const aur_view = @import("views/aur_view.zig");
@@ -243,6 +245,8 @@ pub const Model = struct {
     updates_list: vxfw.ListView,
 
     notice: []const u8 = "",
+    help_open: bool = false,
+    help_panel: help_view.Panel = .{},
 
     selected_list_view: vxfw.ListView,
     package_details_scroll: vxfw.ScrollView,
@@ -393,13 +397,14 @@ pub const Model = struct {
     fn typeErasedCaptureHandler(ptr: *anyopaque, ctx: *vxfw.EventContext, event: vxfw.Event) anyerror!void {
         const self: *Model = @ptrCast(@alignCast(ptr));
         const had_operation = self.operationPrompt() != null;
+        const had_help = self.help_open;
         try self.captureEvent(ctx, event);
         if (ctx.quit) return;
-        if (self.operationPrompt() != null) {
+        if (self.help_open or self.operationPrompt() != null) {
             // The root remains present when a small terminal temporarily
             // replaces browsing with the operation panel.
             try ctx.requestFocus(self.widget());
-        } else if (had_operation) {
+        } else if (had_operation or had_help) {
             const list_active = self.package_list_active;
             try self.focusActiveTab(ctx);
             self.package_list_active = list_active;
@@ -415,6 +420,14 @@ pub const Model = struct {
                         ctx.quit = true;
                         return ctx.consumeEvent();
                     }
+                }
+                if (commands.matches(key, .help)) {
+                    self.help_open = !self.help_open;
+                    return ctx.consumeAndRedraw();
+                }
+                if (self.help_open) {
+                    try self.help_panel.handleKey(ctx, key);
+                    return ctx.consumeAndRedraw();
                 }
                 if (self.overlay) |overlay| {
                     switch (overlay) {
@@ -480,7 +493,7 @@ pub const Model = struct {
                                     try self.focusActiveTab(ctx);
                                     try self.ensureUpdates(ctx);
                                     try self.ensureFlatpak(ctx);
-                                } else try self.package_details_scroll.handleEvent(ctx, event);
+                                } else try self.package_details_scroll.handleEvent(ctx, .{ .key_press = commands.scrollKey(key) orelse key });
                                 return ctx.consumeAndRedraw();
                             }
                             return ctx.consumeEvent();
@@ -514,10 +527,33 @@ pub const Model = struct {
                                 }
                             }
                             if (self.pkgbuild_document != null and self.pkgbuild_job == null)
-                                try self.pkgbuild_scroll.handleEvent(ctx, event);
+                                try self.pkgbuild_scroll.handleEvent(ctx, .{ .key_press = commands.scrollKey(key) orelse key });
                             return ctx.consumeAndRedraw();
                         },
                     }
+                }
+                if (self.active != .packages and self.active != .settings and
+                    (commands.matches(key, .previous) or commands.matches(key, .next)))
+                {
+                    const canonical: vxfw.Event = .{ .key_press = .{ .codepoint = if (commands.matches(key, .previous)) vaxis.Key.up else vaxis.Key.down } };
+                    switch (self.active) {
+                        .aur => try self.aur_list.handleEvent(ctx, canonical),
+                        .flatpak => try self.flatpak_list.handleEvent(ctx, canonical),
+                        .upgrade => try self.updates_list.handleEvent(ctx, canonical),
+                        else => unreachable,
+                    }
+                    return ctx.consumeAndRedraw();
+                }
+                if (self.active == .aur and commands.matches(key, .confirm)) {
+                    const query = try self.aur_field.buf.dupe();
+                    defer self.gpa.free(query);
+                    try onAurSubmit(self, ctx, query);
+                    return ctx.consumeAndRedraw();
+                }
+                if (self.active == .flatpak and commands.matches(key, .confirm)) {
+                    if (self.flatpak_job == null and self.flatpak_failure == null and self.flatpak_list.cursor < self.flatpak_rows.items.len)
+                        self.overlay = .{ .flatpak = self.flatpak_rows.items[self.flatpak_list.cursor] };
+                    return ctx.consumeAndRedraw();
                 }
                 if (self.active == .settings) {
                     if (commands.settings(key)) |action| {
@@ -543,7 +579,7 @@ pub const Model = struct {
                                     self.package_list_active = false;
                                 } else {
                                     self.package_list_active = true;
-                                    try self.list_view.handleEvent(ctx, event);
+                                    try self.list_view.handleEvent(ctx, .{ .key_press = .{ .codepoint = if (action == .previous) vaxis.Key.up else vaxis.Key.down } });
                                 }
                             },
                             .details => if (self.selectedPackage()) |pkg| {
@@ -603,7 +639,7 @@ pub const Model = struct {
                         return ctx.consumeAndRedraw();
                     }
                 }
-                if (self.active == .packages and self.package_list_active and key.matches(vaxis.Key.space, .{})) {
+                if (self.active == .packages and self.package_list_active and commands.matches(key, .mark)) {
                     if (self.list_view.cursor < self.filtered.items.len) try self.toggleSelectedList();
                     return ctx.consumeAndRedraw();
                 }
@@ -625,6 +661,10 @@ pub const Model = struct {
                     }
                     return ctx.consumeAndRedraw();
                 }
+            },
+            .mouse => if (self.help_open) {
+                try self.help_panel.scroll.handleEvent(ctx, event);
+                return ctx.consumeAndRedraw();
             },
             else => {},
         }
@@ -682,12 +722,12 @@ pub const Model = struct {
             .key_press => |key| {
                 // Enter opens the details of the selected package. On the
                 // AUR tab Enter is consumed by the search field instead.
-                if (key.matches(vaxis.Key.enter, .{})) {
+                if (commands.matches(key, .confirm) or (self.active == .packages and commands.matches(key, .select))) {
                     if (self.active == .flatpak and self.flatpak_job == null and self.flatpak_failure == null and self.flatpak_list.cursor < self.flatpak_rows.items.len) {
                         self.overlay = .{ .flatpak = self.flatpak_rows.items[self.flatpak_list.cursor] };
                         return ctx.consumeAndRedraw();
                     }
-                    if (self.active == .packages and
+                    if (self.active == .packages and commands.matches(key, .select) and
                         self.filtered.items.len > 0 and
                         @as(usize, self.list_view.cursor) < self.filtered.items.len)
                     {
@@ -890,7 +930,7 @@ pub const Model = struct {
     }
 
     fn focusActiveTab(self: *Model, ctx: *vxfw.EventContext) !void {
-        if (self.operationPrompt() != null) return ctx.requestFocus(self.widget());
+        if (self.help_open or self.operationPrompt() != null) return ctx.requestFocus(self.widget());
         self.package_list_active = false;
         switch (self.active) {
             .packages => try ctx.requestFocus(self.text_field.widget()),
@@ -1909,9 +1949,10 @@ pub const Model = struct {
             .text_field = &self.text_field,
             .list_view = &self.list_view,
             .details_scroll = &self.package_details_scroll,
+            .help = if (self.help_open) &self.help_panel else null,
             .selected = self.selectedPackage(),
-            .details_active = if (self.overlay) |overlay| overlay == .package else false,
-            .list_active = self.package_list_active,
+            .details_active = !self.help_open and (if (self.overlay) |overlay| overlay == .package else false),
+            .list_active = self.package_list_active and !self.help_open,
             .selected_count = self.selected_packages.items.len,
             .selected_installed = selected_installed,
             .loading = self.loading,
@@ -1969,6 +2010,11 @@ pub const Model = struct {
                 show_browsing = false;
             }
         }
+        if (self.help_open and !show_browsing) {
+            navigation_height = 1;
+            panel_height = @min(panel_height, max.height -| 6);
+            show_browsing = true;
+        }
         const content_offset = navigation_height - 1;
 
         // Navigation occupies its own rows above every page.
@@ -1983,7 +2029,13 @@ pub const Model = struct {
 
         const content_start = children.items.len;
         const content_ctx = ctx.withConstraints(.{}, .{ .width = max.width, .height = max.height - content_offset - panel_height });
-        if (show_browsing) switch (self.active) {
+        self.help_panel.context = self.commandContext();
+        if (show_browsing and self.help_open and self.active != .packages) {
+            try children.append(arena, .{
+                .origin = .{ .row = 1, .col = 0 },
+                .surface = try self.help_panel.draw(content_ctx.withConstraints(.{}, .{ .width = max.width, .height = content_ctx.max.size().height -| 2 })),
+            });
+        } else if (show_browsing) switch (self.active) {
             .packages => try self.packagesView().appendContent(content_ctx, &children),
             .aur => try self.aurView().appendContent(content_ctx, &children),
             .upgrade => try self.updatesView().appendContent(content_ctx, &children),
@@ -2002,21 +2054,18 @@ pub const Model = struct {
             });
         }
 
-        // Bottom row: status bar
-        var status: vxfw.Text = .{
-            .text = try self.statusText(arena),
-            .style = .{ .fg = .{ .index = 250 } },
-        };
+        var footer_context = self.commandContext();
+        if (self.help_open) {
+            footer_context.mode = .help;
+            footer_context.selected_count = 0;
+        }
         try children.append(arena, .{
             .origin = .{ .row = max.height - 1, .col = 0 },
-            .surface = try status.draw(ctx.withConstraints(
-                ctx.min,
-                .{ .width = max.width, .height = 1 },
-            )),
+            .surface = try footer_view.draw(ctx.withConstraints(.{}, .{ .width = max.width, .height = 1 }), footer_context, if (self.help_open) null else try self.footerStatus(arena)),
         });
 
         // Modal overlay on top of everything
-        if (self.overlay) |overlay| {
+        if (!self.help_open) if (self.overlay) |overlay| {
             const overlay_child: ?vxfw.SubSurface = switch (overlay) {
                 .package => null,
                 .aur, .flatpak => try self.drawDetailsOverlay(ctx, arena, max, overlay),
@@ -2027,7 +2076,7 @@ pub const Model = struct {
             if (overlay_child) |child| {
                 try children.append(arena, child);
             }
-        }
+        };
 
         return .{
             .size = max,
@@ -2056,6 +2105,96 @@ pub const Model = struct {
             .rich = .{ .text = spans, .softwrap = false },
         };
         return bar.widget();
+    }
+
+    fn commandContext(self: *Model) commands.Context {
+        var context: commands.Context = .{ .tab_count = self.visibleTabs().len };
+        if (self.operationPrompt()) |prompt| {
+            context.mode = switch (prompt.state) {
+                .entering => if (prompt.elevated) .authentication else .confirmation,
+                .running => .running,
+                .succeeded, .failed, .declined => .result,
+            };
+            context.scrollable = prompt.panel.scroll.scroll.has_more_vertical or
+                prompt.panel.scroll.scroll.top > 0 or prompt.panel.scroll.scroll.vertical_offset != 0;
+            return context;
+        }
+        if (self.overlay) |overlay| switch (overlay) {
+            .package => context.native_details = true,
+            .aur => |pkg| {
+                context.mode = .details;
+                context.installable = true;
+                context.removable = pkg.Installed;
+                context.preview = true;
+                return context;
+            },
+            .flatpak => |row| {
+                context.mode = .details;
+                context.installable = row == .catalog and row.catalog.Remotes.len > 0;
+                context.removable = row == .installed;
+                return context;
+            },
+            .pkgbuild => {
+                context.mode = if (self.operation_question) |question|
+                    if (question.value.question == .select_one or question.value.question == .select_many) .answers else .review
+                else
+                    .preview_document;
+                context.scrollable = self.pkgbuild_document != null;
+                return context;
+            },
+            .flatpak_install => {
+                context.mode = .choice;
+                return context;
+            },
+            .sudo => unreachable,
+        };
+        switch (self.active) {
+            .packages => {
+                context.mode = if (context.native_details) .details else if (self.package_list_active) .packages else .search;
+                context.installed_only = self.installed_only;
+                context.selected_count = self.selected_packages.items.len;
+                for (self.selected_packages.items) |name| for (self.packages) |pkg| {
+                    if (std.mem.eql(u8, name, pkg.Name)) {
+                        if (pkg.Installed) context.selected_installed += 1;
+                        break;
+                    }
+                };
+                context.installable = !self.loading and !self.load_failed and (self.selectedPackage() != null or context.selected_count > 0);
+                context.removable = context.installable and if (context.selected_count > 0) context.selected_installed > 0 else if (self.selectedPackage()) |pkg| pkg.Installed else false;
+                context.scrollable = context.native_details and (self.package_details_scroll.scroll.has_more_vertical or
+                    self.package_details_scroll.scroll.top > 0 or self.package_details_scroll.scroll.vertical_offset != 0);
+            },
+            .aur => {
+                context.mode = .aur;
+                context.installed_only = self.aur_installed_only;
+            },
+            .flatpak => {
+                context.mode = .flatpak;
+                context.installed_only = self.flatpak_installed_only;
+            },
+            .upgrade => {
+                const view = self.updatesView();
+                context.mode = .updates;
+                context.upgrade_all = view.canUpgradeAll();
+                context.upgrade_system = view.canUpgrade();
+                context.upgrade_aur = view.canUpgradeAur();
+                context.upgrade_flatpak = view.canUpgradeFlatpak();
+            },
+            .settings => context.mode = .settings,
+        }
+        return context;
+    }
+
+    fn footerStatus(self: *Model, _: Allocator) Allocator.Error!?[]const u8 {
+        if (self.notice.len > 0) return self.notice;
+        if (self.operationPrompt() != null) return null;
+        return switch (self.active) {
+            .packages => if (self.loading) "Loading packages…" else if (self.load_failed) "Package query failed" else null,
+            .aur => if (self.aur_job != null) "Loading AUR results…" else if (self.aur_failed) "AUR query failed" else null,
+            .flatpak => if (self.flatpak_probe_job != null) "Checking Flatpak backend…" else if (self.flatpak_job != null) "Loading Flatpaks…" else if (self.flatpak_failure != null) "Flatpak query failed" else null,
+            .upgrade => if (self.updates_job != null) "Checking for updates…" else if (self.updates_failed) "Update check failed" else null,
+            .settings => null,
+        };
     }
 
     fn statusText(self: *Model, arena: Allocator) Allocator.Error![]const u8 {
@@ -2288,6 +2427,8 @@ const TabBar = struct {
 test "tab switching requests focus on a widget in the active page" {
     var model: Model = undefined;
     model.active = .packages;
+    model.help_open = false;
+    model.overlay = null;
     model.flatpak_available = false;
     model.settings = .{};
     var ctx: vxfw.EventContext = .{
@@ -3389,4 +3530,122 @@ test "operation completion and dismissal restore the browsing shortcut footer" {
     try std.testing.expect(model.overlay == null);
     try std.testing.expectEqualStrings("", model.notice);
     try std.testing.expect(std.mem.indexOf(u8, try model.statusText(arena.allocator()), "Enter: select") != null);
+}
+
+test "F1 help replaces details and restores selection focus and scroll" {
+    vxfw.DrawContext.init(.unicode);
+    const model = try Model.init(std.testing.allocator);
+    defer model.deinit();
+    var packages = [_]Package{.{ .Name = "example" }};
+    model.packages = &packages;
+    model.loading = false;
+    try model.rebuildFilter();
+    model.package_list_active = true;
+    model.package_details_cursor = 0;
+    model.package_details_scroll.scroll.vertical_offset = -2;
+    model.overlay = .{ .package = &packages[0] };
+    var events: vxfw.EventContext = .{ .io = undefined, .alloc = std.testing.allocator, .cmds = .empty };
+    defer events.cmds.deinit(std.testing.allocator);
+    try Model.typeErasedCaptureHandler(model, &events, .{ .key_press = .{ .codepoint = vaxis.Key.f1 } });
+    try std.testing.expect(model.help_open);
+    try std.testing.expect(events.cmds.items[events.cmds.items.len - 1].request_focus.eql(model.widget()));
+    for ([_]vxfw.Size{ .{ .width = 80, .height = 24 }, .{ .width = 40, .height = 12 } }) |size| {
+        var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+        defer arena.deinit();
+        const surface = try model.widget().draw(.{
+            .arena = arena.allocator(),
+            .min = .{},
+            .max = .{ .width = size.width, .height = size.height },
+            .cell_size = .{ .width = 10, .height = 20 },
+        });
+        var help_found = false;
+        for (surface.children) |child| for (child.surface.children) |nested| {
+            if (nested.surface.widget.eql(model.help_panel.scroll.widget())) {
+                help_found = true;
+                try std.testing.expectEqual(size.width >= 64, child.origin.col > 0);
+            }
+        };
+        try std.testing.expect(help_found);
+        try std.testing.expectEqual(@as(i17, -2), model.package_details_scroll.scroll.vertical_offset);
+    }
+    try Model.typeErasedCaptureHandler(model, &events, .{ .key_press = .{ .codepoint = vaxis.Key.f1 } });
+    try std.testing.expect(!model.help_open);
+    try std.testing.expect(model.package_list_active);
+    try std.testing.expectEqualStrings("example", model.overlay.?.package.Name);
+    try std.testing.expectEqual(@as(i17, -2), model.package_details_scroll.scroll.vertical_offset);
+}
+
+test "help and footer update live bindings without reopening help" {
+    vxfw.DrawContext.init(.unicode);
+    const original = commands.bindings;
+    defer commands.bindings = original;
+    const model = try Model.init(std.testing.allocator);
+    defer model.deinit();
+    var packages = [_]Package{.{ .Name = "example" }};
+    model.packages = &packages;
+    model.loading = false;
+    model.package_list_active = true;
+    try model.rebuildFilter();
+    var events: vxfw.EventContext = .{ .io = undefined, .alloc = std.testing.allocator, .cmds = .empty };
+    defer events.cmds.deinit(std.testing.allocator);
+    try Model.typeErasedCaptureHandler(model, &events, .{ .key_press = .{ .codepoint = vaxis.Key.f1 } });
+    model.help_panel.context = model.commandContext();
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const before = try model.help_panel.text(arena.allocator());
+    try std.testing.expect(std.mem.indexOf(u8, before, "Enter: Toggle selection") != null);
+    commands.bindings.select = .{ .codepoint = 'v' };
+    commands.bindings.help = .{ .codepoint = vaxis.Key.f2 };
+    const after = try model.help_panel.text(arena.allocator());
+    try std.testing.expect(std.mem.indexOf(u8, after, "V: Toggle selection") != null);
+    try std.testing.expect(std.mem.indexOf(u8, after, "F2: Open/close help") != null);
+    try std.testing.expect(commands.packageNavigation(.{ .codepoint = 'v' }, false).? == .select);
+    try std.testing.expect(commands.packageNavigation(.{ .codepoint = vaxis.Key.enter }, false) == null);
+    try Model.typeErasedCaptureHandler(model, &events, .{ .key_press = .{ .codepoint = vaxis.Key.f2 } });
+    try std.testing.expect(!model.help_open);
+    try Model.typeErasedCaptureHandler(model, &events, .{ .key_press = .{ .codepoint = 'v', .text = "v" } });
+    try std.testing.expect(model.packageMarked("example"));
+    var context = model.commandContext();
+    context.selected_count = 0;
+    const footer = try footer_view.draw(.{ .arena = arena.allocator(), .min = .{}, .max = .{ .width = 100, .height = 1 }, .cell_size = .{ .width = 10, .height = 20 } }, context, null);
+    var main: std.ArrayList(u8) = .empty;
+    for (footer.children[0].surface.buffer) |cell| try main.appendSlice(arena.allocator(), cell.char.grapheme);
+    try std.testing.expect(std.mem.indexOf(u8, main.items, "V Select") != null);
+    var help: std.ArrayList(u8) = .empty;
+    for (footer.children[1].surface.buffer) |cell| try help.appendSlice(arena.allocator(), cell.char.grapheme);
+    try std.testing.expectEqualStrings("F2 Help", help.items);
+}
+
+test "help preserves authentication input and follows operation stages" {
+    vxfw.DrawContext.init(.unicode);
+    const model = try Model.init(std.testing.allocator);
+    defer model.deinit();
+    var packages = [_]Package{.{ .Name = "example" }};
+    model.packages = &packages;
+    model.loading = false;
+    try model.rebuildFilter();
+    try model.openNativePrompt(.install);
+    const prompt = model.overlay.?.sudo;
+    try prompt.password.appendSlice(std.testing.allocator, "fixture-secret");
+    var events: vxfw.EventContext = .{ .io = undefined, .alloc = std.testing.allocator, .cmds = .empty };
+    defer events.cmds.deinit(std.testing.allocator);
+    try Model.typeErasedCaptureHandler(model, &events, .{ .key_press = .{ .codepoint = vaxis.Key.f1 } });
+    try Model.typeErasedCaptureHandler(model, &events, .{ .key_press = .{ .codepoint = 'x', .text = "x" } });
+    try std.testing.expectEqualStrings("fixture-secret", prompt.password.items);
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const ctx: vxfw.DrawContext = .{ .arena = arena.allocator(), .min = .{}, .max = .{ .width = 80, .height = 24 }, .cell_size = .{ .width = 10, .height = 20 } };
+    _ = try model.widget().draw(ctx);
+    try std.testing.expectEqual(commands.Mode.authentication, model.help_panel.context.mode);
+    prompt.state = .running;
+    _ = try model.widget().draw(ctx);
+    try std.testing.expectEqual(commands.Mode.running, model.help_panel.context.mode);
+    prompt.state = .succeeded;
+    _ = try model.widget().draw(ctx);
+    try std.testing.expectEqual(commands.Mode.result, model.help_panel.context.mode);
+    try std.testing.expect(std.mem.indexOf(u8, try model.help_panel.text(arena.allocator()), "Dismiss the operation result") != null);
+    try Model.typeErasedCaptureHandler(model, &events, .{ .key_press = .{ .codepoint = vaxis.Key.f1 } });
+    try std.testing.expect(!model.help_open);
+    try std.testing.expect(model.overlay.?.sudo == prompt);
+    try std.testing.expectEqualStrings("fixture-secret", prompt.password.items);
 }

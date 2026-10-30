@@ -168,7 +168,7 @@ pub const View = struct {
     pub fn handleKey(self: View, key: vaxis.Key) ?Action {
         if (self.review) {
             if (self.choices) {
-                if (key.matches(vaxis.Key.enter, .{})) return .approve;
+                if (commands.matches(key, .confirm)) return .approve;
                 return null;
             }
             return switch (commands.review(key) orelse return null) {

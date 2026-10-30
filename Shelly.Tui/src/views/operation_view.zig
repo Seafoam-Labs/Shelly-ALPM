@@ -119,18 +119,18 @@ pub const Panel = struct {
         self.update(view);
         if (view.state != .entering and view.state != .running and commands.closesResult(key)) return .close;
         if (view.state == .entering) {
-            if (key.matches('q', .{ .ctrl = true }) or (!view.elevated and key.matches('q', .{}))) return .close;
-            if (key.matches(vaxis.Key.enter, .{})) {
+            if (commands.matches(key, .cancel) or (!view.elevated and commands.matches(key, .close))) return .close;
+            if (commands.matches(key, .confirm)) {
                 if (self.ready and (!view.elevated or view.password_length > 0)) return .confirm;
                 return .none;
             }
         }
         if (commands.scrollsOperation(key)) {
-            try self.scroll.handleEvent(ctx, .{ .key_press = key });
+            try self.scroll.handleEvent(ctx, .{ .key_press = commands.scrollKey(key).? });
             return .none;
         }
         if (view.state == .entering and view.elevated) {
-            if (key.matches(vaxis.Key.backspace, .{})) return .erase;
+            if (commands.matches(key, .erase)) return .erase;
             if (key.text) |text| return .{ .text = text };
         }
         return .none;
@@ -180,16 +180,24 @@ pub const Panel = struct {
         const review_height = size.height -| footer_height;
         const output = try self.scroll.draw(ctx.withConstraints(.{}, .{ .width = size.width, .height = review_height }));
         const scrollable = self.scroll.scroll.has_more_vertical or self.scroll.scroll.top > 0 or self.scroll.scroll.vertical_offset != 0;
+        const up = try commands.label(ctx.arena, .previous);
+        const down = try commands.label(ctx.arena, .next);
+        const confirm = try commands.label(ctx.arena, .confirm);
+        const cancel = try commands.label(ctx.arena, .cancel);
+        const quit = try commands.label(ctx.arena, .quit);
+        const close = try commands.label(ctx.arena, .close);
+        const scroll_hint = if (scrollable) try std.fmt.allocPrint(ctx.arena, "{s}/{s}: {s}  ", .{ up, down, if (view.state == .entering) "review" else "output" }) else "";
         const footer = if (view.state == .entering) blk: {
             const mask = try ctx.arena.alloc(u8, @min(view.password_length, size.width -| 10));
             @memset(mask, '*');
-            const hints = if (compact_controls)
-                if (scrollable) "↑↓: review  Ctrl+Q: back  Enter: run  Esc: quit" else "Ctrl+Q: back  Enter: run  Esc: quit"
-            else if (scrollable) "↑↓: review  Ctrl+Q: back\nEnter: run  Esc: quit" else "Ctrl+Q: back\nEnter: run  Esc: quit";
+            const hints = try std.fmt.allocPrint(ctx.arena, "{s}{s}: back{s}{s}: run  {s}: quit", .{
+                scroll_hint, cancel, if (compact_controls) "  " else "\n", confirm, quit,
+            });
             break :blk try std.fmt.allocPrint(ctx.arena, "{s}{s}\n{s}", .{ if (view.elevated) "Password: " else "No elevation required.", if (view.elevated) mask else "", hints });
         } else if (view.state == .running)
-            if (scrollable) "↑↓: output  Esc: quit" else "Esc: quit"
-        else if (scrollable) "↑↓: output  Enter/Q: close" else "Enter/Q: close  Esc: quit";
+            try std.fmt.allocPrint(ctx.arena, "{s}{s}: quit", .{ scroll_hint, quit })
+        else
+            try std.fmt.allocPrint(ctx.arena, "{s}{s}/{s}: close  {s}: quit", .{ scroll_hint, confirm, close, quit });
         var text: vxfw.Text = .{ .text = footer, .softwrap = false, .overflow = .ellipsis };
         const children = try ctx.arena.alloc(vxfw.SubSurface, 2);
         children[0] = .{ .origin = .{ .row = 0, .col = 0 }, .surface = output };
@@ -330,7 +338,7 @@ test "scroll hints reflect overflow and remain available when scrolled to the en
     const short_footer = short.children[0].surface.children[1].surface;
     var short_text: std.ArrayList(u8) = .empty;
     for (short_footer.buffer) |cell| try short_text.appendSlice(arena.allocator(), cell.char.grapheme);
-    try std.testing.expect(std.mem.indexOf(u8, short_text.items, "↑↓") == null);
+    try std.testing.expect(std.mem.indexOf(u8, short_text.items, "↑/↓") == null);
     try std.testing.expect(std.mem.indexOf(u8, short_text.items, "Enter/Q") != null);
     view.state = .failed;
     view.detail = "First line\nSecond line\nThird line\nFourth line\nFifth line\nSixth line\nSeventh line";
@@ -348,7 +356,7 @@ test "scroll hints reflect overflow and remain available when scrolled to the en
     const footer = scrolled.children[0].surface.children[1].surface;
     var text: std.ArrayList(u8) = .empty;
     for (footer.buffer) |cell| try text.appendSlice(arena.allocator(), cell.char.grapheme);
-    try std.testing.expect(std.mem.indexOf(u8, text.items, "↑↓") != null);
+    try std.testing.expect(std.mem.indexOf(u8, text.items, "↑/↓") != null);
     _ = try panel.handleKey(view, &events, .{ .codepoint = vaxis.Key.up });
     try std.testing.expect(panel.scroll.scroll.pending_lines < 0);
 }
