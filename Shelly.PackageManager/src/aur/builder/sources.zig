@@ -445,7 +445,18 @@ fn cloneGitSource(
     if (cached) |stat| {
         if (stat.kind != .directory) return error.InvalidSourceCacheEntry;
         try runSourceCommand(self, operation, &.{ "-C", cache_path, "remote", "set-url", "origin", source.location });
-        try runSourceCommand(self, operation, &.{ "-C", cache_path, "remote", "update", "--prune" });
+        // A detached repack can delete packs while the clone below copies them.
+        try runSourceCommand(self, operation, &.{
+            "-C",
+            cache_path,
+            "-c",
+            "maintenance.autoDetach=false",
+            "-c",
+            "gc.autoDetach=false",
+            "remote",
+            "update",
+            "--prune",
+        });
     } else {
         var random_suffix: [8]u8 = undefined;
         self.io.random(&random_suffix);
