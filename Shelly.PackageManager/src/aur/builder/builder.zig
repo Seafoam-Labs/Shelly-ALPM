@@ -172,6 +172,8 @@ pub const BuilderErrors = error{
 pub const FailureLocation = struct {
     package_name: ?[]const u8 = null,
     step_name: ?[]const u8 = null,
+    /// Metadata key whose value was rejected while writing package metadata.
+    rejected_field: ?[]const u8 = null,
 };
 
 /// Non-root standalone package build engine.
@@ -392,11 +394,19 @@ pub const PackageBuilder = struct {
         }
         const artifacts = self.buildPackage(operation) catch |err| {
             const location = self.failure_location;
-            const detail = std.fmt.allocPrint(self.allocator, "{s}: {s}: {s}", .{
-                location.package_name orelse self.requested_names[0],
-                location.step_name orelse "build",
-                @errorName(err),
-            }) catch null;
+            const detail = if (location.rejected_field) |field|
+                std.fmt.allocPrint(self.allocator, "{s}: {s}: {s} (rejected metadata field: {s})", .{
+                    location.package_name orelse self.requested_names[0],
+                    location.step_name orelse "build",
+                    @errorName(err),
+                    field,
+                }) catch null
+            else
+                std.fmt.allocPrint(self.allocator, "{s}: {s}: {s}", .{
+                    location.package_name orelse self.requested_names[0],
+                    location.step_name orelse "build",
+                    @errorName(err),
+                }) catch null;
             if (detail) |message| {
                 defer self.allocator.free(message);
                 log.writeRecord("error", message) catch {};

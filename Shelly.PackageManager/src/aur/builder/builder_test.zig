@@ -8302,3 +8302,25 @@ test "migration split declarations round trip through build and RLPM installatio
     defer testing.allocator.free(record);
     try testing.expect(std.mem.indexOf(u8, record, "%RLPM_ADOPTED%\netc/local  config\n") != null);
 }
+
+test "PackageBuilder names the rejected metadata field when a value spans lines" {
+    const allocator = testing.allocator;
+    const io = testing.io;
+    var fixture = try Fixture.create(allocator,
+        \\pkgname=bad-url
+        \\pkgver=1
+        \\pkgrel=1
+        \\arch=(any)
+        \\url="https://example.com/
+        \\wrapped"
+        \\package() {
+        \\  mkdir -p "$pkgdir/usr/share/bad-url"
+        \\}
+    , null, null);
+    defer fixture.destroy();
+
+    try testing.expectError(error.InvalidPackageMetadata, fixture.builder.run());
+    const log = try readOnlyBuildLog(allocator, io, fixture.build_dir);
+    defer allocator.free(log);
+    try testing.expect(std.mem.indexOf(u8, log, "bad-url: package-assembly: InvalidPackageMetadata (rejected metadata field: url)") != null);
+}
