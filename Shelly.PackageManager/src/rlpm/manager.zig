@@ -37,6 +37,28 @@ pub const Manager = struct {
     parallel_download_count: u8,
 
     pub fn init(allocator: std.mem.Allocator, environ: std.process.Environ, options: contract.InitOptions) !*Manager {
+        var stage: []const u8 = "allocate manager";
+        var path: ?[]const u8 = options.config_path orelse @import("paths").config_file;
+        var original: ?anyerror = null;
+        var path_buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
+        return initInternal(allocator, environ, options, &stage, &path, &path_buffer, &original) catch |err| {
+            reportInitializationFailure(allocator, options, original orelse err, stage, path);
+            return err;
+        };
+    }
+    pub fn reportInitializationFailure(allocator: std.mem.Allocator, options: contract.InitOptions, err: anyerror, stage: []const u8, path: ?[]const u8) void {
+        if (@import("diagnostics").isCancellation(err)) return;
+        const message = rlpm.Diagnostic.init(.configure, err, null).userMessage(allocator, .{ .operation = "initialization", .stage = stage, .path = path }) catch null;
+        defer if (message) |value| allocator.free(value);
+        var buffer: [512]u8 = undefined;
+        const text = message orelse rlpm.Diagnostic.fallback(&buffer, err);
+        if (options.operation_context) |context| {
+            var operation = context.begin(.{ .backend = .alpm, .kind = .configure, .subject = "rlpm" });
+            defer operation.finish(.failed);
+            operation.reportError(err, text, "rlpm", null, false);
+        } else std.debug.print("{s}\n", .{text});
+    }
+    fn initInternal(allocator: std.mem.Allocator, environ: std.process.Environ, options: contract.InitOptions, stage: *[]const u8, failure_path: *?[]const u8, path_buffer: []u8, original: *?anyerror) !*Manager {
         const self = try allocator.create(Manager);
         errdefer allocator.destroy(self);
         const owned_config_path = try allocator.dupe(u8, options.config_path orelse @import("paths").config_file);
@@ -57,13 +79,23 @@ pub const Manager = struct {
         errdefer self.threaded.deinit();
         errdefer self.dispatcher.deinit();
         errdefer self.names.deinit();
-        self.config = (if (options.config_path != null) &configuration.Configuration.parseStrict else &configuration.Configuration.parse)(allocator, self.io(), self.config_path) catch return error.ConfigParseFailed;
+        stage.* = "parse configuration";
+        self.config = (if (options.config_path != null) &configuration.Configuration.parseStrict else &configuration.Configuration.parse)(allocator, self.io(), self.config_path) catch |err| {
+            original.* = err;
+            return error.ConfigParseFailed;
+        };
         errdefer self.config.deinitialize();
-        if (self.config.parallel_downloads == 0) return error.ConfigParseFailed;
+        if (self.config.parallel_downloads == 0) {
+            original.* = error.InvalidParallelDownloads;
+            return error.ConfigParseFailed;
+        }
+        stage.* = "configure installation paths";
         try contract.applyInitPathOverrides(&self.config, options);
         if (options.temp_root_path) |path| if (path.len != 0) {
             // Preview roots copy installed metadata; never symlink a writable
             // transaction database to the host's local database.
+            stage.* = "prepare update-check root";
+            failure_path.* = path;
             try mapping.preparePreview(self.io(), allocator, &self.config, path);
             self.temporary = true;
         };
@@ -71,6 +103,8 @@ pub const Manager = struct {
             defer allocator.free(name);
             self.detected_cachyos = std.ascii.eqlIgnoreCase(name, "cachyos");
         }
+        stage.* = "open package databases";
+        failure_path.* = std.fmt.bufPrint(path_buffer, "{s}", .{self.config.database_path}) catch options.database_path;
         self.owner = try mapping.createOwner(self.io(), allocator, &self.config, self.parallel_download_count, options.worker_executable);
         self.owner.configuration.address_family_policy = self.download_address_family_policy;
         self.owner.configuration.callbacks = .{ .event = legacyEvent, .event_context = self };
@@ -139,6 +173,7 @@ pub const Manager = struct {
         defer operation.finish(status);
         var adapter: Adapter = undefined;
         try adapter.init(&self.owner, &operation);
+        adapter.failure_handler = .{ .function = forwardTransactionFailure, .data = self };
         defer adapter.deinit() catch unreachable;
         var result = self.owner.refreshDatabases(self.io(), force) catch |err| {
             if (err == error.Cancelled or err == error.OutOfMemory) return err;
@@ -158,13 +193,54 @@ pub const Manager = struct {
         status = .success;
     }
     fn reportSyncFailure(self: *Manager, operation: *op.Operation, subject: []const u8, err: anyerror) !void {
-        const diagnostics = @import("diagnostics");
-        const message = try std.fmt.allocPrint(self.allocator, "Could not refresh package database {f}. {s}\n\nTechnical details: {s}", .{ diagnostics.safe(subject), diagnostics.cause(err), @errorName(err) });
-        defer self.allocator.free(message);
-        operation.reportError(err, message, "rlpm", null, false);
-        self.dispatcher.raiseError(.{ .message = message });
-        if (self.operation_context == null and self.dispatcher.errorEvents.items.len == 0)
-            std.log.err("{s}", .{message});
+        const description = std.fmt.allocPrint(self.allocator, "refresh package database \"{s}\"", .{subject}) catch null;
+        defer if (description) |value| self.allocator.free(value);
+        const message = rlpm.Diagnostic.init(.refresh, err, null).userMessage(self.allocator, .{ .operation = description orelse "package database refresh", .path = self.config.database_path }) catch null;
+        defer if (message) |value| self.allocator.free(value);
+        var buffer: [512]u8 = undefined;
+        const text = message orelse rlpm.Diagnostic.fallback(&buffer, err);
+        operation.reportError(err, text, "rlpm", null, false);
+        self.dispatcher.notifyErrorHandlers(.{ .message = text });
+        if (self.operation_context == null and self.dispatcher.errorEvents.items.len == 0 and self.dispatcher.operationEvents.items.len == 0)
+            std.debug.print("{s}\n", .{text});
+    }
+
+    /// Called before compatibility return codes replace the original RLPM cause.
+    pub fn reportFailureSince(self: *Manager, err: anyerror, generation: usize, context: rlpm.Diagnostic.Context) void {
+        if (@import("diagnostics").isCancellation(err) or self.dispatcher.errorGeneration() != generation) return;
+        var diagnostic = rlpm.Diagnostic.init(.query, err, null);
+        if (self.owner.diagnostic()) |value| if (value.cause == err) {
+            diagnostic = value;
+        };
+        self.reportFailure(diagnostic, context);
+    }
+    fn reportFailure(self: *Manager, diagnostic: rlpm.Diagnostic, context: rlpm.Diagnostic.Context) void {
+        const message = diagnostic.userMessage(self.allocator, context) catch null;
+        defer if (message) |value| self.allocator.free(value);
+        var buffer: [512]u8 = undefined;
+        self.publishFailure(diagnostic.cause, message orelse rlpm.Diagnostic.fallback(&buffer, diagnostic.cause));
+    }
+    fn publishFailure(self: *Manager, err: anyerror, message: []const u8) void {
+        if (self.dispatcher.operation) |operation| {
+            operation.reportError(err, message, "rlpm", null, self.dispatcher.recoverableErrorContext() != null);
+        } else {
+            var fallback = op.OperationContext.init(self.allocator, self.io());
+            defer fallback.deinit();
+            const context = self.operation_context orelse &fallback;
+            const subscription = if (self.dispatcher.operationEvents.items.len != 0)
+                context.subscribe(.{ .function = events.Dispatcher.forwardOperationEvent, .data = &self.dispatcher }) catch null
+            else
+                null;
+            defer if (subscription) |id| {
+                _ = context.unsubscribe(id);
+            };
+            var operation = context.begin(.{ .backend = .alpm, .kind = .inspect, .subject = "rlpm" });
+            defer operation.finish(.failed);
+            operation.reportError(err, message, "rlpm", null, self.dispatcher.recoverableErrorContext() != null);
+            if (self.operation_context == null and self.dispatcher.errorEvents.items.len == 0 and self.dispatcher.operationEvents.items.len == 0)
+                std.debug.print("{s}\n", .{message});
+        }
+        self.dispatcher.notifyErrorHandlers(.{ .message = message });
     }
     pub fn sync_for_update_check(self: *Manager, force: bool) !void {
         try self.sync(force);
@@ -349,7 +425,12 @@ pub const Manager = struct {
         return (try self.find_remote_satisfier_for_dependency_details(text)).real_name;
     }
     pub fn get_required_packages(self: *Manager, name: []const u8, database: []const u8) ![][]const u8 {
-        const db = self.owner.findDatabase(database) orelse return error.DatabaseReadFailed;
+        const db = self.owner.findDatabase(database) orelse {
+            const description = std.fmt.allocPrint(self.allocator, "query required packages in repository \"{s}\"", .{database}) catch null;
+            defer if (description) |value| self.allocator.free(value);
+            self.reportFailure(rlpm.Diagnostic.init(.query, error.DatabaseNotFound, null), .{ .operation = description orelse "required-package lookup", .subject = name });
+            return error.DatabaseReadFailed;
+        };
         const ref = try self.owner.queryPackage(self.io(), db, name) orelse return error.NoPackageFound;
         const refs = try self.owner.requiredBy(self.io(), self.allocator, ref);
         defer self.allocator.free(refs);
@@ -377,17 +458,16 @@ pub const Manager = struct {
     fn executeBuild(self: *Manager, mode: Mode, targets: []const []const u8, flags: types.TransFlag, confirmation: contract.RemovalConfirmation, build_request: ?build_transaction.Request) anyerror!void {
         var returned_error: ?anyerror = null;
         const error_generation = self.dispatcher.errorGeneration();
+        var stage: []const u8 = "initialize transaction";
         // Failures before a transaction exists also need their original cause
         // delivered before the facade maps it to its compatibility error set.
         errdefer {
             const err = returned_error.?;
             if (err != error.Cancelled and self.dispatcher.errorGeneration() == error_generation) {
-                const message = @import("diagnostics").format(self.allocator, err, .{ .operation = "the RLPM transaction" }) catch null;
-                defer if (message) |value| self.allocator.free(value);
-                self.dispatcher.raiseError(.{ .message = message orelse @errorName(err) });
+                self.reportFailure(rlpm.Diagnostic.init(.transaction, err, null), .{ .operation = "the package transaction", .stage = stage, .subject = if (targets.len == 1) targets[0] else null, .path = self.config.root_directory });
             }
         }
-        if (self.temporary) return trackReturnError(error.CommitFailed, &returned_error);
+        if (self.temporary) return trackReturnError(error.PreviewRootReadOnly, &returned_error);
         try trackReturnError(self.checkCancelled(), &returned_error);
         var fallback = op.OperationContext.init(self.allocator, self.io());
         defer fallback.deinit();
@@ -409,6 +489,11 @@ pub const Manager = struct {
         defer operation.finish(.failed);
         self.dispatcher.setOperation(&operation);
         defer self.dispatcher.setOperation(previous_operation);
+        errdefer {
+            const err = returned_error.?;
+            self.reportFailureSince(err, error_generation, .{ .operation = "the package transaction", .stage = stage, .subject = if (targets.len == 1) targets[0] else null, .path = self.config.root_directory });
+            operation.finish(if (err == error.Cancelled) .cancelled else .failed);
+        }
         var adapter: Adapter = undefined;
         try trackReturnError(adapter.init(&self.owner, &operation), &returned_error);
         adapter.failure_handler = .{ .function = forwardTransactionFailure, .data = self };
@@ -424,9 +509,10 @@ pub const Manager = struct {
                 const message = (if (err == error.DatabaseLocked or err == error.LockExists)
                     diagnostics.databaseLocked(self.allocator, self.owner.options().database_path)
                 else
-                    diagnostics.format(self.allocator, err, .{ .operation = "the RLPM transaction" })) catch null;
+                    rlpm.Diagnostic.init(.transaction, err, null).userMessage(self.allocator, .{ .operation = "the package transaction", .stage = stage, .path = self.config.database_path })) catch null;
                 defer if (message) |value| self.allocator.free(value);
-                self.dispatcher.raiseError(.{ .message = message orelse @errorName(err) });
+                var buffer: [512]u8 = undefined;
+                self.publishFailure(err, message orelse rlpm.Diagnostic.fallback(&buffer, err));
             }
             return trackReturnError(@as(anyerror!void, err), &returned_error);
         };
@@ -434,6 +520,7 @@ pub const Manager = struct {
         defer if (transaction_active) self.owner.releaseTransaction() catch unreachable;
         errdefer {
             const err = returned_error.?;
+            self.reportFailureSince(err, error_generation, .{ .operation = "the package transaction", .stage = stage, .subject = if (targets.len == 1) targets[0] else null, .path = self.config.root_directory });
             operation.finish(if (err == error.Cancelled) .cancelled else .failed);
         }
         var optional_names: std.ArrayList([]const u8) = .empty;
@@ -449,6 +536,7 @@ pub const Manager = struct {
         };
         if (mode == .upgrade) try trackReturnError(tx.systemUpgrade(false), &returned_error);
         if ((mode == .install or mode == .upgrade) and build_request == null) try trackReturnError(self.selectOptional(tx, targets, flags, &optional_names), &returned_error);
+        stage = "resolve package transaction";
         tx.prepare() catch |err| {
             if (build_request) |request| if (request.issues) |output| {
                 if (tx.plan()) |failed| {
@@ -481,7 +569,14 @@ pub const Manager = struct {
             return;
         };
         if (build_request) |request| {
-            if (plan.removals.len != 0) return trackReturnError(error.DependencyPlanMismatch, &returned_error);
+            if (plan.removals.len != 0) {
+                var details: std.Io.Writer.Allocating = .init(self.allocator);
+                defer details.deinit();
+                try trackReturnError(details.writer.writeAll("Installing the build dependencies would remove installed packages. Review these removals before changing the build environment."), &returned_error);
+                for (plan.removals) |id| try trackReturnError(details.writer.print("\nWould remove: {f}", .{@import("diagnostics").safe(plan.package(id).name)}), &returned_error);
+                self.reportFailure(rlpm.Diagnostic.init(.resolve, error.DependencyPlanMismatch, null), .{ .detail = details.written() });
+                return trackReturnError(error.DependencyPlanMismatch, &returned_error);
+            }
             var snapshots: std.ArrayList(build_transaction.Package) = .empty;
             for (plan.additions) |addition| {
                 const package = plan.package(addition.package);
@@ -497,10 +592,16 @@ pub const Manager = struct {
             const name = plan.package(id).name;
             for (self.config.hold_packages.items) |held| if (std.mem.eql(u8, held, name)) {
                 const answer = self.dispatcher.raiseQuestion(self.io(), .{ .question = "Remove a held package?", .question_type = 0, .arguments = &.{name}, .options = &.{ "Yes", "No" } });
-                if (answer.answer != 1) return trackReturnError(error.PrepareFailed, &returned_error);
+                if (answer.answer != 1) {
+                    var buffer: [512]u8 = undefined;
+                    const message = std.fmt.bufPrint(&buffer, "Removal cancelled because permission to remove held package {f} was declined.", .{@import("diagnostics").safe(name)}) catch "Removal cancelled because permission to remove a held package was declined.";
+                    self.dispatcher.raiseInformational(.{ .event_type = .validation_complete, .message = message, .code = "rlpm.cancelled", .package_name = name });
+                    return trackReturnError(error.Cancelled, &returned_error);
+                }
             };
         };
         // Archive migration metadata and ownership are available only after preflight.
+        stage = "preflight package files";
         if (tx.state == .prepared and !tx.flags.download_only) try trackReturnError(tx.preflight(), &returned_error);
         if (self.operation_context != null and (mode != .remove or confirmation == .required)) try trackReturnError(self.confirmPlan(&operation, plan, mode), &returned_error);
         if (tx.manifest()) |manifest| for (manifest.adoptions.items) |item| {
@@ -512,7 +613,7 @@ pub const Manager = struct {
             self.dispatcher.raiseInformational(.{ .event_type = .validation_complete, .message = message, .code = "migration_planned" });
         };
         if (tx.state == .prepared) {
-            defer self.reportActionFailures(tx);
+            stage = "commit package transaction";
             try trackReturnError(tx.commit(), &returned_error);
             if (tx.execution.adoptions_planned != 0) {
                 const message = try trackReturnError(std.fmt.allocPrint(self.allocator, "Preserved and adopted {d} file(s).", .{tx.execution.adoptions_committed}), &returned_error);
@@ -524,8 +625,10 @@ pub const Manager = struct {
         // Empty/--needed plans have no commit lifecycle event. Finish before
         // releasing them so the adapter does not report a cancellation.
         operation.finish(.success);
+        stage = "release transaction";
         try trackReturnError(self.owner.releaseTransaction(), &returned_error);
         transaction_active = false;
+        stage = "record dependency install reasons";
         if (!flags.downloadonly) for (optional_names.items) |name| {
             const ref = try trackReturnError(self.owner.queryPackage(self.io(), self.owner.localDatabase().?, name), &returned_error) orelse continue;
             try trackReturnError(self.owner.setInstallReason(self.io(), ref, .dependency), &returned_error);
@@ -534,14 +637,6 @@ pub const Manager = struct {
     fn forwardTransactionFailure(data: ?*anyopaque, message: []const u8) void {
         const self: *Manager = @ptrCast(@alignCast(data.?));
         self.dispatcher.notifyErrorHandlers(.{ .message = message });
-    }
-    fn reportActionFailures(self: *Manager, tx: *const rlpm.Transaction) void {
-        const actions = tx.actions() orelse return;
-        for (actions.outcomes.items) |outcome| if (outcome.cause) |cause| {
-            var buffer: [2048]u8 = undefined;
-            const message = std.fmt.bufPrint(&buffer, "Package setup {s} failed: {s}: {s}", .{ @tagName(outcome.kind), outcome.name, @errorName(cause) }) catch outcome.name;
-            self.dispatcher.raiseError(.{ .message = message });
-        };
     }
     fn targetReference(self: *Manager, text: []const u8) !?rlpm.PackageRef {
         if (std.mem.indexOfScalar(u8, text, '/')) |slash| {
@@ -719,6 +814,10 @@ pub const Manager = struct {
         self.hooks_disabled = true;
     }
     pub fn update_package_reason(self: *Manager, name: [:0]const u8, reason: types.PackageReason) !void {
+        if (reason == .Unknown) {
+            self.reportFailure(rlpm.Diagnostic.init(.configure, error.InvalidOption, null), .{ .subject = name, .detail = "The package install reason must be explicit or dependency; unknown cannot be stored." });
+            return error.InvalidOption;
+        }
         const ref = try self.owner.queryPackage(self.io(), self.owner.localDatabase().?, name) orelse return error.NoPackageFound;
         try self.owner.setInstallReason(self.io(), ref, switch (reason) {
             .Explicit => .explicit,
@@ -933,7 +1032,7 @@ fn legacyEvent(data: ?*anyopaque, event: rlpm.Callbacks.Event) void {
             const description = @import("native_output").hookMessage(&buffer, hook.name, hook.description, hook.position, hook.total);
             self.dispatcher.notifyHookHandlers(.{ .name = hook.name, .description = description, .position = hook.position, .total = hook.total });
         },
-        .diagnostic => |value| self.dispatcher.notifyErrorHandlers(.{ .message = @errorName(value.cause) }),
+        .diagnostic => |value| self.reportFailure(value, .{ .operation = "the package operation" }),
         else => {},
     }
 }

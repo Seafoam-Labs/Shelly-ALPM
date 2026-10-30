@@ -98,9 +98,18 @@ pub fn build(b: *std.Build) void {
 
     b.step("run", "Read local metadata (arguments: ROOT DBPATH)").dependOn(&run.step);
 
+    const diagnostic_tests = b.addRunArtifact(b.addTest(.{ .root_module = b.createModule(.{
+        .root_source_file = b.path("src/structs/Diagnostic.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{.{ .name = "diagnostics", .module = diagnostics }},
+    }) }));
+    b.step("test-diagnostics", "Test RLPM explanations, context, redaction, and allocation fallbacks").dependOn(&diagnostic_tests.step);
+
     const unit = b.addTest(.{ .root_module = mod });
     const test_step = b.step("test", "Run hermetic tests, public API checks, and reference ledger validation");
     test_step.dependOn(&b.addRunArtifact(unit).step);
+    test_step.dependOn(&diagnostic_tests.step);
 
     // Compile the real read-only example too, rather than an empty test runner.
     test_step.dependOn(&exe.step);

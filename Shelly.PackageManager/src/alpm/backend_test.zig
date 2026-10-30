@@ -1201,3 +1201,161 @@ test "native backend declined combined upgrade preserves packages and releases t
         try expectUpgradeVersion(&fixture, manager, "1-1");
     }
 }
+
+const RlpmDiagnosticCapture = struct {
+    failures: usize = 0,
+    legacy_failures: usize = 0,
+    cause: ?anyerror = null,
+    rlpm_domain: bool = false,
+    buffer: [8192]u8 = undefined,
+    length: usize = 0,
+    legacy_buffer: [8192]u8 = undefined,
+    legacy_length: usize = 0,
+    cancelled_held_package: bool = false,
+    failure_before_completion: bool = false,
+    completion: ?pm.operation.CompletionStatus = null,
+
+    fn event(data: ?*anyopaque, value: pm.OperationEvent) void {
+        const self: *@This() = @ptrCast(@alignCast(data.?));
+        switch (value) {
+            .failure => |failure| {
+                self.failures += 1;
+                self.failure_before_completion = self.completion == null;
+                self.cause = failure.err;
+                self.rlpm_domain = std.mem.eql(u8, failure.domain orelse "", "rlpm");
+                self.length = @min(self.buffer.len, failure.message.len);
+                @memcpy(self.buffer[0..self.length], failure.message[0..self.length]);
+            },
+            .status => |status| {
+                if (std.mem.eql(u8, status.code orelse "", "rlpm.cancelled"))
+                    self.cancelled_held_package = std.mem.indexOf(u8, status.message, "backend-fixture") != null;
+            },
+            .completed => |completion| self.completion = completion.status,
+            else => {},
+        }
+    }
+    fn legacy(data: ?*anyopaque, value: pm.Manager.events.ErrorArgs) void {
+        const self: *@This() = @ptrCast(@alignCast(data.?));
+        self.legacy_failures += 1;
+        self.legacy_length = @min(self.legacy_buffer.len, value.message.len);
+        @memcpy(self.legacy_buffer[0..self.legacy_length], value.message[0..self.legacy_length]);
+    }
+    fn expect(self: *const @This(), err: anyerror, fragments: []const []const u8) !void {
+        try t.expectEqual(@as(usize, 1), self.failures);
+        try t.expectEqual(err, self.cause.?);
+        try t.expect(self.rlpm_domain);
+        const message = self.buffer[0..self.length];
+        for (fragments) |part| try t.expect(std.mem.indexOf(u8, message, part) != null);
+        try t.expect(std.mem.indexOf(u8, message, @errorName(err)) != null);
+        try t.expect(std.mem.indexOf(u8, message, "more specific reason") == null);
+    }
+    fn expectLegacy(self: *const @This()) !void {
+        try t.expectEqual(@as(usize, 1), self.legacy_failures);
+        try t.expectEqualStrings(self.buffer[0..self.length], self.legacy_buffer[0..self.legacy_length]);
+    }
+};
+
+test "RLPM initialization reports original configuration and allocation causes before compatibility conversion" {
+    var fixture = try Fixture.init(.rlpm);
+    defer fixture.deinit();
+    var context = pm.OperationContext.init(t.allocator, t.io);
+    defer context.deinit();
+    var capture: RlpmDiagnosticCapture = .{};
+    _ = try context.subscribe(.{ .function = RlpmDiagnosticCapture.event, .data = &capture });
+    fixture.options.operation_context = &context;
+    const cases = .{
+        .{ "[options]\nParallelDownloads = 0\n", error.InvalidParallelDownloads, "ParallelDownloads" },
+        .{ "[options]\nParallelDownloads = bad\n", error.InvalidParallelDownloads, "1 to 255" },
+        .{ "[options]\nHookDirMode = typo\n", error.InvalidHookDirMode, "Append or Replace" },
+    };
+    inline for (cases) |case| {
+        capture = .{};
+        try fixture.temp.dir.writeFile(t.io, .{ .sub_path = "pacman.conf", .data = case[0] });
+        try t.expectError(error.ConfigParseFailed, fixture.manager());
+        try capture.expect(case[1], &.{ case[2], fixture.options.config_path.?, "parse configuration" });
+    }
+    capture = .{};
+    try fixture.temp.dir.deleteFile(t.io, "pacman.conf");
+    try t.expectError(error.ConfigParseFailed, fixture.manager());
+    try capture.expect(error.ConfigReadFailed, &.{ "could not be read", fixture.options.config_path.? });
+    capture = .{};
+    var failing = t.FailingAllocator.init(t.allocator, .{ .fail_index = 0 });
+    try t.expectError(error.InitFailed, pm.Manager.init(failing.allocator(), t.environ, fixture.options));
+    try capture.expect(error.OutOfMemory, &.{"formatting was unavailable"});
+}
+
+test "RLPM query and mutation conversions retain original errors and report once" {
+    var fixture = try Fixture.init(.rlpm);
+    defer fixture.deinit();
+    const manager = try fixture.manager();
+    defer manager.deinit();
+    try manager.install_local_packages(&.{fixture.archive}, .{ .nohooks = true, .noscriptlet = true });
+    var context = pm.OperationContext.init(t.allocator, t.io);
+    defer context.deinit();
+    var capture: RlpmDiagnosticCapture = .{};
+    _ = try context.subscribe(.{ .function = RlpmDiagnosticCapture.event, .data = &capture });
+    _ = try manager.dispatcher.addErrorHandler(.{ .function = RlpmDiagnosticCapture.legacy, .data = &capture });
+    manager.setOperationContext(&context);
+    defer manager.setOperationContext(null);
+
+    try t.expectError(error.PkgNotFound, manager.find_remote_satisfier_for_dependency("absent-provider"));
+    try t.expectEqual(@as(usize, 0), capture.failures);
+    try t.expectEqual(@as(usize, 0), capture.legacy_failures);
+    try t.expectError(error.DbNotFound, manager.find_remote_satisfier_for_dependency("bad\x00relation"));
+    try capture.expect(error.InvalidPackageRelation, &.{ "dependency expression", "bad\\x00relation" });
+    try capture.expectLegacy();
+
+    capture = .{};
+    try t.expectError(error.DatabaseReadFailed, manager.get_required_packages("backend-fixture", "missing-repo"));
+    try capture.expect(error.DatabaseNotFound, &.{ "not configured", "missing-repo" });
+    try capture.expectLegacy();
+
+    capture = .{};
+    try t.expectError(error.CommitFailed, manager.update_package_reason("backend-fixture", .Unknown));
+    try capture.expect(error.InvalidOption, &.{ "install reason", "backend-fixture" });
+    try capture.expectLegacy();
+
+    capture = .{};
+    try t.expectError(error.CommitFailed, manager.install_local_packages(&.{fixture.archive}, @bitCast(@as(u32, 2))));
+    try capture.expect(error.InvalidTransactionFlags, &.{ "options", "initialize transaction" });
+    try t.expect(capture.failure_before_completion);
+    try capture.expectLegacy();
+    try t.expectError(error.FileNotFound, fixture.temp.dir.statFile(t.io, "db/db.lck", .{}));
+}
+
+test "RLPM preview root and held package refusal have specific diagnostics" {
+    var fixture = try Fixture.init(.rlpm);
+    defer fixture.deinit();
+    const manager = try fixture.manager();
+    defer manager.deinit();
+    try manager.install_local_packages(&.{fixture.archive}, .{ .nohooks = true, .noscriptlet = true });
+    try manager.hold_package("backend-fixture");
+    var context = pm.OperationContext.init(t.allocator, t.io);
+    defer context.deinit();
+    var capture: RlpmDiagnosticCapture = .{};
+    _ = try context.subscribe(.{ .function = RlpmDiagnosticCapture.event, .data = &capture });
+    _ = try manager.dispatcher.addErrorHandler(.{ .function = RlpmDiagnosticCapture.legacy, .data = &capture });
+    manager.setOperationContext(&context);
+    defer manager.setOperationContext(null);
+    const Decline = struct {
+        fn respond(_: ?*anyopaque, _: pm.operation.Question) pm.operation.QuestionResponse {
+            return .declined;
+        }
+    };
+    context.setQuestionHandler(.{ .function = Decline.respond });
+    var targets = [_][:0]const u8{"backend-fixture"};
+    try t.expectError(error.Cancelled, manager.remove_packages(&targets, .{ .nohooks = true, .noscriptlet = true }, true));
+    try t.expect(capture.cancelled_held_package);
+    try t.expectEqual(@as(usize, 0), capture.failures);
+    try t.expectEqual(@as(usize, 0), capture.legacy_failures);
+    try t.expectEqual(pm.operation.CompletionStatus.cancelled, capture.completion.?);
+    try t.expect(manager.is_package_installed("backend-fixture"));
+    try t.expectError(error.FileNotFound, fixture.temp.dir.statFile(t.io, "db/db.lck", .{}));
+
+    capture = .{};
+    manager.engine.?.rlpm.temporary = true;
+    defer manager.engine.?.rlpm.temporary = false;
+    try t.expectError(error.CommitFailed, manager.install_local_packages(&.{fixture.archive}, .{}));
+    try capture.expect(error.PreviewRootReadOnly, &.{ "temporary update-check root", fixture.options.root_directory.? });
+    try capture.expectLegacy();
+}
