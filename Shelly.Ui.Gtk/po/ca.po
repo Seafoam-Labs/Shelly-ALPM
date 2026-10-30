@@ -13,7 +13,7 @@ msgstr ""
 "X-Generator: Poedit 3.9\n"
 
 msgid "No installable addons available"
-msgstr ""
+msgstr "No hi ha complements instal·lables disponibles"
 
 msgid "Close"
 msgstr "Tanca"
@@ -27,62 +27,69 @@ msgid ""
 "way. Only enable this feature if you are comfortable in verifying the build "
 "scripts."
 msgstr ""
+"L'Arch User Repository conté scripts de construcció coneguts com a PKGBUILDs. "
+"Aquests scripts són pujats pels usuaris i no es verifiquen ni se sotmeten a cap mena de revisió. "
+"Activeu aquesta funcionalitat només si us sentiu còmodes verificant els scripts de construcció."
 
 msgid ""
 "<a href=\"https://www.seafoam-labs.org/shelly-alpm/docs/aur-safety/\">AUR "
 "Safety Guide</a>"
 msgstr ""
+"<a href=\"https://www.seafoam-labs.org/shelly-alpm/docs/aur-safety/\">Guia de seguretat "
+"de l'AUR</a>"
 
 msgid "Enable"
-msgstr ""
+msgstr "Habilita"
 
 msgid "Cancel"
 msgstr "Cancel·la"
 
 msgid "Keep configuration"
-msgstr ""
+msgstr "Conserva la configuració"
 
 msgid "App data and settings will be kept."
-msgstr ""
+msgstr "Les dades i la configuració de l'aplicació es conservaran."
 
 msgid "Remove configuration"
-msgstr ""
+msgstr "Elimina la configuració"
 
 msgid "App data will be permanently removed."
-msgstr ""
+msgstr "Les dades de l'aplicació s'eliminaran de manera permanent."
 
 msgid "Confirm"
 msgstr "Confirma"
 
 #| msgid "No description available."
 msgid "Permissions unavailable"
-msgstr ""
+msgstr "Permisos no disponibles"
 
 msgid "Shelly could not read the permissions for this app."
-msgstr ""
+msgstr "La Shelly no ha pogut llegir els permisos d'aquesta aplicació."
 
 msgid "No special permissions requested"
-msgstr ""
+msgstr "No s'ha sol·licitat cap permís especial"
 
 msgid "Review PKGBUILD changes"
-msgstr ""
+msgstr "Revisa els canvis del PKGBUILD"
 
 msgid "Changes"
-msgstr ""
+msgstr "Canvis"
 
 msgid "Warnings"
-msgstr ""
+msgstr "Advertències"
 
 msgid ""
 "These commands fetch and execute code outside of shelly and libalpm's "
 "control. Review them before continuing."
 msgstr ""
+"Aquestes ordres recuperen i executen codi fora del control de shelly i libalpm. "
+"Reviseu-les abans de continuar."
 
 msgid "Source Files"
-msgstr ""
+msgstr "Fitxers font"
 
 msgid "polkit is required"
-msgstr ""
+msgstr "Es requereix polkit"
 
 msgid ""
 "Shelly's GUI needs <b>polkit</b> installed and running to authorize "
@@ -93,18 +100,25 @@ msgid ""
 "<a href=\"https://www.seafoam-labs.org/shelly-alpm/docs/polkit/\">seafoam-"
 "labs.org/shelly-alpm/docs/polkit</a>"
 msgstr ""
+"La interfície gràfica de Shelly necessita que <b>polkit</b> estigui instal·lat i en "
+"execució per autoritzar accions privilegiades, però no s'ha trobat al bus del sistema.\n"
+"\n"
+"Instal·leu-lo i habiliteu-lo, i torneu-ho a provar.\n"
+"\n"
+"<a href=\"https://www.seafoam-labs.org/shelly-alpm/docs/polkit/\">seafoam-"
+"labs.org/shelly-alpm/docs/polkit</a>"
 
 msgid "Review PKGBUILD"
-msgstr ""
+msgstr "Revisa el PKGBUILD"
 
 msgid "PKGBUILD"
-msgstr ""
+msgstr "PKGBUILD"
 
 msgid "Retry"
-msgstr ""
+msgstr "Torna-ho a provar"
 
 msgid "Skip"
-msgstr ""
+msgstr "Omet"
 
 msgid "Search..."
 msgstr "Cerca..."
@@ -130,7 +144,7 @@ msgid "Install AppImage"
 msgstr "Instal·la l'AppImage"
 
 msgid "Drop AppImage here to install"
-msgstr ""
+msgstr "Arrossegueu l'AppImage aquí per instal·lar-la"
 
 msgid "App Name"
 msgstr "Nom de l'aplicació"
@@ -151,33 +165,35 @@ msgid "Update URL / Repository Info"
 msgstr "URL d'actualització / Informació del repositori"
 
 msgid "Get more information about Update URL / Repository Info"
-msgstr ""
+msgstr "Obteniu més informació sobre l'URL d'actualització / informació del repositori"
 
 msgid "e.g. owner/repo or https://..."
-msgstr ""
+msgstr "p. ex., propietari/repositori o https://..."
 
 msgid ""
 "Enter the repository as owner/repo, for example seafoam-labs/shelly-alpm."
 msgstr ""
+"Introduïu el repositori com a propietari/repositori, per exemple seafoam-labs/shelly-alpm."
 
 msgid "Allow Prerelease"
-msgstr ""
+msgstr "Permet versions preliminars"
 
 msgid "Installation Path"
 msgstr "Camí d'instal·lació"
 
 msgid "Launch Flags"
-msgstr ""
+msgstr "Paràmetres de llançament"
 
 msgid "Environment Variables"
-msgstr ""
+msgstr "Variables d'entorn"
 
 msgid ""
 "One KEY=value per line. Remove a line to restore the normal environment."
 msgstr ""
+"Un CLAU=valor per línia. Elimineu una línia per restaurar l'entorn normal."
 
 msgid "Save Environment"
-msgstr ""
+msgstr "Desa l'entorn"
 
 msgid "Save"
 msgstr "Desa"
@@ -189,37 +205,37 @@ msgid "Remove"
 msgstr "Elimina"
 
 msgid "Search the AUR by name or keyword"
-msgstr ""
+msgstr "Cerca a l'AUR per nom o paraula clau"
 
 #| msgid "Search..."
 msgid "Search By"
-msgstr ""
+msgstr "Cerca per"
 
 msgid "Installed Only"
-msgstr ""
+msgstr "Només instal·lats"
 
 msgid "Show only installed packages"
-msgstr ""
+msgstr "Mostra només els paquets instal·lats"
 
 msgid "Previous page"
-msgstr ""
+msgstr "Pàgina anterior"
 
 msgid "Page 1 of 1"
-msgstr ""
+msgstr "Pàgina 1 d'1"
 
 #| msgid "Default page"
 msgid "Next page"
-msgstr ""
+msgstr "Pàgina següent"
 
 msgid "Additional Options"
-msgstr ""
+msgstr "Opcions addicionals"
 
 msgid "Install Selected"
 msgstr "Instal·la els seleccionats"
 
 #| msgid "Select File"
 msgid "Select"
-msgstr ""
+msgstr "Selecciona"
 
 msgid "Name"
 msgstr "Nom"
@@ -231,51 +247,52 @@ msgid "Popularity"
 msgstr "Popularitat"
 
 msgid "Loading the AUR index"
-msgstr ""
+msgstr "S'està carregant l'índex de l'AUR"
 
 msgid "Powered by Atoll."
-msgstr ""
+msgstr "Amb tecnologia d'Atoll."
 
 msgid "Run checks"
 msgstr "Executa les comprovacions"
 
 msgid "Run the --check function during package build"
-msgstr ""
+msgstr "Executa la funció --check durant la construcció del paquet"
 
 msgid "Hide Detail Pane"
-msgstr ""
+msgstr "Amaga el panell de detalls"
 
 msgid "Hide the detail pane on the right"
-msgstr ""
+msgstr "Amaga el panell de detalls de la dreta"
 
 msgid "Information"
-msgstr ""
+msgstr "Informació"
 
 msgid "Preview Pkgbuild"
-msgstr ""
+msgstr "Previsualitza el Pkgbuild"
 
 msgid "Search the AUR"
-msgstr ""
+msgstr "Cerca a l'AUR"
 
 msgid "The AUR has no browsable index. Type a package name to begin."
-msgstr ""
+msgstr "L'AUR no té cap índex a explorar. Escriviu el nom d'un paquet per començar."
 
 msgid "Install a local Flatpak"
-msgstr ""
+msgstr "Instal·la un Flatpak local"
 
 msgid ""
 "Choose a .flatpak bundle from your system and install it for the current "
 "user or system-wide."
 msgstr ""
+"Trieu un paquet .flatpak del vostre sistema i instal·leu-lo per a l'usuari actual o a tot el sistema."
 
 msgid "Bundle"
-msgstr ""
+msgstr "Paquet"
 
 msgid "Choose file…"
-msgstr ""
+msgstr "Trieu un fitxer..."
 
 msgid "Install for"
-msgstr ""
+msgstr "Instal·la per a"
 
 msgid "system"
 msgstr "sistema"
@@ -287,7 +304,7 @@ msgid "Install"
 msgstr "Instal·la"
 
 msgid "No matching applications found"
-msgstr ""
+msgstr "No s'ha trobat cap aplicació coincident"
 
 msgid "Loading Flatpak Data..."
 msgstr "S'estan carregant les dades de Flatpak..."
@@ -299,7 +316,7 @@ msgid "Addons"
 msgstr "Complements"
 
 msgid "Install source"
-msgstr ""
+msgstr "Font d'instal·lació"
 
 msgid "Author"
 msgstr "Autor"
@@ -317,10 +334,10 @@ msgid "Summary"
 msgstr "Sumari"
 
 msgid "Show more"
-msgstr ""
+msgstr "Mostra'n més"
 
 msgid "App Permissions"
-msgstr ""
+msgstr "Permisos de l'aplicació"
 
 msgid "Version History"
 msgstr "Historial de versions"
@@ -329,7 +346,7 @@ msgid "Search packages..."
 msgstr "Cerca paquets..."
 
 msgid "Browse"
-msgstr ""
+msgstr "Explora"
 
 msgid "Manage"
 msgstr "Administra"
@@ -368,56 +385,56 @@ msgid "Scope"
 msgstr "Àmbit"
 
 msgid "Show Runtimes"
-msgstr ""
+msgstr "Mostra els entorns d'execució"
 
 msgid "Flatpak Repair"
-msgstr ""
+msgstr "Reparació de Flatpak"
 
 msgid "Repairs Flatpak Installation (Experimental)"
-msgstr ""
+msgstr "Repara la instal·lació de Flatpak (experimental)"
 
 msgid "About"
-msgstr ""
+msgstr "Quant a"
 
 msgid "Shelly"
-msgstr ""
+msgstr "Shelly"
 
 #| msgid "Install Local"
 msgid "Install Optional Deps"
-msgstr ""
+msgstr "Instal·la les dependències opcionals"
 
 msgid "Reinstall"
-msgstr ""
+msgstr "Torna a instal·lar"
 
 msgid "Add Ignore"
-msgstr ""
+msgstr "Afegeix a ignorats"
 
 msgid "Add Hold"
-msgstr ""
+msgstr "Afegeix a retinguts"
 
 msgid "Make Explicit"
-msgstr ""
+msgstr "Fes-ho explícit"
 
 msgid "Mark Dependency"
-msgstr ""
+msgstr "Marca com a dependència"
 
 msgid "Package actions"
-msgstr ""
+msgstr "Accions del paquet"
 
 msgid "Package Group Filter"
 msgstr "Filtre de grup de paquets"
 
 msgid "Selected Packages"
-msgstr ""
+msgstr "Paquets seleccionats"
 
 msgid "0 Selected"
-msgstr ""
+msgstr "0 seleccionats"
 
 msgid "Grid View"
-msgstr ""
+msgstr "Vista de graella"
 
 msgid "List View"
-msgstr ""
+msgstr "Vista de llista"
 
 msgid "Size"
 msgstr "Mida"
@@ -426,13 +443,13 @@ msgid "Repository"
 msgstr "Repositori"
 
 msgid "Install Date"
-msgstr ""
+msgstr "Data d'instal·lació"
 
 msgid "No matching packages found"
-msgstr ""
+msgstr "No s'ha trobat cap paquet coincident"
 
 msgid "Had an issue loading your packages. Check if you have a db lock."
-msgstr ""
+msgstr "S'ha produït un problema en carregar els vostres paquets. Comproveu si teniu un bloqueig de base de dades (db.lck)."
 
 msgid "Perform Upgrade"
 msgstr "Realitza l'actualització"
@@ -447,28 +464,28 @@ msgid "Show packages in the IgnorePkg list from pacman.conf"
 msgstr "Mostra els paquets de la llista IgnorePkg del pacman.conf"
 
 msgid "Show Explicit Only"
-msgstr ""
+msgstr "Mostra només els explícits"
 
 msgid "Show only explicitly installed packages"
-msgstr ""
+msgstr "Mostra només els paquets instal·lats explícitament"
 
 msgid "Show Dependency Only"
-msgstr ""
+msgstr "Mostra només les dependències"
 
 msgid "Show dependency packages only"
-msgstr ""
+msgstr "Mostra només els paquets de dependència"
 
 msgid "Recommended Packages"
-msgstr ""
+msgstr "Paquets recomanats"
 
 msgid "Curated suggestions from Seafoam Labs"
-msgstr ""
+msgstr "Suggeriments seleccionats per Seafoam Labs"
 
 msgid "Refresh the recommended packages list from the network"
-msgstr ""
+msgstr "Actualitza la llista de paquets recomanats des de la xarxa"
 
 msgid "Loading Recommended Packages..."
-msgstr ""
+msgstr "S'estan carregant els paquets recomanats..."
 
 msgid ""
 "No recommendations found. Please check your internet connection and try "
@@ -478,36 +495,37 @@ msgstr ""
 "a provar."
 
 msgid "Search standard repositories, AUR and Flatpak"
-msgstr ""
+msgstr "Cerca als repositoris estàndard, AUR i Flatpak"
 
 msgid "Standard"
-msgstr ""
+msgstr "Estàndard"
 
 msgid "Show results from the configured ALPM sync databases"
-msgstr ""
+msgstr "Mostra els resultats de les bases de dades de sincronització ALPM configurades"
 
 msgid "AUR"
 msgstr "AUR"
 
 msgid "Show results from the Arch User Repository"
-msgstr ""
+msgstr "Mostra els resultats de l'Arch User Repository"
 
 msgid "Flatpak"
 msgstr "Flatpak"
 
 msgid "Show results from the configured Flatpak remotes"
-msgstr ""
+msgstr "Mostra els resultats dels remots de Flatpak configurats"
 
 msgid "Source"
-msgstr ""
+msgstr "Font"
 
 msgid "Search everywhere"
-msgstr ""
+msgstr "Cerca a tot arreu"
 
 msgid ""
 "Search the standard repositories, the AUR, and Flatpak all at once. Type a "
 "name to begin."
 msgstr ""
+"Cerca als repositoris estàndard, l'AUR i Flatpak alhora. Escriviu un nom per començar."
 
 msgid "General"
 msgstr "Opcions generals"
@@ -516,13 +534,13 @@ msgid "Enable AUR"
 msgstr "Habilita l'AUR"
 
 msgid "Language"
-msgstr ""
+msgstr "Llengua"
 
 msgid "Enable Flatpak"
 msgstr "Habilita el Flatpak"
 
 msgid "Enable Recommended"
-msgstr ""
+msgstr "Habilita els recomanats"
 
 msgid "Enable AppImage"
 msgstr "Habilita l'AppImage"
@@ -537,10 +555,10 @@ msgid "Use weekly schedule"
 msgstr "Utilitza la planificació setmanal"
 
 msgid "Run Tray as cron"
-msgstr ""
+msgstr "Executa la safata com a cron"
 
 msgid "Tray update with ui"
-msgstr ""
+msgstr "Actualització de la safata amb IU"
 
 msgid "Tray Check Interval (Hours)"
 msgstr "Interval de comprovació de la safata (hores)"
@@ -573,7 +591,7 @@ msgid "Update Time (24h):"
 msgstr "Hora d'actualització (24h):"
 
 msgid ":"
-msgstr ""
+msgstr ":"
 
 msgid "Look & Feel"
 msgstr "Aspecte i comportament"
@@ -585,6 +603,7 @@ msgid ""
 "If enabled, Shelly will use appstream icons in the package list and details "
 "pages."
 msgstr ""
+"Si s'habilita, Shelly utilitzarà icones d'appstream a la llista de paquets i a les pàgines de detalls."
 
 msgid "Use Symbolic Tray Icon"
 msgstr "Utilitza una icona simbòlica a la safata"
@@ -593,6 +612,7 @@ msgid ""
 "If enabled, Shelly will use a symbolic svg icon instead of the default image "
 "one."
 msgstr ""
+"Si s'habilita, Shelly utilitzarà una icona SVG simbòlica en comptes de la imatge predeterminada."
 
 msgid "Tray Icon"
 msgstr "Icona de la safata del sistema"
@@ -610,7 +630,7 @@ msgid "Default page"
 msgstr "Pàgina per defecte"
 
 msgid "Navigation style"
-msgstr ""
+msgstr "Estil de navegació"
 
 msgid "Advanced"
 msgstr "Ajusts avançats"
@@ -625,19 +645,19 @@ msgid "Enable Shelly Search"
 msgstr "Habilita la cerca de Shelly"
 
 msgid "Enable Atoll Powered AUR"
-msgstr ""
+msgstr "Habilita l'AUR amb tecnologia d'Atoll"
 
 msgid "AppImage Install Path"
-msgstr ""
+msgstr "Camí d'instal·lació d'AppImage"
 
 msgid "Select Directory"
-msgstr ""
+msgstr "Selecciona el directori"
 
 msgid "View Changelog"
 msgstr "Veure registre de canvis"
 
 msgid "v0.0.0"
-msgstr ""
+msgstr "v0.0.0"
 
 msgid "GitHub"
 msgstr "GitHub"
@@ -649,59 +669,60 @@ msgid "Sponsor"
 msgstr "Patrocinador"
 
 msgid "Toggle output"
-msgstr ""
+msgstr "Commuta la sortida"
 
 msgid "Done"
-msgstr ""
+msgstr "Fet"
 
 msgid "Available Updates"
 msgstr "Actualitzacions disponibles"
 
 msgid "7 of 7 updates included"
-msgstr ""
+msgstr "7 de 7 actualitzacions incloses"
 
 msgid "Check all enabled sources again"
-msgstr ""
+msgstr "Torna a comprovar totes les fonts habilitades"
 
 msgid "Check Again"
-msgstr ""
+msgstr "Torna a comprovar"
 
 msgid "Upgrade"
-msgstr ""
+msgstr "Actualitza"
 
 msgid "System"
 msgstr "Sistema"
 
 msgid "Checking for updates…"
-msgstr ""
+msgstr "S'estan cercant actualitzacions..."
 
 msgid "Your system is up to date"
-msgstr ""
+msgstr "El vostre sistema està actualitzat"
 
 msgid "Could not check for updates."
-msgstr ""
+msgstr "No s'han pogut cercar actualitzacions."
 
 msgid "Utilities"
-msgstr ""
+msgstr "Utilitats"
 
 msgid "Maintenance and repair tools for your Shelly installation."
-msgstr ""
+msgstr "Eines de manteniment i reparació per a la vostra instal·lació de Shelly."
 
 msgid "Force Database Update"
 msgstr "Força l'actualització de la base de dades"
 
 msgid "Force a synchronization of the package database."
-msgstr ""
+msgstr "Força la sincronització de la base de dades de paquets."
 
 msgid "Run"
-msgstr ""
+msgstr "Executa"
 
 msgid "Remove db.lck"
-msgstr ""
+msgstr "Suprimeix db.lck"
 
 msgid ""
 "Removes the db.lck file if it was left behind by an interrupted alpm process."
 msgstr ""
+"Suprimeix el fitxer db.lck si ha estat deixat enrere per un procés d'alpm interromput."
 
 msgid "Fix Permissions"
 msgstr "Corregeix els permisos"
@@ -717,225 +738,230 @@ msgid "Purify Packages"
 msgstr "Depura els paquets"
 
 msgid "Remove corrupted/orphaned packages."
-msgstr ""
+msgstr "Suprimeix els paquets corromputs o orfes."
 
 msgid "Clean Package Cache"
-msgstr ""
+msgstr "Neteja la memòria cau de paquets"
 
 msgid ""
 "Removes old cached package versions, keeping the selected number per package."
 msgstr ""
+"Suprimeix les versions antigues de paquets en memòria cau, mantenint el nombre seleccionat per paquet."
 
 msgid "Keep"
-msgstr ""
+msgstr "Conserva"
 
 msgid "Number of cached versions to keep per package"
-msgstr ""
+msgstr "Nombre de versions en memòria cau a conservar per paquet"
 
 msgid "Welcome to Shelly v3"
-msgstr ""
+msgstr "Us donem la benvinguda a Shelly v3"
 
 msgid ""
 "Shelly is a modern package manager for Arch Linux. Configure your sources "
 "and preferences to get started."
 msgstr ""
+"Shelly és un gestor de paquets modern per a Arch Linux. Configureu les vostres fonts i preferències per començar."
 
 msgid "Select Your Sources"
-msgstr ""
+msgstr "Seleccioneu les vostres fonts"
 
 msgid ""
 "Choose which package sources you want to browse. You can always change this "
 "later in settings."
 msgstr ""
+"Trieu quines fonts de paquets voleu explorar. Sempre podeu canviar això més tard a la configuració."
 
 msgid "Arch User Repository community packages"
-msgstr ""
+msgstr "Paquets de la comunitat de l'Arch User Repository"
 
 msgid "Sandboxed universal Linux applications"
-msgstr ""
+msgstr "Aplicacions universals de Linux en entorn aïllat"
 
 msgid "AppImage"
 msgstr "AppImage"
 
 msgid "Portable self-contained application bundles"
-msgstr ""
+msgstr "Paquets d'aplicacions portables i autònoms"
 
 msgid "Recommended"
 msgstr "Recomanat"
 
 msgid "Curated picks from Shelly"
-msgstr ""
+msgstr "Seleccions curades de Shelly"
 
 msgid "Look and Feel"
-msgstr ""
+msgstr "Aspecte i comportament"
 
 msgid ""
 "Customize how Shelly looks and behaves. All of these can be changed later in "
 "preferences."
 msgstr ""
+"Personalitzeu l'aspecte i el comportament de Shelly. Tot això es pot canviar més tard a les preferències."
 
 msgid "Navigation Style"
-msgstr ""
+msgstr "Estil de navegació"
 
 msgid "Sidebar"
-msgstr ""
+msgstr "Barra lateral"
 
 msgid "Vertical icon rail on the left"
-msgstr ""
+msgstr "Barra d'icones vertical a l'esquerra"
 
 msgid "Top Bar"
-msgstr ""
+msgstr "Barra superior"
 
 msgid "Horizontal tab switcher at the top"
-msgstr ""
+msgstr "Selector de pestanyes horitzontal a la part superior"
 
 msgid "System Tray"
-msgstr ""
+msgstr "Safata del sistema"
 
 msgid "Run in system tray when minimized"
-msgstr ""
+msgstr "Executa a la safata del sistema en minimitzar"
 
 msgid "Next"
-msgstr ""
+msgstr "Següent"
 
 msgid "Start Shelly"
-msgstr ""
+msgstr "Inicia Shelly"
 
 #| msgid "System"
 msgid "System files"
-msgstr ""
+msgstr "Fitxers del sistema"
 
 msgid "Other folders"
-msgstr ""
+msgstr "Altres carpetes"
 
 msgid "Running services"
-msgstr ""
+msgstr "Serveis en execució"
 
 msgid "Other apps' data"
-msgstr ""
+msgstr "Dades d'altres aplicacions"
 
 msgid "Home folder"
-msgstr ""
+msgstr "Carpeta d'usuari"
 
 msgid "User folders"
-msgstr ""
+msgstr "Carpetes d'usuari"
 
 msgid "Persistent files"
-msgstr ""
+msgstr "Fitxers persistents"
 
 msgid "Devices"
-msgstr ""
+msgstr "Dispositius"
 
 msgid "Session bus"
-msgstr ""
+msgstr "Bus de sessió"
 
 msgid "System bus"
-msgstr ""
+msgstr "Bus del sistema"
 
 #| msgid "Network"
 msgid "Network access"
-msgstr ""
+msgstr "Accés a la xarxa"
 
 msgid "Display server"
-msgstr ""
+msgstr "Servidor de pantalla"
 
 msgid "Sandbox features"
-msgstr ""
+msgstr "Característiques de l'entorn aïllat"
 
 msgid "Environment"
-msgstr ""
+msgstr "Entorn"
 
 msgid "Sound"
-msgstr ""
+msgstr "So"
 
 msgid "Printing"
-msgstr ""
+msgstr "Impressió"
 
 msgid "Inter-process communication"
-msgstr ""
+msgstr "Comunicació entre processos"
 
 msgid "Other"
-msgstr ""
+msgstr "Altres"
 
 msgid "No network access"
-msgstr ""
+msgstr "Sense accés a la xarxa"
 
 msgid "No device access"
-msgstr ""
+msgstr "Sense accés a dispositius"
 
 msgid "No access to system files"
-msgstr ""
+msgstr "Sense accés als fitxers del sistema"
 
 msgid "Review PKGBUILD changes for"
-msgstr ""
+msgstr "Revisa els canvis del PKGBUILD per a"
 
 msgid "Review Changes"
-msgstr ""
+msgstr "Revisa els canvis"
 
 msgid "Security scan completed -"
-msgstr ""
+msgstr "Exploració de seguretat completada -"
 
 msgid "warning(s) found."
-msgstr ""
+msgstr "s'han trobat advertències."
 
 msgid "Security scan completed - warnings found."
-msgstr ""
+msgstr "Exploració de seguretat completada: s'han trobat advertències."
 
 msgid "Security scan completed - no issues found."
-msgstr ""
+msgstr "Exploració de seguretat completada: no s'ha trobat cap problema."
 
 msgid "used in"
-msgstr ""
+msgstr "utilitzat a"
 
 msgid "Install Anyway"
-msgstr ""
+msgstr "Instal·la igualment"
 
 msgid "Unknown"
 msgstr "Desconegut"
 
 msgid "package(s)"
-msgstr ""
+msgstr "paquet(s)"
 
 msgid "to"
-msgstr ""
+msgstr "a"
 
 msgid "removed size"
-msgstr ""
+msgstr "mida eliminada"
 
 msgid "download"
-msgstr ""
+msgstr "baixada"
 
 msgid "net"
-msgstr ""
+msgstr "neta"
 
 msgid "Scanning PKGBUILD…"
-msgstr ""
+msgstr "S'està escanejant el PKGBUILD..."
 
 #| msgid "No description available."
 msgid "Security scan unavailable."
-msgstr ""
+msgstr "Exploració de seguretat no disponible."
 
 msgid "Could not load the PKGBUILD preview."
-msgstr ""
+msgstr "No s'ha pogut carregar la previsualització del PKGBUILD."
 
 msgid ""
 "PKGBUILD changed. Close and reopen the preview to scan the current version."
 msgstr ""
+"El PKGBUILD ha canviat. Tanqueu i torneu a obrir la previsualització per escanejar la versió actual."
 
 msgid "No related files."
-msgstr ""
+msgstr "No hi ha fitxers relacionats."
 
 msgid "Previous"
-msgstr ""
+msgstr "Anterior"
 
 msgid "Dismiss"
-msgstr ""
+msgstr "Ignora"
 
 msgid "None"
 msgstr "Cap"
 
 msgid "Static URL"
-msgstr ""
+msgstr "URL estàtica"
 
 msgid "GitLab"
 msgstr "GitLab"
@@ -947,134 +973,136 @@ msgid "Forgejo"
 msgstr "Forgejo"
 
 msgid "Update Available"
-msgstr ""
+msgstr "Actualització disponible"
 
 msgid "Version ?"
-msgstr ""
+msgstr "Versió?"
 
 msgid "Enter a download URL beginning with http:// or https://."
-msgstr ""
+msgstr "Introduïu un URL de baixada que comenci per http:// o https://."
 
 msgid ""
 "Enter a Forgejo repository URL as http(s)://host/owner/repo or http(s)://"
 "host/owner/repo/releases."
 msgstr ""
+"Introduïu un URL de repositori de Forgejo com a http(s)://servidor/propietari/repositori o http(s)://servidor/propietari/repositori/releases."
 
 msgid "Choose an AppImage file"
-msgstr ""
+msgstr "Trieu un fitxer AppImage"
 
 msgid "AppImage files"
-msgstr ""
+msgstr "Fitxers AppImage"
 
 msgid "Only.AppImage files can be installed"
-msgstr ""
+msgstr "Només es poden instal·lar fitxers .AppImage"
 
 msgid "Installing AppImage"
-msgstr ""
+msgstr "S'està instal·lant l'AppImage"
 
 msgid "No AppImages need to be upgraded"
 msgstr "No hi ha cap AppImage per a actualitzar"
 
 msgid "Upgrading AppImages"
-msgstr ""
+msgstr "S'estan actualitzant les AppImages"
 
 msgid "Syncing AppImages"
-msgstr ""
+msgstr "S'estan sincronitzant les AppImages"
 
 msgid "Syncing AppImage"
-msgstr ""
+msgstr "S'està sincronitzant l'AppImage"
 
 msgid ""
 "Use unique KEY=value lines. Keys must start with a letter or underscore and "
 "contain only letters, digits, or underscores."
 msgstr ""
+"Utilitzeu línies CLAU=valor úniques. Les claus han de començar amb una lletra o guió baix i contenir només lletres, dígits o guions baixos."
 
 msgid "Saving AppImage environment"
-msgstr ""
+msgstr "S'està desant l'entorn de l'AppImage"
 
 msgid "Saving update configuration"
-msgstr ""
+msgstr "S'està desant la configuració d'actualització"
 
 msgid "Configuration files will be kept."
-msgstr ""
+msgstr "Els fitxers de configuració es conservaran."
 
 msgid "Remove this AppImage?"
-msgstr ""
+msgstr "Voleu suprimir aquesta AppImage?"
 
 msgid "Remove AppImage"
-msgstr ""
+msgstr "Suprimeix l'AppImage"
 
 msgid "Removing AppImage"
-msgstr ""
+msgstr "S'està suprimint l'AppImage"
 
 msgid "Operation completed successfully"
-msgstr ""
+msgstr "Operació completada amb èxit"
 
 msgid "Could not complete the requested operation."
-msgstr ""
+msgstr "No s'ha pogut completar l'operació sol·licitada."
 
 msgid "Discard environment changes?"
-msgstr ""
+msgstr "Voleu descartar els canvis de l'entorn?"
 
 msgid "Your environment changes have not been saved."
-msgstr ""
+msgstr "Els canvis de l'entorn no s'han desat."
 
 msgid "Discard"
-msgstr ""
+msgstr "Descarta"
 
 msgid "No packages found"
-msgstr ""
+msgstr "No s'ha trobat cap paquet"
 
 msgid "Try a shorter or more general keyword."
-msgstr ""
+msgstr "Proveu amb una paraula clau més curta o general."
 
 msgid "Could not reach Atoll"
-msgstr ""
+msgstr "No s'ha pogut contactar amb Atoll"
 
 msgid "Check your connection and try again."
-msgstr ""
+msgstr "Comproveu la connexió i torneu-ho a provar."
 
 msgid "Flagged out of date"
-msgstr ""
+msgstr "Marcat com a desactualitzat"
 
 msgid "Installed"
 msgstr "Instal·lats"
 
 msgid "Remove Selected"
-msgstr "Suprimeix seleccionat"
+msgstr "Suprimeix els seleccionats"
 
 msgid "Select one or more packages"
-msgstr ""
+msgstr "Seleccioneu un o més paquets"
 
 msgid "Package(s)"
-msgstr ""
+msgstr "Paquet(s)"
 
 msgid "Page"
-msgstr ""
+msgstr "Pàgina"
 
 msgid "of"
-msgstr ""
+msgstr "de"
 
 msgid "Remove Packages"
-msgstr ""
+msgstr "Suprimeix els paquets"
 
 msgid "Remove the selected AUR packages?"
-msgstr ""
+msgstr "Voleu suprimir els paquets de l'AUR seleccionats?"
 
 msgid "Build from AUR"
-msgstr ""
+msgstr "Construeix des de l'AUR"
 
 msgid "Build and install the selected packages? This may take a while."
-msgstr ""
+msgstr "Voleu construir i instal·lar els paquets seleccionats? Això pot trigar una estona."
 
 msgid "Build"
-msgstr ""
+msgstr "Construeix"
 
 msgid "Installing AUR packages"
-msgstr ""
+msgstr "S'estan instal·lant els paquets de l'AUR"
 
 msgid "Removing AUR packages"
-msgstr ""
+msgstr "S'estan suprimint els paquets de l'AUR"
 
 msgid "Maintainer"
 msgstr "Mantenidor"
@@ -1086,7 +1114,7 @@ msgid "First Submitted"
 msgstr "Primer enviament"
 
 msgid "URL"
-msgstr ""
+msgstr "URL"
 
 msgid "Licenses"
 msgstr "Llicències"
@@ -1095,91 +1123,91 @@ msgid "Depends"
 msgstr "Depèn de"
 
 msgid "Optional Depends"
-msgstr ""
+msgstr "Dependències opcionals"
 
 msgid "Make Depends"
 msgstr "Construeix dependències"
 
 msgid "Section"
-msgstr ""
+msgstr "Secció"
 
 msgid "The AUR has no browsable index — type a package name to begin."
-msgstr ""
+msgstr "L'AUR no té cap índex a explorar; escriviu el nom d'un paquet per començar."
 
 msgid "Could not search the configured AUR service."
-msgstr ""
+msgstr "No s'ha pogut cercar al servei AUR configurat."
 
 msgid "Choose a Flatpak file"
-msgstr ""
+msgstr "Trieu un fitxer Flatpak"
 
 msgid "Flatpak files"
-msgstr ""
+msgstr "Fitxers Flatpak"
 
 msgid "Unsupported file type. Choose a.flatpak or.flatpakref file."
-msgstr ""
+msgstr "Tipus de fitxer no compatible. Trieu un fitxer .flatpak o .flatpakref."
 
 msgid "Installing local flatpak"
-msgstr ""
+msgstr "S'està instal·lant el Flatpak local"
 
 msgid "Could not install the selected packages."
-msgstr ""
+msgstr "No s'han pogut instal·lar els paquets seleccionats."
 
 msgid "Installation complete."
-msgstr ""
+msgstr "Instal·lació completada."
 
 msgid "Choose file..."
-msgstr ""
+msgstr "Trieu un fitxer..."
 
 msgid "Verified"
-msgstr ""
+msgstr "Verificat"
 
 msgid "Show less"
-msgstr ""
+msgstr "Mostra'n menys"
 
 msgid "Installing flatpak"
-msgstr ""
+msgstr "S'està instal·lant el Flatpak"
 
 msgid "Remove this Flatpak?"
-msgstr ""
+msgstr "Voleu suprimir aquest Flatpak?"
 
 msgid "Remove Flatpak"
-msgstr ""
+msgstr "Suprimeix el Flatpak"
 
 msgid "Removing Flatpak"
-msgstr ""
+msgstr "S'està suprimint el Flatpak"
 
 msgid "Permissions"
-msgstr ""
+msgstr "Permisos"
 
 msgid "Available Addons"
 msgstr "Complements disponibles"
 
 msgid "Installing flatpak addon"
-msgstr ""
+msgstr "S'està instal·lant el complement de Flatpak"
 
 msgid "Unknown developer"
-msgstr ""
+msgstr "Desenvolupador desconegut"
 
 msgid "Version: Unknown"
-msgstr ""
+msgstr "Versió: Desconeguda"
 
 msgid "Size: Loading..."
-msgstr ""
+msgstr "Mida: S'està carregant..."
 
 msgid "Size: Unknown"
-msgstr ""
+msgstr "Mida: Desconeguda"
 
 msgid "License"
-msgstr ""
+msgstr "Llicència"
 
 msgid "License: Unknown"
-msgstr ""
+msgstr "Llicència: Desconeguda"
 
 msgid "No summary available"
-msgstr ""
+msgstr "No hi ha cap sumari disponible"
 
 msgid "Size: Unavailable"
-msgstr ""
+msgstr "Mida: No disponible"
 
 msgid "Download"
 msgstr "Baixa"
@@ -1188,60 +1216,61 @@ msgid "No description available."
 msgstr "No hi ha cap descripció disponible."
 
 msgid "Could not load this application screenshot."
-msgstr ""
+msgstr "No s'ha pogut carregar la captura de pantalla d'aquesta aplicació."
 
 msgid "Could not download this application screenshot."
-msgstr ""
+msgstr "No s'ha pogut descarregar la captura de pantalla d'aquesta aplicació."
 
 msgid "Could not display the downloaded application screenshot."
-msgstr ""
+msgstr "No s'ha pogut mostrar la captura de pantalla de l'aplicació descarregada."
 
 msgid "Open link in browser"
-msgstr ""
+msgstr "Obre l'enllaç al navegador"
 
 msgid "Homepage"
-msgstr ""
+msgstr "Pàgina web"
 
 msgid "Bug tracker"
-msgstr ""
+msgstr "Seguiment d'incidències"
 
 msgid "Donation"
-msgstr ""
+msgstr "Donació"
 
 msgid "FAQ"
-msgstr ""
+msgstr "PMF"
 
 msgid "Help"
-msgstr ""
+msgstr "Ajuda"
 
 msgid "Vcs-browser"
-msgstr ""
+msgstr "Navegador de codi font (VCS)"
 
 msgid "Contact"
-msgstr ""
+msgstr "Contacte"
 
 msgid "Translate"
-msgstr ""
+msgstr "Tradueix"
 
 msgid ""
 "Could not load Flatpak applications because Shelly ran out of memory. Close "
 "other applications and try again."
 msgstr ""
+"No s'han pogut carregar les aplicacions de Flatpak perquè Shelly s'ha quedat sense memòria. Tanqueu altres aplicacions i torneu-ho a provar."
 
 msgid "Could not start loading Flatpak applications."
-msgstr ""
+msgstr "No s'ha pogut iniciar la càrrega d'aplicacions de Flatpak."
 
 msgid "Could not load Flatpak applications from the selected remote."
-msgstr ""
+msgstr "No s'han pogut carregar les aplicacions de Flatpak del remot seleccionat."
 
 msgid "No Flatpak applications are available."
-msgstr ""
+msgstr "No hi ha cap aplicació de Flatpak disponible."
 
 msgid "Discover"
-msgstr ""
+msgstr "Descobreix"
 
 msgid "Categories"
-msgstr ""
+msgstr "Categories"
 
 msgid "All Applications"
 msgstr "Totes les aplicacions"
@@ -1283,28 +1312,28 @@ msgid "Utility"
 msgstr "Utilitats"
 
 msgid "Removing Remote"
-msgstr ""
+msgstr "S'està suprimint el remot"
 
 msgid "Adding Remote"
-msgstr ""
+msgstr "S'està afegint el remot"
 
 msgid "App ID"
-msgstr ""
+msgstr "ID de l'aplicació"
 
 msgid "Remote"
-msgstr ""
+msgstr "Remot"
 
 msgid "Developer"
-msgstr ""
+msgstr "Desenvolupador"
 
 msgid "Type"
-msgstr ""
+msgstr "Tipus"
 
 msgid "Download Size"
-msgstr ""
+msgstr "Mida de baixada"
 
 msgid "Installed Size"
-msgstr ""
+msgstr "Mida instal·lada"
 
 msgid "Yes"
 msgstr "Sí"
@@ -1313,19 +1342,19 @@ msgid "No"
 msgstr "No"
 
 msgid "Keywords"
-msgstr ""
+msgstr "Paraules clau"
 
 msgid "Flathub"
-msgstr ""
+msgstr "Flathub"
 
 msgid "Loading..."
 msgstr "S'està carregant..."
 
 msgid "Build Date"
-msgstr ""
+msgstr "Data de construcció"
 
 msgid "Install Reason"
-msgstr ""
+msgstr "Motiu d'instal·lació"
 
 msgid "Provides"
 msgstr "Proveeix"
@@ -1334,117 +1363,120 @@ msgid "Conflicts"
 msgstr "Conflictes"
 
 msgid "Required By"
-msgstr ""
+msgstr "Requerit per"
 
 msgid "Reinstalling package"
-msgstr ""
+msgstr "S'està tornant a instal·lar el paquet"
 
 msgid "Adding to package ignore"
-msgstr ""
+msgstr "S'està afegint el paquet als ignorats"
 
 msgid "Adding to package to hold"
-msgstr ""
+msgstr "S'està afegint el paquet als retinguts"
 
 msgid "Making Package Explicit"
-msgstr ""
+msgstr "S'està fent que el paquet sigui explícit"
 
 msgid "Making Package Dependency"
-msgstr ""
+msgstr "S'està marcant el paquet com a dependència"
 
 msgid "Select Optional Dependencies to Install"
-msgstr ""
+msgstr "Seleccioneu les dependències opcionals a instal·lar"
 
 msgid "Installing optional dependencies"
-msgstr ""
+msgstr "S'estan instal·lant les dependències opcionals"
 
 msgid "Package is already installed"
 msgstr "El paquet ja està instal·lat"
 
 msgid "Remove from selection"
-msgstr ""
+msgstr "Suprimeix de la selecció"
 
 msgid "remove"
-msgstr ""
+msgstr "suprimeix"
 
 msgid "install"
-msgstr ""
+msgstr "instal·la"
 
 msgid "No packages selected"
-msgstr ""
+msgstr "No hi ha cap paquet seleccionat"
 
 msgid "Selected"
-msgstr ""
+msgstr "Seleccionat"
 
 msgid "Mixed selection"
-msgstr ""
+msgstr "Selecció mixta"
 
 msgid ""
 "Select only installed packages to remove, or only available ones to install."
 msgstr ""
+"Seleccioneu només els paquets instal·lats per suprimir, o només els disponibles per instal·lar."
 
 msgid "Remove the selected packages?"
-msgstr ""
+msgstr "Voleu suprimir els paquets seleccionats?"
 
 msgid "Removing packages"
-msgstr ""
+msgstr "S'estan suprimint els paquets"
 
 msgid "Installing packages"
-msgstr ""
+msgstr "S'estan instal·lant els paquets"
 
 msgid ""
 "Search standard repositories, the AUR and Flatpak at once. Type a name to "
 "begin."
 msgstr ""
+"Cerca als repositoris estàndard, l'AUR i Flatpak alhora. Escriviu un nom per començar."
 
 msgid "Could not search the selected sources."
-msgstr ""
+msgstr "No s'ha pogut cercar a les fonts seleccionades."
 
 msgid "Installation in progress"
-msgstr ""
+msgstr "Instal·lació en curs"
 
 msgid "No sources selected"
-msgstr ""
+msgstr "No hi ha cap font seleccionada"
 
 msgid "Enable at least one source filter above."
-msgstr ""
+msgstr "Habiliteu almenys un filtre de font de dalt."
 
 msgid "Install Packages"
-msgstr ""
+msgstr "Instal·la els paquets"
 
 msgid "Install the selected packages?"
-msgstr ""
+msgstr "Voleu instal·lar els paquets seleccionats?"
 
 msgid ""
 "Could not save settings to the configured file. Your latest changes were not "
 "saved."
 msgstr ""
+"No s'ha pogut desar la configuració al fitxer configurat. Els vostres darrers canvis no s'han desat."
 
 msgid "Settings saved"
-msgstr ""
+msgstr "Configuració desada"
 
 msgid "Installing Flatpak support"
-msgstr ""
+msgstr "S'està instal·lant el suport per a Flatpak"
 
 msgid "Installing AppImage support"
-msgstr ""
+msgstr "S'està instal·lant el suport per a AppImage"
 
 msgid "Could not start installing Flatpak support."
-msgstr ""
+msgstr "No s'ha pogut iniciar la instal·lació del suport per a Flatpak."
 
 msgid "Could not start installing AppImage support."
-msgstr ""
+msgstr "No s'ha pogut iniciar la instal·lació del suport per a AppImage."
 
 msgid "Could not install Flatpak support."
-msgstr ""
+msgstr "No s'ha pogut instal·lar el suport per a Flatpak."
 
 msgid "Could not install AppImage support."
-msgstr ""
+msgstr "No s'ha pogut instal·lar el suport per a AppImage."
 
 msgid "Flatpak support enabled"
-msgstr ""
+msgstr "Suport per a Flatpak habilitat"
 
 msgid "AppImage support enabled"
-msgstr ""
+msgstr "Suport per a AppImage habilitat"
 
 msgid "No changelog entries found"
 msgstr "No s'han trobat entrades al registre de canvis"
@@ -1453,93 +1485,94 @@ msgid "No details for this release"
 msgstr "No hi ha detalls per a aquesta versió"
 
 msgid "Could not load the release notes."
-msgstr ""
+msgstr "No s'han pogut carregar les notes de la versió."
 
 msgid "Changelog"
-msgstr ""
+msgstr "Registre de canvis"
 
 msgid "Select Tray Icon"
-msgstr ""
+msgstr "Selecciona la icona de la safata"
 
 msgid "Select Icon"
-msgstr ""
+msgstr "Selecciona la icona"
 
 msgid "Select Tray Updates Icon"
-msgstr ""
+msgstr "Selecciona la icona d'actualitzacions de la safata"
 
 msgid "Select AppImage Install Directory"
-msgstr ""
+msgstr "Selecciona el directori d'instal·lació d'AppImage"
 
 msgid "Tray enabled"
-msgstr ""
+msgstr "Safata habilitada"
 
 msgid ""
 "The tray is disabled, but its autostart service could not be removed. It may "
 "start again at the next login."
 msgstr ""
+"La safata està desactivada, però no s'ha pogut suprimir el seu servei d'inici automàtic. Pot tornar a iniciar-se a la propera sessió."
 
 msgid "Tray disabled"
-msgstr ""
+msgstr "Safata desactivada"
 
 msgid "Could not enable the tray autostart service."
-msgstr ""
+msgstr "No s'ha pogut habilitar el servei d'inici automàtic de la safata."
 
 msgid "Systemd startup service added."
 msgstr "S'ha afegit el servei d'inici de Systemd."
 
 msgid "Could not disable the tray autostart service."
-msgstr ""
+msgstr "No s'ha pogut deshabilitar el servei d'inici automàtic de la safata."
 
 msgid "Systemd startup service removed."
 msgstr "S'ha suprimit el servei d'inici de Systemd."
 
 msgid "AUR enabled"
-msgstr ""
+msgstr "AUR habilitat"
 
 msgid "System Default"
-msgstr ""
+msgstr "Predeterminat del sistema"
 
 msgid "English"
-msgstr ""
+msgstr "Anglès"
 
 msgid "Bulgarian"
-msgstr ""
+msgstr "Búlgar"
 
 msgid "Català"
-msgstr ""
+msgstr "Català"
 
 msgid "Deutsch"
-msgstr ""
+msgstr "Alemany"
 
 msgid "Español"
-msgstr ""
+msgstr "Espanyol"
 
 msgid "Français"
-msgstr ""
+msgstr "Francès"
 
 msgid "Magyar"
-msgstr ""
+msgstr "Hongarès"
 
 msgid "日本語"
-msgstr ""
+msgstr "Japonès"
 
 msgid "Polski"
-msgstr ""
+msgstr "Polonès"
 
 msgid "Português (Brasil)"
-msgstr ""
+msgstr "Portuguès (Brasil)"
 
 msgid "Português (Portugal)"
-msgstr ""
+msgstr "Portuguès (Portugal)"
 
 msgid "Русский"
-msgstr ""
+msgstr "Rus"
 
 msgid "Türkçe"
-msgstr ""
+msgstr "Turc"
 
 msgid "中文（简体）"
-msgstr ""
+msgstr "Xinès simplificat"
 
 msgid "Packages"
 msgstr "Paquets"
@@ -1548,175 +1581,178 @@ msgid "Shelly Search"
 msgstr "Cerca de Shelly"
 
 msgid "Update"
-msgstr ""
+msgstr "Actualitza"
 
 msgid "Pending"
-msgstr ""
+msgstr "Pendent"
 
 msgid "Working"
-msgstr ""
+msgstr "S'està processant"
 
 msgid "Upgraded"
-msgstr ""
+msgstr "Actualitzat"
 
 msgid "Downgraded"
-msgstr ""
+msgstr "Versió anterior"
 
 msgid "Reinstalled"
-msgstr ""
+msgstr "Tornat a instal·lar"
 
 msgid "Removed"
-msgstr ""
+msgstr "Suprimit"
 
 msgid "Failed"
-msgstr ""
+msgstr "Ha fallat"
 
 msgid "Not processed"
-msgstr ""
+msgstr "No processat"
 
 msgid "Interrupted"
-msgstr ""
+msgstr "Interromput"
 
 msgid "Cancelled"
-msgstr ""
+msgstr "Cancel·lat"
 
 msgid "Could not start the requested operation."
-msgstr ""
+msgstr "No s'ha pogut iniciar l'operació sol·licitada."
 
 msgid "Synchronizing databases"
-msgstr ""
+msgstr "S'estan sincronitzant les bases de dades"
 
 msgid "Building"
-msgstr ""
+msgstr "S'està construint"
 
 msgid "Downloading"
-msgstr ""
+msgstr "S'està descarregant"
 
 msgid "Packaging"
-msgstr ""
+msgstr "S'està empaquetant"
 
 msgid "Installing"
-msgstr ""
+msgstr "S'està instal·lant"
 
 msgid "Upgrading"
-msgstr ""
+msgstr "S'està actualitzant"
 
 msgid "Downgrading"
-msgstr ""
+msgstr "S'està instal·lant una versió anterior"
 
 msgid "Reinstalling"
-msgstr ""
+msgstr "S'està tornant a instal·lar"
 
 msgid "Removing"
-msgstr ""
+msgstr "S'està suprimint"
 
 msgid "Checking keyring"
-msgstr ""
+msgstr "S'està comprovant el clauer"
 
 msgid "Checking integrity"
-msgstr ""
+msgstr "S'està comprovant la integritat"
 
 msgid "Loading packages"
-msgstr ""
+msgstr "S'estan carregant els paquets"
 
 msgid "Checking conflicts"
-msgstr ""
+msgstr "S'estan comprovant els conflictes"
 
 msgid "Checking disk space"
-msgstr ""
+msgstr "S'està comprovant l'espai en disc"
 
 msgid "Transaction Completed"
-msgstr ""
+msgstr "Transacció completada"
 
 msgid "Operation failed"
-msgstr ""
+msgstr "L'operació ha fallat"
 
 msgid "Operation cancelled"
-msgstr ""
+msgstr "Operació cancel·lada"
 
 msgid "Finished"
-msgstr ""
+msgstr "Finalitzat"
 
 msgid "exit"
-msgstr ""
+msgstr "sortir"
 
 msgid "Operation cancelled."
-msgstr ""
+msgstr "Operació cancel·lada."
 
 msgid "All operations finished successfully."
-msgstr ""
+msgstr "Totes les operacions han finalitzat amb èxit."
 
 msgid ""
 "Permission to manage packages was not granted. Try again and approve the "
 "authorization request to continue."
 msgstr ""
+"No s'ha concedit el permís per gestionar paquets. Torneu-ho a provar i aproveu la sol·licitud d'autorització per continuar."
 
 msgid ""
 "{package_one}-{version_one} conflicts with {package_two}-{version_two}. "
 "Remove {package_to_remove}?"
 msgstr ""
+"{package_one}-{version_one} entraria en conflicte amb {package_two}-{version_two}. Voleu suprimir {package_to_remove}?"
 
 msgid "Would you like to remove extra cache entries?"
-msgstr ""
+msgstr "Voleu suprimir les entrades de memòria cau addicionals?"
 
 msgid "System package update"
-msgstr ""
+msgstr "Actualització de paquets del sistema"
 
 msgid "AUR package update"
-msgstr ""
+msgstr "Actualització de paquets de l'AUR"
 
 msgid "Update this package"
-msgstr ""
+msgstr "Actualitza aquest paquet"
 
 msgid "updates included"
-msgstr ""
+msgstr "actualitzacions incloses"
 
 msgid "Updates included"
-msgstr ""
+msgstr "Actualitzacions incloses"
 
 msgid "Upgrading packages"
-msgstr ""
+msgstr "S'estan actualitzant els paquets"
 
 msgid "Refreshing package databases"
-msgstr ""
+msgstr "S'estan actualitzant les bases de dades de paquets"
 
 msgid "Database lock removed successfully"
-msgstr ""
+msgstr "El bloqueig de la base de dades s'ha suprimit correctament"
 
 msgid "Fixing permissions"
-msgstr ""
+msgstr "S'estan corregint els permisos"
 
 msgid "Purifying packages"
-msgstr ""
+msgstr "S'estan depurant els paquets"
 
 msgid "Cleaning package cache"
-msgstr ""
+msgstr "S'està netejant la memòria cau de paquets"
 
 msgid "Welcome"
-msgstr ""
+msgstr "Benvinguda"
 
 msgid "Enable Recommended?"
-msgstr ""
+msgstr "Voleu habilitar els recomanats?"
 
 msgid ""
 "Recommended shows curated package suggestions based on your installed "
 "software. Package data is fetched from external sources."
 msgstr ""
+"Els recomanats mostren suggeriments de paquets seleccionats segons el vostre programari instal·lat. Les dades dels paquets s'obtenen de fonts externes."
 
 msgid "Installing Flatpak and AppImage support"
-msgstr ""
+msgstr "S'està instal·lant el suport per a Flatpak i AppImage"
 
 msgid "Main menu"
-msgstr ""
+msgstr "Menú principal"
 
 msgid "Settings"
 msgstr "Paràmetres"
 
 msgid "Expand sidebar"
-msgstr ""
+msgstr "Expandeix la barra lateral"
 
 msgid "Collapse sidebar"
-msgstr ""
+msgstr "Col·lapsa la barra lateral"
 
 msgid "Package"
-msgstr ""
+msgstr "Paquet"
