@@ -16,6 +16,7 @@ pub const View = struct {
     details_scroll: *vxfw.ScrollView,
     selected: ?*const Package,
     details_active: bool,
+    list_active: bool,
     selected_count: usize,
     loading: bool,
     load_failed: bool,
@@ -40,6 +41,7 @@ pub const View = struct {
         var search_border: vxfw.Border = .{
             .child = self.text_field.widget(),
             .labels = &search_labels,
+            .style = if (!self.list_active and !self.details_active) .{ .fg = .{ .index = 4 } } else .{},
         };
         try children.append(arena, .{
             .origin = .{ .row = 1, .col = 0 },
@@ -68,7 +70,11 @@ pub const View = struct {
                 .alignment = .top_left,
             }};
             const content = if (message != null) label.widget() else self.list_view.widget();
-            var border: vxfw.Border = .{ .child = content, .labels = &labels };
+            var border: vxfw.Border = .{
+                .child = content,
+                .labels = &labels,
+                .style = if (self.list_active and !self.details_active) .{ .fg = .{ .index = 4 } } else .{},
+            };
             try children.append(arena, .{
                 .origin = .{ .row = @intCast(content_row), .col = 0 },
                 .surface = if (list_width >= 2 and height >= 2)
@@ -93,6 +99,7 @@ pub const View = struct {
             var border: vxfw.Border = .{
                 .child = if (self.selected != null and !self.loading and !self.load_failed) self.details_scroll.widget() else empty.widget(),
                 .labels = &labels,
+                .style = if (self.details_active) .{ .fg = .{ .index = 4 } } else .{},
             };
             try children.append(arena, .{
                 .origin = .{ .row = @intCast(content_row), .col = if (split) left_w else 0 },
@@ -106,15 +113,20 @@ pub const View = struct {
     pub fn statusText(self: View, arena: Allocator) Allocator.Error![]const u8 {
         if (self.loading) return "Loading packages…";
         if (self.load_failed) return "Could not load the package list.";
-        if (self.details_active) return "↑↓: scroll details — I: install — R: remove installed — Q: search";
-        if (self.selected_count > 0) return std.fmt.allocPrint(arena, "{d} packages marked — Space: toggle — Enter: details — Ctrl+L: installed/all", .{self.selected_count});
-        if (self.installed_only) return std.fmt.allocPrint(arena, "{d} installed matches — Enter: details — Ctrl+L: all", .{self.filtered_count});
+        const actions = if (self.selected) |pkg|
+            if (pkg.Installed) "I: reinstall — R: remove" else "I: install"
+        else
+            "";
+        if (self.details_active) return std.fmt.allocPrint(arena, "↑↓: scroll — {s} — ←/Q: packages", .{actions});
+        if (self.list_active) return std.fmt.allocPrint(arena, "↑↓: select — {s} — →: details — /: search", .{actions});
+        if (self.selected_count > 0) return std.fmt.allocPrint(arena, "{d} packages marked — Space: toggle — ↑↓: browse — Ctrl+L: installed/all", .{self.selected_count});
+        if (self.installed_only) return std.fmt.allocPrint(arena, "{d} installed matches — ↑↓: browse — Ctrl+L: all", .{self.filtered_count});
         if (self.query.len > 0) {
-            return try std.fmt.allocPrint(arena, "{d} of {d} matches — Enter: details — Ctrl+L: installed", .{
+            return try std.fmt.allocPrint(arena, "{d} of {d} matches — ↑↓: browse — Ctrl+L: installed", .{
                 self.filtered_count, self.package_count,
             });
         }
-        return try std.fmt.allocPrint(arena, "{d} packages — Enter: details — Ctrl+L: installed", .{self.package_count});
+        return try std.fmt.allocPrint(arena, "{d} packages — ↑↓: browse — Ctrl+L: installed", .{self.package_count});
     }
 };
 

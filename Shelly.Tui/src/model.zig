@@ -234,6 +234,7 @@ pub const Model = struct {
     selected_list_view: vxfw.ListView,
     package_details_scroll: vxfw.ScrollView,
     package_details_cursor: ?u32 = null,
+    package_list_active: bool = false,
     list_view: vxfw.ListView,
     text_field: vxfw.TextField,
     aur_list: vxfw.ListView,
@@ -426,6 +427,11 @@ pub const Model = struct {
                             return ctx.consumeAndRedraw();
                         },
                         .package, .aur => {
+                            if (overlay == .package and commands.leavesPackageDetails(key)) {
+                                self.closeOverlay();
+                                self.package_list_active = true;
+                                return ctx.consumeAndRedraw();
+                            }
                             if (commands.detail(key)) |action| {
                                 switch (action) {
                                     .close => self.closeOverlay(),
@@ -495,6 +501,34 @@ pub const Model = struct {
                         return ctx.consumeAndRedraw();
                     }
                 }
+                if (self.active == .packages and command == null) {
+                    if (self.package_list_active) {
+                        if (commands.packageAction(key)) |action| {
+                            if (self.selectedPackage()) |pkg| {
+                                if (action != .remove or pkg.Installed)
+                                    try self.openPackagePrompt(pkg.Name, .standard, if (action == .install) .install else .remove);
+                            }
+                            return ctx.consumeAndRedraw();
+                        }
+                    }
+                    if (commands.packageNavigation(key, !self.package_list_active)) |action| {
+                        switch (action) {
+                            .previous, .next => {
+                                if (action == .previous and self.package_list_active and self.list_view.cursor == 0) {
+                                    self.package_list_active = false;
+                                } else {
+                                    self.package_list_active = true;
+                                    try self.list_view.handleEvent(ctx, event);
+                                }
+                            },
+                            .details => if (self.selectedPackage()) |pkg| {
+                                self.overlay = .{ .package = pkg };
+                            },
+                            .search => self.package_list_active = false,
+                        }
+                        return ctx.consumeAndRedraw();
+                    }
+                }
                 if (self.active == .flatpak) {
                     if (commands.togglesInstalled(key)) {
                         if (self.flatpak_job == null) {
@@ -540,10 +574,14 @@ pub const Model = struct {
                         return ctx.consumeAndRedraw();
                     }
                 }
-                if (self.active == .packages and key.matches(vaxis.Key.space, .{})) {
+                if (self.active == .packages and self.package_list_active and key.matches(vaxis.Key.space, .{})) {
                     if (self.list_view.cursor < self.filtered.items.len) try self.toggleSelectedList();
                     return ctx.consumeAndRedraw();
                 }
+                // Search editing is explicit while browsing: Up at the first
+                // package or / returns to the text field.
+                if (self.active == .packages and self.package_list_active and command == null)
+                    return ctx.consumeEvent();
 
                 if (command) |action| {
                     switch (action) {
@@ -822,6 +860,7 @@ pub const Model = struct {
     }
 
     fn focusActiveTab(self: *Model, ctx: *vxfw.EventContext) !void {
+        self.package_list_active = false;
         switch (self.active) {
             .packages => try ctx.requestFocus(self.text_field.widget()),
             .aur => try ctx.requestFocus(self.aur_field.widget()),
@@ -1359,6 +1398,11 @@ pub const Model = struct {
             },
             .sudo, .pkgbuild, .flatpak, .flatpak_install => return,
         }
+        try self.openPackagePrompt(name, backend, action);
+    }
+
+    fn openPackagePrompt(self: *Model, name: []const u8, backend: OperationBackend, action: shelly_operation.Action) !void {
+        if (self.install_job != null) return;
         const prompt = try self.gpa.create(SudoPrompt);
         errdefer self.gpa.destroy(prompt);
         prompt.* = .{
@@ -1728,6 +1772,7 @@ pub const Model = struct {
             .details_scroll = &self.package_details_scroll,
             .selected = self.selectedPackage(),
             .details_active = if (self.overlay) |overlay| overlay == .package else false,
+            .list_active = self.package_list_active,
             .selected_count = self.selected_packages.items.len,
             .loading = self.loading,
             .load_failed = self.load_failed,
@@ -2853,4 +2898,69 @@ test "packages details scroll and retain the selected install and removal target
     try std.testing.expect(model.overlay.? == .sudo);
     try std.testing.expectEqualStrings("installed", model.overlay.?.sudo.name);
     try std.testing.expectEqual(shelly_operation.Action.remove, model.overlay.?.sudo.action);
+}
+
+test "package pane arrows preserve search editing and navigate list and details" {
+    const model = try Model.init(std.testing.allocator);
+    defer model.deinit();
+    var packages = [_]Package{ .{ .Name = "first" }, .{ .Name = "second" } };
+    model.packages = &packages;
+    try model.rebuildFilter();
+    var ctx: vxfw.EventContext = .{ .io = undefined, .alloc = std.testing.allocator, .cmds = .empty };
+    defer ctx.cmds.deinit(std.testing.allocator);
+    const left: vaxis.Key = .{ .codepoint = vaxis.Key.left };
+    const right: vaxis.Key = .{ .codepoint = vaxis.Key.right };
+    try std.testing.expect(commands.packageNavigation(left, true) == null);
+    try std.testing.expect(commands.packageNavigation(right, true) == null);
+    try Model.typeErasedCaptureHandler(model, &ctx, .{ .key_press = right });
+    try std.testing.expect(model.overlay == null);
+    try std.testing.expect(!model.package_list_active);
+    try Model.typeErasedCaptureHandler(model, &ctx, .{ .key_press = .{ .codepoint = vaxis.Key.down } });
+    try std.testing.expect(model.package_list_active);
+    const selected = model.list_view.cursor;
+    try Model.typeErasedCaptureHandler(model, &ctx, .{ .key_press = right });
+    try std.testing.expect(model.packagesView().details_active);
+    try std.testing.expectEqualStrings(model.filtered.items[selected].Name, model.overlay.?.package.Name);
+    try Model.typeErasedCaptureHandler(model, &ctx, .{ .key_press = left });
+    try std.testing.expect(model.overlay == null);
+    try std.testing.expect(model.package_list_active);
+    try std.testing.expectEqual(selected, model.list_view.cursor);
+    model.package_list_active = true;
+    try Model.typeErasedCaptureHandler(model, &ctx, .{ .key_press = .{ .codepoint = 'a', .text = "a" } });
+    try std.testing.expect(model.package_list_active);
+    try Model.typeErasedCaptureHandler(model, &ctx, .{ .key_press = .{ .codepoint = '/', .text = "/" } });
+    try std.testing.expect(!model.package_list_active);
+    try std.testing.expectEqual(selected, model.list_view.cursor);
+    model.package_list_active = true;
+    model.list_view.cursor = 0;
+    try Model.typeErasedCaptureHandler(model, &ctx, .{ .key_press = .{ .codepoint = vaxis.Key.up } });
+    try std.testing.expect(!model.package_list_active);
+    try std.testing.expectEqual(@as(u32, 0), model.list_view.cursor);
+}
+
+test "package list actions open prompts while search letters stay editable" {
+    const model = try Model.init(std.testing.allocator);
+    defer model.deinit();
+    var packages = [_]Package{ .{ .Name = "available" }, .{ .Name = "installed", .Installed = true } };
+    model.packages = &packages;
+    try model.rebuildFilter();
+    var ctx: vxfw.EventContext = .{ .io = undefined, .alloc = std.testing.allocator, .cmds = .empty };
+    defer ctx.cmds.deinit(std.testing.allocator);
+    for ([_]u21{ 'i', 'r' }) |letter| {
+        try Model.typeErasedCaptureHandler(model, &ctx, .{ .key_press = .{ .codepoint = letter, .text = if (letter == 'i') "i" else "r" } });
+        try std.testing.expect(model.overlay == null);
+    }
+    model.package_list_active = true;
+    try Model.typeErasedCaptureHandler(model, &ctx, .{ .key_press = .{ .codepoint = 'r' } });
+    try std.testing.expect(model.overlay == null);
+    try Model.typeErasedCaptureHandler(model, &ctx, .{ .key_press = .{ .codepoint = 'i' } });
+    try std.testing.expectEqualStrings("available", model.overlay.?.sudo.name);
+    try std.testing.expectEqual(shelly_operation.Action.install, model.overlay.?.sudo.action);
+    try std.testing.expect(model.install_job == null);
+    model.closeOverlay();
+    model.list_view.cursor = 1;
+    try Model.typeErasedCaptureHandler(model, &ctx, .{ .key_press = .{ .codepoint = 'r' } });
+    try std.testing.expectEqualStrings("installed", model.overlay.?.sudo.name);
+    try std.testing.expectEqual(shelly_operation.Action.remove, model.overlay.?.sudo.action);
+    try std.testing.expect(model.install_job == null);
 }

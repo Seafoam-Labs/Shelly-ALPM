@@ -20,6 +20,28 @@ pub fn global(key: vaxis.Key, tab_count: usize) ?Global {
 }
 
 pub const Detail = enum { close, install, remove, preview };
+
+pub const PackageAction = enum { install, remove };
+pub fn packageAction(key: vaxis.Key) ?PackageAction {
+    if (key.matches('i', .{})) return .install;
+    if (key.matches('r', .{})) return .remove;
+    return null;
+}
+
+pub const PackageNavigation = enum { previous, next, details, search };
+pub fn packageNavigation(key: vaxis.Key, searching: bool) ?PackageNavigation {
+    if (key.matches(vaxis.Key.up, .{})) return .previous;
+    if (key.matches(vaxis.Key.down, .{})) return .next;
+    if (!searching) {
+        if (key.matches(vaxis.Key.right, .{}) or key.matches(vaxis.Key.enter, .{})) return .details;
+        if (key.matches('/', .{})) return .search;
+    }
+    return null;
+}
+
+pub fn leavesPackageDetails(key: vaxis.Key) bool {
+    return key.matches(vaxis.Key.left, .{}) or key.matches('q', .{});
+}
 pub fn detail(key: vaxis.Key) ?Detail {
     if (key.matches('q', .{})) return .close;
     if (key.matches('p', .{})) return .preview;
