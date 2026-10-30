@@ -327,7 +327,7 @@ fn renderPlannedStandardUpdates(
         net_change += update.size_difference;
         const cells = try allocator.alloc([]const u8, 6);
         cells[0] = update.repository;
-        cells[1] = update.name;
+        cells[1] = try list_updates.standardPackageLabel(allocator, update.old_name, update.name);
         cells[2] = update.current_version;
         cells[3] = update.new_version;
         cells[4] = try fmt.formatSignedSize(allocator, size_display, update.size_difference);
@@ -429,16 +429,15 @@ fn renderStandardUpgradePreview(
     var total_download: i128 = 0;
     var net_change: i128 = 0;
 
-    for (updates, rows) |update, *row| {
-        const download_size: i128 = @max(0, @as(i128, update.new_package.download_size()));
-        const size_change = @as(i128, update.new_package.install_size()) -
-            @as(i128, update.old_package.install_size());
+    for (updates, rows, 0..) |update, *row, index| {
+        const download_size: i128 = @max(0, @as(i128, PackageManager.Manager.OwnedPackageWithUpdate.downloadSize(updates, index)));
+        const size_change: i128 = PackageManager.Manager.OwnedPackageWithUpdate.sizeDifference(updates, index);
         total_download += download_size;
         net_change += size_change;
 
         const cells = try allocator.alloc([]const u8, 6);
         cells[0] = update.new_package.repository() orelse "unknown";
-        cells[1] = update.new_package.name() orelse "unknown";
+        cells[1] = try list_updates.standardPackageLabel(allocator, update.old_package.name_value, update.new_package.name_value);
         cells[2] = update.old_package.version() orelse "unknown";
         cells[3] = update.new_package.version() orelse "unknown";
         cells[4] = try fmt.formatSignedSize(allocator, size_display, size_change);
@@ -608,6 +607,8 @@ fn runStandard(
         "{d} standard packages need updates:",
         .{updates.len},
     );
+    var preview_storage = std.heap.ArenaAllocator.init(context.allocator);
+    defer preview_storage.deinit();
     for (updates) |update| {
         try emitFormattedStatus(
             context,
@@ -617,7 +618,7 @@ fn runStandard(
             "  {s}/{s}: {s} -> {s}",
             .{
                 update.new_package.repository() orelse "unknown",
-                update.new_package.name() orelse "unknown",
+                try list_updates.standardPackageLabel(preview_storage.allocator(), update.old_package.name_value, update.new_package.name_value),
                 update.old_package.version() orelse "unknown",
                 update.new_package.version() orelse "unknown",
             },
@@ -1982,6 +1983,32 @@ test "Auto upgrade preview renders scaled totals and negative net changes" {
     updates[0].size_difference = -1024;
     try renderPlannedStandardUpdates(&tc.context, fmt.parseSizeDisplay("Auto"), &updates);
     try std.testing.expect(std.mem.indexOf(u8, tc.stdout.writer.buffered(), "Total Download Size: 1.00 GiB\nNet Upgrade Size: -1.00 KiB") != null);
+}
+
+test "upgrade preview shows the removed package name for replacements" {
+    var tc: test_support.TestContext = .{};
+    tc.init();
+    defer tc.deinit();
+    const updates = [_]list_updates.StandardUpdate{.{
+        .old_name = "old",
+        .name = "new",
+        .current_version = "1",
+        .new_version = "2",
+        .download_size = 10,
+        .size_difference = -20,
+        .description = "",
+        .url = "",
+        .repository = "test",
+        .installed_size = 0,
+        .depends = &.{},
+        .optional_depends = &.{},
+        .licenses = &.{},
+        .provides = &.{},
+        .conflicts = &.{},
+        .groups = &.{},
+    }};
+    try renderPlannedStandardUpdates(&tc.context, .bytes, &updates);
+    try std.testing.expect(std.mem.indexOf(u8, tc.stdout.writer.buffered(), "old -> new") != null);
 }
 
 test "upgrade routes every action-first type through the combined handler" {

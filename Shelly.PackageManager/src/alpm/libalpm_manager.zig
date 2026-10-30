@@ -592,66 +592,73 @@ pub const Manager = struct {
             for (package_updates.items) |*update| update.deinit(self.allocator);
             package_updates.deinit(self.allocator);
         }
-        var sync_databases = rawLibalpm.alpm_get_syncdbs(self.handle);
-        var usable_sync_databases: [*c]rawLibalpm.alpm_list_t = null;
-        defer rawLibalpm.alpm_list_free(usable_sync_databases);
+        if (rawLibalpm.alpm_trans_init(self.handle, rawLibalpm.ALPM_TRANS_FLAG_NOLOCK) != 0)
+            return TransactionError.TransInitFailed;
+        defer _ = rawLibalpm.alpm_trans_release(self.handle);
+        var preview: UpgradePreview = .{ .allocator = self.allocator, .updates = &package_updates };
+        const previous_callback = rawLibalpm.alpm_option_get_questioncb(self.handle);
+        const previous_context = rawLibalpm.alpm_option_get_questioncb_ctx(self.handle);
+        _ = rawLibalpm.alpm_option_set_questioncb(self.handle, UpgradePreview.question, &preview);
+        defer _ = rawLibalpm.alpm_option_set_questioncb(self.handle, previous_callback, previous_context);
+        if (rawLibalpm.alpm_sync_sysupgrade(self.handle, 0) != 0)
+            return TransactionError.UpdateFetchFailed;
+        if (preview.failed) return TransactionError.OutOfMemory;
+        try self.checkOperationCancelled();
 
-        while (sync_databases != null) : (sync_databases = sync_databases.*.next) {
-            const db_data = sync_databases.*.data orelse continue;
-            const database = libalpm.Database.from(db_data) orelse continue;
-
-            if (!database.allowUsage(.upgrade)) continue;
-
-            const updated = rawLibalpm.alpm_list_add(
-                usable_sync_databases,
-                @ptrCast(database.ptr),
-            );
-            if (updated == null) return TransactionError.OutOfMemory;
-
-            usable_sync_databases = updated;
+        // Accepted replacements can lose to another repository's package.
+        var index: usize = 0;
+        while (index < package_updates.items.len) {
+            const next = package_updates.items[index].new_package;
+            var additions = rawLibalpm.alpm_trans_get_add(self.handle);
+            const selected = while (additions != null) : (additions = additions.*.next) {
+                const package = libalpm.Package.from(additions.*.data orelse continue) orelse continue;
+                if (std.mem.eql(u8, package.name() orelse "", next.name_value) and
+                    std.mem.eql(u8, package.database().?.name() orelse "", next.repository_value orelse "")) break true;
+            } else false;
+            if (selected) {
+                index += 1;
+            } else {
+                var rejected = package_updates.orderedRemove(index);
+                rejected.deinit(self.allocator);
+            }
         }
 
-        const local_database = rawLibalpm.alpm_get_localdb(self.handle);
-        var local_packages = rawLibalpm.alpm_db_get_pkgcache(local_database);
-        while (local_packages != null) : (local_packages = local_packages.*.next) {
-            const package_data = local_packages.*.data orelse continue;
-            const local_pkg = libalpm.Package.from(package_data) orelse continue;
-            const new_version = rawLibalpm.alpm_sync_get_new_version(local_pkg.ptr, usable_sync_databases) orelse continue;
-            var owned_update = libalpm.OwnedPackageWithUpdate.init(
-                self.allocator,
-                local_pkg,
-                libalpm.Package{ .ptr = new_version },
-            ) catch return TransactionError.OutOfMemory;
-            var ignored = false;
-            for (self.config.ignore_package.items) |ign_pkg| {
-                if (std.ascii.eqlIgnoreCase(ign_pkg, owned_update.new_package.name() orelse "")) {
-                    ignored = true;
-                    break;
-                }
-            }
-            if (!ignored) {
-                for (self.config.ignore_group.items) |ign_group| {
-                    for (owned_update.new_package.groups()) |group| {
-                        if (std.ascii.eqlIgnoreCase(ign_group, group)) {
-                            ignored = true;
-
-                            break;
-                        }
-                    }
-                    if (ignored) {
-                        owned_update.deinit(self.allocator);
-                        break;
-                    }
-                }
-            }
-            if (ignored) continue;
-            package_updates.append(self.allocator, owned_update) catch {
-                owned_update.deinit(self.allocator);
-                return TransactionError.OutOfMemory;
-            };
+        const local = rawLibalpm.alpm_get_localdb(self.handle);
+        var additions = rawLibalpm.alpm_trans_get_add(self.handle);
+        while (additions != null) : (additions = additions.*.next) {
+            const next = libalpm.Package.from(additions.*.data orelse continue) orelse continue;
+            const old_ptr = rawLibalpm.alpm_db_get_pkg(local, (next.name() orelse continue).ptr) orelse continue;
+            try preview.append(.{ .ptr = old_ptr }, next);
         }
         return package_updates.toOwnedSlice(self.allocator) catch return TransactionError.OutOfMemory;
     }
+
+    const UpgradePreview = struct {
+        allocator: std.mem.Allocator,
+        updates: *std.ArrayList(libalpm.OwnedPackageWithUpdate),
+        failed: bool = false,
+
+        fn append(self: *UpgradePreview, old: libalpm.Package, next: libalpm.Package) error{OutOfMemory}!void {
+            for (self.updates.items) |update| {
+                if (std.mem.eql(u8, update.old_package.name_value, old.name() orelse "") and
+                    std.mem.eql(u8, update.new_package.name_value, next.name() orelse "")) return;
+            }
+            var update = try libalpm.OwnedPackageWithUpdate.init(self.allocator, old, next);
+            errdefer update.deinit(self.allocator);
+            try self.updates.append(self.allocator, update);
+        }
+
+        fn question(context: ?*anyopaque, value: [*c]rawLibalpm.alpm_question_t) callconv(.c) void {
+            const self: *UpgradePreview = @ptrCast(@alignCast(context.?));
+            if (value.*.type != rawLibalpm.ALPM_QUESTION_REPLACE_PKG) return;
+            const replacement = libalpm.ReplacePackageQuestion.from(@ptrCast(value)).?;
+            self.append(replacement.old_package(), replacement.new_package()) catch {
+                self.failed = true;
+                return;
+            };
+            replacement.confirm_replace(true);
+        }
+    };
 
     pub fn install_packages(
         self: *Manager,

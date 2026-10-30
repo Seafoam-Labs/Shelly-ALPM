@@ -440,15 +440,10 @@ fn writeStandardUpgradePreview(
         .{ updates.len, if (updates.len == 1) "" else "s" },
     );
     for (updates) |update| {
-        try writer.print(
-            "  {s}/{s}: {s} -> {s}\n",
-            .{
-                if (update.repository.len == 0) "unknown" else update.repository,
-                update.name,
-                update.current_version,
-                update.new_version,
-            },
-        );
+        try writer.print("  {s}/", .{if (update.repository.len == 0) "unknown" else update.repository});
+        if (update.old_name.len != 0 and !std.mem.eql(u8, update.old_name, update.name))
+            try writer.print("{s} -> ", .{update.old_name});
+        try writer.print("{s}: {s} -> {s}\n", .{ update.name, update.current_version, update.new_version });
     }
     try writer.writeAll("Requested packages (resolved together with the upgrade):\n");
     for (targets) |target| {
@@ -1856,6 +1851,7 @@ test "standard install upgrade UI previews available updates before confirmation
 
     const updates = [_]list_updates.StandardUpdate{
         .{
+            .old_name = "linux-old",
             .name = "linux",
             .current_version = "6.12.1-1",
             .new_version = "6.12.2-1",
@@ -1903,7 +1899,7 @@ test "standard install upgrade UI previews available updates before confirmation
         const decoded_size = try std.base64.standard.Decoder.calcSizeForSlice(payload);
         const decoded = try tc.arena.allocator().alloc(u8, decoded_size);
         try std.base64.standard.Decoder.decode(decoded, payload);
-        if (std.mem.indexOf(u8, decoded, "core/linux: 6.12.1-1 -> 6.12.2-1") != null and
+        if (std.mem.indexOf(u8, decoded, "core/linux-old -> linux: 6.12.1-1 -> 6.12.2-1") != null and
             std.mem.indexOf(u8, decoded, "extra/firefox: 127.0-1 -> 128.0-1") != null and
             std.mem.indexOf(u8, decoded, "extra-testing/filezilla") != null and
             std.mem.indexOf(u8, decoded, "in one transaction") != null)
