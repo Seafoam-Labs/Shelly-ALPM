@@ -1979,7 +1979,7 @@ pub const Model = struct {
         // Bottom row: status bar
         var status: vxfw.Text = .{
             .text = try self.statusText(arena),
-            .style = .{ .fg = .{ .index = 245 } },
+            .style = .{ .fg = .{ .index = 250 } },
         };
         try children.append(arena, .{
             .origin = .{ .row = max.height - 1, .col = 0 },
@@ -2020,7 +2020,7 @@ pub const Model = struct {
                 .style = if (tab == self.active)
                     .{ .bold = true, .reverse = true, .fg = .{ .index = 7 } }
                 else
-                    .{ .fg = .{ .index = 245 } },
+                    .{ .fg = .{ .index = 250 } },
             };
         }
         const bar = try arena.create(TabBar);

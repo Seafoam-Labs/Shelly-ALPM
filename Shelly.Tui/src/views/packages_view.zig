@@ -154,15 +154,6 @@ fn drawRow(ptr: *anyopaque, ctx: vxfw.DrawContext, selected: bool) Allocator.Err
         try spans.append(arena, .{ .text = "  " });
     }
     try spans.append(arena, .{ .text = pkg.Name, .style = .{ .bold = true } });
-    try spans.append(arena, .{ .text = "  " });
-    try spans.append(arena, .{ .text = pkg.Version, .style = .{ .fg = .{ .index = 245 } } });
-    if (pkg.Description.len > 0) {
-        try spans.append(arena, .{ .text = " — " });
-        try spans.append(arena, .{
-            .text = pkg.Description,
-            .style = .{ .fg = .{ .index = 245 } },
-        });
-    }
 
     const rich = try arena.create(vxfw.RichText);
     rich.* = .{
@@ -171,7 +162,7 @@ fn drawRow(ptr: *anyopaque, ctx: vxfw.DrawContext, selected: bool) Allocator.Err
         .overflow = .ellipsis,
     };
     // ListView allows horizontal overflow. Constrain rows to its viewport
-    // so long descriptions are ellipsized instead of extending off screen.
+    // so long package names are ellipsized instead of extending off screen.
     const width = ctx.max.width orelse ctx.min.width;
     return rich.draw(ctx.withConstraints(
         .{ .width = width, .height = 0 },
@@ -328,11 +319,11 @@ test "details wrap long dependency names to the scroll viewport width" {
     }
 }
 
-test "package rows truncate descriptions to the list viewport" {
+test "package rows truncate long names to the list viewport" {
     vxfw.DrawContext.init(.unicode);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    var pkg: Package = .{ .Name = "example", .Version = "1", .Description = "A long description that should be truncated in the package list." };
+    var pkg: Package = .{ .Name = "an-example-package-with-a-long-name", .Version = "1", .Description = "Description belongs in details." };
     const surface = try drawPackageRow(&pkg, .{
         .arena = arena.allocator(),
         .min = .{ .width = 28 },
