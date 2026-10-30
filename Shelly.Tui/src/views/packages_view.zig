@@ -237,27 +237,15 @@ fn appendSection(arena: Allocator, lines: *std.ArrayList([]const u8), title: []c
     }
 }
 
-const DetailField = struct {
-    label: []const u8,
-    value: []const u8,
-    gap: bool = false,
-};
-
-fn listField(arena: Allocator, fields: *std.ArrayList(DetailField), label: []const u8, items: []const []const u8) Allocator.Error!void {
-    if (items.len == 0) return;
-    try fields.append(arena, .{ .label = label, .value = try std.mem.join(arena, "\n", items), .gap = true });
-}
+const detail_fields = @import("detail_fields.zig");
+const DetailField = detail_fields.Field;
+const listField = detail_fields.listField;
 
 /// Render a structured document for ScrollView. Values wrap independently of
 /// labels, so continuation lines keep their indentation after resizing.
 pub fn drawDetails(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
     const pkg: *const Package = @ptrCast(@alignCast(ptr));
     const arena = ctx.arena;
-    const width = ctx.max.width orelse ctx.min.width;
-    const columns = width >= 36;
-    const label_width: u16 = if (columns) 12 else width;
-    const value_col: u16 = if (columns) 14 else 0;
-    const value_width = width - value_col;
     var fields: std.ArrayList(DetailField) = .empty;
     try fields.appendSlice(arena, &.{
         .{ .label = "Description", .value = if (pkg.Description.len > 0) pkg.Description else "No description." },
@@ -279,36 +267,7 @@ pub fn drawDetails(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.
     try listField(arena, &fields, "Conflicts", pkg.Conflicts);
     try listField(arena, &fields, "Replaces", pkg.Replaces);
 
-    var children: std.ArrayList(vxfw.SubSurface) = .empty;
-    var row: u16 = 0;
-    for (fields.items) |field| {
-        if (field.gap or (!columns and row > 0)) row += 1;
-        var label: vxfw.Text = .{ .text = field.label, .style = .{ .bold = true, .fg = .{ .index = 7 } } };
-        const label_surface = try label.draw(ctx.withConstraints(.{}, .{ .width = label_width, .height = null }));
-        try children.append(arena, .{ .origin = .{ .row = row, .col = 0 }, .surface = label_surface });
-        const value_row = row + if (columns) @as(u16, 0) else label_surface.size.height;
-        var value: vxfw.Text = .{ .text = try std.fmt.allocPrint(arena, "{f}", .{diagnostics.safe(field.value)}), .softwrap = true };
-        const value_surface = try value.draw(ctx.withConstraints(
-            .{ .width = value_width },
-            .{ .width = value_width, .height = null },
-        ));
-        try children.append(arena, .{ .origin = .{ .row = value_row, .col = value_col }, .surface = value_surface });
-        row = @max(row + label_surface.size.height, value_row + value_surface.size.height);
-    }
-    // Flatten the document into one scrollable surface; no frame-arena Text
-    // widgets need to survive the draw call.
-    const surface = try vxfw.Surface.init(arena, .{ .userdata = ptr, .drawFn = drawDetails }, .{ .width = width, .height = row });
-    @memset(surface.buffer, .{});
-    for (children.items) |child| {
-        const origin_row: usize = @intCast(child.origin.row);
-        const origin_col: usize = @intCast(child.origin.col);
-        for (0..child.surface.size.height) |line| {
-            const source = line * child.surface.size.width;
-            const target = (origin_row + line) * width + origin_col;
-            @memcpy(surface.buffer[target .. target + child.surface.size.width], child.surface.buffer[source .. source + child.surface.size.width]);
-        }
-    }
-    return surface;
+    return detail_fields.draw(.{ .userdata = ptr, .drawFn = drawDetails }, ctx, fields.items);
 }
 
 test "details wrap long dependency names to the scroll viewport width" {

@@ -14,7 +14,6 @@ const CheckUpdates = @import("../models/sync.zig").CheckUpdates;
 const JsonPackFrame = @import("ui_decode.zig").JsonPackFrame;
 const RunResult = std.process.RunResult;
 const runtime = @import("../runtime.zig");
-const log = std.log.scoped(.shelly_cli);
 
 fn containsPackageName(packages: []const Package, name: []const u8) bool {
     for (packages) |pkg| {
@@ -241,8 +240,6 @@ pub const ShellyCli = struct {
         const result = try self.runSilently(args);
         defer self.allocator.free(result.stderr);
         defer self.allocator.free(result.stdout);
-
-        log.debug("pkgbuild response received ({d} bytes)", .{result.stdout.len});
 
         return decodeQuery([]PkgBuild, self.allocator, result.stdout, false);
     }

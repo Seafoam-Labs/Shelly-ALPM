@@ -1,6 +1,11 @@
 const std = @import("std");
 const vaxis = @import("vaxis");
 const vxfw = vaxis.vxfw;
+const Border = @import("border.zig");
+const commands = @import("../commands.zig");
+const diagnostics = @import("diagnostics");
+const help_view = @import("help_view.zig");
+const pkgbuild_view = @import("pkgbuild_view.zig");
 const Allocator = std.mem.Allocator;
 const AurPackage = @import("../models/packages.zig").AurPackage;
 const appendDetailList = @import("detail_format.zig").appendDetailList;
@@ -16,49 +21,65 @@ pub const View = struct {
     aur_failed: bool,
     aur_query: []const u8,
     result_count: usize,
+    selected: ?*const AurPackage = null,
+    details_scroll: *vxfw.ScrollView,
+    details_active: bool = false,
+    list_active: bool = false,
+    preview: ?pkgbuild_view.View = null,
+    help: ?*help_view.Panel = null,
     pub fn appendContent(self: View, ctx: vxfw.DrawContext, children: *std.ArrayList(vxfw.SubSurface)) Allocator.Error!void {
         const arena = ctx.arena;
         const max = ctx.max.size();
-
-        // Row 1: search prompt + field
-        var prompt: vxfw.Text = .{ .text = "❯", .style = .{ .fg = .{ .index = 7 } } };
-        try children.append(arena, .{
-            .origin = .{ .row = 1, .col = 0 },
-            .surface = try prompt.draw(ctx.withConstraints(
-                ctx.min,
-                .{ .width = 2, .height = 1 },
-            )),
-        });
-        try children.append(arena, .{
-            .origin = .{ .row = 1, .col = 2 },
-            .surface = try self.aur_field.draw(ctx.withConstraints(
-                ctx.min,
-                .{ .width = max.width -| 2, .height = 1 },
-            )),
-        });
-
-        // Rows 2..height-2: results
-        try children.append(arena, .{
-            .origin = .{ .row = 2, .col = 0 },
-            .surface = try self.aur_list.draw(ctx.withConstraints(
-                .{ .width = 0, .height = 0 },
-                .{ .width = max.width, .height = max.height - 3 },
-            )),
-        });
-
-        if (try self.aurMessage(arena)) |message| {
-            var message_text: vxfw.Text = .{
-                .text = message.text,
-                .style = .{ .fg = .{ .index = if (message.red) @as(u8, 1) else 245 } },
-            };
+        const split = max.width >= 64;
+        const left_w: u16 = if (split) @max(28, @as(u16, @intCast(@as(u32, max.width) * 2 / 5))) else max.width;
+        const right_w = if (split) max.width - left_w else max.width;
+        const list_width = left_w -| @as(u16, if (split) 1 else 0);
+        const search_height: u16 = if (max.width >= 2 and max.height >= 8) 3 else 1;
+        const list_row = 1 + search_height;
+        const list_height = max.height -| (list_row + 1);
+        const pane_row: u16 = 1;
+        const pane_height = max.height -| (pane_row + 1);
+        const show_pane = split or self.details_active or self.preview != null or self.help != null;
+        if (split or !show_pane) {
+            var search_border: Border = .{ .child = self.aur_field.widget(), .style = if (!self.list_active and !self.details_active) .{ .fg = .{ .index = 7 }, .bold = true } else .{} };
             try children.append(arena, .{
-                .origin = .{ .row = 3, .col = 2 },
-                .surface = try message_text.draw(ctx.withConstraints(
-                    ctx.min,
-                    .{ .width = max.width -| 2, .height = 1 },
-                )),
-                .z_index = 1,
+                .origin = .{ .row = 1, .col = 0 },
+                .surface = if (search_height == 3)
+                    try search_border.draw(ctx.withConstraints(.{ .width = list_width, .height = search_height }, .{ .width = list_width, .height = search_height }))
+                else
+                    try self.aur_field.draw(ctx.withConstraints(.{}, .{ .width = list_width, .height = search_height })),
             });
+            const message = try self.aurMessage(arena);
+            var label: vxfw.Text = .{ .text = if (message) |item| item.text else "", .style = .{ .fg = .{ .index = if (message != null and message.?.red) @as(u8, 1) else 250 } } };
+            const labels = [_]Border.BorderLabel{.{ .text = if (self.installed_only) "Installed AUR packages" else "AUR packages", .alignment = .top_left }};
+            const content = if (message != null) label.widget() else self.aur_list.widget();
+            var border: Border = .{ .child = content, .labels = &labels, .style = if (self.list_active and !self.details_active) .{ .fg = .{ .index = 7 }, .bold = true } else .{} };
+            try children.append(arena, .{
+                .origin = .{ .row = @intCast(list_row), .col = 0 },
+                .surface = if (list_width >= 2 and list_height >= 2)
+                    try border.draw(ctx.withConstraints(.{ .width = list_width, .height = list_height }, .{ .width = list_width, .height = list_height }))
+                else
+                    try content.draw(ctx.withConstraints(.{}, .{ .width = list_width, .height = list_height })),
+            });
+        }
+        if (show_pane and pane_height >= 2 and right_w >= 2) {
+            const pane_ctx = ctx.withConstraints(.{}, .{ .width = right_w, .height = pane_height });
+            const surface = if (self.help) |panel|
+                try panel.draw(pane_ctx)
+            else if (self.preview) |preview|
+                try preview.drawInPane(pane_ctx)
+            else blk: {
+                const title = if (self.selected) |pkg| try std.fmt.allocPrint(arena, "{f}", .{diagnostics.safe(pkg.Name)}) else "AUR details";
+                const labels = [_]Border.BorderLabel{.{ .text = title, .alignment = .top_left }};
+                var empty: vxfw.Text = .{ .text = if (self.searching) "Waiting for search results…" else "Select a result to see details." };
+                var border: Border = .{
+                    .child = if (self.selected != null and !self.searching) self.details_scroll.widget() else empty.widget(),
+                    .labels = &labels,
+                    .style = if (self.details_active) .{ .fg = .{ .index = 7 }, .bold = true } else .{},
+                };
+                break :blk try border.draw(pane_ctx.withConstraints(.{ .width = right_w, .height = pane_height }, .{ .width = right_w, .height = pane_height }));
+            };
+            try children.append(arena, .{ .origin = .{ .row = @intCast(pane_row), .col = if (split) @intCast(left_w) else 0 }, .surface = surface });
         }
     }
     fn aurMessage(self: View, arena: Allocator) Allocator.Error!?struct { text: []const u8, red: bool } {
@@ -75,7 +96,7 @@ pub const View = struct {
         }
         if (self.installed_only) return if (self.result_count == 0) .{ .text = "No installed AUR packages match the filter.", .red = false } else null;
         if (self.aur_query.len == 0) {
-            return .{ .text = "Type a search term and press Enter to query the AUR.", .red = false };
+            return .{ .text = try std.fmt.allocPrint(arena, "Type a search term and press {s} to query the AUR.", .{try commands.label(arena, .confirm)}), .red = false };
         }
         if (self.result_count == 0) {
             return .{ .text = "No AUR packages matched.", .red = false };
@@ -102,26 +123,8 @@ pub fn drawAurRow(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.S
     const arena = ctx.arena;
 
     var spans: std.ArrayList(vxfw.RichText.TextSpan) = .empty;
-    try spans.append(arena, .{ .text = "  " });
+    try spans.append(arena, .{ .text = if (pkg.Installed) "● " else "  ", .style = .{ .fg = .{ .index = 2 } } });
     try spans.append(arena, .{ .text = pkg.Name, .style = .{ .bold = true } });
-    try spans.append(arena, .{ .text = "  " });
-    try spans.append(arena, .{
-        .text = pkg.Version,
-        .style = .{ .fg = .{ .index = if (pkg.OutOfDate != null) @as(u8, 1) else 245 } },
-    });
-    try spans.append(arena, .{
-        .text = try std.fmt.allocPrint(arena, " ▲ {d}", .{pkg.NumVotes}),
-        .style = .{ .fg = .{ .index = 245 } },
-    });
-    if (pkg.Description) |description| {
-        if (description.len > 0) {
-            try spans.append(arena, .{ .text = " — " });
-            try spans.append(arena, .{
-                .text = description,
-                .style = .{ .fg = .{ .index = 245 } },
-            });
-        }
-    }
 
     const rich = try arena.create(vxfw.RichText);
     rich.* = .{
@@ -129,7 +132,8 @@ pub fn drawAurRow(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.S
         .softwrap = false,
         .overflow = .ellipsis,
     };
-    return rich.draw(ctx);
+    const width = ctx.max.width orelse ctx.min.width;
+    return rich.draw(ctx.withConstraints(.{ .width = width }, .{ .width = width, .height = 1 }));
 }
 
 pub fn detailsText(arena: Allocator, pkg: *const AurPackage) Allocator.Error![]const u8 {
@@ -155,4 +159,43 @@ pub fn detailsText(arena: Allocator, pkg: *const AurPackage) Allocator.Error![]c
     try lines.append(arena, try std.fmt.allocPrint(arena, "Last modified:   {s}", .{try formatEpoch(arena, pkg.LastModified)}));
 
     return try std.mem.join(arena, "\n", lines.items);
+}
+
+const detail_fields = @import("detail_fields.zig");
+
+pub fn drawDetails(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
+    const pkg: *const AurPackage = @ptrCast(@alignCast(ptr));
+    const arena = ctx.arena;
+    var fields: std.ArrayList(detail_fields.Field) = .empty;
+    try fields.appendSlice(arena, &.{
+        .{ .label = "Description", .value = pkg.Description orelse "No description." },
+        .{ .label = "Version", .value = pkg.Version, .gap = true },
+        .{ .label = "Installed", .value = if (pkg.Installed) "Yes" else "No" },
+        .{ .label = "Package base", .value = pkg.PackageBase },
+        .{ .label = "Maintainer", .value = pkg.Maintainer orelse "—" },
+        .{ .label = "Votes", .value = try std.fmt.allocPrint(arena, "{d}", .{pkg.NumVotes}) },
+        .{ .label = "Popularity", .value = try std.fmt.allocPrint(arena, "{d:.2}", .{pkg.Popularity}) },
+        .{ .label = "Out of date", .value = if (pkg.OutOfDate != null) "Yes" else "No" },
+    });
+    if (pkg.Url) |url| try fields.append(arena, .{ .label = "URL", .value = url });
+    if (pkg.License) |items| if (items.len > 0) {
+        try fields.append(arena, .{ .label = "Licenses", .value = try std.mem.join(arena, ", ", items) });
+    };
+    try fields.appendSlice(arena, &.{
+        .{ .label = "Submitted", .value = try formatEpoch(arena, pkg.FirstSubmitted), .gap = true },
+        .{ .label = "Modified", .value = try formatEpoch(arena, pkg.LastModified) },
+    });
+    if (pkg.Depends) |items| try detail_fields.listField(arena, &fields, "Dependencies", items);
+    if (pkg.MakeDepends) |items| try detail_fields.listField(arena, &fields, "Make deps", items);
+    return detail_fields.draw(.{ .userdata = ptr, .drawFn = drawDetails }, ctx, fields.items);
+}
+
+// ScrollView supplies unbounded constraints; buttons need a finite viewport.
+pub fn drawPreviewButton(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
+    const button: *vxfw.Button = @ptrCast(@alignCast(ptr));
+    const viewport = ctx.max.width orelse ctx.min.width;
+    const width: u16 = @intCast(@min(viewport, ctx.stringWidth(button.label)));
+    var surface = try button.draw(ctx.withConstraints(.{ .width = width }, .{ .width = width, .height = 1 }));
+    surface.widget.drawFn = drawPreviewButton;
+    return surface;
 }

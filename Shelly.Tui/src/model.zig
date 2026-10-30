@@ -225,10 +225,12 @@ pub const Model = struct {
     pkgbuild_thread: ?std.Thread = null,
     pkgbuild_document: ?pkgbuild_view.Document = null,
     pkgbuild_failure: ?anyerror = null,
+    pkgbuild_wrap: bool = true,
     pkgbuild_scroll: vxfw.ScrollView,
 
     /// The currently running install, if any.
     install_job: ?*shelly_operation.Operation = null,
+    dependency_choices: vxfw.ListView,
     operation_question: ?shelly_operation.OwnedMessage = null,
     review_prompt: ?*SudoPrompt = null,
     answer_input: std.ArrayList(u8) = .empty,
@@ -255,6 +257,10 @@ pub const Model = struct {
     list_view: vxfw.ListView,
     text_field: vxfw.TextField,
     aur_list: vxfw.ListView,
+    aur_preview_button: vxfw.Button,
+    aur_details_scroll: vxfw.ScrollView,
+    aur_details_cursor: ?u32 = null,
+    aur_list_active: bool = false,
     aur_field: vxfw.TextField,
 
     pub fn init(gpa: Allocator) !*Model {
@@ -266,6 +272,14 @@ pub const Model = struct {
         errdefer gpa.destroy(model);
 
         model.* = .{
+            .dependency_choices = .{ .children = .{ .builder = .{ .userdata = model, .buildFn = buildDependencyChoice } } },
+            .aur_preview_button = .{ .label = " PKGBUILD ", .userdata = model, .onClick = onAurPreviewClick, .style = .{
+                .default = .{ .fg = .{ .index = 0 }, .bg = .{ .index = 7 } },
+                .focus = .{ .fg = .{ .index = 0 }, .bg = .{ .index = 15 }, .bold = true },
+                .hover = .{ .fg = .{ .index = 0 }, .bg = .{ .index = 15 }, .bold = true },
+                .mouse_down = .{ .reverse = true },
+            } },
+            .aur_details_scroll = .{ .item_count = 2, .children = .{ .builder = .{ .userdata = model, .buildFn = buildAurDetails } } },
             .package_details_scroll = .{ .item_count = 1, .children = .{ .builder = .{
                 .userdata = model,
                 .buildFn = buildPackageDetails,
@@ -398,16 +412,19 @@ pub const Model = struct {
         const self: *Model = @ptrCast(@alignCast(ptr));
         const had_operation = self.operationPrompt() != null;
         const had_help = self.help_open;
+        const had_aur_pane = self.aurPaneFocused();
         try self.captureEvent(ctx, event);
         if (ctx.quit) return;
-        if (self.help_open or self.operationPrompt() != null) {
+        if (self.help_open or self.operationPrompt() != null or self.aurPaneFocused()) {
             // The root remains present when a small terminal temporarily
             // replaces browsing with the operation panel.
             try ctx.requestFocus(self.widget());
-        } else if (had_operation or had_help) {
+        } else if (had_operation or had_help or had_aur_pane) {
             const list_active = self.package_list_active;
+            const aur_active = self.aur_list_active;
             try self.focusActiveTab(ctx);
             self.package_list_active = list_active;
+            self.aur_list_active = aur_active;
         }
     }
 
@@ -468,10 +485,23 @@ pub const Model = struct {
                             return ctx.consumeAndRedraw();
                         },
                         .package, .aur => {
-                            if (overlay == .package and commands.leavesPackageDetails(key)) {
+                            if ((overlay == .package or overlay == .aur) and commands.leavesPackageDetails(key)) {
                                 self.closeOverlay();
-                                self.package_list_active = true;
+                                if (overlay == .package) self.package_list_active = true else self.aur_list_active = true;
                                 return ctx.consumeAndRedraw();
+                            }
+                            if (overlay == .aur) {
+                                if (commands.matches(key, .confirm) and self.aur_preview_button.focused) {
+                                    try self.openPkgbuild(ctx, overlay.aur.Name);
+                                    return ctx.consumeAndRedraw();
+                                }
+                                if (commands.matches(key, .next) and !self.aur_details_scroll.scroll.has_more_vertical) {
+                                    self.aur_preview_button.focused = true;
+                                    self.aur_details_scroll.cursor = 1;
+                                    self.aur_details_scroll.scroll.wants_cursor = true;
+                                    return ctx.consumeAndRedraw();
+                                }
+                                if (commands.matches(key, .previous)) self.aur_preview_button.focused = false;
                             }
                             if (commands.detail(key)) |action| {
                                 switch (action) {
@@ -482,7 +512,7 @@ pub const Model = struct {
                                 }
                                 return ctx.consumeAndRedraw();
                             }
-                            if (overlay == .package) {
+                            if (overlay == .package or overlay == .aur) {
                                 if (command) |action| {
                                     self.closeOverlay();
                                     switch (action) {
@@ -493,7 +523,7 @@ pub const Model = struct {
                                     try self.focusActiveTab(ctx);
                                     try self.ensureUpdates(ctx);
                                     try self.ensureFlatpak(ctx);
-                                } else try self.package_details_scroll.handleEvent(ctx, .{ .key_press = commands.scrollKey(key) orelse key });
+                                } else if (overlay == .package) try self.package_details_scroll.handleEvent(ctx, .{ .key_press = commands.scrollKey(key) orelse key }) else try self.aur_details_scroll.handleEvent(ctx, .{ .key_press = commands.scrollKey(key) orelse key });
                                 return ctx.consumeAndRedraw();
                             }
                             return ctx.consumeEvent();
@@ -505,6 +535,11 @@ pub const Model = struct {
                             const view = self.pkgbuildView();
                             if (view.handleKey(key)) |action| {
                                 switch (action) {
+                                    .toggle_wrap => {
+                                        self.pkgbuild_wrap = !self.pkgbuild_wrap;
+                                        self.pkgbuild_scroll.scroll.left = 0;
+                                        self.pkgbuild_scroll.scroll.vertical_offset = 0;
+                                    },
                                     .close => self.closePkgbuild(),
                                     .retry => if (self.pkgbuild_job == null) try self.openPkgbuild(ctx, self.pkgbuild_name),
                                     .approve => try self.answerOperationQuestion(true),
@@ -512,19 +547,16 @@ pub const Model = struct {
                                 }
                                 return ctx.consumeAndRedraw();
                             }
-                            if (self.operation_question) |question| {
-                                if (question.value.question == .select_one or question.value.question == .select_many) {
-                                    if (key.matches(vaxis.Key.backspace, .{})) {
-                                        popGrapheme(&self.answer_input);
-                                        self.answer_error = "";
-                                    } else if (key.text) |text| {
-                                        for (text) |byte| {
-                                            if ((std.ascii.isDigit(byte) or byte == ',' or byte == ' ') and self.answer_input.items.len < 1024)
-                                                try self.answer_input.append(self.gpa, byte);
-                                        }
-                                        self.answer_error = "";
-                                    }
+                            if (self.choiceOptions()) |options| {
+                                const cursor = self.dependency_choices.cursor;
+                                if (commands.matches(key, .mark) and cursor < options.len) {
+                                    if (self.operation_question.?.value.question == .select_many) options[cursor].is_selected = !options[cursor].is_selected;
+                                } else {
+                                    try self.dependency_choices.handleEvent(ctx, .{ .key_press = commands.scrollKey(key) orelse key });
                                 }
+                                self.syncProviderSelection();
+                                self.answer_error = "";
+                                return ctx.consumeAndRedraw();
                             }
                             if (self.pkgbuild_document != null and self.pkgbuild_job == null)
                                 try self.pkgbuild_scroll.handleEvent(ctx, .{ .key_press = commands.scrollKey(key) orelse key });
@@ -532,9 +564,37 @@ pub const Model = struct {
                         },
                     }
                 }
+                if (self.active == .aur and self.aur_list_active) {
+                    if (commands.matches(key, .search)) {
+                        self.aur_list_active = false;
+                        return ctx.consumeAndRedraw();
+                    }
+                    if (commands.matches(key, .details)) {
+                        if (self.selectedAur()) |pkg| self.overlay = .{ .aur = pkg };
+                        return ctx.consumeAndRedraw();
+                    }
+                    if (commands.matches(key, .preview)) {
+                        if (self.selectedAur()) |pkg| try self.openPkgbuild(ctx, pkg.Name);
+                        return ctx.consumeAndRedraw();
+                    }
+                    if (commands.packageAction(key)) |action| {
+                        if (self.selectedAur()) |pkg| {
+                            if (action != .remove or pkg.Installed)
+                                try self.openPackagePrompt(pkg.Name, .aur, if (action == .install) .install else .remove);
+                        }
+                        return ctx.consumeAndRedraw();
+                    }
+                }
                 if (self.active != .packages and self.active != .settings and
                     (commands.matches(key, .previous) or commands.matches(key, .next)))
                 {
+                    if (self.active == .aur) {
+                        if (self.aur_list_active and self.aur_list.cursor == 0 and commands.matches(key, .previous)) {
+                            self.aur_list_active = false;
+                            return ctx.consumeAndRedraw();
+                        }
+                        self.aur_list_active = true;
+                    }
                     const canonical: vxfw.Event = .{ .key_press = .{ .codepoint = if (commands.matches(key, .previous)) vaxis.Key.up else vaxis.Key.down } };
                     switch (self.active) {
                         .aur => try self.aur_list.handleEvent(ctx, canonical),
@@ -651,7 +711,7 @@ pub const Model = struct {
                 }
                 // Search editing is explicit while browsing: Up at the first
                 // package or / returns to the text field.
-                if (self.active == .packages and self.package_list_active and command == null)
+                if (((self.active == .packages and self.package_list_active) or (self.active == .aur and self.aur_list_active)) and command == null)
                     return ctx.consumeEvent();
 
                 if (command) |action| {
@@ -668,9 +728,18 @@ pub const Model = struct {
                     return ctx.consumeAndRedraw();
                 }
             },
-            .mouse => if (self.help_open) {
-                try self.help_panel.scroll.handleEvent(ctx, event);
-                return ctx.consumeAndRedraw();
+            .mouse => {
+                if (self.help_open) {
+                    try self.help_panel.scroll.handleEvent(ctx, event);
+                    return ctx.consumeAndRedraw();
+                }
+                if (self.active == .aur and self.overlay != null and self.overlay.? == .pkgbuild and self.operation_question == null) {
+                    if (self.choiceOptions() != null) {
+                        try self.dependency_choices.handleEvent(ctx, event);
+                        self.syncProviderSelection();
+                    } else try self.pkgbuild_scroll.handleEvent(ctx, event);
+                    return ctx.consumeAndRedraw();
+                }
             },
             else => {},
         }
@@ -758,8 +827,14 @@ pub const Model = struct {
             },
             .mouse => {
                 if (self.overlay) |overlay| {
-                    if (overlay == .pkgbuild and self.pkgbuild_document != null and self.pkgbuild_job == null)
+                    if (overlay == .pkgbuild and self.pkgbuild_document != null and self.pkgbuild_job == null) {
+                        if (self.choiceOptions() != null) {
+                            try self.dependency_choices.handleEvent(ctx, event);
+                            self.syncProviderSelection();
+                            return;
+                        }
                         return self.pkgbuild_scroll.handleEvent(ctx, event);
+                    }
                 }
                 if (self.active == .upgrade and self.overlay == null)
                     return self.updates_list.handleEvent(ctx, event);
@@ -936,8 +1011,9 @@ pub const Model = struct {
     }
 
     fn focusActiveTab(self: *Model, ctx: *vxfw.EventContext) !void {
-        if (self.help_open or self.operationPrompt() != null) return ctx.requestFocus(self.widget());
+        if (self.help_open or self.operationPrompt() != null or self.aurPaneFocused()) return ctx.requestFocus(self.widget());
         self.package_list_active = false;
+        self.aur_list_active = false;
         switch (self.active) {
             .packages => try ctx.requestFocus(self.text_field.widget()),
             .aur => try ctx.requestFocus(self.aur_field.widget()),
@@ -1127,6 +1203,13 @@ pub const Model = struct {
         for (self.aur_packages) |*pkg| {
             if (std.mem.eql(u8, pkg.Name, self.pkgbuild_name)) {
                 self.overlay = .{ .aur = pkg };
+                self.aur_list_active = true;
+                for (self.aur_filtered.items, 0..) |item, i| {
+                    if (std.mem.eql(u8, item.Name, self.pkgbuild_name)) {
+                        self.aur_list.jumpToItem(@intCast(i));
+                        break;
+                    }
+                }
                 break;
             }
         }
@@ -1135,10 +1218,20 @@ pub const Model = struct {
     fn pkgbuildView(self: *Model) pkgbuild_view.View {
         return .{
             .name = self.pkgbuild_name,
+            .wrap = self.pkgbuild_wrap,
             .scroll = &self.pkgbuild_scroll,
             .loading = self.pkgbuild_job != null,
             .failure = self.pkgbuild_failure,
             .review = self.operation_question != null,
+            .pkgbuild_review = if (self.operation_question) |message| message.value.question == .pkgbuild else false,
+            .transaction_review = if (self.operation_question) |message| message.value.question == .transaction else false,
+            .optional_dependencies = if (self.operation_question) |message| message.value.question == .select_many else false,
+            .choice_list = &self.dependency_choices,
+            .choice_prompt = if (self.choiceOptions()) |_| switch (self.operation_question.?.value.question) {
+                .select_one => |q| q.prompt,
+                .select_many => |q| q.prompt,
+                else => unreachable,
+            } else "",
             .choices = if (self.operation_question) |message|
                 message.value.question == .select_one or message.value.question == .select_many
             else
@@ -1148,9 +1241,31 @@ pub const Model = struct {
         };
     }
 
+    fn choiceOptions(self: *const Model) ?[]shelly_operation.Option {
+        const message = self.operation_question orelse return null;
+        return switch (message.value.question) {
+            .select_one => |q| q.options,
+            .select_many => |q| q.options,
+            else => null,
+        };
+    }
+
+    fn syncProviderSelection(self: *Model) void {
+        const message = self.operation_question orelse return;
+        if (message.value.question != .select_one) return;
+        for (message.value.question.select_one.options, 0..) |*option, index| option.is_selected = index == self.dependency_choices.cursor;
+    }
+
+    fn buildDependencyChoice(ptr: *const anyopaque, index: usize, _: usize) ?vxfw.Widget {
+        const self: *const Model = @ptrCast(@alignCast(ptr));
+        const options = self.choiceOptions() orelse return null;
+        if (index >= options.len) return null;
+        return .{ .userdata = &options[index], .drawFn = pkgbuild_view.drawChoice };
+    }
+
     fn buildPkgbuildLine(ptr: *const anyopaque, index: usize, _: usize) ?vxfw.Widget {
         const self: *const Model = @ptrCast(@alignCast(ptr));
-        if (self.pkgbuild_document) |*document| return pkgbuild_view.row(document, index);
+        if (self.pkgbuild_document) |*document| return pkgbuild_view.rowWithWrap(document, index, self.pkgbuild_wrap);
         return null;
     }
 
@@ -1352,6 +1467,7 @@ pub const Model = struct {
         if (self.aur_installed_only) {
             if (self.aur_list.cursor < self.aur_filtered.items.len)
                 self.overlay = .{ .aur = self.aur_filtered.items[self.aur_list.cursor] };
+            self.aur_list_active = true;
             return ctx.consumeAndRedraw();
         }
         // Enter with an unchanged query opens the selected result instead
@@ -1361,6 +1477,7 @@ pub const Model = struct {
         {
             if (@as(usize, self.aur_list.cursor) < self.aur_filtered.items.len) {
                 self.overlay = .{ .aur = self.aur_filtered.items[self.aur_list.cursor] };
+                self.aur_list_active = true;
                 return ctx.consumeAndRedraw();
             }
             return;
@@ -1624,7 +1741,7 @@ pub const Model = struct {
         const overlay = self.overlay orelse return error.NoOperationDialog;
         if (overlay != .sudo) return error.NoOperationDialog;
         const question = message.value.question;
-        var document = try pkgbuild_view.Document.fromQuestion(self.gpa, question);
+        var document = try pkgbuild_view.Document.fromQuestionForAction(self.gpa, question, overlay.sudo.action);
         errdefer document.deinit();
         const name = try self.gpa.dupe(u8, if (question == .pkgbuild) question.pkgbuild.package_name else overlay.sudo.name);
         if (self.pkgbuild_document) |*old| old.deinit();
@@ -1636,6 +1753,17 @@ pub const Model = struct {
         self.pkgbuild_scroll.cursor = 0;
         self.pkgbuild_scroll.item_count = @intCast(document.lines.len);
         self.operation_question = message;
+        self.dependency_choices.jumpToItem(0);
+        if (self.choiceOptions()) |options| {
+            self.dependency_choices.item_count = @intCast(options.len);
+            if (question == .select_one) for (options, 0..) |option, index| {
+                if (option.is_selected) {
+                    self.dependency_choices.jumpToItem(@intCast(index));
+                    break;
+                }
+            };
+        }
+        self.syncProviderSelection();
         self.review_prompt = overlay.sudo;
         self.answer_input.clearRetainingCapacity();
         self.answer_error = "";
@@ -1653,6 +1781,23 @@ pub const Model = struct {
         self.review_prompt = null;
     }
 
+    fn dependencyAnswer(self: *const Model, indices: *std.ArrayList(usize)) !shelly_operation.Answer {
+        const question = self.operation_question.?.value.question;
+        return switch (question) {
+            .select_one => |request| blk: {
+                if (self.dependency_choices.cursor >= request.options.len) return error.NoProvider;
+                break :blk .{ .provider = request.options[self.dependency_choices.cursor].index };
+            },
+            .select_many => |request| blk: {
+                for (request.options) |option| if (option.is_selected) {
+                    try indices.append(self.gpa, option.index);
+                };
+                break :blk .{ .optional_dependencies = indices.items };
+            },
+            else => unreachable,
+        };
+    }
+
     fn answerOperationQuestion(self: *Model, approve: bool) !void {
         const message = self.operation_question orelse return;
         const job = self.install_job orelse return;
@@ -1663,44 +1808,13 @@ pub const Model = struct {
             .pkgbuild => .{ .pkgbuild = approve },
             .yes_no => .{ .yes_no = approve },
             .transaction => .{ .transaction = approve },
-            .select_one => |request| blk: {
+            .select_one, .select_many => blk: {
                 if (!approve) return;
-                const input = std.mem.trim(u8, self.answer_input.items, " ");
-                const index = std.fmt.parseInt(usize, input, 10) catch {
-                    self.answer_error = "Enter one listed index.";
+                break :blk self.dependencyAnswer(&indices) catch |err| {
+                    if (err != error.NoProvider) return err;
+                    self.answer_error = "No provider is available to select.";
                     return;
                 };
-                for (request.options) |option| {
-                    if (option.index == index) break :blk .{ .provider = index };
-                }
-                self.answer_error = "That index is not listed.";
-                return;
-            },
-            .select_many => |request| blk: {
-                if (!approve) return;
-                const input = std.mem.trim(u8, self.answer_input.items, " ");
-                if (input.len > 0) {
-                    var tokens = std.mem.splitScalar(u8, input, ',');
-                    while (tokens.next()) |token| {
-                        const index = std.fmt.parseInt(usize, std.mem.trim(u8, token, " "), 10) catch {
-                            self.answer_error = "Use listed indices separated by commas, or leave blank for none.";
-                            return;
-                        };
-                        var found = false;
-                        for (request.options) |option| {
-                            if (option.index == index) {
-                                found = true;
-                                break;
-                            }
-                        }
-                        if (!found or std.mem.indexOfScalar(usize, indices.items, index) != null) {
-                            self.answer_error = "Use unique listed indices.";
-                            return;
-                        }
-                        try indices.append(self.gpa, index);
-                    }
-                }
-                break :blk .{ .optional_dependencies = indices.items };
             },
         };
         job.sendAnswer(runtime.io, shelly_operation.questionId(question), answer) catch {
@@ -1726,6 +1840,12 @@ pub const Model = struct {
             },
         }
         return ctx.consumeAndRedraw();
+    }
+
+    fn aurPaneFocused(self: *const Model) bool {
+        if (self.active != .aur) return false;
+        const overlay = self.overlay orelse return false;
+        return overlay == .aur or overlay == .pkgbuild;
     }
 
     fn operationPrompt(self: *Model) ?*SudoPrompt {
@@ -1888,6 +2008,8 @@ pub const Model = struct {
     }
 
     fn rebuildAurFilter(self: *Model) Allocator.Error!void {
+        self.aur_details_scroll.scroll = .{};
+        self.aur_details_cursor = null;
         self.aur_filtered.clearRetainingCapacity();
         if (self.aur_job != null) {
             self.aur_list.item_count = 0;
@@ -1971,8 +2093,19 @@ pub const Model = struct {
     }
 
     fn aurView(self: *Model) aur_view.View {
+        if (self.aur_details_cursor == null or self.aur_details_cursor.? != self.aur_list.cursor) {
+            self.aur_details_scroll.scroll = .{};
+            self.aur_preview_button.focused = false;
+            self.aur_details_cursor = self.aur_list.cursor;
+        }
         return .{
             .aur_field = &self.aur_field,
+            .selected = self.selectedAur(),
+            .details_scroll = &self.aur_details_scroll,
+            .details_active = !self.help_open and self.overlay != null and self.overlay.? == .aur,
+            .list_active = self.aur_list_active and !self.help_open,
+            .preview = if (self.overlay != null and self.overlay.? == .pkgbuild) self.pkgbuildView() else null,
+            .help = if (self.help_open) &self.help_panel else null,
             .aur_list = &self.aur_list,
             .searching = self.aur_job != null,
             .aur_failed = self.aur_failed,
@@ -2000,13 +2133,18 @@ pub const Model = struct {
 
         var children: std.ArrayList(vxfw.SubSurface) = .empty;
 
-        const prompt = self.operationPrompt();
+        const reviewing = self.overlay != null and self.overlay.? == .pkgbuild and self.operation_question != null;
+        const prompt = self.operationPrompt() orelse self.review_prompt;
         var navigation_height: u16 = if (max.width >= 2 and max.height >= 8) 3 else 1;
         var panel_height: u16 = 0;
         var show_browsing = true;
         if (prompt) |active_prompt| {
             const preferred_height = try self.promptView(active_prompt).preferredHeight(ctx, 9);
-            if (max.height >= navigation_height + preferred_height + 5) {
+            if (reviewing) {
+                // Keep the review readable above the same operation panel.
+                // Tiny terminals give priority to answering the CLI question.
+                panel_height = if (max.height >= navigation_height + preferred_height + 7) preferred_height else 0;
+            } else if (max.height >= navigation_height + preferred_height + 5) {
                 panel_height = preferred_height;
             } else {
                 // Short terminals give the operation the content area rather
@@ -2036,10 +2174,15 @@ pub const Model = struct {
         const content_start = children.items.len;
         const content_ctx = ctx.withConstraints(.{}, .{ .width = max.width, .height = max.height - content_offset - panel_height });
         self.help_panel.context = self.commandContext();
-        if (show_browsing and self.help_open and self.active != .packages) {
+        if (show_browsing and self.help_open and self.active != .packages and self.active != .aur) {
             try children.append(arena, .{
                 .origin = .{ .row = 1, .col = 0 },
                 .surface = try self.help_panel.draw(content_ctx.withConstraints(.{}, .{ .width = max.width, .height = content_ctx.max.size().height -| 2 })),
+            });
+        } else if (reviewing and !self.help_open and self.active != .aur) {
+            try children.append(arena, .{
+                .origin = .{ .row = 1, .col = 0 },
+                .surface = try self.pkgbuildView().drawInPane(content_ctx.withConstraints(.{}, .{ .width = max.width, .height = content_ctx.max.size().height -| 2 })),
             });
         } else if (show_browsing) switch (self.active) {
             .packages => try self.packagesView().appendContent(content_ctx, &children),
@@ -2050,7 +2193,7 @@ pub const Model = struct {
         };
 
         for (children.items[content_start..]) |*child| child.origin.row += @intCast(content_offset);
-        if (prompt) |active_prompt| {
+        if (panel_height > 0) if (prompt) |active_prompt| {
             try children.append(arena, .{
                 .origin = .{ .row = @intCast(max.height - panel_height - 1), .col = 0 },
                 .surface = try active_prompt.panel.draw(self.promptView(active_prompt), ctx.withConstraints(
@@ -2058,7 +2201,7 @@ pub const Model = struct {
                     .{ .width = max.width, .height = panel_height },
                 )),
             });
-        }
+        };
 
         var footer_context = self.commandContext();
         if (self.help_open) {
@@ -2074,9 +2217,10 @@ pub const Model = struct {
         if (!self.help_open) if (self.overlay) |overlay| {
             const overlay_child: ?vxfw.SubSurface = switch (overlay) {
                 .package => null,
-                .aur, .flatpak => try self.drawDetailsOverlay(ctx, arena, max, overlay),
+                .aur => null,
+                .flatpak => try self.drawDetailsOverlay(ctx, arena, max, overlay),
                 .sudo => null,
-                .pkgbuild => try self.pkgbuildView().draw(ctx),
+                .pkgbuild => if (self.active == .aur or reviewing) null else try self.pkgbuildView().draw(ctx),
                 .flatpak_install => |choice| try flatpak_view.drawInstallChoices(ctx, choice.app, choice.selected),
             };
             if (overlay_child) |child| {
@@ -2126,12 +2270,15 @@ pub const Model = struct {
             return context;
         }
         if (self.overlay) |overlay| switch (overlay) {
-            .package => context.native_details = true,
+            .package => context.split_details = true,
             .aur => |pkg| {
                 context.mode = .details;
                 context.installable = true;
                 context.removable = pkg.Installed;
                 context.preview = true;
+                context.preview_button = self.aur_preview_button.focused;
+                context.split_details = true;
+                context.scrollable = self.aur_details_scroll.scroll.has_more_vertical or self.aur_details_scroll.scroll.top > 0 or self.aur_details_scroll.scroll.vertical_offset != 0;
                 return context;
             },
             .flatpak => |row| {
@@ -2146,6 +2293,8 @@ pub const Model = struct {
                 else
                     .preview_document;
                 context.scrollable = self.pkgbuild_document != null;
+                context.source_wrap = self.pkgbuild_wrap;
+                context.multiple_choices = if (self.operation_question) |q| q.value.question == .select_many else false;
                 return context;
             },
             .flatpak_install => {
@@ -2156,7 +2305,7 @@ pub const Model = struct {
         };
         switch (self.active) {
             .packages => {
-                context.mode = if (context.native_details) .details else if (self.package_list_active) .packages else .search;
+                context.mode = if (context.split_details) .details else if (self.package_list_active) .packages else .search;
                 context.installed_only = self.installed_only;
                 context.selected_count = self.selected_packages.items.len;
                 for (self.selected_packages.items) |name| for (self.packages) |pkg| {
@@ -2167,12 +2316,16 @@ pub const Model = struct {
                 };
                 context.installable = !self.loading and !self.load_failed and (self.selectedPackage() != null or context.selected_count > 0);
                 context.removable = context.installable and if (context.selected_count > 0) context.selected_installed > 0 else if (self.selectedPackage()) |pkg| pkg.Installed else false;
-                context.scrollable = context.native_details and (self.package_details_scroll.scroll.has_more_vertical or
+                context.scrollable = context.split_details and (self.package_details_scroll.scroll.has_more_vertical or
                     self.package_details_scroll.scroll.top > 0 or self.package_details_scroll.scroll.vertical_offset != 0);
             },
             .aur => {
                 context.mode = .aur;
                 context.installed_only = self.aur_installed_only;
+                context.browsing_list = self.aur_list_active;
+                context.installable = self.aur_list_active and self.selectedAur() != null;
+                context.removable = context.installable and self.selectedAur().?.Installed;
+                context.preview = context.installable;
             },
             .flatpak => {
                 context.mode = .flatpak;
@@ -2279,6 +2432,29 @@ pub const Model = struct {
     }
 
     // -- list rows ---------------------------------------------------------
+
+    fn selectedAur(self: *const Model) ?*const AurPackage {
+        if (self.aur_job != null or self.aur_list.cursor >= self.aur_filtered.items.len) return null;
+        return self.aur_filtered.items[self.aur_list.cursor];
+    }
+
+    fn onAurPreviewClick(ptr: ?*anyopaque, ctx: *vxfw.EventContext) anyerror!void {
+        const self: *Model = @ptrCast(@alignCast(ptr.?));
+        if (self.selectedAur()) |pkg| try self.openPkgbuild(ctx, pkg.Name);
+        ctx.consumeAndRedraw();
+    }
+
+    fn buildAurDetails(ptr: *const anyopaque, index: usize, _: usize) ?vxfw.Widget {
+        if (index > 1) return null;
+        const self: *const Model = @ptrCast(@alignCast(ptr));
+        const pkg = self.selectedAur() orelse return null;
+        if (index == 1) {
+            var button_widget = @constCast(&self.aur_preview_button).widget();
+            button_widget.drawFn = aur_view.drawPreviewButton;
+            return button_widget;
+        }
+        return .{ .userdata = @constCast(pkg), .drawFn = aur_view.drawDetails };
+    }
 
     fn selectedPackage(self: *const Model) ?*const Package {
         if (self.list_view.cursor >= self.filtered.items.len) return null;
@@ -2434,6 +2610,7 @@ test "tab switching requests focus on a widget in the active page" {
     var model: Model = undefined;
     model.active = .packages;
     model.help_open = false;
+    model.aur_list_active = false;
     model.overlay = null;
     model.flatpak_available = false;
     model.settings = .{};
@@ -2749,6 +2926,7 @@ test "operation PKGBUILD review owns each revision and returns to progress" {
     prompt.* = .{
         .name = try std.testing.allocator.dupe(u8, "demo"),
         .backend = .aur,
+        .action = .upgrade,
         .password = .empty,
         .state = .running,
     };
@@ -2760,6 +2938,25 @@ test "operation PKGBUILD review owns each revision and returns to progress" {
     try std.testing.expect(model.overlay.? == .pkgbuild);
     try std.testing.expect(model.pkgbuildView().review);
     try std.testing.expectEqual(pkgbuild_view.Action.approve, model.pkgbuildView().handleKey(.{ .codepoint = 'y' }).?);
+    vxfw.DrawContext.init(.unicode);
+    for ([_]Tab{ .aur, .upgrade }) |tab| {
+        model.active = tab;
+        for ([_]vxfw.Size{ .{ .width = 100, .height = 30 }, .{ .width = 40, .height = 12 } }) |size| {
+            var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+            defer arena.deinit();
+            const surface = try model.widget().draw(.{ .arena = arena.allocator(), .min = .{}, .max = .{ .width = size.width, .height = size.height }, .cell_size = .{ .width = 10, .height = 20 } });
+            var bottom_panel = false;
+            for (surface.children) |child| {
+                try std.testing.expectEqual(@as(u8, 0), child.z_index);
+                if (child.surface.size.width == size.width and child.surface.size.height > 1 and child.origin.row > 3) {
+                    bottom_panel = true;
+                    try std.testing.expectEqual(@as(i17, size.height - 1), child.origin.row + child.surface.size.height);
+                }
+            }
+            try std.testing.expectEqual(size.height >= 20, bottom_panel);
+            try std.testing.expectEqual(commands.Mode.review, model.commandContext().mode);
+        }
+    }
     const text = try std.mem.join(std.testing.allocator, "\n", model.pkgbuild_document.?.lines);
     defer std.testing.allocator.free(text);
     try std.testing.expect(std.mem.indexOf(u8, text, "pkgver=1") != null);
@@ -3694,4 +3891,137 @@ test "clear selection includes filtered packages and preserves search and cursor
     commands.bindings.clear_selection = .{ .codepoint = 'k', .mods = .{ .ctrl = true } };
     try Model.typeErasedCaptureHandler(model, &ctx, .{ .key_press = .{ .codepoint = 'k', .mods = .{ .ctrl = true } } });
     try std.testing.expectEqual(@as(usize, 0), model.selected_packages.items.len);
+}
+
+test "AUR preview replaces the details pane and preserves search and selection" {
+    vxfw.DrawContext.init(.unicode);
+    const model = try Model.init(std.testing.allocator);
+    defer model.deinit();
+    model.active = .aur;
+    model.settings.aur_enabled = true;
+    const packages = [_]AurPackage{ .{ .Name = "first" }, .{ .Name = "second" } };
+    model.aur_packages = &packages;
+    model.aur_query = try std.testing.allocator.dupe(u8, "query");
+    try model.aur_field.buf.insertSliceAtCursor("query");
+    try model.rebuildAurFilter();
+    model.aur_list.jumpToItem(1);
+    model.aur_list_active = true;
+    model.aur_details_cursor = 1;
+    model.aur_details_scroll.scroll.vertical_offset = -2;
+    model.pkgbuild_name = try std.testing.allocator.dupe(u8, "second");
+    model.pkgbuild_document = try pkgbuild_view.Document.init(std.testing.allocator, &.{.{ .Name = "second", .PkgBuild = "pkgname=second\npkgver=1\nbuild() {\n  echo \"hello\"\n}" }});
+    model.pkgbuild_scroll.item_count = @intCast(model.pkgbuild_document.?.lines.len);
+    model.overlay = .pkgbuild;
+    for ([_]vxfw.Size{ .{ .width = 80, .height = 24 }, .{ .width = 120, .height = 40 }, .{ .width = 40, .height = 12 } }) |size| {
+        var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+        defer arena.deinit();
+        const surface = try model.widget().draw(.{
+            .arena = arena.allocator(),
+            .min = .{},
+            .max = .{ .width = size.width, .height = size.height },
+            .cell_size = .{ .width = 10, .height = 20 },
+        });
+        var preview_found = false;
+        for (surface.children) |child| {
+            try std.testing.expectEqual(@as(u8, 0), child.z_index);
+            if (child.surface.children.len > 0 and child.surface.children[0].surface.widget.eql(model.pkgbuild_scroll.widget())) {
+                preview_found = true;
+                try std.testing.expectEqual(size.width >= 64, child.origin.col > 0);
+            }
+        }
+        try std.testing.expect(preview_found);
+        try std.testing.expect(model.aur_job == null); // Drawing never fetches the catalog.
+        try std.testing.expectEqual(@as(i17, -2), model.aur_details_scroll.scroll.vertical_offset);
+    }
+    var events: vxfw.EventContext = .{ .io = undefined, .alloc = std.testing.allocator, .cmds = .empty };
+    defer events.cmds.deinit(std.testing.allocator);
+    try Model.typeErasedCaptureHandler(model, &events, .{ .key_press = .{ .codepoint = 'y' } });
+    try std.testing.expect(model.overlay.? == .pkgbuild);
+    try std.testing.expect(model.operation_question == null);
+    try std.testing.expect(model.pkgbuild_wrap);
+    try Model.typeErasedCaptureHandler(model, &events, .{ .key_press = commands.bindings.toggle_wrap });
+    try std.testing.expect(!model.pkgbuild_wrap);
+    try Model.typeErasedCaptureHandler(model, &events, .{ .key_press = commands.bindings.toggle_wrap });
+    try std.testing.expect(model.pkgbuild_wrap);
+    try Model.typeErasedCaptureHandler(model, &events, .{ .key_press = .{ .codepoint = 'q' } });
+    try std.testing.expectEqualStrings("second", model.overlay.?.aur.Name);
+    try std.testing.expectEqual(@as(u32, 1), model.aur_list.cursor);
+    try std.testing.expectEqualStrings("query", model.aur_query);
+    try std.testing.expectEqual(@as(i17, -2), model.aur_details_scroll.scroll.vertical_offset);
+    try Model.typeErasedCaptureHandler(model, &events, .{ .key_press = .{ .codepoint = vaxis.Key.left } });
+    try std.testing.expect(model.overlay == null);
+    try std.testing.expect(model.aur_list_active);
+}
+
+test "AUR details button is keyboard accessible and opens the selected preview" {
+    vxfw.DrawContext.init(.unicode);
+    const model = try Model.init(std.testing.allocator);
+    defer model.deinit();
+    model.active = .aur;
+    const packages = [_]AurPackage{.{ .Name = "demo", .Description = "A wrapped description", .Version = "1" }};
+    model.aur_packages = &packages;
+    try model.rebuildAurFilter();
+    model.overlay = .{ .aur = &packages[0] };
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const draw_ctx: vxfw.DrawContext = .{ .arena = arena.allocator(), .min = .{ .width = 40 }, .max = .{ .width = 40, .height = null }, .cell_size = .{ .width = 10, .height = 20 } };
+    const details = try Model.buildAurDetails(model, 0, 0).?.draw(draw_ctx);
+    try std.testing.expectEqual(@as(u16, 40), details.size.width);
+    const button = try Model.buildAurDetails(model, 1, 0).?.draw(draw_ctx);
+    try std.testing.expectEqual(@as(u16, 1), button.size.height);
+    try std.testing.expectEqual(@as(u16, @intCast(draw_ctx.stringWidth(model.aur_preview_button.label))), button.size.width);
+    var ctx: vxfw.EventContext = .{ .io = undefined, .alloc = std.testing.allocator, .cmds = .empty };
+    defer ctx.cmds.deinit(std.testing.allocator);
+    model.aur_details_scroll.scroll.has_more_vertical = false;
+    try Model.typeErasedCaptureHandler(model, &ctx, .{ .key_press = commands.bindings.next });
+    try std.testing.expect(model.aur_preview_button.focused);
+    try std.testing.expect(model.commandContext().preview_button);
+    try Model.typeErasedCaptureHandler(model, &ctx, .{ .key_press = commands.bindings.previous });
+    try std.testing.expect(!model.aur_preview_button.focused);
+    try Model.typeErasedCaptureHandler(model, &ctx, .{ .key_press = commands.bindings.next });
+    // A pending fetch prevents this interaction test from starting a subprocess.
+    const pending = try std.testing.allocator.create(PkgbuildJob);
+    pending.* = .{ .name = try std.testing.allocator.dupe(u8, "demo") };
+    model.pkgbuild_job = pending;
+    try Model.typeErasedCaptureHandler(model, &ctx, .{ .key_press = commands.bindings.confirm });
+    try std.testing.expect(model.overlay.? == .pkgbuild);
+    try std.testing.expectEqualStrings("demo", model.pkgbuild_name);
+}
+
+test "dependency checkboxes navigate toggle and submit actual CLI indices" {
+    vxfw.DrawContext.init(.unicode);
+    const model = try Model.init(std.testing.allocator);
+    defer model.deinit();
+    const prompt = try std.testing.allocator.create(SudoPrompt);
+    prompt.* = .{ .name = try std.testing.allocator.dupe(u8, "demo"), .backend = .aur, .password = .empty, .state = .running };
+    model.overlay = .{ .sudo = prompt };
+    try model.showOperationQuestion(try shelly_operation.decodeJson(std.testing.allocator,
+        \\{"$kind":"q.optdeps","QuestionId":"101","QuestionText":"Optional dependencies","Options":[{"Index":0,"Name":"docs","IsSelected":true},{"Index":7,"Name":"plugin"}]}
+    ));
+    var ctx: vxfw.EventContext = .{ .io = undefined, .alloc = std.testing.allocator, .cmds = .empty };
+    defer ctx.cmds.deinit(std.testing.allocator);
+    try std.testing.expect(model.choiceOptions().?[0].is_selected);
+    try Model.typeErasedCaptureHandler(model, &ctx, .{ .key_press = commands.bindings.mark });
+    try std.testing.expect(!model.choiceOptions().?[0].is_selected);
+    var indices: std.ArrayList(usize) = .empty;
+    defer indices.deinit(std.testing.allocator);
+    try std.testing.expectEqual(@as(usize, 0), (try model.dependencyAnswer(&indices)).optional_dependencies.len);
+    try Model.typeErasedCaptureHandler(model, &ctx, .{ .key_press = commands.bindings.next });
+    try Model.typeErasedCaptureHandler(model, &ctx, .{ .key_press = commands.bindings.mark });
+    const answer = try model.dependencyAnswer(&indices);
+    try std.testing.expectEqualSlices(usize, &.{7}, answer.optional_dependencies);
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    _ = try model.widget().draw(.{ .arena = arena.allocator(), .min = .{}, .max = .{ .width = 80, .height = 24 }, .cell_size = .{ .width = 10, .height = 20 } });
+    try std.testing.expect(model.choiceOptions().?[1].is_selected);
+    model.finishOperationQuestion();
+    try model.showOperationQuestion(try shelly_operation.decodeJson(std.testing.allocator,
+        \\{"$kind":"q.provider","QuestionId":"102","QuestionText":"Choose provider","Options":[{"Index":3,"Name":"first"},{"Index":9,"Name":"second","IsSelected":true}]}
+    ));
+    try std.testing.expectEqual(@as(usize, 9), (try model.dependencyAnswer(&indices)).provider);
+    try Model.typeErasedCaptureHandler(model, &ctx, .{ .key_press = commands.bindings.previous });
+    try std.testing.expectEqual(@as(usize, 3), (try model.dependencyAnswer(&indices)).provider);
+    try std.testing.expect(model.choiceOptions().?[0].is_selected);
+    try std.testing.expect(!model.choiceOptions().?[1].is_selected);
+    try std.testing.expectEqual(@as(usize, 0), model.answer_input.items.len);
 }

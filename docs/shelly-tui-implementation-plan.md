@@ -170,7 +170,7 @@ The intended flow is browse → details → review/provider questions → execut
 ### Reserved operation panel (2026-10-30)
 
 - Confirmation, authentication, progress, and results now share `operation_view.zig`, below browsing instead of floating over it. The component emits actions; Model retains passwords/state and starts service operations. Long reviews/output scroll while controls stay visible.
-- Panel height fits wrapped content up to a limit, placing controls directly below output. Short terminals temporarily replace browsing; PKGBUILD reviews retain their dedicated view. Operation focus remains on a visible widget, and result dismissal restores browsing focus.
+- Panel height fits wrapped content up to a limit, placing controls directly below output. Short terminals temporarily replace browsing; PKGBUILD reviews use the page content above the operation panel. Operation focus remains on a visible widget, and result dismissal restores browsing focus.
 - Zig 0.17 build/test and 60 model/service/view tests pass. An isolated PTY test with fake commands covered masking, 80×24 → 40×12 → 80×24 resizing, progress/results, refresh, and clean exit. No real package mutations were run.
 
 ### Contextual help and footer (2026-10-30)
@@ -182,3 +182,19 @@ The intended flow is browse → details → review/provider questions → execut
 ### Clear package selection (2026-10-30)
 
 - Ctrl+U clears native selections while the package list is focused, including filtered-out entries. Search keeps Ctrl+U for text editing; detail/review panes keep their scrolling behavior. The live binding registry supplies help/footer hints.
+
+### AUR split pane and PKGBUILD highlighting (2026-10-30)
+
+- AUR browsing uses a search/results pane and details pane. P replaces details with a read-only PKGBUILD preview; Q returns to details and Left returns to the selected result. Narrow terminals use the content area. Remote search remains submit-based; Atoll catalog prefetch is deferred.
+- Preview and operation review share bounded Bash syntax highlighting, green additions/red removals, and distinct diff headers. Known CLI diff color wrappers are decoded; source files remain literal. Operation reviews use the AUR details pane or the current page content, above the reserved operation panel. Short terminals prioritize review controls.
+- Zig 0.17 build and 66 focused model/service/view tests pass, covering pane placement, selection restoration, source preservation, highlighting, and read-only versus approval behavior. No live package operations were run.
+
+- AUR details now share the native aligned, wrapping field renderer. A View PKGBUILD button follows the metadata: Down at the bottom selects it, Enter opens it, and P remains available. Zig 0.17 build and 50 focused tests pass; a fake-CLI PTY check verifies keyboard button activation.
+
+- PKGBUILD previews/reviews wrap by default. W toggles wrapping for the session; unwrapped mode retains horizontal scrolling. Continuations reserve the line-number gutter, preserve indentation and syntax/diff colors, and leave source unchanged. Zig 0.17 build, 50 focused tests, and a fake-CLI terminal wrap-toggle check pass.
+
+- Install/update CLI questions no longer open a floating review overlay. The operation panel remains below the review when space permits; approval and decline continue through the same CLI operation. Build and 48 focused model/view tests pass.
+
+- Transaction reviews group requested packages and dependency roles with counts, showing names, versions, and origins without code gutters or raw source/role fields. Unknown roles remain visible. Zig 0.17 build and 50 focused tests pass.
+
+- CLI dependency questions now use selectable checkboxes: arrows navigate, Space toggles optional dependencies, and Enter submits. Providers are single-choice; CLI defaults and actual option indices are preserved. Empty optional selections are valid. Zig 0.17 build and 52 focused tests pass, including repeated questions and nonconsecutive indices.

@@ -16,6 +16,7 @@ pub const Id = enum {
     select,
     mark,
     clear_selection,
+    toggle_wrap,
     install,
     remove,
     preview,
@@ -51,6 +52,7 @@ pub const Bindings = struct {
     search: vaxis.Key = .{ .codepoint = '/' },
     select: vaxis.Key = .{ .codepoint = vaxis.Key.enter },
     mark: vaxis.Key = .{ .codepoint = vaxis.Key.space },
+    toggle_wrap: vaxis.Key = .{ .codepoint = 'w' },
     clear_selection: vaxis.Key = .{ .codepoint = 'u', .mods = .{ .ctrl = true } },
     install: vaxis.Key = .{ .codepoint = 'i' },
     remove: vaxis.Key = .{ .codepoint = 'r' },
@@ -119,6 +121,8 @@ pub fn label(arena: std.mem.Allocator, id: Id) std.mem.Allocator.Error![]const u
 pub fn scrollKey(key: vaxis.Key) ?vaxis.Key {
     if (matches(key, .previous)) return .{ .codepoint = vaxis.Key.up };
     if (matches(key, .next)) return .{ .codepoint = vaxis.Key.down };
+    if (matches(key, .back)) return .{ .codepoint = vaxis.Key.left };
+    if (matches(key, .details)) return .{ .codepoint = vaxis.Key.right };
     if (matches(key, .page_up)) return .{ .codepoint = vaxis.Key.page_up };
     if (matches(key, .page_down)) return .{ .codepoint = vaxis.Key.page_down };
     if (matches(key, .half_page_up)) return .{ .codepoint = 'u', .mods = .{ .ctrl = true } };
@@ -266,12 +270,16 @@ pub fn scrollsOperation(key: vaxis.Key) bool {
 
 pub const Mode = enum { search, packages, details, aur, flatpak, updates, settings, authentication, confirmation, running, result, review, preview_document, answers, choice, help };
 pub const Context = struct {
+    source_wrap: bool = true,
+    multiple_choices: bool = false,
+    preview_button: bool = false,
     mode: Mode = .search,
     installed_only: bool = false,
+    browsing_list: bool = false,
     installable: bool = false,
     removable: bool = false,
     preview: bool = false,
-    native_details: bool = false,
+    split_details: bool = false,
     scrollable: bool = false,
     upgrade_system: bool = false,
     upgrade_aur: bool = false,
@@ -312,6 +320,7 @@ pub fn entries(arena: std.mem.Allocator, context: Context) std.mem.Allocator.Err
             try add(arena, &list, .filter, if (context.installed_only) "All" else "Installed", "Toggle all / installed packages; selection survives filtering");
         },
         .details => {
+            if (context.preview_button) try add(arena, &list, .confirm, "View PKGBUILD", "Activate the PKGBUILD preview button");
             if (context.scrollable) {
                 try add(arena, &list, .previous, "Scroll up", "Scroll package details up");
                 try add(arena, &list, .next, "Scroll down", "Scroll package details down");
@@ -319,11 +328,18 @@ pub fn entries(arena: std.mem.Allocator, context: Context) std.mem.Allocator.Err
             if (context.installable) try add(arena, &list, .install, "Install", "Install/reinstall selection, or the displayed package");
             if (context.removable) try add(arena, &list, .remove, "Remove", "Remove installed selections, or the displayed installed package");
             if (context.preview) try add(arena, &list, .preview, "PKGBUILD", "Preview the PKGBUILD and supplied related files");
-            if (context.native_details) try add(arena, &list, .back, "Packages", "Return to the selected package");
+            if (context.split_details) try add(arena, &list, .back, "Packages", "Return to the selected package");
             try add(arena, &list, .close, "Back", "Close details and return to browsing");
         },
         .aur, .flatpak => {
-            try add(arena, &list, .confirm, if (context.mode == .aur and !context.installed_only) "Search" else "Details", if (context.mode == .aur and !context.installed_only) "Submit the AUR search; Enter on a result opens details" else "Open details of the highlighted entry");
+            try add(arena, &list, .confirm, if (context.mode == .aur and !context.installed_only and !context.browsing_list) "Search" else "Details", if (context.mode == .aur and !context.installed_only and !context.browsing_list) "Submit the AUR search; Enter on an unchanged query opens details" else "Open details of the highlighted entry");
+            if (context.mode == .aur and context.browsing_list) {
+                if (context.installable) try add(arena, &list, .install, "Install", "Install/reinstall the highlighted AUR package");
+                if (context.removable) try add(arena, &list, .remove, "Remove", "Remove the highlighted installed AUR package");
+                if (context.preview) try add(arena, &list, .preview, "PKGBUILD", "Preview source in the details pane");
+                try add(arena, &list, .details, "Details", "Focus AUR package details");
+                try add(arena, &list, .search, "Search", "Return to editing the AUR query");
+            }
             try add(arena, &list, .previous, "Previous", "Previous result");
             try add(arena, &list, .next, "Next", "Next result");
             try add(arena, &list, .filter, if (context.installed_only) "All" else "Installed", "Toggle browsing / installed packages");
@@ -357,16 +373,25 @@ pub fn entries(arena: std.mem.Allocator, context: Context) std.mem.Allocator.Err
             try add(arena, &list, .close, "Close", "Dismiss the operation result");
         },
         .review => {
+            try add(arena, &list, .toggle_wrap, "Wrap", "Toggle source wrapping (enabled by default)");
             try add(arena, &list, .approve, "Approve", "Approve the current transaction or PKGBUILD review");
             try add(arena, &list, .decline, "Decline", "Decline the current review");
             try add(arena, &list, .close, "Decline", "Decline the current review (alternative)");
         },
         .preview_document => {
+            try add(arena, &list, .toggle_wrap, "Wrap", "Toggle source wrapping (enabled by default)");
+            if (!context.source_wrap) {
+                try add(arena, &list, .back, "Left", "Scroll source horizontally left");
+                try add(arena, &list, .details, "Right", "Scroll source horizontally right");
+            }
             try add(arena, &list, .refresh, "Retry", "Fetch the PKGBUILD preview again");
             try add(arena, &list, .close, "Back", "Return to package details");
         },
         .answers => {
-            try add(arena, &list, .confirm, "Answer", "Type the listed indices, then send the answer");
+            try add(arena, &list, .previous, "Previous", "Highlight the previous dependency");
+            try add(arena, &list, .next, "Next", "Highlight the next dependency");
+            if (context.multiple_choices) try add(arena, &list, .mark, "Toggle", "Check or uncheck an optional dependency");
+            try add(arena, &list, .confirm, "Submit", "Submit checked dependencies or the highlighted provider");
         },
         .choice => {
             try add(arena, &list, .previous, "Previous", "Previous choice");
@@ -379,7 +404,7 @@ pub fn entries(arena: std.mem.Allocator, context: Context) std.mem.Allocator.Err
     if (context.mode == .help or context.scrollable or context.mode == .review) {
         try add(arena, &list, .page_up, "Page up", "Scroll up by a page");
         try add(arena, &list, .page_down, "Page down", "Scroll down by a page");
-        if (context.mode != .details) {
+        if (context.mode != .details and context.mode != .answers) {
             try add(arena, &list, .previous, "Scroll up", "Scroll review/output up");
             try add(arena, &list, .next, "Scroll down", "Scroll review/output down");
         }
