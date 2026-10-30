@@ -1,6 +1,7 @@
 //! Private versioned protocol, shared only by the matching native Zig worker.
 //! stdin: u32-le JSON size, JSON, then unframed action stdin. stderr: 8-byte
 //! setup reports (stage, fatal, reserved, reserved, i32-le errno), closed on exec.
+
 const std = @import("std");
 
 pub const Network = enum { required, best_effort, allowed };
@@ -30,21 +31,6 @@ pub const Result = struct {
         return self.setup_failure == null and self.term == .exited and self.term.exited == 0;
     }
 };
+
 pub const maximum_request = 1024 * 1024;
-pub const c = @cImport({
-    @cUndef("_FORTIFY_SOURCE");
-    @cDefine("_FORTIFY_SOURCE", "0");
-    @cDefine("_GNU_SOURCE", "1");
-    @cInclude("unistd.h");
-    @cInclude("fcntl.h");
-    @cInclude("sys/socket.h");
-    @cInclude("sys/stat.h");
-    @cInclude("sys/syscall.h");
-    @cInclude("sys/ioctl.h");
-    @cInclude("net/if.h");
-    @cInclude("sched.h");
-    @cInclude("signal.h");
-    @cInclude("stdlib.h");
-    @cInclude("poll.h");
-    @cInclude("errno.h");
-});
+pub const c = @import("rlpm_c");

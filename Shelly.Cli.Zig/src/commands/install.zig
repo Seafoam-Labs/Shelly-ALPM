@@ -156,6 +156,10 @@ pub fn dispatch(
 ) !?u8 {
     if (!isInstallPath(invocation.command.path)) return null;
 
+    if (std.mem.eql(u8, invocation.command.path, standard_command_path) and
+        optionEnabled(invocation, "--upgrade") and optionEnabled(invocation, "--build-deps"))
+        return try reportValidationFailure(context, invocation, "Cannot combine --upgrade with --build-deps. Upgrade the system separately before installing build dependencies.");
+
     if (std.mem.eql(u8, invocation.command.path, aur_command_path) and optionEnabled(invocation, "--isolated")) {
         if (optionEnabled(invocation, "--chroot"))
             return try reportValidationFailure(context, invocation, "Choose either --isolated or --chroot.");
@@ -281,9 +285,9 @@ fn executeWithRunner(
 ) anyerror!u8 {
     if (requestsStandardUpgrade(invocation) and !invocation.globals.no_confirm) {
         const confirmed = if (invocation.globals.ui_mode)
-            try confirmStandardUpgradeUi(context)
+            try confirmStandardUpgradeUi(context, invocation.positionals)
         else
-            try confirmStandardUpgrade(context);
+            try confirmStandardUpgrade(context, invocation.positionals);
         if (!confirmed) return 0;
     }
 
@@ -301,7 +305,7 @@ fn requestsStandardUpgrade(invocation: *const parser.Invocation) bool {
         dependencyTargetCount(invocation) > 0;
 }
 
-fn confirmStandardUpgrade(context: *runtime.RuntimeContext) !bool {
+fn confirmStandardUpgrade(context: *runtime.RuntimeContext, targets: []const []const u8) !bool {
     var result = list_updates.collectUpdates(context, .standard, .{}) catch |err| {
         try context.stderr.print("Could not prepare the full standard-package upgrade before installation. {0s}\n\nTechnical details: {1s}\n", .{ diagnostics.cause(err), @errorName(err) });
         try context.stderr.flush();
@@ -313,12 +317,13 @@ fn confirmStandardUpgrade(context: *runtime.RuntimeContext) !bool {
         .standard => |standard| standard.items,
         else => unreachable,
     };
-    return confirmStandardUpgradeWithUpdates(context, updates);
+    return confirmStandardUpgradeWithUpdates(context, updates, targets);
 }
 
 fn confirmStandardUpgradeWithUpdates(
     context: *runtime.RuntimeContext,
     updates: []const list_updates.StandardUpdate,
+    targets: []const []const u8,
 ) !bool {
     if (updates.len == 0) {
         try context.stdout.writeAll(
@@ -328,14 +333,14 @@ fn confirmStandardUpgradeWithUpdates(
         return true;
     }
 
-    try writeStandardUpgradePreview(context.stdout, updates);
+    try writeStandardUpgradePreview(context.stdout, updates, targets);
     const reader = context.stdin orelse {
         try context.stdout.writeAll("Operation cancelled because confirmation input is unavailable. Run the command in an interactive terminal to review and confirm the operation.\n");
         try context.stdout.flush();
         return false;
     };
     while (true) {
-        try context.stdout.writeAll("Proceed with the standard system upgrade? (Y/n) ");
+        try context.stdout.writeAll("Proceed with the system upgrade and requested packages? (Y/n) ");
         try context.stdout.flush();
         const input = (try reader.takeDelimiter('\n')) orelse {
             try context.stdout.writeAll("\nOperation cancelled.\n");
@@ -357,7 +362,7 @@ fn confirmStandardUpgradeWithUpdates(
     }
 }
 
-fn confirmStandardUpgradeUi(context: *runtime.RuntimeContext) !bool {
+fn confirmStandardUpgradeUi(context: *runtime.RuntimeContext, targets: []const []const u8) !bool {
     var result = list_updates.collectUpdates(context, .standard, .{}) catch |err| {
         const message = try std.fmt.allocPrint(
             context.allocator,
@@ -375,12 +380,13 @@ fn confirmStandardUpgradeUi(context: *runtime.RuntimeContext) !bool {
         .standard => |standard| standard.items,
         else => unreachable,
     };
-    return confirmStandardUpgradeUiWithUpdates(context, updates);
+    return confirmStandardUpgradeUiWithUpdates(context, updates, targets);
 }
 
 fn confirmStandardUpgradeUiWithUpdates(
     context: *runtime.RuntimeContext,
     updates: []const list_updates.StandardUpdate,
+    targets: []const []const u8,
 ) !bool {
     if (updates.len == 0) {
         try output.writeInfoFrame(
@@ -393,7 +399,7 @@ fn confirmStandardUpgradeUiWithUpdates(
 
     var preview = std.Io.Writer.Allocating.init(context.allocator);
     defer preview.deinit();
-    try writeStandardUpgradePreview(&preview.writer, updates);
+    try writeStandardUpgradePreview(&preview.writer, updates, targets);
     try output.writeInfoFrame(context, preview.writer.buffered());
 
     var operation_context = PackageManager.OperationContext.init(context.allocator, context.io);
@@ -412,7 +418,7 @@ fn confirmStandardUpgradeUiWithUpdates(
     });
     var answer = try operation.ask(.{
         .kind = .confirmation,
-        .prompt = "Proceed with the standard system upgrade?",
+        .prompt = "Proceed with the system upgrade and requested packages?",
         .default_response = .accepted,
     });
     defer answer.deinit(context.allocator);
@@ -426,10 +432,11 @@ fn confirmStandardUpgradeUiWithUpdates(
 fn writeStandardUpgradePreview(
     writer: *std.Io.Writer,
     updates: []const list_updates.StandardUpdate,
+    targets: []const []const u8,
 ) !void {
     try writer.print(
-        "WARNING: --upgrade will perform a full standard system upgrade before installing the " ++
-            "requested packages.\n\nThe following {d} standard package{s} will be upgraded:\n",
+        "--upgrade will resolve the full standard system upgrade and requested repository packages " ++
+            "in one transaction.\n\nThe following {d} automatic upgrade candidate{s} were found:\n",
         .{ updates.len, if (updates.len == 1) "" else "s" },
     );
     for (updates) |update| {
@@ -442,6 +449,10 @@ fn writeStandardUpgradePreview(
                 update.new_version,
             },
         );
+    }
+    try writer.writeAll("Requested packages (resolved together with the upgrade):\n");
+    for (targets) |target| {
+        if (classifyPackageSource(target) == .repository) try writer.print("  {s}\n", .{target});
     }
 }
 
@@ -554,18 +565,23 @@ fn installRepositoryPackages(
     manager.setOperationContext(operation_context);
     defer manager.setOperationContext(null);
 
+    try installRepositoryPackagesWithManager(context.allocator, invocation, package_names, manager);
+}
+
+fn installRepositoryPackagesWithManager(
+    allocator: std.mem.Allocator,
+    invocation: *const parser.Invocation,
+    package_names: []const []const u8,
+    manager: anytype,
+) !void {
+    const names = try sentinelStrings(allocator, package_names);
+    defer freeSentinelStrings(allocator, names);
     if (optionEnabled(invocation, "--upgrade")) {
         try manager.sync(false);
-        const updates = try manager.get_updates_available();
-        defer PackageManager.Manager.OwnedPackageWithUpdate.deinitSlice(context.allocator, updates);
-        if (updates.len > 0) {
-            var restart_report = try manager.sync_system_update(.{});
-            restart_report.deinit();
-        }
+        var restart_report = try manager.sync_system_update_with_packages(names, repositoryInstallFlags(invocation));
+        defer restart_report.deinit();
+        return;
     }
-
-    const names = try sentinelStrings(context.allocator, package_names);
-    defer freeSentinelStrings(context.allocator, names);
     if (optionEnabled(invocation, "--build-deps")) {
         try manager.install_dependencies_only(
             names[0],
@@ -927,11 +943,11 @@ fn runFlatpak(
     const install_id = if (eol_replacement) |replacement| replacement.id else selected_id;
     const install_branch = if (eol_replacement) |replacement| replacement.branch else requested_branch;
 
-    const id_z = try context.allocator.dupeZ(u8, install_id);
+    const id_z = try context.allocator.dupeSentinel(u8, install_id, 0);
     defer context.allocator.free(id_z);
-    const remote_z = try context.allocator.dupeZ(u8, selected_remote);
+    const remote_z = try context.allocator.dupeSentinel(u8, selected_remote, 0);
     defer context.allocator.free(remote_z);
-    const branch_z = try context.allocator.dupeZ(u8, install_branch);
+    const branch_z = try context.allocator.dupeSentinel(u8, install_branch, 0);
     defer context.allocator.free(branch_z);
     if (!try manager.install_flatpak(
         id_z,
@@ -987,7 +1003,7 @@ fn runFlatpakFile(
     defer context.allocator.free(current_directory);
     const absolute_path = try std.fs.path.resolve(context.allocator, &.{ current_directory, location });
     defer context.allocator.free(absolute_path);
-    const path_z = try context.allocator.dupeZ(u8, absolute_path);
+    const path_z = try context.allocator.dupeSentinel(u8, absolute_path, 0);
     defer context.allocator.free(path_z);
 
     var manager = PackageManager.FlatpakManager{ .allocator = context.allocator, .io = context.io };
@@ -1206,7 +1222,7 @@ fn sentinelStrings(allocator: std.mem.Allocator, values: []const []const u8) ![]
         allocator.free(result);
     }
     for (values, result) |value, *destination| {
-        destination.* = try allocator.dupeZ(u8, value);
+        destination.* = try allocator.dupeSentinel(u8, value, 0);
         initialized += 1;
     }
     return result;
@@ -1756,8 +1772,10 @@ test "standard install upgrade requires confirmation unless disabled" {
         &.{ "install", "standard", "--upgrade", "demo" },
     );
     try std.testing.expect(requestsStandardUpgrade(&outcome.dispatch));
-    try std.testing.expect(!try confirmStandardUpgradeWithUpdates(&tc.context, &updates));
+    try std.testing.expect(!try confirmStandardUpgradeWithUpdates(&tc.context, &updates, &.{"extra-testing/filezilla"}));
     try std.testing.expect(!capture.called);
+    try std.testing.expect(std.mem.indexOf(u8, tc.stdout.writer.buffered(), "extra-testing/filezilla") != null);
+    try std.testing.expect(std.mem.indexOf(u8, tc.stdout.writer.buffered(), "in one transaction") != null);
     try std.testing.expect(std.mem.indexOf(
         u8,
         tc.stdout.writer.buffered(),
@@ -1766,14 +1784,14 @@ test "standard install upgrade requires confirmation unless disabled" {
     try std.testing.expect(std.mem.indexOf(
         u8,
         tc.stdout.writer.buffered(),
-        "Proceed with the standard system upgrade? (Y/n)",
+        "Proceed with the system upgrade and requested packages? (Y/n)",
     ) != null);
     try std.testing.expect(std.mem.indexOf(u8, tc.stdout.writer.buffered(), "Operation cancelled.") != null);
 
     tc.stdout.writer.end = 0;
     var accepted_input = std.Io.Reader.fixed("\n");
     tc.context.stdin = &accepted_input;
-    try std.testing.expect(try confirmStandardUpgradeWithUpdates(&tc.context, &updates));
+    try std.testing.expect(try confirmStandardUpgradeWithUpdates(&tc.context, &updates, &.{"extra-testing/filezilla"}));
 
     tc.context.stdin = null;
     outcome = try parser.parse(
@@ -1807,7 +1825,7 @@ test "standard install upgrade CLI skips confirmation when packages are current"
         .stderr = &stderr.writer,
     };
 
-    try std.testing.expect(try confirmStandardUpgradeWithUpdates(&context, &.{}));
+    try std.testing.expect(try confirmStandardUpgradeWithUpdates(&context, &.{}, &.{"demo"}));
     try std.testing.expect(std.mem.indexOf(
         u8,
         stdout.writer.buffered(),
@@ -1816,7 +1834,7 @@ test "standard install upgrade CLI skips confirmation when packages are current"
     try std.testing.expect(std.mem.indexOf(
         u8,
         stdout.writer.buffered(),
-        "Proceed with the standard system upgrade?",
+        "Proceed with the system upgrade and requested packages?",
     ) == null);
 }
 
@@ -1873,7 +1891,7 @@ test "standard install upgrade UI previews available updates before confirmation
         },
     };
 
-    try std.testing.expect(try confirmStandardUpgradeUiWithUpdates(&tc.context, &updates));
+    try std.testing.expect(try confirmStandardUpgradeUiWithUpdates(&tc.context, &updates, &.{"extra-testing/filezilla"}));
     const rendered = tc.stdout.writer.buffered();
     var frame_iterator = std.mem.splitSequence(u8, rendered, "[JSON]");
     _ = frame_iterator.next();
@@ -1886,13 +1904,15 @@ test "standard install upgrade UI previews available updates before confirmation
         const decoded = try tc.arena.allocator().alloc(u8, decoded_size);
         try std.base64.standard.Decoder.decode(decoded, payload);
         if (std.mem.indexOf(u8, decoded, "core/linux: 6.12.1-1 -> 6.12.2-1") != null and
-            std.mem.indexOf(u8, decoded, "extra/firefox: 127.0-1 -> 128.0-1") != null)
+            std.mem.indexOf(u8, decoded, "extra/firefox: 127.0-1 -> 128.0-1") != null and
+            std.mem.indexOf(u8, decoded, "extra-testing/filezilla") != null and
+            std.mem.indexOf(u8, decoded, "in one transaction") != null)
         {
             found_preview = true;
         }
         if (std.mem.indexOf(u8, decoded, "\"$kind\":\"q.yesno\"") == null) continue;
         found_confirmation = true;
-        try std.testing.expect(std.mem.indexOf(u8, decoded, "Proceed with the standard system upgrade?") != null);
+        try std.testing.expect(std.mem.indexOf(u8, decoded, "Proceed with the system upgrade and requested packages?") != null);
     }
     try std.testing.expect(found_preview);
     try std.testing.expect(found_confirmation);
@@ -1909,7 +1929,7 @@ test "standard install upgrade UI previews available updates before confirmation
     );
     var decline_input = std.Io.Reader.fixed(decline_frame);
     tc.context.stdin = &decline_input;
-    try std.testing.expect(!try confirmStandardUpgradeUiWithUpdates(&tc.context, &updates));
+    try std.testing.expect(!try confirmStandardUpgradeUiWithUpdates(&tc.context, &updates, &.{"extra-testing/filezilla"}));
 }
 
 test "standard install upgrade UI skips confirmation when packages are current" {
@@ -1927,7 +1947,7 @@ test "standard install upgrade UI skips confirmation when packages are current" 
         .stderr = &stderr.writer,
     };
 
-    try std.testing.expect(try confirmStandardUpgradeUiWithUpdates(&context, &.{}));
+    try std.testing.expect(try confirmStandardUpgradeUiWithUpdates(&context, &.{}, &.{"demo"}));
 
     var frame_iterator = std.mem.splitSequence(u8, stdout.writer.buffered(), "[JSON]");
     _ = frame_iterator.next();
@@ -2347,4 +2367,58 @@ test "install preserves actionable lock errors once in terminal and UI output" {
         try std.testing.expect(std.mem.indexOf(u8, rendered, "TransInitFailed") != null);
         try std.testing.expect(std.mem.indexOf(u8, rendered, "unexpected error") == null);
     }
+}
+
+test "standard install upgrade forwards targets and flags to one combined operation" {
+    var tc: test_support.TestContext = .{};
+    tc.init();
+    defer tc.deinit();
+    const manifest = try spec.Manifest.load(tc.arena.allocator());
+    var outcome = try parser.parse(tc.arena.allocator(), &manifest, &.{
+        "install",                 "standard",                   "--upgrade", "--needed", "--no-deps", "--no-confirm",
+        "extra-testing/filezilla", "extra-testing/libfilezilla",
+    });
+    const Manager = struct {
+        synced: bool = false,
+        upgrades: usize = 0,
+        fail: bool,
+        pub fn sync(self: *@This(), force: bool) !void {
+            try std.testing.expect(!force);
+            try std.testing.expect(!self.synced);
+            self.synced = true;
+        }
+        pub fn sync_system_update_with_packages(self: *@This(), targets: [][:0]const u8, flags: PackageManager.Manager.TransFlag) !PackageManager.Manager.RestartReport {
+            try std.testing.expect(self.synced);
+            try std.testing.expectEqual(@as(usize, 2), targets.len);
+            try std.testing.expectEqualStrings("extra-testing/filezilla", targets[0]);
+            try std.testing.expectEqualStrings("extra-testing/libfilezilla", targets[1]);
+            try std.testing.expect(flags.needed);
+            try std.testing.expect(flags.nodeps);
+            self.upgrades += 1;
+            if (self.fail) return error.PrepareFailed;
+            return PackageManager.Manager.RestartReport.empty(std.testing.allocator);
+        }
+        pub fn install_packages(_: *@This(), _: [][:0]const u8, _: PackageManager.Manager.TransFlag) !void {
+            return error.UnexpectedSeparateInstall;
+        }
+        pub fn install_dependencies_only(_: *@This(), _: [:0]const u8, _: bool, _: PackageManager.Manager.TransFlag) !void {
+            return error.UnexpectedDependencyInstall;
+        }
+    };
+    for ([_]bool{ false, true }) |fail| {
+        var manager: Manager = .{ .fail = fail };
+        const result = installRepositoryPackagesWithManager(tc.arena.allocator(), &outcome.dispatch, outcome.dispatch.positionals, &manager);
+        if (fail) try std.testing.expectError(error.PrepareFailed, result) else try result;
+        try std.testing.expectEqual(@as(usize, 1), manager.upgrades);
+    }
+}
+
+test "standard install upgrade rejects dependency-only mode before elevation" {
+    var tc: test_support.TestContext = .{};
+    tc.init();
+    defer tc.deinit();
+    const manifest = try spec.Manifest.load(tc.arena.allocator());
+    var outcome = try parser.parse(tc.arena.allocator(), &manifest, &.{ "install", "standard", "--upgrade", "--build-deps", "demo" });
+    try std.testing.expectEqual(@as(?u8, 1), try dispatch(&tc.context, &outcome.dispatch));
+    try std.testing.expect(std.mem.indexOf(u8, tc.stdout.writer.buffered(), "Cannot combine --upgrade with --build-deps") != null);
 }

@@ -248,7 +248,7 @@ fn runFlatpak(context: *runtime.RuntimeContext, target: []const u8, kill: bool) 
     var manager = PackageManager.FlatpakManager{ .allocator = context.allocator, .io = context.io };
     defer manager.deinit();
     if (!kill) {
-        const target_z = try context.allocator.dupeZ(u8, target);
+        const target_z = try context.allocator.dupeSentinel(u8, target, 0);
         defer context.allocator.free(target_z);
         return manager.launch_flatpak(target_z);
     }

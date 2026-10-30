@@ -1,6 +1,8 @@
 //! Owner-owned, address-stable transaction. Borrow this pointer until release.
 //! Fields are implementation state; use methods and treat plan() as immutable.
+
 const std = @import("std");
+const trackReturnError = @import("diagnostics").captureError;
 const Owner = @import("Owner.zig");
 const Package = @import("Package.zig");
 const Ref = @import("PackageRef.zig");
@@ -68,8 +70,10 @@ pub fn actions(self: *const Transaction) ?*const TransactionActions {
 /// Used by the ordered mutation executor.
 pub fn startActions(self: *Transaction) !*TransactionActions {
     if (self.owned_actions != null) return error.InvalidActionState;
+
     self.owned_actions = try TransactionActions.init(self);
     try self.owned_actions.?.begin();
+
     return &self.owned_actions.?;
 }
 
@@ -78,10 +82,12 @@ pub fn result(self: *const Transaction) Result {
         m.warnings.items.len
     else
         0);
+
     if (self.actions()) |value|
         for (value.outcomes.items) |item| {
             if (item.cause != null or item.warning) warnings += 1;
         };
+
     return .{
         .state = self.state,
         .cause = self.cause,
@@ -103,19 +109,24 @@ pub fn manifest(self: *const Transaction) ?*const ExecutionManifest {
 pub fn preflight(self: *Transaction) !void {
     try self.begin(.prepared);
     defer self.owner.busy = false;
+
     if (self.flags.download_only) return self.owner.transactionFailure(error.InvalidTransactionState);
+
     self.preflightInternal() catch |err| return self.failed(err);
 }
 
 fn preflightInternal(self: *Transaction) !void {
     try self.checkSnapshot();
+
     if (self.owned_manifest != null) return self.revalidateInternal();
+
     try self.downloadInternal();
     self.owned_manifest = try ExecutionManifest.init(
         self.owner.allocator,
         self.owner.configuration.root,
         self.owner.configuration.database_path,
     );
+
     try Preflight.populate(self, &self.owned_manifest.?);
     try self.checkSnapshot();
     try self.owned_manifest.?.revalidate(
@@ -123,6 +134,7 @@ fn preflightInternal(self: *Transaction) !void {
         self.owner.configuration.database_path,
         self.owner.configuration.check_space,
     );
+
     try self.owner.checkCancelled();
 }
 
@@ -136,6 +148,7 @@ pub fn revalidatePreflight(self: *Transaction) !void {
 
 fn revalidateInternal(self: *Transaction) !void {
     try self.checkSnapshot();
+
     const value = if (self.owned_manifest) |*value| value else return error.IncompletePreflight;
     try Preflight.reverify(self, value);
     try value.revalidate(
@@ -143,12 +156,14 @@ fn revalidateInternal(self: *Transaction) !void {
         self.owner.configuration.database_path,
         self.owner.configuration.check_space,
     );
+
     try self.owner.checkCancelled();
 }
 
 fn begin(self: *Transaction, expected: State) !void {
     try self.owner.beginTransactionOperation(self);
     errdefer self.owner.busy = false;
+
     if (self.state != expected) return self.owner.transactionFailure(error.InvalidTransactionState);
 }
 
@@ -165,46 +180,64 @@ fn mutable(self: *Transaction) !void {
 /// Frontend name/relation syntax is resolved during prepare. Exact repeated
 /// text is rejected; package identity duplicates are also checked by Resolver.
 pub fn addTarget(self: *Transaction, text: []const u8) !void {
-    try self.mutable();
+    var returned_error: ?anyerror = null;
+    try trackReturnError(self.mutable(), &returned_error);
     defer self.owner.busy = false;
-    errdefer |err| self.recordFailure(err);
-    if (text.len == 0 or std.mem.indexOfScalar(u8, text, 0) != null) return error.InvalidOption;
+    errdefer {
+        const err = returned_error.?;
+        self.recordFailure(err);
+    }
+
+    if (text.len == 0 or std.mem.indexOfScalar(u8, text, 0) != null) return trackReturnError(error.InvalidOption, &returned_error);
     for (self.targets.items) |target|
         if (target == .text and std.mem.eql(u8, target.text, text))
-            return error.DuplicateTarget;
-    const owned = try self.storage.allocator().dupe(u8, text);
-    try self.targets.append(self.owner.allocator, .{ .text = owned });
+            return trackReturnError(error.DuplicateTarget, &returned_error);
+
+    const owned = try trackReturnError(self.storage.allocator().dupe(u8, text), &returned_error);
+    try trackReturnError(self.targets.append(self.owner.allocator, .{ .text = owned }), &returned_error);
 }
 
 /// Adopt exact existing paths without extracting over them. Must precede prepare.
 pub fn addMigration(self: *Transaction, request: Migration.Request) !void {
-    try self.mutable();
+    var returned_error: ?anyerror = null;
+    try trackReturnError(self.mutable(), &returned_error);
     defer self.owner.busy = false;
-    errdefer |err| self.recordFailure(err);
-    if (self.flags.database_only or self.flags.download_only) return error.InvalidMigrationFlags;
-    try Migration.validatePath(request.path);
-    if (request.package.len == 0) return error.InvalidMigrationTarget;
+    errdefer {
+        const err = returned_error.?;
+        self.recordFailure(err);
+    }
+
+    if (self.flags.database_only or self.flags.download_only) return trackReturnError(error.InvalidMigrationFlags, &returned_error);
+
+    try trackReturnError(Migration.validatePath(request.path), &returned_error);
+
+    if (request.package.len == 0) return trackReturnError(error.InvalidMigrationTarget, &returned_error);
     for (self.migration_requests.items) |previous|
-        if (std.mem.eql(u8, previous.path, request.path)) return error.DuplicateMigration;
+        if (std.mem.eql(u8, previous.path, request.path)) return trackReturnError(error.DuplicateMigration, &returned_error);
+
     const a = self.storage.allocator();
-    const owned = try Plan.copyValue(Migration.Request, a, request);
-    try self.migration_requests.append(a, owned);
+    const owned = try trackReturnError(Plan.copyValue(Migration.Request, a, request), &returned_error);
+    try trackReturnError(self.migration_requests.append(a, owned), &returned_error);
 }
 
 fn resolveMigrations(self: *Transaction) !void {
     const plan_value = &self.owned_plan.?;
     const a = plan_value.arena.allocator();
     const resolved = try a.alloc(Plan.Migration, self.migration_requests.items.len);
+
     for (self.migration_requests.items, resolved) |request, *out| {
         const destination = for (plan_value.additions) |addition| {
             if (std.mem.eql(u8, plan_value.package(addition.package).name, request.package))
                 break addition.package;
         } else return error.InvalidMigrationTarget;
+
         var source: ?Plan.Id = null;
+
         if (request.source == .replaced_package) {
             source = plan_value.migrationSource(destination, request.source.replaced_package) orelse
                 return error.InvalidMigrationSource;
         }
+
         out.* = .{
             .package = destination,
             .source = source,
@@ -213,20 +246,27 @@ fn resolveMigrations(self: *Transaction) !void {
             .backup = request.backup,
         };
     }
+
     plan_value.migrations = resolved;
 }
 
 pub fn addPackage(self: *Transaction, reference: Ref) !void {
-    try self.mutable();
+    var returned_error: ?anyerror = null;
+    try trackReturnError(self.mutable(), &returned_error);
     defer self.owner.busy = false;
-    errdefer |err| self.recordFailure(err);
-    const package = try self.owner.transactionPackage(reference);
-    if (package.origin != .sync) return error.UnsupportedPackageOrigin;
+    errdefer {
+        const err = returned_error.?;
+        self.recordFailure(err);
+    }
+    const package = try trackReturnError(self.owner.transactionPackage(reference), &returned_error);
+
+    if (package.origin != .sync) return trackReturnError(error.UnsupportedPackageOrigin, &returned_error);
     for (self.targets.items) |target|
         if (target == .reference and std.meta.eql(target.reference, reference))
             return;
-    try self.checkName(package.name);
-    try self.targets.append(self.owner.allocator, .{ .reference = reference });
+
+    try trackReturnError(self.checkName(package.name), &returned_error);
+    try trackReturnError(self.targets.append(self.owner.allocator, .{ .reference = reference }), &returned_error);
 }
 
 fn checkName(self: *Transaction, name: []const u8) !void {
@@ -236,6 +276,7 @@ fn checkName(self: *Transaction, name: []const u8) !void {
             .archive => |pkg| pkg,
             .reference => |ref| try self.owner.transactionPackage(ref),
         };
+
         if (std.mem.eql(u8, existing.name, name)) return error.DuplicateTarget;
     }
 }
@@ -243,29 +284,43 @@ fn checkName(self: *Transaction, name: []const u8) !void {
 /// On success the caller is reset to null. On every rejection/allocation error
 /// the caller retains the complete package, including its sealed descriptor.
 pub fn takeArchive(self: *Transaction, input: *?Package) !void {
-    try self.mutable();
+    var returned_error: ?anyerror = null;
+    try trackReturnError(self.mutable(), &returned_error);
     defer self.owner.busy = false;
-    errdefer |err| self.recordFailure(err);
-    const package = &(input.* orelse return error.InvalidPackageOwnership);
+    errdefer {
+        const err = returned_error.?;
+        self.recordFailure(err);
+    }
+    const package = &(input.* orelse return trackReturnError(error.InvalidPackageOwnership, &returned_error));
+
     if (package.origin != .archive or package.archive_arena == null)
-        return error.InvalidPackageOwnership;
-    try self.checkName(package.name);
-    const owned = try self.owner.allocator.create(Package);
+        return trackReturnError(error.InvalidPackageOwnership, &returned_error);
+
+    try trackReturnError(self.checkName(package.name), &returned_error);
+
+    const owned = try trackReturnError(self.owner.allocator.create(Package), &returned_error);
     errdefer self.owner.allocator.destroy(owned);
-    try self.targets.append(self.owner.allocator, .{ .archive = owned });
+    try trackReturnError(self.targets.append(self.owner.allocator, .{ .archive = owned }), &returned_error);
     owned.* = package.*;
     input.* = null;
 }
 
 pub fn remove(self: *Transaction, name: []const u8) !void {
-    try self.mutable();
+    var returned_error: ?anyerror = null;
+    try trackReturnError(self.mutable(), &returned_error);
     defer self.owner.busy = false;
-    errdefer |err| self.recordFailure(err);
+    errdefer {
+        const err = returned_error.?;
+        self.recordFailure(err);
+    }
+
     for (self.removals.items) |existing|
         if (std.mem.eql(u8, existing, name)) return;
-    if (!self.owner.local.?.packages.by_name.contains(name)) return error.TargetNotFound;
-    const owned = try self.storage.allocator().dupe(u8, name);
-    try self.removals.append(self.owner.allocator, owned);
+
+    if (!self.owner.local.?.packages.by_name.contains(name)) return trackReturnError(error.TargetNotFound, &returned_error);
+
+    const owned = try trackReturnError(self.storage.allocator().dupe(u8, name), &returned_error);
+    try trackReturnError(self.removals.append(self.owner.allocator, owned), &returned_error);
 }
 
 pub fn systemUpgrade(self: *Transaction, allow_downgrade: bool) !void {
@@ -280,6 +335,7 @@ pub fn prepare(self: *Transaction) !void {
     defer self.owner.busy = false;
     self.transition(.preparing, null);
     self.prepareInternal() catch |err| return self.failed(err);
+
     // libalpm leaves an initially empty transaction initialized.
     self.transition(
         if (self.owned_plan != null and self.owned_plan.?.had_prepare_targets)
@@ -288,25 +344,33 @@ pub fn prepare(self: *Transaction) !void {
             .initialized,
         null,
     );
+
     self.owner.checkCancelled() catch |err| return self.failed(err);
 }
 
 fn prepareInternal(self: *Transaction) !void {
     try self.checkSnapshot();
+
     if (self.owned_plan) |*previous| previous.deinit();
+
     self.owned_plan = null;
+
     if (self.targets.items.len == 0 and self.removals.items.len == 0 and !self.system_upgrade) {
         if (self.migration_requests.items.len != 0) return error.InvalidMigrationTarget;
+
         return;
     }
+
     var targets: std.ArrayList(Resolver.Target) = .empty;
     defer targets.deinit(self.owner.allocator);
+
     for (self.targets.items) |target|
         try targets.append(self.owner.allocator, switch (target) {
             .text => |value| .{ .text = value },
             .reference => |value| .{ .reference = value },
             .archive => |value| .{ .archive = value },
         });
+
     self.owned_plan = try self.owner.resolveTransaction(
         self,
         .{
@@ -317,6 +381,7 @@ fn prepareInternal(self: *Transaction) !void {
             .flags = self.flags,
         },
     );
+
     try self.owned_plan.?.check();
     try self.resolveMigrations();
     try self.checkSnapshot();
@@ -325,10 +390,14 @@ fn prepareInternal(self: *Transaction) !void {
 pub fn commit(self: *Transaction) !void {
     try self.begin(.prepared);
     defer self.owner.busy = false;
+
     if (self.flags.no_lock) return self.owner.transactionFailure(error.TransactionNotLocked);
     if (self.lock == null) return self.failed(error.LockNotHeld);
+
     self.checkSnapshot() catch |err| return self.failed(err);
+
     const reviewed = &self.owned_plan.?;
+
     if (self.flags.download_only and reviewed.additions.len != 0) {
         self.transition(.committing, null);
         self.downloadInternal() catch |err| return self.failed(err);
@@ -337,6 +406,7 @@ pub fn commit(self: *Transaction) !void {
             return self.owner.transactionFailure(
                 error.ReadOnlyDatabase,
             );
+
         self.preflightInternal() catch |err| return self.failed(err);
         self.transition(.committing, null);
         Executor.run(self) catch |err| return self.failed(err);
@@ -350,16 +420,19 @@ pub fn commit(self: *Transaction) !void {
 pub fn interrupt(self: *Transaction) !void {
     try self.owner.beginTransactionOperation(self);
     defer self.owner.busy = false;
+
     if (self.state != .committing and self.state != .interrupted)
         return self.owner.transactionFailure(
             error.InvalidTransactionState,
         );
+
     self.owner.requestCancellation();
     self.transition(.interrupted, error.Cancelled);
 }
 
 fn checkSnapshot(self: *Transaction) !void {
     try self.owner.checkCancelled();
+
     if (self.lock) |*lock| try lock.validate();
     if (!std.mem.eql(u8, &self.snapshot, &try Snapshot.capture(self.owner, self.io)))
         return error.StaleDatabaseState;
@@ -369,9 +442,12 @@ fn failed(self: *Transaction, err: anyerror) anyerror {
     if (self.owned_actions) |*value| value.fail();
     if (self.owned_manifest) |*value| {
         if (value.failure == null) value.failure = .{ .cause = err };
+
         value.complete = false;
     }
+
     self.transition(if (err == error.Cancelled) .interrupted else .failed, err);
+
     return self.owner.transactionFailure(err);
 }
 
@@ -385,24 +461,29 @@ pub fn transition(self: *Transaction, state: State, cause: ?anyerror) void {
 /// resources, then reports a lock ownership/unlink error if one occurred.
 pub fn destroy(self: *Transaction) !void {
     self.transition(.released, self.cause);
+
     const allocator = self.owner.allocator;
     defer allocator.destroy(self);
     defer self.storage.deinit();
     defer self.targets.deinit(allocator);
     defer self.removals.deinit(allocator);
+
     if (self.owned_actions) |*value| value.deinit();
     if (self.owned_manifest) |*value| value.deinit();
     if (self.downloaded_files) |files| {
         for (files) |*file|
             file.deinit();
+
         allocator.free(files);
     }
+
     if (self.owned_plan) |*value| value.deinit();
     for (self.targets.items) |target|
         if (target == .archive) {
             target.archive.deinit();
             allocator.destroy(target.archive);
         };
+
     if (self.lock) |*lock| try lock.release(allocator);
 }
 
@@ -415,10 +496,13 @@ pub fn download(self: *Transaction) !void {
 
 fn downloadInternal(self: *Transaction) !void {
     try self.checkSnapshot();
+
     if (self.downloaded_files != null) return;
+
     var requests: std.ArrayList(Downloads.Request) = .empty;
     defer requests.deinit(self.owner.allocator);
     try self.downloadRequests(&requests);
+
     if (requests.items.len != 0)
         self.owner.transactionEvent(
             .{
@@ -438,8 +522,10 @@ fn downloadInternal(self: *Transaction) !void {
                 },
             },
         );
+
     self.downloaded_files = try Downloads.acquire(self.owner, self.io, requests.items);
     try self.checkSnapshot();
+
     if (requests.items.len != 0)
         self.owner.transactionEvent(
             .{
@@ -449,6 +535,7 @@ fn downloadInternal(self: *Transaction) !void {
                 },
             },
         );
+
     // Acquisition has already applied effective trust and integrity policy to
     // sealed bytes. Publish the accepted batch at the native phase boundaries.
     if (self.plan().?.additions.len != 0)
@@ -464,10 +551,13 @@ fn downloadRequests(
     requests: *std.ArrayList(Downloads.Request),
 ) !void {
     const reviewed = &self.owned_plan.?;
+
     for (reviewed.additions) |addition| {
-        const candidate = &reviewed.candidates[@intFromEnum(addition.package)];
+        const candidate = &reviewed.candidates[@backingInt(addition.package)];
         const package = &candidate.package;
+
         if (package.origin != .sync) continue;
+
         const db = &self.owner.sync_databases.items[candidate.repository.?];
         try requests.append(
             self.owner.allocator,
@@ -484,12 +574,18 @@ fn downloadRequests(
 }
 
 pub fn downloadSize(self: *Transaction) !Downloads.Sizes {
-    try self.begin(.prepared);
-    errdefer |err| self.recordFailure(err);
+    var returned_error: ?anyerror = null;
+    try trackReturnError(self.begin(.prepared), &returned_error);
+    errdefer {
+        const err = returned_error.?;
+        self.recordFailure(err);
+    }
     defer self.owner.busy = false;
-    try self.checkSnapshot();
+    try trackReturnError(self.checkSnapshot(), &returned_error);
+
     var requests: std.ArrayList(Downloads.Request) = .empty;
     defer requests.deinit(self.owner.allocator);
-    try self.downloadRequests(&requests);
-    return Downloads.sizes(self.owner, self.io, requests.items);
+    try trackReturnError(self.downloadRequests(&requests), &returned_error);
+
+    return trackReturnError(Downloads.sizes(self.owner, self.io, requests.items), &returned_error);
 }

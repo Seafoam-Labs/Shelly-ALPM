@@ -124,7 +124,7 @@ test "verifyFileHash matches sha256, honors SKIP, and rejects mismatches" {
     const expected = std.fmt.bytesToHex(digest, .lower);
     try verifyFileHash(std.crypto.hash.sha2.Sha256, std.testing.io, path, &expected);
     try verifyFileHash(std.crypto.hash.sha2.Sha256, std.testing.io, path, "SKIP");
-    try std.testing.expectError(error.SourceChecksumMismatch, verifyFileHash(std.crypto.hash.sha2.Sha256, std.testing.io, path, "0" ** 64));
+    try std.testing.expectError(error.SourceChecksumMismatch, verifyFileHash(std.crypto.hash.sha2.Sha256, std.testing.io, path, "0000000000000000000000000000000000000000000000000000000000000000"));
     try std.testing.expectError(error.InvalidSourceChecksum, verifyFileHash(std.crypto.hash.sha2.Sha256, std.testing.io, path, "abc"));
 }
 

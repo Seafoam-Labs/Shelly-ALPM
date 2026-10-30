@@ -32,15 +32,15 @@ fn renderBash(manifest: *const spec.Manifest, writer: *std.Io.Writer) !void {
         \\# Bash completions for shelly
         \\# Auto-generated from the native Shelly CLI catalog. Do not edit.
         \\_shelly_packages_standard_sync() {
-        \\    pacman -Slq 2>/dev/null
+        \\    shelly search standard --names-only --show-hidden 2>/dev/null
         \\}
         \\
         \\_shelly_packages_standard_local() {
-        \\    pacman -Qq 2>/dev/null
+        \\    shelly list standard --names-only 2>/dev/null
         \\}
         \\
         \\_shelly_packages_aur_local() {
-        \\    pacman -Qqm 2>/dev/null
+        \\    shelly list aur --names-only --show-hidden 2>/dev/null
         \\}
         \\
         \\_shelly_packages_flatpak_remote() {
@@ -188,15 +188,15 @@ fn renderFish(manifest: *const spec.Manifest, writer: *std.Io.Writer) !void {
         \\# Fish completions for shelly
         \\# Auto-generated from the native Shelly CLI catalog. Do not edit.
         \\function __shelly_packages_standard_sync
-        \\    pacman -Slq 2>/dev/null
+        \\    shelly search standard --names-only --show-hidden 2>/dev/null
         \\end
         \\
         \\function __shelly_packages_standard_local
-        \\    pacman -Qq 2>/dev/null
+        \\    shelly list standard --names-only 2>/dev/null
         \\end
         \\
         \\function __shelly_packages_aur_local
-        \\    pacman -Qqm 2>/dev/null
+        \\    shelly list aur --names-only --show-hidden 2>/dev/null
         \\end
         \\
         \\function __shelly_packages_flatpak_remote
@@ -457,20 +457,20 @@ fn renderZsh(manifest: *const spec.Manifest, writer: *std.Io.Writer) !void {
         \\
         \\_shelly_packages_standard_sync() {
         \\    if (( ${#_shelly_repo_packages} == 0 )); then
-        \\        _shelly_repo_packages=(${(f)"$(pacman -Slq 2>/dev/null)"})
+        \\        _shelly_repo_packages=(${(f)"$(shelly search standard --names-only --show-hidden 2>/dev/null)"})
         \\    fi
         \\    _describe -t packages 'package' _shelly_repo_packages
         \\}
         \\
         \\_shelly_packages_standard_local() {
         \\    local -a packages
-        \\    packages=(${(f)"$(pacman -Qq 2>/dev/null)"})
+        \\    packages=(${(f)"$(shelly list standard --names-only 2>/dev/null)"})
         \\    _describe -t packages 'package' packages
         \\}
         \\
         \\_shelly_packages_aur_local() {
         \\    local -a packages
-        \\    packages=(${(f)"$(pacman -Qqm 2>/dev/null)"})
+        \\    packages=(${(f)"$(shelly list aur --names-only --show-hidden 2>/dev/null)"})
         \\    _describe -t packages 'package' packages
         \\}
         \\
@@ -770,7 +770,7 @@ fn collectModifiers(
     const action_code = command.actionCode orelse return buffer[0..0];
     const combined = actionSupportsCombinedTypes(action_code);
     var count: usize = 0;
-    var seen = [_]bool{false} ** 256;
+    var seen = @as([256]bool, @splat(false));
     for (command.options) |option| {
         if (count >= buffer.len) break;
         if (option.hidden) continue;
@@ -821,7 +821,7 @@ fn collectStandaloneModifiers(
 ) []const Modifier {
     const action_code = command.actionCode orelse return buffer[0..0];
     var count: usize = 0;
-    var seen = [_]bool{false} ** 256;
+    var seen = @as([256]bool, @splat(false));
     for (command.options) |option| {
         if (count >= buffer.len) break;
         if (option.hidden) continue;
@@ -1051,6 +1051,7 @@ fn isChildOf(command: *const spec.Command, parent: *const spec.Command) bool {
 }
 
 test "renders Bash Fish and Zsh scripts from the native catalog" {
+    const news_enabled = @import("../build_features.zig").arch_news_enabled;
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const manifest = try spec.Manifest.load(arena.allocator());
@@ -1071,6 +1072,10 @@ test "renders Bash Fish and Zsh scripts from the native catalog" {
         try std.testing.expect(std.mem.indexOf(u8, script, "pacfiles") != null);
         try std.testing.expect(std.mem.indexOf(u8, script, "threeway") != null);
         try std.testing.expect(std.mem.indexOf(u8, script, "bash fish zsh") != null);
+        try std.testing.expect(std.mem.indexOf(u8, script, "pacman -") == null);
+        try std.testing.expect(std.mem.indexOf(u8, script, "shelly search standard --names-only --show-hidden") != null);
+        try std.testing.expect(std.mem.indexOf(u8, script, "shelly list standard --names-only") != null);
+        try std.testing.expect(std.mem.indexOf(u8, script, "shelly list aur --names-only --show-hidden") != null);
         if (expected.shell == .bash) {
             try std.testing.expect(std.mem.indexOf(u8, script, "_shelly_packages_standard_sync") != null);
             try std.testing.expect(std.mem.indexOf(u8, script, "_shelly_packages_flatpak_local") != null);
@@ -1089,7 +1094,7 @@ test "renders Bash Fish and Zsh scripts from the native catalog" {
             try std.testing.expect(std.mem.indexOf(u8, script, "-U*) action=\"upgrade\"; selector=\"all\"; consumed=1 ;;") != null);
             try std.testing.expect(std.mem.indexOf(u8, script, "-B*) action=\"backup\"; selector=\"utility\"; consumed=1 ;;") != null);
             // Standalone modifier extensions are offered alongside their bare shortcode.
-            try std.testing.expect(std.mem.indexOf(u8, script, "-Na") != null);
+            try std.testing.expectEqual(news_enabled, std.mem.indexOf(u8, script, "-Na") != null);
             try std.testing.expect(std.mem.indexOf(u8, script, "-Be") != null);
         }
         if (expected.shell == .fish) {
@@ -1104,9 +1109,9 @@ test "renders Bash Fish and Zsh scripts from the native catalog" {
             try std.testing.expect(std.mem.indexOf(u8, script, "__shelly_shortcode_token -Sa' -a '-Sad'") != null);
             // Bare action shortcodes are offered as top-level candidates.
             try std.testing.expect(std.mem.indexOf(u8, script, "-a '-U'") != null);
-            try std.testing.expect(std.mem.indexOf(u8, script, "-a '-N'") != null);
+            try std.testing.expectEqual(news_enabled, std.mem.indexOf(u8, script, "-a '-N'") != null);
             // Standalone modifier extensions are conditioned on the bare token.
-            try std.testing.expect(std.mem.indexOf(u8, script, "__shelly_shortcode_token -N' -a '-Na'") != null);
+            try std.testing.expectEqual(news_enabled, std.mem.indexOf(u8, script, "__shelly_shortcode_token -N' -a '-Na'") != null);
             // Bare shortcodes exclude their typed siblings from their option condition.
             try std.testing.expect(std.mem.indexOf(u8, script, "__shelly_shortcut -Ux -U; and not __shelly_shortcut -Us -Ui -Ua -Uf") != null);
             // Standalone shortcodes whose action also has typed variants are still offered.
@@ -1122,7 +1127,7 @@ test "renders Bash Fish and Zsh scripts from the native catalog" {
             try std.testing.expect(std.mem.indexOf(u8, script, "'-Sad:") != null);
             // Bare action shortcodes and standalone extensions are generated.
             try std.testing.expect(std.mem.indexOf(u8, script, "'-U:") != null);
-            try std.testing.expect(std.mem.indexOf(u8, script, "'-Na:") != null);
+            try std.testing.expectEqual(news_enabled, std.mem.indexOf(u8, script, "'-Na:") != null);
             try std.testing.expect(std.mem.indexOf(u8, script, "-U*) action=upgrade; selector=all; consumed=1 ;;") != null);
             try std.testing.expect(std.mem.indexOf(u8, script, "-B*) action=backup; selector=utility; consumed=1 ;;") != null);
             // Repeated and single positional arguments are represented.

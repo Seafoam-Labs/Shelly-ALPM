@@ -1,4 +1,5 @@
 const std = @import("std");
+const trackReturnError = @import("diagnostics").captureError;
 const builtin = @import("builtin");
 const diagnostics = @import("diagnostics");
 const models = @import("models.zig");
@@ -260,64 +261,72 @@ pub const Client = struct {
     }
 
     fn get(self: *Client, url: []const u8) ![]u8 {
+        var returned_error: ?anyerror = null;
         var operation_scope = HttpOperationScope.init(self, url);
         defer operation_scope.finish(.success);
-        errdefer |err| operation_scope.fail(err);
-        try operation_scope.checkCancelled();
+        errdefer {
+            const err = returned_error.?;
+            operation_scope.fail(err);
+        }
+        try trackReturnError(operation_scope.checkCancelled(), &returned_error);
         if (builtin.is_test) if (self.test_transport) |transport|
-            return transport.request(transport.context, self.allocator, url, null);
-        const uri = try std.Uri.parse(url);
-        var request = try self.http.request(.GET, uri, .{
+            return trackReturnError(transport.request(transport.context, self.allocator, url, null), &returned_error);
+        const uri = try trackReturnError(std.Uri.parse(url), &returned_error);
+        var request = try trackReturnError(self.http.request(.GET, uri, .{
             .headers = .{
                 .user_agent = .{ .override = "Shelly-ALPM/3" },
                 .accept_encoding = .{ .override = "identity" },
             },
             .redirect_behavior = .init(10),
-        });
+        }), &returned_error);
         defer request.deinit();
-        request.accept_encoding[@intFromEnum(std.http.ContentEncoding.gzip)] = false;
-        request.accept_encoding[@intFromEnum(std.http.ContentEncoding.deflate)] = false;
-        try request.sendBodiless();
+        request.accept_encoding[@backingInt(std.http.ContentEncoding.gzip)] = false;
+        request.accept_encoding[@backingInt(std.http.ContentEncoding.deflate)] = false;
+        try trackReturnError(request.sendBodiless(), &returned_error);
         var redirect_buffer: [8 * 1024]u8 = undefined;
-        var response = try request.receiveHead(&redirect_buffer);
+        var response = try trackReturnError(request.receiveHead(&redirect_buffer), &returned_error);
         if (response.head.status.class() != .success) {
-            return error.AurHttpStatus;
+            return trackReturnError(error.AurHttpStatus, &returned_error);
         }
         var transfer_buffer: [8 * 1024]u8 = undefined;
-        return self.readResponse(response.reader(&transfer_buffer), response.head.content_length, &operation_scope);
+        return trackReturnError(self.readResponse(response.reader(&transfer_buffer), response.head.content_length, &operation_scope), &returned_error);
     }
 
     fn postForm(self: *Client, url: []const u8, body: []u8) ![]u8 {
+        var returned_error: ?anyerror = null;
         var operation_scope = HttpOperationScope.init(self, url);
         defer operation_scope.finish(.success);
-        errdefer |err| operation_scope.fail(err);
-        try operation_scope.checkCancelled();
+        errdefer {
+            const err = returned_error.?;
+            operation_scope.fail(err);
+        }
+        try trackReturnError(operation_scope.checkCancelled(), &returned_error);
         if (builtin.is_test) if (self.test_transport) |transport|
-            return transport.request(transport.context, self.allocator, url, body);
-        const uri = try std.Uri.parse(url);
+            return trackReturnError(transport.request(transport.context, self.allocator, url, body), &returned_error);
+        const uri = try trackReturnError(std.Uri.parse(url), &returned_error);
         const headers = [_]std.http.Header{.{
             .name = "content-type",
             .value = "application/x-www-form-urlencoded",
         }};
-        var request = try self.http.request(.POST, uri, .{
+        var request = try trackReturnError(self.http.request(.POST, uri, .{
             .headers = .{
                 .user_agent = .{ .override = "Shelly-ALPM/3" },
                 .accept_encoding = .{ .override = "identity" },
             },
             .extra_headers = &headers,
             .redirect_behavior = .init(10),
-        });
+        }), &returned_error);
         defer request.deinit();
-        request.accept_encoding[@intFromEnum(std.http.ContentEncoding.gzip)] = false;
-        request.accept_encoding[@intFromEnum(std.http.ContentEncoding.deflate)] = false;
-        try request.sendBodyComplete(body);
+        request.accept_encoding[@backingInt(std.http.ContentEncoding.gzip)] = false;
+        request.accept_encoding[@backingInt(std.http.ContentEncoding.deflate)] = false;
+        try trackReturnError(request.sendBodyComplete(body), &returned_error);
         var redirect_buffer: [8 * 1024]u8 = undefined;
-        var response = try request.receiveHead(&redirect_buffer);
+        var response = try trackReturnError(request.receiveHead(&redirect_buffer), &returned_error);
         if (response.head.status.class() != .success) {
-            return error.AurHttpStatus;
+            return trackReturnError(error.AurHttpStatus, &returned_error);
         }
         var transfer_buffer: [8 * 1024]u8 = undefined;
-        return self.readResponse(response.reader(&transfer_buffer), response.head.content_length, &operation_scope);
+        return trackReturnError(self.readResponse(response.reader(&transfer_buffer), response.head.content_length, &operation_scope), &returned_error);
     }
 
     fn readResponse(

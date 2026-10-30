@@ -1,9 +1,7 @@
 //! Zig adapter for protocols/proxies outside Shelly.Http's supported set.
 //! libcurl supplies protocol implementations; ownership and file I/O stay here.
 const std = @import("std");
-const c = @cImport({
-    @cInclude("curl/curl.h");
-});
+const c = @import("curl_c");
 
 pub const Error = error{ NetworkError, FileError, NotModified, NotFound, Cancelled, SizeExceeded, Timeout, InvalidUrl, SslError, HostNotFound };
 pub const Options = struct {

@@ -20,12 +20,16 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--library', required=True, type=Path)
     args = parser.parse_args()
+
     if hashlib.sha256(args.library.read_bytes()).hexdigest() != json.loads((HERE / 'manifest.json').read_text())['library']['sha256']:
         parser.error('library does not match frozen reference')
+
     locale.setlocale(locale.LC_ALL, 'C')
     lib = c.CDLL(str(args.library.resolve()))
+
     def bind(name, result, *params):
         fn = getattr(lib, name); fn.restype = result; fn.argtypes = list(params); return fn
+
     initialize = bind('alpm_initialize', c.c_void_p, c.c_char_p, c.c_char_p, c.POINTER(c.c_int))
     release = bind('alpm_release', c.c_int, c.c_void_p)
     addcache = bind('alpm_option_add_cachedir', c.c_int, c.c_void_p, c.c_char_p)
@@ -44,27 +48,37 @@ def main():
     commit = bind('alpm_trans_commit', c.c_int, c.c_void_p, c.POINTER(ListPtr))
     finish = bind('alpm_trans_release', c.c_int, c.c_void_p)
     download_size = bind('alpm_pkg_download_size', c.c_int64, c.c_void_p)
+
     for name in ('downloadonly', 'digest-mismatch', 'required-signature', 'optional-signature', 'refresh-disabled', 'refresh-lock'):
         with tempfile.TemporaryDirectory(prefix='rlpm-download-oracle-') as tmp:
             base = Path(tmp); root = base/'root'; db = base/'db'; mirror = base/'mirror'; cache = base/'cache'
+
             for path in (root, db, mirror, cache): path.mkdir()
+
             payload = b'package' # Native DOWNLOADONLY checks integrity, not archive inventory.
             (mirror/'demo.pkg.tar.zst').write_bytes(payload)
             digest = hashlib.sha256(b'wrong' if name == 'digest-mismatch' else payload).hexdigest()
             desc = f'%NAME%\ndemo\n\n%VERSION%\n1-1\n\n%FILENAME%\ndemo.pkg.tar.zst\n\n%CSIZE%\n7\n\n%SHA256SUM%\n{digest}\n\n'.encode()
+
             with tarfile.open(mirror/'cachyos.db', 'w') as archive:
                 entry = tarfile.TarInfo('demo-1-1/desc'); entry.size = len(desc); archive.addfile(entry, io.BytesIO(desc))
+
             err = c.c_int(); handle = initialize(str(root).encode(), str(db).encode(), c.byref(err)); assert handle
+
             try:
                 assert addcache(handle, str(cache).encode()) == 0
                 policy = 1 if name == 'required-signature' else 3 if name == 'optional-signature' else 0
                 repo = register(handle, b'cachyos', policy); assert repo
                 assert addserver(repo, mirror.as_uri().encode()) == 0
                 repos = addlist(None, repo)
+
                 try:
                     if name == 'refresh-disabled': assert usage(repo, 2) == 0
+
                     if name == 'refresh-lock': (db/'db.lck').touch()
+
                     result = {'name': name, 'refresh': refresh(handle, repos, 0)}
+
                     if name.startswith('refresh-'):
                         result['db_exists'] = (db/'sync/cachyos.db').exists()
                     else:
@@ -84,6 +98,7 @@ def main():
                         assert result['installed_unchanged']
                         assert finish(handle) == 0
                 finally: free_list(repos)
+
                 print(json.dumps(result, sort_keys=True))
             finally: assert release(handle) == 0
 

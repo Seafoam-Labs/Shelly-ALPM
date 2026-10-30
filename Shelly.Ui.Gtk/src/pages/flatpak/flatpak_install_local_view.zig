@@ -79,17 +79,13 @@ pub const FlatpakInstallLocalView = extern struct {
         const p = self.priv();
         if (p.disposed) return;
 
-        const duped = std.heap.c_allocator.dupeZ(u8, path) catch return;
+        const duped = std.heap.c_allocator.dupeSentinel(u8, path, 0) catch return;
         if (p.selected_path) |old| std.heap.c_allocator.free(old);
         p.selected_path = duped;
 
         const base = std.fs.path.basename(duped);
         var name_buffer: [std.fs.max_name_bytes + 1]u8 = undefined;
-        const name = std.fmt.bufPrintZ(
-            &name_buffer,
-            "{s}",
-            .{base},
-        ) catch duped;
+        const name = std.fmt.bufPrintSentinel(&name_buffer, "{s}", .{base}, 0) catch duped;
 
         gtk.Label.setLabel(p.chosen_file_label, name);
         gtk.Widget.setSensitive(p.install_button.as(gtk.Widget), 1);
@@ -133,7 +129,7 @@ pub const FlatpakInstallLocalView = extern struct {
         const path = std.mem.span(path_c);
 
         if (p.selected_path) |old| std.heap.c_allocator.free(old);
-        p.selected_path = std.heap.c_allocator.dupeZ(u8, path) catch {
+        p.selected_path = std.heap.c_allocator.dupeSentinel(u8, path, 0) catch {
             p.selected_path = null;
             gtk.Label.setLabel(p.chosen_file_label, translations._("Choose file…"));
             gtk.Widget.setSensitive(p.install_button.as(gtk.Widget), 0);

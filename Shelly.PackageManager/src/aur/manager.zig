@@ -1,4 +1,5 @@
 const std = @import("std");
+const trackReturnError = @import("diagnostics").captureError;
 const diagnostics = @import("diagnostics");
 
 const alpm_module = @import("../alpm/manager.zig");
@@ -202,9 +203,9 @@ pub fn collectVersionUpdates(
     for (aur_packages) |package| {
         for (installed) |local| {
             if (!std.mem.eql(u8, package.name, local.name)) continue;
-            const remote_version = try allocator.dupeZ(u8, package.version);
+            const remote_version = try allocator.dupeSentinel(u8, package.version, 0);
             defer allocator.free(remote_version);
-            const local_version = try allocator.dupeZ(u8, local.version);
+            const local_version = try allocator.dupeSentinel(u8, local.version, 0);
             defer allocator.free(local_version);
             // Match pacman, including versions with an empty epoch emitted by
             // older native builders, so equal versions do not trigger rebuilds.
@@ -577,7 +578,7 @@ pub const Manager = struct {
     ) !void {
         if (!reverse_dependencies.required_by and !reverse_dependencies.optional_for) return;
         for (packages) |*package| {
-            const name_z = try self.allocator.dupeZ(u8, package.name);
+            const name_z = try self.allocator.dupeSentinel(u8, package.name, 0);
             defer self.allocator.free(name_z);
             if (!self.alpm.is_package_installed(name_z)) continue;
             var local_package = try self.alpm.get_single_installed_package(name_z) orelse continue;
@@ -1292,7 +1293,7 @@ pub const Manager = struct {
 
     fn filterNeededTargets(self: *Self, plan: *PreparedInstall) !void {
         if (!self.needed or !canSkipNeededBuild(&plan.prepared)) return;
-        const generated = try self.generateReviewedSrcinfo(&plan.prepared);
+        const generated = try self.generateReviewedDependencySrcinfo(&plan.prepared);
         defer self.allocator.free(generated);
         var index: usize = 0;
         while (index < plan.requested_names.items.len) {
@@ -1317,7 +1318,7 @@ pub const Manager = struct {
         try self.checkCancelled();
         const candidate = try srcinfo.packageVersion(self.allocator, generated, name) orelse return false;
         defer self.allocator.free(candidate);
-        const terminated_name = try self.allocator.dupeZ(u8, name);
+        const terminated_name = try self.allocator.dupeSentinel(u8, name, 0);
         defer self.allocator.free(terminated_name);
         var installed = try self.alpm.get_single_installed_package(terminated_name) orelse return false;
         defer installed.deinit(self.allocator);
@@ -1480,7 +1481,7 @@ pub const Manager = struct {
             for (plan.selected_optional orelse &.{}) |raw| {
                 const parsed = dependency_resolver.parseOptionalDependency(raw);
                 if (self.isDeclinedPackage(parsed.name)) continue;
-                const name_z = try allocator.dupeZ(u8, parsed.name);
+                const name_z = try allocator.dupeSentinel(u8, parsed.name, 0);
                 const repository_name = self.alpm.find_remote_satisfier_for_dependency(name_z) catch null;
                 try appendTransactionPackage(&packages, allocator, .{
                     .name = repository_name orelse parsed.name,
@@ -1543,7 +1544,7 @@ pub const Manager = struct {
         if (!self.needed) try self.alpm.sync(false);
         try self.requirePkgbuildApproval(&prepared);
         if (self.needed and canSkipNeededBuild(&prepared)) {
-            const generated = try self.generateReviewedSrcinfo(&prepared);
+            const generated = try self.generateReviewedDependencySrcinfo(&prepared);
             defer self.allocator.free(generated);
             if (try self.skipCurrentTarget(package_name, generated)) return;
         }
@@ -1725,7 +1726,7 @@ pub const Manager = struct {
             for (terminated.items) |name| self.allocator.free(name);
             terminated.deinit(self.allocator);
         }
-        for (names) |name| try terminated.append(self.allocator, try self.allocator.dupeZ(u8, name));
+        for (names) |name| try terminated.append(self.allocator, try self.allocator.dupeSentinel(u8, name, 0));
         try self.alpm.install_packages(terminated.items, flags);
     }
 
@@ -1735,7 +1736,7 @@ pub const Manager = struct {
             for (terminated.items) |name| self.allocator.free(name);
             terminated.deinit(self.allocator);
         }
-        for (names) |name| try terminated.append(self.allocator, try self.allocator.dupeZ(u8, name));
+        for (names) |name| try terminated.append(self.allocator, try self.allocator.dupeSentinel(u8, name, 0));
         try self.alpm.remove_packages_with_confirmation(terminated.items, flags, keep_optional_dependencies, confirmation);
     }
 
@@ -1759,7 +1760,7 @@ pub const Manager = struct {
         var installed: std.ArrayList([]const u8) = .empty;
         defer installed.deinit(self.allocator);
         for (build_only) |name| {
-            const name_z = self.allocator.dupeZ(u8, name) catch continue;
+            const name_z = self.allocator.dupeSentinel(u8, name, 0) catch continue;
             const is_installed = self.alpm.is_package_installed(name_z);
             self.allocator.free(name_z);
             if (is_installed) installed.append(self.allocator, name) catch continue;
@@ -1794,7 +1795,7 @@ pub const Manager = struct {
             const parsed = dependency_resolver.parseOptionalDependency(raw);
             if (!dependency_resolver.isValidPackageName(parsed.name)) continue;
             if (self.isDeclinedPackage(parsed.name)) continue;
-            const name_z = try self.allocator.dupeZ(u8, parsed.name);
+            const name_z = try self.allocator.dupeSentinel(u8, parsed.name, 0);
             defer self.allocator.free(name_z);
             try options.append(self.allocator, .{
                 .name = parsed.name,
@@ -1832,7 +1833,7 @@ pub const Manager = struct {
             try self.checkCancelled();
             const parsed = dependency_resolver.parseOptionalDependency(raw);
             if (self.isDeclinedPackage(parsed.name)) continue;
-            const name_z = try self.allocator.dupeZ(u8, parsed.name);
+            const name_z = try self.allocator.dupeSentinel(u8, parsed.name, 0);
             defer self.allocator.free(name_z);
             if (self.alpm.find_remote_satisfier_for_dependency(name_z)) |satisfier| {
                 if (!containsConst(repo_names.items, satisfier)) try repo_names.append(self.allocator, satisfier);
@@ -1847,7 +1848,7 @@ pub const Manager = struct {
             defer recoverable_errors.deinit();
             if (self.installRepoPackagesConst(repo_names.items, .{})) |_| {
                 for (repo_names.items) |name| {
-                    const name_z = try self.allocator.dupeZ(u8, name);
+                    const name_z = try self.allocator.dupeSentinel(u8, name, 0);
                     defer self.allocator.free(name_z);
                     self.alpm.update_package_reason(name_z, .Dependency) catch |err| switch (err) {
                         error.Cancelled, error.OutOfMemory => return err,
@@ -1872,7 +1873,8 @@ pub const Manager = struct {
     }
 
     fn installOptionalAurDependency(self: *Self, parent: []const u8, name: []const u8) anyerror!void {
-        const message = try std.fmt.allocPrint(self.allocator, "Could not install optional dependency '{0f}' for '{1f}'. The primary package is installed. Retry this dependency separately if needed.", .{ diagnostics.safe(name), diagnostics.safe(parent) });
+        var returned_error: ?anyerror = null;
+        const message = try trackReturnError(std.fmt.allocPrint(self.allocator, "Could not install optional dependency '{0f}' for '{1f}'. The primary package is installed. Retry this dependency separately if needed.", .{ diagnostics.safe(name), diagnostics.safe(parent) }), &returned_error);
         defer self.allocator.free(message);
         var recovery: operation_api.RecoverableErrors = .{ .message = message };
         var scope = OperationScope.init(self, .install, name);
@@ -1881,7 +1883,8 @@ pub const Manager = struct {
         if (scope.operation) |*operation| operation.recoverable_errors = &recovery;
         scope.attach();
         defer scope.finish(.success);
-        errdefer |err| {
+        errdefer {
+            const err = returned_error.?;
             if (scope.operation) |*operation| {
                 operation.reportError(err, diagnostics.cause(err), "aur", null, false);
             } else if (err != error.Cancelled and err != error.OutOfMemory) {
@@ -1889,15 +1892,15 @@ pub const Manager = struct {
             }
             scope.finish(if (err == error.Cancelled) .cancelled else .failed);
         }
-        const providers = try self.aur_client.findProviders(name);
+        const providers = try trackReturnError(self.aur_client.findProviders(name), &returned_error);
         defer rpc.deinitStrings(self.allocator, providers);
-        const chosen = try self.chooseProvider(name, providers) orelse return error.OptionalDependencyProviderNotSelected;
-        try self.checkCancelled();
+        const chosen = try trackReturnError(self.chooseProvider(name, providers), &returned_error) orelse return trackReturnError(error.OptionalDependencyProviderNotSelected, &returned_error);
+        try trackReturnError(self.checkCancelled(), &returned_error);
         if (self.isDeclinedPackage(chosen)) return;
-        try self.installPackages(&.{chosen});
-        const chosen_z = try self.allocator.dupeZ(u8, chosen);
+        try trackReturnError(self.installPackages(&.{chosen}), &returned_error);
+        const chosen_z = try trackReturnError(self.allocator.dupeSentinel(u8, chosen, 0), &returned_error);
         defer self.allocator.free(chosen_z);
-        try self.alpm.update_package_reason(chosen_z, .Dependency);
+        try trackReturnError(self.alpm.update_package_reason(chosen_z, .Dependency), &returned_error);
     }
 
     fn chooseProvider(self: *Self, dependency: []const u8, provider_names: []const []u8) !?[]const u8 {
@@ -1906,7 +1909,7 @@ pub const Manager = struct {
         var options: std.ArrayList(events.ProviderOption) = .empty;
         defer options.deinit(self.allocator);
         for (provider_names) |name| {
-            const name_z = try self.allocator.dupeZ(u8, name);
+            const name_z = try self.allocator.dupeSentinel(u8, name, 0);
             defer self.allocator.free(name_z);
             try options.append(self.allocator, .{
                 .name = name,
@@ -2393,7 +2396,7 @@ pub const Manager = struct {
         selected_package_names: []const []const u8,
     ) !void {
         if (prepared.dependency_metadata != null) return;
-        const generated = try self.generateReviewedSrcinfo(prepared);
+        const generated = try self.generateReviewedDependencySrcinfo(prepared);
         defer self.allocator.free(generated);
         prepared.dependency_metadata = try srcinfo.parseDependencyMetadata(
             self.allocator,
@@ -2404,14 +2407,16 @@ pub const Manager = struct {
         );
     }
 
-    /// Evaluates the already-approved PKGBUILD through the same sandboxed
-    /// SRCINFO path used by the builder. The external form returns metadata on
-    /// stdout, so no coordinator files are created inside the AUR checkout.
-    fn generateReviewedSrcinfo(self: *Self, prepared: *PreparedPackage) ![]u8 {
-        return self.generateReviewedSrcinfoUsing(prepared, generateReviewedSrcinfoWithCommand);
+    /// Evaluates the already-approved PKGBUILD without running source or
+    /// version preparation: dependencies are not installed yet. The external
+    /// form returns metadata on stdout without modifying the checkout.
+    fn generateReviewedDependencySrcinfo(self: *Self, prepared: *PreparedPackage) ![]u8 {
+        return self.generateReviewedSrcinfoUsing(prepared, .dependencies, generateReviewedSrcinfoWithCommand);
     }
 
-    fn generateReviewedSrcinfoUsing(self: *Self, prepared: *PreparedPackage, comptime run_command: anytype) ![]u8 {
+    const SrcinfoPurpose = enum { dependencies, refresh_version };
+
+    fn generateReviewedSrcinfoUsing(self: *Self, prepared: *PreparedPackage, purpose: SrcinfoPurpose, comptime run_command: anytype) ![]u8 {
         if (prepared.target_commit.len != 0) {
             try self.verifyPreparedPackage(prepared);
         } else {
@@ -2464,11 +2469,19 @@ pub const Manager = struct {
         defer review.deinit();
 
         const generated = if (self.build_command) |command_path|
-            try run_command(self, command_path, prepared, review.digest)
+            try run_command(self, command_path, prepared, review.digest, purpose)
         else
-            try self.generateReviewedSrcinfoInProcess(prepared, package_builds, names.items, &review);
+            try self.generateReviewedSrcinfoInProcess(prepared, package_builds, names.items, &review, purpose);
         errdefer self.allocator.free(generated);
-        try self.reconcilePreparedPkgver(prepared, &review, names.items);
+        switch (purpose) {
+            .dependencies => {
+                // Planning cannot accept even a controlled pkgver edit: no
+                // lifecycle function should run before dependencies exist.
+                try review.verifyCurrent(self.allocator, self.io(), prepared.pkgbuild_path, prepared.cache_path);
+                if (prepared.target_commit.len != 0) try self.verifyPreparedPackage(prepared);
+            },
+            .refresh_version => try self.reconcilePreparedPkgver(prepared, &review, names.items),
+        }
         return generated;
     }
 
@@ -2554,6 +2567,7 @@ pub const Manager = struct {
         command_path: []const u8,
         prepared: *const PreparedPackage,
         reviewed_digest: package_builder.pkgbuild_review.Digest,
+        purpose: SrcinfoPurpose,
     ) ![]u8 {
         const digest_hex = std.fmt.bytesToHex(reviewed_digest, .lower);
         var arguments: std.ArrayList([]const u8) = .empty;
@@ -2569,6 +2583,7 @@ pub const Manager = struct {
                 prepared.pkgbuild_path,
             },
         );
+        if (purpose == .dependencies) try arguments.append(self.allocator, "--metadata-only");
         if (self.config_path) |path| try arguments.appendSlice(self.allocator, &.{ "--config", path });
         var command = try builder.invokingUserCleanCommand(
             self.allocator,
@@ -2619,6 +2634,7 @@ pub const Manager = struct {
         package_builds: []PkgbuildInfo,
         requested_names: []const []const u8,
         review: *const package_builder.PreparedPkgbuildReview,
+        purpose: SrcinfoPurpose,
     ) ![]u8 {
         var standalone_context = operation_api.OperationContext.init(self.allocator, self.io());
         defer standalone_context.deinit();
@@ -2681,7 +2697,10 @@ pub const Manager = struct {
         defer package_build.deinit();
         var output: std.Io.Writer.Allocating = .init(self.allocator);
         errdefer output.deinit();
-        try package_build.writeSrcinfoWithOperation(operation, &output.writer);
+        switch (purpose) {
+            .dependencies => try package_build.writeDependencySrcinfoWithOperation(operation, &output.writer),
+            .refresh_version => try package_build.writeSrcinfoWithOperation(operation, &output.writer),
+        }
         standalone_completion = .success;
         return output.toOwnedSlice();
     }
@@ -3167,7 +3186,7 @@ pub const Manager = struct {
     fn availabilityFailureMessage(self: *Self, name: []const u8, err: anyerror) ![]u8 {
         var repository_match = false;
         if (err == error.AurPackageNotFound) {
-            const name_z = try self.allocator.dupeZ(u8, name);
+            const name_z = try self.allocator.dupeSentinel(u8, name, 0);
             defer self.allocator.free(name_z);
             if (self.alpm.find_remote_satisfier_for_dependency_details(name_z)) |match| {
                 repository_match = !match.via_provides and std.mem.eql(u8, match.real_name, name);
@@ -3584,7 +3603,7 @@ fn artifactsFromPaths(
     }
     for (paths, artifacts) |path, *artifact| {
         const package_name = packageNameForArtifact(path, requested_names) orelse requested_names[0];
-        const owned_path = try allocator.dupeZ(u8, path);
+        const owned_path = try allocator.dupeSentinel(u8, path, 0);
         errdefer allocator.free(owned_path);
         const owned_name = try allocator.dupe(u8, package_name);
         errdefer allocator.free(owned_name);
@@ -3624,14 +3643,14 @@ fn forwardBuildLine(data: ?*anyopaque, stream: builder.StreamKind, line: []const
 test "AUR isolated arguments retain review and version policies without bypassing the coordinator" {
     var arguments: std.ArrayList([]const u8) = .empty;
     defer arguments.deinit(std.testing.allocator);
-    try appendShellyBuildArguments(std.testing.allocator, &arguments, "/cache/demo/PKGBUILD", &.{ "demo", "demo-docs" }, "ab" ** 32, true, false, null, true, true);
+    try appendShellyBuildArguments(std.testing.allocator, &arguments, "/cache/demo/PKGBUILD", &.{ "demo", "demo-docs" }, "abababababababababababababababababababababababababababababababab", true, false, null, true, true);
     try std.testing.expect(containsConst(arguments.items, "--isolated"));
     try std.testing.expect(containsConst(arguments.items, "--sync-deps"));
     try std.testing.expect(!containsConst(arguments.items, "--coordinator-child"));
     try std.testing.expect(!containsConst(arguments.items, "--install"));
     try std.testing.expect(!containsConst(arguments.items, "--skip-source-pgp-verification"));
     try std.testing.expect(containsConst(arguments.items, "--review-digest"));
-    try std.testing.expect(containsConst(arguments.items, "ab" ** 32));
+    try std.testing.expect(containsConst(arguments.items, "abababababababababababababababababababababababababababababababab"));
     try std.testing.expect(containsConst(arguments.items, "demo-docs"));
     try std.testing.expect(containsConst(arguments.items, "--no-check"));
     try std.testing.expect(containsConst(arguments.items, "--nosign"));
@@ -3640,7 +3659,7 @@ test "AUR isolated arguments retain review and version policies without bypassin
 }
 
 test "coordinator child build arguments bind review package set and policies" {
-    const digest = "5a" ** std.crypto.hash.sha2.Sha256.digest_length;
+    const digest = "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a";
     const sign_key = "CE4814F7337B98A2527A32F8FCEBF9274CA93649";
     var upgrade: std.ArrayList([]const u8) = .empty;
     defer upgrade.deinit(std.testing.allocator);
@@ -3967,7 +3986,7 @@ fn runFixtureCommand(
 fn writeFixtureFile(io: std.Io, path: []const u8, content: []const u8, executable: bool) !void {
     var file = try std.Io.Dir.cwd().createFile(io, path, .{
         .permissions = if (executable)
-            @as(std.Io.File.Permissions, @enumFromInt(0o755))
+            @as(std.Io.File.Permissions, @fromBackingInt(@intCast(0o755)))
         else
             .default_file,
     });
@@ -4551,7 +4570,7 @@ test "AUR dependency planning uses sandbox-evaluated conditional arrays" {
             "_enable_plasmoid=${SYNCTHING_TRAY_ENABLE_PLASMOID:-1}\n" ++
             "makedepends=('cmake')\n" ++
             "[[ $_enable_plasmoid ]] && makedepends+=('libplasma' 'extra-cmake-modules')\n" ++
-            "package() { :; }\n",
+            "prepare() { exit 42; }\npkgver() { printf 2; }\npackage() { :; }\n",
         false,
     );
     try runFixtureCommand(allocator, io, &.{ "git", "add", "PKGBUILD" }, remote);
@@ -4570,7 +4589,11 @@ test "AUR dependency planning uses sandbox-evaluated conditional arrays" {
     var prepared = try manager.preparePackageForBuild("dynamic-deps", null);
     defer prepared.deinit(allocator);
     try manager.requirePkgbuildApproval(&prepared);
+    const initial_digest = prepared.digest;
     try manager.resolvePreparedDependencies(&prepared, &.{"dynamic-deps"});
+    try manager.verifyPreparedPackage(&prepared);
+    try std.testing.expectEqualSlices(u8, &initial_digest, &prepared.digest);
+    try std.testing.expectEqualStrings("1", prepared.info.pkg_version.?);
     const metadata = prepared.dependency_metadata.?;
     try std.testing.expectEqual(@as(usize, 3), metadata.parsed_make_depends.len);
     try std.testing.expectEqualStrings("cmake", metadata.parsed_make_depends[0].name);
@@ -4580,14 +4603,18 @@ test "AUR dependency planning uses sandbox-evaluated conditional arrays" {
 
 // Exercise the metadata subprocess protocol without requiring root/runuser in
 // tests. Production always uses invokingUserCleanCommand at this boundary.
-fn runFixtureSrcinfoCommand(manager: *Manager, command: []const u8, prepared: *const PreparedPackage, digest: package_builder.pkgbuild_review.Digest) ![]u8 {
+fn runFixtureSrcinfoCommand(manager: *Manager, command: []const u8, prepared: *const PreparedPackage, digest: package_builder.pkgbuild_review.Digest, purpose: Manager.SrcinfoPurpose) ![]u8 {
     const encoded = std.fmt.bytesToHex(digest, .lower);
-    var result = try builder.runWithEnvironment(manager.allocator, manager.io(), manager.environ, &.{ command, "build", "--makesrcinfo", "--review-digest", &encoded, prepared.pkgbuild_path }, prepared.cache_path, 120);
+    var arguments: std.ArrayList([]const u8) = .empty;
+    defer arguments.deinit(manager.allocator);
+    try arguments.appendSlice(manager.allocator, &.{ command, "build", "--makesrcinfo", "--review-digest", &encoded, prepared.pkgbuild_path });
+    if (purpose == .dependencies) try arguments.append(manager.allocator, "--metadata-only");
+    var result = try builder.runWithEnvironment(manager.allocator, manager.io(), manager.environ, arguments.items, prepared.cache_path, 120);
     defer result.deinit(manager.allocator);
     return manager.readSrcinfoCommandResult(prepared.package_name, &result);
 }
 
-test "AUR pkgver planning refreshes approved state before the first build" {
+test "AUR dependency planning preserves approval before explicit pkgver refresh" {
     const allocator = std.testing.allocator;
     const io = std.testing.io;
     for ([_]bool{ false, true }) |external| {
@@ -4628,13 +4655,23 @@ test "AUR pkgver planning refreshes approved state before the first build" {
                 command,
                 "#!/bin/sh\nset -eu\n" ++
                     "test \"$1\" = build && test \"$2\" = --makesrcinfo && test \"$3\" = --review-digest\n" ++
+                    "if [ \"${6:-}\" = --metadata-only ]; then\n" ++
+                    "  printf 'pkgbase = demo-git\\n\\tpkgver = 1\\n\\tpkgrel = 7\\n\\tarch = any\\n\\npkgname = demo-git\\n\\npkgname = demo-docs\\n\\tdepends = demo-git=1-7\\n'\n" ++
+                    "  exit 0\nfi\n" ++
                     "sed -i \"s/^pkgver=1$/pkgver='2'/; s/^pkgrel=7$/pkgrel=1/\" PKGBUILD\n" ++
                     "printf 'pkgbase = demo-git\\n\\tpkgver = 2\\n\\tpkgrel = 1\\n\\tarch = any\\n\\npkgname = demo-git\\n\\npkgname = demo-docs\\n\\tdepends = demo-git=2-1\\n'\n",
                 true,
             );
             manager.build_command = command;
         }
-        const generated = try manager.generateReviewedSrcinfoUsing(&prepared, runFixtureSrcinfoCommand);
+        const planned = try manager.generateReviewedSrcinfoUsing(&prepared, .dependencies, runFixtureSrcinfoCommand);
+        defer allocator.free(planned);
+        try std.testing.expect(std.mem.indexOf(u8, planned, "depends = demo-git=1-7") != null);
+        try manager.verifyPreparedPackage(&prepared);
+        try std.testing.expectEqualStrings(original, prepared.new_pkgbuild);
+        try std.testing.expectEqualSlices(u8, &initial_digest, &prepared.digest);
+        try std.testing.expectEqualSlices(u8, &initial_digest, &manager.approved_pkgbuild_reviews.get("demo-git").?.digest);
+        const generated = try manager.generateReviewedSrcinfoUsing(&prepared, .refresh_version, runFixtureSrcinfoCommand);
         defer allocator.free(generated);
         try std.testing.expect(std.mem.indexOf(u8, generated, "depends = demo-git=2-1") != null);
         try manager.verifyPreparedPackage(&prepared);
@@ -4646,7 +4683,7 @@ test "AUR pkgver planning refreshes approved state before the first build" {
         const expected = try package_builder.pkgver_update.render(allocator, original, "2");
         defer allocator.free(expected);
         try std.testing.expectEqualStrings(expected, prepared.new_pkgbuild);
-        const repeated = try manager.generateReviewedSrcinfoUsing(&prepared, runFixtureSrcinfoCommand);
+        const repeated = try manager.generateReviewedSrcinfoUsing(&prepared, .refresh_version, runFixtureSrcinfoCommand);
         defer allocator.free(repeated);
         try std.testing.expectEqualStrings(generated, repeated);
         try manager.requirePkgbuildApproval(&prepared);
@@ -4661,7 +4698,150 @@ test "AUR pkgver planning refreshes approved state before the first build" {
     }
 }
 
-test "AUR pkgver planning rejects unrelated edits and preserves the original approval" {
+test "AUR dependency planning installs recursive tools before prepare and stops on decline or cancellation" {
+    const allocator = std.testing.allocator;
+    const io = std.testing.io;
+    const Outcome = enum { install, decline_plan, cancel_dependency_install };
+    for ([_]Outcome{ .install, .decline_plan, .cancel_dependency_install }) |outcome| {
+        var paths = try createAurManagerFixturePaths(allocator, io);
+        defer paths.deinit(allocator);
+        const names = [_][:0]const u8{ "fixture-leaf", "fixture-tool", "fixture-app" };
+        for (names, 0..) |name, index| {
+            try createAurFixtureRepository(allocator, io, paths.remote_root, name, null);
+            const remote = try std.fmt.allocPrint(allocator, "{s}/{s}.git", .{ paths.remote_root, name });
+            defer allocator.free(remote);
+            const path = try std.fs.path.join(allocator, &.{ remote, "PKGBUILD" });
+            defer allocator.free(path);
+            const dependency = if (index == 0)
+                try allocator.dupe(u8, "")
+            else
+                try std.fmt.allocPrint(allocator, "makedepends=('{s}')\n", .{names[index - 1]});
+            defer allocator.free(dependency);
+            const check = if (index == 0)
+                try allocator.dupe(u8, ":")
+            else
+                try std.fmt.allocPrint(allocator, "test -f '{s}/alpm-root/usr/share/issue2087/{s}'", .{ paths.root, names[index - 1] });
+            defer allocator.free(check);
+            const content = try std.fmt.allocPrint(allocator, "pkgname={s}\npkgver=1\npkgrel=7\narch=('any')\n{s}" ++
+                "prepare() {{ {s} || return; printf '%s\\n' '{s}' >> '{s}/phases'; }}\n" ++
+                "pkgver() {{ printf 2; }}\n" ++
+                "package() {{ mkdir -p \"$pkgdir/usr/share/issue2087\"; printf installed > \"$pkgdir/usr/share/issue2087/{s}\"; }}\n", .{ name, dependency, check, name, paths.root, name });
+            defer allocator.free(content);
+            try writeFixtureFile(io, path, content, false);
+            try runFixtureCommand(allocator, io, &.{ "git", "add", "PKGBUILD" }, remote);
+            try runFixtureCommand(allocator, io, &.{ "git", "commit", "-m", "prepare requires installed dependency" }, remote);
+        }
+        var manager = try initFixtureAurManager(allocator, &paths, paths.remote_root);
+        defer manager.deinit();
+        manager.alpm.disable_transaction_hooks();
+        for (names) |name| {
+            _ = try manager.cachePkgbase(name, name);
+            try manager.bin_variant_cache.put(try allocator.dupe(u8, name), null);
+        }
+        var service = rpc.TestService{ .packages = &.{
+            .{ .Name = "fixture-leaf", .PackageBase = "fixture-leaf" },
+            .{ .Name = "fixture-tool", .PackageBase = "fixture-tool" },
+            .{ .Name = "fixture-app", .PackageBase = "fixture-app" },
+        } };
+        service.install(&manager.aur_client);
+        var context = operation_api.OperationContext.init(allocator, io);
+        defer context.deinit();
+        const Answers = struct {
+            outcome: Outcome,
+            context: *operation_api.OperationContext,
+            plan_confirmations: usize = 0,
+            dependency_cancellations: usize = 0,
+
+            fn answer(data: ?*anyopaque, question: operation_api.Question) operation_api.QuestionResponse {
+                const self: *@This() = @ptrCast(@alignCast(data.?));
+                if (question.envelope.backend == .aur and question.kind == .confirm_transaction) {
+                    self.plan_confirmations += 1;
+                    if (self.outcome == .decline_plan) return .declined;
+                }
+                return .accepted;
+            }
+
+            fn info(data: ?*anyopaque, args: events.InformationalArgs) void {
+                const self: *@This() = @ptrCast(@alignCast(data.?));
+                if (self.outcome != .cancel_dependency_install or args.event_type != .aur_install_start) return;
+                if (!std.mem.eql(u8, args.package_name orelse return, "fixture-leaf")) return;
+                // libalpm installs local archives without another confirmation.
+                // Cancel at the shared install boundary to cover both backends.
+                self.dependency_cancellations += 1;
+                self.context.cancel();
+            }
+        };
+        var answers = Answers{ .outcome = outcome, .context = &context };
+        context.setQuestionHandler(.{ .function = Answers.answer, .data = &answers });
+        _ = try manager.dispatcher.addInformationalHandler(.{ .function = Answers.info, .data = &answers });
+        manager.setOperationContext(&context);
+        defer manager.setOperationContext(null);
+        if (outcome != .install) {
+            // Neither declining the plan nor cancelling the leaf's install may
+            // install packages or allow dependents to enter prepare().
+            try std.testing.expectError(error.Cancelled, manager.installPackages(&.{"fixture-app"}));
+            for (names) |name| try std.testing.expect(!manager.alpm.is_package_installed(name));
+        } else {
+            try manager.installPackages(&.{"fixture-app"});
+            var installed = (try manager.alpm.get_single_installed_package("fixture-app")).?;
+            defer installed.deinit(allocator);
+            try std.testing.expectEqualStrings("2-1", installed.version().?);
+        }
+        try std.testing.expectEqual(@as(usize, 1), answers.plan_confirmations);
+        try std.testing.expectEqual(@as(usize, if (outcome == .cancel_dependency_install) 1 else 0), answers.dependency_cancellations);
+        if (outcome == .decline_plan) {
+            try std.testing.expectError(error.FileNotFound, paths.temporary.dir.access(io, "phases", .{}));
+            continue;
+        }
+        const phases = try paths.temporary.dir.readFileAlloc(io, "phases", allocator, .unlimited);
+        defer allocator.free(phases);
+        try std.testing.expectEqualStrings(
+            if (outcome == .cancel_dependency_install) "fixture-leaf\n" else "fixture-leaf\nfixture-tool\nfixture-app\n",
+            phases,
+        );
+    }
+}
+
+test "AUR dependency planning rejects metadata child edits including pkgver" {
+    const allocator = std.testing.allocator;
+    const io = std.testing.io;
+    const cases = [_]struct { edit: []const u8, expected: anyerror }{
+        .{ .edit = "sed -i 's/^pkgver=1$/pkgver=2/' PKGBUILD", .expected = error.ReviewedPkgbuildChanged },
+        .{ .edit = "printf '\\n# changed\\n' >> PKGBUILD", .expected = error.ReviewedPkgbuildChanged },
+        .{ .edit = "git -c user.name=Tests -c user.email=tests@example.invalid -c commit.gpgsign=false commit --allow-empty -m changed", .expected = error.ReviewedCheckoutChanged },
+        .{ .edit = "exit 37", .expected = error.BuildFailed },
+    };
+    for (cases) |case| {
+        var paths = try createAurManagerFixturePaths(allocator, io);
+        defer paths.deinit(allocator);
+        try createAurFixtureRepository(allocator, io, paths.remote_root, "demo", null);
+        var manager = try initFixtureAurManager(allocator, &paths, paths.remote_root);
+        defer manager.deinit();
+        _ = try manager.cachePkgbase("demo", "demo");
+        manager.setPkgbuildApprovalHandler(.{ .function = struct {
+            fn answer(_: ?*anyopaque, _: PkgbuildDiffRequest) bool {
+                return true;
+            }
+        }.answer });
+        var prepared = try manager.preparePackageForBuild("demo", null);
+        defer prepared.deinit(allocator);
+        try manager.requirePkgbuildApproval(&prepared);
+        const original_digest = prepared.digest;
+        const command = try std.fs.path.join(allocator, &.{ paths.root, "metadata-child" });
+        manager.build_command = command;
+        const script = try std.fmt.allocPrint(allocator, "#!/bin/sh\nset -eu\ntest \"$6\" = --metadata-only\n{s}\n" ++
+            "printf 'pkgbase = demo\\n\\tpkgver = 1\\n\\tpkgrel = 1\\n\\tarch = any\\n\\npkgname = demo\\n'\n", .{case.edit});
+        defer allocator.free(script);
+        try writeFixtureFile(io, command, script, true);
+        try std.testing.expectError(case.expected, manager.generateReviewedSrcinfoUsing(&prepared, .dependencies, runFixtureSrcinfoCommand));
+        try std.testing.expectEqualStrings("1", prepared.info.pkg_version.?);
+        try std.testing.expectEqualSlices(u8, &original_digest, &prepared.digest);
+        try std.testing.expectEqualSlices(u8, &original_digest, &manager.approved_pkgbuild_reviews.get("demo").?.digest);
+        try std.testing.expect(prepared.dependency_metadata == null);
+    }
+}
+
+test "AUR explicit pkgver refresh rejects unrelated edits and preserves the original approval" {
     const allocator = std.testing.allocator;
     const io = std.testing.io;
     const cases = [_]struct {
@@ -4728,7 +4908,7 @@ test "AUR pkgver planning rejects unrelated edits and preserves the original app
         );
         defer allocator.free(script);
         try writeFixtureFile(io, command, script, true);
-        try std.testing.expectError(case.expected, manager.generateReviewedSrcinfoUsing(&prepared, runFixtureSrcinfoCommand));
+        try std.testing.expectError(case.expected, manager.generateReviewedSrcinfoUsing(&prepared, .refresh_version, runFixtureSrcinfoCommand));
         try std.testing.expectEqualStrings(original, prepared.new_pkgbuild);
         try std.testing.expectEqualStrings("1", prepared.info.pkg_version.?);
         try std.testing.expectEqualSlices(u8, &original_digest, &prepared.digest);
@@ -6530,7 +6710,7 @@ test "AUR upgrades skip declined reviews and continue independent packages" {
         try std.testing.expectEqual(case.skipped.len, capture.skip_count);
         try std.testing.expectEqual(@as(usize, if (case.skipped.len == 0) 0 else 1), capture.summaries);
         for (names) |name| {
-            const name_z = try paths.dupeZ(u8, name);
+            const name_z = try paths.dupeSentinel(u8, name, 0);
             try std.testing.expectEqual(containsConst(case.installed, name), manager.alpm.is_package_installed(name_z));
         }
         const built = std.Io.Dir.cwd().readFileAlloc(io, marker, paths, .limited(4096)) catch |err| switch (err) {
@@ -6845,7 +7025,7 @@ test "AUR package preparation failure does not stop valid packages" {
     try std.testing.expectEqual(@as(usize, 1), capture.valid_completed);
     try std.testing.expectEqual(operation_api.CompletionStatus.failed, capture.completion.?);
 
-    const valid_name = try allocator.dupeZ(u8, "valid-after-invalid");
+    const valid_name = try allocator.dupeSentinel(u8, "valid-after-invalid", 0);
     defer allocator.free(valid_name);
     try std.testing.expect(manager.alpm.is_package_installed(valid_name));
 }
@@ -7033,10 +7213,10 @@ test "build-only dependencies are removed after a failed build" {
     try std.testing.expectEqual(@as(usize, 1), capture.cleanup_starts);
     try std.testing.expectEqual(@as(usize, 1), capture.cleanup_dones);
 
-    const makedep_z = try allocator.dupeZ(u8, "makedep-tool");
+    const makedep_z = try allocator.dupeSentinel(u8, "makedep-tool", 0);
     defer allocator.free(makedep_z);
     try std.testing.expect(!manager.alpm.is_package_installed(makedep_z));
-    const failpkg_z = try allocator.dupeZ(u8, "failpkg");
+    const failpkg_z = try allocator.dupeSentinel(u8, "failpkg", 0);
     defer allocator.free(failpkg_z);
     try std.testing.expect(!manager.alpm.is_package_installed(failpkg_z));
 }

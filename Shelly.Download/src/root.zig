@@ -102,6 +102,8 @@ fn initHttpClient(
     return .{
         .allocator = allocator,
         .io = io,
+        // GitHub security and redirect headers can exceed the HTTP client's 8 KiB default.
+        .read_buffer_size = 64 * 1024,
         .connect_timeout = connectTimeout(connect_timeout_seconds),
         .address_family_policy = address_family_policy,
     };
@@ -441,18 +443,18 @@ pub const CoreDownloader = struct {
         const status = response.head.status;
         if (status == .not_modified) return DownloadError.NotModified;
         if (status == .not_found) return DownloadError.NotFound;
-        if (@intFromEnum(status) == 416 and resume_offset != 0) {
+        if (@backingInt(status) == 416 and resume_offset != 0) {
             std.Io.Dir.cwd().deleteFile(self.io, self.configuration.resume_path.?) catch return error.FileError;
             return self.performDownload(url, destination_path, force);
         }
         switch (status.class()) {
             .success => {},
             .server_error => {
-                self.logErr("Could not download {0f} from {1f}: the server returned HTTP {2d}.", .{ diagnostics.safe(destination_path), diagnostics.safe(url), @intFromEnum(status) });
+                self.logErr("Could not download {0f} from {1f}: the server returned HTTP {2d}.", .{ diagnostics.safe(destination_path), diagnostics.safe(url), @backingInt(status) });
                 return DownloadError.NetworkError;
             },
             else => {
-                self.logErr("HTTP status {d} for {s}", .{ @intFromEnum(status), url });
+                self.logErr("HTTP status {d} for {s}", .{ @backingInt(status), url });
                 return DownloadError.HttpError;
             },
         }
@@ -586,11 +588,11 @@ pub const CoreDownloader = struct {
     }
 
     fn curlDownload(self: *CoreDownloader, url: []const u8, destination: []const u8, force: bool) DownloadError!void {
-        const url_z = self.allocator.dupeZ(u8, url) catch return error.FileError;
+        const url_z = self.allocator.dupeSentinel(u8, url, 0) catch return error.FileError;
         defer self.allocator.free(url_z);
         const part = (if (self.configuration.resume_path) |path| self.allocator.dupe(u8, path) else makePartPath(self.allocator, self.io, destination)) catch return error.FileError;
         defer self.allocator.free(part);
-        const path_z = self.allocator.dupeZ(u8, part) catch return error.FileError;
+        const path_z = self.allocator.dupeSentinel(u8, part, 0) catch return error.FileError;
         defer self.allocator.free(path_z);
         defer if (self.configuration.resume_path == null) std.Io.Dir.cwd().deleteFile(self.io, part) catch {};
         try self.emitEvent(.{ .event_type = .Start, .destination_path = destination });
@@ -1908,6 +1910,48 @@ test "redirects preserve bytes and disk-full injection preserves the previous de
     const bytes = try std.Io.Dir.cwd().readFileAlloc(io, target, a, .limited(100));
     defer a.free(bytes);
     try std.testing.expectEqualStrings("old", bytes);
+}
+
+test "downloads accept large response headers across redirects with owned and shared clients" {
+    const a = std.testing.allocator;
+    var threaded: std.Io.Threaded = .init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    const large_header = "X-Padding: " ++ @as([12 * 1024]u8, @splat('x')) ++ "\r\n";
+
+    for ([_]bool{ false, true }) |shared| {
+        var temporary = std.testing.tmpDir(.{});
+        defer temporary.cleanup();
+        const destination = try testDestinationPath(a, io, &temporary);
+        defer a.free(destination);
+        var server = try TestHttpServer.init(io, .raw);
+        defer server.deinit();
+        server.response = "HTTP/1.1 302 Found\r\n" ++
+            "Location: /next.pkg.tar.zst\r\n" ++
+            large_header ++
+            "Content-Length: 0\r\nConnection: close\r\n\r\n";
+        server.second_response = "HTTP/1.1 200 OK\r\n" ++
+            large_header ++
+            "Content-Length: 5\r\nConnection: close\r\n\r\nhello";
+        var serving = try io.concurrent(TestHttpServer.serve, .{&server});
+        defer _ = serving.cancel(io) catch {};
+        const url = try server.url(a);
+        defer a.free(url);
+        var session = DownloadSession.init(a, io, 2, .prefer_ipv4);
+        defer session.deinit();
+        const config = timeoutTestConfiguration();
+        var core = if (shared) session.downloader(config) else CoreDownloader.init(a, io, config);
+        defer core.deinit();
+        core.quiet = true;
+
+        const result = core.downloadToFile(url, destination, true);
+        if (result == .failure) return result.failure;
+        try std.testing.expect(result == .succes);
+        try serving.await(io);
+        const bytes = try std.Io.Dir.cwd().readFileAlloc(io, destination, a, .limited(100));
+        defer a.free(bytes);
+        try std.testing.expectEqualStrings("hello", bytes);
+    }
 }
 
 test "disabled timeouts allow cancellable downloads with owned and shared clients" {

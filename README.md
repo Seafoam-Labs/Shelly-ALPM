@@ -121,6 +121,19 @@ available. `Megabytes` remains the default; restore it with
 `shelly config set FileSizeDisplay Megabytes`. This setting affects human-readable
 CLI output; structured output keeps numeric byte counts.
 
+## CLI progress animation
+
+`ProgressBarStyle` defaults to `Shell`: a small `<` / `=` shell opens and closes
+as progress advances through a line of dots. Completed bars use `=` throughout.
+To select it in an existing configuration:
+
+```bash
+shelly config set ProgressBarStyle Shell
+```
+
+`Blocks` and `Pacman` remain available, and saved style choices are preserved.
+Redirected output prints completed progress lines without animation.
+
 ## PKGBUILD review
 
 Terminal PKGBUILD reviews show changed lines with three unchanged lines of
@@ -215,16 +228,14 @@ Upcoming features and development targets:
 
 ## Prerequisites
 
-- **Arch Linux** (or an Arch-based distribution)
-- **zig 0.16.0** (for building)
+- **Devario**, or Arch Linux for the libalpm-enabled variant
+- **zig 0.17.0** (for building)
 - **vala** (for building)
 - **libalpm** (provided by `pacman`; omitted from the CLI build with `-Dlibalpm=false`)
 
-CI installs the prebuilt Arch **zig 0.16.0-1** package with its LLVM 21 runtime
-dependencies. This package includes the `R_X86_64_PC64` linker fix required by
-newer glibc startup objects. The shared setup action installs it after system
-updates and verifies the package and compiler versions. Builds retain Zig's
-normal backend defaults; CI does not rebuild the compiler.
+CI installs the official Zig **0.17.0** Linux archive, verifies its SHA-256,
+and checks the compiler version. The shared setup action selects the matching
+runner architecture. Builds retain Zig's normal backend defaults.
 
 ### Optional Prerequisites
 
@@ -247,6 +258,15 @@ makepkg -si
 ```
 
 ### Manual Build
+
+Use Zig 0.17.0. Third-party libraries are pinned by URL and content hash in each
+component's `build.zig.zon`; Zig downloads them into its package cache on the
+first build. Dependencies use unchanged upstream sources, including transitive
+dependencies. No vendored copies or dependency source patches are maintained.
+
+To populate the dependency cache before building offline, run
+`zig build --fetch=all` in each component you intend to build. Subsequent builds
+reuse the downloaded packages.
 
 The native Zig components can be built and tested independently:
 

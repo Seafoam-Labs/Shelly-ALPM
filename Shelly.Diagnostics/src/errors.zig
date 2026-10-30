@@ -1,5 +1,29 @@
 const std = @import("std");
 
+/// Preserve the propagated cause for deferred diagnostics. Zig 0.17 errdefer
+/// no longer captures the returned error. Successful values pass through intact.
+pub fn captureError(value: anytype, failure: *?anyerror) @TypeOf(value) {
+    switch (@typeInfo(@TypeOf(value))) {
+        .error_union => return value catch |err| {
+            failure.* = err;
+            return err;
+        },
+        .error_set => failure.* = value,
+        else => {},
+    }
+    return value;
+}
+
+test "deferred diagnostics retain the propagated error and preserve success" {
+    var failure: ?anyerror = null;
+    try std.testing.expectEqual(@as(u32, 42), try captureError(@as(error{Failed}!u32, 42), &failure));
+    try std.testing.expectEqual(null, failure);
+    try std.testing.expectError(error.Failed, captureError(@as(error{Failed}!u32, error.Failed), &failure));
+    try std.testing.expectEqual(error.Failed, failure.?);
+    try std.testing.expectEqual(error.Cancelled, captureError(error.Cancelled, &failure));
+    try std.testing.expectEqual(error.Cancelled, failure.?);
+}
+
 pub const Context = struct {
     operation: []const u8 = "the package operation",
     action: []const u8 = "manage packages",
@@ -62,7 +86,14 @@ pub fn format(allocator: std.mem.Allocator, err: anyerror, context: Context) ![]
     if (context.stage) |stage| try out.writer.print("\nStage: {s}", .{stage});
     if (std.mem.indexOf(u8, explanation, "Technical details:") == null)
         try out.writer.print("\n\nTechnical details: {s}", .{@errorName(err)});
-    if (context.domain) |domain| try out.writer.print("\nBackend: {s}", .{domain});
+    if (context.domain) |domain| {
+        // Native backends may already supply a complete diagnostic block.
+        var lines = std.mem.splitScalar(u8, explanation, '\n');
+        const already_present = while (lines.next()) |line| {
+            if (std.mem.startsWith(u8, line, "Backend: ") and std.mem.eql(u8, line["Backend: ".len..], domain)) break true;
+        } else false;
+        if (!already_present) try out.writer.print("\nBackend: {s}", .{domain});
+    }
     if (context.native_code) |code| try out.writer.print("\nNative code: {d}", .{code});
     return sanitizeAlloc(allocator, out.written());
 }
@@ -256,7 +287,7 @@ pub fn cause(err: anyerror) []const u8 {
         error.ConflictingPackageFunctions => "The PKGBUILD declares conflicting generic and package-specific functions. Review which function should package the selected output.",
         error.MissingPackageFunction => "The PKGBUILD is missing its package() function. Review the package definition.",
         error.InvalidDynamicScalarOutput, error.InvalidDynamicArrayOutput, error.InvalidDynamicShellOptionOutput => "The metadata subprocess returned invalid output. Review the dynamic metadata and build details.",
-        error.UnsupportedArrayExpansion => "This PKGBUILD uses an array expansion Shelly cannot resolve. Use quoted elements of a dense array with literal nonnegative decimal indices, standalone quoted array references with supported literal, * or ? trimming patterns, or explicit entries.",
+        error.UnsupportedArrayExpansion => "This PKGBUILD uses an array expansion Shelly cannot resolve. Use quoted elements of a dense array with literal nonnegative decimal indices, optionally trimmed with #, ##, % or %% and literal, * or ? patterns; standalone quoted whole-array references with those trimming patterns; or explicit entries.",
         error.ArrayExpansionTooDeep, error.ArrayExpansionTooLarge => "The PKGBUILD array expansion exceeds Shelly's nesting or element limit. Simplify the array assignments.",
         error.UnresolvedPkgbuildVariable => "The PKGBUILD contains an expression Shelly could not resolve. Review the reported field and source location.",
         error.MissingPkgbuildSourceFile => "A local source referenced by the PKGBUILD is missing. Restore the source or correct its path.",

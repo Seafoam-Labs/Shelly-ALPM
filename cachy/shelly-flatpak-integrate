@@ -1,0 +1,96 @@
+#!/bin/bash
+# Add the Shelly action using an atomic replacement of each desktop override.
+FLATPAK_DIRS=(
+    "/var/lib/flatpak/exports/share/applications"
+    "$HOME/.local/share/flatpak/exports/share/applications"
+)
+LOCAL_APPS_DIR="$HOME/.local/share/applications"
+failed=0
+updated=0
+
+# %q keeps file names and external control bytes safe in terminal diagnostics.
+report_failure() {
+    printf 'Could not %s %q. Review the file, destination directory, and technical details before retrying.\n' "$1" "$2" >&2
+    if [[ -n $3 ]]; then printf '\nTechnical details: %q\n' "$3" >&2; fi
+}
+if ! detail=$(mkdir -p -- "$LOCAL_APPS_DIR" 2>&1); then
+    report_failure 'create the desktop override directory' "$LOCAL_APPS_DIR" "$detail"
+    exit 1
+fi
+
+for dir in "${FLATPAK_DIRS[@]}"; do
+    [[ -d $dir ]] || continue
+    for desktop_file in "$dir"/*.desktop; do
+        [[ -f $desktop_file ]] || continue
+        filename=${desktop_file##*/}
+        dest="$LOCAL_APPS_DIR/$filename"
+        source=$desktop_file
+        [[ -f $dest ]] && source=$dest
+        detail=$(grep -q 'ShellyManage' "$source" 2>&1)
+        status=$?
+        [[ $status -eq 0 ]] && continue
+        if [[ $status -ne 1 ]]; then
+            report_failure 'read the desktop entry' "$source" "$detail"
+            failed=$((failed + 1))
+            continue
+        fi
+        if ! temporary=$(mktemp "$LOCAL_APPS_DIR/.shelly-desktop.XXXXXX" 2>&1); then
+            report_failure 'prepare the desktop override' "$dest" "$temporary"
+            failed=$((failed + 1))
+            continue
+        fi
+        if ! detail=$(cp -- "$source" "$temporary" 2>&1); then
+            report_failure 'copy the desktop entry' "$source" "$detail"
+            rm -f -- "$temporary"
+            failed=$((failed + 1))
+            continue
+        fi
+        detail=$(grep -q '^Actions=' "$temporary" 2>&1)
+        status=$?
+        if [[ $status -eq 0 ]]; then
+            detail=$(sed -i 's/^Actions=\(.*\)/Actions=\1ShellyManage;/' "$temporary" 2>&1)
+            status=$?
+        elif [[ $status -eq 1 ]]; then
+            detail=$(sed -i '/^\[Desktop Entry\]/a Actions=ShellyManage;' "$temporary" 2>&1)
+            status=$?
+        fi
+        if [[ $status -ne 0 ]]; then
+            report_failure 'update the desktop actions in' "$dest" "$detail"
+            rm -f -- "$temporary"
+            failed=$((failed + 1))
+            continue
+        fi
+        if ! detail=$(cat >> "$temporary" 2>&1 <<'EOF'
+
+[Desktop Action ShellyManage]
+Name=Manage in Shelly
+Name[ru]=Управлять в Shelly
+Name[pl]=Zarządzaj w Shelly
+Icon=shelly
+Exec=/usr/bin/shelly-ui --page flatpak-install
+EOF
+        ); then
+            report_failure 'append the Shelly action to' "$dest" "$detail"
+            rm -f -- "$temporary"
+            failed=$((failed + 1))
+            continue
+        fi
+        if ! detail=$(chmod --reference="$source" -- "$temporary" 2>&1) ||
+            ! detail=$(mv -f -- "$temporary" "$dest" 2>&1); then
+            report_failure 'save the desktop override' "$dest" "$detail"
+            rm -f -- "$temporary"
+            failed=$((failed + 1))
+            continue
+        fi
+        updated=$((updated + 1))
+    done
+done
+
+if ! detail=$(update-desktop-database "$LOCAL_APPS_DIR" 2>&1); then
+    printf 'Warning: desktop entries were processed, but the desktop application cache could not be refreshed. Refresh it after resolving the reported error.\n\nTechnical details: %q\n' "$detail" >&2
+fi
+if [[ $failed -gt 0 ]]; then
+    printf 'Updated %d desktop entries; %d entries could not be updated. Successful changes were kept. Review the errors above.\n' "$updated" "$failed" >&2
+    exit 1
+fi
+printf 'Flatpak desktop integration is ready (%d entries updated).\n' "$updated"

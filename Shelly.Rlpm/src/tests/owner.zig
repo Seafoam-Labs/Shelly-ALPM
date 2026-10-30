@@ -14,15 +14,18 @@ const Fixture = struct {
         errdefer temporary.cleanup();
         try temporary.dir.createDirPath(io, "root");
         try temporary.dir.createDirPath(io, "db");
+
         const root = try temporary.dir.realPathFileAlloc(io, "root", allocator);
         errdefer allocator.free(root);
         const db = try temporary.dir.realPathFileAlloc(io, "db", allocator);
         errdefer allocator.free(db);
+
         if (populated) {
             for ([_][]const u8{ "zeta", "alpha", "beta" }) |name| {
                 const dir = try std.fmt.allocPrint(allocator, "db/local/{s}-1.0-1", .{name});
                 defer allocator.free(dir);
                 try temporary.dir.createDirPath(io, dir);
+
                 const path = try std.fmt.allocPrint(allocator, "{s}/desc", .{dir});
                 defer allocator.free(path);
                 const contents = try std.fmt.allocPrint(
@@ -33,8 +36,10 @@ const Fixture = struct {
                 defer allocator.free(contents);
                 try temporary.dir.writeFile(io, .{ .sub_path = path, .data = contents });
             }
+
             try temporary.dir.writeFile(io, .{ .sub_path = "db/local/ALPM_DB_VERSION", .data = "9\n" });
         }
+
         return .{
             .temporary = temporary,
             .root = root,
@@ -89,6 +94,7 @@ fn completeConfiguration(fixture: Fixture) rlpm.OwnerConfiguration {
             .description = "provided by the environment",
         },
     };
+
     config.no_upgrade = &.{"etc/config"};
     config.no_extract = &.{ "usr/share/docs/*", "!usr/share/docs/keep" };
     config.overwrite_files = &.{"usr/bin/*"};
@@ -99,6 +105,7 @@ fn completeConfiguration(fixture: Fixture) rlpm.OwnerConfiguration {
         .database = .optional,
         .package_trust = .{ .allow_marginal = true },
     };
+
     config.local_file_signature_policy = null;
     config.remote_file_signature_policy = .{ .package = .disabled, .database = .disabled };
     config.disable_download_timeout = true;
@@ -107,6 +114,7 @@ fn completeConfiguration(fixture: Fixture) rlpm.OwnerConfiguration {
     config.worker_executable = "/usr/bin/shelly";
     config.sandbox.setDisabled(true);
     config.sandbox.disable_network = false;
+
     return config;
 }
 
@@ -114,25 +122,30 @@ test "owner paths use canonical independent root and database directories" {
     var fixture = try Fixture.init(false);
     defer fixture.deinit();
     try fixture.temporary.dir.symLink(io, "root", "root-link", .{ .is_directory = true });
+
     const link = try fixture.temporary.dir.realPathFileAlloc(io, ".", allocator);
     defer allocator.free(link);
     const root_link = try std.fmt.allocPrint(allocator, "{s}/root-link/./", .{link});
     defer allocator.free(root_link);
     var config = fixture.configuration();
     config.root = root_link;
+
     var owner = try rlpm.Owner.init(io, allocator, config, &repositories);
     defer owner.deinit() catch unreachable;
     const expected_root = try std.fmt.allocPrint(allocator, "{s}/", .{fixture.root});
     defer allocator.free(expected_root);
     try std.testing.expectEqualStrings(expected_root, owner.options().root);
+
     const local = try owner.database(owner.localDatabase().?);
     const expected_local = try std.fmt.allocPrint(allocator, "{s}/local/", .{fixture.db});
     defer allocator.free(expected_local);
     try std.testing.expectEqualStrings(expected_local, local.path);
     try std.testing.expectEqual(.exists, local.status.presence);
+
     const expected_sync = try std.fmt.allocPrint(allocator, "{s}/sync/core.db", .{fixture.db});
     defer allocator.free(expected_sync);
     try std.testing.expectEqualStrings(expected_sync, owner.syncDatabases()[0].path);
+
     const expected_hook = try std.fmt.allocPrint(allocator, "{s}/usr/share/libalpm/hooks/", .{fixture.root});
     defer allocator.free(expected_hook);
     try std.testing.expectEqualStrings(expected_hook, owner.options().hook_directories.?[0]);
@@ -140,6 +153,7 @@ test "owner paths use canonical independent root and database directories" {
     try std.testing.expectError(error.FileNotFound, fixture.temporary.dir.statFile(io, "db/sync", .{}));
     try std.testing.expectError(error.FileNotFound, owner.loadDatabase(io, owner.findDatabase("core").?));
     try std.testing.expectEqual(.io, owner.diagnostic().?.category);
+
     var message: [128]u8 = undefined;
     var writer = std.Io.Writer.fixed(&message);
     try owner.diagnostic().?.format(&writer);
@@ -157,8 +171,10 @@ test "owner owns caller configuration, relation versions, and ordered server lis
         var config = completeConfiguration(fixture);
         const copied = try config.copy(input, io);
         config = copied;
+
         var repos = repositories;
         repos[0].database_name = try input.dupe(u8, "core");
+
         const servers = try input.alloc([]const u8, 1);
         servers[0] = try input.dupe(u8, "https://owned.invalid/");
         repos[0].servers = servers;
@@ -185,12 +201,15 @@ test "owner owns caller configuration, relation versions, and ordered server lis
         config.sandbox.disable_filesystem and config.sandbox.disable_syscalls and
             !config.sandbox.disable_network,
     );
+
     try std.testing.expect(config.effectiveLocalSignaturePolicy().package_trust.allow_marginal);
     try std.testing.expectEqual(.disabled, config.effectiveRemoteSignaturePolicy().package);
+
     const core = try owner.database(owner.findDatabase("core").?);
     try std.testing.expectEqualStrings("https://owned.invalid", core.servers.items[0]);
     try std.testing.expect(core.signature_policy.package_trust.allow_marginal);
     try std.testing.expect(std.mem.endsWith(u8, core.path, "/sync/core.files"));
+
     const local = try owner.database(owner.localDatabase().?);
     try std.testing.expectEqual(.disabled, local.signature_policy.database);
     try std.testing.expectEqual(3, (try owner.packageIds(owner.localDatabase().?)).len);
@@ -206,12 +225,14 @@ test "registration validates names and preserves stable identities across growth
         error.DuplicateDatabase,
         owner.registerDatabase(.{ .database_name = "core" }),
     );
+
     try std.testing.expectError(
         error.ReservedDatabaseName,
         owner.registerDatabase(
             .{ .database_name = "local" },
         ),
     );
+
     for ([_][]const u8{ "", "path/repo", "bad\x00name" }) |name| {
         try std.testing.expectError(
             error.InvalidDatabaseName,
@@ -220,24 +241,30 @@ test "registration validates names and preserves stable identities across growth
             ),
         );
     }
+
     try std.testing.expectEqual(2, owner.syncDatabases().len);
+
     for (0..20) |i| {
         const name = try std.fmt.allocPrint(allocator, "repository-{d}", .{i});
         defer allocator.free(name);
         _ = try owner.registerDatabase(.{ .database_name = name });
     }
+
     try std.testing.expectEqualStrings("core", (try owner.database(core)).name);
     try owner.unregisterDatabase(core);
+
     const replacement = try owner.registerDatabase(.{ .database_name = "core" });
     try std.testing.expect(!core.eql(replacement));
     try std.testing.expectEqualStrings("cachyos", owner.syncDatabases()[0].name);
     try std.testing.expectEqualStrings("core", owner.syncDatabases()[owner.syncDatabases().len - 1].name);
     try std.testing.expectError(error.StaleDatabaseReference, owner.unregisterDatabase(core));
     try std.testing.expectEqual(.stale_reference, owner.diagnostic().?.category);
+
     var other = try rlpm.Owner.init(io, allocator, fixture.configuration(), &repositories);
     defer other.deinit() catch unreachable;
     try std.testing.expectError(error.ForeignOwner, other.database(replacement));
     try std.testing.expectError(error.ForeignOwner, other.unregisterDatabase(replacement));
+
     const local = owner.localDatabase().?;
     try owner.unregisterDatabase(local);
     try std.testing.expect(owner.localDatabase() == null);
@@ -256,26 +283,33 @@ test "local queries retain repository provenance and reject invalidated package 
         "cachyos",
         (try owner.packageMetadata(io, alpha, .{})).installed_database.?,
     );
+
     try std.testing.expect(try owner.findPackage(local, "absent") == null);
     try std.testing.expect(try owner.findGroup(io, local, "absent") == null);
+
     const expected = [_][]const u8{ "alpha", "beta", "zeta" };
+
     for (try owner.packageIds(local), expected) |id, name| {
         try std.testing.expectEqualStrings(
             name,
             (try owner.package(try owner.packageReference(local, id))).name,
         );
     }
+
     const group = (try owner.findGroup(io, local, "common")).?;
+
     for (group.packages.items, expected) |id, name| {
         try std.testing.expectEqualStrings(
             name,
             (try owner.package(try owner.packageReference(local, id))).name,
         );
     }
+
     try std.testing.expectError(
         error.StalePackageReference,
-        owner.packageReference(local, @enumFromInt(999)),
+        owner.packageReference(local, @fromBackingInt(@intCast(999))),
     );
+
     try owner.invalidateDatabase(local);
     try std.testing.expectError(error.StalePackageReference, owner.package(alpha));
     try std.testing.expectError(error.DatabaseNotLoaded, owner.findPackage(local, "alpha"));
@@ -285,6 +319,7 @@ test "local queries retain repository provenance and reject invalidated package 
         "alpha",
         (try owner.package((try owner.findPackage(local, "alpha")).?)).name,
     );
+
     try std.testing.expectError(error.DatabaseAlreadyLoaded, owner.loadDatabase(io, local));
 }
 
@@ -310,12 +345,15 @@ test "option replacement updates paths and inheritance without altering local me
         .required,
         (try owner.database(owner.findDatabase("cachyos").?)).signature_policy.package,
     );
+
     try std.testing.expectEqual(.optional, owner.options().effectiveLocalSignaturePolicy().package);
+
     // Recopying an already stored URL must not strip another slash.
     try std.testing.expectEqualStrings(
         "https://second.invalid/core/",
         (try owner.database(core)).servers.items[1],
     );
+
     update = owner.options();
     update.root = fixture.db;
     try std.testing.expectError(error.ImmutablePath, owner.setOptions(io, update));
@@ -333,20 +371,24 @@ test "ordered option lists support replacement append and first-match removal" {
     defer fixture.deinit();
     var owner = try rlpm.Owner.init(io, allocator, fixture.configuration(), &.{});
     defer owner.deinit() catch unreachable;
+
     inline for (comptime std.meta.tags(rlpm.OwnerConfiguration.StringList)) |field| {
         try owner.setList(io, field, &.{ "first", "second", "first" });
         try owner.addListValue(io, field, "last");
         try std.testing.expectEqual(4, owner.options().list(field).len);
         try std.testing.expect(try owner.removeListValue(io, field, "first"));
+
         const directory = field == .cache_directories or field == .hook_directories;
         try std.testing.expectEqualStrings(
             if (directory) "second/" else "second",
             owner.options().list(field)[0],
         );
+
         try std.testing.expectEqualStrings(
             if (directory) "first/" else "first",
             owner.options().list(field)[1],
         );
+
         try std.testing.expect(!try owner.removeListValue(io, field, "absent"));
         try owner.setList(io, field, &.{});
         try std.testing.expectEqual(0, owner.options().list(field).len);
@@ -362,11 +404,13 @@ test "invalid initialization and partial registration release everything" {
     config = fixture.configuration();
     config.database_path = "/rlpm-test-does-not-exist";
     try std.testing.expectError(error.FileNotFound, rlpm.Owner.init(io, allocator, config, &.{}));
+
     for ([_][]const u8{ "", "shelly", "./shelly", "/usr/bin/shelly\x00suffix" }) |path| {
         config = fixture.configuration();
         config.worker_executable = path;
         try std.testing.expectError(error.InvalidOption, rlpm.Owner.init(io, allocator, config, &.{}));
     }
+
     config = fixture.configuration();
     try std.testing.expectError(
         error.DuplicateDatabase,
@@ -377,6 +421,7 @@ test "invalid initialization and partial registration release everything" {
             &.{ repositories[0], repositories[0] },
         ),
     );
+
     try fixture.temporary.dir.writeFile(io, .{ .sub_path = "db/local", .data = "not a directory" });
     try std.testing.expectError(error.NotDir, rlpm.Owner.init(io, allocator, config, &repositories));
 }
@@ -398,15 +443,18 @@ const Capture = struct {
             self.registration_error = err;
             break :blk self.owner.localDatabase().?;
         };
+
         self.owner.deinit() catch |err| {
             self.release_error = err;
         };
+
         if (self.cancel) self.owner.requestCancellation();
     }
 
     fn onQuestion(context: ?*anyopaque, question: *rlpm.Callbacks.Question) void {
         const self: *Capture = @ptrCast(@alignCast(context.?));
         self.called += 1;
+
         if (self.change_tag) {
             question.* = .{ .corrupted = .{ .path = "changed", .reason = error.TestFailure } };
         } else switch (question.*) {
@@ -414,6 +462,7 @@ const Capture = struct {
             .select_provider => |*payload| payload.selected = if (self.invalid_answer) 999 else 1,
             else => {},
         }
+
         if (self.cancel) self.owner.requestCancellation();
     }
 };
@@ -432,10 +481,12 @@ test "callbacks carry contexts, reject reentry, and propagate cancellation" {
             .question_context = &capture,
         },
     );
+
     try owner.emit(.{ .database_missing = owner.localDatabase().? });
     try std.testing.expectEqual(error.CallbackReentry, capture.registration_error.?);
     try std.testing.expectEqual(error.CallbackReentry, capture.release_error.?);
     try std.testing.expect(owner.findDatabase("reentrant") == null);
+
     const alpha = (try owner.findPackage(owner.localDatabase().?, "alpha")).?;
     var question: rlpm.Callbacks.Question = .{ .install_ignored = .{ .package = alpha } };
     try owner.ask(&question);
@@ -465,14 +516,17 @@ test "provider answers are bounded and callbacks cannot replace the question tag
         (try owner.findPackage(local, "alpha")).?,
         (try owner.findPackage(local, "beta")).?,
     };
+
     var capture: Capture = .{ .owner = &owner };
     try owner.setCallbacks(.{ .question = Capture.onQuestion, .question_context = &capture });
+
     var question: rlpm.Callbacks.Question = .{
         .select_provider = .{
             .dependency = .{ .name = "runtime" },
             .candidates = &candidates,
         },
     };
+
     try owner.ask(&question);
     try std.testing.expectEqual(1, question.select_provider.selected);
     capture.invalid_answer = true;
@@ -487,16 +541,20 @@ fn allocationLifecycle(failing: std.mem.Allocator, fixture: Fixture) !void {
     var owner = try rlpm.Owner.init(io, failing, completeConfiguration(fixture), &repositories);
     defer owner.deinit() catch unreachable;
     _ = try owner.registerDatabase(.{ .database_name = "third", .servers = &.{"https://third.invalid/"} });
+
     var config = owner.options();
     config.database_extension = ".db";
     owner.setOptions(io, config) catch |err| {
         try std.testing.expectEqualStrings(".files", owner.options().database_extension);
         try std.testing.expectEqual(3, owner.syncDatabases().len);
         try std.testing.expectEqual(3, (try owner.packageIds(owner.localDatabase().?)).len);
+
         return err;
     };
+
     try owner.addListValue(io, .cache_directories, "another-cache");
     _ = try owner.removeListValue(io, .cache_directories, "another-cache");
+
     const local = owner.localDatabase().?;
     try owner.invalidateDatabase(local);
     try owner.loadDatabase(io, local);
@@ -506,7 +564,7 @@ fn allocationLifecycle(failing: std.mem.Allocator, fixture: Fixture) !void {
 test "owner lifecycle propagates every allocation failure and releases all owned storage" {
     var fixture = try Fixture.init(true);
     defer fixture.deinit();
-    try std.testing.checkAllAllocationFailures(allocator, allocationLifecycle, .{fixture});
+    try @import("allocation_failures.zig").checkAllAllocationFailures(allocator, allocationLifecycle, .{fixture});
 }
 
 test "failed option replacement preserves old options and database identities" {
@@ -548,6 +606,7 @@ test "owner defaults and registration match independently recorded libalpm resul
         manifest.value.object.get("library").?.object.get("sha256").?.string,
         reference.get("library_sha256").?.string,
     );
+
     const defaults = reference.get("defaults").?.object;
     var fixture = try Fixture.init(false);
     defer fixture.deinit();
@@ -562,6 +621,7 @@ test "owner defaults and registration match independently recorded libalpm resul
         @as(u32, @intCast(defaults.get("parallel_downloads").?.integer)),
         options.parallel_downloads,
     );
+
     inline for (.{
         .{ "checkspace", "check_space" }, .{ "usesyslog", "use_syslog" },
         .{
@@ -571,6 +631,7 @@ test "owner defaults and registration match independently recorded libalpm resul
     }) |pair| {
         try std.testing.expectEqual(defaults.get(pair[0]).?.integer != 0, @field(options, pair[1]));
     }
+
     inline for (.{
         .{ "gpgdir", "gpg_directory" },
         .{ "logfile", "log_file" },
@@ -579,6 +640,7 @@ test "owner defaults and registration match independently recorded libalpm resul
         try std.testing.expect(defaults.get(pair[0]).? == .null);
         try std.testing.expect(@field(options, pair[1]) == null);
     }
+
     inline for (.{
         .{ "cachedirs", "cache_directories" },     .{ "architectures", "architectures" },
         .{ "ignorepkgs", "ignore_packages" },      .{ "ignoregroups", "ignore_groups" },
@@ -587,19 +649,23 @@ test "owner defaults and registration match independently recorded libalpm resul
     }) |pair| {
         try std.testing.expectEqual(defaults.get(pair[0]).?.array.items.len, @field(options, pair[1]).len);
     }
+
     const hooks = defaults.get("hookdirs").?.array.items;
     try std.testing.expectEqual(hooks.len, options.hook_directories.?.len);
+
     for (hooks, options.hook_directories.?) |expected, actual|
         try expectReferencePath(
             actual,
             expected.string,
             fixture,
         );
+
     inline for (.{ "default_siglevel", "local_file_siglevel", "remote_file_siglevel" }) |key|
         try std.testing.expectEqual(
             0,
             defaults.get(key).?.integer,
         );
+
     for ([_]rlpm.SignaturePolicy{
         options.default_signature_policy,
         options.effectiveLocalSignaturePolicy(),
@@ -608,13 +674,16 @@ test "owner defaults and registration match independently recorded libalpm resul
         try std.testing.expectEqual(.disabled, policy.package);
         try std.testing.expectEqual(.disabled, policy.database);
     }
+
     const order = reference.get("repository_order").?.array.items;
     try std.testing.expectEqual(order.len, owner.syncDatabases().len);
+
     for (order, owner.syncDatabases()) |expected, actual|
         try std.testing.expectEqualStrings(
             expected.string,
             actual.name,
         );
+
     for (reference.get("rejected_registration_names").?.array.items) |name| {
         if (owner.registerDatabase(.{ .database_name = name.string })) |_| {
             return error.UnexpectedRegistrationSuccess;
@@ -623,34 +692,43 @@ test "owner defaults and registration match independently recorded libalpm resul
             else => return err,
         }
     }
+
     const expected_servers = reference.get("servers_after_add").?.array.items;
     const actual_servers = (try owner.database(owner.findDatabase("core").?)).servers.items;
     try std.testing.expectEqual(expected_servers.len, actual_servers.len);
+
     for (expected_servers, actual_servers) |expected, actual|
         try std.testing.expectEqualStrings(
             expected.string,
             actual,
         );
+
     var sandbox: rlpm.OwnerConfiguration.Sandbox = .{};
+
     for (reference.get("sandbox").?.array.items) |step| {
         const state = step.object;
+
         if (std.mem.eql(u8, state.get("set").?.string, "all"))
             sandbox.setDisabled(state.get("value").?.bool)
         else
             sandbox.disable_network = state.get("value").?.bool;
+
         try std.testing.expectEqual(
             state.get("disable_sandbox_filesystem").?.bool,
             sandbox.disable_filesystem,
         );
+
         try std.testing.expectEqual(state.get("disable_sandbox_syscalls").?.bool, sandbox.disable_syscalls);
         try std.testing.expectEqual(state.get("disable_sandbox_network").?.bool, sandbox.disable_network);
     }
+
     sandbox.disable_network = true;
     try std.testing.expectEqual(0, sandbox.legacyDisabledState());
     sandbox.disable_filesystem = true;
     try std.testing.expectEqual(1, sandbox.legacyDisabledState());
     sandbox.disable_syscalls = true;
     try std.testing.expectEqual(2, sandbox.legacyDisabledState());
+
     // Local database initialization creates and validates the recorded format version.
     try std.testing.expect(reference.get("initialization_creates_local_version_file").?.bool);
     _ = try fixture.temporary.dir.statFile(io, "db/local/ALPM_DB_VERSION", .{});
@@ -677,6 +755,7 @@ test "failed local reload rolls back cache indexes and supports retry" {
     failing.fail_index = failing.alloc_index;
     try std.testing.expectError(error.OutOfMemory, owner.loadDatabase(io, local));
     failing.fail_index = std.math.maxInt(usize);
+
     const db = try owner.database(local);
     try std.testing.expect(!db.status.package_cache_loaded);
     try std.testing.expectEqual(0, db.packages.by_name.count());

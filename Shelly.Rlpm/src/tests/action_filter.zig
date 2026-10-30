@@ -1,5 +1,6 @@
 //! Test-only launcher: force network namespace creation to fail with EPERM.
 //! No fault-injection switch exists in the production worker.
+
 const std = @import("std");
 const worker_fixture = @import("worker_fixture");
 const Workers = @import("workers");
@@ -19,9 +20,8 @@ const Program = extern struct {
     len: u16,
     filter: [*]const Instruction,
 };
-const c = @cImport({
-    @cInclude("unistd.h");
-});
+
+const c = @import("rlpm_c");
 
 pub fn main() void {
     const filter = [_]Instruction{
@@ -35,7 +35,7 @@ pub fn main() void {
             .code = bpf.JMP | bpf.JEQ | bpf.K,
             .jt = 0,
             .jf = 1,
-            .k = @intFromEnum(linux.SYS.unshare),
+            .k = @backingInt(linux.SYS.unshare),
         },
         .{
             .code = bpf.RET | bpf.K,
@@ -50,12 +50,15 @@ pub fn main() void {
             .k = seccomp.RET.ALLOW,
         },
     };
+
     const program: Program = .{ .len = filter.len, .filter = &filter };
-    if (linux.errno(linux.prctl(@intFromEnum(linux.PR.SET_NO_NEW_PRIVS), 1, 0, 0, 0)) != .SUCCESS)
+
+    if (linux.errno(linux.prctl(@backingInt(linux.PR.SET_NO_NEW_PRIVS), 1, 0, 0, 0)) != .SUCCESS)
         std.process.exit(126);
+
     if (linux.errno(
         linux.prctl(
-            @intFromEnum(linux.PR.SET_SECCOMP),
+            @backingInt(linux.PR.SET_SECCOMP),
             seccomp.MODE.FILTER,
             @intFromPtr(&program),
             0,
@@ -63,6 +66,7 @@ pub fn main() void {
         ),
     ) != .SUCCESS)
         std.process.exit(126);
+
     const path = worker_fixture.path ++ "";
     const argv = [_:null]?[*:0]const u8{ path.ptr, Workers.action_argument };
     _ = c.execv(path.ptr, @ptrCast(&argv));

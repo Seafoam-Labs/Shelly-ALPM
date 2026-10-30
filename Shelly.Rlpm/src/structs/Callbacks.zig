@@ -1,5 +1,6 @@
 //! Callbacks run synchronously on the Owner's thread. Payloads are borrowed for
 //! the call. They may request cancellation, but may not reenter Owner operations.
+
 const DatabaseRef = @import("DatabaseRef.zig");
 const PackageRef = @import("PackageRef.zig");
 const PackageRelation = @import("PackageRelation.zig");
@@ -113,6 +114,7 @@ pub const Download = union(enum) {
         attempt: u32 = 1,
         resuming: bool,
     },
+
     /// Payload and applicable signature requests ended, before acceptance.
     /// A verification retry starts a new attempt for the same acquisition.
     transferred: struct {
@@ -128,6 +130,7 @@ pub const Download = union(enum) {
         position: usize,
         total: usize,
     },
+
     /// Terminal acquisition result, after verification and durable publication.
     completed: struct {
         name: []const u8,
@@ -206,6 +209,7 @@ log_context: ?*anyopaque = null,
 event: ?*const fn (?*anyopaque, Event) void = null,
 event_context: ?*anyopaque = null,
 question: ?*const fn (?*anyopaque, *Question) void = null,
+
 /// Fallible adapter variant, preferred when set. Uses question_context.
 question_with_error: ?*const fn (?*anyopaque, *Question) anyerror!void = null,
 question_context: ?*anyopaque = null,

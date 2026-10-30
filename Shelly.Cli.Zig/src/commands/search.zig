@@ -418,7 +418,7 @@ fn runStandard(
         }
     }
 
-    if (invocation.globals.ui_mode) {
+    if (invocation.globals.ui_mode or optionEnabled(invocation, "--names-only")) {
         return .{
             .mode = .packages,
             .packages = selected.items,
@@ -590,9 +590,9 @@ fn enrichFlatpakRemoteInfo(
     defer manager.deinit();
     for (packages) |*package| {
         if (package.scope == .unknown or package.remote.len == 0 or package.id.len == 0) continue;
-        const remote = try context.allocator.dupeZ(u8, package.remote);
+        const remote = try context.allocator.dupeSentinel(u8, package.remote, 0);
         defer context.allocator.free(remote);
-        const id = try context.allocator.dupeZ(u8, package.id);
+        const id = try context.allocator.dupeSentinel(u8, package.id, 0);
         defer context.allocator.free(id);
         var info = manager.get_remote_ref_info_flatpak(
             remote,
@@ -613,6 +613,11 @@ fn renderStandard(
     invocation: *const parser.Invocation,
     result: StandardResult,
 ) !void {
+    if (optionEnabled(invocation, "--names-only") and !invocation.globals.ui_mode and !invocation.globals.json) {
+        for (result.packages) |package| try context.stdout.print("{s}\n", .{package.name});
+        for (result.local_packages) |package| try context.stdout.print("{s}\n", .{package.name});
+        return;
+    }
     if (invocation.globals.ui_mode) {
         if (result.mode == .packages) {
             if (result.packages.len > 0) {
@@ -1164,7 +1169,7 @@ fn optionalDependencyInstalledStates(
             installed.* = false;
             continue;
         }
-        const dependency_z = try allocator.dupeZ(u8, dependency);
+        const dependency_z = try allocator.dupeSentinel(u8, dependency, 0);
         defer allocator.free(dependency_z);
         installed.* = manager.is_dependency_satisfied_by_installed_packages(dependency_z) catch false;
     }
@@ -1500,6 +1505,7 @@ test "default standard search renders package tables and JSON for both command f
     };
     const shortcodes = @import("../cli/shortcodes.zig");
     for ([_][]const []const u8{
+        &.{ "search", "standard", "discord", "--names-only" },
         &.{ "search", "standard", "discord" },
         &.{ "-Ss", "discord" },
         &.{ "search", "standard", "--available", "discord" },
@@ -1517,6 +1523,8 @@ test "default standard search renders package tables and JSON for both command f
             try std.testing.expectEqual(@as(usize, 2), parsed.value.array.items.len);
             try std.testing.expectEqualStrings("discord", parsed.value.array.items[0].object.get("Name").?.string);
             try std.testing.expectEqualStrings("webcord", parsed.value.array.items[1].object.get("Name").?.string);
+        } else if (optionEnabled(&outcome.dispatch, "--names-only")) {
+            try std.testing.expectEqualStrings("discord\nwebcord\n", rendered);
         } else {
             try std.testing.expect(std.mem.indexOf(u8, rendered, "│ Name") != null);
             try std.testing.expect(std.mem.indexOf(u8, rendered, "Repository") != null);

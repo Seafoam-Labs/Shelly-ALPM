@@ -30,19 +30,19 @@ pub const AurPackage = struct {
     pub fn clone(allocator: std.mem.Allocator, source: AurPackage) !AurPackage {
         return .{
             .Id = source.Id,
-            .Name = try allocator.dupeZ(u8, source.Name),
+            .Name = try allocator.dupeSentinel(u8, source.Name, 0),
             .PackageBaseId = source.PackageBaseId,
-            .PackageBase = try allocator.dupeZ(u8, source.PackageBase),
-            .Version = try allocator.dupeZ(u8, source.Version),
-            .Description = if (source.Description) |value| try allocator.dupeZ(u8, value) else null,
-            .Url = if (source.Url) |value| try allocator.dupeZ(u8, value) else null,
+            .PackageBase = try allocator.dupeSentinel(u8, source.PackageBase, 0),
+            .Version = try allocator.dupeSentinel(u8, source.Version, 0),
+            .Description = if (source.Description) |value| try allocator.dupeSentinel(u8, value, 0) else null,
+            .Url = if (source.Url) |value| try allocator.dupeSentinel(u8, value, 0) else null,
             .NumVotes = source.NumVotes,
             .Popularity = source.Popularity,
             .OutOfDate = source.OutOfDate,
-            .Maintainer = if (source.Maintainer) |value| try allocator.dupeZ(u8, value) else null,
+            .Maintainer = if (source.Maintainer) |value| try allocator.dupeSentinel(u8, value, 0) else null,
             .FirstSubmitted = source.FirstSubmitted,
             .LastModified = source.LastModified,
-            .UrlPath = try allocator.dupeZ(u8, source.UrlPath),
+            .UrlPath = try allocator.dupeSentinel(u8, source.UrlPath, 0),
             .Depends = try cloneOptionalStrings(allocator, source.Depends),
             .MakeDepends = try cloneOptionalStrings(allocator, source.MakeDepends),
             .OptDepends = try cloneOptionalStrings(allocator, source.OptDepends),
@@ -63,7 +63,7 @@ pub const AurPackage = struct {
     ) !?[]const [:0]const u8 {
         const values = source orelse return null;
         const result = try allocator.alloc([:0]const u8, values.len);
-        for (values, 0..) |value, index| result[index] = try allocator.dupeZ(u8, value);
+        for (values, 0..) |value, index| result[index] = try allocator.dupeSentinel(u8, value, 0);
         return result;
     }
 };

@@ -1427,9 +1427,9 @@ test "refresh reloads an externally replaced sync database cache" {
     const mgr = try Manager.init(allocator, testing.environ, .{ .config_path = workspace.config_path });
     defer mgr.deinit();
 
-    const original = try allocator.dupeZ(u8, "remote-provider");
+    const original = try allocator.dupeSentinel(u8, "remote-provider", 0);
     defer allocator.free(original);
-    const replacement = try allocator.dupeZ(u8, "remote-target");
+    const replacement = try allocator.dupeSentinel(u8, "remote-target", 0);
     defer allocator.free(replacement);
 
     // Materialize the first archive in libalpm's sync package cache.
@@ -2227,8 +2227,8 @@ const NeededInstallCapture = struct {
             },
             .status => |status| {
                 if (std.mem.eql(u8, status.message, "Nothing to install.")) self.no_op = true;
-                if (status.native_code == @intFromEnum(libalpm.EventType.transaction_start) or
-                    status.native_code == @intFromEnum(libalpm.EventType.hook_start)) self.saw_transaction = true;
+                if (status.native_code == @backingInt(libalpm.EventType.transaction_start) or
+                    status.native_code == @backingInt(libalpm.EventType.hook_start)) self.saw_transaction = true;
             },
             .completed => |completed| {
                 if (completed.envelope.backend == .alpm and completed.envelope.kind == .install)
@@ -2564,7 +2564,7 @@ test "ALPM package completion events preserve package identity and action" {
     defer workspace.cleanup(allocator);
     const archive_path = try workspace.createPackageArchive(allocator, "completed-package", "1.0-1");
     defer allocator.free(archive_path);
-    const path_z = try allocator.dupeZ(u8, archive_path);
+    const path_z = try allocator.dupeSentinel(u8, archive_path, 0);
     defer allocator.free(path_z);
     const mgr = try Manager.init(allocator, testing.environ, .{ .config_path = workspace.config_path });
     defer mgr.deinit();

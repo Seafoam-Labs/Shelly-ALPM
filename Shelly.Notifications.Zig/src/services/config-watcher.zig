@@ -22,7 +22,7 @@ pub const ConfigWatcher = struct {
         filename: []const u8,
     ) !ConfigWatcher {
         const dir = resolver.settings_dir_abs orelse return error.NoSettingsDir;
-        const dir_z = try allocator.dupeZ(u8, dir);
+        const dir_z = try allocator.dupeSentinel(u8, dir, 0);
         return .{
             .resolver = resolver,
             .allocator = allocator,

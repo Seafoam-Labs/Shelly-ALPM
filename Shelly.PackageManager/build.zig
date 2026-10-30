@@ -1,31 +1,6 @@
 const std = @import("std");
 const package_manifest = @import("build.zig.zon");
 
-// The pinned zig-toml parser requires a key even in {}. Patch its generated
-// source copy until the dependency supports empty inline tables (build.env = {}).
-// Never modify the dependency cache shared by other projects.
-fn patchedTomlModule(b: *std.Build, dependency: *std.Build.Dependency, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode) *std.Build.Module {
-    const source_path = dependency.path("src/table.zig").getPath3(b, null);
-    const source = source_path.root_dir.handle.readFileAlloc(b.graph.io, source_path.subPathOrDot(), b.allocator, .limited(1024 * 1024)) catch @panic("cannot read zig-toml table parser");
-    const before = "    while (true) {\n        spaces.skipSpacesAndLineBreaks(ctx);\n        var pair = try kv.parse(ctx);";
-    const after =
-        \\    spaces.skipSpacesAndLineBreaks(ctx);
-        \\    if (ctx.current() == '}') {
-        \\        _ = ctx.next();
-        \\        return table;
-        \\    }
-        \\    while (true) {
-        \\        spaces.skipSpacesAndLineBreaks(ctx);
-        \\        var pair = try kv.parse(ctx);
-    ;
-    if (std.mem.count(u8, source, before) != 1) @panic("zig-toml changed: review the empty inline table patch");
-    const patched = std.mem.replaceOwned(u8, b.allocator, source, before, after) catch @panic("OOM");
-    const files = b.addWriteFiles();
-    const directory = files.addCopyDirectory(dependency.path("src"), "src", .{ .exclude_extensions = &.{"table.zig"} });
-    _ = files.add("src/table.zig", patched);
-    return b.createModule(.{ .root_source_file = directory.path(b, "root.zig"), .target = target, .optimize = optimize });
-}
-
 // Match the pkg-config requirement of the libalpm header translation step.
 // Only native tests may infer availability from the host; cross builds and an
 // explicit -Dlibalpm selection must retain the requested backend coverage.
@@ -56,6 +31,14 @@ pub fn build(b: *std.Build) void {
     // between Debug, ReleaseSafe, ReleaseFast, and ReleaseSmall. Here we do not
     // set a preferred release mode, allowing the user to decide how to optimize.
     const optimize = b.standardOptimizeOption(.{});
+    const native_translation = b.addTranslateC(.{
+        .root_source_file = b.path("src/native_bindings.h"),
+        .target = target,
+        .optimize = optimize,
+        .link_libc = true,
+    });
+    const native_bindings = native_translation.createModule();
+
     const path_profile = b.option([]const u8, "path-profile", "Distribution path defaults: pacman or devario") orelse "pacman";
     const paths = b.dependency("shelly_paths", .{ .target = target, .optimize = optimize, .@"path-profile" = path_profile }).module("paths");
     const requested_libalpm = b.option(bool, "libalpm", "Include the libalpm backend alongside RLPM (tests auto-detect when omitted)");
@@ -99,7 +82,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
-    const toml_module = patchedTomlModule(b, toml, target, optimize);
+    const toml_module = toml.module("toml");
     // It's also possible to define more custom flags to toggle optional features
     // of this build script using `b.option()`. All defined flags (including
     // target and optimize options) will be listed when running `zig build --help`
@@ -121,6 +104,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .link_libc = true,
     });
+    archive_mod.addImport("archive_c", native_bindings);
     archive_mod.addImport("diagnostics", diagnostics);
     archive_mod.linkSystemLibrary("archive", .{});
     const compression_tests = b.addRunArtifact(b.addTest(.{
@@ -331,9 +315,7 @@ pub fn build(b: *std.Build) void {
 
     // This allows the user to pass arguments to the application in the build
     // command itself, like this: `zig build run -- arg1 arg2 etc`
-    if (b.args) |args| {
-        run_cmd.addArgs(args);
-    }
+    run_cmd.addPassthruArgs();
 
     // Creates an executable that will run `test` blocks from the provided module.
     // Here `mod` needs to define a target, which is why earlier we made sure to
@@ -799,25 +781,17 @@ pub fn build(b: *std.Build) void {
         .root_module = fake_backend_module,
     });
     fake_backend.root_module.addImport("diagnostics", diagnostics);
-    const fake_backend_filename =
-        "libshelly-flatpak-backend-package-manager-test.so";
-    const install_fake_backend = b.addInstallArtifact(fake_backend, .{
-        .dest_dir = .{ .override = .{ .custom = "test-flatpak-backend" } },
-        .dest_sub_path = fake_backend_filename,
-        .dylib_symlinks = false,
-        .pdb_dir = .disabled,
-        .h_dir = .disabled,
-        .implib_dir = .disabled,
-    });
-    const fake_backend_options = b.addOptions();
-    fake_backend_options.addOption(
-        []const u8,
-        "backend_path",
-        b.getInstallPath(
-            .{ .custom = "test-flatpak-backend" },
-            fake_backend_filename,
+    // Zig 0.17 options paths may be relative; the production loader deliberately
+    // accepts absolute paths only. Resolve the test artifact during the build.
+    const fake_backend_path = b.addSystemCommand(&.{"realpath"});
+    fake_backend_path.addFileArg(fake_backend.getEmittedBin());
+    const fake_backend_files = b.addWriteFiles();
+    _ = fake_backend_files.addCopyFile(fake_backend_path.captureStdOut(.{}), "backend-path.txt");
+    const fake_backend_options = b.createModule(.{
+        .root_source_file = fake_backend_files.add("options.zig",
+            \\pub const backend_path = @import("std").mem.trim(u8, @embedFile("backend-path.txt"), "\r\n");
         ),
-    );
+    });
     const backend_integration_module = b.createModule(.{
         .root_source_file = b.path("src/flatpak/backend_integration_test.zig"),
         .target = target,
@@ -833,10 +807,7 @@ pub fn build(b: *std.Build) void {
         "operation_context",
         operation_context_mod,
     );
-    backend_integration_module.addOptions(
-        "flatpak_backend_options",
-        fake_backend_options,
-    );
+    backend_integration_module.addImport("flatpak_backend_options", fake_backend_options);
     const backend_integration_tests = b.addTest(.{
         .name = "flatpak-backend-test",
         .root_module = backend_integration_module,
@@ -844,7 +815,6 @@ pub fn build(b: *std.Build) void {
     const run_backend_integration_tests = b.addRunArtifact(
         backend_integration_tests,
     );
-    run_backend_integration_tests.step.dependOn(&install_fake_backend.step);
     flatpak_test_step.dependOn(&run_backend_integration_tests.step);
     test_step.dependOn(&run_backend_integration_tests.step);
 
@@ -873,7 +843,9 @@ pub fn build(b: *std.Build) void {
             "RPC client keeps an owned copy of its configured endpoint",
             "custom AUR base fetches PKGBUILDs from its Git checkout",
             "AUR preview scan uses cached Atoll files and matches install validation",
-            "AUR dependency planning uses sandbox-evaluated conditional arrays",
+            "AUR dependency planning",
+            "AUR explicit pkgver refresh",
+            "AUR pkgver planning",
             "custom AUR base PKGBUILD failures stay actionable",
             "custom AUR base ignores unverified cached SRCINFO provenance",
             "endpoint switching replaces a checkout with a mismatched origin",

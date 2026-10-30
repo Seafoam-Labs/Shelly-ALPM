@@ -17,18 +17,22 @@ test "repeated actions override scalars while triggers and dependencies accumula
             "[Action]\nWhen=PostTransaction\nDescription=old\nDescription=new\nExec=/new 'two words' \"\" x\\ y $literal\nDepends=virtual>=2\nDepends=base\nNeedsTargets=ignored\nAbortOnFail=false\nNetworkAccess=allowed\n" ++
             trigger,
     );
+
     try hooks.check();
+
     const hook = hooks.hooks.items[0];
     try std.testing.expectEqual(2, hook.triggers.items.len);
     try std.testing.expectEqual(2, hook.depends.items.len);
     try std.testing.expectEqual(.post_transaction, hook.when.?);
     try std.testing.expectEqualStrings("new", hook.description.?);
     try std.testing.expect(hook.abort_on_fail and hook.needs_targets and hook.allow_network);
+
     for (hook.argv, &[_][]const u8{ "/new", "two words", "", "x\\", "y", "$literal" }) |actual, expected|
         try std.testing.expectEqualStrings(
             expected,
             actual,
         );
+
     try std.testing.expectEqual(4, hooks.issues.items.len);
 }
 
@@ -44,6 +48,7 @@ test "invalid hooks retain errors and line context; triggerless hooks mask" {
         trigger ++ action ++ "When=Invalid",
         trigger ++ "Operation=Invalid\n" ++ action,
     };
+
     for (invalid) |input| {
         var hooks = rlpm.Hooks.init(a);
         defer hooks.deinit();
@@ -52,6 +57,7 @@ test "invalid hooks retain errors and line context; triggerless hooks mask" {
         try std.testing.expectEqual(0, hooks.hooks.items.len);
         try std.testing.expect(hooks.issues.items[hooks.issues.items.len - 1].line > 0);
     }
+
     var hooks = rlpm.Hooks.init(a);
     defer hooks.deinit();
     try hooks.parse("empty.hook", "# masked\n");
@@ -72,6 +78,7 @@ test "directory precedence disabling missing directories and stem order" {
     try f.write("low/not-a-hook.txt", "broken");
     try f.tmp.dir.createDirPath(io, "high/directory.hook");
     try f.tmp.dir.symLink(io, "/dev/null", "high/null.hook", .{});
+
     var arena = std.heap.ArenaAllocator.init(a);
     defer arena.deinit();
     const alloc = arena.allocator();
@@ -93,6 +100,7 @@ test "any trigger matches and NeedsTargets unions sorts deduplicates and negates
     defer hooks.deinit();
     try hooks.parse("a.hook", trigger ++ action ++ "NeedsTargets\nTarget=invalid-in-action\n");
     try std.testing.expectError(error.InvalidHook, hooks.check());
+
     var valid = rlpm.Hooks.init(a);
     defer valid.deinit();
     try valid.parse(
@@ -100,6 +108,7 @@ test "any trigger matches and NeedsTargets unions sorts deduplicates and negates
         trigger ++ "Target=!skip\n" ++ action ++
             "NeedsTargets\n[Trigger]\nType=Path\nOperation=Upgrade\nOperation=Remove\nTarget=usr/*\n",
     );
+
     const matches = try valid.match(.pre_transaction, &.{
         .{
             .kind = .package,
@@ -132,13 +141,16 @@ test "any trigger matches and NeedsTargets unions sorts deduplicates and negates
             .target = "usr/c",
         },
     });
+
     try std.testing.expectEqual(1, matches.len);
     try std.testing.expectEqual(3, matches[0].targets.len);
+
     for (matches[0].targets, &[_][]const u8{ "usr/a", "usr/b", "z" }) |actual, expected|
         try std.testing.expectEqualStrings(
             expected,
             actual,
         );
+
     try std.testing.expectEqual(0, (try valid.match(.post_transaction, &.{})).len);
 }
 
@@ -147,6 +159,7 @@ test "inventory matching includes absent removals NoExtract and original pacnew 
     defer f.deinit();
     try f.installed("demo", "1-1", "conf\nmissing\nskipped\nusr/", null);
     try f.write("root/conf", "local");
+
     var archive = try Archive.init(
         &.{
             .{
@@ -165,11 +178,13 @@ test "inventory matching includes absent removals NoExtract and original pacnew 
     defer owner.deinit() catch unreachable;
     try owner.setList(io, .no_extract, &.{"skipped"});
     try owner.setList(io, .no_upgrade, &.{"conf"});
+
     const tx = try owner.initializeTransaction(io, .{});
     defer owner.releaseTransaction() catch unreachable;
     try Fixture.add(tx, archive.path);
     try tx.prepare();
     try tx.preflight();
+
     var arena = std.heap.ArenaAllocator.init(a);
     defer arena.deinit();
     const changes = try rlpm.Hooks.changes(
@@ -178,7 +193,9 @@ test "inventory matching includes absent removals NoExtract and original pacnew 
         tx.manifest().?,
         owner.options().no_extract,
     );
+
     try std.testing.expectEqual(6, changes.len);
+
     for (changes) |change| {
         const expected: rlpm.Hooks.Operation = if (std.mem.eql(u8, change.target, "missing") or
             std.mem.eql(u8, change.target, "skipped"))
@@ -187,8 +204,10 @@ test "inventory matching includes absent removals NoExtract and original pacnew 
             .install
         else
             .upgrade;
+
         try std.testing.expectEqual(expected, change.operation);
     }
+
     try std.testing.expectError(error.InvalidTransactionState, tx.startActions());
     try std.testing.expectEqual(.prepared, tx.state); // Read-only preflight boundary.
 }
@@ -196,6 +215,7 @@ test "inventory matching includes absent removals NoExtract and original pacnew 
 test "scriptlet function discovery follows comments and native line chunks" {
     try std.testing.expect(!rlpm.Scriptlets.contains("# pre_install() {}\npost_install() {}", .pre_install));
     try std.testing.expect(rlpm.Scriptlets.contains("echo pre_install\n", .pre_install));
+
     var bytes: [1040]u8 = @splat('x');
     @memcpy(bytes[1020..1031], "pre_install");
     try std.testing.expect(!rlpm.Scriptlets.contains(&bytes, .pre_install));
@@ -212,6 +232,7 @@ fn allocations(allocator: std.mem.Allocator) !void {
         .target = "demo",
     }});
 }
+
 test "parser and matcher release every allocation on failure" {
-    try std.testing.checkAllAllocationFailures(a, allocations, .{});
+    try @import("allocation_failures.zig").checkAllAllocationFailures(a, allocations, .{});
 }

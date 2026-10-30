@@ -381,7 +381,7 @@ pub const ShellySearchPage = extern struct {
                 var buf: [512]u8 = undefined;
                 const escaped = glib.markupEscapeText(pkg.getName(), -1);
                 defer glib.free(escaped);
-                const markup = std.fmt.bufPrintZ(&buf, "<b>{s}</b>", .{escaped}) catch pkg.getName();
+                const markup = std.fmt.bufPrintSentinel(&buf, "<b>{s}</b>", .{escaped}, 0) catch pkg.getName();
                 gtk.Label.setMarkup(name_label, markup);
                 gtk.Widget.setVisible(ood_w, @intFromBool(pkg.isOutOfDate()));
                 gtk.Widget.setVisible(installed_w, @intFromBool(pkg.isInstalled()));
@@ -512,7 +512,7 @@ pub const ShellySearchPage = extern struct {
         var buf: [64]u8 = undefined;
         gtk.Button.setLabel(
             p.install_button,
-            std.fmt.bufPrintZ(&buf, "{s} {d} {s}", .{ translations._("Install"), count, translations._("Package(s)") }) catch translations._("Install Selected"),
+            std.fmt.bufPrintSentinel(&buf, "{s} {d} {s}", .{ translations._("Install"), count, translations._("Package(s)") }, 0) catch translations._("Install Selected"),
         );
         gtk.Widget.setSensitive(btn, 1);
         gtk.Widget.addCssClass(btn, "suggested-action");
@@ -522,9 +522,9 @@ pub const ShellySearchPage = extern struct {
     fn update_source_labels(self: *Self, standard_count: u32, aur_count: u32, flatpak_count: u32) void {
         const p = self.priv();
         var buf: [64]u8 = undefined;
-        gtk.Button.setLabel(p.standard_toggle.as(gtk.Button), std.fmt.bufPrintZ(&buf, "{s} \u{00b7} {d}", .{ translations._("Standard"), standard_count }) catch translations._("Standard"));
-        gtk.Button.setLabel(p.aur_toggle.as(gtk.Button), std.fmt.bufPrintZ(&buf, "{s} \u{00b7} {d}", .{ translations._(features.aur_source_name), aur_count }) catch translations._(features.aur_source_name));
-        gtk.Button.setLabel(p.flatpak_toggle.as(gtk.Button), std.fmt.bufPrintZ(&buf, "{s} \u{00b7} {d}", .{ translations._("Flatpak"), flatpak_count }) catch translations._("Flatpak"));
+        gtk.Button.setLabel(p.standard_toggle.as(gtk.Button), std.fmt.bufPrintSentinel(&buf, "{s} \u{00b7} {d}", .{ translations._("Standard"), standard_count }, 0) catch translations._("Standard"));
+        gtk.Button.setLabel(p.aur_toggle.as(gtk.Button), std.fmt.bufPrintSentinel(&buf, "{s} \u{00b7} {d}", .{ translations._(features.aur_source_name), aur_count }, 0) catch translations._(features.aur_source_name));
+        gtk.Button.setLabel(p.flatpak_toggle.as(gtk.Button), std.fmt.bufPrintSentinel(&buf, "{s} \u{00b7} {d}", .{ translations._("Flatpak"), flatpak_count }, 0) catch translations._("Flatpak"));
     }
 
     fn reset_source_labels(self: *Self) void {
@@ -550,7 +550,9 @@ pub const ShellySearchPage = extern struct {
 
         self.applyOptionsFromConfig();
         self.update_selection_ui();
-        _ = gtk.Widget.grabFocus(p.search_entry.as(gtk.Widget));
+        // The page is the focus stop, so a page switch lands on its group name
+        // and Tab reaches the search entry from there.
+        _ = a11y.focusFirst(self.as(gtk.Widget));
     }
 
     extern fn malloc_trim(pad: usize) c_int;
@@ -745,11 +747,11 @@ pub const ShellySearchPage = extern struct {
                     seen.put(pkg.Name, {}) catch continue;
                     items.append(alloc, .{
                         .source = .standard,
-                        .name = alloc.dupeZ(u8, pkg.Name) catch continue,
-                        .install_target = alloc.dupeZ(u8, pkg.Name) catch continue,
-                        .version = alloc.dupeZ(u8, pkg.Version) catch continue,
-                        .description = alloc.dupeZ(u8, pkg.Description) catch continue,
-                        .repository = alloc.dupeZ(u8, pkg.Repository) catch continue,
+                        .name = alloc.dupeSentinel(u8, pkg.Name, 0) catch continue,
+                        .install_target = alloc.dupeSentinel(u8, pkg.Name, 0) catch continue,
+                        .version = alloc.dupeSentinel(u8, pkg.Version, 0) catch continue,
+                        .description = alloc.dupeSentinel(u8, pkg.Description, 0) catch continue,
+                        .repository = alloc.dupeSentinel(u8, pkg.Repository, 0) catch continue,
                         .installed = std.mem.eql(u8, pkg.Repository, "local"),
                     }) catch continue;
                 }
@@ -762,11 +764,11 @@ pub const ShellySearchPage = extern struct {
                 for (parsed.value) |pkg| {
                     items.append(alloc, .{
                         .source = .aur,
-                        .name = alloc.dupeZ(u8, pkg.Name) catch continue,
-                        .install_target = alloc.dupeZ(u8, pkg.Name) catch continue,
-                        .version = alloc.dupeZ(u8, pkg.Version) catch continue,
-                        .description = if (pkg.Description) |value| alloc.dupeZ(u8, value) catch "" else "",
-                        .repository = alloc.dupeZ(u8, features.aur_source_name) catch continue,
+                        .name = alloc.dupeSentinel(u8, pkg.Name, 0) catch continue,
+                        .install_target = alloc.dupeSentinel(u8, pkg.Name, 0) catch continue,
+                        .version = alloc.dupeSentinel(u8, pkg.Version, 0) catch continue,
+                        .description = if (pkg.Description) |value| alloc.dupeSentinel(u8, value, 0) catch "" else "",
+                        .repository = alloc.dupeSentinel(u8, features.aur_source_name, 0) catch continue,
                         .out_of_date = pkg.OutOfDate != null,
                         .aur = pkg,
                     }) catch continue;
@@ -781,10 +783,10 @@ pub const ShellySearchPage = extern struct {
                     const display = if (hit.name.len > 0) hit.name else hit.id;
                     items.append(alloc, .{
                         .source = .flatpak,
-                        .name = alloc.dupeZ(u8, display) catch continue,
-                        .install_target = alloc.dupeZ(u8, hit.id) catch continue,
-                        .description = alloc.dupeZ(u8, hit.summary) catch continue,
-                        .repository = alloc.dupeZ(u8, hit.remote) catch continue,
+                        .name = alloc.dupeSentinel(u8, display, 0) catch continue,
+                        .install_target = alloc.dupeSentinel(u8, hit.id, 0) catch continue,
+                        .description = alloc.dupeSentinel(u8, hit.summary, 0) catch continue,
+                        .repository = alloc.dupeSentinel(u8, hit.remote, 0) catch continue,
                         .verified = hit.verification_verified,
                         .flatpak = hit,
                     }) catch continue;
@@ -962,7 +964,7 @@ pub const ShellySearchPage = extern struct {
             const pkg = gobject.ext.cast(SearchResultObject, obj) orelse continue;
             if (!pkg.isSelected()) continue;
 
-            const target = std.heap.c_allocator.dupeZ(u8, pkg.getInstallTarget()) catch continue;
+            const target = std.heap.c_allocator.dupeSentinel(u8, pkg.getInstallTarget(), 0) catch continue;
             switch (pkg.getSource()) {
                 .standard => standard.append(std.heap.c_allocator, target) catch {
                     std.heap.c_allocator.free(target);

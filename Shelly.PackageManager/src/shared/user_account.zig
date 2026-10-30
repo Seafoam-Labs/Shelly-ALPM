@@ -15,7 +15,7 @@ pub const Account = struct {
 
 pub fn byName(allocator: std.mem.Allocator, username: []const u8) !?Account {
     if (username.len == 0 or std.mem.indexOfScalar(u8, username, 0) != null) return null;
-    const name = try allocator.dupeZ(u8, username);
+    const name = try allocator.dupeSentinel(u8, username, 0);
     defer allocator.free(name);
     return lookup(allocator, .{ .name = name }, resolve);
 }
@@ -47,7 +47,7 @@ fn lookup(allocator: std.mem.Allocator, query: Query, comptime resolver: anytype
         var record: std.c.passwd = undefined;
         var result: ?*std.c.passwd = null;
         const status = resolver(query, &record, buffer, &result);
-        if (status == @intFromEnum(std.c.E.RANGE)) {
+        if (status == @backingInt(std.c.E.RANGE)) {
             // Bound memory use even if an NSS backend repeatedly requests more.
             if (buffer.len >= 4 * 1024 * 1024) return error.AccountRecordTooLarge;
             buffer = try allocator.realloc(buffer, buffer.len * 2);
@@ -65,8 +65,8 @@ fn lookup(allocator: std.mem.Allocator, query: Query, comptime resolver: anytype
 test "NSS account lookup retries ERANGE and owns returned strings" {
     const Fake = struct {
         fn resolve(query: Query, record: *std.c.passwd, buffer: []u8, result: *?*std.c.passwd) c_int {
-            if (query != .uid or query.uid != 60123) return @intFromEnum(std.c.E.IO);
-            if (buffer.len < 2048) return @intFromEnum(std.c.E.RANGE);
+            if (query != .uid or query.uid != 60123) return @backingInt(std.c.E.IO);
+            if (buffer.len < 2048) return @backingInt(std.c.E.RANGE);
             const name = "homed-only";
             const home = "/home/custom-home";
             @memcpy(buffer[0 .. name.len + 1], name ++ "\x00");
@@ -92,7 +92,7 @@ test "NSS account lookup distinguishes missing accounts and backend failures" {
     const Fake = struct {
         fn resolve(query: Query, _: *std.c.passwd, _: []u8, result: *?*std.c.passwd) c_int {
             result.* = null;
-            return if (query.uid == 1) 0 else @intFromEnum(std.c.E.IO);
+            return if (query.uid == 1) 0 else @backingInt(std.c.E.IO);
         }
     };
     try std.testing.expect(try lookup(std.testing.allocator, .{ .uid = 1 }, Fake.resolve) == null);

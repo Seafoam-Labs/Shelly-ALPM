@@ -14,6 +14,7 @@ const parser = @import("../cli/parser.zig");
 const SizeDisplay = fmt.SizeDisplay;
 
 const ProgressStyle = enum {
+    shell,
     blocks,
     pacman,
     nerdfont,
@@ -21,7 +22,7 @@ const ProgressStyle = enum {
 
 const Settings = struct {
     size_display: SizeDisplay = .megabytes,
-    progress_style: ProgressStyle = .blocks,
+    progress_style: ProgressStyle = .shell,
     bar_width: usize = 20,
     collapse_pkgbuild_diff: bool = true,
 };
@@ -773,7 +774,7 @@ fn loadSettings(context: *runtime.RuntimeContext) !Settings {
     const config = manager.read() catch try config_model.Config.defaults(context.allocator);
     return .{
         .size_display = fmt.parseSizeDisplay(stringValue(&config, "FileSizeDisplay") orelse "Megabytes"),
-        .progress_style = parseProgressStyle(stringValue(&config, "ProgressBarStyle") orelse "Blocks"),
+        .progress_style = parseProgressStyle(stringValue(&config, "ProgressBarStyle") orelse "Shell"),
         .bar_width = integerValue(&config, "ProgressBarWidth") orelse 20,
         .collapse_pkgbuild_diff = boolValue(&config, "CollapsePkgbuildDiff") orelse true,
     };
@@ -798,7 +799,10 @@ fn integerValue(config: *const config_model.Config, key: []const u8) ?usize {
 }
 
 fn parseProgressStyle(value: []const u8) ProgressStyle {
-    return if (std.ascii.eqlIgnoreCase(value, "Pacman")) .pacman else if (std.ascii.eqlIgnoreCase(value, "Nerdfont")) .nerdfont else .blocks;
+    if (std.ascii.eqlIgnoreCase(value, "Blocks")) return .blocks;
+    if (std.ascii.eqlIgnoreCase(value, "Pacman")) return .pacman;
+    if (std.ascii.eqlIgnoreCase(value, "Nerdfont")) return .nerdfont;
+    return .shell;
 }
 
 fn convertSize(display: SizeDisplay, bytes: u64) f64 {
@@ -1074,6 +1078,21 @@ fn renderBar(
 ) !void {
     const filled = width * percentage / 100;
     switch (style) {
+        .shell => {
+            if (width == 0) return;
+            if (percentage >= 100) {
+                try writer.splatByteAll('=', width);
+                return;
+            }
+            // One cell for the two valves, opening and closing on progress updates.
+            // Keep the shell visible even before the first cell is filled.
+            const position = @min(filled, width - 1);
+            try writer.splatByteAll(' ', position);
+            try writer.writeByte(if (frame & 1 == 0) '<' else '=');
+            for (position + 1..width) |index| {
+                try writer.writeByte(if (index % 2 == 0) '.' else ' ');
+            }
+        },
         .blocks => {
             if (ascii_only) {
                 try writer.splatByteAll('#', filled);
@@ -1108,6 +1127,42 @@ fn renderBar(
                 }
             }
         },
+    }
+}
+
+test "single-pane shell style defaults and legacy selections" {
+    try std.testing.expectEqual(ProgressStyle.shell, (Settings{}).progress_style);
+    try std.testing.expectEqual(ProgressStyle.shell, parseProgressStyle("sHeLl"));
+    try std.testing.expectEqual(ProgressStyle.shell, parseProgressStyle("unknown"));
+    try std.testing.expectEqual(ProgressStyle.blocks, parseProgressStyle("blocks"));
+    try std.testing.expectEqual(ProgressStyle.pacman, parseProgressStyle("pacman"));
+    try std.testing.expectEqual(ProgressStyle.nerdfont, parseProgressStyle("nerdfont"));
+}
+
+test "single-pane shell opens and closes across progress including narrow bars" {
+    const Case = struct { percentage: u8, frame: usize, width: usize, expected: []const u8 };
+    const cases = [_]Case{
+        .{ .percentage = 0, .frame = 0, .width = 10, .expected = "< . . . . " },
+        .{ .percentage = 0, .frame = 1, .width = 10, .expected = "= . . . . " },
+        .{ .percentage = 50, .frame = 0, .width = 10, .expected = "     <. . " },
+        .{ .percentage = 50, .frame = 1, .width = 10, .expected = "     =. . " },
+        .{ .percentage = 99, .frame = 0, .width = 10, .expected = "         <" },
+        .{ .percentage = 100, .frame = 0, .width = 10, .expected = "==========" },
+        .{ .percentage = 100, .frame = 1, .width = 10, .expected = "==========" },
+        .{ .percentage = 0, .frame = 0, .width = 0, .expected = "" },
+        .{ .percentage = 100, .frame = 1, .width = 0, .expected = "" },
+        .{ .percentage = 0, .frame = 0, .width = 1, .expected = "<" },
+        .{ .percentage = 99, .frame = 1, .width = 1, .expected = "=" },
+        .{ .percentage = 100, .frame = 0, .width = 1, .expected = "=" },
+    };
+    // Shell is ASCII in both interactive and plain output modes.
+    for ([_]bool{ false, true }) |ascii_only| {
+        for (cases) |case| {
+            var output_buffer = std.Io.Writer.Allocating.init(std.testing.allocator);
+            defer output_buffer.deinit();
+            try renderBar(&output_buffer.writer, case.percentage, case.frame, .shell, case.width, ascii_only);
+            try std.testing.expectEqualStrings(case.expected, output_buffer.writer.buffered());
+        }
     }
 }
 
@@ -1386,6 +1441,107 @@ test "single-pane clears unknown-length bars on completion and suppresses AUR me
 
     second.finish(.success);
     try std.testing.expectEqual(@as(usize, 0), renderer.bars.items.len);
+}
+
+test "single-pane RLPM processing clears before hooks and preserves concurrent transfers" {
+    for ([_]bool{ true, false }) |animate| {
+        var temporary = std.testing.tmpDir(.{});
+        defer temporary.cleanup();
+        var absolute_buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
+        const absolute_length = try temporary.dir.realPath(std.testing.io, &absolute_buffer);
+
+        var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+        defer arena.deinit();
+        var stdout = std.Io.Writer.Allocating.init(std.testing.allocator);
+        defer stdout.deinit();
+        var stderr = std.Io.Writer.Allocating.init(std.testing.allocator);
+        defer stderr.deinit();
+        var environment = std.process.Environ.Map.init(arena.allocator());
+        try environment.put("XDG_CONFIG_HOME", absolute_buffer[0..absolute_length]);
+        try environment.put("COLUMNS", "80");
+        var context: runtime.RuntimeContext = .{
+            .allocator = arena.allocator(),
+            .io = std.testing.io,
+            .stdout = &stdout.writer,
+            .stderr = &stderr.writer,
+            .environment = &environment,
+            .stdin_is_tty = animate,
+            .stdout_is_tty = animate,
+        };
+        var renderer = try Renderer.init(&context, true);
+        var operation_context = PackageManager.OperationContext.init(arena.allocator(), std.testing.io);
+        defer {
+            renderer.detach();
+            operation_context.deinit();
+            renderer.deinit();
+        }
+        try renderer.attach(&operation_context);
+
+        var ui_stdout = std.Io.Writer.Allocating.init(std.testing.allocator);
+        defer ui_stdout.deinit();
+        var ui_context = context;
+        ui_context.stdout = &ui_stdout.writer;
+        var reporter: @import("ui_operation.zig").Reporter = .{ .context = &ui_context };
+        const ui_subscription = try operation_context.subscribe(.{ .function = @import("ui_operation.zig").Reporter.handle, .data = &reporter });
+        defer _ = operation_context.unsubscribe(ui_subscription);
+
+        const rlpm = @import("Shelly_Rlpm");
+        const path = absolute_buffer[0..absolute_length];
+        var owner = try rlpm.Owner.init(std.testing.io, arena.allocator(), .{ .root = path, .database_path = path }, &.{});
+        defer owner.deinit() catch unreachable;
+        var transaction = operation_context.begin(.{ .backend = .alpm, .kind = .update });
+        defer transaction.finish(.success);
+        var adapter: PackageManager.RlpmOperationAdapter = undefined;
+        try adapter.init(&owner, &transaction);
+        defer adapter.deinit() catch unreachable;
+        const cb = owner.options().callbacks;
+
+        // Keep another transfer active to detect accidental clearing of all bars.
+        cb.download.?(cb.download_context, .{ .progress = .{ .name = "other.pkg.tar", .downloaded = 4, .total = 8 } });
+        try std.testing.expectEqual(@as(usize, if (animate) 1 else 0), renderer.bars.items.len);
+        const transfer_id = if (animate) renderer.bars.items[0].operation_id else 0;
+        for (0..29) |index| {
+            var name_buffer: [64]u8 = undefined;
+            const name = try std.fmt.bufPrint(&name_buffer, "package-{d}.pkg.tar.zst", .{index + 1});
+            inline for (.{ .verification, .publication }) |stage| {
+                cb.download.?(cb.download_context, .{ .processing = .{ .name = name, .stage = stage, .boundary = .start, .position = index + 1, .total = 29 } });
+                try std.testing.expectEqual(@as(usize, if (animate) 2 else 0), renderer.bars.items.len);
+                cb.download.?(cb.download_context, .{ .processing = .{ .name = name, .stage = stage, .boundary = .done, .position = index + 1, .total = 29 } });
+                try std.testing.expectEqual(@as(usize, if (animate) 1 else 0), renderer.bars.items.len);
+                if (animate) try std.testing.expectEqual(transfer_id, renderer.bars.items[0].operation_id);
+            }
+        }
+        const before_hook = stdout.writer.buffered().len;
+        cb.event.?(cb.event_context, .{ .hook_run = .{ .name = "cache.hook", .description = "Updating cache", .position = 1, .total = 1, .boundary = .start } });
+        const hook_output = stdout.writer.buffered()[before_hook..];
+        try std.testing.expect(std.mem.indexOf(u8, hook_output, "Hook:") != null);
+        try std.testing.expect(std.mem.indexOf(u8, hook_output, "Verifying downloads") == null);
+        try std.testing.expect(std.mem.indexOf(u8, hook_output, "Publishing downloads") == null);
+        if (animate) try std.testing.expect(std.mem.indexOf(u8, hook_output, "other.pkg.tar") != null);
+        try std.testing.expect(!transaction.completed);
+        cb.download.?(cb.download_context, .{ .transferred = .{ .name = "other.pkg.tar", .attempt = 1, .downloaded = 8, .result = .updated } });
+        try std.testing.expectEqual(@as(usize, 0), renderer.bars.items.len);
+        if (!animate) try std.testing.expect(std.mem.indexOf(u8, stdout.writer.buffered(), "\x1b") == null);
+        var decoded_frames = std.Io.Writer.Allocating.init(std.testing.allocator);
+        defer decoded_frames.deinit();
+        var frame_iterator = std.mem.splitSequence(u8, ui_stdout.writer.buffered(), "[/JSON]\n");
+        while (frame_iterator.next()) |frame| {
+            if (frame.len == 0) continue;
+            try std.testing.expect(std.mem.startsWith(u8, frame, "[JSON]"));
+            const encoded = frame["[JSON]".len..];
+            const length = try std.base64.standard.Decoder.calcSizeForSlice(encoded);
+            const decoded = try arena.allocator().alloc(u8, length);
+            try std.base64.standard.Decoder.decode(decoded, encoded);
+            try decoded_frames.writer.writeAll(decoded);
+        }
+        const frames = decoded_frames.writer.buffered();
+        try std.testing.expectEqual(@as(usize, 58), std.mem.count(u8, frames, "\"ProgressType\":\"IntegrityStart\""));
+        try std.testing.expectEqual(@as(usize, 58), std.mem.count(u8, frames, "\"ProgressType\":\"LoadStart\""));
+        try std.testing.expect(std.mem.indexOf(u8, frames, "\"PackageName\":\"package-1.pkg.tar.zst\"") != null);
+        try std.testing.expect(std.mem.indexOf(u8, frames, "\"Percent\":3,") != null);
+        try std.testing.expect(std.mem.indexOf(u8, frames, "\"Percent\":96,") != null);
+        try std.testing.expect(!reporter.failed());
+    }
 }
 
 test "single-pane no-confirm uses the shared automatic question policy" {
