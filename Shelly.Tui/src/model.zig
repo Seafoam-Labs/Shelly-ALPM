@@ -98,6 +98,9 @@ const PkgbuildJob = struct {
 const SudoPrompt = struct {
     /// Package being installed; owned by `gpa`.
     name: []const u8,
+    targets: []const []const u8 = &.{},
+    review_text: []const u8 = "",
+    review_scroll: vxfw.ScrollView = .{ .children = .{ .slice = &.{} } },
     backend: OperationBackend,
     action: shelly_operation.Action = .install,
     elevated: bool = true,
@@ -136,6 +139,9 @@ const SudoPrompt = struct {
         @memset(self.password.items, 0);
         self.password.deinit(gpa);
         gpa.free(self.name);
+        for (self.targets) |target| gpa.free(target);
+        if (self.targets.len > 0) gpa.free(self.targets);
+        if (self.review_text.len > 0) gpa.free(self.review_text);
         if (self.flatpak_target) |target| target.deinit(gpa);
         if (self.detail.len > 0) gpa.free(self.detail);
         gpa.destroy(self);
@@ -505,10 +511,7 @@ pub const Model = struct {
                 if (self.active == .packages and command == null) {
                     if (self.package_list_active) {
                         if (commands.packageAction(key)) |action| {
-                            if (self.selectedPackage()) |pkg| {
-                                if (action != .remove or pkg.Installed)
-                                    try self.openPackagePrompt(pkg.Name, .standard, if (action == .install) .install else .remove);
-                            }
+                            try self.openNativePrompt(if (action == .install) .install else .remove);
                             return ctx.consumeAndRedraw();
                         }
                     }
@@ -526,6 +529,10 @@ pub const Model = struct {
                                 self.overlay = .{ .package = pkg };
                             },
                             .search => self.package_list_active = false,
+                            .select => {
+                                self.package_list_active = true;
+                                if (self.selectedPackage() != null) try self.toggleSelectedList();
+                            },
                         }
                         return ctx.consumeAndRedraw();
                     }
@@ -663,7 +670,8 @@ pub const Model = struct {
                         self.filtered.items.len > 0 and
                         @as(usize, self.list_view.cursor) < self.filtered.items.len)
                     {
-                        self.overlay = .{ .package = self.filtered.items[self.list_view.cursor] };
+                        self.package_list_active = true;
+                        try self.toggleSelectedList();
                         return ctx.consumeAndRedraw();
                     }
                 }
@@ -1387,9 +1395,8 @@ pub const Model = struct {
         var backend: OperationBackend = undefined;
         switch (overlay) {
             .package => |pkg| {
-                if (action == .remove and !pkg.Installed) return;
-                name = pkg.Name;
-                backend = .standard;
+                _ = pkg;
+                return self.openNativePrompt(action);
             },
             .aur => |pkg| {
                 if (!self.settings.aur_enabled) return;
@@ -1400,6 +1407,93 @@ pub const Model = struct {
             .sudo, .pkgbuild, .flatpak, .flatpak_install => return,
         }
         try self.openPackagePrompt(name, backend, action);
+    }
+
+    fn packageMarked(self: *const Model, name: []const u8) bool {
+        for (self.selected_packages.items) |selected| {
+            if (std.mem.eql(u8, name, selected)) return true;
+        }
+        return false;
+    }
+
+    fn openNativePrompt(self: *Model, action: shelly_operation.Action) !void {
+        if (self.install_job != null or self.loading or self.load_failed) return;
+        var targets: std.ArrayList([]const u8) = .empty;
+        defer targets.deinit(self.gpa);
+        var review: std.ArrayList(u8) = .empty;
+        defer review.deinit(self.gpa);
+        var installed: usize = 0;
+        var available: usize = 0;
+        var excluded: usize = 0;
+        const highlighted = self.selectedPackage();
+        for (self.packages) |pkg| {
+            const included = if (self.selected_packages.items.len > 0)
+                self.packageMarked(pkg.Name)
+            else if (highlighted) |item|
+                std.mem.eql(u8, item.Name, pkg.Name)
+            else
+                false;
+            if (!included) continue;
+            if (action == .remove and !pkg.Installed) {
+                excluded += 1;
+                continue;
+            }
+            var duplicate = false;
+            for (targets.items) |target| {
+                if (std.mem.eql(u8, target, pkg.Name)) duplicate = true;
+            }
+            if (duplicate) continue;
+            try targets.append(self.gpa, pkg.Name);
+            if (pkg.Installed) installed += 1 else available += 1;
+            const line = try std.fmt.allocPrint(self.gpa, "{s}: {f}\n", .{
+                if (action == .remove) "Remove" else if (pkg.Installed) "Reinstall" else "Install",
+                diagnostics.safe(pkg.Name),
+            });
+            defer self.gpa.free(line);
+            try review.appendSlice(self.gpa, line);
+        }
+        if (targets.items.len == 0) {
+            try self.setNotice(if (action == .remove) "No installed packages selected for removal." else "No packages selected.");
+            return;
+        }
+        const summary = if (action == .remove)
+            try std.fmt.allocPrint(self.gpa, "Remove {d} installed packages.\n{d} uninstalled selections excluded.\nUnused dependencies and configuration will be kept.\n\n", .{ installed, excluded })
+        else
+            try std.fmt.allocPrint(self.gpa, "Install {d} available packages; reinstall {d} installed packages.\n\n", .{ available, installed });
+        defer self.gpa.free(summary);
+        const prompt = try self.gpa.create(SudoPrompt);
+        prompt.* = .{ .name = "", .backend = .standard, .action = action, .password = .empty };
+        errdefer prompt.deinit(self.gpa);
+        prompt.name = if (targets.items.len == 1) try self.gpa.dupe(u8, targets.items[0]) else try std.fmt.allocPrint(self.gpa, "{d} packages", .{targets.items.len});
+        var owned: std.ArrayList([]const u8) = .empty;
+        errdefer {
+            for (owned.items) |target| self.gpa.free(target);
+            owned.deinit(self.gpa);
+        }
+        for (targets.items) |target| {
+            const copy = try self.gpa.dupe(u8, target);
+            errdefer self.gpa.free(copy);
+            try owned.append(self.gpa, copy);
+        }
+        prompt.targets = try owned.toOwnedSlice(self.gpa);
+        prompt.review_text = try std.mem.concat(self.gpa, u8, &.{ summary, review.items });
+        prompt.review_scroll = .{ .item_count = 1, .children = .{ .builder = .{
+            .userdata = prompt,
+            .buildFn = buildNativeReview,
+        } } };
+        self.overlay = .{ .sudo = prompt };
+    }
+
+    fn buildNativeReview(ptr: *const anyopaque, index: usize, _: usize) ?vxfw.Widget {
+        if (index != 0) return null;
+        return .{ .userdata = @constCast(ptr), .drawFn = drawNativeReview };
+    }
+
+    fn drawNativeReview(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
+        const prompt: *const SudoPrompt = @ptrCast(@alignCast(ptr));
+        const width = ctx.max.width orelse ctx.min.width;
+        var text: vxfw.Text = .{ .text = prompt.review_text };
+        return text.draw(ctx.withConstraints(.{ .width = width }, .{ .width = width, .height = null }));
     }
 
     fn openPackagePrompt(self: *Model, name: []const u8, backend: OperationBackend, action: shelly_operation.Action) !void {
@@ -1433,6 +1527,7 @@ pub const Model = struct {
     }
 
     fn toggleSelectedList(self: *Model) !void {
+        try self.setNotice("");
         const package_name = self.filtered.items[self.list_view.cursor].Name;
         for (self.selected_packages.items, 0..) |*item, index| {
             if (std.mem.eql(u8, item.*, package_name)) {
@@ -1549,6 +1644,20 @@ pub const Model = struct {
             return ctx.consumeAndRedraw();
         }
 
+        if (prompt.targets.len > 0) {
+            if (key.matches('q', .{ .ctrl = true })) {
+                self.closeOverlay();
+                return ctx.consumeAndRedraw();
+            }
+            if (key.matches(vaxis.Key.up, .{}) or key.matches(vaxis.Key.down, .{}) or
+                key.matches(vaxis.Key.page_up, .{}) or key.matches(vaxis.Key.page_down, .{}) or
+                key.matches('d', .{ .ctrl = true }) or key.matches('u', .{ .ctrl = true }))
+            {
+                try prompt.review_scroll.handleEvent(ctx, .{ .key_press = key });
+                return ctx.consumeAndRedraw();
+            }
+        }
+
         if (key.matches(vaxis.Key.enter, .{})) {
             if (prompt.elevated and prompt.password.items.len == 0) return ctx.consumeEvent();
             try self.startElevatedInstall(ctx, prompt);
@@ -1582,6 +1691,7 @@ pub const Model = struct {
             .shelly_bin = shellyBin(),
             .environ_map = runtime.environ_map,
             .name = prompt.name,
+            .targets = prompt.targets,
             .action = prompt.action,
             .backend = @tagName(prompt.backend),
             .password = prompt.password.items,
@@ -1633,13 +1743,19 @@ pub const Model = struct {
         self.install_job = null;
         const is_flatpak = std.mem.eql(u8, job.request.backend, "flatpak");
         const is_combined = std.mem.eql(u8, job.request.backend, "all");
+        const native_batch = job.request.targets.len > 0;
+        if (native_batch) {
+            self.refresh_after_upgrade = true;
+            self.refresh_updates_after_operation = true;
+            if (!failed and !completed.declined) self.clearCompletedSelection(job.request.targets);
+        }
         if (is_flatpak or (is_combined and job.request.include_flatpak)) self.refresh_flatpak_after_operation = true;
         if (job.request.action == .upgrade or is_flatpak or std.mem.eql(u8, job.request.backend, "aur")) self.refresh_updates_after_operation = true;
         if (!is_flatpak and (job.request.action == .upgrade or std.mem.eql(u8, job.request.backend, "aur"))) self.refresh_after_upgrade = true;
         if ((is_combined and job.request.include_aur) or std.mem.eql(u8, job.request.backend, "aur")) self.refresh_aur_after_operation = true;
 
         // Native and AUR operations change the same installed package database.
-        if (!is_flatpak and !failed and job.request.action != .upgrade) {
+        if (!native_batch and !is_flatpak and !failed and !completed.declined and job.request.action != .upgrade) {
             for (self.packages) |*pkg| {
                 if (std.mem.eql(u8, pkg.Name, job.request.name)) {
                     pkg.Installed = job.request.action == .install;
@@ -1647,7 +1763,7 @@ pub const Model = struct {
                 }
             }
         }
-        if (!is_flatpak and !failed and job.request.action != .upgrade) {
+        if (!native_batch and !is_flatpak and !failed and !completed.declined and job.request.action != .upgrade) {
             if (self.aur_parsed) |parsed| {
                 for (parsed.value) |*pkg| {
                     if (std.mem.eql(u8, pkg.Name, job.request.name))
@@ -1685,6 +1801,17 @@ pub const Model = struct {
         try self.setNotice(message);
 
         return false;
+    }
+
+    fn clearCompletedSelection(self: *Model, targets: []const []const u8) void {
+        var index: usize = 0;
+        while (index < self.selected_packages.items.len) {
+            var completed = false;
+            for (targets) |target| {
+                if (std.mem.eql(u8, self.selected_packages.items[index], target)) completed = true;
+            }
+            if (completed) _ = self.selected_packages.orderedRemove(index) else index += 1;
+        }
     }
 
     fn setNotice(self: *Model, message: []const u8) Allocator.Error!void {
@@ -1767,6 +1894,15 @@ pub const Model = struct {
             self.package_details_scroll.scroll = .{};
             self.package_details_cursor = self.list_view.cursor;
         }
+        var selected_installed: usize = 0;
+        for (self.selected_packages.items) |name| {
+            for (self.packages) |pkg| {
+                if (std.mem.eql(u8, pkg.Name, name)) {
+                    if (pkg.Installed) selected_installed += 1;
+                    break;
+                }
+            }
+        }
         return .{
             .text_field = &self.text_field,
             .list_view = &self.list_view,
@@ -1775,6 +1911,7 @@ pub const Model = struct {
             .details_active = if (self.overlay) |overlay| overlay == .package else false,
             .list_active = self.package_list_active,
             .selected_count = self.selected_packages.items.len,
+            .selected_installed = selected_installed,
             .loading = self.loading,
             .load_failed = self.load_failed,
             .query = self.query,
@@ -1964,6 +2101,21 @@ pub const Model = struct {
 
     fn drawSudoPrompt(_: *const Model, ctx: vxfw.DrawContext, arena: Allocator, max: vxfw.Size, prompt: *const SudoPrompt) Allocator.Error!?vxfw.SubSurface {
         if (prompt.operationView()) |view| return view.draw(ctx);
+        if (prompt.targets.len > 0) {
+            const width = @min(max.width -| 2, @as(u16, 70));
+            const height = @min(max.height -| 2, @as(u16, 20));
+            if (width < 30 or height < 8) return null;
+            const labels = [_]Border.BorderLabel{.{ .text = if (prompt.action == .remove) "Confirm removal" else "Confirm installation", .alignment = .top_left }};
+            var border: Border = .{
+                .child = .{ .userdata = @constCast(prompt), .drawFn = drawNativePromptContent },
+                .labels = &labels,
+            };
+            return .{
+                .origin = .{ .row = @intCast((max.height - height) / 2), .col = @intCast((max.width - width) / 2) },
+                .surface = try border.draw(ctx.withConstraints(.{ .width = width, .height = height }, .{ .width = width, .height = height })),
+                .z_index = 2,
+            };
+        }
         const count = codepointCount(prompt.password.items);
         const mask = try arena.alloc(u8, count * 3);
         var pos: usize = 0;
@@ -2014,6 +2166,23 @@ pub const Model = struct {
         };
     }
 
+    fn drawNativePromptContent(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
+        const prompt: *SudoPrompt = @ptrCast(@alignCast(ptr));
+        const size = ctx.max.size();
+        const mask = try ctx.arena.alloc(u8, @min(codepointCount(prompt.password.items), size.width -| 10));
+        @memset(mask, '*');
+        const footer = try std.fmt.allocPrint(ctx.arena, "Password: {s}\n↑↓: review  Ctrl+Q: back\nEnter: run  Esc: quit", .{mask});
+        var text: vxfw.Text = .{ .text = footer };
+        const review_height = size.height -| 4;
+        const children = try ctx.arena.alloc(vxfw.SubSurface, 2);
+        children[0] = .{ .origin = .{ .row = 0, .col = 0 }, .surface = try prompt.review_scroll.draw(ctx.withConstraints(
+            .{},
+            .{ .width = size.width, .height = review_height },
+        )) };
+        children[1] = .{ .origin = .{ .row = @intCast(review_height + 1), .col = 0 }, .surface = try text.draw(ctx.withConstraints(.{}, .{ .width = size.width, .height = 3 })) };
+        return .{ .size = size, .widget = .{ .userdata = ptr, .drawFn = drawNativePromptContent }, .buffer = &.{}, .children = children };
+    }
+
     fn codepointCount(bytes: []const u8) usize {
         var count: usize = 0;
         var i: usize = 0;
@@ -2047,7 +2216,7 @@ pub const Model = struct {
         const pkg = self.filtered.items[idx];
         return .{
             .userdata = @constCast(pkg),
-            .drawFn = packages_view.drawPackageRow,
+            .drawFn = if (self.packageMarked(pkg.Name)) packages_view.drawMarkedPackageRow else packages_view.drawPackageRow,
         };
     }
 
@@ -2910,7 +3079,8 @@ test "packages split details follow selection and remain within the page on resi
 
     var events: vxfw.EventContext = .{ .io = undefined, .alloc = std.testing.allocator, .cmds = .empty };
     defer events.cmds.deinit(std.testing.allocator);
-    try Model.typeErasedEventHandler(model, &events, .{ .key_press = .{ .codepoint = vaxis.Key.enter } });
+    model.package_list_active = true;
+    try Model.typeErasedCaptureHandler(model, &events, .{ .key_press = .{ .codepoint = vaxis.Key.right } });
     try std.testing.expect(model.packagesView().details_active);
     for ([_]vxfw.Size{ .{ .width = 120, .height = 30 }, .{ .width = 80, .height = 24 }, .{ .width = 40, .height = 12 }, .{ .width = 1, .height = 4 } }) |size| {
         var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
@@ -2965,7 +3135,8 @@ test "packages details scroll and retain the selected install and removal target
     _ = try model.widget().draw(.{ .arena = arena.allocator(), .min = .{}, .max = .{ .width = 80, .height = 12 }, .cell_size = .{ .width = 10, .height = 20 } });
     var events: vxfw.EventContext = .{ .io = undefined, .alloc = std.testing.allocator, .cmds = .empty };
     defer events.cmds.deinit(std.testing.allocator);
-    try Model.typeErasedEventHandler(model, &events, .{ .key_press = .{ .codepoint = vaxis.Key.enter } });
+    model.package_list_active = true;
+    try Model.typeErasedCaptureHandler(model, &events, .{ .key_press = .{ .codepoint = vaxis.Key.right } });
     try Model.typeErasedCaptureHandler(model, &events, .{ .key_press = .{ .codepoint = vaxis.Key.down } });
     try std.testing.expect(model.package_details_scroll.scroll.pending_lines > 0);
     try std.testing.expectEqual(@as(u32, 0), model.list_view.cursor);
@@ -3019,6 +3190,7 @@ test "package list actions open prompts while search letters stay editable" {
     var packages = [_]Package{ .{ .Name = "available" }, .{ .Name = "installed", .Installed = true } };
     model.packages = &packages;
     try model.rebuildFilter();
+    model.loading = false;
     var ctx: vxfw.EventContext = .{ .io = undefined, .alloc = std.testing.allocator, .cmds = .empty };
     defer ctx.cmds.deinit(std.testing.allocator);
     for ([_]u21{ 'i', 'r' }) |letter| {
@@ -3097,4 +3269,111 @@ test "centered tab mouse targets exclude borders and padding" {
     try std.testing.expectEqual(Tab.packages, model.active);
     try TabBar.handleEvent(bar, &ctx, .{ .mouse = .{ .button = .left, .type = .press, .col = @intCast(col), .row = 1, .mods = .{} } });
     try std.testing.expectEqual(Tab.settings, model.active);
+}
+
+test "native batch selection survives filtering and confirms mixed targets" {
+    const model = try Model.init(std.testing.allocator);
+    defer model.deinit();
+    var packages = [_]Package{
+        .{ .Name = "available" },                            .{ .Name = "installed", .Installed = true },
+        .{ .Name = "another-installed", .Installed = true },
+    };
+    model.packages = &packages;
+    model.loading = false;
+    try model.rebuildFilter();
+    var ctx: vxfw.EventContext = .{ .io = undefined, .alloc = std.testing.allocator, .cmds = .empty };
+    defer ctx.cmds.deinit(std.testing.allocator);
+    const enter: vxfw.Event = .{ .key_press = .{ .codepoint = vaxis.Key.enter } };
+    try Model.typeErasedCaptureHandler(model, &ctx, enter);
+    try std.testing.expect(model.overlay == null);
+    try std.testing.expect(model.packageMarked("available"));
+    model.list_view.cursor = 1;
+    try Model.typeErasedCaptureHandler(model, &ctx, enter);
+    try std.testing.expectEqual(@as(usize, 2), model.selected_packages.items.len);
+    try model.setQuery("another");
+    try std.testing.expectEqual(@as(usize, 1), model.filtered.items.len);
+    try std.testing.expectEqual(@as(usize, 2), model.selected_packages.items.len);
+    try std.testing.expectEqual(@as(usize, 1), model.packagesView().selected_installed);
+    try model.openNativePrompt(.install);
+    var prompt = model.overlay.?.sudo;
+    try std.testing.expectEqualStrings("available", prompt.targets[0]);
+    try std.testing.expectEqualStrings("installed", prompt.targets[1]);
+    try std.testing.expect(std.mem.indexOf(u8, prompt.review_text, "Install 1 available packages; reinstall 1 installed packages.") != null);
+    try std.testing.expect(std.mem.indexOf(u8, prompt.review_text, "Reinstall: installed") != null);
+    // Confirmation owns its targets, independently of the source records.
+    packages[0].Name = "changed-source-name";
+    try std.testing.expectEqualStrings("available", prompt.targets[0]);
+    packages[0].Name = "available";
+    model.closeOverlay();
+    try model.openNativePrompt(.remove);
+    prompt = model.overlay.?.sudo;
+    try std.testing.expectEqual(@as(usize, 1), prompt.targets.len);
+    try std.testing.expectEqualStrings("installed", prompt.targets[0]);
+    try std.testing.expect(std.mem.indexOf(u8, prompt.review_text, "1 uninstalled selections excluded.") != null);
+    try std.testing.expect(std.mem.indexOf(u8, prompt.review_text, "Remove: installed") != null);
+    model.closeOverlay();
+    model.clearCompletedSelection(&.{"installed"});
+    try std.testing.expectEqual(@as(usize, 1), model.selected_packages.items.len);
+    try std.testing.expect(model.packageMarked("available"));
+    try model.openNativePrompt(.remove);
+    try std.testing.expect(model.overlay == null);
+    try std.testing.expect(std.mem.indexOf(u8, model.notice, "No installed packages") != null);
+}
+
+test "native batch confirmation scrolls long reviews and keeps password entry visible" {
+    vxfw.DrawContext.init(.unicode);
+    const model = try Model.init(std.testing.allocator);
+    defer model.deinit();
+    var packages: [30]Package = undefined;
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    for (&packages, 0..) |*pkg, i| pkg.* = .{ .Name = try std.fmt.allocPrint(arena.allocator(), "package-{d}", .{i}) };
+    model.packages = &packages;
+    model.loading = false;
+    try model.rebuildFilter();
+    for (packages) |pkg| try model.selected_packages.append(std.testing.allocator, pkg.Name);
+    try model.openNativePrompt(.install);
+    const prompt = model.overlay.?.sudo;
+    const drawn = (try model.drawSudoPrompt(.{
+        .arena = arena.allocator(),
+        .min = .{},
+        .max = .{ .width = 80, .height = 24 },
+        .cell_size = .{ .width = 10, .height = 20 },
+    }, arena.allocator(), .{ .width = 80, .height = 24 }, prompt)).?;
+    try std.testing.expectEqual(@as(u16, 20), drawn.surface.size.height);
+    try std.testing.expect(prompt.review_scroll.scroll.has_more_vertical);
+    var ctx: vxfw.EventContext = .{ .io = undefined, .alloc = std.testing.allocator, .cmds = .empty };
+    defer ctx.cmds.deinit(std.testing.allocator);
+    try Model.typeErasedCaptureHandler(model, &ctx, .{ .key_press = .{ .codepoint = vaxis.Key.down } });
+    try std.testing.expect(prompt.review_scroll.scroll.pending_lines > 0);
+    try std.testing.expectEqual(@as(usize, 0), prompt.password.items.len);
+    try Model.typeErasedCaptureHandler(model, &ctx, .{ .key_press = .{ .codepoint = 'q', .mods = .{ .ctrl = true } } });
+    try std.testing.expect(model.overlay == null);
+    try std.testing.expectEqual(@as(usize, 30), model.selected_packages.items.len);
+}
+
+test "native batch completion refreshes actual state and clears only successful targets" {
+    for ([_]bool{ false, true }) |failed| {
+        const model = try Model.init(std.testing.allocator);
+        defer model.deinit();
+        var packages = [_]Package{ .{ .Name = "available" }, .{ .Name = "installed", .Installed = true } };
+        model.packages = &packages;
+        try model.selected_packages.appendSlice(std.testing.allocator, &.{ "available", "installed" });
+        var env: std.process.Environ.Map = .init(std.testing.allocator);
+        defer env.deinit();
+        const job = try std.heap.page_allocator.create(shelly_operation.Operation);
+        job.* = .{
+            .arena = .init(std.heap.page_allocator),
+            .done = .init(true),
+            .result = .{ .failed = failed },
+            .request = .{ .shelly_bin = "unused", .environ_map = &env, .backend = "standard", .action = .remove, .name = "installed", .targets = &.{"installed"}, .password = "" },
+        };
+        model.install_job = job;
+        try std.testing.expect(!try model.pollInstall());
+        try std.testing.expect(model.refresh_after_upgrade);
+        try std.testing.expect(model.refresh_updates_after_operation);
+        try std.testing.expect(packages[1].Installed); // No optimistic batch result.
+        try std.testing.expect(model.packageMarked("available"));
+        try std.testing.expectEqual(failed, model.packageMarked("installed"));
+    }
 }

@@ -19,6 +19,7 @@ pub const View = struct {
     details_active: bool,
     list_active: bool,
     selected_count: usize,
+    selected_installed: usize = 0,
     loading: bool,
     load_failed: bool,
     query: []const u8,
@@ -110,13 +111,19 @@ pub const View = struct {
     pub fn statusText(self: View, arena: Allocator) Allocator.Error![]const u8 {
         if (self.loading) return "Loading packages…";
         if (self.load_failed) return "Could not load the package list.";
-        const actions = if (self.selected) |pkg|
+        const actions = if (self.selected_count > 0)
+            if (self.selected_installed > 0) "I: install/reinstall — R: remove installed" else "I: install"
+        else if (self.selected) |pkg|
             if (pkg.Installed) "I: reinstall — R: remove" else "I: install"
         else
             "";
-        if (self.details_active) return std.fmt.allocPrint(arena, "↑↓: scroll — {s} — ←/Q: packages", .{actions});
-        if (self.list_active) return std.fmt.allocPrint(arena, "↑↓: select — {s} — →: details — /: search", .{actions});
-        if (self.selected_count > 0) return std.fmt.allocPrint(arena, "{d} packages marked — Space: toggle — ↑↓: browse — Ctrl+L: installed/all", .{self.selected_count});
+        const selection = if (self.selected_count > 0)
+            try std.fmt.allocPrint(arena, "{d} selected · {d} installed · {d} available — ", .{ self.selected_count, self.selected_installed, self.selected_count - self.selected_installed })
+        else
+            "";
+        if (self.details_active) return std.fmt.allocPrint(arena, "{s}↑↓: scroll — {s} — ←/Q: packages", .{ selection, actions });
+        if (self.list_active) return std.fmt.allocPrint(arena, "{s}{s} — Enter: select — →: details — /: search", .{ selection, actions });
+        if (self.selected_count > 0) return std.fmt.allocPrint(arena, "{s}↑↓: browse — Ctrl+L: installed/all", .{selection});
         if (self.installed_only) return std.fmt.allocPrint(arena, "{d} installed matches — ↑↓: browse — Ctrl+L: all", .{self.filtered_count});
         if (self.query.len > 0) {
             return try std.fmt.allocPrint(arena, "{d} of {d} matches — ↑↓: browse — Ctrl+L: installed", .{
@@ -128,10 +135,19 @@ pub const View = struct {
 };
 
 pub fn drawPackageRow(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
+    return drawRow(ptr, ctx, false);
+}
+
+pub fn drawMarkedPackageRow(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
+    return drawRow(ptr, ctx, true);
+}
+
+fn drawRow(ptr: *anyopaque, ctx: vxfw.DrawContext, selected: bool) Allocator.Error!vxfw.Surface {
     const pkg: *const Package = @ptrCast(@alignCast(ptr));
     const arena = ctx.arena;
 
     var spans: std.ArrayList(vxfw.RichText.TextSpan) = .empty;
+    try spans.append(arena, .{ .text = if (selected) "[x] " else "[ ] ", .style = .{ .bold = selected } });
     if (pkg.Installed) {
         try spans.append(arena, .{ .text = "● ", .style = .{ .fg = .{ .index = 2 } } });
     } else {
@@ -360,4 +376,18 @@ test "structured details align wrapped values and stack fields in narrow panes" 
                 try std.testing.expectEqualStrings(" ", cell.char.grapheme);
         }
     }
+}
+
+test "selection checkbox is independent of the installed indicator" {
+    vxfw.DrawContext.init(.unicode);
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var pkg: Package = .{ .Name = "installed", .Installed = true };
+    const ctx: vxfw.DrawContext = .{ .arena = arena.allocator(), .min = .{}, .max = .{ .width = 40, .height = 1 }, .cell_size = .{ .width = 10, .height = 20 } };
+    const marked = try drawMarkedPackageRow(&pkg, ctx);
+    const unmarked = try drawPackageRow(&pkg, ctx);
+    try std.testing.expectEqualStrings("x", marked.buffer[1].char.grapheme);
+    try std.testing.expectEqualStrings(" ", unmarked.buffer[1].char.grapheme);
+    try std.testing.expectEqualStrings("●", marked.buffer[4].char.grapheme);
+    try std.testing.expectEqualStrings("●", unmarked.buffer[4].char.grapheme);
 }

@@ -28,12 +28,13 @@ pub fn packageAction(key: vaxis.Key) ?PackageAction {
     return null;
 }
 
-pub const PackageNavigation = enum { previous, next, details, search };
+pub const PackageNavigation = enum { previous, next, details, search, select };
 pub fn packageNavigation(key: vaxis.Key, searching: bool) ?PackageNavigation {
     if (key.matches(vaxis.Key.up, .{})) return .previous;
     if (key.matches(vaxis.Key.down, .{})) return .next;
+    if (key.matches(vaxis.Key.enter, .{})) return .select;
     if (!searching) {
-        if (key.matches(vaxis.Key.right, .{}) or key.matches(vaxis.Key.enter, .{})) return .details;
+        if (key.matches(vaxis.Key.right, .{})) return .details;
         if (key.matches('/', .{})) return .search;
     }
     return null;

@@ -75,6 +75,7 @@ pub const OperationRequest = struct {
     shelly_bin: []const u8,
     environ_map: *const std.process.Environ.Map,
     name: []const u8,
+    targets: []const []const u8 = &.{},
     backend: []const u8,
     password: []const u8,
     flatpak: ?FlatpakTarget = null,
@@ -339,6 +340,9 @@ pub const Operation = struct {
         self.request.sudo_bin = try alloc.dupe(u8, request.sudo_bin);
         self.request.shelly_bin = try alloc.dupe(u8, request.shelly_bin);
         self.request.name = try alloc.dupe(u8, request.name);
+        const targets = try alloc.alloc([]const u8, request.targets.len);
+        for (request.targets, targets) |source, *target| target.* = try alloc.dupe(u8, source);
+        self.request.targets = targets;
         self.request.backend = try alloc.dupe(u8, request.backend);
         if (request.flatpak) |target| self.request.flatpak = try target.clone(alloc);
         self.request.password = try alloc.dupe(u8, request.password);
@@ -410,6 +414,8 @@ fn elevated(request: OperationRequest) bool {
 }
 
 fn operationArgv(alloc: std.mem.Allocator, request: OperationRequest) ![][]const u8 {
+    if (request.targets.len > 0 and (!std.mem.eql(u8, request.backend, "standard") or request.action == .upgrade))
+        return error.UnsupportedBatchAction;
     if (std.mem.eql(u8, request.backend, "all") and request.action != .upgrade) return error.UnsupportedCombinedAction;
     const keep_dependencies = request.action == .remove and std.mem.eql(u8, request.backend, "standard");
     if (request.action == .upgrade and !std.mem.eql(u8, request.backend, "standard") and !std.mem.eql(u8, request.backend, "aur") and !isFlatpak(request) and !combined(request))
@@ -424,7 +430,9 @@ fn operationArgv(alloc: std.mem.Allocator, request: OperationRequest) ![][]const
         if (interactive(request)) try argv.appendSlice(alloc, &.{ request.sudo_bin, "-n" }) else try argv.appendSlice(alloc, &.{ request.sudo_bin, "-S", "-p", "" });
     }
     try argv.appendSlice(alloc, &.{ request.shelly_bin, @tagName(request.action), request.backend });
-    if (request.action != .upgrade) try argv.append(alloc, request.name);
+    if (request.action != .upgrade) {
+        if (request.targets.len > 0) try argv.appendSlice(alloc, request.targets) else try argv.append(alloc, request.name);
+    }
     if (isFlatpak(request) and request.action == .install) {
         const target = request.flatpak.?;
         if (target.scope == .user) try argv.append(alloc, "--user");
@@ -1353,17 +1361,24 @@ test "operation worker owns inputs and joins on launch failure" {
     defer env.deinit();
     // No real sudo or package operation can be launched by this test.
     try env.put("PATH", "/nonexistent-shelly-operation-test");
+    var first_target = [_]u8{ 'o', 'n', 'e' };
+    var second_target = [_]u8{ 't', 'w', 'o' };
     var name = [_]u8{ 't', 'e', 's', 't' };
     const operation = try Operation.start(.{
         .sudo_bin = "/nonexistent-shelly-sudo",
         .shelly_bin = "/nonexistent-shelly",
         .environ_map = &env,
         .name = &name,
+        .targets = &.{ &first_target, &second_target },
         .backend = "standard",
         .password = "",
     });
     defer operation.deinit();
     @memset(&name, 'x');
+    @memset(&first_target, 'x');
+    @memset(&second_target, 'x');
+    try std.testing.expectEqualStrings("one", operation.request.targets[0]);
+    try std.testing.expectEqualStrings("two", operation.request.targets[1]);
     try std.testing.expectEqualStrings("test", operation.request.name);
     operation.thread.?.join();
     operation.thread = null;
@@ -1636,4 +1651,27 @@ test "settings disable AUR and Flatpak in combined upgrade arguments" {
         try std.testing.expect(!std.mem.eql(u8, arg, "--no-repo"));
     }
     try std.testing.expect(aur and flatpak and appimage);
+}
+
+test "native batch operands stay separate in a single install or removal command" {
+    var env: std.process.Environ.Map = .init(std.testing.allocator);
+    defer env.deinit();
+    for ([_]Action{ .install, .remove }) |action| {
+        const argv = try operationArgv(std.testing.allocator, .{
+            .action = action,
+            .shelly_bin = "shelly",
+            .environ_map = &env,
+            .name = "2 packages",
+            .targets = &.{ "editor", "package with spaces" },
+            .backend = "standard",
+            .password = "",
+        });
+        defer std.testing.allocator.free(argv);
+        try std.testing.expectEqualStrings(@tagName(action), argv[5]);
+        try std.testing.expectEqualStrings("standard", argv[6]);
+        try std.testing.expectEqualStrings("editor", argv[7]);
+        try std.testing.expectEqualStrings("package with spaces", argv[8]);
+        try std.testing.expectEqualStrings("--no-confirm", argv[9]);
+        if (action == .remove) try std.testing.expectEqualStrings("--no-cascade", argv[argv.len - 1]);
+    }
 }

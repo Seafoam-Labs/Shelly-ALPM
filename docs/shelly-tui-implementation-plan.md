@@ -160,3 +160,9 @@ The intended flow is browse → details → review/provider questions → execut
 - Saved preferences control tabs from the first frame, source-specific update queries, and combined-upgrade exclusions. Enabled Flatpak remains visible while its independent backend probe runs or reports an error. Disabled-source and stale update results are discarded.
 - Saves are atomic, preserve unknown keys, and leave invalid files intact. Failed saves do not apply unsaved preferences. GTK settings and shared CLI configuration are unchanged; shared CLI option editing/backend installation remain separate work.
 - Zig 0.17 build/test and 43 focused tests pass. Four fake-CLI cases verify enabled-source query selection. An isolated PTY smoke verified immediate saved tabs, keyboard saving, unknown-key preservation, and clean exit without touching real preferences.
+
+### Native package batches (2026-10-30)
+
+- Enter toggles selection; Right focuses details. I installs/reinstalls selected packages; R removes only installed selections. With no selection, actions use the highlighted package. Checkboxes and installed indicators are separate; selections survive filtering.
+- Confirmation lists all targets, install/reinstall counts, and excluded removal entries in a scrollable review. One CLI operation receives separate target arguments. State refreshes after every attempt; success clears completed selections, while skipped entries and failed selections remain.
+- Zig 0.17 build/test and 57 model/service/view tests pass. Six fake-process cases cover install/remove success, failure, and authorization failure. No real batch mutation was run. AUR/Flatpak batching remains deferred.
