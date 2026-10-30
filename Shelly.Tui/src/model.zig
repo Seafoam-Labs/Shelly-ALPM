@@ -29,13 +29,13 @@ const OperationBackend = shelly_operation.Backend;
 pub const Tab = enum {
     packages,
     aur,
-    upgrade,
     flatpak,
+    upgrade,
     settings,
 
     pub const always: []const Tab = &.{ .packages, .upgrade, .settings };
 
-    pub const all: []const Tab = &.{ .packages, .aur, .upgrade, .flatpak, .settings };
+    pub const all: []const Tab = &.{ .packages, .aur, .flatpak, .upgrade, .settings };
 
     pub fn title(self: Tab) []const u8 {
         return switch (self) {
