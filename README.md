@@ -121,6 +121,19 @@ available. `Megabytes` remains the default; restore it with
 `shelly config set FileSizeDisplay Megabytes`. This setting affects human-readable
 CLI output; structured output keeps numeric byte counts.
 
+## CLI progress animation
+
+`ProgressBarStyle` defaults to `Shell`: a small `<` / `=` shell opens and closes
+as progress advances through a line of dots. Completed bars use `=` throughout.
+To select it in an existing configuration:
+
+```bash
+shelly config set ProgressBarStyle Shell
+```
+
+`Blocks` and `Pacman` remain available, and saved style choices are preserved.
+Redirected output prints completed progress lines without animation.
+
 ## PKGBUILD review
 
 Terminal PKGBUILD reviews show changed lines with three unchanged lines of
