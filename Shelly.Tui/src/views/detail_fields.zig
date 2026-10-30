@@ -30,6 +30,16 @@ fn displayValue(arena: Allocator, field: Field) Allocator.Error![]const u8 {
     return out.toOwnedSlice(arena);
 }
 
+fn hyperlink(field: Field) vaxis.Cell.Hyperlink {
+    if (!field.preserve_url) return .{};
+    for (field.value) |byte| if (byte <= 0x20 or byte == 0x7f) return .{};
+    const uri = std.Uri.parse(field.value) catch return .{};
+    if (!std.ascii.eqlIgnoreCase(uri.scheme, "http") and !std.ascii.eqlIgnoreCase(uri.scheme, "https")) return .{};
+    const host = uri.host orelse return .{};
+    if (host.isEmpty()) return .{};
+    return .{ .uri = field.value };
+}
+
 pub fn draw(widget: vxfw.Widget, ctx: vxfw.DrawContext, fields: []const Field) Allocator.Error!vxfw.Surface {
     const arena = ctx.arena;
     const width = ctx.max.width orelse ctx.min.width;
@@ -45,7 +55,13 @@ pub fn draw(widget: vxfw.Widget, ctx: vxfw.DrawContext, fields: []const Field) A
         const label_surface = try label.draw(ctx.withConstraints(.{}, .{ .width = label_width, .height = null }));
         try children.append(arena, .{ .origin = .{ .row = row, .col = 0 }, .surface = label_surface });
         const value_row = row + if (columns) @as(u16, 0) else label_surface.size.height;
-        var value: vxfw.Text = .{ .text = try displayValue(arena, field), .softwrap = true };
+        const link = hyperlink(field);
+        const spans = [_]vxfw.RichText.TextSpan{.{
+            .text = try displayValue(arena, field),
+            .link = link,
+            .style = if (link.uri.len > 0) .{ .ul_style = .single } else .{},
+        }};
+        var value: vxfw.RichText = .{ .text = &spans, .softwrap = true };
         const value_surface = try value.draw(ctx.withConstraints(
             .{ .width = value_width },
             .{ .width = value_width, .height = null },
@@ -77,4 +93,37 @@ test "package homepage URLs retain paths and queries while escaping terminal con
     const escaped = try displayValue(std.testing.allocator, .{ .label = "URL", .value = "https://example.org/path\x1b[31m", .preserve_url = true });
     defer std.testing.allocator.free(escaped);
     try std.testing.expectEqualStrings("https://example.org/path\\x1b[31m", escaped);
+}
+
+test "homepage hyperlinks survive wrapping and flattening without linking labels" {
+    vxfw.DrawContext.init(.unicode);
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var pkg: @import("../models/packages.zig").Package = .{};
+    const url = "https://example.org/project/releases?version=1#details";
+    const surface = try draw(.{ .userdata = &pkg, .drawFn = @import("packages_view.zig").drawDetails }, .{
+        .arena = arena.allocator(),
+        .min = .{},
+        .max = .{ .width = 24, .height = null },
+        .cell_size = .{ .width = 10, .height = 20 },
+    }, &.{.{ .label = "URL", .value = url, .preserve_url = true }});
+    var linked: std.ArrayList(u8) = .empty;
+    defer linked.deinit(std.testing.allocator);
+    var linked_rows: usize = 0;
+    for (0..surface.size.height) |row_index| {
+        var found = false;
+        for (surface.buffer[row_index * 24 .. (row_index + 1) * 24]) |cell| {
+            if (cell.link.uri.len == 0) continue;
+            found = true;
+            try std.testing.expectEqualStrings(url, cell.link.uri);
+            try std.testing.expectEqual(vaxis.Style.Underline.single, cell.style.ul_style);
+            try linked.appendSlice(std.testing.allocator, cell.char.grapheme);
+        }
+        if (found) linked_rows += 1;
+    }
+    try std.testing.expect(linked_rows > 1);
+    try std.testing.expectEqualStrings(url, linked.items);
+    try std.testing.expectEqualStrings("", surface.buffer[0].link.uri);
+    for ([_][]const u8{ "file:///tmp/package", "javascript:alert(1)", "https://example.org/\x1b[31m", "https://example.org/\npath", "https:///" }) |invalid|
+        try std.testing.expectEqualStrings("", hyperlink(.{ .label = "URL", .value = invalid, .preserve_url = true }).uri);
 }
