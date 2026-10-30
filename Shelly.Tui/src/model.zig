@@ -232,6 +232,8 @@ pub const Model = struct {
     notice: []const u8 = "",
 
     selected_list_view: vxfw.ListView,
+    package_details_scroll: vxfw.ScrollView,
+    package_details_cursor: ?u32 = null,
     list_view: vxfw.ListView,
     text_field: vxfw.TextField,
     aur_list: vxfw.ListView,
@@ -246,6 +248,10 @@ pub const Model = struct {
         errdefer gpa.destroy(model);
 
         model.* = .{
+            .package_details_scroll = .{ .item_count = 1, .children = .{ .builder = .{
+                .userdata = model,
+                .buildFn = buildPackageDetails,
+            } } },
             .flatpak_field = .{ .buf = .init(gpa), .userdata = model, .onChange = onFlatpakQueryChange },
             .flatpak_list = .{ .children = .{ .builder = .{ .userdata = model, .buildFn = buildFlatpakRow } } },
             .updates_list = .{ .children = .{ .builder = .{
@@ -427,6 +433,20 @@ pub const Model = struct {
                                     .remove => try self.operationFromOverlay(.remove),
                                     .preview => if (overlay == .aur) try self.openPkgbuild(ctx, overlay.aur.Name),
                                 }
+                                return ctx.consumeAndRedraw();
+                            }
+                            if (overlay == .package) {
+                                if (command) |action| {
+                                    self.closeOverlay();
+                                    switch (action) {
+                                        .quit => unreachable,
+                                        .next_tab, .previous_tab => self.switchTab(if (action == .next_tab) 1 else -1),
+                                        .select_tab => |index| try self.setTab(self.visibleTabs()[index], ctx),
+                                    }
+                                    try self.focusActiveTab(ctx);
+                                    try self.ensureUpdates(ctx);
+                                    try self.ensureFlatpak(ctx);
+                                } else try self.package_details_scroll.handleEvent(ctx, event);
                                 return ctx.consumeAndRedraw();
                             }
                             return ctx.consumeEvent();
@@ -611,7 +631,11 @@ pub const Model = struct {
                 // Let the active list handle whatever the search field
                 // ignored (arrow keys, mouse wheel, ...)
                 return switch (self.active) {
-                    .packages => self.list_view.handleEvent(ctx, event),
+                    .packages => {
+                        const previous = self.list_view.cursor;
+                        try self.list_view.handleEvent(ctx, event);
+                        if (previous != self.list_view.cursor) self.package_details_scroll.scroll = .{};
+                    },
                     .aur => self.aur_list.handleEvent(ctx, event),
                     .upgrade => self.updates_list.handleEvent(ctx, event),
                     .flatpak => self.flatpak_list.handleEvent(ctx, event),
@@ -1661,6 +1685,7 @@ pub const Model = struct {
     }
 
     fn rebuildFilter(self: *Model) Allocator.Error!void {
+        self.package_details_scroll.scroll = .{};
         self.filtered.clearRetainingCapacity();
         for (self.packages) |*pkg| {
             if (self.installed_only and !pkg.Installed) continue;
@@ -1693,10 +1718,17 @@ pub const Model = struct {
     // -- drawing -----------------------------------------------------------
 
     fn packagesView(self: *Model) packages_view.View {
+        if (self.package_details_cursor == null or self.package_details_cursor.? != self.list_view.cursor) {
+            self.package_details_scroll.scroll = .{};
+            self.package_details_cursor = self.list_view.cursor;
+        }
         return .{
             .text_field = &self.text_field,
             .list_view = &self.list_view,
-            .selected_list_view = &self.selected_list_view,
+            .details_scroll = &self.package_details_scroll,
+            .selected = self.selectedPackage(),
+            .details_active = if (self.overlay) |overlay| overlay == .package else false,
+            .selected_count = self.selected_packages.items.len,
             .loading = self.loading,
             .load_failed = self.load_failed,
             .query = self.query,
@@ -1770,7 +1802,8 @@ pub const Model = struct {
         // Modal overlay on top of everything
         if (self.overlay) |overlay| {
             const overlay_child: ?vxfw.SubSurface = switch (overlay) {
-                .package, .aur, .flatpak => try self.drawDetailsOverlay(ctx, arena, max, overlay),
+                .package => null,
+                .aur, .flatpak => try self.drawDetailsOverlay(ctx, arena, max, overlay),
                 .sudo => |prompt| try self.drawSudoPrompt(ctx, arena, max, prompt),
                 .pkgbuild => try self.pkgbuildView().draw(ctx),
                 .flatpak_install => |choice| try flatpak_view.drawInstallChoices(ctx, choice.app, choice.selected),
@@ -1941,6 +1974,18 @@ pub const Model = struct {
 
     // -- list rows ---------------------------------------------------------
 
+    fn selectedPackage(self: *const Model) ?*const Package {
+        if (self.list_view.cursor >= self.filtered.items.len) return null;
+        return self.filtered.items[self.list_view.cursor];
+    }
+
+    fn buildPackageDetails(ptr: *const anyopaque, idx: usize, _: usize) ?vxfw.Widget {
+        if (idx != 0) return null;
+        const self: *const Model = @ptrCast(@alignCast(ptr));
+        const pkg = self.selectedPackage() orelse return null;
+        return .{ .userdata = @constCast(pkg), .drawFn = packages_view.drawDetails };
+    }
+
     /// ListView builder: constructs the widget for a single row on demand, so
     /// only visible rows are ever built.
     fn buildRow(ptr: *const anyopaque, idx: usize, _: usize) ?vxfw.Widget {
@@ -2068,6 +2113,9 @@ test "tab views preserve input widgets and render without background work" {
             var found = surface.widget.eql(input);
             for (surface.children) |child| {
                 found = found or child.surface.widget.eql(input);
+                for (child.surface.children) |nested| {
+                    found = found or nested.surface.widget.eql(input);
+                }
             }
             try std.testing.expect(found);
         }
@@ -2727,4 +2775,82 @@ test "settings changes reject late update results and disabled source data" {
     model.pollUpdates();
     try std.testing.expect(!model.updates_checked);
     try std.testing.expectEqualStrings("native", model.updates_parsed.?.value.Packages[0].Name);
+}
+
+test "packages split details follow selection and remain within the page on resize" {
+    vxfw.DrawContext.init(.unicode);
+    const model = try Model.init(std.testing.allocator);
+    defer model.deinit();
+    var packages = [_]Package{
+        .{ .Name = "first", .Description = "First package", .Repository = "core" },
+        .{ .Name = "second", .Description = "Second package", .Repository = "extra", .Installed = true },
+    };
+    model.packages = &packages;
+    try model.rebuildFilter();
+    model.loading = false;
+    try std.testing.expectEqualStrings("first", model.packagesView().selected.?.Name);
+    model.list_view.cursor = 1;
+    try std.testing.expectEqualStrings("second", model.packagesView().selected.?.Name);
+
+    var events: vxfw.EventContext = .{ .io = undefined, .alloc = std.testing.allocator, .cmds = .empty };
+    defer events.cmds.deinit(std.testing.allocator);
+    try Model.typeErasedEventHandler(model, &events, .{ .key_press = .{ .codepoint = vaxis.Key.enter } });
+    try std.testing.expect(model.packagesView().details_active);
+    for ([_]vxfw.Size{ .{ .width = 120, .height = 30 }, .{ .width = 80, .height = 24 }, .{ .width = 40, .height = 12 }, .{ .width = 1, .height = 4 } }) |size| {
+        var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+        defer arena.deinit();
+        const ctx: vxfw.DrawContext = .{
+            .arena = arena.allocator(),
+            .min = .{},
+            .max = .{ .width = size.width, .height = size.height },
+            .cell_size = .{ .width = 10, .height = 20 },
+        };
+        var children: std.ArrayList(vxfw.SubSurface) = .empty;
+        try model.packagesView().appendContent(ctx, &children);
+        var details_on_right = false;
+        var list_on_left = false;
+        for (children.items) |child| {
+            try std.testing.expect(child.origin.col >= 0 and child.origin.row >= 0);
+            try std.testing.expect(@as(usize, @intCast(child.origin.col)) + child.surface.size.width <= size.width);
+            try std.testing.expect(@as(usize, @intCast(child.origin.row)) + child.surface.size.height <= size.height - 1);
+            const content_row: i17 = if (size.width >= 2 and size.height >= 8) 4 else 2;
+            if (child.origin.row == content_row) {
+                if (child.origin.col > 0) details_on_right = true;
+                if (child.surface.widget.eql(model.list_view.widget())) list_on_left = true;
+                for (child.surface.children) |nested| {
+                    if (nested.surface.widget.eql(model.list_view.widget())) list_on_left = true;
+                }
+            }
+        }
+        try std.testing.expectEqual(size.width >= 64, details_on_right);
+        try std.testing.expectEqual(size.width >= 64, list_on_left);
+    }
+    try Model.typeErasedCaptureHandler(model, &events, .{ .key_press = .{ .codepoint = 'q' } });
+    try std.testing.expect(model.overlay == null);
+    try std.testing.expectEqual(@as(u32, 1), model.list_view.cursor);
+    try model.setQuery("no matches");
+    try std.testing.expect(model.packagesView().selected == null);
+}
+
+test "packages details scroll and retain the selected install and removal target" {
+    vxfw.DrawContext.init(.unicode);
+    const model = try Model.init(std.testing.allocator);
+    defer model.deinit();
+    var packages = [_]Package{.{ .Name = "installed", .Installed = true }};
+    model.packages = &packages;
+    try model.rebuildFilter();
+    model.loading = false;
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    _ = try model.widget().draw(.{ .arena = arena.allocator(), .min = .{}, .max = .{ .width = 80, .height = 12 }, .cell_size = .{ .width = 10, .height = 20 } });
+    var events: vxfw.EventContext = .{ .io = undefined, .alloc = std.testing.allocator, .cmds = .empty };
+    defer events.cmds.deinit(std.testing.allocator);
+    try Model.typeErasedEventHandler(model, &events, .{ .key_press = .{ .codepoint = vaxis.Key.enter } });
+    try Model.typeErasedCaptureHandler(model, &events, .{ .key_press = .{ .codepoint = vaxis.Key.down } });
+    try std.testing.expect(model.package_details_scroll.scroll.pending_lines > 0);
+    try std.testing.expectEqual(@as(u32, 0), model.list_view.cursor);
+    try Model.typeErasedCaptureHandler(model, &events, .{ .key_press = .{ .codepoint = 'r' } });
+    try std.testing.expect(model.overlay.? == .sudo);
+    try std.testing.expectEqualStrings("installed", model.overlay.?.sudo.name);
+    try std.testing.expectEqual(shelly_operation.Action.remove, model.overlay.?.sudo.action);
 }
