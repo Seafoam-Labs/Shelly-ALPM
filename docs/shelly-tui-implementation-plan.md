@@ -166,3 +166,9 @@ The intended flow is browse → details → review/provider questions → execut
 - Enter toggles selection; Right focuses details. I installs/reinstalls selected packages; R removes only installed selections. With no selection, actions use the highlighted package. Checkboxes and installed indicators are separate; selections survive filtering.
 - Confirmation lists all targets, install/reinstall counts, and excluded removal entries in a scrollable review. One CLI operation receives separate target arguments. State refreshes after every attempt; success clears completed selections, while skipped entries and failed selections remain.
 - Zig 0.17 build/test and 57 model/service/view tests pass. Six fake-process cases cover install/remove success, failure, and authorization failure. No real batch mutation was run. AUR/Flatpak batching remains deferred.
+
+### Reserved operation panel (2026-10-30)
+
+- Confirmation, authentication, progress, and results now share `operation_view.zig`, below browsing instead of floating over it. The component emits actions; Model retains passwords/state and starts service operations. Long reviews/output scroll while controls stay visible.
+- Panel height fits wrapped content up to a limit, placing controls directly below output. Short terminals temporarily replace browsing; PKGBUILD reviews retain their dedicated view. Operation focus remains on a visible widget, and result dismissal restores browsing focus.
+- Zig 0.17 build/test and 60 model/service/view tests pass. An isolated PTY test with fake commands covered masking, 80×24 → 40×12 → 80×24 resizing, progress/results, refresh, and clean exit. No real package mutations were run.

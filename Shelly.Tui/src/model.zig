@@ -94,13 +94,13 @@ const PkgbuildJob = struct {
     done: std.atomic.Value(bool) = .init(false),
 };
 
-/// Modal password prompt used to elevate installs through sudo.
+/// Operation state owned by Model and presented by the reusable panel.
 const SudoPrompt = struct {
     /// Package being installed; owned by `gpa`.
     name: []const u8,
     targets: []const []const u8 = &.{},
     review_text: []const u8 = "",
-    review_scroll: vxfw.ScrollView = .{ .children = .{ .slice = &.{} } },
+    panel: operation_view.Panel = .{},
     backend: OperationBackend,
     action: shelly_operation.Action = .install,
     elevated: bool = true,
@@ -116,16 +116,22 @@ const SudoPrompt = struct {
 
     const State = enum { entering, running, succeeded, failed, declined };
 
-    fn operationView(self: *const SudoPrompt) ?operation_view.View {
+    fn operationView(self: *const SudoPrompt) operation_view.View {
         return .{
             .name = self.name,
             .elevated = self.elevated,
             .combined = self.backend == .all,
+            .backend = self.backend,
+            .include_aur = self.include_aur,
+            .include_flatpak = self.include_flatpak,
+            .target = self.flatpak_target,
+            .review = self.review_text,
+            .password_length = Model.codepointCount(self.password.items),
             .action = self.action,
             .detail = self.detail,
             .progress = self.progress,
             .state = switch (self.state) {
-                .entering => return null,
+                .entering => .entering,
                 .running => .running,
                 .succeeded => .succeeded,
                 .failed => .failed,
@@ -386,6 +392,21 @@ pub const Model = struct {
     /// user is typing, and where the modal overlay swallows all input.
     fn typeErasedCaptureHandler(ptr: *anyopaque, ctx: *vxfw.EventContext, event: vxfw.Event) anyerror!void {
         const self: *Model = @ptrCast(@alignCast(ptr));
+        const had_operation = self.operationPrompt() != null;
+        try self.captureEvent(ctx, event);
+        if (ctx.quit) return;
+        if (self.operationPrompt() != null) {
+            // The root remains present when a small terminal temporarily
+            // replaces browsing with the operation panel.
+            try ctx.requestFocus(self.widget());
+        } else if (had_operation) {
+            const list_active = self.package_list_active;
+            try self.focusActiveTab(ctx);
+            self.package_list_active = list_active;
+        }
+    }
+
+    fn captureEvent(self: *Model, ctx: *vxfw.EventContext, event: vxfw.Event) anyerror!void {
         switch (event) {
             .key_press => |key| {
                 const command = commands.global(key, self.visibleTabs().len);
@@ -869,6 +890,7 @@ pub const Model = struct {
     }
 
     fn focusActiveTab(self: *Model, ctx: *vxfw.EventContext) !void {
+        if (self.operationPrompt() != null) return ctx.requestFocus(self.widget());
         self.package_list_active = false;
         switch (self.active) {
             .packages => try ctx.requestFocus(self.text_field.widget()),
@@ -1422,6 +1444,10 @@ pub const Model = struct {
         defer targets.deinit(self.gpa);
         var review: std.ArrayList(u8) = .empty;
         defer review.deinit(self.gpa);
+        var installed_names: std.ArrayList([]const u8) = .empty;
+        defer installed_names.deinit(self.gpa);
+        var available_names: std.ArrayList([]const u8) = .empty;
+        defer available_names.deinit(self.gpa);
         var installed: usize = 0;
         var available: usize = 0;
         var excluded: usize = 0;
@@ -1444,22 +1470,34 @@ pub const Model = struct {
             }
             if (duplicate) continue;
             try targets.append(self.gpa, pkg.Name);
-            if (pkg.Installed) installed += 1 else available += 1;
-            const line = try std.fmt.allocPrint(self.gpa, "{s}: {f}\n", .{
-                if (action == .remove) "Remove" else if (pkg.Installed) "Reinstall" else "Install",
-                diagnostics.safe(pkg.Name),
-            });
-            defer self.gpa.free(line);
-            try review.appendSlice(self.gpa, line);
+            if (pkg.Installed) {
+                installed += 1;
+                try installed_names.append(self.gpa, pkg.Name);
+            } else {
+                available += 1;
+                try available_names.append(self.gpa, pkg.Name);
+            }
         }
         if (targets.items.len == 0) {
             try self.setNotice(if (action == .remove) "No installed packages selected for removal." else "No packages selected.");
             return;
         }
+        const groups = [_]struct { label: []const u8, names: []const []const u8 }{
+            .{ .label = "Install", .names = available_names.items },
+            .{ .label = if (action == .remove) "Remove" else "Reinstall", .names = installed_names.items },
+        };
+        for (groups) |group| {
+            if (group.names.len == 0) continue;
+            const names = try std.mem.join(self.gpa, ", ", group.names);
+            defer self.gpa.free(names);
+            const line = try std.fmt.allocPrint(self.gpa, "{s}: {f}\n", .{ group.label, diagnostics.safe(names) });
+            defer self.gpa.free(line);
+            try review.appendSlice(self.gpa, line);
+        }
         const summary = if (action == .remove)
-            try std.fmt.allocPrint(self.gpa, "Remove {d} installed packages.\n{d} uninstalled selections excluded.\nUnused dependencies and configuration will be kept.\n\n", .{ installed, excluded })
+            try std.fmt.allocPrint(self.gpa, "Remove {d} installed packages.\n{d} uninstalled selections excluded.\nUnused dependencies and configuration will be kept.\n", .{ installed, excluded })
         else
-            try std.fmt.allocPrint(self.gpa, "Install {d} available packages; reinstall {d} installed packages.\n\n", .{ available, installed });
+            try std.fmt.allocPrint(self.gpa, "Install {d} available packages; reinstall {d} installed packages.\n", .{ available, installed });
         defer self.gpa.free(summary);
         const prompt = try self.gpa.create(SudoPrompt);
         prompt.* = .{ .name = "", .backend = .standard, .action = action, .password = .empty };
@@ -1477,23 +1515,7 @@ pub const Model = struct {
         }
         prompt.targets = try owned.toOwnedSlice(self.gpa);
         prompt.review_text = try std.mem.concat(self.gpa, u8, &.{ summary, review.items });
-        prompt.review_scroll = .{ .item_count = 1, .children = .{ .builder = .{
-            .userdata = prompt,
-            .buildFn = buildNativeReview,
-        } } };
         self.overlay = .{ .sudo = prompt };
-    }
-
-    fn buildNativeReview(ptr: *const anyopaque, index: usize, _: usize) ?vxfw.Widget {
-        if (index != 0) return null;
-        return .{ .userdata = @constCast(ptr), .drawFn = drawNativeReview };
-    }
-
-    fn drawNativeReview(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
-        const prompt: *const SudoPrompt = @ptrCast(@alignCast(ptr));
-        const width = ctx.max.width orelse ctx.min.width;
-        var text: vxfw.Text = .{ .text = prompt.review_text };
-        return text.draw(ctx.withConstraints(.{ .width = width }, .{ .width = width, .height = null }));
     }
 
     fn openPackagePrompt(self: *Model, name: []const u8, backend: OperationBackend, action: shelly_operation.Action) !void {
@@ -1541,7 +1563,11 @@ pub const Model = struct {
     fn closeOverlay(self: *Model) void {
         if (self.overlay) |overlay| {
             switch (overlay) {
-                .sudo => |prompt| prompt.deinit(self.gpa),
+                .sudo => |prompt| {
+                    prompt.deinit(self.gpa);
+                    if (self.notice.len > 0) self.gpa.free(self.notice);
+                    self.notice = "";
+                },
                 else => {},
             }
         }
@@ -1639,48 +1665,33 @@ pub const Model = struct {
     }
 
     fn handleSudoKey(self: *Model, prompt: *SudoPrompt, ctx: *vxfw.EventContext, key: vaxis.Key) anyerror!void {
-        if (prompt.operationView()) |view| {
-            if (view.handleKey(key) == .close) self.closeOverlay();
-            return ctx.consumeAndRedraw();
+        switch (try prompt.panel.handleKey(self.promptView(prompt), ctx, key)) {
+            .none => {},
+            .close => self.closeOverlay(),
+            .confirm => {
+                try self.startElevatedInstall(ctx, prompt);
+                @memset(prompt.password.items, 0);
+                prompt.password.clearRetainingCapacity();
+                prompt.state = .running;
+            },
+            .erase => popGrapheme(&prompt.password),
+            .text => |text| for (text) |byte| {
+                if (byte >= 0x20) try prompt.password.append(self.gpa, byte);
+            },
         }
+        return ctx.consumeAndRedraw();
+    }
 
-        if (prompt.targets.len > 0) {
-            if (key.matches('q', .{ .ctrl = true })) {
-                self.closeOverlay();
-                return ctx.consumeAndRedraw();
-            }
-            if (key.matches(vaxis.Key.up, .{}) or key.matches(vaxis.Key.down, .{}) or
-                key.matches(vaxis.Key.page_up, .{}) or key.matches(vaxis.Key.page_down, .{}) or
-                key.matches('d', .{ .ctrl = true }) or key.matches('u', .{ .ctrl = true }))
-            {
-                try prompt.review_scroll.handleEvent(ctx, .{ .key_press = key });
-                return ctx.consumeAndRedraw();
-            }
-        }
+    fn operationPrompt(self: *Model) ?*SudoPrompt {
+        const overlay = self.overlay orelse return null;
+        return if (overlay == .sudo) overlay.sudo else null;
+    }
 
-        if (key.matches(vaxis.Key.enter, .{})) {
-            if (prompt.elevated and prompt.password.items.len == 0) return ctx.consumeEvent();
-            try self.startElevatedInstall(ctx, prompt);
-            @memset(prompt.password.items, 0);
-            prompt.password.clearRetainingCapacity();
-            prompt.state = .running;
-            return ctx.consumeAndRedraw();
-        }
-        if (!prompt.elevated) {
-            if (commands.closesPreview(key)) self.closeOverlay();
-            return ctx.consumeAndRedraw();
-        }
-        if (key.matches(vaxis.Key.backspace, .{})) {
-            popGrapheme(&prompt.password);
-            return ctx.consumeAndRedraw();
-        }
-        if (key.text) |text| {
-            for (text) |b| {
-                if (b >= 0x20) try prompt.password.append(self.gpa, b);
-            }
-            return ctx.consumeAndRedraw();
-        }
-        return ctx.consumeEvent();
+    fn promptView(self: *const Model, prompt: *const SudoPrompt) operation_view.View {
+        var view = prompt.operationView();
+        view.refresh_pending = self.refresh_after_upgrade or self.refresh_flatpak_after_operation or
+            self.refresh_updates_after_operation or self.loading or self.updates_job != null or self.flatpak_job != null;
+        return view;
     }
 
     fn startElevatedInstall(self: *Model, ctx: *vxfw.EventContext, prompt: *SudoPrompt) !void {
@@ -1790,15 +1801,6 @@ pub const Model = struct {
                 else => {},
             }
         }
-
-        const message = if (completed.declined)
-            try std.fmt.allocPrint(self.gpa, "Declined {s} for {f}.", .{ @tagName(job.request.action), diagnostics.safe(job.request.name) })
-        else if (failed)
-            try std.fmt.allocPrint(self.gpa, "Could not {s} {f}.", .{ @tagName(job.request.action), diagnostics.safe(job.request.name) })
-        else
-            try std.fmt.allocPrint(self.gpa, "{s} {s}", .{ job.request.action.completed(), job.request.name });
-        defer self.gpa.free(message);
-        try self.setNotice(message);
 
         return false;
     }
@@ -1951,7 +1953,22 @@ pub const Model = struct {
 
         var children: std.ArrayList(vxfw.SubSurface) = .empty;
 
-        const navigation_height: u16 = if (max.width >= 2 and max.height >= 8) 3 else 1;
+        const prompt = self.operationPrompt();
+        var navigation_height: u16 = if (max.width >= 2 and max.height >= 8) 3 else 1;
+        var panel_height: u16 = 0;
+        var show_browsing = true;
+        if (prompt) |active_prompt| {
+            const preferred_height = try self.promptView(active_prompt).preferredHeight(ctx, 9);
+            if (max.height >= navigation_height + preferred_height + 5) {
+                panel_height = preferred_height;
+            } else {
+                // Short terminals give the operation the content area rather
+                // than clipping authentication beneath a tiny browsing pane.
+                navigation_height = if (max.height >= 11) 3 else 1;
+                panel_height = max.height -| (navigation_height + 1);
+                show_browsing = false;
+            }
+        }
         const content_offset = navigation_height - 1;
 
         // Navigation occupies its own rows above every page.
@@ -1965,16 +1982,25 @@ pub const Model = struct {
         });
 
         const content_start = children.items.len;
-        const content_ctx = ctx.withConstraints(.{}, .{ .width = max.width, .height = max.height - content_offset });
-        switch (self.active) {
+        const content_ctx = ctx.withConstraints(.{}, .{ .width = max.width, .height = max.height - content_offset - panel_height });
+        if (show_browsing) switch (self.active) {
             .packages => try self.packagesView().appendContent(content_ctx, &children),
             .aur => try self.aurView().appendContent(content_ctx, &children),
             .upgrade => try self.updatesView().appendContent(content_ctx, &children),
             .flatpak => try self.flatpakView().appendContent(content_ctx, &children),
             .settings => try self.settingsView().appendContent(content_ctx, &children),
-        }
+        };
 
         for (children.items[content_start..]) |*child| child.origin.row += @intCast(content_offset);
+        if (prompt) |active_prompt| {
+            try children.append(arena, .{
+                .origin = .{ .row = @intCast(max.height - panel_height - 1), .col = 0 },
+                .surface = try active_prompt.panel.draw(self.promptView(active_prompt), ctx.withConstraints(
+                    .{},
+                    .{ .width = max.width, .height = panel_height },
+                )),
+            });
+        }
 
         // Bottom row: status bar
         var status: vxfw.Text = .{
@@ -1994,7 +2020,7 @@ pub const Model = struct {
             const overlay_child: ?vxfw.SubSurface = switch (overlay) {
                 .package => null,
                 .aur, .flatpak => try self.drawDetailsOverlay(ctx, arena, max, overlay),
-                .sudo => |prompt| try self.drawSudoPrompt(ctx, arena, max, prompt),
+                .sudo => null,
                 .pkgbuild => try self.pkgbuildView().draw(ctx),
                 .flatpak_install => |choice| try flatpak_view.drawInstallChoices(ctx, choice.app, choice.selected),
             };
@@ -2033,9 +2059,6 @@ pub const Model = struct {
     }
 
     fn statusText(self: *Model, arena: Allocator) Allocator.Error![]const u8 {
-        if (self.install_job) |job| {
-            return try std.fmt.allocPrint(arena, "{s} {s}…", .{ job.request.action.ongoing(), job.request.name });
-        }
         if (self.active == .upgrade) return self.updatesView().statusText(arena);
         if (self.notice.len > 0) return self.notice;
         return switch (self.active) {
@@ -2097,90 +2120,6 @@ pub const Model = struct {
             .surface = surface,
             .z_index = 2,
         };
-    }
-
-    fn drawSudoPrompt(_: *const Model, ctx: vxfw.DrawContext, arena: Allocator, max: vxfw.Size, prompt: *const SudoPrompt) Allocator.Error!?vxfw.SubSurface {
-        if (prompt.operationView()) |view| return view.draw(ctx);
-        if (prompt.targets.len > 0) {
-            const width = @min(max.width -| 2, @as(u16, 70));
-            const height = @min(max.height -| 2, @as(u16, 20));
-            if (width < 30 or height < 8) return null;
-            const labels = [_]Border.BorderLabel{.{ .text = if (prompt.action == .remove) "Confirm removal" else "Confirm installation", .alignment = .top_left }};
-            var border: Border = .{
-                .child = .{ .userdata = @constCast(prompt), .drawFn = drawNativePromptContent },
-                .labels = &labels,
-            };
-            return .{
-                .origin = .{ .row = @intCast((max.height - height) / 2), .col = @intCast((max.width - width) / 2) },
-                .surface = try border.draw(ctx.withConstraints(.{ .width = width, .height = height }, .{ .width = width, .height = height })),
-                .z_index = 2,
-            };
-        }
-        const count = codepointCount(prompt.password.items);
-        const mask = try arena.alloc(u8, count * 3);
-        var pos: usize = 0;
-        for (0..count) |_| {
-            @memcpy(mask[pos .. pos + 3], "●");
-            pos += 3;
-        }
-        const target_text = if (prompt.flatpak_target) |target|
-            try std.fmt.allocPrint(arena, "\nScope: {s}\nRemote: {f}\nBranch: {f}\nArchitecture: {f}", .{ @tagName(target.scope), diagnostics.safe(target.remote), diagnostics.safe(if (target.branch.len > 0) target.branch else "remote default"), diagnostics.safe(if (target.arch.len > 0) target.arch else "remote default") })
-        else
-            "";
-        const note: []const u8 = if (prompt.backend == .all)
-            if (prompt.include_aur)
-                if (prompt.include_flatpak) "\nFull upgrade: system packages, AUR, and system/user Flatpaks. AppImages are excluded. PKGBUILDs require review." else "\nFull upgrade: system packages and AUR. Flatpak is disabled or unavailable. AppImages are excluded. PKGBUILDs require review."
-            else if (prompt.include_flatpak) "\nFull upgrade: system packages and system/user Flatpaks. AUR and AppImages are excluded." else "\nFull system upgrade. AUR, Flatpak and AppImages are excluded."
-        else if (prompt.backend == .flatpak)
-            if (prompt.action == .upgrade) "\nUpdates both system and user Flatpaks as the invoking user. System changes may require a Flatpak authorization agent." else if (prompt.action == .remove) "\nConfiguration and unused dependencies will be kept." else "\nInstall from the selected remote and scope. Shelly handles dependencies and review."
-        else if (prompt.action == .remove) "\nUnused dependencies and configuration will be kept." else if (prompt.action == .upgrade)
-            if (prompt.backend == .aur) "\nUpgrade AUR packages and required dependencies. PKGBUILDs require review." else "\nFull system upgrade. AUR, Flatpak and AppImage are excluded."
-        else
-            "";
-        const body = if (prompt.elevated)
-            try std.fmt.allocPrint(arena, "{s} '{f}'?{s}{s}\n\nPassword: {s}\n\n{s}", .{ prompt.action.verb(), diagnostics.safe(prompt.name), target_text, note, mask[0..pos], commands.authentication_hint })
-        else
-            try std.fmt.allocPrint(arena, "{s} '{f}'?{s}{s}\n\n{s}", .{ prompt.action.verb(), diagnostics.safe(prompt.name), target_text, note, commands.confirmation_hint });
-
-        const box_width = @min(max.width -| 2, @as(u16, 70));
-        const box_height = @min(max.height -| 2, @as(u16, 20));
-        if (box_width < 30 or box_height < 8) return null;
-
-        var text: vxfw.Text = .{ .text = body };
-        const labels = [_]Border.BorderLabel{.{ .text = if (prompt.elevated) "Administrator privileges" else "Confirm Flatpak operation", .alignment = .top_left }};
-        var border: Border = .{
-            .child = text.widget(),
-            .labels = &labels,
-        };
-        const surface = try border.widget().draw(ctx.withConstraints(
-            .{ .width = 0, .height = 0 },
-            .{ .width = box_width, .height = box_height },
-        ));
-        return .{
-            .origin = .{
-                .row = @divFloor(@as(i17, max.height) - @as(i17, surface.size.height), 2),
-                .col = @divFloor(@as(i17, max.width) - @as(i17, surface.size.width), 2),
-            },
-            .surface = surface,
-            .z_index = 2,
-        };
-    }
-
-    fn drawNativePromptContent(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
-        const prompt: *SudoPrompt = @ptrCast(@alignCast(ptr));
-        const size = ctx.max.size();
-        const mask = try ctx.arena.alloc(u8, @min(codepointCount(prompt.password.items), size.width -| 10));
-        @memset(mask, '*');
-        const footer = try std.fmt.allocPrint(ctx.arena, "Password: {s}\n↑↓: review  Ctrl+Q: back\nEnter: run  Esc: quit", .{mask});
-        var text: vxfw.Text = .{ .text = footer };
-        const review_height = size.height -| 4;
-        const children = try ctx.arena.alloc(vxfw.SubSurface, 2);
-        children[0] = .{ .origin = .{ .row = 0, .col = 0 }, .surface = try prompt.review_scroll.draw(ctx.withConstraints(
-            .{},
-            .{ .width = size.width, .height = review_height },
-        )) };
-        children[1] = .{ .origin = .{ .row = @intCast(review_height + 1), .col = 0 }, .surface = try text.draw(ctx.withConstraints(.{}, .{ .width = size.width, .height = 3 })) };
-        return .{ .size = size, .widget = .{ .userdata = ptr, .drawFn = drawNativePromptContent }, .buffer = &.{}, .children = children };
     }
 
     fn codepointCount(bytes: []const u8) usize {
@@ -2972,7 +2911,7 @@ test "combined update shortcut opens an authenticated prompt even for an empty c
     vxfw.DrawContext.init(.unicode);
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
-    _ = try Model.drawSudoPrompt(model, .{ .arena = arena.allocator(), .min = .{}, .max = .{ .width = 80, .height = 24 }, .cell_size = .{ .width = 10, .height = 20 } }, arena.allocator(), .{ .width = 80, .height = 24 }, model.overlay.?.sudo);
+    _ = try model.widget().draw(.{ .arena = arena.allocator(), .min = .{}, .max = .{ .width = 80, .height = 24 }, .cell_size = .{ .width = 10, .height = 20 } });
     model.closeOverlay();
     model.updates_failed = true;
     try std.testing.expect(model.updatesView().handleKey(key) == null);
@@ -3334,18 +3273,18 @@ test "native batch confirmation scrolls long reviews and keeps password entry vi
     for (packages) |pkg| try model.selected_packages.append(std.testing.allocator, pkg.Name);
     try model.openNativePrompt(.install);
     const prompt = model.overlay.?.sudo;
-    const drawn = (try model.drawSudoPrompt(.{
+    const drawn = try model.widget().draw(.{
         .arena = arena.allocator(),
         .min = .{},
         .max = .{ .width = 80, .height = 24 },
         .cell_size = .{ .width = 10, .height = 20 },
-    }, arena.allocator(), .{ .width = 80, .height = 24 }, prompt)).?;
-    try std.testing.expectEqual(@as(u16, 20), drawn.surface.size.height);
-    try std.testing.expect(prompt.review_scroll.scroll.has_more_vertical);
+    });
+    try std.testing.expectEqual(@as(u16, 24), drawn.size.height);
+    try std.testing.expect(prompt.panel.scroll.scroll.has_more_vertical);
     var ctx: vxfw.EventContext = .{ .io = undefined, .alloc = std.testing.allocator, .cmds = .empty };
     defer ctx.cmds.deinit(std.testing.allocator);
     try Model.typeErasedCaptureHandler(model, &ctx, .{ .key_press = .{ .codepoint = vaxis.Key.down } });
-    try std.testing.expect(prompt.review_scroll.scroll.pending_lines > 0);
+    try std.testing.expect(prompt.panel.scroll.scroll.pending_lines > 0);
     try std.testing.expectEqual(@as(usize, 0), prompt.password.items.len);
     try Model.typeErasedCaptureHandler(model, &ctx, .{ .key_press = .{ .codepoint = 'q', .mods = .{ .ctrl = true } } });
     try std.testing.expect(model.overlay == null);
@@ -3376,4 +3315,78 @@ test "native batch completion refreshes actual state and clears only successful 
         try std.testing.expect(model.packageMarked("available"));
         try std.testing.expectEqual(failed, model.packageMarked("installed"));
     }
+}
+
+test "operation panel fits content below browsing across stages" {
+    vxfw.DrawContext.init(.unicode);
+    const model = try Model.init(std.testing.allocator);
+    defer model.deinit();
+    var packages = [_]Package{.{ .Name = "example" }};
+    model.packages = &packages;
+    model.loading = false;
+    try model.rebuildFilter();
+    try model.openNativePrompt(.install);
+    const prompt = model.overlay.?.sudo;
+    for ([_]vxfw.Size{ .{ .width = 80, .height = 24 }, .{ .width = 120, .height = 40 }, .{ .width = 40, .height = 12 } }) |size| {
+        for ([_]SudoPrompt.State{ .entering, .running, .succeeded, .failed, .declined }) |state| {
+            prompt.state = state;
+            var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+            defer arena.deinit();
+            const drawn = try model.widget().draw(.{
+                .arena = arena.allocator(),
+                .min = .{},
+                .max = .{ .width = size.width, .height = size.height },
+                .cell_size = .{ .width = 10, .height = 20 },
+            });
+            const panel = drawn.children[drawn.children.len - 2];
+            try std.testing.expectEqual(@as(i17, 0), panel.origin.col);
+            try std.testing.expectEqual(size.width, panel.surface.size.width);
+            try std.testing.expectEqual(@as(usize, size.height - 1), @as(usize, @intCast(panel.origin.row)) + panel.surface.size.height);
+            try std.testing.expectEqual(@as(u8, 0), panel.z_index);
+            for (drawn.children[0 .. drawn.children.len - 2]) |child| {
+                try std.testing.expect(child.origin.row + child.surface.size.height <= panel.origin.row);
+            }
+            try std.testing.expect(panel.surface.size.height <= 9);
+        }
+    }
+}
+
+test "operation completion and dismissal restore the browsing shortcut footer" {
+    var threaded: std.Io.Threaded = .init(std.testing.allocator, .{});
+    defer threaded.deinit();
+    runtime.io = threaded.io();
+    defer runtime.io = undefined;
+    const model = try Model.init(std.testing.allocator);
+    defer model.deinit();
+    var packages = [_]Package{.{ .Name = "example" }};
+    model.packages = &packages;
+    model.loading = false;
+    model.package_list_active = true;
+    try model.rebuildFilter();
+    try model.openNativePrompt(.install);
+    const prompt = model.overlay.?.sudo;
+    prompt.state = .running;
+    var env: std.process.Environ.Map = .init(std.testing.allocator);
+    defer env.deinit();
+    const job = try std.heap.page_allocator.create(shelly_operation.Operation);
+    job.* = .{
+        .arena = .init(std.heap.page_allocator),
+        .done = .init(true),
+        .request = .{ .shelly_bin = "unused", .environ_map = &env, .backend = "standard", .action = .install, .name = "example", .targets = &.{"example"}, .password = "" },
+    };
+    model.install_job = job;
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    try std.testing.expect(std.mem.indexOf(u8, try model.statusText(arena.allocator()), "Enter: select") != null);
+    try std.testing.expect(!try model.pollInstall());
+    try std.testing.expectEqual(SudoPrompt.State.succeeded, prompt.state);
+    try std.testing.expectEqualStrings("", model.notice);
+    try std.testing.expect(std.mem.indexOf(u8, try model.statusText(arena.allocator()), "Enter: select") != null);
+    try model.setNotice("Stale operation notice");
+    var ctx: vxfw.EventContext = .{ .io = undefined, .alloc = std.testing.allocator, .cmds = .empty };
+    defer ctx.cmds.deinit(std.testing.allocator);
+    try Model.typeErasedCaptureHandler(model, &ctx, .{ .key_press = .{ .codepoint = 'q' } });
+    try std.testing.expect(model.overlay == null);
+    try std.testing.expectEqualStrings("", model.notice);
+    try std.testing.expect(std.mem.indexOf(u8, try model.statusText(arena.allocator()), "Enter: select") != null);
 }

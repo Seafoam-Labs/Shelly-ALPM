@@ -132,3 +132,10 @@ pub fn settings(key: vaxis.Key) ?SettingsAction {
     return null;
 }
 pub const settings_hint = "↑↓: select    Enter/Space: toggle and save    R: reload    Esc: quit";
+
+/// Scroll review/output without sending navigation keys to password input.
+pub fn scrollsOperation(key: vaxis.Key) bool {
+    return key.matches(vaxis.Key.up, .{}) or key.matches(vaxis.Key.down, .{}) or
+        key.matches(vaxis.Key.page_up, .{}) or key.matches(vaxis.Key.page_down, .{}) or
+        key.matches('d', .{ .ctrl = true }) or key.matches('u', .{ .ctrl = true });
+}
