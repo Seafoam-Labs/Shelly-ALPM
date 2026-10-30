@@ -186,7 +186,7 @@ pub fn drawDetails(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.
         .{ .label = "Popularity", .value = try std.fmt.allocPrint(arena, "{d:.2}", .{pkg.Popularity}) },
         .{ .label = "Out of date", .value = if (pkg.OutOfDate != null) "Yes" else "No" },
     });
-    if (pkg.Url) |url| try fields.append(arena, .{ .label = "URL", .value = url });
+    if (pkg.Url) |url| try fields.append(arena, .{ .label = "URL", .value = url, .preserve_url = true });
     if (pkg.License) |items| if (items.len > 0) {
         try fields.append(arena, .{ .label = "Licenses", .value = try std.mem.join(arena, ", ", items) });
     };

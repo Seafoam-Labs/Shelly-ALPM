@@ -255,7 +255,7 @@ pub fn drawDetails(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.
     });
     if (pkg.Licenses.len > 0) try fields.append(arena, .{ .label = "Licenses", .value = try std.mem.join(arena, ", ", pkg.Licenses) });
     if (pkg.Groups.len > 0) try fields.append(arena, .{ .label = "Groups", .value = try std.mem.join(arena, ", ", pkg.Groups) });
-    if (pkg.Url) |url| try fields.append(arena, .{ .label = "URL", .value = url });
+    if (pkg.Url) |url| try fields.append(arena, .{ .label = "URL", .value = url, .preserve_url = true });
     try fields.appendSlice(arena, &.{
         .{ .label = "Download", .value = try formatSize(arena, pkg.DownloadSize), .gap = true },
         .{ .label = "Disk usage", .value = try formatSize(arena, pkg.InstalledSize) },
