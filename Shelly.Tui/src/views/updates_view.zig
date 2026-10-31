@@ -44,14 +44,9 @@ pub const View = struct {
 
     pub fn statusText(self: View, arena: Allocator) Allocator.Error![]const u8 {
         if (self.loading) return "Checking for updates…";
-        if (self.failed) return "Update check failed — R: retry";
-        const hints = if (self.aur_enabled)
-            if (self.flatpak_available) commands.flatpak_updates_hint else commands.updates_hint
-        else if (self.flatpak_available) "G: all    U: system    F: Flatpak    R: refresh" else "G: all    U: system    R: refresh";
-        if (self.data) |data| return std.fmt.allocPrint(arena, "{d} updates ({d} system, {d} AUR, {d} Flatpak) — {s}", .{
-            data.count(), data.Packages.len, data.Aur.len, data.Flatpak.len, if (self.canUpgradeAll()) hints else "R: refresh",
-        });
-        return "R: check for updates";
+        if (self.failed) return "Update check failed";
+        if (self.data) |data| return std.fmt.allocPrint(arena, "{d} updates — System: {d}, AUR: {d}, Flatpak: {d}", .{ data.count(), data.Packages.len, data.Aur.len, data.Flatpak.len });
+        return "Updates have not been checked.";
     }
 
     pub fn appendContent(self: View, ctx: vxfw.DrawContext, children: *std.ArrayList(vxfw.SubSurface)) Allocator.Error!void {
@@ -64,11 +59,11 @@ pub const View = struct {
         const message: ?[]const u8 = if (self.loading)
             "Checking for updates…"
         else if (self.failed)
-            "Could not check for updates. Press R to retry."
+            "Could not check for updates."
         else if (self.data) |data|
             if (data.count() == 0) "No updates reported." else null
         else if (!self.checked)
-            "Press R to check for updates."
+            "Updates have not been checked."
         else
             "No update data received.";
         if (message) |text| {

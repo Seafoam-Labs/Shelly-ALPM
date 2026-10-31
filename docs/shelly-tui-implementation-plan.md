@@ -169,8 +169,8 @@ The intended flow is browse → details → review/provider questions → execut
 
 ### Reserved operation panel (2026-10-30)
 
-- Confirmation, authentication, progress, and results now share `operation_view.zig`, below browsing instead of floating over it. The component emits actions; Model retains passwords/state and starts service operations. Long reviews/output scroll while controls stay visible.
-- Panel height fits wrapped content up to a limit, placing controls directly below output. Short terminals temporarily replace browsing; PKGBUILD reviews use the page content above the operation panel. Operation focus remains on a visible widget, and result dismissal restores browsing focus.
+- Confirmation, authentication, progress, and results now share `operation_view.zig`, below browsing instead of floating over it. The component emits actions; Model retains passwords/state and starts service operations. Long reviews/output scroll while the global footer retains contextual actions.
+- Panel height fits wrapped content up to a limit, without reserving space for in-panel shortcut hints. Short terminals temporarily replace browsing; PKGBUILD reviews use the page content above the operation panel. Operation focus remains on a visible widget, and result dismissal restores browsing focus.
 - Zig 0.17 build/test and 60 model/service/view tests pass. An isolated PTY test with fake commands covered masking, 80×24 → 40×12 → 80×24 resizing, progress/results, refresh, and clean exit. No real package mutations were run.
 
 ### Contextual help and footer (2026-10-30)
@@ -204,3 +204,9 @@ The intended flow is browse → details → review/provider questions → execut
 - Enter/Space select AUR results; Right opens details; I installs selected packages or the highlighted result. Owned selections survive filters and replacement search results, have independent checkboxes/installed indicators, and Ctrl+U clears them. R still removes the highlighted installed AUR package.
 - Native/AUR batch confirmations share target ownership and install/reinstall summaries. AUR targets stay separate in one interactive CLI command, preserving per-package PKGBUILD reviews and dependency questions. Successful completion clears only completed targets; failure/decline keeps selections and refreshes state.
 - Zig 0.17 build and 64 focused tests pass. Fake subprocess success/failure checks verify two targets and repeated PKGBUILD answers in one operation; no live package changes were run.
+
+### Single contextual shortcut footer (2026-10-31)
+
+- The bottom footer is the sole shortcut strip and changes with the focused page, authentication, review, dependency selection, progress, and results. F1 provides full descriptions and alternate bindings from the live registry.
+- Panels retain content, warnings, password input, and answer errors; duplicate hints and reserved shortcut rows are removed. Wrapping state is reflected by the Wrap/Unwrap action, and optional dependency choices expose Space Toggle in the footer.
+- Zig 0.17 build and 64 focused tests cover footer contexts, live wrapping labels, a single preview hint strip, compact panel heights, scrolling, and restoration after operation completion. An isolated fake-command PTY check covers F1 during authentication/progress, preserved password input, resizing, result context, refresh, and clean exit.

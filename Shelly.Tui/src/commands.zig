@@ -375,13 +375,13 @@ pub fn entries(arena: std.mem.Allocator, context: Context) std.mem.Allocator.Err
             try add(arena, &list, .close, "Close", "Dismiss the operation result");
         },
         .review => {
-            try add(arena, &list, .toggle_wrap, "Wrap", "Toggle source wrapping (enabled by default)");
             try add(arena, &list, .approve, "Approve", "Approve the current transaction or PKGBUILD review");
             try add(arena, &list, .decline, "Decline", "Decline the current review");
             try add(arena, &list, .close, "Decline", "Decline the current review (alternative)");
+            try add(arena, &list, .toggle_wrap, if (context.source_wrap) "Unwrap" else "Wrap", "Toggle source wrapping (enabled by default)");
         },
         .preview_document => {
-            try add(arena, &list, .toggle_wrap, "Wrap", "Toggle source wrapping (enabled by default)");
+            try add(arena, &list, .toggle_wrap, if (context.source_wrap) "Unwrap" else "Wrap", "Toggle source wrapping (enabled by default)");
             if (!context.source_wrap) {
                 try add(arena, &list, .back, "Left", "Scroll source horizontally left");
                 try add(arena, &list, .details, "Right", "Scroll source horizontally right");
@@ -393,7 +393,7 @@ pub fn entries(arena: std.mem.Allocator, context: Context) std.mem.Allocator.Err
             try add(arena, &list, .previous, "Previous", "Highlight the previous dependency");
             try add(arena, &list, .next, "Next", "Highlight the next dependency");
             if (context.multiple_choices) try add(arena, &list, .mark, "Toggle", "Check or uncheck an optional dependency");
-            try add(arena, &list, .confirm, "Submit", "Submit checked dependencies or the highlighted provider");
+            try add(arena, &list, .confirm, "Submit", if (context.multiple_choices) "Submit checked dependencies; leave all unchecked to install none" else "Submit the highlighted provider");
         },
         .choice => {
             try add(arena, &list, .previous, "Previous", "Previous choice");

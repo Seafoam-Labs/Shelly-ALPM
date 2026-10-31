@@ -1,6 +1,5 @@
 const std = @import("std");
 const Border = @import("border.zig");
-const commands = @import("../commands.zig");
 const diagnostics = @import("diagnostics");
 const vxfw = @import("vaxis").vxfw;
 const data = @import("../models/flatpak.zig");
@@ -44,14 +43,14 @@ pub const Row = union(enum) {
 
     pub fn details(self: Row, arena: Allocator) Allocator.Error![]const u8 {
         return switch (self) {
-            .installed => |app| std.fmt.allocPrint(arena, "{f}\n\nName: {f}\nID: {f}\nVersion: {f}\nScope: {s}\nKind: {s}\nArchitecture: {f}\nBranch: {f}\nRemote: {f}\nRef: {f}\nFull ref: {f}\nInstalled size: {s}\n\n{s}", .{ diagnostics.safe(app.Summary), diagnostics.safe(app.Name), diagnostics.safe(app.Id), diagnostics.safe(app.Version), @tagName(app.InstallLevel), @tagName(app.Kind), diagnostics.safe(app.Arch), diagnostics.safe(app.Branch), diagnostics.safe(app.Remote), diagnostics.safe(app.Ref), diagnostics.safe(app.FullRef), try formatSize(arena, app.InstalledSize), commands.flatpak_installed_hint }),
+            .installed => |app| std.fmt.allocPrint(arena, "{f}\n\nName: {f}\nID: {f}\nVersion: {f}\nScope: {s}\nKind: {s}\nArchitecture: {f}\nBranch: {f}\nRemote: {f}\nRef: {f}\nFull ref: {f}\nInstalled size: {s}", .{ diagnostics.safe(app.Summary), diagnostics.safe(app.Name), diagnostics.safe(app.Id), diagnostics.safe(app.Version), @tagName(app.InstallLevel), @tagName(app.Kind), diagnostics.safe(app.Arch), diagnostics.safe(app.Branch), diagnostics.safe(app.Remote), diagnostics.safe(app.Ref), diagnostics.safe(app.FullRef), try formatSize(arena, app.InstalledSize) }),
             .catalog => |app| blk: {
                 var remotes: std.ArrayList(u8) = .empty;
                 for (app.Remotes, 0..) |remote, i| {
                     const text = try std.fmt.allocPrint(arena, "{s}{f} ({s})", .{ if (i == 0) "" else ", ", diagnostics.safe(remote.Name), @tagName(remote.Scope) });
                     try remotes.appendSlice(arena, text);
                 }
-                break :blk std.fmt.allocPrint(arena, "{f}\n\nName: {f}\nID: {f}\nType: {f}\nDeveloper: {f}\nLicense: {f}\nVerified: {s}\nRemotes: {s}\n\n{f}\n\nCatalog metadata — installation status and permissions are not queried.\n{s}", .{ diagnostics.safe(app.Summary), diagnostics.safe(app.Name), diagnostics.safe(app.Id), diagnostics.safe(app.Type), diagnostics.safe(app.DeveloperName), diagnostics.safe(app.ProjectLicense), if (app.IsVerified) "yes" else "no", remotes.items, diagnostics.safe(app.Description), commands.flatpak_catalog_hint });
+                break :blk std.fmt.allocPrint(arena, "{f}\n\nName: {f}\nID: {f}\nType: {f}\nDeveloper: {f}\nLicense: {f}\nVerified: {s}\nRemotes: {s}\n\n{f}\n\nCatalog metadata — installation status and permissions are not queried.", .{ diagnostics.safe(app.Summary), diagnostics.safe(app.Name), diagnostics.safe(app.Id), diagnostics.safe(app.Type), diagnostics.safe(app.DeveloperName), diagnostics.safe(app.ProjectLicense), if (app.IsVerified) "yes" else "no", remotes.items, diagnostics.safe(app.Description) });
             },
         };
     }
@@ -77,16 +76,16 @@ pub const View = struct {
 
     pub fn statusText(self: View, arena: Allocator) Allocator.Error![]const u8 {
         if (self.checking_backend) return "Checking Flatpak backend…";
-        if (self.backend_failure) |err| return std.fmt.allocPrint(arena, "Flatpak backend check failed: {s} — Ctrl+R: retry", .{@errorName(err)});
+        if (self.backend_failure) |err| return std.fmt.allocPrint(arena, "Flatpak backend check failed: {s}", .{@errorName(err)});
         if (self.loading) return "Loading Flatpaks…";
-        if (self.failure) |err| return std.fmt.allocPrint(arena, "Flatpak query failed: {s} — Ctrl+R: retry", .{@errorName(err)});
-        return std.fmt.allocPrint(arena, "{d} {s} — Enter: details  Ctrl+L: {s}  Ctrl+R: refresh", .{ self.count, if (self.installed_only) "installed Flatpaks" else "catalog apps", if (self.installed_only) "catalog" else "installed" });
+        if (self.failure) |err| return std.fmt.allocPrint(arena, "Flatpak query failed: {s}", .{@errorName(err)});
+        return std.fmt.allocPrint(arena, "{d} {s}", .{ self.count, if (self.installed_only) "installed Flatpaks" else "catalog apps" });
     }
 
     pub fn appendContent(self: View, ctx: vxfw.DrawContext, children: *std.ArrayList(vxfw.SubSurface)) Allocator.Error!void {
         const size = ctx.max.size();
         try children.append(ctx.arena, .{ .origin = .{ .row = 1, .col = 0 }, .surface = try self.field.draw(ctx.withConstraints(.{}, .{ .width = size.width, .height = 1 })) });
-        const message: ?[]const u8 = if (self.checking_backend) "Checking Flatpak backend…" else if (self.backend_failure != null) "Flatpak is enabled, but its backend could not be used. Install the Shelly Flatpak backend, then Ctrl+R to retry." else if (self.loading) "Loading Flatpaks…" else if (self.failure != null) "Could not load Flatpaks. Ctrl+R: retry; Ctrl+L: change list." else if (!self.checked) "Flatpak list not loaded yet." else if (self.count == 0) "No Flatpaks match. Catalogs reflect configured remotes and cached metadata." else null;
+        const message: ?[]const u8 = if (self.checking_backend) "Checking Flatpak backend…" else if (self.backend_failure != null) "Flatpak is enabled, but its backend could not be used. Install the Shelly Flatpak backend to use this source." else if (self.loading) "Loading Flatpaks…" else if (self.failure != null) "Could not load Flatpaks." else if (!self.checked) "Flatpak list not loaded yet." else if (self.count == 0) "No Flatpaks match. Catalogs reflect configured remotes and cached metadata." else null;
         const content_ctx = ctx.withConstraints(.{}, .{ .width = size.width, .height = size.height -| 3 });
         var label: vxfw.Text = .{ .text = message orelse "" };
         try children.append(ctx.arena, .{ .origin = .{ .row = 2, .col = 0 }, .surface = if (message != null) try label.draw(content_ctx) else try self.list.draw(content_ctx) });
@@ -113,13 +112,12 @@ pub fn drawInstallChoices(ctx: vxfw.DrawContext, app: *const data.AppstreamApp, 
     var lines: std.ArrayList(u8) = .empty;
     const heading = try std.fmt.allocPrint(ctx.arena, "Install {f}\nChoose a remote and installation scope.\n\n", .{diagnostics.safe(app.Id)});
     try lines.appendSlice(ctx.arena, heading);
-    const capacity = @max(@as(usize, 1), height -| 8);
+    const capacity = @max(@as(usize, 1), height -| 5);
     const start = selected -| (capacity / 2);
     for (start..@min(app.Remotes.len, start + capacity)) |index| {
         const remote = app.Remotes[index];
         try lines.appendSlice(ctx.arena, try std.fmt.allocPrint(ctx.arena, "{s} {f} — {s}\n", .{ if (index == selected) ">" else " ", diagnostics.safe(remote.Name), @tagName(remote.Scope) }));
     }
-    try lines.appendSlice(ctx.arena, "\n" ++ commands.flatpak_choice_hint);
     var text: vxfw.Text = .{ .text = lines.items };
     const labels = [_]Border.BorderLabel{.{ .text = "Flatpak installation", .alignment = .top_left }};
     var border: Border = .{ .child = text.widget(), .labels = &labels };

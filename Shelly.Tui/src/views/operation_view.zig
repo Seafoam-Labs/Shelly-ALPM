@@ -25,19 +25,19 @@ pub const View = struct {
     progress: operation.Progress = .{},
     refresh_pending: bool = false,
 
-    fn footerRows(self: View, width: u16) u16 {
-        return if (self.state == .entering) (if (width >= 60) @as(u16, 2) else 3) else 1;
+    fn inputRows(self: View, _: u16) u16 {
+        return if (self.state == .entering and self.elevated) 1 else 0;
     }
 
     /// Measure wrapped content up to the panel limit instead of reserving
     /// empty rows. Longer output is still handled by the scroll view.
     pub fn preferredHeight(self: View, ctx: vxfw.DrawContext, limit: u16) Allocator.Error!u16 {
         const width = ctx.max.size().width -| 2;
-        const controls = self.footerRows(width) + 2;
-        if (limit <= controls) return limit;
+        const reserved = self.inputRows(width) + 2;
+        if (limit <= reserved) return limit;
         var text: vxfw.Text = .{ .text = try self.body(ctx.arena, width), .softwrap = true };
-        const measured = try text.draw(ctx.withConstraints(.{}, .{ .width = width, .height = limit - controls }));
-        return @min(limit, @max(@as(u16, 1), measured.size.height) + controls);
+        const measured = try text.draw(ctx.withConstraints(.{}, .{ .width = width, .height = limit - reserved }));
+        return @min(limit, @max(@as(u16, 1), measured.size.height) + reserved);
     }
 
     fn confirmation(self: View, arena: Allocator) Allocator.Error![]const u8 {
@@ -139,7 +139,7 @@ pub const Panel = struct {
     pub fn draw(self: *Panel, view: View, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
         self.update(view);
         const size = ctx.max.size();
-        self.ready = size.width >= 24 and size.height >= view.footerRows(size.width -| 2) + 3;
+        self.ready = size.width >= 24 and size.height >= view.inputRows(size.width -| 2) + 3;
         if (!self.ready) {
             var text: vxfw.Text = .{ .text = "Enlarge the terminal to view the operation." };
             return text.draw(ctx);
@@ -178,33 +178,17 @@ pub const Panel = struct {
         const self: *Panel = @ptrCast(@alignCast(ptr));
         const view = self.view;
         const size = ctx.max.size();
-        const compact_controls = size.width >= 60;
-        const footer_height = view.footerRows(size.width);
-        const review_height = size.height -| footer_height;
+        const input_height = view.inputRows(size.width);
+        const review_height = size.height -| input_height;
         const output = try self.scroll.draw(ctx.withConstraints(.{}, .{ .width = size.width, .height = review_height }));
-        const scrollable = self.scroll.scroll.has_more_vertical or self.scroll.scroll.top > 0 or self.scroll.scroll.vertical_offset != 0;
-        const up = try commands.label(ctx.arena, .previous);
-        const down = try commands.label(ctx.arena, .next);
-        const confirm = try commands.label(ctx.arena, .confirm);
-        const cancel = try commands.label(ctx.arena, .cancel);
-        const quit = try commands.label(ctx.arena, .quit);
-        const close = try commands.label(ctx.arena, .close);
-        const scroll_hint = if (scrollable) try std.fmt.allocPrint(ctx.arena, "{s}/{s}: {s}  ", .{ up, down, if (view.state == .entering) "review" else "output" }) else "";
-        const footer = if (view.state == .entering) blk: {
+        const children = try ctx.arena.alloc(vxfw.SubSurface, if (input_height > 0) 2 else 1);
+        children[0] = .{ .origin = .{ .row = 0, .col = 0 }, .surface = output };
+        if (input_height > 0) {
             const mask = try ctx.arena.alloc(u8, @min(view.password_length, size.width -| 10));
             @memset(mask, '*');
-            const hints = try std.fmt.allocPrint(ctx.arena, "{s}{s}: back{s}{s}: run  {s}: quit", .{
-                scroll_hint, cancel, if (compact_controls) "  " else "\n", confirm, quit,
-            });
-            break :blk try std.fmt.allocPrint(ctx.arena, "{s}{s}\n{s}", .{ if (view.elevated) "Password: " else "No elevation required.", if (view.elevated) mask else "", hints });
-        } else if (view.state == .running)
-            try std.fmt.allocPrint(ctx.arena, "{s}{s}: quit", .{ scroll_hint, quit })
-        else
-            try std.fmt.allocPrint(ctx.arena, "{s}{s}/{s}: close  {s}: quit", .{ scroll_hint, confirm, close, quit });
-        var text: vxfw.Text = .{ .text = footer, .softwrap = false, .overflow = .ellipsis };
-        const children = try ctx.arena.alloc(vxfw.SubSurface, 2);
-        children[0] = .{ .origin = .{ .row = 0, .col = 0 }, .surface = output };
-        children[1] = .{ .origin = .{ .row = @intCast(review_height), .col = 0 }, .surface = try text.draw(ctx.withConstraints(.{}, .{ .width = size.width, .height = footer_height })) };
+            var text: vxfw.Text = .{ .text = try std.fmt.allocPrint(ctx.arena, "Password: {s}", .{mask}), .softwrap = false, .overflow = .ellipsis };
+            children[1] = .{ .origin = .{ .row = @intCast(review_height), .col = 0 }, .surface = try text.draw(ctx.withConstraints(.{}, .{ .width = size.width, .height = input_height })) };
+        }
         return .{ .size = size, .widget = .{ .userdata = self, .drawFn = drawContent }, .buffer = &.{}, .children = children };
     }
 };
@@ -295,7 +279,7 @@ test "running output uses pane width without blank placeholder rows" {
     }
 }
 
-test "short progress content has no unused rows above the controls" {
+test "progress panels fit output without duplicated controls" {
     vxfw.DrawContext.init(.unicode);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
@@ -315,22 +299,21 @@ test "short progress content has no unused rows above the controls" {
         .cell_size = .{ .width = 10, .height = 20 },
     };
     const height = try view.preferredHeight(ctx, 9);
-    try std.testing.expectEqual(@as(u16, 7), height); // Four content rows, controls, two borders.
+    try std.testing.expectEqual(@as(u16, 6), height); // Four content rows and two borders.
     var panel: Panel = .{};
     const surface = try panel.draw(view, ctx.withConstraints(.{}, .{ .width = 100, .height = height }));
     const content = surface.children[0].surface;
     const output = content.children[0];
-    const controls = content.children[1];
+    try std.testing.expectEqual(@as(usize, 1), content.children.len);
     try std.testing.expectEqual(@as(u16, 4), output.surface.size.height);
-    try std.testing.expectEqual(@as(i17, 4), controls.origin.row);
     try std.testing.expect(panel.ready);
     view.progress.percent = 50;
-    try std.testing.expectEqual(@as(u16, 8), try view.preferredHeight(ctx, 9));
+    try std.testing.expectEqual(@as(u16, 7), try view.preferredHeight(ctx, 9));
     view.state = .succeeded;
-    try std.testing.expectEqual(@as(u16, 4), try view.preferredHeight(ctx, 9));
+    try std.testing.expectEqual(@as(u16, 3), try view.preferredHeight(ctx, 9));
 }
 
-test "scroll hints reflect overflow and remain available when scrolled to the end" {
+test "output remains scrollable without in-panel shortcut hints" {
     vxfw.DrawContext.init(.unicode);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
@@ -338,11 +321,7 @@ test "scroll hints reflect overflow and remain available when scrolled to the en
     var view: View = .{ .name = "editor", .state = .succeeded };
     const ctx: vxfw.DrawContext = .{ .arena = arena.allocator(), .min = .{}, .max = .{ .width = 80, .height = 4 }, .cell_size = .{ .width = 10, .height = 20 } };
     const short = try panel.draw(view, ctx);
-    const short_footer = short.children[0].surface.children[1].surface;
-    var short_text: std.ArrayList(u8) = .empty;
-    for (short_footer.buffer) |cell| try short_text.appendSlice(arena.allocator(), cell.char.grapheme);
-    try std.testing.expect(std.mem.indexOf(u8, short_text.items, "↑/↓") == null);
-    try std.testing.expect(std.mem.indexOf(u8, short_text.items, "Enter/Q") != null);
+    try std.testing.expectEqual(@as(usize, 1), short.children[0].surface.children.len);
     view.state = .failed;
     view.detail = "First line\nSecond line\nThird line\nFourth line\nFifth line\nSixth line\nSeventh line";
     const tall_ctx = ctx.withConstraints(.{}, .{ .width = 80, .height = 8 });
@@ -356,10 +335,7 @@ test "scroll hints reflect overflow and remain available when scrolled to the en
     }
     try std.testing.expect(panel.scroll.scroll.top > 0 or panel.scroll.scroll.vertical_offset != 0);
     const scrolled = try panel.draw(view, tall_ctx);
-    const footer = scrolled.children[0].surface.children[1].surface;
-    var text: std.ArrayList(u8) = .empty;
-    for (footer.buffer) |cell| try text.appendSlice(arena.allocator(), cell.char.grapheme);
-    try std.testing.expect(std.mem.indexOf(u8, text.items, "↑/↓") != null);
+    try std.testing.expectEqual(@as(usize, 1), scrolled.children[0].surface.children.len);
     _ = try panel.handleKey(view, &events, .{ .codepoint = vaxis.Key.up });
     try std.testing.expect(panel.scroll.scroll.pending_lines < 0);
 }

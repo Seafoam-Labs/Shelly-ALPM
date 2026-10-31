@@ -128,26 +128,9 @@ pub const View = struct {
     pub fn statusText(self: View, arena: Allocator) Allocator.Error![]const u8 {
         if (self.loading) return "Loading packages…";
         if (self.load_failed) return "Could not load the package list.";
-        const actions = if (self.selected_count > 0)
-            if (self.selected_installed > 0) "I: install/reinstall — R: remove installed" else "I: install"
-        else if (self.selected) |pkg|
-            if (pkg.Installed) "I: reinstall — R: remove" else "I: install"
-        else
-            "";
-        const selection = if (self.selected_count > 0)
-            try std.fmt.allocPrint(arena, "{d} selected · {d} installed · {d} available — ", .{ self.selected_count, self.selected_installed, self.selected_count - self.selected_installed })
-        else
-            "";
-        if (self.details_active) return std.fmt.allocPrint(arena, "{s}↑↓: scroll — {s} — ←/Q: packages", .{ selection, actions });
-        if (self.list_active) return std.fmt.allocPrint(arena, "{s}{s} — Enter: select — →: details — /: search", .{ selection, actions });
-        if (self.selected_count > 0) return std.fmt.allocPrint(arena, "{s}↑↓: browse — Ctrl+L: installed/all", .{selection});
-        if (self.installed_only) return std.fmt.allocPrint(arena, "{d} installed matches — ↑↓: browse — Ctrl+L: all", .{self.filtered_count});
-        if (self.query.len > 0) {
-            return try std.fmt.allocPrint(arena, "{d} of {d} matches — ↑↓: browse — Ctrl+L: installed", .{
-                self.filtered_count, self.package_count,
-            });
-        }
-        return try std.fmt.allocPrint(arena, "{d} packages — ↑↓: browse — Ctrl+L: installed", .{self.package_count});
+        if (self.selected_count > 0) return std.fmt.allocPrint(arena, "{d} selected · {d} installed · {d} available", .{ self.selected_count, self.selected_installed, self.selected_count - self.selected_installed });
+        if (self.installed_only) return std.fmt.allocPrint(arena, "{d} installed matches", .{self.filtered_count});
+        return std.fmt.allocPrint(arena, "{d} of {d} packages", .{ self.filtered_count, self.package_count });
     }
 };
 

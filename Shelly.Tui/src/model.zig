@@ -2466,17 +2466,11 @@ pub const Model = struct {
         switch (overlay) {
             .package => |pkg| {
                 title = try std.fmt.allocPrint(arena, "{s} {s}", .{ pkg.Name, pkg.Version });
-                body = try std.fmt.allocPrint(arena, "{s}\n\n{s}", .{
-                    try packages_view.detailsText(arena, pkg),
-                    commands.detailsHint(pkg.Installed),
-                });
+                body = try packages_view.detailsText(arena, pkg);
             },
             .aur => |pkg| {
                 title = try std.fmt.allocPrint(arena, "{s} {s} (AUR)", .{ pkg.Name, pkg.Version });
-                body = try std.fmt.allocPrint(arena, "{s}\n\n{s}", .{
-                    try aur_view.detailsText(arena, pkg),
-                    commands.aurDetailsHint(pkg.Installed),
-                });
+                body = try aur_view.detailsText(arena, pkg);
             },
             .flatpak => |row| {
                 title = try std.fmt.allocPrint(arena, "{f} (Flatpak)", .{diagnostics.safe(row.title())});
@@ -2791,7 +2785,7 @@ test "updates view renders source rows and distinguishes query states" {
     }
     var view = model.updatesView();
     view.failed = true;
-    try std.testing.expectEqualStrings("Update check failed — R: retry", try view.statusText(arena.allocator()));
+    try std.testing.expectEqualStrings("Update check failed", try view.statusText(arena.allocator()));
     view.loading = true;
     try std.testing.expectEqualStrings("Checking for updates…", try view.statusText(arena.allocator()));
 }
@@ -3811,20 +3805,18 @@ test "operation completion and dismissal restore the browsing shortcut footer" {
         .request = .{ .shelly_bin = "unused", .environ_map = &env, .backend = "standard", .action = .install, .name = "example", .targets = &.{"example"}, .password = "" },
     };
     model.install_job = job;
-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena.deinit();
-    try std.testing.expect(std.mem.indexOf(u8, try model.statusText(arena.allocator()), "Enter: select") != null);
+    try std.testing.expectEqual(commands.Mode.running, model.commandContext().mode);
     try std.testing.expect(!try model.pollInstall());
     try std.testing.expectEqual(SudoPrompt.State.succeeded, prompt.state);
     try std.testing.expectEqualStrings("", model.notice);
-    try std.testing.expect(std.mem.indexOf(u8, try model.statusText(arena.allocator()), "Enter: select") != null);
+    try std.testing.expectEqual(commands.Mode.result, model.commandContext().mode);
     try model.setNotice("Stale operation notice");
     var ctx: vxfw.EventContext = .{ .io = undefined, .alloc = std.testing.allocator, .cmds = .empty };
     defer ctx.cmds.deinit(std.testing.allocator);
     try Model.typeErasedCaptureHandler(model, &ctx, .{ .key_press = .{ .codepoint = 'q' } });
     try std.testing.expect(model.overlay == null);
     try std.testing.expectEqualStrings("", model.notice);
-    try std.testing.expect(std.mem.indexOf(u8, try model.statusText(arena.allocator()), "Enter: select") != null);
+    try std.testing.expectEqual(commands.Mode.packages, model.commandContext().mode);
 }
 
 test "F1 help replaces details and restores selection focus and scroll" {
@@ -4175,4 +4167,34 @@ test "AUR batch selections own names across searches and preserve per-package re
     try std.testing.expectEqual(@as(usize, 1), model.aur_selection.items.len);
     model.clearCompletedAurSelection(&.{"third"});
     try std.testing.expectEqual(@as(usize, 0), model.aur_selection.items.len);
+}
+
+test "PKGBUILD shortcuts appear only in the contextual footer" {
+    const Text = struct {
+        fn append(alloc: Allocator, text: *std.ArrayList(u8), surface: vxfw.Surface) Allocator.Error!void {
+            for (surface.buffer) |cell| try text.appendSlice(alloc, cell.char.grapheme);
+            for (surface.children) |child| try append(alloc, text, child.surface);
+        }
+    };
+    vxfw.DrawContext.init(.unicode);
+    const model = try Model.init(std.testing.allocator);
+    defer model.deinit();
+    model.active = .aur;
+    model.settings.aur_enabled = true;
+    model.overlay = .pkgbuild;
+    model.pkgbuild_name = try std.testing.allocator.dupe(u8, "demo");
+    model.pkgbuild_document = try pkgbuild_view.Document.init(std.testing.allocator, &.{.{ .Name = "demo", .PkgBuild = "pkgname=demo" }});
+    model.pkgbuild_scroll.item_count = @intCast(model.pkgbuild_document.?.lines.len);
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const surface = try model.widget().draw(.{ .arena = arena.allocator(), .min = .{}, .max = .{ .width = 100, .height = 24 }, .cell_size = .{ .width = 10, .height = 20 } });
+    var body: std.ArrayList(u8) = .empty;
+    var footer: std.ArrayList(u8) = .empty;
+    for (surface.children) |child| try Text.append(arena.allocator(), if (child.origin.row == 23) &footer else &body, child.surface);
+    try std.testing.expect(std.mem.indexOf(u8, body.items, "pkgname") != null);
+    for ([_][]const u8{ "Retry", "Unwrap", "F1 Help" }) |hint| {
+        try std.testing.expectEqual(@as(usize, 1), std.mem.count(u8, footer.items, hint));
+        try std.testing.expect(std.mem.indexOf(u8, body.items, hint) == null);
+    }
+    try std.testing.expect(std.mem.indexOf(u8, body.items, "wrap on") == null);
 }

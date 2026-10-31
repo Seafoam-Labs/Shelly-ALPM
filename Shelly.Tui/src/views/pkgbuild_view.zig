@@ -296,49 +296,39 @@ pub const View = struct {
         }
         const inner_width = width - 2;
         const inner_height = height - 2;
+        const note_height: u16 = if (self.answer_error.len > 0) 1 else 0;
+        const body_height = inner_height -| note_height;
         var children: std.ArrayList(vxfw.SubSurface) = .empty;
         if (self.loading or self.failure != null) {
             var text: vxfw.Text = .{ .text = if (self.failure) |err|
-                try std.fmt.allocPrint(ctx.arena, "Could not load PKGBUILD preview ({s}). {s}: retry", .{ @errorName(err), try commands.label(ctx.arena, .refresh) })
+                try std.fmt.allocPrint(ctx.arena, "Could not load PKGBUILD preview ({s}).", .{@errorName(err)})
             else
                 try std.fmt.allocPrint(ctx.arena, "Fetching PKGBUILD for {f}…", .{@import("diagnostics").safe(self.name)}) };
             try children.append(ctx.arena, .{
                 .origin = .{ .row = 0, .col = 0 },
-                .surface = try text.draw(ctx.withConstraints(.{}, .{ .width = inner_width, .height = inner_height - 2 })),
+                .surface = try text.draw(ctx.withConstraints(.{}, .{ .width = inner_width, .height = body_height })),
             });
         } else if (self.choices and self.choice_list != null) {
             var prompt: vxfw.Text = .{ .text = try std.fmt.allocPrint(ctx.arena, "{f}", .{@import("diagnostics").safe(self.choice_prompt)}), .softwrap = true };
-            const prompt_surface = try prompt.draw(ctx.withConstraints(.{}, .{ .width = inner_width, .height = inner_height -| 3 }));
+            const prompt_surface = try prompt.draw(ctx.withConstraints(.{}, .{ .width = inner_width, .height = body_height -| 1 }));
             try children.append(ctx.arena, .{ .origin = .{ .row = 0, .col = 0 }, .surface = prompt_surface });
             try children.append(ctx.arena, .{
                 .origin = .{ .row = @intCast(prompt_surface.size.height), .col = 0 },
-                .surface = try self.choice_list.?.draw(ctx.withConstraints(.{}, .{ .width = inner_width, .height = inner_height -| (prompt_surface.size.height + 2) })),
+                .surface = try self.choice_list.?.draw(ctx.withConstraints(.{}, .{ .width = inner_width, .height = body_height -| prompt_surface.size.height })),
             });
         } else {
             try children.append(ctx.arena, .{
                 .origin = .{ .row = 0, .col = 0 },
-                .surface = try self.scroll.draw(ctx.withConstraints(.{}, .{ .width = inner_width, .height = inner_height - 2 })),
+                .surface = try self.scroll.draw(ctx.withConstraints(.{}, .{ .width = inner_width, .height = body_height })),
             });
         }
-        const controls = if (self.review)
-            if (self.choices) try std.fmt.allocPrint(ctx.arena, "{s}: submit{s}", .{ try commands.label(ctx.arena, .confirm), if (self.optional_dependencies) try std.fmt.allocPrint(ctx.arena, "  {s}: toggle", .{try commands.label(ctx.arena, .mark)}) else "" }) else try std.fmt.allocPrint(ctx.arena, "{s}: approve  {s}/{s}: decline", .{ try commands.label(ctx.arena, .approve), try commands.label(ctx.arena, .decline), try commands.label(ctx.arena, .close) })
-        else
-            try std.fmt.allocPrint(ctx.arena, "{s}: retry  {s}: back", .{ try commands.label(ctx.arena, .refresh), try commands.label(ctx.arena, .close) });
-        var hint: vxfw.Text = .{ .text = try std.fmt.allocPrint(ctx.arena, "{s}  {s}/{s}: scroll", .{ controls, try commands.label(ctx.arena, .previous), try commands.label(ctx.arena, .next) }), .softwrap = false };
-        try children.append(ctx.arena, .{
-            .origin = .{ .row = inner_height - 2, .col = 0 },
-            .surface = try hint.draw(ctx.withConstraints(.{}, .{ .width = inner_width, .height = 1 })),
-        });
-        var note: vxfw.Text = .{ .text = if (self.review)
-            if (self.choices)
-                if (self.answer_error.len > 0) self.answer_error else if (self.optional_dependencies) "Check the dependencies to install; none is also valid." else "Select one provider and press Enter."
-            else if (self.answer_error.len > 0) self.answer_error else "Approval applies only to this CLI request."
-        else
-            try std.fmt.allocPrint(ctx.arena, "{s}: wrap {s}", .{ try commands.label(ctx.arena, .toggle_wrap), if (self.wrap) "on" else "off" }), .softwrap = false };
-        try children.append(ctx.arena, .{
-            .origin = .{ .row = inner_height - 1, .col = 0 },
-            .surface = try note.draw(ctx.withConstraints(.{}, .{ .width = inner_width, .height = 1 })),
-        });
+        if (note_height > 0) {
+            var note: vxfw.Text = .{ .text = self.answer_error, .softwrap = false };
+            try children.append(ctx.arena, .{
+                .origin = .{ .row = @intCast(body_height), .col = 0 },
+                .surface = try note.draw(ctx.withConstraints(.{}, .{ .width = inner_width, .height = note_height })),
+            });
+        }
         const content: vxfw.Surface = .{
             .widget = self.scroll.widget(),
             .size = .{ .width = inner_width, .height = inner_height },
