@@ -387,8 +387,10 @@ pub const Model = struct {
                 if (self.active == .settings) {
                     if (commands.settings(key)) |action| {
                         switch (action) {
-                            .previous, .next => self.settings_state.settings_selected = 1 - self.settings_state.settings_selected,
+                            .previous => self.settings_state.settings_selected = (self.settings_state.settings_selected + 2) % 3,
+                            .next => self.settings_state.settings_selected = (self.settings_state.settings_selected + 1) % 3,
                             .toggle => if (self.operation_state.install_job == null) try settings_model.toggleSetting(self, ctx),
+                            .save => if (self.operation_state.install_job == null) try settings_model.saveSettings(self, ctx),
                             .reload => if (self.operation_state.install_job == null) try settings_model.reloadSettings(self, ctx),
                         }
                         return ctx.consumeAndRedraw();
@@ -957,7 +959,10 @@ pub const Model = struct {
                 context.upgrade_aur = view.canUpgradeAur();
                 context.upgrade_flatpak = view.canUpgradeFlatpak();
             },
-            .settings => context.mode = .settings,
+            .settings => {
+                context.mode = .settings;
+                context.settings_save_selected = self.settings_state.settings_selected == 2;
+            },
         }
         return context;
     }

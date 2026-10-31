@@ -29,6 +29,7 @@ pub const Id = enum {
     erase,
     refresh,
     refresh_list,
+    save_settings,
     filter,
     upgrade_all,
     upgrade_system,
@@ -68,6 +69,7 @@ pub const Bindings = struct {
     cancel: vaxis.Key = .{ .codepoint = 'q', .mods = .{ .ctrl = true } },
     erase: vaxis.Key = .{ .codepoint = vaxis.Key.backspace },
     refresh: vaxis.Key = .{ .codepoint = 'r' },
+    save_settings: vaxis.Key = .{ .codepoint = 's', .mods = .{ .ctrl = true } },
     refresh_list: vaxis.Key = .{ .codepoint = 'r', .mods = .{ .ctrl = true } },
     filter: vaxis.Key = .{ .codepoint = 'l', .mods = .{ .ctrl = true } },
     upgrade_all: vaxis.Key = .{ .codepoint = 'g' },
@@ -259,15 +261,16 @@ pub fn choice(key: vaxis.Key) ?Choice {
 }
 pub const flatpak_choice_hint = "↑↓: select remote/scope    Enter: confirm    Q: back";
 
-pub const SettingsAction = enum { previous, next, toggle, reload };
+pub const SettingsAction = enum { previous, next, toggle, save, reload };
 pub fn settings(key: vaxis.Key) ?SettingsAction {
+    if (matches(key, .save_settings)) return .save;
     if (matches(key, .previous)) return .previous;
     if (matches(key, .next)) return .next;
     if (matches(key, .confirm) or matches(key, .mark)) return .toggle;
     if (matches(key, .refresh)) return .reload;
     return null;
 }
-pub const settings_hint = "↑↓: select    Enter/Space: toggle and save    R: reload    Esc: quit";
+pub const settings_hint = "↑↓: select    Enter/Space: toggle    Ctrl+S: save    R: reload    Esc: quit";
 
 /// Scroll review/output without sending navigation keys to password input.
 pub fn scrollsOperation(key: vaxis.Key) bool {
@@ -277,6 +280,7 @@ pub fn scrollsOperation(key: vaxis.Key) bool {
 pub const Mode = enum { search, packages, details, aur, flatpak, updates, settings, authentication, confirmation, running, result, review, preview_document, answers, choice, help };
 pub const Context = struct {
     source_wrap: bool = true,
+    settings_save_selected: bool = false,
     multiple_choices: bool = false,
     preview_button: bool = false,
     mode: Mode = .search,
@@ -383,9 +387,10 @@ pub fn entries(arena: std.mem.Allocator, context: Context) std.mem.Allocator.Err
         .settings => {
             try add(arena, &list, .previous, "Previous", "Previous preference");
             try add(arena, &list, .next, "Next", "Next preference");
-            try add(arena, &list, .confirm, "Toggle", "Toggle the selected preference and save");
-            try add(arena, &list, .mark, "Toggle", "Toggle the selected preference and save (alternative)");
-            try add(arena, &list, .refresh, "Reload", "Reload preferences from disk");
+            try add(arena, &list, .confirm, if (context.settings_save_selected) "Save" else "Toggle", if (context.settings_save_selected) "Save and apply pending settings" else "Edit the selected preference without saving");
+            try add(arena, &list, .mark, if (context.settings_save_selected) "Save" else "Toggle", "Activate the selected setting or Save action (alternative)");
+            try add(arena, &list, .save_settings, "Save", "Save and apply pending settings");
+            try add(arena, &list, .refresh, "Reload", "Discard pending edits and reload saved preferences");
         },
         .authentication, .confirmation => {
             try add(arena, &list, .confirm, "Run", "Confirm and run the operation");

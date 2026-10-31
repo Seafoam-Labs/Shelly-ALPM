@@ -23,6 +23,7 @@ pub fn draw(ctx: vxfw.DrawContext, context: commands.Context, status: ?[]const u
     for (try commands.entries(ctx.arena, context)) |entry| {
         if ((entry.id == .mark and context.mode != .answers) or (context.mode == .search and (entry.id == .install or entry.id == .remove))) continue;
         if (entry.id == .next) continue;
+        if (entry.id == .save_settings and context.mode == .settings and context.settings_save_selected) continue;
         // Keep alternative bindings in F1 help instead of repeating actions.
         if (entry.id == .close and (context.mode == .review or context.mode == .result or context.mode == .confirmation)) continue;
         const key = if (entry.id == .previous)

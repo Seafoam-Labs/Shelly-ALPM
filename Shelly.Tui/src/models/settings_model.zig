@@ -21,6 +21,7 @@ const UpdatesJob = updates_model.UpdatesJob;
 /// Page-owned state. Worker results are published to the UI loop before use.
 pub const State = struct {
     settings: Settings = .{},
+    settings_draft: Settings = .{},
     settings_store: ?settings_service.Store = null,
     settings_failure: ?anyerror = null,
     settings_selected: usize = 0,
@@ -75,6 +76,7 @@ pub fn applySettings(self: *Model, saved: Settings) void {
         self.flatpak_state.flatpak_probe_error = null;
     }
     self.settings_state.settings = saved;
+    self.settings_state.settings_draft = saved;
     self.settings_state.settings_failure = null;
     self.updates_state.updates_checked = false;
     if (self.updates_state.updates_parsed) |*parsed| {
@@ -90,13 +92,24 @@ pub fn applySettings(self: *Model, saved: Settings) void {
     }
 }
 
+pub fn hasChanges(self: *const Model) bool {
+    return !self.settings_state.settings_draft.eql(self.settings_state.settings);
+}
+
 pub fn toggleSetting(self: *Model, ctx: *vxfw.EventContext) !void {
+    if (self.operation_state.install_job != null) return;
+    if (self.settings_state.settings_selected == 2) return saveSettings(self, ctx);
+    const draft = &self.settings_state.settings_draft;
+    if (self.settings_state.settings_selected == 0) draft.aur_enabled = !draft.aur_enabled else draft.flatpak_enabled = !draft.flatpak_enabled;
+}
+
+pub fn saveSettings(self: *Model, ctx: *vxfw.EventContext) !void {
+    if (self.operation_state.install_job != null or !hasChanges(self)) return;
     const store = self.settings_state.settings_store orelse {
         self.settings_state.settings_failure = error.SettingsNotInitialized;
         return;
     };
-    var saved = self.settings_state.settings;
-    if (self.settings_state.settings_selected == 0) saved.aur_enabled = !saved.aur_enabled else saved.flatpak_enabled = !saved.flatpak_enabled;
+    const saved = self.settings_state.settings_draft;
     store.save(runtime.io, saved) catch |err| {
         self.settings_state.settings_failure = err;
         return;
@@ -107,6 +120,7 @@ pub fn toggleSetting(self: *Model, ctx: *vxfw.EventContext) !void {
 }
 
 pub fn reloadSettings(self: *Model, ctx: *vxfw.EventContext) !void {
+    if (self.operation_state.install_job != null) return;
     const store = self.settings_state.settings_store orelse return;
     const saved = store.load(runtime.io) catch |err| {
         self.settings_state.settings_failure = err;
@@ -118,7 +132,7 @@ pub fn reloadSettings(self: *Model, ctx: *vxfw.EventContext) !void {
 }
 
 pub fn settingsView(self: *Model) settings_view.View {
-    return .{ .settings = self.settings_state.settings, .selected = self.settings_state.settings_selected, .path = if (self.settings_state.settings_store) |store| store.path else "Settings could not be initialized", .failure = self.settings_state.settings_failure, .flatpak_checked = self.flatpak_state.flatpak_checked, .flatpak_available = self.flatpak_state.flatpak_available, .checking = self.flatpak_state.flatpak_probe_job != null, .busy = self.operation_state.install_job != null };
+    return .{ .settings = self.settings_state.settings_draft, .dirty = hasChanges(self), .selected = self.settings_state.settings_selected, .path = if (self.settings_state.settings_store) |store| store.path else "Settings could not be initialized", .failure = self.settings_state.settings_failure, .flatpak_checked = self.flatpak_state.flatpak_checked, .flatpak_available = self.flatpak_state.flatpak_available, .checking = self.flatpak_state.flatpak_probe_job != null, .busy = self.operation_state.install_job != null };
 }
 
 test "settings determine source visibility before backend or native loading finishes" {
@@ -141,7 +155,7 @@ test "settings determine source visibility before backend or native loading fini
     try std.testing.expectEqualSlices(Tab, Tab.always, model.visibleTabs());
 }
 
-test "settings persist before source visibility changes and failed saves keep the active choice" {
+test "settings drafts apply only after explicit save and survive failed saves" {
     const allocator = std.testing.allocator;
     const io = std.testing.io;
     runtime.io = io;
@@ -160,7 +174,14 @@ test "settings persist before source visibility changes and failed saves keep th
     var ctx: vxfw.EventContext = .{ .io = io, .alloc = allocator, .cmds = .empty };
     defer ctx.cmds.deinit(allocator);
     try toggleSetting(model, &ctx);
+    try std.testing.expect(!model.settings_state.settings.aur_enabled);
+    try std.testing.expect(model.settings_state.settings_draft.aur_enabled);
+    try std.testing.expect(!model.tabEnabled(.aur));
+    try std.testing.expect(hasChanges(model));
+    try std.testing.expect(!(try model.settings_state.settings_store.?.load(io)).aur_enabled);
+    try saveSettings(model, &ctx);
     try std.testing.expect(model.settings_state.settings.aur_enabled);
+    try std.testing.expect(!hasChanges(model));
     const restarted = try Model.init(allocator);
     defer restarted.deinit();
     restarted.loadSettings(io, &env);
@@ -171,8 +192,11 @@ test "settings persist before source visibility changes and failed saves keep th
     try file.writeStreamingAll(io, "{\"AurEnabled\":\"invalid\"}");
     file.close(io);
     try toggleSetting(model, &ctx);
+    try saveSettings(model, &ctx);
     try std.testing.expectEqual(error.InvalidSettings, model.settings_state.settings_failure.?);
     try std.testing.expect(model.settings_state.settings.aur_enabled);
+    try std.testing.expect(!model.settings_state.settings_draft.aur_enabled);
+    try std.testing.expect(hasChanges(model));
 }
 
 test "settings changes reject late update results and disabled source data" {
@@ -198,4 +222,53 @@ test "settings changes reject late update results and disabled source data" {
     updates_model.pollUpdates(model);
     try std.testing.expect(!model.updates_state.updates_checked);
     try std.testing.expectEqualStrings("native", model.updates_state.updates_parsed.?.value.Packages[0].Name);
+}
+
+test "settings keyboard edits survive tab changes and support Save Reload and Ctrl S" {
+    const commands = @import("../commands.zig");
+    const allocator = std.testing.allocator;
+    const io = std.testing.io;
+    runtime.io = io;
+    var temporary = std.testing.tmpDir(.{});
+    defer temporary.cleanup();
+    const directory = try temporary.dir.realPathFileAlloc(io, ".", allocator);
+    defer allocator.free(directory);
+    var env: std.process.Environ.Map = .init(allocator);
+    defer env.deinit();
+    try env.put("XDG_CONFIG_HOME", directory);
+    const model = try Model.init(allocator);
+    defer model.deinit();
+    loadSettings(model, io, &env);
+    model.active = .settings;
+    var ctx: vxfw.EventContext = .{ .io = io, .alloc = allocator, .cmds = .empty };
+    defer ctx.cmds.deinit(allocator);
+    try model.captureEvent(&ctx, .{ .key_press = commands.bindings.mark });
+    try std.testing.expect(hasChanges(model));
+    try std.testing.expect(!model.tabEnabled(.aur));
+    model.switchTab(1);
+    try model.setTab(.settings, &ctx);
+    try std.testing.expect(model.settings_state.settings_draft.aur_enabled);
+    try model.captureEvent(&ctx, .{ .key_press = commands.bindings.next });
+    try model.captureEvent(&ctx, .{ .key_press = commands.bindings.next });
+    try std.testing.expectEqual(@as(usize, 2), model.settings_state.settings_selected);
+    try std.testing.expect(model.commandContext().settings_save_selected);
+    try model.captureEvent(&ctx, .{ .key_press = commands.bindings.confirm });
+    try std.testing.expect(model.tabEnabled(.aur));
+    try std.testing.expect(!hasChanges(model));
+    try std.testing.expect((try model.settings_state.settings_store.?.load(io)).aur_enabled);
+
+    // Reload discards the draft; neither editing nor tab changes save it.
+    model.settings_state.settings_selected = 0;
+    try model.captureEvent(&ctx, .{ .key_press = commands.bindings.mark });
+    try std.testing.expect(!model.settings_state.settings_draft.aur_enabled);
+    try std.testing.expect(model.settings_state.settings.aur_enabled);
+    try model.captureEvent(&ctx, .{ .key_press = commands.bindings.refresh });
+    try std.testing.expect(model.settings_state.settings_draft.aur_enabled);
+    try std.testing.expect(!hasChanges(model));
+
+    try model.captureEvent(&ctx, .{ .key_press = commands.bindings.mark });
+    try model.captureEvent(&ctx, .{ .key_press = commands.bindings.save_settings });
+    try std.testing.expect(!model.tabEnabled(.aur));
+    try std.testing.expect(!hasChanges(model));
+    try std.testing.expect(!(try model.settings_state.settings_store.?.load(io)).aur_enabled);
 }
