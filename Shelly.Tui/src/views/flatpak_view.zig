@@ -64,6 +64,10 @@ fn contains(text: []const u8, query: []const u8) bool {
 }
 
 pub const View = struct {
+    category_button: ?*vxfw.Button = null,
+    category_list: ?*vxfw.ListView = null,
+    category_open: bool = false,
+    category: []const u8 = "",
     field: *vxfw.TextField,
     list: *vxfw.ListView,
     installed_only: bool,
@@ -95,20 +99,31 @@ pub const View = struct {
         const right_w = if (split) max.width - left_w else max.width;
         const list_width = left_w -| @as(u16, if (split) 1 else 0);
         const search_height: u16 = if (max.width >= 2 and max.height >= 8) 3 else 1;
-        const list_row = 1 + search_height;
+        const selector_width: u16 = @min(list_width, 21);
+        const has_selector = self.category_button != null;
+        const side_by_side = !has_selector or list_width >= 33;
+        const search_width = if (has_selector and side_by_side) list_width - selector_width - 1 else list_width;
+        const search_row: u16 = if (side_by_side) 1 else 1 + search_height;
+        const list_row = 1 + search_height + @as(u16, if (side_by_side) 0 else search_height);
         const list_height = max.height -| (list_row + 1);
         const pane_row: u16 = 1;
         const pane_height = max.height -| (pane_row + 1);
-        const show_pane = split or self.details_active or self.help != null;
+        const show_pane = split or (!self.category_open and self.details_active) or self.help != null;
         if (split or !show_pane) {
             var search_border: Border = .{ .child = self.field.widget(), .style = if (!self.list_active and !self.details_active) .{ .fg = .{ .index = 7 }, .bold = true } else .{} };
             try children.append(arena, .{
-                .origin = .{ .row = 1, .col = 0 },
+                .origin = .{ .row = @intCast(search_row), .col = 0 },
                 .surface = if (search_height == 3)
-                    try search_border.draw(ctx.withConstraints(.{ .width = list_width, .height = search_height }, .{ .width = list_width, .height = search_height }))
+                    try search_border.draw(ctx.withConstraints(.{ .width = search_width, .height = search_height }, .{ .width = search_width, .height = search_height }))
                 else
-                    try self.field.draw(ctx.withConstraints(.{}, .{ .width = list_width, .height = search_height })),
+                    try self.field.draw(ctx.withConstraints(.{}, .{ .width = search_width, .height = search_height })),
             });
+            if (self.category_button) |button| {
+                button.label = try std.fmt.allocPrint(arena, "{f} ▾", .{diagnostics.safe(if (self.category.len == 0) "All categories" else self.category)});
+                var border: Border = .{ .child = categoryButtonWidget(button) };
+                const selector_ctx = ctx.withConstraints(.{ .width = selector_width, .height = search_height }, .{ .width = selector_width, .height = search_height });
+                try children.append(arena, .{ .origin = .{ .row = 1, .col = if (side_by_side) @intCast(search_width + 1) else 0 }, .surface = if (search_height == 3) try border.draw(selector_ctx) else try categoryButtonWidget(button).draw(selector_ctx) });
+            }
             const message = self.contentMessage();
             var label: vxfw.Text = .{ .text = message orelse "", .style = .{ .fg = .{ .index = 250 } } };
             const labels = [_]Border.BorderLabel{.{ .text = if (self.installed_only) "Installed Flatpaks" else "Flatpak applications", .alignment = .top_left }};
@@ -141,6 +156,14 @@ pub const View = struct {
                 break :blk try border.draw(pane_ctx.withConstraints(.{ .width = right_w, .height = pane_height }, .{ .width = right_w, .height = pane_height }));
             };
             try children.append(arena, .{ .origin = .{ .row = @intCast(pane_row), .col = if (split) @intCast(left_w) else 0 }, .surface = surface });
+        }
+        if (self.category_open and self.category_list != null and self.help == null) {
+            const popup_height = @min(@as(u16, 14), max.height -| (1 + search_height + 1));
+            if (popup_height >= 3 and list_width >= 3) {
+                const labels = [_]Border.BorderLabel{.{ .text = "Categories", .alignment = .top_left }};
+                var menu: Border = .{ .child = self.category_list.?.widget(), .labels = &labels };
+                try children.append(arena, .{ .origin = .{ .row = @intCast(1 + search_height), .col = 0 }, .z_index = 3, .surface = try menu.draw(ctx.withConstraints(.{ .width = list_width, .height = popup_height }, .{ .width = list_width, .height = popup_height })) });
+            }
         }
     }
     fn contentMessage(self: View) ?[]const u8 {
@@ -216,8 +239,49 @@ pub fn drawDetails(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.
                 .{ .label = "License", .value = app.ProjectLicense },
                 .{ .label = "Verified", .value = if (app.IsVerified) "Yes" else "No" },
             });
+            try detail_fields.listField(arena, &fields, "Categories", app.Categories);
             for (app.Remotes, 0..) |remote, i| try fields.append(arena, .{ .label = if (i == 0) "Remotes" else "", .value = try std.fmt.allocPrint(arena, "{s} ({s})", .{ remote.Name, @tagName(remote.Scope) }) });
         },
     }
     return detail_fields.draw(.{ .userdata = ptr, .drawFn = drawDetails }, ctx, fields.items);
+}
+
+/// Borrows catalog category names. Model owns the options and handles selection.
+pub const CategoryOption = struct {
+    name: []const u8,
+    userdata: *anyopaque,
+    onSelect: *const fn (*anyopaque, *vxfw.EventContext, []const u8) anyerror!void,
+
+    pub fn widget(self: *const CategoryOption) vxfw.Widget {
+        return .{ .userdata = @constCast(self), .drawFn = draw, .eventHandler = event };
+    }
+    fn draw(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
+        const self: *const CategoryOption = @ptrCast(@alignCast(ptr));
+        var text: vxfw.Text = .{ .text = try std.fmt.allocPrint(ctx.arena, "{f}", .{diagnostics.safe(if (self.name.len == 0) "All categories" else self.name)}), .softwrap = false, .overflow = .ellipsis };
+        var surface = try text.draw(ctx.withConstraints(.{}, .{ .width = ctx.max.width orelse ctx.min.width, .height = 1 }));
+        surface.widget = self.widget();
+        return surface;
+    }
+    fn event(ptr: *anyopaque, ctx: *vxfw.EventContext, value: vxfw.Event) anyerror!void {
+        if (value != .mouse or value.mouse.type != .press or value.mouse.button != .left) return;
+        const self: *const CategoryOption = @ptrCast(@alignCast(ptr));
+        try self.onSelect(self.userdata, ctx, self.name);
+        return ctx.consumeAndRedraw();
+    }
+};
+
+fn categoryButtonWidget(button: *vxfw.Button) vxfw.Widget {
+    return .{ .userdata = button, .drawFn = drawCategoryButton, .eventHandler = categoryButtonEvent };
+}
+fn drawCategoryButton(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
+    const button: *vxfw.Button = @ptrCast(@alignCast(ptr));
+    var surface = try button.draw(ctx);
+    surface.widget = categoryButtonWidget(button);
+    return surface;
+}
+fn categoryButtonEvent(ptr: *anyopaque, ctx: *vxfw.EventContext, event: vxfw.Event) anyerror!void {
+    const button: *vxfw.Button = @ptrCast(@alignCast(ptr));
+    const consumed = ctx.consume_event;
+    try button.handleEvent(ctx, event);
+    if (event == .mouse_enter) ctx.consume_event = consumed;
 }

@@ -17,6 +17,7 @@ pub const Id = enum {
     mark,
     clear_selection,
     toggle_wrap,
+    categories,
     install,
     remove,
     preview,
@@ -52,6 +53,7 @@ pub const Bindings = struct {
     search: vaxis.Key = .{ .codepoint = '/' },
     select: vaxis.Key = .{ .codepoint = vaxis.Key.enter },
     mark: vaxis.Key = .{ .codepoint = vaxis.Key.space },
+    categories: vaxis.Key = .{ .codepoint = 'g', .mods = .{ .ctrl = true } },
     toggle_wrap: vaxis.Key = .{ .codepoint = 'w' },
     clear_selection: vaxis.Key = .{ .codepoint = 'u', .mods = .{ .ctrl = true } },
     install: vaxis.Key = .{ .codepoint = 'i' },
@@ -276,6 +278,8 @@ pub const Context = struct {
     mode: Mode = .search,
     installed_only: bool = false,
     browsing_list: bool = false,
+    categories_available: bool = false,
+    category_choice: bool = false,
     installable: bool = false,
     removable: bool = false,
     preview: bool = false,
@@ -299,6 +303,7 @@ fn add(arena: std.mem.Allocator, list: *std.ArrayList(Entry), id: Id, short: []c
 /// operation completes in the background.
 pub fn entries(arena: std.mem.Allocator, context: Context) std.mem.Allocator.Error![]const Entry {
     var list: std.ArrayList(Entry) = .empty;
+    if (context.categories_available) try add(arena, &list, .categories, "Categories", "Choose a Flatpak category; All categories clears the filter");
     switch (context.mode) {
         .search, .packages => {
             if (context.mode == .packages and context.selected_count > 0)
@@ -404,7 +409,7 @@ pub fn entries(arena: std.mem.Allocator, context: Context) std.mem.Allocator.Err
         .choice => {
             try add(arena, &list, .previous, "Previous", "Previous choice");
             try add(arena, &list, .next, "Next", "Next choice");
-            try add(arena, &list, .confirm, "Confirm", "Confirm the chosen remote and scope");
+            try add(arena, &list, .confirm, "Confirm", if (context.category_choice) "Apply the highlighted category" else "Confirm the chosen remote and scope");
             try add(arena, &list, .close, "Back", "Return without confirming");
         },
         .help => {},

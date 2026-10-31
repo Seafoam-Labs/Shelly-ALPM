@@ -244,3 +244,9 @@ Finish the baseline UI/UX across the remaining pages, starting with Flatpak, bef
 - Flatpak now uses the same bordered search/list and scrollable details layout as Packages and AUR, with a narrow-terminal fallback and contextual F1 help in the details area. Lists show names; installed entries retain their scope indicator. Details use the shared wrapped metadata fields, including remote, scope, branch, architecture, and ref.
 - Right focuses details; Left/Q returns to the highlighted row; / returns to search. I/R also work from the list, with the existing remote/scope chooser and backend checks preserved. The floating details window is removed.
 - Zig 0.17 build and 49 focused model tests pass, including scoped identity, installation choices, operation refresh, split-pane navigation, and small-terminal rendering. Live Flatpak operations remain for manual verification.
+
+### Flatpak category filtering (2026-10-31)
+
+- Replaced the browsing scope selector with a catalog category dropdown. Categories come from AppStream metadata, are deduplicated/sorted, and combine with the search text. All categories includes apps without category metadata. Ctrl+G opens/closes the menu; arrows and Enter choose, Q cancels, and mouse selection is supported. The footer/F1 use the shared binding registry.
+- Catalog and installed browsing include both scopes again. The existing per-app remote/scope install chooser remains; browsing scope preferences are deferred. Installed browsing has no category control because its CLI records do not contain categories. Catalog details now list categories as well.
+- Selected category names survive catalog replacement independently of parsed-data ownership; absent categories reset to All categories. Zig 0.17 build and 52 focused Model tests cover combined filters, both scopes, menu keyboard/mouse interaction, resizing, and refresh ownership. No live package operations were run.

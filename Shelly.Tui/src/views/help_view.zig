@@ -51,7 +51,7 @@ pub const Panel = struct {
             .review => "Operation review",
             .preview_document => "PKGBUILD preview",
             .answers => "Operation choices",
-            .choice => "Remote and scope",
+            .choice => if (self.context.category_choice) "Flatpak categories" else "Remote and scope",
             .help => "Help",
         };
         try lines.appendSlice(arena, &.{ heading, "" });

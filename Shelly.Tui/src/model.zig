@@ -194,6 +194,11 @@ pub const Model = struct {
     flatpak_details_scroll: vxfw.ScrollView,
     flatpak_details_cursor: ?u32 = null,
     flatpak_list_active: bool = false,
+    flatpak_category: []const u8 = "",
+    flatpak_categories: std.ArrayList(flatpak_view.CategoryOption) = .empty,
+    flatpak_category_open: bool = false,
+    flatpak_category_button: vxfw.Button,
+    flatpak_category_list: vxfw.ListView,
     refresh_flatpak_after_operation: bool = false,
 
     /// All known packages, borrowed from `parsed`.
@@ -291,6 +296,13 @@ pub const Model = struct {
                 .buildFn = buildPackageDetails,
             } } },
             .flatpak_details_scroll = .{ .item_count = 1, .children = .{ .builder = .{ .userdata = model, .buildFn = buildFlatpakDetails } } },
+            .flatpak_category_button = .{ .label = "All categories ▾", .userdata = model, .onClick = onFlatpakCategoryClick, .style = .{
+                .default = .{ .fg = .{ .index = 250 } },
+                .hover = .{ .fg = .{ .index = 7 }, .bold = true },
+                .focus = .{ .fg = .{ .index = 7 }, .bold = true },
+                .mouse_down = .{ .reverse = true },
+            } },
+            .flatpak_category_list = .{ .children = .{ .builder = .{ .userdata = model, .buildFn = buildFlatpakCategory } } },
             .flatpak_field = .{ .buf = .init(gpa), .userdata = model, .onChange = onFlatpakQueryChange },
             .flatpak_list = .{ .children = .{ .builder = .{ .userdata = model, .buildFn = buildFlatpakRow } } },
             .updates_list = .{ .children = .{ .builder = .{
@@ -352,6 +364,8 @@ pub const Model = struct {
         if (self.flatpak_catalog) |*parsed| parsed.deinit();
         if (self.flatpak_installed) |*parsed| parsed.deinit();
         self.flatpak_rows.deinit(gpa);
+        self.flatpak_categories.deinit(gpa);
+        if (self.flatpak_category.len > 0) gpa.free(self.flatpak_category);
         self.flatpak_field.deinit();
         if (self.operation_question) |*question| question.deinit();
         if (self.review_prompt) |prompt| prompt.deinit(gpa);
@@ -421,10 +435,10 @@ pub const Model = struct {
         const self: *Model = @ptrCast(@alignCast(ptr));
         const had_operation = self.operationPrompt() != null;
         const had_help = self.help_open;
-        const had_aur_pane = self.aurPaneFocused();
+        const had_aur_pane = self.aurPaneFocused() or self.flatpak_category_open;
         try self.captureEvent(ctx, event);
         if (ctx.quit) return;
-        if (self.help_open or self.operationPrompt() != null or self.aurPaneFocused()) {
+        if (self.help_open or self.operationPrompt() != null or self.aurPaneFocused() or self.flatpak_category_open) {
             // The root remains present when a small terminal temporarily
             // replaces browsing with the operation panel.
             try ctx.requestFocus(self.widget());
@@ -455,6 +469,19 @@ pub const Model = struct {
                 }
                 if (self.help_open) {
                     try self.help_panel.handleKey(ctx, key);
+                    return ctx.consumeAndRedraw();
+                }
+                if (self.active == .flatpak and !self.flatpak_installed_only and self.operationPrompt() == null and self.review_prompt == null and (self.overlay == null or self.overlay.? == .flatpak) and commands.matches(key, .categories)) {
+                    try self.toggleFlatpakCategories(ctx);
+                    return ctx.consumeAndRedraw();
+                }
+                if (self.flatpak_category_open) {
+                    if (commands.matches(key, .close) or commands.matches(key, .back)) {
+                        self.flatpak_category_open = false;
+                    } else if (commands.matches(key, .confirm)) {
+                        const index = self.flatpak_category_list.cursor;
+                        if (index < self.flatpak_categories.items.len) try self.chooseFlatpakCategory(self.flatpak_categories.items[index].name);
+                    } else try self.flatpak_category_list.handleEvent(ctx, .{ .key_press = commands.scrollKey(key) orelse key });
                     return ctx.consumeAndRedraw();
                 }
                 if (self.overlay) |overlay| {
@@ -918,6 +945,8 @@ pub const Model = struct {
             if (self.overlay) |overlay| {
                 if (overlay == .flatpak or overlay == .flatpak_install) self.closeOverlay();
             }
+            self.flatpak_category_open = false;
+            self.flatpak_categories.clearRetainingCapacity();
             self.flatpak_rows.clearRetainingCapacity();
             if (self.flatpak_catalog) |*parsed| parsed.deinit();
             if (self.flatpak_installed) |*parsed| parsed.deinit();
@@ -1048,6 +1077,7 @@ pub const Model = struct {
     fn setTab(self: *Model, tab: Tab, ctx: *vxfw.EventContext) !void {
         if (!self.tabEnabled(tab)) return;
         if (tab == self.active) return;
+        self.flatpak_category_open = false;
         self.active = tab;
         try self.focusActiveTab(ctx);
         try self.ensureUpdates(ctx);
@@ -1055,7 +1085,7 @@ pub const Model = struct {
     }
 
     fn focusActiveTab(self: *Model, ctx: *vxfw.EventContext) !void {
-        if (self.help_open or self.operationPrompt() != null or self.aurPaneFocused()) return ctx.requestFocus(self.widget());
+        if (self.help_open or self.operationPrompt() != null or self.aurPaneFocused() or self.flatpak_category_open) return ctx.requestFocus(self.widget());
         self.package_list_active = false;
         self.aur_list_active = false;
         self.flatpak_list_active = false;
@@ -1123,9 +1153,78 @@ pub const Model = struct {
         if (self.overlay) |overlay| {
             if (overlay == .flatpak or overlay == .flatpak_install) self.overlay = null;
         }
+        self.flatpak_category_open = false;
         self.flatpak_failure = job.failure;
         if (job.installed_only) self.flatpak_installed = job.installed else self.flatpak_catalog = job.catalog;
         try self.rebuildFlatpakFilter();
+    }
+
+    fn onFlatpakCategoryClick(ptr: ?*anyopaque, ctx: *vxfw.EventContext) anyerror!void {
+        const self: *Model = @ptrCast(@alignCast(ptr.?));
+        try self.toggleFlatpakCategories(ctx);
+        return ctx.consumeAndRedraw();
+    }
+    fn toggleFlatpakCategories(self: *Model, ctx: *vxfw.EventContext) !void {
+        if (self.help_open or self.flatpak_installed_only or self.install_job != null or self.operationPrompt() != null or self.review_prompt != null or (self.overlay != null and self.overlay.? != .flatpak)) return;
+        self.flatpak_category_open = !self.flatpak_category_open;
+        if (self.flatpak_category_open) {
+            try self.rebuildFlatpakCategories();
+            try ctx.requestFocus(self.widget());
+        } else try self.focusActiveTab(ctx);
+    }
+    fn onFlatpakCategorySelected(ptr: *anyopaque, ctx: *vxfw.EventContext, name: []const u8) anyerror!void {
+        const self: *Model = @ptrCast(@alignCast(ptr));
+        try self.chooseFlatpakCategory(name);
+        try self.focusActiveTab(ctx);
+    }
+    fn chooseFlatpakCategory(self: *Model, name: []const u8) !void {
+        const owned = if (name.len > 0) try self.gpa.dupe(u8, name) else "";
+        if (self.flatpak_category.len > 0) self.gpa.free(self.flatpak_category);
+        self.flatpak_category = owned;
+        self.flatpak_category_open = false;
+        if (self.overlay != null and self.overlay.? == .flatpak) self.closeOverlay();
+        self.flatpak_rows.clearRetainingCapacity();
+        self.flatpak_list.jumpToItem(0);
+        try self.rebuildFlatpakFilter();
+    }
+    fn rebuildFlatpakCategories(self: *Model) !void {
+        self.flatpak_categories.clearRetainingCapacity();
+        try self.flatpak_categories.append(self.gpa, .{ .name = "", .userdata = self, .onSelect = onFlatpakCategorySelected });
+        var names: std.StringHashMapUnmanaged(void) = .empty;
+        defer names.deinit(self.gpa);
+        if (self.flatpak_catalog) |catalog| for (catalog.value) |app| {
+            for (app.Categories) |name| {
+                if (name.len == 0) continue;
+                const entry = try names.getOrPut(self.gpa, name);
+                if (entry.found_existing) continue;
+                try self.flatpak_categories.append(self.gpa, .{ .name = name, .userdata = self, .onSelect = onFlatpakCategorySelected });
+            }
+        };
+        std.mem.sort(flatpak_view.CategoryOption, self.flatpak_categories.items[1..], {}, struct {
+            fn less(_: void, a: flatpak_view.CategoryOption, b: flatpak_view.CategoryOption) bool {
+                return std.mem.lessThan(u8, a.name, b.name);
+            }
+        }.less);
+        if (self.flatpak_category.len > 0 and !names.contains(self.flatpak_category)) {
+            self.gpa.free(self.flatpak_category);
+            self.flatpak_category = "";
+        }
+        self.flatpak_category_list.item_count = @intCast(self.flatpak_categories.items.len);
+        self.flatpak_category_list.jumpToItem(0);
+        for (self.flatpak_categories.items, 0..) |option, i| if (std.mem.eql(u8, option.name, self.flatpak_category)) {
+            self.flatpak_category_list.jumpToItem(@intCast(i));
+            break;
+        };
+    }
+    fn buildFlatpakCategory(ptr: *const anyopaque, index: usize, _: usize) ?vxfw.Widget {
+        const self: *const Model = @ptrCast(@alignCast(ptr));
+        if (index >= self.flatpak_categories.items.len) return null;
+        return self.flatpak_categories.items[index].widget();
+    }
+    fn matchesFlatpakCategory(self: *const Model, app: *const flatpak.AppstreamApp) bool {
+        if (self.flatpak_category.len == 0) return true;
+        for (app.Categories) |name| if (std.mem.eql(u8, name, self.flatpak_category)) return true;
+        return false;
     }
 
     fn onFlatpakQueryChange(ptr: ?*anyopaque, _: *vxfw.EventContext, _: []const u8) anyerror!void {
@@ -1134,6 +1233,7 @@ pub const Model = struct {
     }
 
     fn rebuildFlatpakFilter(self: *Model) Allocator.Error!void {
+        try self.rebuildFlatpakCategories();
         const selected: ?flatpak_view.Row = if (self.flatpak_list.cursor < self.flatpak_rows.items.len) self.flatpak_rows.items[self.flatpak_list.cursor] else null;
         self.flatpak_details_cursor = null;
         self.flatpak_details_scroll.scroll = .{};
@@ -1149,7 +1249,7 @@ pub const Model = struct {
             } else {
                 if (self.flatpak_catalog) |parsed| for (parsed.value) |*app| {
                     const row: flatpak_view.Row = .{ .catalog = app };
-                    if (row.matches(query)) try self.flatpak_rows.append(self.gpa, row);
+                    if (self.matchesFlatpakCategory(app) and row.matches(query)) try self.flatpak_rows.append(self.gpa, row);
                 };
             }
         }
@@ -1180,7 +1280,7 @@ pub const Model = struct {
             self.flatpak_details_scroll.scroll = .{};
             self.flatpak_details_cursor = self.flatpak_list.cursor;
         }
-        return .{ .details_scroll = &self.flatpak_details_scroll, .selected = if (self.flatpak_job == null and self.flatpak_list.cursor < self.flatpak_rows.items.len) self.flatpak_rows.items[self.flatpak_list.cursor] else null, .list_active = self.flatpak_list_active, .details_active = self.overlay != null and self.overlay.? == .flatpak, .help = if (self.help_open) &self.help_panel else null, .field = &self.flatpak_field, .list = &self.flatpak_list, .installed_only = self.flatpak_installed_only, .loading = self.flatpak_job != null, .checking_backend = self.flatpak_probe_job != null, .backend_failure = self.flatpak_probe_error, .failure = self.flatpak_failure, .checked = if (self.flatpak_installed_only) self.flatpak_installed != null else self.flatpak_catalog != null, .count = self.flatpak_rows.items.len };
+        return .{ .category = self.flatpak_category, .category_button = if (!self.flatpak_installed_only) &self.flatpak_category_button else null, .category_list = &self.flatpak_category_list, .category_open = self.flatpak_category_open, .details_scroll = &self.flatpak_details_scroll, .selected = if (self.flatpak_job == null and self.flatpak_list.cursor < self.flatpak_rows.items.len) self.flatpak_rows.items[self.flatpak_list.cursor] else null, .list_active = self.flatpak_list_active, .details_active = self.overlay != null and self.overlay.? == .flatpak, .help = if (self.help_open) &self.help_panel else null, .field = &self.flatpak_field, .list = &self.flatpak_list, .installed_only = self.flatpak_installed_only, .loading = self.flatpak_job != null, .checking_backend = self.flatpak_probe_job != null, .backend_failure = self.flatpak_probe_error, .failure = self.flatpak_failure, .checked = if (self.flatpak_installed_only) self.flatpak_installed != null else self.flatpak_catalog != null, .count = self.flatpak_rows.items.len };
     }
 
     // -- background jobs ---------------------------------------------------
@@ -2376,6 +2476,12 @@ pub const Model = struct {
             };
             context.scrollable = prompt.panel.scroll.scroll.has_more_vertical or
                 prompt.panel.scroll.scroll.top > 0 or prompt.panel.scroll.scroll.vertical_offset != 0;
+            return context;
+        }
+        context.categories_available = self.active == .flatpak and !self.flatpak_installed_only and (self.overlay == null or self.overlay.? == .flatpak);
+        if (self.flatpak_category_open) {
+            context.mode = .choice;
+            context.category_choice = true;
             return context;
         }
         if (self.overlay) |overlay| switch (overlay) {
@@ -4441,4 +4547,105 @@ test "Flatpak split details navigate back to the selected row and keep scope vis
     try std.testing.expectEqual(@as(u32, 1), model.flatpak_list.cursor);
     try model.captureEvent(&events, .{ .key_press = commands.bindings.search });
     try std.testing.expect(!model.flatpak_list_active);
+}
+
+test "Flatpak categories combine with search and retain both remote scopes" {
+    const allocator = std.testing.allocator;
+    const model = try Model.init(allocator);
+    defer model.deinit();
+    model.settings.flatpak_enabled = true;
+    model.active = .flatpak;
+    model.flatpak_catalog = try std.json.parseFromSlice([]flatpak.AppstreamApp, allocator,
+        \\[{"Id":"editor","Name":"Editor","Categories":["Utility","Development"],"Remotes":[{"Name":"flathub","Scope":0},{"Name":"flathub","Scope":1}]},{"Id":"player","Name":"Player","Categories":["AudioVideo","Utility"],"Remotes":[{"Name":"user-repo","Scope":1}]},{"Id":"unknown","Categories":[]}]
+    , .{ .allocate = .alloc_always });
+    try model.rebuildFlatpakFilter();
+    try std.testing.expectEqual(@as(usize, 3), model.flatpak_rows.items.len);
+    try std.testing.expectEqual(@as(usize, 4), model.flatpak_categories.items.len);
+    try std.testing.expectEqualStrings("", model.flatpak_categories.items[0].name);
+    try std.testing.expectEqualStrings("AudioVideo", model.flatpak_categories.items[1].name);
+    try model.chooseFlatpakCategory("Utility");
+    try std.testing.expectEqual(@as(usize, 2), model.flatpak_rows.items.len);
+    try std.testing.expectEqual(@as(usize, 2), model.flatpak_rows.items[0].catalog.Remotes.len);
+    try model.flatpak_field.buf.insertSliceAtCursor("PLAYER");
+    try model.rebuildFlatpakFilter();
+    try std.testing.expectEqual(@as(usize, 1), model.flatpak_rows.items.len);
+    try std.testing.expectEqualStrings("player", model.flatpak_rows.items[0].title());
+    try model.chooseFlatpakCategory("Development");
+    try std.testing.expectEqual(@as(usize, 0), model.flatpak_rows.items.len);
+    try model.chooseFlatpakCategory("");
+    try std.testing.expectEqual(@as(usize, 1), model.flatpak_rows.items.len);
+    model.flatpak_field.buf.clearRetainingCapacity();
+    try model.rebuildFlatpakFilter();
+    try std.testing.expectEqual(@as(usize, 3), model.flatpak_rows.items.len);
+    // A catalog-only category filter does not hide installed applications.
+    model.flatpak_installed = try std.json.parseFromSlice([]flatpak.Flatpak, allocator,
+        \\[{"Id":"system-app","InstallLevel":0},{"Id":"user-app","InstallLevel":1}]
+    , .{ .allocate = .alloc_always });
+    try model.chooseFlatpakCategory("Development");
+    model.flatpak_installed_only = true;
+    try model.rebuildFlatpakFilter();
+    try std.testing.expectEqual(@as(usize, 2), model.flatpak_rows.items.len);
+    try std.testing.expect(model.flatpakView().category_button == null);
+    try std.testing.expect(!model.commandContext().categories_available);
+}
+
+test "Flatpak category menu supports keyboard mouse and narrow layouts" {
+    const allocator = std.testing.allocator;
+    const model = try Model.init(allocator);
+    defer model.deinit();
+    model.settings.flatpak_enabled = true;
+    model.active = .flatpak;
+    model.flatpak_catalog = try std.json.parseFromSlice([]flatpak.AppstreamApp, allocator,
+        \\[{"Id":"editor","Categories":["Utility","Development"]}]
+    , .{ .allocate = .alloc_always });
+    try model.rebuildFlatpakFilter();
+    var events: vxfw.EventContext = .{ .io = undefined, .alloc = allocator, .cmds = .empty };
+    defer events.cmds.deinit(allocator);
+    try model.captureEvent(&events, .{ .key_press = commands.bindings.categories });
+    try std.testing.expect(model.flatpak_category_open);
+    try std.testing.expect(model.commandContext().category_choice);
+    vxfw.DrawContext.init(.unicode);
+    var arena = std.heap.ArenaAllocator.init(allocator);
+    defer arena.deinit();
+    for ([_]vxfw.Size{ .{ .width = 100, .height = 30 }, .{ .width = 64, .height = 18 }, .{ .width = 25, .height = 16 }, .{ .width = 12, .height = 5 } }) |size| {
+        _ = try model.widget().draw(.{ .arena = arena.allocator(), .min = .{}, .max = .{ .width = size.width, .height = size.height }, .cell_size = .{ .width = 10, .height = 20 } });
+    }
+    try model.captureEvent(&events, .{ .key_press = commands.bindings.next });
+    try model.captureEvent(&events, .{ .key_press = commands.bindings.confirm });
+    try std.testing.expectEqualStrings("Development", model.flatpak_category);
+    try std.testing.expect(!model.flatpak_category_open);
+    try model.captureEvent(&events, .{ .key_press = commands.bindings.categories });
+    try model.captureEvent(&events, .{ .key_press = commands.bindings.close });
+    try std.testing.expectEqualStrings("Development", model.flatpak_category);
+    try Model.onFlatpakCategoryClick(model, &events);
+    const surface = try model.widget().draw(.{ .arena = arena.allocator(), .min = .{}, .max = .{ .width = 100, .height = 30 }, .cell_size = .{ .width = 10, .height = 20 } });
+    var hits: std.ArrayList(vxfw.HitResult) = .empty;
+    defer hits.deinit(allocator);
+    // All categories is the first option beneath the selector.
+    try surface.hitTest(allocator, &hits, .{ .col = 3, .row = 7 });
+    try hits.items[hits.items.len - 1].widget.handleEvent(&events, .{ .mouse = .{ .button = .left, .type = .press, .col = 0, .row = 0, .mods = .{} } });
+    try std.testing.expectEqualStrings("", model.flatpak_category);
+    try std.testing.expect(!model.flatpak_category_open);
+}
+
+test "Flatpak category refresh owns selection and resets missing categories" {
+    const allocator = std.testing.allocator;
+    const model = try Model.init(allocator);
+    defer model.deinit();
+    model.flatpak_catalog = try std.json.parseFromSlice([]flatpak.AppstreamApp, allocator,
+        \\[{"Id":"old","Categories":["Utility"]}]
+    , .{ .allocate = .alloc_always });
+    try model.rebuildFlatpakFilter();
+    try model.chooseFlatpakCategory(model.flatpak_categories.items[1].name);
+    const replacement = try allocator.create(FlatpakJob);
+    replacement.* = .{ .installed_only = false, .done = .init(true), .catalog = try std.json.parseFromSlice([]flatpak.AppstreamApp, allocator,
+        \\[{"Id":"new","Categories":["Game"]}]
+    , .{ .allocate = .alloc_always }) };
+    model.flatpak_job = replacement;
+    model.flatpak_category_open = true;
+    try model.pollFlatpak();
+    try std.testing.expectEqualStrings("", model.flatpak_category);
+    try std.testing.expect(!model.flatpak_category_open);
+    try std.testing.expectEqualStrings("Game", model.flatpak_categories.items[1].name);
+    try std.testing.expectEqualStrings("new", model.flatpak_rows.items[0].title());
 }
