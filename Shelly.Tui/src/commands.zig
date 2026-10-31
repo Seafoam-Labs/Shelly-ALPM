@@ -326,7 +326,7 @@ pub fn entries(arena: std.mem.Allocator, context: Context) std.mem.Allocator.Err
                 try add(arena, &list, .next, "Scroll down", "Scroll package details down");
             }
             if (context.installable) try add(arena, &list, .install, "Install", "Install/reinstall selection, or the displayed package");
-            if (context.removable) try add(arena, &list, .remove, "Remove", if (context.preview) "Remove the displayed installed AUR package" else "Remove installed selections, or the displayed installed package");
+            if (context.removable) try add(arena, &list, .remove, "Remove", "Remove installed selections, or the displayed installed package");
             if (context.preview) try add(arena, &list, .preview, "PKGBUILD", "Preview the PKGBUILD and supplied related files");
             if (context.split_details) try add(arena, &list, .back, "Packages", "Return to the selected package");
             try add(arena, &list, .close, "Back", "Close details and return to browsing");
@@ -337,7 +337,7 @@ pub fn entries(arena: std.mem.Allocator, context: Context) std.mem.Allocator.Err
                 if (context.selected_count > 0) try add(arena, &list, .clear_selection, "Clear", "Clear all AUR selections, including other search results");
                 try add(arena, &list, .mark, "Select", "Toggle selection (alternative to Enter)");
                 if (context.installable) try add(arena, &list, .install, "Install", "Install/reinstall selected AUR packages, or the highlighted package");
-                if (context.removable) try add(arena, &list, .remove, "Remove", "Remove the highlighted installed AUR package");
+                if (context.removable) try add(arena, &list, .remove, "Remove", "Remove installed AUR selections, or the highlighted installed package");
                 if (context.preview) try add(arena, &list, .preview, "PKGBUILD", "Preview source in the details pane");
                 try add(arena, &list, .details, "Details", "Focus AUR package details");
                 try add(arena, &list, .search, "Search", "Return to editing the AUR query");

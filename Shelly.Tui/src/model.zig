@@ -591,12 +591,7 @@ pub const Model = struct {
                         return ctx.consumeAndRedraw();
                     }
                     if (commands.packageAction(key)) |action| {
-                        if (action == .install) {
-                            try self.openAurInstallPrompt();
-                        } else if (self.selectedAur()) |pkg| {
-                            if (action != .remove or pkg.Installed)
-                                try self.openPackagePrompt(pkg.Name, .aur, if (action == .install) .install else .remove);
-                        }
+                        try self.openAurPrompt(if (action == .install) .install else .remove);
                         return ctx.consumeAndRedraw();
                     }
                 }
@@ -1607,23 +1602,14 @@ pub const Model = struct {
     fn operationFromOverlay(self: *Model, action: shelly_operation.Action) !void {
         if (self.install_job != null) return; // one install at a time
         const overlay = self.overlay orelse return;
-        var name: []const u8 = undefined;
-        var backend: OperationBackend = undefined;
         switch (overlay) {
             .package => |pkg| {
                 _ = pkg;
                 return self.openNativePrompt(action);
             },
-            .aur => |pkg| {
-                if (!self.settings.aur_enabled) return;
-                if (action == .install) return self.openAurInstallPrompt();
-                if (action == .remove and !pkg.Installed) return;
-                name = pkg.Name;
-                backend = .aur;
-            },
+            .aur => return self.openAurPrompt(action),
             .sudo, .pkgbuild, .flatpak, .flatpak_install => return,
         }
-        try self.openPackagePrompt(name, backend, action);
     }
 
     fn aurMarked(self: *const Model, name: []const u8) bool {
@@ -1668,7 +1654,7 @@ pub const Model = struct {
         return self.openPackageBatchPrompt(action, .standard, self.packages, false);
     }
 
-    fn openAurInstallPrompt(self: *Model) !void {
+    fn openAurPrompt(self: *Model, action: shelly_operation.Action) !void {
         if (!self.settings.aur_enabled or self.install_job != null) return;
         var packages: std.ArrayList(Package) = .empty;
         defer packages.deinit(self.gpa);
@@ -1677,7 +1663,7 @@ pub const Model = struct {
             const pkg = self.selectedAur() orelse return;
             try packages.append(self.gpa, .{ .Name = pkg.Name, .Installed = pkg.Installed });
         }
-        try self.openPackageBatchPrompt(.install, .aur, packages.items, true);
+        try self.openPackageBatchPrompt(action, .aur, packages.items, true);
     }
 
     fn openPackageBatchPrompt(self: *Model, action: shelly_operation.Action, backend: OperationBackend, packages: []const Package, include_all: bool) !void {
@@ -2353,7 +2339,7 @@ pub const Model = struct {
                     context.selected_installed += 1;
                 };
                 context.installable = true;
-                context.removable = pkg.Installed;
+                context.removable = if (context.selected_count > 0) context.selected_installed > 0 else pkg.Installed;
                 context.preview = true;
                 context.preview_button = self.aur_preview_button.focused;
                 context.split_details = true;
@@ -2407,7 +2393,7 @@ pub const Model = struct {
                     context.selected_installed += 1;
                 };
                 context.installable = self.aur_list_active and (self.selectedAur() != null or self.aur_selection.items.len > 0);
-                context.removable = self.aur_list_active and if (self.selectedAur()) |pkg| pkg.Installed else false;
+                context.removable = self.aur_list_active and if (context.selected_count > 0) context.selected_installed > 0 else if (self.selectedAur()) |pkg| pkg.Installed else false;
                 context.preview = self.aur_list_active and self.selectedAur() != null;
             },
             .flatpak => {
@@ -4167,7 +4153,7 @@ test "AUR batch selections own names across searches and preserve per-package re
     model.aur_packages = &items;
     try model.rebuildAurFilter();
     try model.toggleAurSelection();
-    try model.openAurInstallPrompt();
+    try model.openAurPrompt(.install);
     try std.testing.expectEqualStrings("third", model.overlay.?.sudo.targets[0]);
     model.resetPackageSelection();
     try std.testing.expectEqual(@as(usize, 0), model.aur_selection.items.len);
@@ -4213,7 +4199,6 @@ test "successful native and AUR installs and removals deselect both lists throug
     for ([_][]const u8{ "standard", "aur" }) |backend| {
         inline for ([_]shelly_operation.Action{ .install, .remove }) |action| {
             for ([_]bool{ false, true }) |batch| {
-                if (action == .remove and batch and std.mem.eql(u8, backend, "aur")) continue;
                 const model = try Model.init(std.testing.allocator);
                 defer model.deinit();
                 model.settings.aur_enabled = true;
@@ -4304,4 +4289,66 @@ test "cancelling native and AUR authentication or declining a review clears both
         try std.testing.expectEqual(@as(usize, 0), model.aur_selection.items.len);
         try std.testing.expectEqual(@as(u32, 0), model.selected_list_view.item_count.?);
     }
+}
+
+test "AUR removal uses installed selections from list and details and excludes available entries" {
+    const model = try Model.init(std.testing.allocator);
+    defer model.deinit();
+    model.active = .aur;
+    model.settings.aur_enabled = true;
+    model.aur_list_active = true;
+    var packages = [_]AurPackage{
+        .{ .Name = "first-git", .Installed = true },
+        .{ .Name = "available-git" },
+        .{ .Name = "second-git", .Installed = true },
+    };
+    model.aur_packages = &packages;
+    try model.rebuildAurFilter();
+    for (0..3) |index| {
+        model.aur_list.jumpToItem(@intCast(index));
+        try model.toggleAurSelection();
+    }
+    // Even when the highlighted package is unavailable, R removes the
+    // installed entries in the selection rather than the highlighted row.
+    model.aur_list.jumpToItem(1);
+    try std.testing.expect(model.commandContext().removable);
+    var ctx: vxfw.EventContext = .{ .io = undefined, .alloc = std.testing.allocator, .cmds = .empty };
+    defer ctx.cmds.deinit(std.testing.allocator);
+    try Model.typeErasedCaptureHandler(model, &ctx, .{ .key_press = commands.bindings.remove });
+    var prompt = model.overlay.?.sudo;
+    try std.testing.expectEqual(shelly_operation.Action.remove, prompt.action);
+    try std.testing.expectEqual(OperationBackend.aur, prompt.backend);
+    try std.testing.expectEqual(@as(usize, 2), prompt.targets.len);
+    try std.testing.expectEqualStrings("first-git", prompt.targets[0]);
+    try std.testing.expectEqualStrings("second-git", prompt.targets[1]);
+    try std.testing.expect(std.mem.indexOf(u8, prompt.review_text, "1 uninstalled selections excluded.") != null);
+    try std.testing.expect(std.mem.indexOf(u8, prompt.review_text, "Remove (2): first-git, second-git") != null);
+    model.closeOverlay();
+    try std.testing.expectEqual(@as(usize, 0), model.aur_selection.items.len);
+    // Details use the same selected batch, including names outside this query.
+    model.aur_list.jumpToItem(0);
+    try model.toggleAurSelection();
+    model.aur_list.jumpToItem(2);
+    try model.toggleAurSelection();
+    model.aur_packages = packages[1..2];
+    try model.rebuildAurFilter();
+    model.overlay = .{ .aur = &packages[1] };
+    try std.testing.expect(model.commandContext().removable);
+    try model.operationFromOverlay(.remove);
+    prompt = model.overlay.?.sudo;
+    try std.testing.expectEqual(@as(usize, 2), prompt.targets.len);
+    model.closeOverlay();
+    // No selection falls back to the highlighted installed package.
+    model.aur_packages = &packages;
+    try model.rebuildAurFilter();
+    model.aur_list.jumpToItem(2);
+    try model.openAurPrompt(.remove);
+    try std.testing.expectEqualStrings("second-git", model.overlay.?.sudo.targets[0]);
+    model.closeOverlay();
+    model.aur_list.jumpToItem(1);
+    try model.toggleAurSelection();
+    try std.testing.expect(!model.commandContext().removable);
+    try model.openAurPrompt(.remove);
+    try std.testing.expect(model.overlay == null);
+    try std.testing.expect(std.mem.indexOf(u8, model.notice, "No installed packages") != null);
 }

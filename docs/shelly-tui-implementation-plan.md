@@ -103,6 +103,12 @@ The intended flow is browse → details → review/provider questions → execut
 | TUI-B06 | Corrected remote-list ordering and removed ignored remote/branch parameters in `4b84daae`. Native selection remains name-based; Flatpak lookup searches by ID. | Exact identity/scope handling remains open. |
 | TUI-B07 | Progress is streamed. AUR install/upgrade keeps stdin open and requires answers, including repeated PKGBUILD reviews. Native operations still use `--no-confirm`. | Live AUR review/authentication checks; native review, cancellation, and recovery remain open. |
 
+### After baseline UI/UX
+
+Finish the baseline UI/UX across the remaining pages, starting with Flatpak, before these AUR enhancements:
+
+- **Atoll-backed AUR setting and preview scans:** add a persistent “Enable Atoll Backed AUR” toggle, connect it to the browsing source and package links, and support cached/preloaded Atoll browsing. Enable PKGBUILD preview scans only with Atoll selected, using CLI-provided findings and related files; browsing previews remain separate from installation approval.
+
 ## Changes and verification
 
 | Date | Checkpoint | Result |
@@ -165,7 +171,7 @@ The intended flow is browse → details → review/provider questions → execut
 
 - Enter toggles selection; Right focuses details. I installs/reinstalls selected packages; R removes only installed selections. With no selection, actions use the highlighted package. Checkboxes and installed indicators are separate; selections survive filtering.
 - Confirmation lists all targets, install/reinstall counts, and excluded removal entries in a scrollable review. One CLI operation receives separate target arguments. State refreshes after every attempt; successful installs clear all native/AUR selections before refresh. Successful removal and cancellation also clear both selection stores; failed selections remain only until result dismissal.
-- Zig 0.17 build/test and 57 model/service/view tests pass. Six fake-process cases cover install/remove success, failure, and authorization failure. Maintainer subsequently verified live native batch installation and removal. AUR install batching is now supported; AUR removal and Flatpak batching remain deferred.
+- Zig 0.17 build/test and 57 model/service/view tests pass. Six fake-process cases cover install/remove success, failure, and authorization failure. Maintainer subsequently verified live native batch installation and removal. AUR batch installation and removal are now supported; Flatpak batching remains deferred.
 
 ### Reserved operation panel (2026-10-30)
 
@@ -201,7 +207,7 @@ The intended flow is browse → details → review/provider questions → execut
 
 ### AUR batch installation (2026-10-30)
 
-- Enter/Space select AUR results; Right opens details; I installs selected packages or the highlighted result. Owned selections survive filters and replacement search results, have independent checkboxes/installed indicators, and Ctrl+U clears them. R still removes the highlighted installed AUR package.
+- Enter/Space select AUR results; Right opens details; I installs selected packages or the highlighted result. Owned selections survive filters and replacement search results, have independent checkboxes/installed indicators, and Ctrl+U clears them. R removes installed selections, or the highlighted installed package if nothing is selected.
 - Native/AUR batch confirmations share target ownership and install/reinstall summaries. AUR targets stay separate in one interactive CLI command, preserving per-package PKGBUILD reviews and dependency questions. Successful installs clear all native/AUR selections before refresh; declines also clear selections and refresh state; failure preserves selections until the result is dismissed.
 - Zig 0.17 build and 64 focused tests pass. Fake subprocess success/failure checks verify two targets and repeated PKGBUILD answers in one operation; no live package changes were run.
 
@@ -226,3 +232,9 @@ The intended flow is browse → details → review/provider questions → execut
 - Zig 0.17 build and 78 focused tests cover decoding, ownership, missing/empty results, severity colors, wrapped findings, control-character escaping, and resetting scan state between reviews. No live package installations were run.
 
 - Native/AUR removal now uses the same complete selection reset as installation. Cancelling authentication, declining a CLI review, and closing an operation result also reset both package-page selections and selected-list state. Zig 0.17 build and 47 model tests pass, covering removal refresh, pre-auth cancellation, and declined results.
+
+### AUR batch removal (2026-10-31)
+
+- R uses the selection from either the AUR list or details, including entries outside the current search. Confirmation lists installed targets and counts excluded uninstalled entries. Without selection, removal uses the highlighted installed package.
+- One CLI removal command receives separate target arguments and keeps unused dependencies/configuration, matching native removal. Existing completion/cancellation cleanup clears both package-page selections and refreshes actual state.
+- Zig 0.17 build and 70 focused model/service tests pass. Fake-process checks cover success, partial failure, and authorization failure with both operands preserved. No live package removals were run.

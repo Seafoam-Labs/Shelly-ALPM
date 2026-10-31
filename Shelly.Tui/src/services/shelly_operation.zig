@@ -415,10 +415,11 @@ fn elevated(request: OperationRequest) bool {
 }
 
 fn operationArgv(alloc: std.mem.Allocator, request: OperationRequest) ![][]const u8 {
-    if (request.targets.len > 0 and !((std.mem.eql(u8, request.backend, "standard") and request.action != .upgrade) or (std.mem.eql(u8, request.backend, "aur") and request.action == .install)))
+    const package_backend = std.mem.eql(u8, request.backend, "standard") or std.mem.eql(u8, request.backend, "aur");
+    if (request.targets.len > 0 and (!package_backend or request.action == .upgrade))
         return error.UnsupportedBatchAction;
     if (std.mem.eql(u8, request.backend, "all") and request.action != .upgrade) return error.UnsupportedCombinedAction;
-    const keep_dependencies = request.action == .remove and std.mem.eql(u8, request.backend, "standard");
+    const keep_dependencies = request.action == .remove and package_backend;
     if (request.action == .upgrade and !std.mem.eql(u8, request.backend, "standard") and !std.mem.eql(u8, request.backend, "aur") and !isFlatpak(request) and !combined(request))
         return error.UnsupportedUpgradeSource;
     if (isFlatpak(request) and request.action != .upgrade) {
@@ -1709,4 +1710,17 @@ test "PKGBUILD scan reporting distinguishes empty findings from absent results" 
         try std.testing.expectEqual(case.reported, message.value.question.pkgbuild.scan_reported);
         try std.testing.expectEqual(@as(usize, 0), message.value.question.pkgbuild.warnings.len);
     }
+}
+
+test "AUR batch removal sends all operands and preserves dependencies" {
+    var env: std.process.Environ.Map = .init(std.testing.allocator);
+    defer env.deinit();
+    const argv = try operationArgv(std.testing.allocator, .{ .shelly_bin = "shelly", .environ_map = &env, .name = "2 packages", .targets = &.{ "first-git", "second-git" }, .backend = "aur", .action = .remove, .password = "" });
+    defer std.testing.allocator.free(argv);
+    try std.testing.expectEqualStrings("remove", argv[5]);
+    try std.testing.expectEqualStrings("aur", argv[6]);
+    try std.testing.expectEqualStrings("first-git", argv[7]);
+    try std.testing.expectEqualStrings("second-git", argv[8]);
+    try std.testing.expectEqualStrings("--no-confirm", argv[9]);
+    try std.testing.expectEqualStrings("--no-cascade", argv[argv.len - 1]);
 }
