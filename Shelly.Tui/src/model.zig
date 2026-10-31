@@ -1375,7 +1375,8 @@ pub const Model = struct {
 
     fn screenshotView(self: *Model) ?image_view.View {
         if (!self.screenshot_open or !self.screenshots_supported or self.screenshot_items.len == 0) return null;
-        return .{ .previous = &self.screenshot_previous, .next = &self.screenshot_next, .index = self.screenshot_index, .count = self.screenshot_items.len, .caption = self.screenshot_items[self.screenshot_index].caption, .image = if (self.screenshot_image_generation == self.screenshot_generation) self.screenshot_image else null, .failure = self.screenshot_failure };
+        // Hide captions until the shared AppStream parser selects their language correctly.
+        return .{ .previous = &self.screenshot_previous, .next = &self.screenshot_next, .index = self.screenshot_index, .count = self.screenshot_items.len, .caption = "", .image = if (self.screenshot_image_generation == self.screenshot_generation) self.screenshot_image else null, .failure = self.screenshot_failure };
     }
 
     fn onFlatpakCategoryClick(ptr: ?*anyopaque, ctx: *vxfw.EventContext) anyerror!void {
