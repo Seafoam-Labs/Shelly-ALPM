@@ -2222,8 +2222,10 @@ pub const Model = struct {
         var navigation_height: u16 = if (max.width >= 2 and max.height >= 8) 3 else 1;
         var panel_height: u16 = 0;
         var show_browsing = true;
-        if (prompt) |active_prompt| {
-            const preferred_height = try self.promptView(active_prompt).preferredHeight(ctx, 9);
+        if (prompt != null) {
+            // Keep the operation area stable across authentication, progress,
+            // and results; long content scrolls within this reserved third.
+            const preferred_height = @max(@as(u16, 4), max.height / 3 + @intFromBool(max.height % 3 != 0));
             if (reviewing) {
                 // Keep the review readable above the same operation panel.
                 // Tiny terminals give priority to answering the CLI question.
@@ -3747,7 +3749,7 @@ test "native batch completion refreshes actual state and clears only successful 
     }
 }
 
-test "operation panel fits content below browsing across stages" {
+test "operation panel reserves one third of the terminal across stages" {
     vxfw.DrawContext.init(.unicode);
     const model = try Model.init(std.testing.allocator);
     defer model.deinit();
@@ -3776,7 +3778,13 @@ test "operation panel fits content below browsing across stages" {
             for (drawn.children[0 .. drawn.children.len - 2]) |child| {
                 try std.testing.expect(child.origin.row + child.surface.size.height <= panel.origin.row);
             }
-            try std.testing.expect(panel.surface.size.height <= 9);
+            const expected_height: u16 = switch (size.height) {
+                24 => 8,
+                40 => 14,
+                12 => 4,
+                else => unreachable,
+            };
+            try std.testing.expectEqual(expected_height, panel.surface.size.height);
         }
     }
 }
@@ -3804,10 +3812,14 @@ test "operation completion and dismissal restore the browsing shortcut footer" {
         .done = .init(true),
         .request = .{ .shelly_bin = "unused", .environ_map = &env, .backend = "standard", .action = .install, .name = "example", .targets = &.{"example"}, .password = "" },
     };
+    const history = "Retained operation event";
+    @memcpy(job.progress.messages[63][0..history.len], history);
+    job.progress.lengths[63] = history.len;
     model.install_job = job;
     try std.testing.expectEqual(commands.Mode.running, model.commandContext().mode);
     try std.testing.expect(!try model.pollInstall());
     try std.testing.expectEqual(SudoPrompt.State.succeeded, prompt.state);
+    try std.testing.expectEqualStrings(history, prompt.progress.messages[63][0..prompt.progress.lengths[63]]);
     try std.testing.expectEqualStrings("", model.notice);
     try std.testing.expectEqual(commands.Mode.result, model.commandContext().mode);
     try model.setNotice("Stale operation notice");

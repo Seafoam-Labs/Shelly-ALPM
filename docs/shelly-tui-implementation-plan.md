@@ -210,3 +210,9 @@ The intended flow is browse → details → review/provider questions → execut
 - The bottom footer is the sole shortcut strip and changes with the focused page, authentication, review, dependency selection, progress, and results. F1 provides full descriptions and alternate bindings from the live registry.
 - Panels retain content, warnings, password input, and answer errors; duplicate hints and reserved shortcut rows are removed. Wrapping state is reflected by the Wrap/Unwrap action, and optional dependency choices expose Space Toggle in the footer.
 - Zig 0.17 build and 64 focused tests cover footer contexts, live wrapping labels, a single preview hint strip, compact panel heights, scrolling, and restoration after operation completion. An isolated fake-command PTY check covers F1 during authentication/progress, preserved password input, resizing, result context, refresh, and clean exit.
+
+- Operation panels now reserve one third of terminal height (rounded up, minimum four rows), keeping authentication/progress/results stable in size. Small terminals retain the existing content-priority fallback. Zig 0.17 build and 45 model tests pass, including fixed-height and non-overlap checks at 80×24, 120×40, and 40×12.
+
+- Progress snapshots retain 64 messages instead of four, with messages in chronological order. The reserved operation area uses its full height; older history remains scrollable, including Page Up/Down. Zig 0.17 build and 71 focused tests cover bounded history eviction and a 12-row output viewport.
+
+- Operation output now flows oldest to newest and follows the bottom while running. Scrolling up pauses following; reaching the bottom resumes it. Success, failure, and decline append their result to the retained 64-message history, which stays scrollable until dismissal. Tests cover chronological order, paused reading across completion, and result/history lifetime after worker cleanup.

@@ -88,8 +88,8 @@ pub const Progress = struct {
     status: [512]u8 = @splat(0),
     status_len: usize = 0,
     percent: ?i64 = null,
-    messages: [4][512]u8 = @splat(@splat(0)),
-    lengths: [4]usize = @splat(0),
+    messages: [64][512]u8 = @splat(@splat(0)),
+    lengths: [64]usize = @splat(0),
 
     pub fn text(self: *const Progress) []const u8 {
         return self.status[0..self.status_len];
@@ -103,12 +103,13 @@ pub const Progress = struct {
 
     fn log(self: *Progress, value: []const u8) void {
         if (value.len == 0) return;
-        for (0..3) |i| {
+        for (0..self.messages.len - 1) |i| {
             self.messages[i] = self.messages[i + 1];
             self.lengths[i] = self.lengths[i + 1];
         }
-        self.lengths[3] = @min(value.len, 512);
-        @memcpy(self.messages[3][0..self.lengths[3]], value[0..self.lengths[3]]);
+        const last = self.messages.len - 1;
+        self.lengths[last] = @min(value.len, self.messages[last].len);
+        @memcpy(self.messages[last][0..self.lengths[last]], value[0..self.lengths[last]]);
     }
 };
 
@@ -1420,8 +1421,12 @@ test "operation progress stream handles fragmented frames and owns display data"
 test "operation progress retains only bounded recent messages" {
     var progress: Progress = .{};
     for ([_][]const u8{ "one", "two", "three", "four", "five" }) |line| progress.log(line);
-    try std.testing.expectEqualStrings("two", progress.messages[0][0..progress.lengths[0]]);
-    try std.testing.expectEqualStrings("five", progress.messages[3][0..progress.lengths[3]]);
+    try std.testing.expectEqualStrings("one", progress.messages[59][0..progress.lengths[59]]);
+    try std.testing.expectEqualStrings("five", progress.messages[63][0..progress.lengths[63]]);
+    var buffer: [64]u8 = undefined;
+    for (0..70) |index| progress.log(try std.fmt.bufPrint(&buffer, "entry-{d}", .{index}));
+    try std.testing.expectEqualStrings("entry-6", progress.messages[0][0..progress.lengths[0]]);
+    try std.testing.expectEqualStrings("entry-69", progress.messages[63][0..progress.lengths[63]]);
     var stream: ProgressStream = .{};
     defer stream.deinit();
     stream.feed("[JSON]", null, undefined);

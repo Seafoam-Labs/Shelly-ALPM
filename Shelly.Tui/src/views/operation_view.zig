@@ -73,8 +73,7 @@ pub const View = struct {
                 diagnostics.safe(if (self.detail.len > 0) self.detail else "Shelly returned no error details."), if (self.combined) "\nSome sources may already have completed. Package state will be refreshed." else "",
             }),
         };
-        if (self.state != .running) return outcome;
-        const progress = if (self.progress.percent) |reported| blk: {
+        const progress = if (if (self.state == .running) self.progress.percent else null) |reported| blk: {
             const percent = @min(@max(reported, 0), 100);
             const bar_width: usize = width -| 7;
             const bar = try arena.alloc(u8, bar_width);
@@ -84,14 +83,19 @@ pub const View = struct {
             break :blk try std.fmt.allocPrint(arena, "[{s}] {d: >3}%", .{ bar, percent });
         } else "";
         var lines: std.ArrayList([]const u8) = .empty;
-        const status = std.mem.trim(u8, self.progress.text(), " \t\r\n");
-        try lines.append(arena, if (status.len > 0) try diagnostics.sanitizeAlloc(arena, status) else "Waiting for progress…");
-        if (progress.len > 0) try lines.append(arena, progress);
-        for (self.progress.messages, self.progress.lengths) |line, len| {
-            const message = std.mem.trim(u8, line[0..len], " \t\r\n");
-            if (message.len == 0 or std.mem.eql(u8, message, status)) continue;
-            try lines.append(arena, try diagnostics.sanitizeAlloc(arena, message));
+        var last: []const u8 = "";
+        for (&self.progress.messages, self.progress.lengths) |*message, len| {
+            const text = std.mem.trim(u8, message[0..len], " \t\r\n");
+            if (text.len == 0) continue;
+            try lines.append(arena, try diagnostics.sanitizeAlloc(arena, text));
+            last = text;
         }
+        const status = std.mem.trim(u8, self.progress.text(), " \t\r\n");
+        if (status.len > 0 and !std.mem.eql(u8, status, last))
+            try lines.append(arena, try diagnostics.sanitizeAlloc(arena, status));
+        if (lines.items.len == 0 and self.state == .running) try lines.append(arena, "Waiting for progress…");
+        if (progress.len > 0) try lines.append(arena, progress);
+        if (outcome.len > 0) try lines.append(arena, outcome);
         return std.mem.join(arena, "\n", lines.items);
     }
 };
@@ -105,13 +109,17 @@ pub const Panel = struct {
     scroll: vxfw.ScrollView = .{ .children = .{ .slice = &.{} } },
     initialized: bool = false,
     ready: bool = false,
+    follow_output: bool = true,
 
     fn update(self: *Panel, view: View) void {
         if (!self.initialized) {
             self.scroll = .{ .item_count = 1, .children = .{ .builder = .{ .userdata = self, .buildFn = buildBody } } };
             self.initialized = true;
         }
-        if (self.view.state != view.state) self.scroll.scroll = .{};
+        if (self.view.state == .entering and view.state != .entering) {
+            self.scroll.scroll = .{};
+            self.follow_output = true;
+        }
         self.view = view;
     }
 
@@ -126,7 +134,12 @@ pub const Panel = struct {
             }
         }
         if (commands.scrollsOperation(key)) {
-            try self.scroll.handleEvent(ctx, .{ .key_press = commands.scrollKey(key).? });
+            const scroll_key = commands.scrollKey(key).?;
+            if (scroll_key.matches(vaxis.Key.page_down, .{})) {
+                if (self.scroll.scroll.linesDown(@max(self.scroll.last_height, 1))) ctx.consumeAndRedraw();
+            } else if (scroll_key.matches(vaxis.Key.page_up, .{})) {
+                if (self.scroll.scroll.linesUp(@max(self.scroll.last_height, 1))) ctx.consumeAndRedraw();
+            } else try self.scroll.handleEvent(ctx, .{ .key_press = scroll_key });
             return .none;
         }
         if (view.state == .entering and view.elevated) {
@@ -180,7 +193,18 @@ pub const Panel = struct {
         const size = ctx.max.size();
         const input_height = view.inputRows(size.width);
         const review_height = size.height -| input_height;
+        if (view.state != .entering) {
+            // Upward keyboard or wheel navigation pauses following.
+            if (self.scroll.scroll.pending_lines < 0) self.follow_output = false;
+            if (self.follow_output) {
+                const document = try drawBody(self, ctx);
+                self.scroll.scroll.top = 0;
+                self.scroll.scroll.vertical_offset = @intCast(document.size.height -| review_height);
+                self.scroll.scroll.pending_lines = 0;
+            }
+        }
         const output = try self.scroll.draw(ctx.withConstraints(.{}, .{ .width = size.width, .height = review_height }));
+        if (view.state != .entering and !self.scroll.scroll.has_more_vertical) self.follow_output = true;
         const children = try ctx.arena.alloc(vxfw.SubSurface, if (input_height > 0) 2 else 1);
         children[0] = .{ .origin = .{ .row = 0, .col = 0 }, .surface = output };
         if (input_height > 0) {
@@ -241,11 +265,11 @@ test "operation panel wraps long results and scrolls output independently" {
     const surface = try panel.draw(view, ctx);
     try std.testing.expectEqual(@as(u16, 40), surface.size.width);
     try std.testing.expectEqual(@as(u16, 8), surface.size.height);
-    try std.testing.expect(panel.scroll.scroll.has_more_vertical);
+    try std.testing.expect(!panel.scroll.scroll.has_more_vertical);
     var events: vxfw.EventContext = .{ .io = undefined, .alloc = std.testing.allocator, .cmds = .empty };
     defer events.cmds.deinit(std.testing.allocator);
-    _ = try panel.handleKey(view, &events, .{ .codepoint = vaxis.Key.down });
-    try std.testing.expect(panel.scroll.scroll.pending_lines > 0);
+    _ = try panel.handleKey(view, &events, .{ .codepoint = vaxis.Key.up });
+    try std.testing.expect(panel.scroll.scroll.pending_lines < 0);
     view.state = .running;
     view.progress.percent = 150;
     _ = try panel.draw(view, ctx);
@@ -267,14 +291,14 @@ test "running output uses pane width without blank placeholder rows" {
     @memcpy(view.progress.messages[1][0..status.len], status);
     view.progress.lengths[1] = status.len;
     const unknown_percent = try view.body(arena.allocator(), 100);
-    try std.testing.expectEqualStrings("Installing editor\nPreparing transaction", unknown_percent);
+    try std.testing.expectEqualStrings("Preparing transaction\nInstalling editor", unknown_percent);
     for ([_]i64{ 5, 50, 100 }) |percent| {
         view.progress.percent = percent;
         const body = try view.body(arena.allocator(), 100);
         var lines = std.mem.splitScalar(u8, body, '\n');
+        try std.testing.expectEqualStrings(message, lines.next().?);
         try std.testing.expectEqualStrings(status, lines.next().?);
         try std.testing.expectEqual(@as(usize, 100), lines.next().?.len);
-        try std.testing.expectEqualStrings(message, lines.next().?);
         try std.testing.expect(lines.next() == null);
     }
 }
@@ -310,7 +334,7 @@ test "progress panels fit output without duplicated controls" {
     view.progress.percent = 50;
     try std.testing.expectEqual(@as(u16, 7), try view.preferredHeight(ctx, 9));
     view.state = .succeeded;
-    try std.testing.expectEqual(@as(u16, 3), try view.preferredHeight(ctx, 9));
+    try std.testing.expectEqual(@as(u16, 7), try view.preferredHeight(ctx, 9));
 }
 
 test "output remains scrollable without in-panel shortcut hints" {
@@ -323,6 +347,7 @@ test "output remains scrollable without in-panel shortcut hints" {
     const short = try panel.draw(view, ctx);
     try std.testing.expectEqual(@as(usize, 1), short.children[0].surface.children.len);
     view.state = .failed;
+    panel.follow_output = false;
     view.detail = "First line\nSecond line\nThird line\nFourth line\nFifth line\nSixth line\nSeventh line";
     const tall_ctx = ctx.withConstraints(.{}, .{ .width = 80, .height = 8 });
     _ = try panel.draw(view, tall_ctx);
@@ -338,4 +363,79 @@ test "output remains scrollable without in-panel shortcut hints" {
     try std.testing.expectEqual(@as(usize, 1), scrolled.children[0].surface.children.len);
     _ = try panel.handleKey(view, &events, .{ .codepoint = vaxis.Key.up });
     try std.testing.expect(panel.scroll.scroll.pending_lines < 0);
+}
+
+test "expanded operation panels retain chronological output and follow the latest line" {
+    vxfw.DrawContext.init(.unicode);
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var view: View = .{ .name = "packages", .state = .running };
+    const status = "Current operation status";
+    @memcpy(view.progress.status[0..status.len], status);
+    view.progress.status_len = status.len;
+    for (0..20) |index| {
+        const line = try std.fmt.bufPrint(&view.progress.messages[index], "Operation message {d}", .{index});
+        view.progress.lengths[index] = line.len;
+    }
+    var panel: Panel = .{};
+    const surface = try panel.draw(view, .{ .arena = arena.allocator(), .min = .{}, .max = .{ .width = 100, .height = 14 }, .cell_size = .{ .width = 10, .height = 20 } });
+    const output = surface.children[0].surface.children[0].surface;
+    try std.testing.expectEqual(@as(u16, 12), output.size.height);
+    const body = try view.body(arena.allocator(), 98);
+    var lines = std.mem.splitScalar(u8, body, '\n');
+    try std.testing.expectEqualStrings("Operation message 0", lines.next().?);
+    try std.testing.expectEqualStrings("Operation message 1", lines.next().?);
+    try std.testing.expectEqualStrings("Operation message 2", lines.next().?);
+    try std.testing.expect(!panel.scroll.scroll.has_more_vertical);
+    try std.testing.expect(panel.scroll.scroll.vertical_offset > 0);
+    const document = output.children[0].surface;
+    try std.testing.expectEqual(@as(u16, 21), document.size.height);
+    var ctx: vxfw.EventContext = .{ .io = undefined, .alloc = std.testing.allocator, .cmds = .empty };
+    defer ctx.cmds.deinit(std.testing.allocator);
+    _ = try panel.handleKey(view, &ctx, commands.bindings.page_up);
+    try std.testing.expect(panel.scroll.scroll.pending_lines < 0);
+}
+
+test "completion preserves history and scrolling without forcing the reader to the bottom" {
+    vxfw.DrawContext.init(.unicode);
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var view: View = .{ .name = "demo", .state = .running };
+    for (0..20) |index| {
+        const line = try std.fmt.bufPrint(&view.progress.messages[index], "Event {d}", .{index});
+        view.progress.lengths[index] = line.len;
+    }
+    var panel: Panel = .{};
+    const draw_ctx: vxfw.DrawContext = .{ .arena = arena.allocator(), .min = .{}, .max = .{ .width = 80, .height = 8 }, .cell_size = .{ .width = 10, .height = 20 } };
+    _ = try panel.draw(view, draw_ctx);
+    try std.testing.expect(panel.follow_output);
+    try std.testing.expect(panel.scroll.scroll.vertical_offset > 0);
+    var ctx: vxfw.EventContext = .{ .io = undefined, .alloc = std.testing.allocator, .cmds = .empty };
+    defer ctx.cmds.deinit(std.testing.allocator);
+    _ = try panel.handleKey(view, &ctx, commands.bindings.page_up);
+    _ = try panel.draw(view, draw_ctx);
+    try std.testing.expect(!panel.follow_output);
+    const position = panel.scroll.scroll.vertical_offset;
+    const newest = "Event 20";
+    @memcpy(view.progress.messages[20][0..newest.len], newest);
+    view.progress.lengths[20] = newest.len;
+    _ = try panel.draw(view, draw_ctx);
+    try std.testing.expectEqual(position, panel.scroll.scroll.vertical_offset);
+    for ([_]@TypeOf(view.state){ .succeeded, .failed, .declined }) |state| {
+        view.state = state;
+        _ = try panel.draw(view, draw_ctx);
+        try std.testing.expectEqual(position, panel.scroll.scroll.vertical_offset);
+        const body = try view.body(arena.allocator(), 78);
+        try std.testing.expect(std.mem.startsWith(u8, body, "Event 0\nEvent 1\n"));
+        try std.testing.expect(std.mem.indexOf(u8, body, "Event 20") != null);
+        try std.testing.expect(panel.scroll.scroll.has_more_vertical);
+    }
+    _ = try panel.handleKey(view, &ctx, commands.bindings.page_down);
+    _ = try panel.draw(view, draw_ctx);
+    try std.testing.expect(panel.follow_output);
+    try std.testing.expect(!panel.scroll.scroll.has_more_vertical);
+    _ = try panel.handleKey(view, &ctx, commands.bindings.previous);
+    _ = try panel.draw(view, draw_ctx);
+    try std.testing.expect(!panel.follow_output);
+    try std.testing.expectEqual(Action.close, try panel.handleKey(view, &ctx, commands.bindings.close));
 }
