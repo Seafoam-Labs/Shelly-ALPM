@@ -1631,23 +1631,16 @@ pub const Model = struct {
         return false;
     }
 
+    fn resetPackageSelection(self: *Model) void {
+        self.selected_packages.clearRetainingCapacity();
+        self.selected_list_view.item_count = 0;
+        self.selected_list_view.jumpToItem(0);
+        self.clearAurSelection();
+    }
+
     fn clearAurSelection(self: *Model) void {
         for (self.aur_selection.items) |selected| self.gpa.free(selected.name);
         self.aur_selection.clearRetainingCapacity();
-    }
-
-    fn clearCompletedAurSelection(self: *Model, targets: []const []const u8) void {
-        var index: usize = 0;
-        while (index < self.aur_selection.items.len) {
-            var completed = false;
-            for (targets) |target| if (std.mem.eql(u8, target, self.aur_selection.items[index].name)) {
-                completed = true;
-                break;
-            };
-            if (completed) {
-                self.gpa.free(self.aur_selection.orderedRemove(index).name);
-            } else index += 1;
-        }
     }
 
     fn toggleAurSelection(self: *Model) !void {
@@ -1809,6 +1802,7 @@ pub const Model = struct {
         if (self.overlay) |overlay| {
             switch (overlay) {
                 .sudo => |prompt| {
+                    if (prompt.backend == .standard or prompt.backend == .aur) self.resetPackageSelection();
                     prompt.deinit(self.gpa);
                     if (self.notice.len > 0) self.gpa.free(self.notice);
                     self.notice = "";
@@ -1903,6 +1897,7 @@ pub const Model = struct {
             self.answer_error = "Could not send the answer. The operation may have ended.";
             return;
         };
+        if (!approve and (std.mem.eql(u8, job.request.backend, "standard") or std.mem.eql(u8, job.request.backend, "aur"))) self.resetPackageSelection();
         self.finishOperationQuestion();
     }
 
@@ -2003,13 +1998,10 @@ pub const Model = struct {
         const is_flatpak = std.mem.eql(u8, job.request.backend, "flatpak");
         const is_combined = std.mem.eql(u8, job.request.backend, "all");
         const package_batch = job.request.targets.len > 0;
-        const package_install = job.request.action == .install and
+        const package_change = (job.request.action == .install or job.request.action == .remove) and
             (std.mem.eql(u8, job.request.backend, "standard") or std.mem.eql(u8, job.request.backend, "aur"));
-        if (package_install and !failed and !completed.declined) {
-            self.selected_packages.clearRetainingCapacity();
-            self.selected_list_view.item_count = 0;
-            self.selected_list_view.jumpToItem(0);
-            self.clearAurSelection();
+        if (package_change and (!failed or completed.declined)) {
+            self.resetPackageSelection();
             self.refresh_after_upgrade = true;
             self.refresh_updates_after_operation = true;
             if (self.settings.aur_enabled) self.refresh_aur_after_operation = true;
@@ -2017,9 +2009,6 @@ pub const Model = struct {
         if (package_batch) {
             self.refresh_after_upgrade = true;
             self.refresh_updates_after_operation = true;
-            if (!failed and !completed.declined) {
-                if (std.mem.eql(u8, job.request.backend, "aur")) self.clearCompletedAurSelection(job.request.targets) else self.clearCompletedSelection(job.request.targets);
-            }
         }
         if (is_flatpak or (is_combined and job.request.include_flatpak)) self.refresh_flatpak_after_operation = true;
         if (job.request.action == .upgrade or is_flatpak or std.mem.eql(u8, job.request.backend, "aur")) self.refresh_updates_after_operation = true;
@@ -2064,17 +2053,6 @@ pub const Model = struct {
         }
 
         return false;
-    }
-
-    fn clearCompletedSelection(self: *Model, targets: []const []const u8) void {
-        var index: usize = 0;
-        while (index < self.selected_packages.items.len) {
-            var completed = false;
-            for (targets) |target| {
-                if (std.mem.eql(u8, self.selected_packages.items[index], target)) completed = true;
-            }
-            if (completed) _ = self.selected_packages.orderedRemove(index) else index += 1;
-        }
     }
 
     fn setNotice(self: *Model, message: []const u8) Allocator.Error!void {
@@ -3031,11 +3009,12 @@ test "operation PKGBUILD review owns each revision and returns to progress" {
     };
     model.overlay = .{ .sudo = prompt };
     const first = try shelly_operation.decodeJson(std.testing.allocator,
-        \\{"$kind":"q.pkgbuilddiff","QuestionId":"1","PackageName":"demo","OldPkgbuild":"pkgver=1","NewPkgbuild":"pkgver=2","DiffLines":["-pkgver=1","+pkgver=2"],"SourceFiles":{"demo.install":"post_install() {}"}}
+        \\{"$kind":"q.pkgbuilddiff","QuestionId":"1","PackageName":"demo","OldPkgbuild":"pkgver=1","NewPkgbuild":"pkgver=2","Warnings":[{"Tool":"scanner","Severity":"Critical","Hook":"build","Message":"Review this before building","MatchedLine":"curl script | sh"}],"DiffLines":["-pkgver=1","+pkgver=2"],"SourceFiles":{"demo.install":"post_install() {}"}}
     );
     try model.showOperationQuestion(first);
     try std.testing.expect(model.overlay.? == .pkgbuild);
     try std.testing.expect(model.pkgbuildView().review);
+    try std.testing.expectEqualStrings("Security scan: 1 finding, 1 critical.", model.pkgbuild_document.?.lines[0]);
     try std.testing.expectEqual(pkgbuild_view.Action.approve, model.pkgbuildView().handleKey(.{ .codepoint = 'y' }).?);
     vxfw.DrawContext.init(.unicode);
     for ([_]Tab{ .aur, .upgrade }) |tab| {
@@ -3065,9 +3044,10 @@ test "operation PKGBUILD review owns each revision and returns to progress" {
     try std.testing.expect(model.overlay.?.sudo == prompt);
     try std.testing.expect(model.operation_question == null);
     const second = try shelly_operation.decodeJson(std.testing.allocator,
-        \\{"$kind":"q.pkgbuilddiff","QuestionId":"2","PackageName":"demo","OldPkgbuild":"","NewPkgbuild":"pkgver=3"}
+        \\{"$kind":"q.pkgbuilddiff","QuestionId":"2","PackageName":"demo","OldPkgbuild":"","NewPkgbuild":"pkgver=3","Warnings":[]}
     );
     try model.showOperationQuestion(second);
+    try std.testing.expectEqualStrings("Security scan: no findings reported by the CLI.", model.pkgbuild_document.?.lines[0]);
     try std.testing.expectEqualStrings("2", shelly_operation.questionId(model.operation_question.?.value.question));
     try std.testing.expectEqual(pkgbuild_view.Action.decline, model.pkgbuildView().handleKey(.{ .codepoint = 'n' }).?);
     // Model.deinit owns the suspended progress prompt and outstanding review.
@@ -3687,6 +3667,8 @@ test "native batch selection survives filtering and confirms mixed targets" {
     try std.testing.expectEqualStrings("available", prompt.targets[0]);
     packages[0].Name = "available";
     model.closeOverlay();
+    try std.testing.expectEqual(@as(usize, 0), model.selected_packages.items.len);
+    try model.selected_packages.appendSlice(std.testing.allocator, &.{ "available", "installed" });
     try model.openNativePrompt(.remove);
     prompt = model.overlay.?.sudo;
     try std.testing.expectEqual(@as(usize, 1), prompt.targets.len);
@@ -3694,7 +3676,8 @@ test "native batch selection survives filtering and confirms mixed targets" {
     try std.testing.expect(std.mem.indexOf(u8, prompt.review_text, "1 uninstalled selections excluded.") != null);
     try std.testing.expect(std.mem.indexOf(u8, prompt.review_text, "Remove (1): installed") != null);
     model.closeOverlay();
-    model.clearCompletedSelection(&.{"installed"});
+    try std.testing.expectEqual(@as(usize, 0), model.selected_packages.items.len);
+    try model.selected_packages.append(std.testing.allocator, "available");
     try std.testing.expectEqual(@as(usize, 1), model.selected_packages.items.len);
     try std.testing.expect(model.packageMarked("available"));
     try model.openNativePrompt(.remove);
@@ -3731,10 +3714,10 @@ test "native batch confirmation scrolls long reviews and keeps password entry vi
     try std.testing.expectEqual(@as(usize, 0), prompt.password.items.len);
     try Model.typeErasedCaptureHandler(model, &ctx, .{ .key_press = .{ .codepoint = 'q', .mods = .{ .ctrl = true } } });
     try std.testing.expect(model.overlay == null);
-    try std.testing.expectEqual(@as(usize, 60), model.selected_packages.items.len);
+    try std.testing.expectEqual(@as(usize, 0), model.selected_packages.items.len);
 }
 
-test "native batch completion refreshes actual state and clears only successful targets" {
+test "native removal refreshes actual state and clears all successful selections" {
     for ([_]bool{ false, true }) |failed| {
         const model = try Model.init(std.testing.allocator);
         defer model.deinit();
@@ -3755,7 +3738,7 @@ test "native batch completion refreshes actual state and clears only successful 
         try std.testing.expect(model.refresh_after_upgrade);
         try std.testing.expect(model.refresh_updates_after_operation);
         try std.testing.expect(packages[1].Installed); // No optimistic batch result.
-        try std.testing.expect(model.packageMarked("available"));
+        try std.testing.expectEqual(failed, model.packageMarked("available"));
         try std.testing.expectEqual(failed, model.packageMarked("installed"));
     }
 }
@@ -4186,9 +4169,7 @@ test "AUR batch selections own names across searches and preserve per-package re
     try model.toggleAurSelection();
     try model.openAurInstallPrompt();
     try std.testing.expectEqualStrings("third", model.overlay.?.sudo.targets[0]);
-    model.clearCompletedAurSelection(&.{"different"});
-    try std.testing.expectEqual(@as(usize, 1), model.aur_selection.items.len);
-    model.clearCompletedAurSelection(&.{"third"});
+    model.resetPackageSelection();
     try std.testing.expectEqual(@as(usize, 0), model.aur_selection.items.len);
 }
 
@@ -4222,7 +4203,7 @@ test "PKGBUILD shortcuts appear only in the contextual footer" {
     try std.testing.expect(std.mem.indexOf(u8, body.items, "wrap on") == null);
 }
 
-test "successful native and AUR installs deselect both lists through refresh" {
+test "successful native and AUR installs and removals deselect both lists through refresh" {
     var threaded: std.Io.Threaded = .init(std.testing.allocator, .{});
     defer threaded.deinit();
     runtime.io = threaded.io();
@@ -4230,50 +4211,97 @@ test "successful native and AUR installs deselect both lists through refresh" {
     var env: std.process.Environ.Map = .init(std.testing.allocator);
     defer env.deinit();
     for ([_][]const u8{ "standard", "aur" }) |backend| {
-        for ([_]bool{ false, true }) |batch| {
-            const model = try Model.init(std.testing.allocator);
-            defer model.deinit();
-            model.settings.aur_enabled = true;
-            var packages = [_]Package{ .{ .Name = "target" }, .{ .Name = "other-native" } };
-            model.packages = &packages;
-            model.loading = false;
-            try model.rebuildFilter();
-            try model.selected_packages.appendSlice(std.testing.allocator, &.{ "target", "other-native" });
-            model.selected_list_view.item_count = 2;
-            model.selected_list_view.jumpToItem(1);
-            var aur = [_]AurPackage{ .{ .Name = "target" }, .{ .Name = "other-aur" } };
-            model.aur_packages = &aur;
-            try model.rebuildAurFilter();
-            try model.toggleAurSelection();
-            model.aur_list.jumpToItem(1);
-            try model.toggleAurSelection();
-            const job = try std.heap.page_allocator.create(shelly_operation.Operation);
-            job.* = .{
-                .arena = .init(std.heap.page_allocator),
-                .done = .init(true),
-                .request = .{ .shelly_bin = "unused", .environ_map = &env, .backend = backend, .name = "target", .targets = if (batch) &.{"target"} else &.{}, .password = "" },
-            };
-            model.install_job = job;
-            try std.testing.expect(!try model.pollInstall());
-            try std.testing.expectEqual(@as(usize, 0), model.selected_packages.items.len);
-            try std.testing.expectEqual(@as(usize, 0), model.aur_selection.items.len);
-            try std.testing.expectEqual(@as(u32, 0), model.selected_list_view.item_count orelse unreachable);
-            try std.testing.expect(model.refresh_after_upgrade);
-            try std.testing.expect(model.refresh_aur_after_operation);
-            // Deliver fresh results through the actual refresh publication paths.
-            model.loading = true;
-            model.load.result = try std.json.parseFromSlice([]Package, std.testing.allocator, "[{\"Name\":\"target\",\"Installed\":true},{\"Name\":\"other-native\"}]", .{ .allocate = .alloc_always });
-            model.load.done.store(true, .release);
-            try std.testing.expect(!try model.pollLoad());
-            const aur_job = try std.testing.allocator.create(AurSearchJob);
-            aur_job.* = .{ .result = try std.json.parseFromSlice([]AurPackage, std.testing.allocator, "[{\"Name\":\"target\",\"Installed\":true},{\"Name\":\"other-aur\"}]", .{ .allocate = .alloc_always }) };
-            aur_job.done.store(true, .release);
-            model.aur_job = aur_job;
-            try std.testing.expect(!try model.pollAurSearch());
-            try std.testing.expectEqual(@as(usize, 0), model.selected_packages.items.len);
-            try std.testing.expectEqual(@as(usize, 0), model.aur_selection.items.len);
-            try std.testing.expect(!model.packageMarked("target"));
-            try std.testing.expect(!model.aurMarked("target"));
+        inline for ([_]shelly_operation.Action{ .install, .remove }) |action| {
+            for ([_]bool{ false, true }) |batch| {
+                if (action == .remove and batch and std.mem.eql(u8, backend, "aur")) continue;
+                const model = try Model.init(std.testing.allocator);
+                defer model.deinit();
+                model.settings.aur_enabled = true;
+                var packages = [_]Package{ .{ .Name = "target" }, .{ .Name = "other-native" } };
+                model.packages = &packages;
+                model.loading = false;
+                try model.rebuildFilter();
+                try model.selected_packages.appendSlice(std.testing.allocator, &.{ "target", "other-native" });
+                model.selected_list_view.item_count = 2;
+                model.selected_list_view.jumpToItem(1);
+                var aur = [_]AurPackage{ .{ .Name = "target" }, .{ .Name = "other-aur" } };
+                model.aur_packages = &aur;
+                try model.rebuildAurFilter();
+                try model.toggleAurSelection();
+                model.aur_list.jumpToItem(1);
+                try model.toggleAurSelection();
+                const job = try std.heap.page_allocator.create(shelly_operation.Operation);
+                job.* = .{
+                    .arena = .init(std.heap.page_allocator),
+                    .done = .init(true),
+                    .request = .{ .shelly_bin = "unused", .environ_map = &env, .backend = backend, .action = action, .name = "target", .targets = if (batch) &.{"target"} else &.{}, .password = "" },
+                };
+                model.install_job = job;
+                try std.testing.expect(!try model.pollInstall());
+                try std.testing.expectEqual(@as(usize, 0), model.selected_packages.items.len);
+                try std.testing.expectEqual(@as(usize, 0), model.aur_selection.items.len);
+                try std.testing.expectEqual(@as(u32, 0), model.selected_list_view.item_count orelse unreachable);
+                try std.testing.expect(model.refresh_after_upgrade);
+                try std.testing.expect(model.refresh_aur_after_operation);
+                // Deliver fresh results through the actual refresh publication paths.
+                model.loading = true;
+                model.load.result = try std.json.parseFromSlice([]Package, std.testing.allocator, "[{\"Name\":\"target\",\"Installed\":true},{\"Name\":\"other-native\"}]", .{ .allocate = .alloc_always });
+                model.load.done.store(true, .release);
+                try std.testing.expect(!try model.pollLoad());
+                const aur_job = try std.testing.allocator.create(AurSearchJob);
+                aur_job.* = .{ .result = try std.json.parseFromSlice([]AurPackage, std.testing.allocator, "[{\"Name\":\"target\",\"Installed\":true},{\"Name\":\"other-aur\"}]", .{ .allocate = .alloc_always }) };
+                aur_job.done.store(true, .release);
+                model.aur_job = aur_job;
+                try std.testing.expect(!try model.pollAurSearch());
+                try std.testing.expectEqual(@as(usize, 0), model.selected_packages.items.len);
+                try std.testing.expectEqual(@as(usize, 0), model.aur_selection.items.len);
+                try std.testing.expect(!model.packageMarked("target"));
+                try std.testing.expect(!model.aurMarked("target"));
+            }
         }
+    }
+}
+
+test "cancelling native and AUR authentication or declining a review clears both selections" {
+    var threaded: std.Io.Threaded = .init(std.testing.allocator, .{});
+    defer threaded.deinit();
+    runtime.io = threaded.io();
+    defer runtime.io = undefined;
+    var env: std.process.Environ.Map = .init(std.testing.allocator);
+    defer env.deinit();
+    for ([_]OperationBackend{ .standard, .aur }) |backend| {
+        const model = try Model.init(std.testing.allocator);
+        defer model.deinit();
+        var packages = [_]Package{.{ .Name = "native" }};
+        var aur = [_]AurPackage{.{ .Name = "aur" }};
+        model.packages = &packages;
+        model.aur_packages = &aur;
+        model.settings.aur_enabled = true;
+        model.loading = false;
+        try model.rebuildFilter();
+        try model.rebuildAurFilter();
+        try model.selected_packages.append(std.testing.allocator, "native");
+        try model.toggleAurSelection();
+        try model.openPackagePrompt("target", backend, .remove);
+        var ctx: vxfw.EventContext = .{ .io = undefined, .alloc = std.testing.allocator, .cmds = .empty };
+        defer ctx.cmds.deinit(std.testing.allocator);
+        try Model.typeErasedCaptureHandler(model, &ctx, .{ .key_press = commands.bindings.cancel });
+        try std.testing.expect(model.overlay == null);
+        try std.testing.expectEqual(@as(usize, 0), model.selected_packages.items.len);
+        try std.testing.expectEqual(@as(usize, 0), model.aur_selection.items.len);
+        try model.selected_packages.append(std.testing.allocator, "native");
+        try model.toggleAurSelection();
+        const job = try std.heap.page_allocator.create(shelly_operation.Operation);
+        job.* = .{
+            .arena = .init(std.heap.page_allocator),
+            .done = .init(true),
+            .result = .{ .declined = true },
+            .request = .{ .shelly_bin = "unused", .environ_map = &env, .backend = @tagName(backend), .name = "target", .password = "" },
+        };
+        model.install_job = job;
+        try std.testing.expect(!try model.pollInstall());
+        try std.testing.expectEqual(@as(usize, 0), model.selected_packages.items.len);
+        try std.testing.expectEqual(@as(usize, 0), model.aur_selection.items.len);
+        try std.testing.expectEqual(@as(u32, 0), model.selected_list_view.item_count.?);
     }
 }

@@ -164,7 +164,7 @@ The intended flow is browse → details → review/provider questions → execut
 ### Native package batches (2026-10-30)
 
 - Enter toggles selection; Right focuses details. I installs/reinstalls selected packages; R removes only installed selections. With no selection, actions use the highlighted package. Checkboxes and installed indicators are separate; selections survive filtering.
-- Confirmation lists all targets, install/reinstall counts, and excluded removal entries in a scrollable review. One CLI operation receives separate target arguments. State refreshes after every attempt; successful installs clear all native/AUR selections before refresh. Removal clears completed targets; skipped removal entries and failed selections remain.
+- Confirmation lists all targets, install/reinstall counts, and excluded removal entries in a scrollable review. One CLI operation receives separate target arguments. State refreshes after every attempt; successful installs clear all native/AUR selections before refresh. Successful removal and cancellation also clear both selection stores; failed selections remain only until result dismissal.
 - Zig 0.17 build/test and 57 model/service/view tests pass. Six fake-process cases cover install/remove success, failure, and authorization failure. Maintainer subsequently verified live native batch installation and removal. AUR install batching is now supported; AUR removal and Flatpak batching remain deferred.
 
 ### Reserved operation panel (2026-10-30)
@@ -202,7 +202,7 @@ The intended flow is browse → details → review/provider questions → execut
 ### AUR batch installation (2026-10-30)
 
 - Enter/Space select AUR results; Right opens details; I installs selected packages or the highlighted result. Owned selections survive filters and replacement search results, have independent checkboxes/installed indicators, and Ctrl+U clears them. R still removes the highlighted installed AUR package.
-- Native/AUR batch confirmations share target ownership and install/reinstall summaries. AUR targets stay separate in one interactive CLI command, preserving per-package PKGBUILD reviews and dependency questions. Successful installs clear all native/AUR selections before refresh; failure/decline keeps selections and refreshes state.
+- Native/AUR batch confirmations share target ownership and install/reinstall summaries. AUR targets stay separate in one interactive CLI command, preserving per-package PKGBUILD reviews and dependency questions. Successful installs clear all native/AUR selections before refresh; declines also clear selections and refresh state; failure preserves selections until the result is dismissed.
 - Zig 0.17 build and 64 focused tests pass. Fake subprocess success/failure checks verify two targets and repeated PKGBUILD answers in one operation; no live package changes were run.
 
 ### Single contextual shortcut footer (2026-10-31)
@@ -218,3 +218,11 @@ The intended flow is browse → details → review/provider questions → execut
 - Operation output now flows oldest to newest and follows the bottom while running. Scrolling up pauses following; reaching the bottom resumes it. Success, failure, and decline append their result to the retained 64-message history, which stays scrollable until dismissal. Tests cover chronological order, paused reading across completion, and result/history lifetime after worker cleanup.
 
 - Successful native/AUR installations now clear both selection stores and reset the selected-items widget before refresh, including single-package requests. Refresh publication cannot restore the old selections. Zig 0.17 build and 46 model tests pass, covering native/AUR single and batch completion plus both refresh paths.
+
+### AUR install scan reviews (2026-10-31)
+
+- The CLI already validates prepared PKGBUILDs and related files before requesting approval. The TUI now shows its scan summary and findings before the reviewed source/diff, including severity colors, scanner, hook, explanation, and matched text. Related files remain available.
+- Empty reported findings and missing scan results are distinguished; a missing result is never presented as a clean scan. Approval/decline and per-package batch reviews retain the existing CLI protocol. Preview scans remain deferred until Atoll-backed AUR settings are introduced.
+- Zig 0.17 build and 78 focused tests cover decoding, ownership, missing/empty results, severity colors, wrapped findings, control-character escaping, and resetting scan state between reviews. No live package installations were run.
+
+- Native/AUR removal now uses the same complete selection reset as installation. Cancelling authentication, declining a CLI review, and closing an operation result also reset both package-page selections and selected-list state. Zig 0.17 build and 47 model tests pass, covering removal refresh, pre-auth cancellation, and declined results.

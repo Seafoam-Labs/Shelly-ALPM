@@ -697,6 +697,7 @@ pub const Question = union(enum) {
         old_pkgbuild: []const u8,
         new_pkgbuild: []const u8,
         warnings: []const Warning = &.{},
+        scan_reported: bool = false,
         diff_lines: []const []const u8 = &.{},
         source_files: []const SourceFile = &.{},
     },
@@ -760,7 +761,7 @@ pub const PkgbuildDiff = struct {
     PackageName: []const u8,
     OldPkgbuild: []const u8,
     NewPkgbuild: []const u8,
-    Warnings: []const Warning = &.{},
+    Warnings: ?[]const Warning = null,
     DiffLines: []const []const u8 = &.{},
     SourceFiles: ?std.json.ArrayHashMap([]const u8) = null,
 };
@@ -937,7 +938,8 @@ fn decodeQuestion(alloc: std.mem.Allocator, json: []const u8, kind: []const u8) 
             .package_name = q.PackageName,
             .old_pkgbuild = q.OldPkgbuild,
             .new_pkgbuild = q.NewPkgbuild,
-            .warnings = q.Warnings,
+            .warnings = q.Warnings orelse &.{},
+            .scan_reported = q.Warnings != null,
             .diff_lines = q.DiffLines,
             .source_files = files,
         } };
@@ -1693,4 +1695,18 @@ test "AUR batch install retains separate operands and interactive review" {
     try std.testing.expectEqualStrings("second", argv[6]);
     try std.testing.expectEqualStrings("--ui-mode", argv[7]);
     for (argv) |arg| try std.testing.expect(!std.mem.eql(u8, arg, "--no-confirm"));
+}
+
+test "PKGBUILD scan reporting distinguishes empty findings from absent results" {
+    const cases = [_]struct { json: []const u8, reported: bool }{
+        .{ .json = "{\"$kind\":\"q.pkgbuilddiff\",\"QuestionId\":\"1\",\"PackageName\":\"demo\",\"OldPkgbuild\":\"\",\"NewPkgbuild\":\"pkgname=demo\",\"Warnings\":[]}", .reported = true },
+        .{ .json = "{\"$kind\":\"q.pkgbuilddiff\",\"QuestionId\":\"2\",\"PackageName\":\"demo\",\"OldPkgbuild\":\"\",\"NewPkgbuild\":\"pkgname=demo\"}", .reported = false },
+        .{ .json = "{\"$kind\":\"q.pkgbuilddiff\",\"QuestionId\":\"3\",\"PackageName\":\"demo\",\"OldPkgbuild\":\"\",\"NewPkgbuild\":\"pkgname=demo\",\"Warnings\":null}", .reported = false },
+    };
+    for (cases) |case| {
+        var message = try decodeJson(std.testing.allocator, case.json);
+        defer message.deinit();
+        try std.testing.expectEqual(case.reported, message.value.question.pkgbuild.scan_reported);
+        try std.testing.expectEqual(@as(usize, 0), message.value.question.pkgbuild.warnings.len);
+    }
 }
