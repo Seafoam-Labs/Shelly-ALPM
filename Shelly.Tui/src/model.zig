@@ -2003,6 +2003,17 @@ pub const Model = struct {
         const is_flatpak = std.mem.eql(u8, job.request.backend, "flatpak");
         const is_combined = std.mem.eql(u8, job.request.backend, "all");
         const package_batch = job.request.targets.len > 0;
+        const package_install = job.request.action == .install and
+            (std.mem.eql(u8, job.request.backend, "standard") or std.mem.eql(u8, job.request.backend, "aur"));
+        if (package_install and !failed and !completed.declined) {
+            self.selected_packages.clearRetainingCapacity();
+            self.selected_list_view.item_count = 0;
+            self.selected_list_view.jumpToItem(0);
+            self.clearAurSelection();
+            self.refresh_after_upgrade = true;
+            self.refresh_updates_after_operation = true;
+            if (self.settings.aur_enabled) self.refresh_aur_after_operation = true;
+        }
         if (package_batch) {
             self.refresh_after_upgrade = true;
             self.refresh_updates_after_operation = true;
@@ -4209,4 +4220,60 @@ test "PKGBUILD shortcuts appear only in the contextual footer" {
         try std.testing.expect(std.mem.indexOf(u8, body.items, hint) == null);
     }
     try std.testing.expect(std.mem.indexOf(u8, body.items, "wrap on") == null);
+}
+
+test "successful native and AUR installs deselect both lists through refresh" {
+    var threaded: std.Io.Threaded = .init(std.testing.allocator, .{});
+    defer threaded.deinit();
+    runtime.io = threaded.io();
+    defer runtime.io = undefined;
+    var env: std.process.Environ.Map = .init(std.testing.allocator);
+    defer env.deinit();
+    for ([_][]const u8{ "standard", "aur" }) |backend| {
+        for ([_]bool{ false, true }) |batch| {
+            const model = try Model.init(std.testing.allocator);
+            defer model.deinit();
+            model.settings.aur_enabled = true;
+            var packages = [_]Package{ .{ .Name = "target" }, .{ .Name = "other-native" } };
+            model.packages = &packages;
+            model.loading = false;
+            try model.rebuildFilter();
+            try model.selected_packages.appendSlice(std.testing.allocator, &.{ "target", "other-native" });
+            model.selected_list_view.item_count = 2;
+            model.selected_list_view.jumpToItem(1);
+            var aur = [_]AurPackage{ .{ .Name = "target" }, .{ .Name = "other-aur" } };
+            model.aur_packages = &aur;
+            try model.rebuildAurFilter();
+            try model.toggleAurSelection();
+            model.aur_list.jumpToItem(1);
+            try model.toggleAurSelection();
+            const job = try std.heap.page_allocator.create(shelly_operation.Operation);
+            job.* = .{
+                .arena = .init(std.heap.page_allocator),
+                .done = .init(true),
+                .request = .{ .shelly_bin = "unused", .environ_map = &env, .backend = backend, .name = "target", .targets = if (batch) &.{"target"} else &.{}, .password = "" },
+            };
+            model.install_job = job;
+            try std.testing.expect(!try model.pollInstall());
+            try std.testing.expectEqual(@as(usize, 0), model.selected_packages.items.len);
+            try std.testing.expectEqual(@as(usize, 0), model.aur_selection.items.len);
+            try std.testing.expectEqual(@as(u32, 0), model.selected_list_view.item_count orelse unreachable);
+            try std.testing.expect(model.refresh_after_upgrade);
+            try std.testing.expect(model.refresh_aur_after_operation);
+            // Deliver fresh results through the actual refresh publication paths.
+            model.loading = true;
+            model.load.result = try std.json.parseFromSlice([]Package, std.testing.allocator, "[{\"Name\":\"target\",\"Installed\":true},{\"Name\":\"other-native\"}]", .{ .allocate = .alloc_always });
+            model.load.done.store(true, .release);
+            try std.testing.expect(!try model.pollLoad());
+            const aur_job = try std.testing.allocator.create(AurSearchJob);
+            aur_job.* = .{ .result = try std.json.parseFromSlice([]AurPackage, std.testing.allocator, "[{\"Name\":\"target\",\"Installed\":true},{\"Name\":\"other-aur\"}]", .{ .allocate = .alloc_always }) };
+            aur_job.done.store(true, .release);
+            model.aur_job = aur_job;
+            try std.testing.expect(!try model.pollAurSearch());
+            try std.testing.expectEqual(@as(usize, 0), model.selected_packages.items.len);
+            try std.testing.expectEqual(@as(usize, 0), model.aur_selection.items.len);
+            try std.testing.expect(!model.packageMarked("target"));
+            try std.testing.expect(!model.aurMarked("target"));
+        }
+    }
 }
