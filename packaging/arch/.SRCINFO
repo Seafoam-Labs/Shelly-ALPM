@@ -1,0 +1,89 @@
+pkgbase = shelly
+	pkgver = 3.1.10
+	pkgrel = 1
+	url = https://github.com/Seafoam-Labs/Shelly-ALPM
+	arch = x86_64
+	arch = aarch64
+	license = GPL-3.0-only
+	checkdepends = ripgrep
+	makedepends = binutils
+	makedepends = curl
+	makedepends = flatpak
+	makedepends = gettext
+	makedepends = git
+	makedepends = go-md2man
+	makedepends = gtk4
+	makedepends = libarchive
+	makedepends = pkgconf
+	makedepends = sqlite
+	makedepends = zig>=0.17.0
+	source = Shelly-ALPM::git+https://github.com/Seafoam-Labs/Shelly-ALPM.git#tag=v3.1.10
+	sha256sums = SKIP
+
+pkgname = shelly
+	pkgdesc = Shelly: A Modern Arch Package Manager (Arch RLPM release build)
+	depends = shelly-cli=3.1.10-1
+	depends = shelly-flatpak-backend=3.1.10-1
+	depends = shelly-notify
+	depends = glib2
+	depends = glibc
+	depends = gtk4
+	depends = hicolor-icon-theme
+	optdepends = fuse2: run AppImages that require FUSE 2
+	optdepends = libstarfish: dependency viewer for arch packages
+	conflicts = shelly-git
+	conflicts = shelly-bin
+
+pkgname = shelly-cli
+	pkgdesc = Native Shelly package-manager CLI (Arch RLPM release build)
+	depends = curl
+	depends = diffutils
+	depends = git
+	depends = glibc
+	depends = gnupg
+	depends = libarchive
+	depends = sqlite
+	depends = sudo
+	depends = tar
+	optdepends = pacman: package-owner lookup for pacfile merging
+	optdepends = base-devel: build and install AUR packages
+	optdepends = desktop-file-utils: update AppImage desktop entries
+	optdepends = devtools: build AUR packages in a clean chroot
+	optdepends = fuse2: run AppImages that require FUSE 2
+	optdepends = gtk-update-icon-cache: update AppImage icons
+	optdepends = opendoas: alternative privilege elevator to sudo
+	optdepends = plocate: locate-based pacfile discovery
+	optdepends = shelly-flatpak-backend: Flatpak package management support
+	optdepends = systemd: run isolated build containers with systemd-nspawn
+	optdepends = util-linux: isolate fresh-root provisioning for --isolated builds
+	optdepends = vim: default visual pacfile diff viewer
+	conflicts = shelly<3.1.6-2
+	conflicts = shelly-git<3.1.6.r0
+	conflicts = shelly-bin
+	conflicts = shelly-cli-git
+	backup = etc/shellybuild.conf
+
+pkgname = shelly-flatpak-backend
+	pkgdesc = Optional native Flatpak backend for Shelly (Arch RLPM release build)
+	depends = shelly-cli=3.1.10-1
+	depends = flatpak
+	depends = glib2
+	depends = glibc
+	conflicts = shelly-flatpak-backend-git
+	conflicts = shelly-flatpak-backend-bin
+	conflicts = shelly-cli-flatpak-backend-git
+	replaces = shelly-cli-flatpak-backend-git
+
+pkgname = shelly-notify
+	pkgdesc = Notification tray for Shelly (Arch RLPM release build)
+	depends = shelly=3.1.10-1
+	depends = glibc
+	conflicts = shelly-notify-git
+
+pkgname = shelly-notify-none
+	pkgdesc = Placeholder that satisfies Shelly without the notification tray
+	arch = any
+	provides = shelly-notify
+	conflicts = shelly-notify
+	conflicts = shelly-notify-git
+	conflicts = shelly-notify-none-git
