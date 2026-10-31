@@ -172,6 +172,20 @@ pub fn detailsText(arena: Allocator, pkg: *const AurPackage) Allocator.Error![]c
 
 const detail_fields = @import("detail_fields.zig");
 
+pub fn packageLink(arena: Allocator, pkg: *const AurPackage) Allocator.Error![]const u8 {
+    const base = std.mem.trimEnd(u8, std.mem.trim(u8, pkg.AurBaseUrl, " \t\r\n"), "/");
+    const atoll = if (std.Uri.parse(base)) |uri| if (uri.host) |host| switch (host) {
+        .raw, .percent_encoded => |name| std.ascii.eqlIgnoreCase(name, "atoll.seafoam-labs.org"),
+    } else false else |_| false;
+    var name: std.ArrayList(u8) = .empty;
+    defer name.deinit(arena);
+    const hex = "0123456789ABCDEF";
+    for (pkg.Name) |byte| {
+        if (std.ascii.isAlphanumeric(byte) or std.mem.indexOfScalar(u8, "-._~", byte) != null) try name.append(arena, byte) else try name.appendSlice(arena, &.{ '%', hex[byte >> 4], hex[byte & 15] });
+    }
+    return std.fmt.allocPrint(arena, "{s}/{s}/{s}", .{ base, if (atoll) "package" else "packages", name.items });
+}
+
 pub fn drawDetails(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
     const pkg: *const AurPackage = @ptrCast(@alignCast(ptr));
     const arena = ctx.arena;
@@ -187,6 +201,8 @@ pub fn drawDetails(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.
         .{ .label = "Out of date", .value = if (pkg.OutOfDate != null) "Yes" else "No" },
     });
     if (pkg.Url) |url| try fields.append(arena, .{ .label = "URL", .value = url, .preserve_url = true });
+    const page = try packageLink(arena, pkg);
+    try fields.append(arena, .{ .label = if (std.mem.indexOf(u8, page, "/package/") != null) "Atoll page" else "AUR page", .value = page, .preserve_url = true });
     if (pkg.License) |items| if (items.len > 0) {
         try fields.append(arena, .{ .label = "Licenses", .value = try std.mem.join(arena, ", ", items) });
     };
@@ -207,4 +223,26 @@ pub fn drawPreviewButton(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error
     var surface = try button.draw(ctx.withConstraints(.{ .width = width }, .{ .width = width, .height = 1 }));
     surface.widget.drawFn = drawPreviewButton;
     return surface;
+}
+
+test "AUR package pages follow the configured source independently of upstream URLs" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+    var pkg: AurPackage = .{ .Name = "foot-git", .Url = "https://codeberg.org/dnkl/foot" };
+    try std.testing.expectEqualStrings("https://aur.archlinux.org/packages/foot-git", try packageLink(alloc, &pkg));
+    pkg.AurBaseUrl = "https://atoll.seafoam-labs.org/";
+    try std.testing.expectEqualStrings("https://atoll.seafoam-labs.org/package/foot-git", try packageLink(alloc, &pkg));
+    try std.testing.expectEqualStrings("https://codeberg.org/dnkl/foot", pkg.Url.?);
+    pkg.Name = "name+suffix";
+    try std.testing.expectEqualStrings("https://atoll.seafoam-labs.org/package/name%2Bsuffix", try packageLink(alloc, &pkg));
+    vxfw.DrawContext.init(.unicode);
+    const surface = try drawDetails(&pkg, .{ .arena = alloc, .min = .{ .width = 40 }, .max = .{}, .cell_size = .{ .width = 10, .height = 20 } });
+    var upstream = false;
+    var atoll = false;
+    for (surface.buffer) |cell| {
+        upstream = upstream or std.mem.eql(u8, cell.link.uri, pkg.Url.?);
+        atoll = atoll or std.mem.eql(u8, cell.link.uri, "https://atoll.seafoam-labs.org/package/name%2Bsuffix");
+    }
+    try std.testing.expect(upstream and atoll);
 }

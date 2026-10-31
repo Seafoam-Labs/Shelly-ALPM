@@ -202,6 +202,15 @@ pub const ShellyCli = struct {
     }
 
     /// Searches the AUR via the CLI. The caller owns the parsed result.
+    pub const AurSource = struct { AurUrl: []const u8 = "https://aur.archlinux.org" };
+
+    pub fn get_aur_source(self: ShellyCli) !std.json.Parsed(AurSource) {
+        const result = try self.runSilently(&.{ "config", "get", "AurUrl" });
+        defer self.allocator.free(result.stdout);
+        defer self.allocator.free(result.stderr);
+        return decodeQuery(AurSource, self.allocator, result.stdout, false);
+    }
+
     pub fn search_aur(self: ShellyCli, query: []const u8) !std.json.Parsed([]AurPackage) {
         const result = try self.run(&.{ "search", "aur", query });
         defer self.allocator.free(result.stdout);
@@ -417,4 +426,12 @@ test "Flatpak probe decoding accepts empty remotes but rejects backend failure" 
     defer allocator.free(failure);
     try std.testing.expectError(error.CommandFailed, decodeQuery([]Remote, allocator, failure, false));
     try std.testing.expectError(error.NoDataFrame, decodeQuery([]Remote, allocator, "", false));
+}
+
+test "AUR source configuration decodes the CLI single-value frame" {
+    const frame = try queryTestFrame(std.testing.allocator, "{\"AurUrl\":\"https://atoll.seafoam-labs.org\"}");
+    defer std.testing.allocator.free(frame);
+    const parsed = try decodeQuery(ShellyCli.AurSource, std.testing.allocator, frame, false);
+    defer parsed.deinit();
+    try std.testing.expectEqualStrings("https://atoll.seafoam-labs.org", parsed.value.AurUrl);
 }

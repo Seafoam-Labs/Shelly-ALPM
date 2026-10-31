@@ -1532,6 +1532,16 @@ pub const Model = struct {
             return;
         };
 
+        const configured = cli.get_aur_source() catch null;
+        defer if (configured) |value| value.deinit();
+        const base = parsed.arena.allocator().dupe(u8, if (configured) |value| value.value.AurUrl else "https://aur.archlinux.org") catch {
+            parsed.deinit();
+            job.failed = true;
+            job.done.store(true, .release);
+            return;
+        };
+        for (parsed.value) |*pkg| pkg.AurBaseUrl = base;
+
         if (job.installed_only) {
             for (parsed.value) |*pkg| pkg.Installed = true;
             job.result = parsed;
