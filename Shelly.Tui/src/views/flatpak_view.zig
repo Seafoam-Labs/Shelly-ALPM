@@ -73,6 +73,11 @@ pub const View = struct {
     failure: ?anyerror,
     checked: bool,
     count: usize,
+    selected: ?Row = null,
+    details_scroll: *vxfw.ScrollView,
+    details_active: bool = false,
+    list_active: bool = false,
+    help: ?*@import("help_view.zig").Panel = null,
 
     pub fn statusText(self: View, arena: Allocator) Allocator.Error![]const u8 {
         if (self.checking_backend) return "Checking Flatpak backend…";
@@ -83,24 +88,79 @@ pub const View = struct {
     }
 
     pub fn appendContent(self: View, ctx: vxfw.DrawContext, children: *std.ArrayList(vxfw.SubSurface)) Allocator.Error!void {
-        const size = ctx.max.size();
-        try children.append(ctx.arena, .{ .origin = .{ .row = 1, .col = 0 }, .surface = try self.field.draw(ctx.withConstraints(.{}, .{ .width = size.width, .height = 1 })) });
-        const message: ?[]const u8 = if (self.checking_backend) "Checking Flatpak backend…" else if (self.backend_failure != null) "Flatpak is enabled, but its backend could not be used. Install the Shelly Flatpak backend to use this source." else if (self.loading) "Loading Flatpaks…" else if (self.failure != null) "Could not load Flatpaks." else if (!self.checked) "Flatpak list not loaded yet." else if (self.count == 0) "No Flatpaks match. Catalogs reflect configured remotes and cached metadata." else null;
-        const content_ctx = ctx.withConstraints(.{}, .{ .width = size.width, .height = size.height -| 3 });
-        var label: vxfw.Text = .{ .text = message orelse "" };
-        try children.append(ctx.arena, .{ .origin = .{ .row = 2, .col = 0 }, .surface = if (message != null) try label.draw(content_ctx) else try self.list.draw(content_ctx) });
+        const arena = ctx.arena;
+        const max = ctx.max.size();
+        const split = max.width >= 64;
+        const left_w: u16 = if (split) @max(28, @as(u16, @intCast(@as(u32, max.width) * 2 / 5))) else max.width;
+        const right_w = if (split) max.width - left_w else max.width;
+        const list_width = left_w -| @as(u16, if (split) 1 else 0);
+        const search_height: u16 = if (max.width >= 2 and max.height >= 8) 3 else 1;
+        const list_row = 1 + search_height;
+        const list_height = max.height -| (list_row + 1);
+        const pane_row: u16 = 1;
+        const pane_height = max.height -| (pane_row + 1);
+        const show_pane = split or self.details_active or self.help != null;
+        if (split or !show_pane) {
+            var search_border: Border = .{ .child = self.field.widget(), .style = if (!self.list_active and !self.details_active) .{ .fg = .{ .index = 7 }, .bold = true } else .{} };
+            try children.append(arena, .{
+                .origin = .{ .row = 1, .col = 0 },
+                .surface = if (search_height == 3)
+                    try search_border.draw(ctx.withConstraints(.{ .width = list_width, .height = search_height }, .{ .width = list_width, .height = search_height }))
+                else
+                    try self.field.draw(ctx.withConstraints(.{}, .{ .width = list_width, .height = search_height })),
+            });
+            const message = self.contentMessage();
+            var label: vxfw.Text = .{ .text = message orelse "", .style = .{ .fg = .{ .index = 250 } } };
+            const labels = [_]Border.BorderLabel{.{ .text = if (self.installed_only) "Installed Flatpaks" else "Flatpak applications", .alignment = .top_left }};
+            const content = if (message != null) label.widget() else self.list.widget();
+            var border: Border = .{ .child = content, .labels = &labels, .style = if (self.list_active and !self.details_active) .{ .fg = .{ .index = 7 }, .bold = true } else .{} };
+            try children.append(arena, .{
+                .origin = .{ .row = @intCast(list_row), .col = 0 },
+                .surface = if (list_width >= 2 and list_height >= 2)
+                    try border.draw(ctx.withConstraints(.{ .width = list_width, .height = list_height }, .{ .width = list_width, .height = list_height }))
+                else
+                    try content.draw(ctx.withConstraints(.{}, .{ .width = list_width, .height = list_height })),
+            });
+        }
+        if (show_pane and pane_height >= 2 and right_w >= 2) {
+            const pane_ctx = ctx.withConstraints(.{}, .{ .width = right_w, .height = pane_height });
+            const surface = if (self.help) |panel|
+                try panel.draw(pane_ctx)
+            else blk: {
+                const title = if (self.selected) |pkg| try std.fmt.allocPrint(arena, "{f}", .{diagnostics.safe(switch (pkg) {
+                    .catalog => |app| if (app.Name.len > 0) app.Name else app.Id,
+                    .installed => |app| if (app.Name.len > 0) app.Name else app.Id,
+                })}) else "Flatpak details";
+                const labels = [_]Border.BorderLabel{.{ .text = title, .alignment = .top_left }};
+                var empty: vxfw.Text = .{ .text = if (self.loading) "Loading Flatpaks…" else "Select a result to see details." };
+                var border: Border = .{
+                    .child = if (self.selected != null and !self.loading) self.details_scroll.widget() else empty.widget(),
+                    .labels = &labels,
+                    .style = if (self.details_active) .{ .fg = .{ .index = 7 }, .bold = true } else .{},
+                };
+                break :blk try border.draw(pane_ctx.withConstraints(.{ .width = right_w, .height = pane_height }, .{ .width = right_w, .height = pane_height }));
+            };
+            try children.append(arena, .{ .origin = .{ .row = @intCast(pane_row), .col = if (split) @intCast(left_w) else 0 }, .surface = surface });
+        }
+    }
+    fn contentMessage(self: View) ?[]const u8 {
+        return if (self.checking_backend) "Checking Flatpak backend…" else if (self.backend_failure != null) "Flatpak is enabled, but its backend could not be used. Install the Shelly Flatpak backend to use this source." else if (self.loading) "Loading Flatpaks…" else if (self.failure != null) "Could not load Flatpaks." else if (!self.checked) "Flatpak list not loaded yet." else if (self.count == 0) "No Flatpaks match. Catalogs reflect configured remotes and cached metadata." else null;
     }
 };
 
 fn drawCatalog(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
     const app: *const data.AppstreamApp = @ptrCast(@alignCast(ptr));
-    var label: vxfw.Text = .{ .text = try std.fmt.allocPrint(ctx.arena, "{f} — {f}  {f}", .{ diagnostics.safe(app.Name), diagnostics.safe(app.Id), diagnostics.safe(app.Summary) }), .softwrap = false, .overflow = .ellipsis };
+    var label: vxfw.Text = .{ .style = .{ .bold = true }, .text = try std.fmt.allocPrint(ctx.arena, "{f}", .{diagnostics.safe(if (app.Name.len > 0) app.Name else app.Id)}), .softwrap = false, .overflow = .ellipsis };
     return label.draw(ctx);
 }
 
 fn drawInstalled(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
     const app: *const data.Flatpak = @ptrCast(@alignCast(ptr));
-    var label: vxfw.Text = .{ .text = try std.fmt.allocPrint(ctx.arena, "[{s}/{s}] {f}/{f}/{f}  {f}  ({f})", .{ @tagName(app.InstallLevel), @tagName(app.Kind), diagnostics.safe(app.Id), diagnostics.safe(app.Arch), diagnostics.safe(app.Branch), diagnostics.safe(app.Version), diagnostics.safe(app.Remote) }), .softwrap = false, .overflow = .ellipsis };
+    const spans = [_]vxfw.RichText.TextSpan{
+        .{ .text = "● ", .style = .{ .fg = .{ .index = 2 } } },
+        .{ .text = try std.fmt.allocPrint(ctx.arena, "{f} ({s})", .{ diagnostics.safe(if (app.Name.len > 0) app.Name else app.Id), @tagName(app.InstallLevel) }), .style = .{ .bold = true } },
+    };
+    var label: vxfw.RichText = .{ .text = &spans, .softwrap = false, .overflow = .ellipsis };
     return label.draw(ctx);
 }
 
@@ -123,4 +183,41 @@ pub fn drawInstallChoices(ctx: vxfw.DrawContext, app: *const data.AppstreamApp, 
     var border: Border = .{ .child = text.widget(), .labels = &labels };
     const surface = try border.widget().draw(ctx.withConstraints(.{}, .{ .width = width, .height = height }));
     return .{ .origin = .{ .row = @divFloor(@as(i17, size.height) - surface.size.height, 2), .col = @divFloor(@as(i17, size.width) - surface.size.width, 2) }, .surface = surface, .z_index = 2 };
+}
+
+const detail_fields = @import("detail_fields.zig");
+pub fn drawDetails(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
+    const row: *const Row = @ptrCast(@alignCast(ptr));
+    const arena = ctx.arena;
+    var fields: std.ArrayList(detail_fields.Field) = .empty;
+    switch (row.*) {
+        .installed => |app| try fields.appendSlice(arena, &.{
+            .{ .label = "Description", .value = app.Summary },
+            .{ .label = "Name", .value = app.Name, .gap = true },
+            .{ .label = "ID", .value = app.Id },
+            .{ .label = "Version", .value = app.Version },
+            .{ .label = "Scope", .value = @tagName(app.InstallLevel) },
+            .{ .label = "Kind", .value = @tagName(app.Kind) },
+            .{ .label = "Architecture", .value = app.Arch },
+            .{ .label = "Branch", .value = app.Branch },
+            .{ .label = "Remote", .value = app.Remote },
+            .{ .label = "Ref", .value = app.Ref },
+            .{ .label = "Full ref", .value = app.FullRef },
+            .{ .label = "Size", .value = try formatSize(arena, app.InstalledSize) },
+        }),
+        .catalog => |app| {
+            try fields.appendSlice(arena, &.{
+                .{ .label = "Summary", .value = app.Summary },
+                .{ .label = "Description", .value = app.Description, .gap = true },
+                .{ .label = "Name", .value = app.Name, .gap = true },
+                .{ .label = "ID", .value = app.Id },
+                .{ .label = "Type", .value = app.Type },
+                .{ .label = "Developer", .value = app.DeveloperName },
+                .{ .label = "License", .value = app.ProjectLicense },
+                .{ .label = "Verified", .value = if (app.IsVerified) "Yes" else "No" },
+            });
+            for (app.Remotes, 0..) |remote, i| try fields.append(arena, .{ .label = if (i == 0) "Remotes" else "", .value = try std.fmt.allocPrint(arena, "{s} ({s})", .{ remote.Name, @tagName(remote.Scope) }) });
+        },
+    }
+    return detail_fields.draw(.{ .userdata = ptr, .drawFn = drawDetails }, ctx, fields.items);
 }

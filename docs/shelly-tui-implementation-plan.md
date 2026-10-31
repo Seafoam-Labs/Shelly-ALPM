@@ -238,3 +238,9 @@ Finish the baseline UI/UX across the remaining pages, starting with Flatpak, bef
 - R uses the selection from either the AUR list or details, including entries outside the current search. Confirmation lists installed targets and counts excluded uninstalled entries. Without selection, removal uses the highlighted installed package.
 - One CLI removal command receives separate target arguments and keeps unused dependencies/configuration, matching native removal. Existing completion/cancellation cleanup clears both package-page selections and refreshes actual state.
 - Zig 0.17 build and 70 focused model/service tests pass. Fake-process checks cover success, partial failure, and authorization failure with both operands preserved. No live package removals were run.
+
+### Flatpak split browsing (2026-10-31)
+
+- Flatpak now uses the same bordered search/list and scrollable details layout as Packages and AUR, with a narrow-terminal fallback and contextual F1 help in the details area. Lists show names; installed entries retain their scope indicator. Details use the shared wrapped metadata fields, including remote, scope, branch, architecture, and ref.
+- Right focuses details; Left/Q returns to the highlighted row; / returns to search. I/R also work from the list, with the existing remote/scope chooser and backend checks preserved. The floating details window is removed.
+- Zig 0.17 build and 49 focused model tests pass, including scoped identity, installation choices, operation refresh, split-pane navigation, and small-terminal rendering. Live Flatpak operations remain for manual verification.

@@ -191,6 +191,9 @@ pub const Model = struct {
     flatpak_rows: std.ArrayList(flatpak_view.Row) = .empty,
     flatpak_field: vxfw.TextField,
     flatpak_list: vxfw.ListView,
+    flatpak_details_scroll: vxfw.ScrollView,
+    flatpak_details_cursor: ?u32 = null,
+    flatpak_list_active: bool = false,
     refresh_flatpak_after_operation: bool = false,
 
     /// All known packages, borrowed from `parsed`.
@@ -287,6 +290,7 @@ pub const Model = struct {
                 .userdata = model,
                 .buildFn = buildPackageDetails,
             } } },
+            .flatpak_details_scroll = .{ .item_count = 1, .children = .{ .builder = .{ .userdata = model, .buildFn = buildFlatpakDetails } } },
             .flatpak_field = .{ .buf = .init(gpa), .userdata = model, .onChange = onFlatpakQueryChange },
             .flatpak_list = .{ .children = .{ .builder = .{ .userdata = model, .buildFn = buildFlatpakRow } } },
             .updates_list = .{ .children = .{ .builder = .{
@@ -427,9 +431,11 @@ pub const Model = struct {
         } else if (had_operation or had_help or had_aur_pane) {
             const list_active = self.package_list_active;
             const aur_active = self.aur_list_active;
+            const flatpak_active = self.flatpak_list_active;
             try self.focusActiveTab(ctx);
             self.package_list_active = list_active;
             self.aur_list_active = aur_active;
+            self.flatpak_list_active = flatpak_active;
         }
     }
 
@@ -454,9 +460,17 @@ pub const Model = struct {
                 if (self.overlay) |overlay| {
                     switch (overlay) {
                         .flatpak => |row| {
+                            if (commands.matches(key, .back) or commands.matches(key, .search)) {
+                                self.closeOverlay();
+                                self.flatpak_list_active = !commands.matches(key, .search);
+                                return ctx.consumeAndRedraw();
+                            }
                             if (commands.detail(key)) |action| {
                                 switch (action) {
-                                    .close => self.closeOverlay(),
+                                    .close => {
+                                        self.closeOverlay();
+                                        self.flatpak_list_active = true;
+                                    },
                                     .install => if (row == .catalog and self.install_job == null) {
                                         if (row.catalog.Remotes.len == 0) try self.setNotice("No configured remote is available for this catalog entry.") else self.overlay = .{ .flatpak_install = .{ .app = row.catalog } };
                                     },
@@ -470,7 +484,7 @@ pub const Model = struct {
                                     }),
                                     .preview => {},
                                 }
-                            }
+                            } else try self.flatpak_details_scroll.handleEvent(ctx, .{ .key_press = commands.scrollKey(key) orelse key });
                             return ctx.consumeAndRedraw();
                         },
                         .flatpak_install => |choice| {
@@ -569,6 +583,19 @@ pub const Model = struct {
                         },
                     }
                 }
+                if (self.active == .flatpak and self.flatpak_list_active) {
+                    if (commands.matches(key, .search)) {
+                        self.flatpak_list_active = false;
+                        return ctx.consumeAndRedraw();
+                    }
+                    if (commands.matches(key, .details) or commands.packageAction(key) != null) {
+                        if (self.flatpak_job == null and self.flatpak_list.cursor < self.flatpak_rows.items.len) {
+                            self.overlay = .{ .flatpak = self.flatpak_rows.items[self.flatpak_list.cursor] };
+                            if (commands.packageAction(key) != null) try self.captureEvent(ctx, event);
+                        }
+                        return ctx.consumeAndRedraw();
+                    }
+                }
                 if (self.active == .aur and self.aur_list_active) {
                     if (commands.matches(key, .select) or commands.matches(key, .mark)) {
                         try self.toggleAurSelection();
@@ -604,6 +631,13 @@ pub const Model = struct {
                             return ctx.consumeAndRedraw();
                         }
                         self.aur_list_active = true;
+                    }
+                    if (self.active == .flatpak) {
+                        if (self.flatpak_list_active and self.flatpak_list.cursor == 0 and commands.matches(key, .previous)) {
+                            self.flatpak_list_active = false;
+                            return ctx.consumeAndRedraw();
+                        }
+                        self.flatpak_list_active = true;
                     }
                     const canonical: vxfw.Event = .{ .key_press = .{ .codepoint = if (commands.matches(key, .previous)) vaxis.Key.up else vaxis.Key.down } };
                     switch (self.active) {
@@ -721,7 +755,7 @@ pub const Model = struct {
                 }
                 // Search editing is explicit while browsing: Up at the first
                 // package or / returns to the text field.
-                if (((self.active == .packages and self.package_list_active) or (self.active == .aur and self.aur_list_active)) and command == null)
+                if (((self.active == .packages and self.package_list_active) or (self.active == .aur and self.aur_list_active) or (self.active == .flatpak and self.flatpak_list_active)) and command == null)
                     return ctx.consumeEvent();
 
                 if (command) |action| {
@@ -1024,6 +1058,7 @@ pub const Model = struct {
         if (self.help_open or self.operationPrompt() != null or self.aurPaneFocused()) return ctx.requestFocus(self.widget());
         self.package_list_active = false;
         self.aur_list_active = false;
+        self.flatpak_list_active = false;
         switch (self.active) {
             .packages => try ctx.requestFocus(self.text_field.widget()),
             .aur => try ctx.requestFocus(self.aur_field.widget()),
@@ -1100,6 +1135,8 @@ pub const Model = struct {
 
     fn rebuildFlatpakFilter(self: *Model) Allocator.Error!void {
         const selected: ?flatpak_view.Row = if (self.flatpak_list.cursor < self.flatpak_rows.items.len) self.flatpak_rows.items[self.flatpak_list.cursor] else null;
+        self.flatpak_details_cursor = null;
+        self.flatpak_details_scroll.scroll = .{};
         self.flatpak_rows.clearRetainingCapacity();
         const query = try self.flatpak_field.buf.dupe();
         defer self.gpa.free(query);
@@ -1132,8 +1169,18 @@ pub const Model = struct {
         return self.flatpak_rows.items[index].widget();
     }
 
+    fn buildFlatpakDetails(ptr: *const anyopaque, index: usize, _: usize) ?vxfw.Widget {
+        const self: *const Model = @ptrCast(@alignCast(ptr));
+        if (index != 0 or self.flatpak_job != null or self.flatpak_list.cursor >= self.flatpak_rows.items.len) return null;
+        return .{ .userdata = @constCast(&self.flatpak_rows.items[self.flatpak_list.cursor]), .drawFn = flatpak_view.drawDetails };
+    }
+
     fn flatpakView(self: *Model) flatpak_view.View {
-        return .{ .field = &self.flatpak_field, .list = &self.flatpak_list, .installed_only = self.flatpak_installed_only, .loading = self.flatpak_job != null, .checking_backend = self.flatpak_probe_job != null, .backend_failure = self.flatpak_probe_error, .failure = self.flatpak_failure, .checked = if (self.flatpak_installed_only) self.flatpak_installed != null else self.flatpak_catalog != null, .count = self.flatpak_rows.items.len };
+        if (self.flatpak_details_cursor == null or self.flatpak_details_cursor.? != self.flatpak_list.cursor) {
+            self.flatpak_details_scroll.scroll = .{};
+            self.flatpak_details_cursor = self.flatpak_list.cursor;
+        }
+        return .{ .details_scroll = &self.flatpak_details_scroll, .selected = if (self.flatpak_job == null and self.flatpak_list.cursor < self.flatpak_rows.items.len) self.flatpak_rows.items[self.flatpak_list.cursor] else null, .list_active = self.flatpak_list_active, .details_active = self.overlay != null and self.overlay.? == .flatpak, .help = if (self.help_open) &self.help_panel else null, .field = &self.flatpak_field, .list = &self.flatpak_list, .installed_only = self.flatpak_installed_only, .loading = self.flatpak_job != null, .checking_backend = self.flatpak_probe_job != null, .backend_failure = self.flatpak_probe_error, .failure = self.flatpak_failure, .checked = if (self.flatpak_installed_only) self.flatpak_installed != null else self.flatpak_catalog != null, .count = self.flatpak_rows.items.len };
     }
 
     // -- background jobs ---------------------------------------------------
@@ -1906,6 +1953,7 @@ pub const Model = struct {
     }
 
     fn aurPaneFocused(self: *const Model) bool {
+        if (self.active == .flatpak) return self.overlay != null and self.overlay.? == .flatpak;
         if (self.active != .aur) return false;
         const overlay = self.overlay orelse return false;
         return overlay == .aur or overlay == .pkgbuild;
@@ -2235,7 +2283,7 @@ pub const Model = struct {
         const content_start = children.items.len;
         const content_ctx = ctx.withConstraints(.{}, .{ .width = max.width, .height = max.height - content_offset - panel_height });
         self.help_panel.context = self.commandContext();
-        if (show_browsing and self.help_open and self.active != .packages and self.active != .aur) {
+        if (show_browsing and self.help_open and self.active != .packages and self.active != .aur and self.active != .flatpak) {
             try children.append(arena, .{
                 .origin = .{ .row = 1, .col = 0 },
                 .surface = try self.help_panel.draw(content_ctx.withConstraints(.{}, .{ .width = max.width, .height = content_ctx.max.size().height -| 2 })),
@@ -2279,7 +2327,7 @@ pub const Model = struct {
             const overlay_child: ?vxfw.SubSurface = switch (overlay) {
                 .package => null,
                 .aur => null,
-                .flatpak => try self.drawDetailsOverlay(ctx, arena, max, overlay),
+                .flatpak => null,
                 .sudo => null,
                 .pkgbuild => if (self.active == .aur or reviewing) null else try self.pkgbuildView().draw(ctx),
                 .flatpak_install => |choice| try flatpak_view.drawInstallChoices(ctx, choice.app, choice.selected),
@@ -2350,6 +2398,8 @@ pub const Model = struct {
                 context.mode = .details;
                 context.installable = row == .catalog and row.catalog.Remotes.len > 0;
                 context.removable = row == .installed;
+                context.split_details = true;
+                context.scrollable = true;
                 return context;
             },
             .pkgbuild => {
@@ -2398,6 +2448,12 @@ pub const Model = struct {
             },
             .flatpak => {
                 context.mode = .flatpak;
+                context.browsing_list = self.flatpak_list_active;
+                if (self.flatpak_list_active and self.flatpak_job == null and self.flatpak_list.cursor < self.flatpak_rows.items.len) {
+                    const row = self.flatpak_rows.items[self.flatpak_list.cursor];
+                    context.installable = row == .catalog and row.catalog.Remotes.len > 0;
+                    context.removable = row == .installed;
+                }
                 context.installed_only = self.flatpak_installed_only;
             },
             .upgrade => {
@@ -4351,4 +4407,38 @@ test "AUR removal uses installed selections from list and details and excludes a
     try model.openAurPrompt(.remove);
     try std.testing.expect(model.overlay == null);
     try std.testing.expect(std.mem.indexOf(u8, model.notice, "No installed packages") != null);
+}
+
+test "Flatpak split details navigate back to the selected row and keep scope visible" {
+    const allocator = std.testing.allocator;
+    const model = try Model.init(allocator);
+    defer model.deinit();
+    model.settings.flatpak_enabled = true;
+    model.flatpak_available = true;
+    model.active = .flatpak;
+    model.flatpak_installed_only = true;
+    model.flatpak_installed = try std.json.parseFromSlice([]flatpak.Flatpak, allocator,
+        \\[{"Id":"org.example.Editor","Name":"Editor","InstallLevel":0,"Branch":"stable","Remote":"flathub"},{"Id":"org.example.Editor","Name":"Editor","InstallLevel":1,"Branch":"stable","Remote":"flathub"}]
+    , .{ .allocate = .alloc_always });
+    try model.rebuildFlatpakFilter();
+    model.flatpak_list.jumpToItem(1);
+    model.flatpak_list_active = true;
+    var events: vxfw.EventContext = .{ .io = undefined, .alloc = allocator, .cmds = .empty };
+    defer events.cmds.deinit(allocator);
+    try model.captureEvent(&events, .{ .key_press = commands.bindings.details });
+    try std.testing.expect(model.overlay.? == .flatpak);
+    try std.testing.expectEqual(flatpak.InstallLevel.user, model.overlay.?.flatpak.installed.InstallLevel);
+    try std.testing.expect(model.commandContext().split_details);
+    vxfw.DrawContext.init(.unicode);
+    var arena = std.heap.ArenaAllocator.init(allocator);
+    defer arena.deinit();
+    for ([_]vxfw.Size{ .{ .width = 100, .height = 30 }, .{ .width = 40, .height = 12 }, .{ .width = 12, .height = 5 } }) |size| {
+        _ = try model.widget().draw(.{ .arena = arena.allocator(), .min = .{}, .max = .{ .width = size.width, .height = size.height }, .cell_size = .{ .width = 10, .height = 20 } });
+    }
+    try model.captureEvent(&events, .{ .key_press = .{ .codepoint = vaxis.Key.left } });
+    try std.testing.expect(model.overlay == null);
+    try std.testing.expect(model.flatpak_list_active);
+    try std.testing.expectEqual(@as(u32, 1), model.flatpak_list.cursor);
+    try model.captureEvent(&events, .{ .key_press = commands.bindings.search });
+    try std.testing.expect(!model.flatpak_list_active);
 }

@@ -342,6 +342,12 @@ pub fn entries(arena: std.mem.Allocator, context: Context) std.mem.Allocator.Err
                 try add(arena, &list, .details, "Details", "Focus AUR package details");
                 try add(arena, &list, .search, "Search", "Return to editing the AUR query");
             }
+            if (context.mode == .flatpak and context.browsing_list) {
+                try add(arena, &list, .details, "Details", "Focus Flatpak details");
+                try add(arena, &list, .search, "Search", "Return to editing the filter");
+                if (context.installable) try add(arena, &list, .install, "Install", "Choose a remote and installation scope");
+                if (context.removable) try add(arena, &list, .remove, "Remove", "Remove the highlighted Flatpak");
+            }
             try add(arena, &list, .previous, "Previous", "Previous result");
             try add(arena, &list, .next, "Next", "Next result");
             try add(arena, &list, .filter, if (context.installed_only) "All" else "Installed", "Toggle browsing / installed packages");
