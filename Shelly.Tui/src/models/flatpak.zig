@@ -90,6 +90,8 @@ pub const AppstreamRelease = struct {
 };
 
 pub const AppstreamApp = struct {
+    /// Derived by the TUI from installed application IDs in either scope.
+    Installed: bool = false,
     Id: []const u8 = "",
     Name: []const u8 = "",
     Summary: []const u8 = "",

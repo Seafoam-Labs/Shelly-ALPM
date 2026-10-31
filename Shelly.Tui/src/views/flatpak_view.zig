@@ -50,7 +50,7 @@ pub const Row = union(enum) {
                     const text = try std.fmt.allocPrint(arena, "{s}{f} ({s})", .{ if (i == 0) "" else ", ", diagnostics.safe(remote.Name), @tagName(remote.Scope) });
                     try remotes.appendSlice(arena, text);
                 }
-                break :blk std.fmt.allocPrint(arena, "{f}\n\nName: {f}\nID: {f}\nType: {f}\nDeveloper: {f}\nLicense: {f}\nVerified: {s}\nRemotes: {s}\n\n{f}\n\nCatalog metadata — installation status and permissions are not queried.", .{ diagnostics.safe(app.Summary), diagnostics.safe(app.Name), diagnostics.safe(app.Id), diagnostics.safe(app.Type), diagnostics.safe(app.DeveloperName), diagnostics.safe(app.ProjectLicense), if (app.IsVerified) "yes" else "no", remotes.items, diagnostics.safe(app.Description) });
+                break :blk std.fmt.allocPrint(arena, "{f}\n\nName: {f}\nID: {f}\nType: {f}\nDeveloper: {f}\nLicense: {f}\nVerified: {s}\nRemotes: {s}\n\n{f}\n\nCatalog metadata — permissions are not queried.", .{ diagnostics.safe(app.Summary), diagnostics.safe(app.Name), diagnostics.safe(app.Id), diagnostics.safe(app.Type), diagnostics.safe(app.DeveloperName), diagnostics.safe(app.ProjectLicense), if (app.IsVerified) "yes" else "no", remotes.items, diagnostics.safe(app.Description) });
             },
         };
     }
@@ -176,7 +176,11 @@ pub const View = struct {
 
 fn drawCatalog(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
     const app: *const data.AppstreamApp = @ptrCast(@alignCast(ptr));
-    var label: vxfw.Text = .{ .style = .{ .bold = true }, .text = try std.fmt.allocPrint(ctx.arena, "{f}", .{diagnostics.safe(if (app.Name.len > 0) app.Name else app.Id)}), .softwrap = false, .overflow = .ellipsis };
+    const spans = [_]vxfw.RichText.TextSpan{
+        .{ .text = if (app.Installed) "● " else "  ", .style = .{ .fg = .{ .index = 2 } } },
+        .{ .text = try std.fmt.allocPrint(ctx.arena, "{f}", .{diagnostics.safe(if (app.Name.len > 0) app.Name else app.Id)}), .style = .{ .bold = true } },
+    };
+    var label: vxfw.RichText = .{ .text = &spans, .softwrap = false, .overflow = .ellipsis };
     return label.draw(ctx);
 }
 
@@ -236,6 +240,7 @@ pub fn drawDetails(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.
                 .{ .label = "Description", .value = app.Description, .gap = true },
                 .{ .label = "Name", .value = app.Name, .gap = true },
                 .{ .label = "ID", .value = app.Id },
+                .{ .label = "Installed", .value = if (app.Installed) "Yes" else "No" },
                 .{ .label = "Type", .value = app.Type },
                 .{ .label = "Developer", .value = app.DeveloperName },
                 .{ .label = "License", .value = app.ProjectLicense },

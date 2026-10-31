@@ -1169,6 +1169,24 @@ pub const Model = struct {
                 job.failure = err;
                 return;
             };
+            var installed = cli.get_installed_flatpaks() catch |err| {
+                job.failure = err;
+                return;
+            };
+            defer installed.deinit();
+            markInstalledFlatpaks(job.catalog.?.value, installed.value);
+        }
+    }
+
+    fn markInstalledFlatpaks(apps: []flatpak.AppstreamApp, installed: []const flatpak.Flatpak) void {
+        for (apps) |*app| {
+            app.Installed = false;
+            for (installed) |item| {
+                if (item.Kind == .app and std.mem.eql(u8, app.Id, item.Id)) {
+                    app.Installed = true;
+                    break;
+                }
+            }
         }
     }
 
@@ -5265,4 +5283,25 @@ test "Flatpak install cannot enter source selection without an available backend
     model.flatpak_available = true;
     try model.openFlatpakInstallChoice(&.{ .Id = "no-remote" });
     try std.testing.expect(model.overlay == null and model.install_job == null);
+}
+
+test "Flatpak catalog installed markers match application IDs across scopes and reset on refresh" {
+    var apps = [_]flatpak.AppstreamApp{
+        .{ .Id = "org.example.System" },
+        .{ .Id = "org.example.User" },
+        .{ .Id = "org.example.System.Extra" },
+        .{ .Id = "org.example.Runtime" },
+    };
+    const installed = [_]flatpak.Flatpak{
+        .{ .Id = "org.example.System", .InstallLevel = .system },
+        .{ .Id = "org.example.User", .InstallLevel = .user },
+        .{ .Id = "org.example.Runtime", .Kind = .runtime },
+    };
+    Model.markInstalledFlatpaks(&apps, &installed);
+    try std.testing.expect(apps[0].Installed);
+    try std.testing.expect(apps[1].Installed);
+    try std.testing.expect(!apps[2].Installed);
+    try std.testing.expect(!apps[3].Installed);
+    Model.markInstalledFlatpaks(&apps, &.{});
+    for (apps) |app| try std.testing.expect(!app.Installed);
 }
