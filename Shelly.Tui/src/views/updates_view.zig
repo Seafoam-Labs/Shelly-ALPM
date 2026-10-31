@@ -88,7 +88,7 @@ pub const View = struct {
             return label.draw(ctx);
         }
         var children: std.ArrayList(vxfw.SubSurface) = .empty;
-        var summary: vxfw.Text = .{ .text = try self.sourceSummary(ctx.arena), .text_align = .center, .width_basis = .parent, .softwrap = true, .style = .{ .fg = .{ .index = 250 } } };
+        var summary: vxfw.Text = .{ .text = try self.sourceSummary(ctx.arena), .text_align = .center, .width_basis = .parent, .softwrap = true, .style = .{ .fg = .{ .index = 7 }, .bold = true } };
         const summary_surface = try summary.draw(ctx.withConstraints(.{}, .{ .width = size.width, .height = size.height }));
         try children.append(ctx.arena, .{ .origin = .{ .row = 0, .col = 0 }, .surface = summary_surface });
         var top = summary_surface.size.height;
@@ -126,12 +126,30 @@ pub const View = struct {
 pub fn row(data: *const sync.CheckUpdates, index: usize) ?vxfw.Widget {
     if (index < data.Packages.len) return .{ .userdata = @constCast(&data.Packages[index]), .drawFn = drawNative };
     const aur_index = index - data.Packages.len;
-    if (aur_index < data.Aur.len) return .{ .userdata = @constCast(&data.Aur[aur_index]), .drawFn = drawAur };
+    if (aur_index < data.Aur.len) return .{ .userdata = @constCast(&data.Aur[aur_index]), .drawFn = if (aur_index == 0 and data.Packages.len > 0) groupStart(drawAur).draw else drawAur };
     const flatpak_index = aur_index - data.Aur.len;
-    if (flatpak_index < data.Flatpak.len) return .{ .userdata = @constCast(&data.Flatpak[flatpak_index]), .drawFn = drawFlatpak };
+    if (flatpak_index < data.Flatpak.len) return .{ .userdata = @constCast(&data.Flatpak[flatpak_index]), .drawFn = if (flatpak_index == 0 and data.Packages.len + data.Aur.len > 0) groupStart(drawFlatpak).draw else drawFlatpak };
     const appimage_index = flatpak_index - data.Flatpak.len;
-    if (appimage_index < data.AppImage.len) return .{ .userdata = @constCast(&data.AppImage[appimage_index]), .drawFn = drawAppImage };
+    if (appimage_index < data.AppImage.len) return .{ .userdata = @constCast(&data.AppImage[appimage_index]), .drawFn = if (appimage_index == 0 and data.Packages.len + data.Aur.len + data.Flatpak.len > 0) groupStart(drawAppImage).draw else drawAppImage };
     return null;
+}
+
+/// One blank line separates sources; entries within each source stay compact.
+fn groupStart(comptime drawItem: anytype) type {
+    return struct {
+        fn draw(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
+            const gap: u16 = if (ctx.max.height == 0) 0 else 1;
+            const content = try drawItem(ptr, ctx.withConstraints(.{ .width = ctx.min.width }, .{
+                .width = ctx.max.width,
+                .height = if (ctx.max.height) |height| height -| gap else null,
+            }));
+            const surface = try vxfw.Surface.init(ctx.arena, .{ .userdata = ptr, .drawFn = draw }, .{ .width = content.size.width, .height = content.size.height + gap });
+            @memset(surface.buffer, .{});
+            const offset = @as(usize, gap) * content.size.width;
+            @memcpy(surface.buffer[offset..][0..content.buffer.len], content.buffer);
+            return surface;
+        }
+    };
 }
 
 const table_min_width = 56;
@@ -183,7 +201,7 @@ fn drawColumns(ctx: vxfw.DrawContext, entry: Entry, heading: bool) Allocator.Err
     const values = [_][]const u8{ entry.source, entry.name, upgrade };
     const row_data = try ctx.arena.create(ColumnRow);
     row_data.* = .{ .entry = entry, .heading = heading };
-    const surface = try vxfw.Surface.init(ctx.arena, .{ .userdata = row_data, .drawFn = ColumnRow.draw }, .{ .width = width, .height = @min(if (heading) @as(u16, 1) else 2, ctx.max.height orelse 2) });
+    const surface = try vxfw.Surface.init(ctx.arena, .{ .userdata = row_data, .drawFn = ColumnRow.draw }, .{ .width = width, .height = @min(@as(u16, 1), ctx.max.height orelse 1) });
     @memset(surface.buffer, .{});
     if (surface.size.height == 0) return surface;
     var col: u16 = 0;
@@ -213,12 +231,7 @@ fn drawEntry(parent_ctx: vxfw.DrawContext, entry: Entry) Allocator.Error!vxfw.Su
         .{ .text = try std.fmt.allocPrint(ctx.arena, "{f} ---> {f}", .{ diagnostics.safe(entry.current), diagnostics.safe(entry.available) }) },
     };
     var text: vxfw.RichText = .{ .text = &spans, .softwrap = true };
-    const content = try text.draw(ctx);
-    const height = @min(content.size.height +| 1, ctx.max.height orelse std.math.maxInt(u16));
-    const padded = try vxfw.Surface.init(ctx.arena, content.widget, .{ .width = content.size.width, .height = height });
-    @memset(padded.buffer, .{});
-    @memcpy(padded.buffer[0..content.buffer.len], content.buffer);
-    return padded;
+    return text.draw(ctx);
 }
 
 fn version(value: []const u8) []const u8 {
@@ -278,10 +291,13 @@ test "update rows keep compact source and package columns with inline upgrades" 
         try std.testing.expectEqualStrings("U", heading.buffer[upgrade_col].char.grapheme);
         for (0..3) |index| {
             const surface = try row(&data, index).?.draw(ctx);
-            try std.testing.expectEqual(@as(u16, 2), surface.size.height);
+            const gap: u16 = if (index == 0) 0 else 1;
+            try std.testing.expectEqual(@as(u16, 1) + gap, surface.size.height);
             try std.testing.expectEqual(width, surface.size.width);
-            try std.testing.expectEqualStrings("1", surface.buffer[upgrade_col].char.grapheme);
-            try std.testing.expect(surface.buffer[15].style.bold);
+            const offset = @as(usize, gap) * width;
+            try std.testing.expectEqualStrings("1", surface.buffer[offset + upgrade_col].char.grapheme);
+            try std.testing.expect(surface.buffer[offset + 15].style.bold);
+            if (gap > 0) for (surface.buffer[0..width]) |cell| try std.testing.expectEqualStrings(" ", cell.char.grapheme);
             try std.testing.expect(std.mem.indexOf(u8, try surfaceText(arena.allocator(), surface), "1.0 ---> 2.0") != null);
         }
         const flatpak_text = try surfaceText(arena.allocator(), try row(&data, 2).?.draw(ctx));
