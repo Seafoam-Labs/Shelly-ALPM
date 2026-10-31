@@ -375,8 +375,10 @@ pub fn entries(arena: std.mem.Allocator, context: Context) std.mem.Allocator.Err
             if (context.upgrade_aur) try add(arena, &list, .upgrade_aur, "AUR", "Upgrade AUR packages with PKGBUILD review");
             if (context.upgrade_flatpak) try add(arena, &list, .upgrade_flatpak, "Flatpak", "Upgrade system and user Flatpaks");
             try add(arena, &list, .refresh, "Refresh", "Check for updates again");
-            try add(arena, &list, .previous, "Previous", "Previous update");
-            try add(arena, &list, .next, "Next", "Next update");
+            try add(arena, &list, .previous, "Up", "Scroll updates up");
+            try add(arena, &list, .next, "Down", "Scroll updates down");
+            try add(arena, &list, .page_up, "Page up", "Scroll updates up half a page");
+            try add(arena, &list, .page_down, "Page down", "Scroll updates down half a page");
         },
         .settings => {
             try add(arena, &list, .previous, "Previous", "Previous preference");

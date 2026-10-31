@@ -30,7 +30,7 @@ pub const State = struct {
     refresh_updates_after_operation: bool = false,
     updates_checked: bool = false,
     updates_failed: bool = false,
-    updates_list: vxfw.ListView,
+    updates_list: vxfw.ScrollView,
 };
 
 pub const UpdatesJob = struct {
@@ -108,7 +108,8 @@ pub fn pollUpdates(self: *Model) void {
         if (self.updates_state.updates_parsed) |*old| old.deinit();
         self.updates_state.updates_parsed = parsed;
         self.updates_state.updates_list.item_count = @intCast(parsed.value.count());
-        self.updates_state.updates_list.jumpToItem(0);
+        self.updates_state.updates_list.scroll = .{};
+        self.updates_state.updates_list.cursor = 0;
     }
 }
 
@@ -120,8 +121,27 @@ pub fn updatesView(self: *Model) updates_view.View {
         .failed = self.updates_state.updates_failed,
         .checked = self.updates_state.updates_checked,
         .aur_enabled = self.settings_state.settings.aur_enabled,
+        .flatpak_enabled = self.settings_state.settings.flatpak_enabled,
         .flatpak_available = self.settings_state.settings.flatpak_enabled and self.flatpak_state.flatpak_available,
     };
+}
+
+/// This page scrolls a document; navigation never selects upgrade targets.
+pub fn handleScrollEvent(self: *Model, ctx: *vxfw.EventContext, event: vxfw.Event) anyerror!void {
+    const scroll = &self.updates_state.updates_list;
+    if (event == .key_press) {
+        const key = event.key_press;
+        if (commands.matches(key, .page_up) or commands.matches(key, .page_down)) {
+            const lines = @max(scroll.last_height / 2, 1);
+            const changed = if (commands.matches(key, .page_up)) scroll.scroll.linesUp(lines) else scroll.scroll.linesDown(lines);
+            if (changed) ctx.consumeAndRedraw();
+            return;
+        }
+        if (commands.matches(key, .previous) or commands.matches(key, .next)) {
+            return scroll.handleEvent(ctx, .{ .key_press = .{ .codepoint = if (commands.matches(key, .previous)) vaxis.Key.up else vaxis.Key.down } });
+        }
+    }
+    return scroll.handleEvent(ctx, event);
 }
 
 pub fn buildUpdateRow(ptr: *const anyopaque, index: usize, _: usize) ?vxfw.Widget {
@@ -311,4 +331,58 @@ test "combined operation completion refreshes every included source after partia
         try std.testing.expect(model.updates_state.refresh_updates_after_operation);
         try std.testing.expectEqual(include_flatpak, model.flatpak_state.refresh_flatpak_after_operation);
     }
+}
+
+test "updates scroll without selecting packages and reset after refresh" {
+    vxfw.DrawContext.init(.unicode);
+    const allocator = std.testing.allocator;
+    const model = try Model.init(allocator);
+    defer model.deinit();
+    var packages: [30]@import("sync.zig").CheckUpdatesPackage = undefined;
+    for (&packages, 0..) |*pkg, index| pkg.* = .{
+        .Name = if (index == 0) "first-package" else "other-package",
+        .CurrentVersion = "1.0",
+        .NewVersion = "2.0",
+    };
+    const data: CheckUpdates = .{ .Packages = &packages };
+    const json = try std.json.Stringify.valueAlloc(allocator, data, .{});
+    defer allocator.free(json);
+    model.updates_state.updates_parsed = try std.json.parseFromSlice(CheckUpdates, allocator, json, .{ .allocate = .alloc_always });
+    model.updates_state.updates_list.item_count = packages.len;
+    var arena = std.heap.ArenaAllocator.init(allocator);
+    defer arena.deinit();
+    const draw_ctx: vxfw.DrawContext = .{ .arena = arena.allocator(), .min = .{}, .max = .{ .width = 80, .height = 8 }, .cell_size = .{ .width = 10, .height = 20 } };
+    var ctx: vxfw.EventContext = .{ .io = std.testing.io, .alloc = allocator, .cmds = .empty };
+    defer ctx.cmds.deinit(allocator);
+    const scroll = &model.updates_state.updates_list;
+    try std.testing.expect(!scroll.draw_cursor);
+    _ = try scroll.draw(draw_ctx);
+    for (0..12) |_| {
+        try scroll.handleEvent(&ctx, .{ .key_press = .{ .codepoint = vaxis.Key.down } });
+        _ = try scroll.draw(draw_ctx);
+    }
+    try std.testing.expect(scroll.scroll.top > 0);
+    try std.testing.expectEqual(@as(u32, 0), scroll.cursor);
+    const previous_top = scroll.scroll.top;
+    try handleScrollEvent(model, &ctx, .{ .key_press = commands.bindings.page_down });
+    _ = try scroll.draw(draw_ctx);
+    try std.testing.expect(scroll.scroll.top > previous_top);
+    try scroll.handleEvent(&ctx, .{ .key_press = .{ .codepoint = vaxis.Key.enter } });
+    try std.testing.expectEqual(@as(u32, 0), scroll.cursor);
+    try std.testing.expect(model.overlay == null);
+
+    const job = try allocator.create(UpdatesJob);
+    job.* = .{ .result = try std.json.parseFromSlice(CheckUpdates, allocator, "{}", .{}) };
+    const Worker = struct {
+        fn complete(value: *UpdatesJob) void {
+            value.done.store(true, .release);
+        }
+    };
+    model.updates_state.updates_job = job;
+    model.updates_state.updates_thread = try std.Thread.spawn(.{}, Worker.complete, .{job});
+    job.done.store(true, .release);
+    pollUpdates(model);
+    try std.testing.expectEqual(@as(u32, 0), scroll.scroll.top);
+    try std.testing.expectEqual(@as(i17, 0), scroll.scroll.vertical_offset);
+    try std.testing.expectEqual(@as(?u32, 0), scroll.item_count);
 }

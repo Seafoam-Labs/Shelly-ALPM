@@ -30,7 +30,7 @@ pub fn draw(ctx: vxfw.DrawContext, context: commands.Context, status: ?[]const u
         else
             try commands.label(ctx.arena, entry.id);
         const short = if (entry.id == .previous) switch (context.mode) {
-            .search, .packages, .aur, .flatpak, .updates => "Browse",
+            .search, .packages, .aur, .flatpak => "Browse",
             .settings, .choice, .answers => "Select",
             else => "Scroll",
         } else entry.short;

@@ -81,7 +81,8 @@ pub fn applySettings(self: *Model, saved: Settings) void {
         if (!saved.aur_enabled) parsed.value.Aur = &.{};
         if (!saved.flatpak_enabled) parsed.value.Flatpak = &.{};
         self.updates_state.updates_list.item_count = @intCast(parsed.value.count());
-        self.updates_state.updates_list.jumpToItem(0);
+        self.updates_state.updates_list.scroll = .{};
+        self.updates_state.updates_list.cursor = 0;
     }
     if (!self.tabEnabled(self.active)) {
         operation_model.closeOverlay(self);

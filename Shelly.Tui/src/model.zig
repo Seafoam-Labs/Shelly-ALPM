@@ -368,7 +368,7 @@ pub const Model = struct {
                     switch (self.active) {
                         .aur => try self.aur_state.aur_list.handleEvent(ctx, canonical),
                         .flatpak => try self.flatpak_state.flatpak_list.handleEvent(ctx, canonical),
-                        .upgrade => try self.updates_state.updates_list.handleEvent(ctx, canonical),
+                        .upgrade => try updates_model.handleScrollEvent(self, ctx, canonical),
                         else => unreachable,
                     }
                     return ctx.consumeAndRedraw();
@@ -591,7 +591,7 @@ pub const Model = struct {
                         if (previous != self.packages_state.list_view.cursor) self.packages_state.package_details_scroll.scroll = .{};
                     },
                     .aur => self.aur_state.aur_list.handleEvent(ctx, event),
-                    .upgrade => self.updates_state.updates_list.handleEvent(ctx, event),
+                    .upgrade => updates_model.handleScrollEvent(self, ctx, event),
                     .flatpak => self.flatpak_state.flatpak_list.handleEvent(ctx, event),
                     .settings => {},
                 };
@@ -608,7 +608,7 @@ pub const Model = struct {
                     }
                 }
                 if (self.active == .upgrade and self.overlay == null)
-                    return self.updates_state.updates_list.handleEvent(ctx, event);
+                    return updates_model.handleScrollEvent(self, ctx, event);
             },
             else => {},
         }
