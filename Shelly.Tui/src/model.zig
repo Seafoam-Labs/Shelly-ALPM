@@ -7,6 +7,8 @@ const commands = @import("commands.zig");
 const help_view = @import("views/help_view.zig");
 const footer_view = @import("views/footer_view.zig");
 const packages_view = @import("views/packages_view.zig");
+const flatpak_images = @import("services/flatpak_images.zig");
+const image_view = @import("views/image_view.zig");
 const flatpak_view = @import("views/flatpak_view.zig");
 const aur_view = @import("views/aur_view.zig");
 const updates_view = @import("views/updates_view.zig");
@@ -194,6 +196,21 @@ pub const Model = struct {
     flatpak_details_scroll: vxfw.ScrollView,
     flatpak_details_cursor: ?u32 = null,
     flatpak_list_active: bool = false,
+    screenshots_supported: bool = false,
+    screenshot_open: bool = false,
+    screenshot_app_id: []const u8 = "",
+    screenshot_previous: vxfw.Button,
+    screenshot_next: vxfw.Button,
+    screenshot_generation: u64 = 0,
+    screenshot_image_generation: u64 = 0,
+    screenshot_request_after: ?std.Io.Timestamp = null,
+    screenshot_tick_pending: bool = false,
+    screenshot_items: []flatpak_images.Item = &.{},
+    screenshot_index: usize = 0,
+    screenshot_image: ?vaxis.Image = null,
+    screenshot_failure: ?anyerror = null,
+    screenshot_job: ?*flatpak_images.Job = null,
+    screenshot_thread: ?std.Thread = null,
     flatpak_category: []const u8 = "",
     flatpak_categories: std.ArrayList(flatpak_view.CategoryOption) = .empty,
     flatpak_category_open: bool = false,
@@ -296,6 +313,8 @@ pub const Model = struct {
                 .buildFn = buildPackageDetails,
             } } },
             .flatpak_details_scroll = .{ .item_count = 1, .children = .{ .builder = .{ .userdata = model, .buildFn = buildFlatpakDetails } } },
+            .screenshot_previous = .{ .label = " < ", .userdata = model, .onClick = onPreviousScreenshot, .style = screenshotButtonStyle },
+            .screenshot_next = .{ .label = " > ", .userdata = model, .onClick = onNextScreenshot, .style = screenshotButtonStyle },
             .flatpak_category_button = .{ .label = "All categories ▾", .userdata = model, .onClick = onFlatpakCategoryClick, .style = .{
                 .default = .{ .fg = .{ .index = 250 } },
                 .hover = .{ .fg = .{ .index = 7 }, .bold = true },
@@ -351,6 +370,9 @@ pub const Model = struct {
     }
 
     pub fn deinit(self: *Model) void {
+        self.closeScreenshots();
+        if (self.screenshot_thread) |thread| thread.join();
+        if (self.screenshot_job) |job| job.deinit(self.gpa);
         const gpa = self.gpa;
         if (self.settings_store) |store| store.deinit();
         if (self.flatpak_probe_thread) |thread| thread.join();
@@ -438,6 +460,7 @@ pub const Model = struct {
         const had_aur_pane = self.aurPaneFocused() or self.flatpak_category_open;
         try self.captureEvent(ctx, event);
         if (ctx.quit) return;
+        try self.syncScreenshots(ctx);
         if (self.help_open or self.operationPrompt() != null or self.aurPaneFocused() or self.flatpak_category_open) {
             // The root remains present when a small terminal temporarily
             // replaces browsing with the operation panel.
@@ -487,6 +510,16 @@ pub const Model = struct {
                 if (self.overlay) |overlay| {
                     switch (overlay) {
                         .flatpak => |row| {
+                            if (self.screenshot_open) {
+                                if (commands.matches(key, .previous_screenshot) or commands.matches(key, .next_screenshot)) {
+                                    if (try self.moveScreenshot(ctx, commands.matches(key, .next_screenshot))) return ctx.consumeAndRedraw();
+                                    return ctx.consumeEvent();
+                                }
+                                if (commands.matches(key, .refresh_list) and self.screenshot_failure != null and self.screenshot_job == null) {
+                                    try self.queueScreenshot(ctx);
+                                    return ctx.consumeAndRedraw();
+                                }
+                            }
                             if (commands.matches(key, .back) or commands.matches(key, .search)) {
                                 self.closeOverlay();
                                 self.flatpak_list_active = !commands.matches(key, .search);
@@ -820,6 +853,7 @@ pub const Model = struct {
         const self: *Model = @ptrCast(@alignCast(ptr));
         switch (event) {
             .init => {
+                self.screenshots_supported = runtime.supportsImages();
                 try self.startLoad(ctx);
                 if (self.settings.flatpak_enabled) try self.startFlatpakProbe(ctx);
                 ctx.redraw = true;
@@ -837,6 +871,7 @@ pub const Model = struct {
                 try self.ensureUpdates(ctx);
                 try self.pollFlatpak();
                 try self.pollPkgbuild(ctx);
+                try self.syncScreenshots(ctx);
                 if (self.refresh_after_upgrade and !self.loading) {
                     try self.reloadPackages(ctx);
                     self.refresh_after_upgrade = false;
@@ -942,6 +977,7 @@ pub const Model = struct {
             self.aur_list.jumpToItem(0);
         }
         if (self.settings.flatpak_enabled != saved.flatpak_enabled) {
+            self.closeScreenshots();
             if (self.overlay) |overlay| {
                 if (overlay == .flatpak or overlay == .flatpak_install) self.closeOverlay();
             }
@@ -1077,6 +1113,7 @@ pub const Model = struct {
     fn setTab(self: *Model, tab: Tab, ctx: *vxfw.EventContext) !void {
         if (!self.tabEnabled(tab)) return;
         if (tab == self.active) return;
+        self.closeScreenshots();
         self.flatpak_category_open = false;
         self.active = tab;
         try self.focusActiveTab(ctx);
@@ -1153,10 +1190,192 @@ pub const Model = struct {
         if (self.overlay) |overlay| {
             if (overlay == .flatpak or overlay == .flatpak_install) self.overlay = null;
         }
+        self.closeScreenshots();
         self.flatpak_category_open = false;
         self.flatpak_failure = job.failure;
         if (job.installed_only) self.flatpak_installed = job.installed else self.flatpak_catalog = job.catalog;
         try self.rebuildFlatpakFilter();
+    }
+
+    fn selectedScreenshotApp(self: *const Model) ?*const flatpak.AppstreamApp {
+        if (self.flatpak_job != null or self.flatpak_list.cursor >= self.flatpak_rows.items.len) return null;
+        const row = self.flatpak_rows.items[self.flatpak_list.cursor];
+        if (row != .catalog) return null;
+        for (row.catalog.Screenshots) |shot| if (flatpak_images.variant(shot) != null) return row.catalog;
+        return null;
+    }
+    fn clearScreenshotImage(self: *Model) void {
+        if (self.screenshot_image) |img| if (runtime.terminal) |app| app.vx.freeImage(app.tty.writer(), img.imageId());
+        self.screenshot_image = null;
+    }
+    fn closeScreenshots(self: *Model) void {
+        self.resetScreenshots(true);
+    }
+    fn resetScreenshots(self: *Model, cancel_download: bool) void {
+        self.screenshot_open = false;
+        self.screenshot_generation +%= 1;
+        self.screenshot_request_after = null;
+        if (cancel_download) if (self.screenshot_job) |job| job.canceled.store(true, .release);
+        self.clearScreenshotImage();
+        if (self.screenshot_items.len > 0) flatpak_images.freeItems(self.gpa, self.screenshot_items);
+        self.screenshot_items = &.{};
+        if (self.screenshot_app_id.len > 0) self.gpa.free(self.screenshot_app_id);
+        self.screenshot_app_id = "";
+        self.screenshot_failure = null;
+    }
+    fn openScreenshots(self: *Model, ctx: *vxfw.EventContext) !void {
+        if (!self.screenshots_supported) return;
+        const app = self.selectedScreenshotApp() orelse return;
+        const items = try flatpak_images.collect(self.gpa, app);
+        const app_id = self.gpa.dupe(u8, app.Id) catch |err| {
+            flatpak_images.freeItems(self.gpa, items);
+            return err;
+        };
+        self.resetScreenshots(false);
+        self.screenshot_app_id = app_id;
+        self.screenshot_items = items;
+        self.screenshot_index = 0;
+        self.screenshot_open = items.len > 0;
+        try self.queueScreenshot(ctx);
+    }
+    fn syncScreenshots(self: *Model, ctx: *vxfw.EventContext) !void {
+        const app = if (self.active == .flatpak and self.screenshots_supported) self.selectedScreenshotApp() else null;
+        if (app) |selected| {
+            if (self.screenshot_open and std.mem.eql(u8, selected.Id, self.screenshot_app_id)) return;
+            try self.openScreenshots(ctx);
+        } else if (self.screenshot_open) self.resetScreenshots(false);
+    }
+    const screenshotButtonStyle: @TypeOf(@as(vxfw.Button, undefined).style) = .{
+        .default = .{ .fg = .{ .index = 250 } },
+        .hover = .{ .fg = .{ .index = 7 }, .bold = true },
+        .focus = .{ .fg = .{ .index = 7 }, .bold = true },
+        .mouse_down = .{ .reverse = true },
+    };
+    fn onPreviousScreenshot(ptr: ?*anyopaque, ctx: *vxfw.EventContext) anyerror!void {
+        const self: *Model = @ptrCast(@alignCast(ptr.?));
+        try self.moveScreenshotFromMouse(ctx, false);
+    }
+    fn onNextScreenshot(ptr: ?*anyopaque, ctx: *vxfw.EventContext) anyerror!void {
+        const self: *Model = @ptrCast(@alignCast(ptr.?));
+        try self.moveScreenshotFromMouse(ctx, true);
+    }
+    fn moveScreenshotFromMouse(self: *Model, ctx: *vxfw.EventContext, forward: bool) !void {
+        if (self.help_open or self.active != .flatpak or (self.overlay != null and self.overlay.? != .flatpak)) return;
+        if (self.flatpak_list.cursor >= self.flatpak_rows.items.len) return;
+        self.overlay = .{ .flatpak = self.flatpak_rows.items[self.flatpak_list.cursor] };
+        _ = try self.moveScreenshot(ctx, forward);
+        try ctx.requestFocus(self.widget());
+        return ctx.consumeAndRedraw();
+    }
+    fn moveScreenshot(self: *Model, ctx: *vxfw.EventContext, forward: bool) !bool {
+        if (!self.screenshot_open or !self.screenshots_supported or self.screenshot_items.len < 2) return false;
+        self.screenshot_index = if (forward) (self.screenshot_index + 1) % self.screenshot_items.len else (if (self.screenshot_index == 0) self.screenshot_items.len - 1 else self.screenshot_index - 1);
+        try self.queueScreenshot(ctx);
+        return true;
+    }
+    fn queueScreenshot(self: *Model, ctx: *vxfw.EventContext) !void {
+        if (!self.screenshot_open or !self.screenshots_supported) return;
+        // Trailing debounce: load only after the selection has stayed stable.
+        // Let the sole in-flight download finish; generation checks discard it
+        // if it belongs to an older selection. Never start another beside it.
+        self.screenshot_generation +%= 1;
+        self.screenshot_failure = null;
+        self.screenshot_request_after = std.Io.Timestamp.now(ctx.io, .awake).addDuration(.fromMilliseconds(300));
+        try self.scheduleScreenshotTick(ctx);
+    }
+    fn screenshotTickWidget(self: *Model) vxfw.Widget {
+        return .{ .userdata = self, .eventHandler = onScreenshotTick, .drawFn = drawScreenshotTick };
+    }
+    fn drawScreenshotTick(ptr: *anyopaque, _: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
+        const self: *Model = @ptrCast(@alignCast(ptr));
+        return .{ .size = .{ .width = 0, .height = 0 }, .widget = self.screenshotTickWidget(), .buffer = &.{}, .children = &.{} };
+    }
+    fn scheduleScreenshotTick(self: *Model, ctx: *vxfw.EventContext) !void {
+        if (self.screenshot_tick_pending) return;
+        try ctx.tick(50, self.screenshotTickWidget());
+        self.screenshot_tick_pending = true;
+    }
+    fn onScreenshotTick(ptr: *anyopaque, ctx: *vxfw.EventContext, event: vxfw.Event) anyerror!void {
+        if (event != .tick) return;
+        const self: *Model = @ptrCast(@alignCast(ptr));
+        self.screenshot_tick_pending = false;
+        self.pollScreenshot(ctx) catch |err| {
+            self.screenshot_failure = err;
+            self.screenshot_request_after = null;
+        };
+        if (self.screenshot_job != null or self.screenshot_request_after != null) try self.scheduleScreenshotTick(ctx);
+        ctx.redraw = true;
+    }
+    fn startScreenshot(self: *Model, ctx: *vxfw.EventContext) !void {
+        if (!self.screenshot_open or !self.screenshots_supported) return;
+        if (self.screenshot_job != null) return;
+        _ = ctx;
+        self.screenshot_request_after = null;
+        self.screenshot_failure = null;
+        const job = try self.gpa.create(flatpak_images.Job);
+        errdefer self.gpa.destroy(job);
+        job.* = .{ .generation = self.screenshot_generation, .url = try self.gpa.dupe(u8, self.screenshot_items[self.screenshot_index].url) };
+        errdefer self.gpa.free(job.url);
+        self.screenshot_thread = try std.Thread.spawn(.{}, flatpak_images.Job.run, .{job});
+        self.screenshot_job = job;
+    }
+    fn pollScreenshot(self: *Model, ctx: *vxfw.EventContext) !void {
+        if (self.screenshot_job) |job| {
+            if (!job.done.load(.acquire)) return;
+            self.screenshot_thread.?.join();
+            self.screenshot_thread = null;
+            self.screenshot_job = null;
+            defer job.deinit(self.gpa);
+            const current = self.screenshot_open and !job.canceled.load(.acquire) and job.generation == self.screenshot_generation and std.mem.eql(u8, job.url, self.screenshot_items[self.screenshot_index].url);
+            if (current) {
+                self.screenshot_failure = job.failure;
+                if (job.bytes) |bytes| {
+                    if (runtime.terminal) |app| {
+                        const image = self.uploadScreenshot(app, bytes) catch |err| {
+                            self.screenshot_failure = err;
+                            return;
+                        };
+                        // Complete the new upload before retiring the old image.
+                        // Navigation keys never write graphics commands to the tty.
+                        self.clearScreenshotImage();
+                        self.screenshot_image = image;
+                        self.screenshot_image_generation = job.generation;
+                    } else self.screenshot_failure = error.NoGraphicsCapability;
+                }
+            }
+        }
+        if (self.screenshot_request_after) |deadline| {
+            if (self.screenshot_open and std.Io.Timestamp.now(ctx.io, .awake).nanoseconds >= deadline.nanoseconds)
+                try self.startScreenshot(ctx);
+        }
+    }
+    fn uploadScreenshot(self: *Model, app: *vxfw.App, bytes: []const u8) !vaxis.Image {
+        var decoded: ?vaxis.zigimg.Image = null;
+        defer if (decoded) |*image| image.deinit(self.gpa);
+        var converted: ?[]u8 = null;
+        defer if (converted) |buffer| self.gpa.free(buffer);
+        var png = bytes;
+        if (bytes.len < 8 or !std.mem.eql(u8, bytes[0..8], "\x89PNG\r\n\x1a\n")) {
+            decoded = try vaxis.zigimg.Image.fromMemory(self.gpa, bytes);
+            // Leave room for PNG headers, filters and compression overhead,
+            // including images too small for Vaxis's pixel-sized buffer.
+            const pixel_bytes = decoded.?.imageByteSize();
+            converted = try self.gpa.alloc(u8, pixel_bytes + pixel_bytes / 8 + 65536);
+            png = try decoded.?.writeToMemory(self.gpa, converted.?, .{ .png = .{} });
+        }
+        const size = try flatpak_images.dimensions(png);
+        const encoder = std.base64.standard.Encoder;
+        const encoded = try self.gpa.alloc(u8, encoder.calcSize(png.len));
+        defer self.gpa.free(encoded);
+        const id = app.vx.next_img_id;
+        app.vx.next_img_id += 1;
+        try image_view.transmitPng(app.tty.writer(), encoder.encode(encoded, png), id, size.width, size.height);
+        return vaxis.Image.init(id, size.width, size.height);
+    }
+
+    fn screenshotView(self: *Model) ?image_view.View {
+        if (!self.screenshot_open or !self.screenshots_supported or self.screenshot_items.len == 0) return null;
+        return .{ .previous = &self.screenshot_previous, .next = &self.screenshot_next, .index = self.screenshot_index, .count = self.screenshot_items.len, .caption = self.screenshot_items[self.screenshot_index].caption, .image = if (self.screenshot_image_generation == self.screenshot_generation) self.screenshot_image else null, .failure = self.screenshot_failure };
     }
 
     fn onFlatpakCategoryClick(ptr: ?*anyopaque, ctx: *vxfw.EventContext) anyerror!void {
@@ -1175,9 +1394,11 @@ pub const Model = struct {
     fn onFlatpakCategorySelected(ptr: *anyopaque, ctx: *vxfw.EventContext, name: []const u8) anyerror!void {
         const self: *Model = @ptrCast(@alignCast(ptr));
         try self.chooseFlatpakCategory(name);
+        try self.syncScreenshots(ctx);
         try self.focusActiveTab(ctx);
     }
     fn chooseFlatpakCategory(self: *Model, name: []const u8) !void {
+        self.closeScreenshots();
         const owned = if (name.len > 0) try self.gpa.dupe(u8, name) else "";
         if (self.flatpak_category.len > 0) self.gpa.free(self.flatpak_category);
         self.flatpak_category = owned;
@@ -1227,9 +1448,10 @@ pub const Model = struct {
         return false;
     }
 
-    fn onFlatpakQueryChange(ptr: ?*anyopaque, _: *vxfw.EventContext, _: []const u8) anyerror!void {
+    fn onFlatpakQueryChange(ptr: ?*anyopaque, ctx: *vxfw.EventContext, _: []const u8) anyerror!void {
         const self: *Model = @ptrCast(@alignCast(ptr orelse return));
         try self.rebuildFlatpakFilter();
+        try self.syncScreenshots(ctx);
     }
 
     fn rebuildFlatpakFilter(self: *Model) Allocator.Error!void {
@@ -1280,7 +1502,7 @@ pub const Model = struct {
             self.flatpak_details_scroll.scroll = .{};
             self.flatpak_details_cursor = self.flatpak_list.cursor;
         }
-        return .{ .category = self.flatpak_category, .category_button = if (!self.flatpak_installed_only) &self.flatpak_category_button else null, .category_list = &self.flatpak_category_list, .category_open = self.flatpak_category_open, .details_scroll = &self.flatpak_details_scroll, .selected = if (self.flatpak_job == null and self.flatpak_list.cursor < self.flatpak_rows.items.len) self.flatpak_rows.items[self.flatpak_list.cursor] else null, .list_active = self.flatpak_list_active, .details_active = self.overlay != null and self.overlay.? == .flatpak, .help = if (self.help_open) &self.help_panel else null, .field = &self.flatpak_field, .list = &self.flatpak_list, .installed_only = self.flatpak_installed_only, .loading = self.flatpak_job != null, .checking_backend = self.flatpak_probe_job != null, .backend_failure = self.flatpak_probe_error, .failure = self.flatpak_failure, .checked = if (self.flatpak_installed_only) self.flatpak_installed != null else self.flatpak_catalog != null, .count = self.flatpak_rows.items.len };
+        return .{ .images = self.screenshotView(), .category = self.flatpak_category, .category_button = if (!self.flatpak_installed_only) &self.flatpak_category_button else null, .category_list = &self.flatpak_category_list, .category_open = self.flatpak_category_open, .details_scroll = &self.flatpak_details_scroll, .selected = if (self.flatpak_job == null and self.flatpak_list.cursor < self.flatpak_rows.items.len) self.flatpak_rows.items[self.flatpak_list.cursor] else null, .list_active = self.flatpak_list_active, .details_active = self.overlay != null and self.overlay.? == .flatpak, .help = if (self.help_open) &self.help_panel else null, .field = &self.flatpak_field, .list = &self.flatpak_list, .installed_only = self.flatpak_installed_only, .loading = self.flatpak_job != null, .checking_backend = self.flatpak_probe_job != null, .backend_failure = self.flatpak_probe_error, .failure = self.flatpak_failure, .checked = if (self.flatpak_installed_only) self.flatpak_installed != null else self.flatpak_catalog != null, .count = self.flatpak_rows.items.len };
     }
 
     // -- background jobs ---------------------------------------------------
@@ -2502,6 +2724,8 @@ pub const Model = struct {
             },
             .flatpak => |row| {
                 context.mode = .details;
+                context.screenshots_navigable = self.screenshots_supported and self.screenshot_open and self.screenshot_items.len > 1;
+                context.screenshot_retry = self.screenshots_supported and self.screenshot_open and self.screenshot_failure != null;
                 context.installable = row == .catalog and row.catalog.Remotes.len > 0;
                 context.removable = row == .installed;
                 context.split_details = true;
@@ -2840,7 +3064,7 @@ test "tab switching requests focus on a widget in the active page" {
     model.flatpak_available = false;
     model.settings = .{};
     var ctx: vxfw.EventContext = .{
-        .io = undefined,
+        .io = std.testing.io,
         .alloc = std.testing.allocator,
         .cmds = .empty,
     };
@@ -2973,7 +3197,7 @@ test "shared commands quit from every tab and modal" {
         model.deinit();
     }
     var ctx: vxfw.EventContext = .{
-        .io = undefined,
+        .io = std.testing.io,
         .alloc = std.testing.allocator,
         .cmds = .empty,
     };
@@ -3078,7 +3302,7 @@ test "PKGBUILD preview renders scrolls and returns to AUR details" {
         state_view.loading = false;
         state_view.failure = error.CommandFailed;
         try std.testing.expectEqual(first.surface.size, (try state_view.draw(ctx)).?.surface.size);
-        var events: vxfw.EventContext = .{ .io = undefined, .alloc = std.testing.allocator, .cmds = .empty };
+        var events: vxfw.EventContext = .{ .io = std.testing.io, .alloc = std.testing.allocator, .cmds = .empty };
         defer events.cmds.deinit(std.testing.allocator);
         for (0..6) |_| {
             try Model.typeErasedCaptureHandler(model, &events, .{ .key_press = .{ .codepoint = vaxis.Key.down } });
@@ -3112,7 +3336,7 @@ test "PKGBUILD preview discards stale results and joins unpolled jobs" {
     model.pkgbuild_job = job;
     model.pkgbuild_thread = try std.Thread.spawn(.{}, Worker.finish, .{job});
     job.done.store(true, .release);
-    var ctx: vxfw.EventContext = .{ .io = undefined, .alloc = std.testing.allocator, .cmds = .empty };
+    var ctx: vxfw.EventContext = .{ .io = std.testing.io, .alloc = std.testing.allocator, .cmds = .empty };
     defer ctx.cmds.deinit(std.testing.allocator);
     try model.pollPkgbuild(&ctx);
     try std.testing.expect(model.pkgbuild_document == null);
@@ -3233,7 +3457,7 @@ test "installed AUR list filters locally and opens the displayed package" {
     try model.rebuildAurFilter();
     try std.testing.expectEqual(@as(usize, 1), model.aur_filtered.items.len);
     try std.testing.expectEqualStrings("editor-git", model.aur_filtered.items[0].Name);
-    var ctx: vxfw.EventContext = .{ .io = undefined, .alloc = std.testing.allocator, .cmds = .empty };
+    var ctx: vxfw.EventContext = .{ .io = std.testing.io, .alloc = std.testing.allocator, .cmds = .empty };
     defer ctx.cmds.deinit(std.testing.allocator);
     try Model.onAurSubmit(model, &ctx, "EDITOR");
     try std.testing.expectEqualStrings("editor-git", model.overlay.?.aur.Name);
@@ -3247,7 +3471,7 @@ test "settings determine source visibility before backend or native loading fini
     const model = try Model.init(std.testing.allocator);
     defer model.deinit();
     try std.testing.expectEqualSlices(Tab, &.{ .packages, .upgrade, .settings }, model.visibleTabs());
-    var events: vxfw.EventContext = .{ .io = undefined, .alloc = std.testing.allocator, .cmds = .empty };
+    var events: vxfw.EventContext = .{ .io = std.testing.io, .alloc = std.testing.allocator, .cmds = .empty };
     defer events.cmds.deinit(std.testing.allocator);
     try model.setTab(.aur, &events);
     try std.testing.expectEqual(Tab.packages, model.active);
@@ -3268,7 +3492,7 @@ test "Flatpak probe publishes independently and failure does not hide an enabled
     const model = try Model.init(allocator);
     defer model.deinit();
     model.settings.flatpak_enabled = true;
-    var events: vxfw.EventContext = .{ .io = undefined, .alloc = allocator, .cmds = .empty };
+    var events: vxfw.EventContext = .{ .io = std.testing.io, .alloc = allocator, .cmds = .empty };
     defer events.cmds.deinit(allocator);
     const ready = try allocator.create(FlatpakProbeJob);
     ready.* = .{ .done = .init(true) };
@@ -3359,7 +3583,7 @@ test "Flatpak catalog details retain remote scopes and Enter opens the selected 
         \\[{"Id":"org.example.App","Name":"Example","Summary":"An editor","Remotes":[{"Name":"flathub","Scope":0},{"Name":"flathub","Scope":1}]}]
     , .{ .allocate = .alloc_always });
     try model.rebuildFlatpakFilter();
-    var events: vxfw.EventContext = .{ .io = undefined, .alloc = allocator, .cmds = .empty };
+    var events: vxfw.EventContext = .{ .io = std.testing.io, .alloc = allocator, .cmds = .empty };
     defer events.cmds.deinit(allocator);
     try Model.typeErasedEventHandler(model, &events, .{ .key_press = .{ .codepoint = vaxis.Key.enter } });
     try std.testing.expectEqualStrings("org.example.App", model.overlay.?.flatpak.title());
@@ -3386,7 +3610,7 @@ test "Flatpak install chooses remote scope and owns confirmation target" {
         .Remotes = &.{ .{ .Name = "system-remote", .Scope = .system }, .{ .Name = "user-remote", .Scope = .user } },
     };
     model.overlay = .{ .flatpak = .{ .catalog = &app } };
-    var events: vxfw.EventContext = .{ .io = undefined, .alloc = allocator, .cmds = .empty };
+    var events: vxfw.EventContext = .{ .io = std.testing.io, .alloc = allocator, .cmds = .empty };
     defer events.cmds.deinit(allocator);
     try Model.typeErasedCaptureHandler(model, &events, .{ .key_press = .{ .codepoint = 'i' } });
     try std.testing.expect(model.overlay.? == .flatpak_install);
@@ -3419,7 +3643,7 @@ test "Flatpak removal copies exact identity and updates require backend availabi
         \\[{"Id":"org.example.App","Remote":"flathub","InstallLevel":1,"Kind":0,"Arch":"x86_64","Branch":"beta","FullRef":"app/org.example.App/x86_64/beta"}]
     , .{ .allocate = .alloc_always });
     model.overlay = .{ .flatpak = .{ .installed = &apps.value[0] } };
-    var events: vxfw.EventContext = .{ .io = undefined, .alloc = allocator, .cmds = .empty };
+    var events: vxfw.EventContext = .{ .io = std.testing.io, .alloc = allocator, .cmds = .empty };
     defer events.cmds.deinit(allocator);
     try Model.typeErasedCaptureHandler(model, &events, .{ .key_press = .{ .codepoint = 'r' } });
     apps.deinit();
@@ -3587,7 +3811,7 @@ test "packages split details follow selection and remain within the page on resi
     model.list_view.cursor = 1;
     try std.testing.expectEqualStrings("second", model.packagesView().selected.?.Name);
 
-    var events: vxfw.EventContext = .{ .io = undefined, .alloc = std.testing.allocator, .cmds = .empty };
+    var events: vxfw.EventContext = .{ .io = std.testing.io, .alloc = std.testing.allocator, .cmds = .empty };
     defer events.cmds.deinit(std.testing.allocator);
     model.package_list_active = true;
     try Model.typeErasedCaptureHandler(model, &events, .{ .key_press = .{ .codepoint = vaxis.Key.right } });
@@ -3643,7 +3867,7 @@ test "packages details scroll and retain the selected install and removal target
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     _ = try model.widget().draw(.{ .arena = arena.allocator(), .min = .{}, .max = .{ .width = 80, .height = 12 }, .cell_size = .{ .width = 10, .height = 20 } });
-    var events: vxfw.EventContext = .{ .io = undefined, .alloc = std.testing.allocator, .cmds = .empty };
+    var events: vxfw.EventContext = .{ .io = std.testing.io, .alloc = std.testing.allocator, .cmds = .empty };
     defer events.cmds.deinit(std.testing.allocator);
     model.package_list_active = true;
     try Model.typeErasedCaptureHandler(model, &events, .{ .key_press = .{ .codepoint = vaxis.Key.right } });
@@ -3662,7 +3886,7 @@ test "package pane arrows preserve search editing and navigate list and details"
     var packages = [_]Package{ .{ .Name = "first" }, .{ .Name = "second" } };
     model.packages = &packages;
     try model.rebuildFilter();
-    var ctx: vxfw.EventContext = .{ .io = undefined, .alloc = std.testing.allocator, .cmds = .empty };
+    var ctx: vxfw.EventContext = .{ .io = std.testing.io, .alloc = std.testing.allocator, .cmds = .empty };
     defer ctx.cmds.deinit(std.testing.allocator);
     const left: vaxis.Key = .{ .codepoint = vaxis.Key.left };
     const right: vaxis.Key = .{ .codepoint = vaxis.Key.right };
@@ -3701,7 +3925,7 @@ test "package list actions open prompts while search letters stay editable" {
     model.packages = &packages;
     try model.rebuildFilter();
     model.loading = false;
-    var ctx: vxfw.EventContext = .{ .io = undefined, .alloc = std.testing.allocator, .cmds = .empty };
+    var ctx: vxfw.EventContext = .{ .io = std.testing.io, .alloc = std.testing.allocator, .cmds = .empty };
     defer ctx.cmds.deinit(std.testing.allocator);
     for ([_]u21{ 'i', 'r' }) |letter| {
         try Model.typeErasedCaptureHandler(model, &ctx, .{ .key_press = .{ .codepoint = letter, .text = if (letter == 'i') "i" else "r" } });
@@ -3769,7 +3993,7 @@ test "centered tab mouse targets exclude borders and padding" {
     const widget = try model.drawTabBar(arena.allocator());
     _ = try widget.draw(.{ .arena = arena.allocator(), .min = .{}, .max = .{ .width = 100, .height = 3 }, .cell_size = .{ .width = 10, .height = 20 } });
     const bar: *TabBar = @ptrCast(@alignCast(widget.userdata));
-    var ctx: vxfw.EventContext = .{ .io = undefined, .alloc = std.testing.allocator, .cmds = .empty };
+    var ctx: vxfw.EventContext = .{ .io = std.testing.io, .alloc = std.testing.allocator, .cmds = .empty };
     defer ctx.cmds.deinit(std.testing.allocator);
     var col = bar.start_col;
     for (bar.rich.text[0 .. bar.rich.text.len - 1]) |span| col += @intCast(span.text.len + 1);
@@ -3791,7 +4015,7 @@ test "native batch selection survives filtering and confirms mixed targets" {
     model.packages = &packages;
     model.loading = false;
     try model.rebuildFilter();
-    var ctx: vxfw.EventContext = .{ .io = undefined, .alloc = std.testing.allocator, .cmds = .empty };
+    var ctx: vxfw.EventContext = .{ .io = std.testing.io, .alloc = std.testing.allocator, .cmds = .empty };
     defer ctx.cmds.deinit(std.testing.allocator);
     const enter: vxfw.Event = .{ .key_press = .{ .codepoint = vaxis.Key.enter } };
     try Model.typeErasedCaptureHandler(model, &ctx, enter);
@@ -3855,7 +4079,7 @@ test "native batch confirmation scrolls long reviews and keeps password entry vi
     });
     try std.testing.expectEqual(@as(u16, 24), drawn.size.height);
     try std.testing.expect(prompt.panel.scroll.scroll.has_more_vertical);
-    var ctx: vxfw.EventContext = .{ .io = undefined, .alloc = std.testing.allocator, .cmds = .empty };
+    var ctx: vxfw.EventContext = .{ .io = std.testing.io, .alloc = std.testing.allocator, .cmds = .empty };
     defer ctx.cmds.deinit(std.testing.allocator);
     try Model.typeErasedCaptureHandler(model, &ctx, .{ .key_press = .{ .codepoint = vaxis.Key.down } });
     try std.testing.expect(prompt.panel.scroll.scroll.pending_lines > 0);
@@ -3935,7 +4159,7 @@ test "operation completion and dismissal restore the browsing shortcut footer" {
     var threaded: std.Io.Threaded = .init(std.testing.allocator, .{});
     defer threaded.deinit();
     runtime.io = threaded.io();
-    defer runtime.io = undefined;
+    defer runtime.io = std.testing.io;
     const model = try Model.init(std.testing.allocator);
     defer model.deinit();
     var packages = [_]Package{.{ .Name = "example" }};
@@ -3965,7 +4189,7 @@ test "operation completion and dismissal restore the browsing shortcut footer" {
     try std.testing.expectEqualStrings("", model.notice);
     try std.testing.expectEqual(commands.Mode.result, model.commandContext().mode);
     try model.setNotice("Stale operation notice");
-    var ctx: vxfw.EventContext = .{ .io = undefined, .alloc = std.testing.allocator, .cmds = .empty };
+    var ctx: vxfw.EventContext = .{ .io = std.testing.io, .alloc = std.testing.allocator, .cmds = .empty };
     defer ctx.cmds.deinit(std.testing.allocator);
     try Model.typeErasedCaptureHandler(model, &ctx, .{ .key_press = .{ .codepoint = 'q' } });
     try std.testing.expect(model.overlay == null);
@@ -3985,7 +4209,7 @@ test "F1 help replaces details and restores selection focus and scroll" {
     model.package_details_cursor = 0;
     model.package_details_scroll.scroll.vertical_offset = -2;
     model.overlay = .{ .package = &packages[0] };
-    var events: vxfw.EventContext = .{ .io = undefined, .alloc = std.testing.allocator, .cmds = .empty };
+    var events: vxfw.EventContext = .{ .io = std.testing.io, .alloc = std.testing.allocator, .cmds = .empty };
     defer events.cmds.deinit(std.testing.allocator);
     try Model.typeErasedCaptureHandler(model, &events, .{ .key_press = .{ .codepoint = vaxis.Key.f1 } });
     try std.testing.expect(model.help_open);
@@ -4027,7 +4251,7 @@ test "help and footer update live bindings without reopening help" {
     model.loading = false;
     model.package_list_active = true;
     try model.rebuildFilter();
-    var events: vxfw.EventContext = .{ .io = undefined, .alloc = std.testing.allocator, .cmds = .empty };
+    var events: vxfw.EventContext = .{ .io = std.testing.io, .alloc = std.testing.allocator, .cmds = .empty };
     defer events.cmds.deinit(std.testing.allocator);
     try Model.typeErasedCaptureHandler(model, &events, .{ .key_press = .{ .codepoint = vaxis.Key.f1 } });
     model.help_panel.context = model.commandContext();
@@ -4068,7 +4292,7 @@ test "help preserves authentication input and follows operation stages" {
     try model.openNativePrompt(.install);
     const prompt = model.overlay.?.sudo;
     try prompt.password.appendSlice(std.testing.allocator, "fixture-secret");
-    var events: vxfw.EventContext = .{ .io = undefined, .alloc = std.testing.allocator, .cmds = .empty };
+    var events: vxfw.EventContext = .{ .io = std.testing.io, .alloc = std.testing.allocator, .cmds = .empty };
     defer events.cmds.deinit(std.testing.allocator);
     try Model.typeErasedCaptureHandler(model, &events, .{ .key_press = .{ .codepoint = vaxis.Key.f1 } });
     try Model.typeErasedCaptureHandler(model, &events, .{ .key_press = .{ .codepoint = 'x', .text = "x" } });
@@ -4102,7 +4326,7 @@ test "clear selection includes filtered packages and preserves search and cursor
     try model.rebuildFilter();
     try model.selected_packages.appendSlice(std.testing.allocator, &.{ "visible", "hidden" });
     try model.setQuery("visible");
-    var ctx: vxfw.EventContext = .{ .io = undefined, .alloc = std.testing.allocator, .cmds = .empty };
+    var ctx: vxfw.EventContext = .{ .io = std.testing.io, .alloc = std.testing.allocator, .cmds = .empty };
     defer ctx.cmds.deinit(std.testing.allocator);
     const clear: vxfw.Event = .{ .key_press = .{ .codepoint = 'u', .mods = .{ .ctrl = true } } };
     // The search field retains Ctrl+U for editing its text.
@@ -4171,7 +4395,7 @@ test "AUR preview replaces the details pane and preserves search and selection" 
         try std.testing.expect(model.aur_job == null); // Drawing never fetches the catalog.
         try std.testing.expectEqual(@as(i17, -2), model.aur_details_scroll.scroll.vertical_offset);
     }
-    var events: vxfw.EventContext = .{ .io = undefined, .alloc = std.testing.allocator, .cmds = .empty };
+    var events: vxfw.EventContext = .{ .io = std.testing.io, .alloc = std.testing.allocator, .cmds = .empty };
     defer events.cmds.deinit(std.testing.allocator);
     try Model.typeErasedCaptureHandler(model, &events, .{ .key_press = .{ .codepoint = 'y' } });
     try std.testing.expect(model.overlay.? == .pkgbuild);
@@ -4208,7 +4432,7 @@ test "AUR details button is keyboard accessible and opens the selected preview" 
     const button = try Model.buildAurDetails(model, 1, 0).?.draw(draw_ctx);
     try std.testing.expectEqual(@as(u16, 1), button.size.height);
     try std.testing.expectEqual(@as(u16, @intCast(draw_ctx.stringWidth(model.aur_preview_button.label))), button.size.width);
-    var ctx: vxfw.EventContext = .{ .io = undefined, .alloc = std.testing.allocator, .cmds = .empty };
+    var ctx: vxfw.EventContext = .{ .io = std.testing.io, .alloc = std.testing.allocator, .cmds = .empty };
     defer ctx.cmds.deinit(std.testing.allocator);
     model.aur_details_scroll.scroll.has_more_vertical = false;
     try Model.typeErasedCaptureHandler(model, &ctx, .{ .key_press = commands.bindings.next });
@@ -4236,7 +4460,7 @@ test "dependency checkboxes navigate toggle and submit actual CLI indices" {
     try model.showOperationQuestion(try shelly_operation.decodeJson(std.testing.allocator,
         \\{"$kind":"q.optdeps","QuestionId":"101","QuestionText":"Optional dependencies","Options":[{"Index":0,"Name":"docs","IsSelected":true},{"Index":7,"Name":"plugin"}]}
     ));
-    var ctx: vxfw.EventContext = .{ .io = undefined, .alloc = std.testing.allocator, .cmds = .empty };
+    var ctx: vxfw.EventContext = .{ .io = std.testing.io, .alloc = std.testing.allocator, .cmds = .empty };
     defer ctx.cmds.deinit(std.testing.allocator);
     try std.testing.expect(model.choiceOptions().?[0].is_selected);
     try Model.typeErasedCaptureHandler(model, &ctx, .{ .key_press = commands.bindings.mark });
@@ -4275,7 +4499,7 @@ test "AUR batch selections own names across searches and preserve per-package re
     , .{ .allocate = .alloc_always });
     model.aur_packages = model.aur_parsed.?.value;
     try model.rebuildAurFilter();
-    var ctx: vxfw.EventContext = .{ .io = undefined, .alloc = std.testing.allocator, .cmds = .empty };
+    var ctx: vxfw.EventContext = .{ .io = std.testing.io, .alloc = std.testing.allocator, .cmds = .empty };
     defer ctx.cmds.deinit(std.testing.allocator);
     try Model.typeErasedCaptureHandler(model, &ctx, .{ .key_press = commands.bindings.select });
     try std.testing.expect(model.overlay == null);
@@ -4355,7 +4579,7 @@ test "successful native and AUR installs and removals deselect both lists throug
     var threaded: std.Io.Threaded = .init(std.testing.allocator, .{});
     defer threaded.deinit();
     runtime.io = threaded.io();
-    defer runtime.io = undefined;
+    defer runtime.io = std.testing.io;
     var env: std.process.Environ.Map = .init(std.testing.allocator);
     defer env.deinit();
     for ([_][]const u8{ "standard", "aur" }) |backend| {
@@ -4413,7 +4637,7 @@ test "cancelling native and AUR authentication or declining a review clears both
     var threaded: std.Io.Threaded = .init(std.testing.allocator, .{});
     defer threaded.deinit();
     runtime.io = threaded.io();
-    defer runtime.io = undefined;
+    defer runtime.io = std.testing.io;
     var env: std.process.Environ.Map = .init(std.testing.allocator);
     defer env.deinit();
     for ([_]OperationBackend{ .standard, .aur }) |backend| {
@@ -4430,7 +4654,7 @@ test "cancelling native and AUR authentication or declining a review clears both
         try model.selected_packages.append(std.testing.allocator, "native");
         try model.toggleAurSelection();
         try model.openPackagePrompt("target", backend, .remove);
-        var ctx: vxfw.EventContext = .{ .io = undefined, .alloc = std.testing.allocator, .cmds = .empty };
+        var ctx: vxfw.EventContext = .{ .io = std.testing.io, .alloc = std.testing.allocator, .cmds = .empty };
         defer ctx.cmds.deinit(std.testing.allocator);
         try Model.typeErasedCaptureHandler(model, &ctx, .{ .key_press = commands.bindings.cancel });
         try std.testing.expect(model.overlay == null);
@@ -4474,7 +4698,7 @@ test "AUR removal uses installed selections from list and details and excludes a
     // installed entries in the selection rather than the highlighted row.
     model.aur_list.jumpToItem(1);
     try std.testing.expect(model.commandContext().removable);
-    var ctx: vxfw.EventContext = .{ .io = undefined, .alloc = std.testing.allocator, .cmds = .empty };
+    var ctx: vxfw.EventContext = .{ .io = std.testing.io, .alloc = std.testing.allocator, .cmds = .empty };
     defer ctx.cmds.deinit(std.testing.allocator);
     try Model.typeErasedCaptureHandler(model, &ctx, .{ .key_press = commands.bindings.remove });
     var prompt = model.overlay.?.sudo;
@@ -4529,7 +4753,7 @@ test "Flatpak split details navigate back to the selected row and keep scope vis
     try model.rebuildFlatpakFilter();
     model.flatpak_list.jumpToItem(1);
     model.flatpak_list_active = true;
-    var events: vxfw.EventContext = .{ .io = undefined, .alloc = allocator, .cmds = .empty };
+    var events: vxfw.EventContext = .{ .io = std.testing.io, .alloc = allocator, .cmds = .empty };
     defer events.cmds.deinit(allocator);
     try model.captureEvent(&events, .{ .key_press = commands.bindings.details });
     try std.testing.expect(model.overlay.? == .flatpak);
@@ -4599,7 +4823,7 @@ test "Flatpak category menu supports keyboard mouse and narrow layouts" {
         \\[{"Id":"editor","Categories":["Utility","Development"]}]
     , .{ .allocate = .alloc_always });
     try model.rebuildFlatpakFilter();
-    var events: vxfw.EventContext = .{ .io = undefined, .alloc = allocator, .cmds = .empty };
+    var events: vxfw.EventContext = .{ .io = std.testing.io, .alloc = allocator, .cmds = .empty };
     defer events.cmds.deinit(allocator);
     try model.captureEvent(&events, .{ .key_press = commands.bindings.categories });
     try std.testing.expect(model.flatpak_category_open);
@@ -4648,4 +4872,285 @@ test "Flatpak category refresh owns selection and resets missing categories" {
     try std.testing.expect(!model.flatpak_category_open);
     try std.testing.expectEqualStrings("Game", model.flatpak_categories.items[1].name);
     try std.testing.expectEqualStrings("new", model.flatpak_rows.items[0].title());
+}
+
+test "inline screenshots require graphics and expose controls only in details" {
+    const allocator = std.testing.allocator;
+    const model = try Model.init(allocator);
+    defer model.deinit();
+    model.settings.flatpak_enabled = true;
+    model.active = .flatpak;
+    model.flatpak_list_active = true;
+    model.flatpak_catalog = try std.json.parseFromSlice([]flatpak.AppstreamApp, allocator,
+        \\[{"Id":"editor","Screenshots":[{"Caption":"Editor","Images":[{"Url":"https://example.test/editor.png","Width":800}]},{"Images":[{"Url":"https://example.test/second.png"}]}]}]
+    , .{ .allocate = .alloc_always });
+    try model.rebuildFlatpakFilter();
+    var events: vxfw.EventContext = .{ .io = std.testing.io, .alloc = allocator, .cmds = .empty };
+    defer events.cmds.deinit(allocator);
+    try model.syncScreenshots(&events);
+    try std.testing.expect(!model.screenshot_open and model.screenshot_job == null);
+    try std.testing.expect(model.screenshotView() == null);
+    model.screenshots_supported = true;
+    try model.syncScreenshots(&events);
+    try std.testing.expect(model.screenshot_open and model.screenshot_request_after != null);
+    try std.testing.expect(model.overlay == null);
+    try std.testing.expect(!model.commandContext().screenshots_navigable);
+    model.overlay = .{ .flatpak = model.flatpak_rows.items[0] };
+    try std.testing.expect(model.commandContext().screenshots_navigable);
+    try std.testing.expectEqual(commands.Mode.details, model.commandContext().mode);
+    try model.captureEvent(&events, .{ .key_press = commands.bindings.next_screenshot });
+    try std.testing.expectEqual(@as(usize, 1), model.screenshot_index);
+    try model.captureEvent(&events, .{ .key_press = commands.bindings.back });
+    try std.testing.expect(model.overlay == null and model.flatpak_list_active);
+    try std.testing.expect(model.screenshot_open);
+    try std.testing.expect(!model.commandContext().screenshots_navigable);
+    try model.captureEvent(&events, .{ .key_press = commands.bindings.previous_screenshot });
+    try std.testing.expectEqual(@as(usize, 1), model.screenshot_index);
+    try model.flatpak_field.buf.insertSliceAtCursor("missing");
+    try Model.onFlatpakQueryChange(model, &events, "missing");
+    try std.testing.expect(model.screenshotView() == null);
+    try std.testing.expect(model.screenshot_request_after == null);
+    model.flatpak_field.buf.clearRetainingCapacity();
+    try Model.onFlatpakQueryChange(model, &events, "");
+    try std.testing.expect(model.screenshot_open);
+    try std.testing.expectEqual(@as(usize, 0), model.screenshot_index);
+    model.active = .packages;
+    try model.syncScreenshots(&events);
+    try std.testing.expect(!model.screenshot_open and model.screenshot_request_after == null);
+}
+
+test "closed screenshot downloads discard late results without terminal access" {
+    const allocator = std.testing.allocator;
+    const model = try Model.init(allocator);
+    defer model.deinit();
+    const job = try allocator.create(flatpak_images.Job);
+    job.* = .{ .url = try allocator.dupe(u8, "https://example.test/old.png"), .done = .init(true), .bytes = try std.heap.page_allocator.dupe(u8, "stale image bytes") };
+    model.screenshot_job = job;
+    model.screenshot_thread = try std.Thread.spawn(.{}, struct {
+        fn done() void {}
+    }.done, .{});
+    model.closeScreenshots();
+    var events: vxfw.EventContext = .{ .io = std.testing.io, .alloc = allocator, .cmds = .empty };
+    defer events.cmds.deinit(allocator);
+    try model.pollScreenshot(&events);
+    try std.testing.expect(model.screenshot_job == null and model.screenshot_thread == null);
+    try std.testing.expect(model.screenshot_image == null and model.screenshot_failure == null);
+}
+
+test "rapid screenshot navigation coalesces requests and rejects same-URL stale results" {
+    const allocator = std.testing.allocator;
+    const model = try Model.init(allocator);
+    defer model.deinit();
+    model.active = .flatpak;
+    model.screenshots_supported = true;
+    model.screenshot_open = true;
+    const app: flatpak.AppstreamApp = .{ .Screenshots = &.{
+        .{ .Caption = "First", .Images = &.{.{ .Url = "https://example.test/shared.png" }} },
+        .{ .Caption = "Second", .Images = &.{.{ .Url = "https://example.test/shared.png" }} },
+    } };
+    model.screenshot_items = try flatpak_images.collect(allocator, &app);
+    model.overlay = .{ .flatpak = .{ .catalog = &app } };
+    model.screenshot_image = vaxis.Image.init(99, 800, 600);
+    var events: vxfw.EventContext = .{ .io = std.testing.io, .alloc = allocator, .cmds = .empty };
+    defer events.cmds.deinit(allocator);
+    for (0..400) |i| {
+        try model.captureEvent(&events, .{ .key_press = if (i % 2 == 0) commands.bindings.next_screenshot else commands.bindings.previous_screenshot });
+        try std.testing.expectEqual(@as(u32, 99), model.screenshot_image.?.imageId());
+        try std.testing.expect(model.screenshotView().?.image == null);
+    }
+    try std.testing.expectEqual(@as(usize, 0), model.screenshot_index);
+    try std.testing.expectEqual(@as(u64, 400), model.screenshot_generation);
+    try std.testing.expectEqual(@as(usize, 1), events.cmds.items.len);
+    try std.testing.expect(model.screenshot_job == null);
+    const pending = model.screenshot_request_after.?;
+    // A result with the same URL still belongs to an obsolete selection.
+    const job = try allocator.create(flatpak_images.Job);
+    job.* = .{ .generation = 0, .url = try allocator.dupe(u8, model.screenshot_items[0].url), .done = .init(true), .bytes = try std.heap.page_allocator.dupe(u8, "stale") };
+    model.screenshot_job = job;
+    model.screenshot_thread = try std.Thread.spawn(.{}, struct {
+        fn finish() void {}
+    }.finish, .{});
+    model.screenshot_request_after = std.Io.Timestamp.now(std.testing.io, .awake).addDuration(.fromMilliseconds(30000));
+    try model.pollScreenshot(&events);
+    try std.testing.expect(model.screenshot_job == null);
+    try std.testing.expect(model.screenshot_failure == null);
+    try std.testing.expectEqual(@as(u32, 99), model.screenshot_image.?.imageId());
+    try std.testing.expect(model.screenshot_request_after.?.nanoseconds >= pending.nanoseconds);
+    model.closeScreenshots();
+    try std.testing.expect(model.screenshot_request_after == null);
+    try std.testing.expect(model.screenshot_image == null);
+}
+
+test "inline screenshots stay fixed while metadata scrolls and mouse buttons navigate" {
+    const allocator = std.testing.allocator;
+    const model = try Model.init(allocator);
+    defer model.deinit();
+    model.settings.flatpak_enabled = true;
+    model.active = .flatpak;
+    model.screenshots_supported = true;
+    const description = try allocator.alloc(u8, 4096);
+    defer allocator.free(description);
+    @memset(description, 'x');
+    const apps = [_]flatpak.AppstreamApp{.{ .Id = "editor", .Name = "Editor", .Description = description, .Screenshots = &.{
+        .{ .Images = &.{.{ .Url = "https://example.test/one.png" }} },
+        .{ .Images = &.{.{ .Url = "https://example.test/two.png" }} },
+    } }};
+    const json = try std.json.Stringify.valueAlloc(allocator, &apps, .{});
+    defer allocator.free(json);
+    model.flatpak_catalog = try std.json.parseFromSlice([]flatpak.AppstreamApp, allocator, json, .{ .allocate = .alloc_always });
+    try model.rebuildFlatpakFilter();
+    var events: vxfw.EventContext = .{ .io = std.testing.io, .alloc = allocator, .cmds = .empty };
+    defer events.cmds.deinit(allocator);
+    try model.syncScreenshots(&events);
+    model.screenshot_image = vaxis.Image.init(42, 800, 600);
+    model.screenshot_image_generation = model.screenshot_generation;
+    model.overlay = .{ .flatpak = model.flatpak_rows.items[0] };
+    vxfw.DrawContext.init(.unicode);
+    var arena = std.heap.ArenaAllocator.init(allocator);
+    defer arena.deinit();
+    const ctx: vxfw.DrawContext = .{ .arena = arena.allocator(), .min = .{}, .max = .{ .width = 100, .height = 30 }, .cell_size = .{ .width = 10, .height = 20 } };
+    const Find = struct {
+        fn widget(surface: vxfw.Surface, ptr: *anyopaque) ?vxfw.Surface {
+            if (surface.widget.userdata == ptr) return surface;
+            for (surface.children) |child| if (widget(child.surface, ptr)) |found| return found;
+            return null;
+        }
+        fn image(surface: vxfw.Surface, origin: vxfw.RelativePoint) ?vxfw.RelativePoint {
+            for (surface.buffer, 0..) |cell, i| if (cell.image != null) return .{ .row = origin.row + @as(i17, @intCast(i / surface.size.width)), .col = origin.col + @as(i17, @intCast(i % surface.size.width)) };
+            for (surface.children) |child| if (image(child.surface, .{ .row = origin.row + child.origin.row, .col = origin.col + child.origin.col })) |found| return found;
+            return null;
+        }
+    };
+    const first = try model.widget().draw(ctx);
+    const first_image = Find.image(first, .{ .row = 0, .col = 0 }).?;
+    const scroll = Find.widget(first, &model.flatpak_details_scroll).?;
+    try std.testing.expect(scroll.size.height >= 5 and scroll.size.height < 24);
+    try std.testing.expect(first_image.col > 40 and first_image.row < 15);
+    try model.captureEvent(&events, .{ .key_press = commands.bindings.next });
+    const second = try model.widget().draw(ctx);
+    const second_image = Find.image(second, .{ .row = 0, .col = 0 }).?;
+    try std.testing.expectEqual(first_image, second_image);
+    try std.testing.expect(model.flatpak_details_scroll.scroll.top > 0 or model.flatpak_details_scroll.scroll.vertical_offset != 0);
+    const scroll_offset = model.flatpak_details_scroll.scroll.vertical_offset;
+    const button = Find.widget(second, &model.screenshot_next).?;
+    try button.widget.handleEvent(&events, .mouse_enter);
+    try button.widget.handleEvent(&events, .{ .mouse = .{ .button = .left, .type = .press, .col = 0, .row = 0, .mods = .{} } });
+    try button.widget.handleEvent(&events, .{ .mouse = .{ .button = .left, .type = .release, .col = 0, .row = 0, .mods = .{} } });
+    try std.testing.expectEqual(@as(usize, 1), model.screenshot_index);
+    try std.testing.expectEqual(scroll_offset, model.flatpak_details_scroll.scroll.vertical_offset);
+    try std.testing.expect(model.overlay.? == .flatpak);
+    // A single screenshot retains its preview without misleading navigation.
+    flatpak_images.freeItems(allocator, model.screenshot_items);
+    model.screenshot_items = try flatpak_images.collect(allocator, &.{ .Screenshots = apps[0].Screenshots[0..1] });
+    model.screenshot_index = 0;
+    try std.testing.expect(!model.commandContext().screenshots_navigable);
+    const single = try model.widget().draw(ctx);
+    try std.testing.expect(Find.widget(single, &model.screenshot_previous) == null);
+    try std.testing.expect(Find.widget(single, &model.screenshot_next) == null);
+}
+
+test "rapid package paging retains one independent screenshot timer" {
+    const allocator = std.testing.allocator;
+    const model = try Model.init(allocator);
+    defer model.deinit();
+    model.active = .flatpak;
+    model.screenshots_supported = true;
+    const apps = [_]flatpak.AppstreamApp{
+        .{ .Id = "one", .Screenshots = &.{.{ .Images = &.{.{ .Url = "https://example.test/one.png" }} }} },
+        .{ .Id = "two", .Screenshots = &.{.{ .Images = &.{.{ .Url = "https://example.test/two.png" }} }} },
+    };
+    for (&apps) |*app| try model.flatpak_rows.append(allocator, .{ .catalog = app });
+    var events: vxfw.EventContext = .{ .io = std.testing.io, .alloc = allocator, .cmds = .empty };
+    defer events.cmds.deinit(allocator);
+    for (0..400) |i| {
+        model.flatpak_list.cursor = @intCast(i % 2);
+        try model.syncScreenshots(&events);
+    }
+    try std.testing.expectEqual(@as(usize, 1), events.cmds.items.len);
+    try std.testing.expect(events.cmds.items[0].tick.widget.eql(model.screenshotTickWidget()));
+    try std.testing.expect(!events.cmds.items[0].tick.widget.eql(model.widget()));
+    try std.testing.expect(model.screenshot_tick_pending);
+    model.closeScreenshots();
+    events.cmds.clearRetainingCapacity();
+    try Model.onScreenshotTick(model, &events, .tick);
+    try std.testing.expect(!model.screenshot_tick_pending);
+    try std.testing.expectEqual(@as(usize, 0), events.cmds.items.len);
+}
+
+test "Flatpak result scrolling stays unrestricted while images wait to load" {
+    const allocator = std.testing.allocator;
+    const model = try Model.init(allocator);
+    defer model.deinit();
+    model.active = .flatpak;
+    model.flatpak_list_active = true;
+    model.flatpak_catalog = try std.json.parseFromSlice([]flatpak.AppstreamApp, allocator,
+        \\[{"Id":"one"},{"Id":"two"},{"Id":"three"}]
+    , .{ .allocate = .alloc_always });
+    try model.rebuildFlatpakFilter();
+    var events: vxfw.EventContext = .{ .io = std.testing.io, .alloc = allocator, .cmds = .empty };
+    defer events.cmds.deinit(allocator);
+    for (0..500) |i| {
+        try model.captureEvent(&events, .{ .key_press = if (i % 2 == 0) commands.bindings.next else commands.bindings.previous });
+        try std.testing.expectEqual(@as(u32, if (i % 2 == 0) 1 else 0), model.flatpak_list.cursor);
+    }
+    try Model.typeErasedEventHandler(model, &events, .{ .key_press = .{ .codepoint = 'n', .mods = .{ .ctrl = true } } });
+    try std.testing.expectEqual(@as(u32, 1), model.flatpak_list.cursor);
+    events.consume_event = false;
+    try model.captureEvent(&events, .{ .mouse = .{ .button = .wheel_down, .type = .press, .col = 0, .row = 0, .mods = .{} } });
+    try std.testing.expect(!events.consume_event);
+}
+
+test "selection changes during a fetch debounce the latest image without canceling the active download" {
+    const allocator = std.testing.allocator;
+    const model = try Model.init(allocator);
+    defer model.deinit();
+    model.active = .flatpak;
+    model.screenshots_supported = true;
+    const apps = [_]flatpak.AppstreamApp{
+        .{ .Id = "one", .Screenshots = &.{
+            .{ .Images = &.{.{ .Url = "https://example.test/one.png" }} },
+            .{ .Images = &.{.{ .Url = "https://example.test/two.png" }} },
+        } },
+        .{ .Id = "three", .Screenshots = &.{.{ .Images = &.{.{ .Url = "https://example.test/three.png" }} }} },
+    };
+    for (&apps) |*app| try model.flatpak_rows.append(allocator, .{ .catalog = app });
+    model.flatpak_list.item_count = 2;
+    var events: vxfw.EventContext = .{ .io = std.testing.io, .alloc = allocator, .cmds = .empty };
+    defer events.cmds.deinit(allocator);
+    try model.syncScreenshots(&events);
+    model.overlay = .{ .flatpak = .{ .catalog = &apps[0] } };
+    const job = try allocator.create(flatpak_images.Job);
+    job.* = .{ .generation = model.screenshot_generation, .url = try allocator.dupe(u8, model.screenshot_items[0].url) };
+    model.screenshot_job = job;
+    model.screenshot_request_after = null;
+    const before = std.Io.Timestamp.now(std.testing.io, .awake);
+    try model.captureEvent(&events, .{ .key_press = commands.bindings.next_screenshot });
+    try std.testing.expectEqual(@as(usize, 1), model.screenshot_index);
+    try std.testing.expect(model.screenshot_request_after.?.nanoseconds >= before.addDuration(.fromMilliseconds(300)).nanoseconds);
+    try std.testing.expect(!job.canceled.load(.acquire));
+    try Model.onNextScreenshot(model, &events);
+    try std.testing.expectEqual(@as(usize, 0), model.screenshot_index);
+    try model.captureEvent(&events, .{ .key_press = commands.bindings.back });
+    try model.captureEvent(&events, .{ .key_press = commands.bindings.next });
+    try std.testing.expectEqual(@as(u32, 1), model.flatpak_list.cursor);
+    try model.syncScreenshots(&events);
+    try std.testing.expectEqualStrings("three", model.screenshot_app_id);
+    try std.testing.expect(!job.canceled.load(.acquire));
+    try std.testing.expect(model.screenshot_job.? == job);
+    const latest = model.screenshot_generation;
+    model.screenshot_request_after = std.Io.Timestamp.now(std.testing.io, .awake).addDuration(.fromMilliseconds(30000));
+    job.done.store(true, .release);
+    model.screenshot_thread = try std.Thread.spawn(.{}, struct {
+        fn finish() void {}
+    }.finish, .{});
+    try model.pollScreenshot(&events);
+    try std.testing.expect(model.screenshot_job == null);
+    try std.testing.expectEqual(latest, model.screenshot_generation);
+    try std.testing.expect(model.screenshot_failure == null);
+    try std.testing.expect(model.screenshot_request_after != null);
+    // Polling before the final quiet-period deadline cannot start a request.
+    try model.pollScreenshot(&events);
+    try std.testing.expect(model.screenshot_job == null);
+    model.closeScreenshots();
+    try std.testing.expect(model.screenshot_request_after == null);
 }

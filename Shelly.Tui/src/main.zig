@@ -16,5 +16,7 @@ pub fn main(init: std.process.Init) !void {
     var app: vxfw.App = try .init(init.io, init.gpa, init.environ_map, &buffer);
     defer app.deinit();
 
+    Shelly_Tui.runtime.terminal = &app;
+    defer Shelly_Tui.runtime.terminal = null;
     try app.run(model.widget(), .{});
 }

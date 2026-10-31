@@ -18,6 +18,8 @@ pub const Id = enum {
     clear_selection,
     toggle_wrap,
     categories,
+    previous_screenshot,
+    next_screenshot,
     install,
     remove,
     preview,
@@ -53,6 +55,8 @@ pub const Bindings = struct {
     search: vaxis.Key = .{ .codepoint = '/' },
     select: vaxis.Key = .{ .codepoint = vaxis.Key.enter },
     mark: vaxis.Key = .{ .codepoint = vaxis.Key.space },
+    previous_screenshot: vaxis.Key = .{ .codepoint = '[' },
+    next_screenshot: vaxis.Key = .{ .codepoint = ']' },
     categories: vaxis.Key = .{ .codepoint = 'g', .mods = .{ .ctrl = true } },
     toggle_wrap: vaxis.Key = .{ .codepoint = 'w' },
     clear_selection: vaxis.Key = .{ .codepoint = 'u', .mods = .{ .ctrl = true } },
@@ -279,6 +283,8 @@ pub const Context = struct {
     installed_only: bool = false,
     browsing_list: bool = false,
     categories_available: bool = false,
+    screenshots_navigable: bool = false,
+    screenshot_retry: bool = false,
     category_choice: bool = false,
     installable: bool = false,
     removable: bool = false,
@@ -304,6 +310,11 @@ fn add(arena: std.mem.Allocator, list: *std.ArrayList(Entry), id: Id, short: []c
 pub fn entries(arena: std.mem.Allocator, context: Context) std.mem.Allocator.Error![]const Entry {
     var list: std.ArrayList(Entry) = .empty;
     if (context.categories_available) try add(arena, &list, .categories, "Categories", "Choose a Flatpak category; All categories clears the filter");
+    if (context.screenshots_navigable) {
+        try add(arena, &list, .previous_screenshot, "Previous image", "Show the previous Flatpak screenshot");
+        try add(arena, &list, .next_screenshot, "Next image", "Show the next Flatpak screenshot");
+    }
+    if (context.screenshot_retry) try add(arena, &list, .refresh_list, "Retry image", "Retry loading the Flatpak screenshot");
     switch (context.mode) {
         .search, .packages => {
             if (context.mode == .packages and context.selected_count > 0)

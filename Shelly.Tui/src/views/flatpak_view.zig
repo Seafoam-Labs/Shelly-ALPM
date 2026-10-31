@@ -64,6 +64,7 @@ fn contains(text: []const u8, query: []const u8) bool {
 }
 
 pub const View = struct {
+    images: ?@import("image_view.zig").View = null,
     category_button: ?*vxfw.Button = null,
     category_list: ?*vxfw.ListView = null,
     category_open: bool = false,
@@ -148,8 +149,10 @@ pub const View = struct {
                 })}) else "Flatpak details";
                 const labels = [_]Border.BorderLabel{.{ .text = title, .alignment = .top_left }};
                 var empty: vxfw.Text = .{ .text = if (self.loading) "Loading Flatpaks…" else "Select a result to see details." };
+                const details = try arena.create(DetailsBody);
+                details.* = .{ .scroll = self.details_scroll, .images = self.images };
                 var border: Border = .{
-                    .child = if (self.selected != null and !self.loading) self.details_scroll.widget() else empty.widget(),
+                    .child = if (self.selected != null and !self.loading) details.widget() else empty.widget(),
                     .labels = &labels,
                     .style = if (self.details_active) .{ .fg = .{ .index = 7 }, .bold = true } else .{},
                 };
@@ -285,3 +288,22 @@ fn categoryButtonEvent(ptr: *anyopaque, ctx: *vxfw.EventContext, event: vxfw.Eve
     try button.handleEvent(ctx, event);
     if (event == .mouse_enter) ctx.consume_event = consumed;
 }
+
+/// Screenshots stay fixed while metadata scrolls independently below them.
+const DetailsBody = struct {
+    scroll: *vxfw.ScrollView,
+    images: ?@import("image_view.zig").View,
+    fn widget(self: *DetailsBody) vxfw.Widget {
+        return .{ .userdata = self, .drawFn = draw };
+    }
+    fn draw(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
+        const self: *DetailsBody = @ptrCast(@alignCast(ptr));
+        const size = ctx.max.size();
+        const image_height: u16 = if (self.images != null and size.height >= 9 and size.width >= 12) @max(4, size.height / 2) else 0;
+        const details_row = if (image_height > 0) image_height + 1 else 0;
+        var children: std.ArrayList(vxfw.SubSurface) = .empty;
+        if (image_height > 0) try children.append(ctx.arena, .{ .origin = .{ .row = 0, .col = 0 }, .surface = try self.images.?.draw(ctx.withConstraints(.{}, .{ .width = size.width, .height = image_height })) });
+        try children.append(ctx.arena, .{ .origin = .{ .row = @intCast(details_row), .col = 0 }, .surface = try self.scroll.draw(ctx.withConstraints(.{}, .{ .width = size.width, .height = size.height - details_row })) });
+        return .{ .size = size, .widget = self.widget(), .buffer = &.{}, .children = children.items };
+    }
+};

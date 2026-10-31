@@ -94,6 +94,9 @@ pub fn build(b: *std.Build) void {
     });
     const vaxis_module = vaxis.module("vaxis");
 
+    const http = b.dependency("shelly_http", .{ .target = target, .optimize = optimize }).module("ShellyHttp");
+    mod.addImport("ShellyHttp", http);
+    exe.root_module.addImport("ShellyHttp", http);
     mod.addImport("vaxis", vaxis_module);
     exe.root_module.addImport("vaxis", vaxis_module);
 
