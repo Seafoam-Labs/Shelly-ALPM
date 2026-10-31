@@ -24,5 +24,6 @@ test "basic add functionality" {
 }
 
 test {
+    std.testing.refAllDecls(model);
     _ = @import("services/ui_decode.zig");
 }

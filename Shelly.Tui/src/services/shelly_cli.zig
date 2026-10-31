@@ -321,6 +321,8 @@ pub const ShellyCli = struct {
 };
 
 test "get_packages" {
+    // Live CLI smoke test: requires runtime.setup and configured local sources.
+    if (runtime.data_home.len == 0) return error.SkipZigTest;
     var threaded: std.Io.Threaded = .init(std.testing.allocator, .{});
     defer threaded.deinit();
 
@@ -335,6 +337,8 @@ test "get_packages" {
 }
 
 test "get_remotes" {
+    // Live CLI smoke test: requires runtime.setup and configured local sources.
+    if (runtime.data_home.len == 0) return error.SkipZigTest;
     var threaded: std.Io.Threaded = .init(std.testing.allocator, .{});
     defer threaded.deinit();
 
@@ -349,6 +353,8 @@ test "get_remotes" {
 }
 
 test "get_flatpaks" {
+    // Live CLI smoke test: requires runtime.setup and configured local sources.
+    if (runtime.data_home.len == 0) return error.SkipZigTest;
     var threaded: std.Io.Threaded = .init(std.testing.allocator, .{});
     defer threaded.deinit();
 
