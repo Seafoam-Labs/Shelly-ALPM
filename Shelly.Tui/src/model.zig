@@ -532,7 +532,7 @@ pub const Model = struct {
                                         self.flatpak_list_active = true;
                                     },
                                     .install => if (row == .catalog and self.install_job == null) {
-                                        if (row.catalog.Remotes.len == 0) try self.setNotice("No configured remote is available for this catalog entry.") else self.overlay = .{ .flatpak_install = .{ .app = row.catalog } };
+                                        try self.openFlatpakInstallChoice(row.catalog);
                                     },
                                     .remove => if (row == .installed) try self.openFlatpakPrompt(.remove, row.installed.Id, .{
                                         .scope = row.installed.InstallLevel,
@@ -2124,6 +2124,24 @@ pub const Model = struct {
         self.overlay = .{ .sudo = prompt };
     }
 
+    fn openFlatpakInstallChoice(self: *Model, app: *const flatpak.AppstreamApp) !void {
+        if (self.install_job != null) return;
+        if (!self.settings.flatpak_enabled or !self.flatpak_available) {
+            try self.setNotice("The Flatpak backend is unavailable. Refresh Flatpak before installing.");
+            return;
+        }
+        if (app.Remotes.len == 0) {
+            try self.setNotice("No configured remote is available for this catalog entry.");
+            return;
+        }
+        var selected: usize = 0;
+        for (app.Remotes, 0..) |remote, i| if (remote.Scope == .system) {
+            selected = i;
+            break;
+        };
+        self.overlay = .{ .flatpak_install = .{ .app = app, .selected = selected } };
+    }
+
     fn openFlatpakPrompt(self: *Model, action: shelly_operation.Action, name: []const u8, target: ?shelly_operation.FlatpakTarget) !void {
         if (!self.settings.flatpak_enabled or !self.flatpak_available or self.install_job != null) return;
         const prompt = try self.gpa.create(SudoPrompt);
@@ -2275,7 +2293,7 @@ pub const Model = struct {
     }
 
     fn aurPaneFocused(self: *const Model) bool {
-        if (self.active == .flatpak) return self.overlay != null and self.overlay.? == .flatpak;
+        if (self.active == .flatpak) return self.overlay != null and (self.overlay.? == .flatpak or self.overlay.? == .flatpak_install);
         if (self.active != .aur) return false;
         const overlay = self.overlay orelse return false;
         return overlay == .aur or overlay == .pkgbuild;
@@ -2564,10 +2582,11 @@ pub const Model = struct {
 
         const reviewing = self.overlay != null and self.overlay.? == .pkgbuild and self.operation_question != null;
         const prompt = self.operationPrompt() orelse self.review_prompt;
+        const choosing_flatpak = self.overlay != null and self.overlay.? == .flatpak_install;
         var navigation_height: u16 = if (max.width >= 2 and max.height >= 8) 3 else 1;
         var panel_height: u16 = 0;
         var show_browsing = true;
-        if (prompt != null) {
+        if (prompt != null or choosing_flatpak) {
             // Keep the operation area stable across authentication, progress,
             // and results; long content scrolls within this reserved third.
             const preferred_height = @max(@as(u16, 4), max.height / 3 + @intFromBool(max.height % 3 != 0));
@@ -2634,6 +2653,14 @@ pub const Model = struct {
             });
         };
 
+        if (panel_height > 0 and choosing_flatpak) {
+            const choice = self.overlay.?.flatpak_install;
+            try children.append(arena, .{
+                .origin = .{ .row = @intCast(max.height - panel_height - 1), .col = 0 },
+                .surface = try flatpak_view.drawInstallChoices(ctx.withConstraints(.{}, .{ .width = max.width, .height = panel_height }), choice.app, choice.selected),
+            });
+        }
+
         var footer_context = self.commandContext();
         if (self.help_open) {
             footer_context.mode = .help;
@@ -2652,7 +2679,7 @@ pub const Model = struct {
                 .flatpak => null,
                 .sudo => null,
                 .pkgbuild => if (self.active == .aur or reviewing) null else try self.pkgbuildView().draw(ctx),
-                .flatpak_install => |choice| try flatpak_view.drawInstallChoices(ctx, choice.app, choice.selected),
+                .flatpak_install => null,
             };
             if (overlay_child) |child| {
                 try children.append(arena, child);
@@ -3620,7 +3647,7 @@ test "Flatpak install chooses remote scope and owns confirmation target" {
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
     const picker = try flatpak_view.drawInstallChoices(.{ .arena = arena.allocator(), .min = .{}, .max = .{ .width = 80, .height = 24 }, .cell_size = .{ .width = 10, .height = 20 } }, &app, 1);
-    try std.testing.expect(picker != null);
+    try std.testing.expectEqual(@as(u16, 80), picker.size.width);
     try Model.typeErasedCaptureHandler(model, &events, .{ .key_press = .{ .codepoint = vaxis.Key.enter } });
     const prompt = model.overlay.?.sudo;
     try std.testing.expect(!prompt.elevated);
@@ -5153,4 +5180,88 @@ test "selection changes during a fetch debounce the latest image without canceli
     try std.testing.expect(model.screenshot_job == null);
     model.closeScreenshots();
     try std.testing.expect(model.screenshot_request_after == null);
+}
+
+test "Flatpak source authentication progress and results share the bottom operation area" {
+    const allocator = std.testing.allocator;
+    vxfw.DrawContext.init(.unicode);
+    for ([_]flatpak.InstallLevel{ .system, .user }) |scope| {
+        const model = try Model.init(allocator);
+        defer model.deinit();
+        model.active = .flatpak;
+        model.settings.flatpak_enabled = true;
+        model.flatpak_available = true;
+        const app: flatpak.AppstreamApp = .{ .Id = "org.example.Editor", .Remotes = &.{ .{ .Name = "user-repo", .Scope = .user }, .{ .Name = "system-repo", .Scope = .system } } };
+        var events: vxfw.EventContext = .{ .io = std.testing.io, .alloc = allocator, .cmds = .empty };
+        defer events.cmds.deinit(allocator);
+        try model.openFlatpakInstallChoice(&app);
+        try std.testing.expectEqual(@as(usize, 1), model.overlay.?.flatpak_install.selected);
+        try std.testing.expectEqual(commands.Mode.choice, model.commandContext().mode);
+        var arena = std.heap.ArenaAllocator.init(allocator);
+        defer arena.deinit();
+        const Check = struct {
+            fn panel(surface: vxfw.Surface) !vxfw.Size {
+                var found: ?vxfw.Size = null;
+                const height = surface.size.height;
+                const panel_height = @max(@as(u16, 4), height / 3 + @intFromBool(height % 3 != 0));
+                for (surface.children) |child| {
+                    try std.testing.expectEqual(@as(u8, 0), child.z_index);
+                    try std.testing.expect(child.origin.row >= 0);
+                    try std.testing.expect(@as(u32, @intCast(child.origin.row)) + child.surface.size.height <= height);
+                    if (child.origin.row == height - panel_height - 1 and child.surface.size.width == surface.size.width) found = child.surface.size;
+                }
+                const size = found orelse return error.MissingOperationPanel;
+                try std.testing.expectEqual(panel_height, size.height);
+                return size;
+            }
+        };
+        const ctx: vxfw.DrawContext = .{ .arena = arena.allocator(), .min = .{}, .max = .{ .width = 80, .height = 24 }, .cell_size = .{ .width = 10, .height = 20 } };
+        const source_size = try Check.panel(try model.widget().draw(ctx));
+        // Cancelling source selection returns to details without starting work.
+        try Model.typeErasedCaptureHandler(model, &events, .{ .key_press = commands.bindings.close });
+        try std.testing.expect(model.overlay.? == .flatpak);
+        try std.testing.expect(model.install_job == null);
+        try model.openFlatpakInstallChoice(&app);
+        if (scope == .user) try Model.typeErasedCaptureHandler(model, &events, .{ .key_press = commands.bindings.next });
+        try Model.typeErasedCaptureHandler(model, &events, .{ .key_press = commands.bindings.confirm });
+        const prompt = model.overlay.?.sudo;
+        try std.testing.expectEqual(scope == .system, prompt.elevated);
+        try std.testing.expectEqual(scope, prompt.flatpak_target.?.scope);
+        try std.testing.expectEqual(if (scope == .system) commands.Mode.authentication else commands.Mode.confirmation, model.commandContext().mode);
+        try std.testing.expectEqual(source_size, try Check.panel(try model.widget().draw(ctx)));
+        if (scope == .system) {
+            try Model.typeErasedCaptureHandler(model, &events, .{ .key_press = .{ .codepoint = 'p', .text = "p" } });
+            try std.testing.expectEqual(@as(usize, 1), prompt.operationView().password_length);
+        }
+        for ([_]SudoPrompt.State{ .running, .succeeded, .failed, .declined }) |state| {
+            prompt.state = state;
+            try std.testing.expectEqual(source_size, try Check.panel(try model.widget().draw(ctx)));
+        }
+        prompt.state = .entering;
+        _ = try model.widget().draw(ctx);
+        try Model.typeErasedCaptureHandler(model, &events, .{ .key_press = commands.bindings.cancel });
+        try std.testing.expect(model.overlay == null and model.install_job == null);
+        for ([_]vxfw.Size{ .{ .width = 120, .height = 40 }, .{ .width = 40, .height = 12 }, .{ .width = 12, .height = 5 } }) |size| {
+            try model.openFlatpakInstallChoice(&app);
+            const surface = try model.widget().draw(ctx.withConstraints(.{}, .{ .width = size.width, .height = size.height }));
+            for (surface.children) |child| {
+                try std.testing.expectEqual(@as(u8, 0), child.z_index);
+                try std.testing.expect(@as(u32, @intCast(child.origin.row)) + child.surface.size.height <= size.height);
+            }
+        }
+    }
+}
+
+test "Flatpak install cannot enter source selection without an available backend or remote" {
+    const model = try Model.init(std.testing.allocator);
+    defer model.deinit();
+    const app: flatpak.AppstreamApp = .{ .Id = "org.example.Editor", .Remotes = &.{.{ .Name = "flathub" }} };
+    try model.openFlatpakInstallChoice(&app);
+    try std.testing.expect(model.overlay == null and model.install_job == null);
+    model.settings.flatpak_enabled = true;
+    try model.openFlatpakInstallChoice(&app);
+    try std.testing.expect(model.overlay == null and model.install_job == null);
+    model.flatpak_available = true;
+    try model.openFlatpakInstallChoice(&.{ .Id = "no-remote" });
+    try std.testing.expect(model.overlay == null and model.install_job == null);
 }

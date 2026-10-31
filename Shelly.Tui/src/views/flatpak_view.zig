@@ -190,25 +190,24 @@ fn drawInstalled(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Su
     return label.draw(ctx);
 }
 
-pub fn drawInstallChoices(ctx: vxfw.DrawContext, app: *const data.AppstreamApp, selected: usize) Allocator.Error!?vxfw.SubSurface {
+/// The source step occupies the same reserved bottom area as authentication.
+pub fn drawInstallChoices(ctx: vxfw.DrawContext, app: *const data.AppstreamApp, selected: usize) Allocator.Error!vxfw.Surface {
     const size = ctx.max.size();
-    const width = @min(size.width -| 2, @as(u16, 80));
-    const height = @min(size.height -| 2, @as(u16, 22));
-    if (width < 20 or height < 6) return null;
+    const framed = size.width >= 2 and size.height >= 3;
+    const inner_height = size.height -| @as(u16, if (framed) 2 else 0);
     var lines: std.ArrayList(u8) = .empty;
-    const heading = try std.fmt.allocPrint(ctx.arena, "Install {f}\nChoose a remote and installation scope.\n\n", .{diagnostics.safe(app.Id)});
-    try lines.appendSlice(ctx.arena, heading);
-    const capacity = @max(@as(usize, 1), height -| 5);
-    const start = selected -| (capacity / 2);
+    if (inner_height >= 3) try lines.appendSlice(ctx.arena, "Choose a remote and installation scope.\n\n");
+    const capacity = @max(@as(usize, 1), inner_height -| @as(u16, if (inner_height >= 3) 2 else 0));
+    const start = @min(selected -| (capacity / 2), app.Remotes.len -| capacity);
     for (start..@min(app.Remotes.len, start + capacity)) |index| {
         const remote = app.Remotes[index];
-        try lines.appendSlice(ctx.arena, try std.fmt.allocPrint(ctx.arena, "{s} {f} — {s}\n", .{ if (index == selected) ">" else " ", diagnostics.safe(remote.Name), @tagName(remote.Scope) }));
+        try lines.appendSlice(ctx.arena, try std.fmt.allocPrint(ctx.arena, "{s} {f} ({s})\n", .{ if (index == selected) ">" else " ", diagnostics.safe(remote.Name), @tagName(remote.Scope) }));
     }
-    var text: vxfw.Text = .{ .text = lines.items };
-    const labels = [_]Border.BorderLabel{.{ .text = "Flatpak installation", .alignment = .top_left }};
+    var text: vxfw.Text = .{ .text = lines.items, .softwrap = false, .overflow = .ellipsis };
+    if (!framed) return text.draw(ctx);
+    const labels = [_]Border.BorderLabel{.{ .text = try std.fmt.allocPrint(ctx.arena, "Install {f} — Remote", .{diagnostics.safe(app.Id)}), .alignment = .top_left }};
     var border: Border = .{ .child = text.widget(), .labels = &labels };
-    const surface = try border.widget().draw(ctx.withConstraints(.{}, .{ .width = width, .height = height }));
-    return .{ .origin = .{ .row = @divFloor(@as(i17, size.height) - surface.size.height, 2), .col = @divFloor(@as(i17, size.width) - surface.size.width, 2) }, .surface = surface, .z_index = 2 };
+    return border.draw(ctx.withConstraints(size, .{ .width = size.width, .height = size.height }));
 }
 
 const detail_fields = @import("detail_fields.zig");
@@ -307,3 +306,26 @@ const DetailsBody = struct {
         return .{ .size = size, .widget = self.widget(), .buffer = &.{}, .children = children.items };
     }
 };
+
+test "reserved source panel keeps the chosen remote visible with many remotes" {
+    vxfw.DrawContext.init(.unicode);
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var remotes: [20]data.Remote = @splat(.{ .Name = "other", .Scope = .system });
+    remotes[19].Name = "last-selected";
+    const app: data.AppstreamApp = .{ .Id = "org.example.Editor", .Remotes = &remotes };
+    const Collect = struct {
+        fn text(alloc: Allocator, output: *std.ArrayList(u8), surface: vxfw.Surface) Allocator.Error!void {
+            for (surface.buffer) |cell| try output.appendSlice(alloc, cell.char.grapheme);
+            for (surface.children) |child| try text(alloc, output, child.surface);
+        }
+    };
+    for ([_]u16{ 3, 4, 8 }) |height| {
+        const surface = try drawInstallChoices(.{ .arena = arena.allocator(), .min = .{}, .max = .{ .width = 80, .height = height }, .cell_size = .{ .width = 10, .height = 20 } }, &app, 19);
+        try std.testing.expectEqual(@as(u16, 80), surface.size.width);
+        try std.testing.expectEqual(height, surface.size.height);
+        var output: std.ArrayList(u8) = .empty;
+        try Collect.text(arena.allocator(), &output, surface);
+        try std.testing.expect(std.mem.indexOf(u8, output.items, "> last-selected (system)") != null);
+    }
+}
