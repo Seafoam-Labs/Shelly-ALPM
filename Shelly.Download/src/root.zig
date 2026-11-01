@@ -511,6 +511,7 @@ pub const CoreDownloader = struct {
 
         const start_ns = std.Io.Timestamp.now(self.io, .awake).nanoseconds;
         var downloaded: u64 = resume_offset;
+        var transferred: u64 = 0;
         var last_percent: i16 = -1;
         var last_reported: u64 = 0;
 
@@ -538,15 +539,18 @@ pub const CoreDownloader = struct {
             };
 
             downloaded += n;
+            transferred += n;
 
             if (self.shouldEmitProgress(downloaded, total, &last_percent, &last_reported)) {
                 try self.emitEvent(.{
                     .event_type = .Progress,
                     .destination_path = destination_path,
-                    .progress = makeProgress(downloaded, total, self.speedBytesPerSec(downloaded, start_ns)),
+                    .progress = makeProgress(downloaded, total, self.speedBytesPerSec(transferred, start_ns)),
                 });
             }
         }
+        // take the final rate now so fsync and rename time don't count
+        const final_speed = self.speedBytesPerSec(transferred, start_ns);
 
         if (total) |expected| {
             if (downloaded != expected) {
@@ -583,7 +587,7 @@ pub const CoreDownloader = struct {
         try self.emitEvent(.{
             .event_type = .Complete,
             .destination_path = destination_path,
-            .progress = makeProgress(downloaded, total orelse downloaded, self.speedBytesPerSec(downloaded, start_ns)),
+            .progress = makeProgress(downloaded, total orelse downloaded, final_speed),
         });
     }
 
@@ -697,13 +701,9 @@ pub const CoreDownloader = struct {
         return false;
     }
 
-    fn speedBytesPerSec(self: *const CoreDownloader, downloaded: u64, start_ns: i96) ?u64 {
+    fn speedBytesPerSec(self: *const CoreDownloader, transferred: u64, start_ns: i96) ?u64 {
         const now_ns = std.Io.Timestamp.now(self.io, .awake).nanoseconds;
-        const elapsed_ns = now_ns - start_ns;
-        if (elapsed_ns <= 0) return null;
-        const elapsed: u128 = @intCast(elapsed_ns);
-        const bps = @as(u128, downloaded) * std.time.ns_per_s / elapsed;
-        return std.math.cast(u64, bps) orelse std.math.maxInt(u64);
+        return averageSpeed(transferred, now_ns - start_ns);
     }
 
     pub fn emitEvent(self: *const CoreDownloader, event: DownloadEvent) !void {
@@ -934,6 +934,15 @@ fn downloadRequestOptions(
     };
 }
 
+/// the first reads come in as one burst, so anything shorter reads too high
+const minimum_speed_window_ns = std.time.ns_per_s;
+
+fn averageSpeed(transferred: u64, elapsed_ns: i96) ?u64 {
+    if (elapsed_ns < minimum_speed_window_ns) return null;
+    const elapsed: u128 = @intCast(elapsed_ns);
+    return @intCast(@as(u128, transferred) * std.time.ns_per_s / elapsed);
+}
+
 fn makeProgress(downloaded: u64, total: ?u64, speed: ?u64) DownloadProgress {
     const percent: u8 = if (total) |t|
         (if (t == 0) 100 else @intCast(@min(@as(u64, 100), downloaded * 100 / t)))
@@ -1128,6 +1137,14 @@ test "download session lends one HTTP client without transferring ownership" {
 
     try std.testing.expect(first.httpClient() == second.httpClient());
     try std.testing.expect(first.httpClient() == &session.http_client);
+}
+
+test "averageSpeed waits for a full measurement window" {
+    try std.testing.expectEqual(@as(?u64, null), averageSpeed(1024 * 1024, 0));
+    try std.testing.expectEqual(@as(?u64, null), averageSpeed(1024 * 1024, std.time.ns_per_s / 10));
+    try std.testing.expectEqual(@as(?u64, 1024), averageSpeed(1024, std.time.ns_per_s));
+    try std.testing.expectEqual(@as(?u64, 512), averageSpeed(1024, 2 * std.time.ns_per_s));
+    try std.testing.expectEqual(@as(?u64, std.math.maxInt(u64)), averageSpeed(std.math.maxInt(u64), std.time.ns_per_s));
 }
 
 test "makeProgress calculates progress correctly with total size" {
