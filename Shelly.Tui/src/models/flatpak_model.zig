@@ -268,8 +268,12 @@ pub fn resetScreenshots(self: *Model, cancel_download: bool) void {
     self.flatpak_state.screenshot_failure = null;
 }
 
+pub fn screenshotsEnabled(self: *const Model) bool {
+    return self.settings_state.settings.show_flatpak_screenshots and self.flatpak_state.screenshots_supported;
+}
+
 pub fn openScreenshots(self: *Model, ctx: *vxfw.EventContext) !void {
-    if (!self.flatpak_state.screenshots_supported) return;
+    if (!screenshotsEnabled(self)) return;
     const app = selectedScreenshotApp(self) orelse return;
     const items = try flatpak_images.collect(self.gpa, app);
     const app_id = self.gpa.dupe(u8, app.Id) catch |err| {
@@ -285,7 +289,7 @@ pub fn openScreenshots(self: *Model, ctx: *vxfw.EventContext) !void {
 }
 
 pub fn syncScreenshots(self: *Model, ctx: *vxfw.EventContext) !void {
-    const app = if (self.active == .flatpak and self.flatpak_state.screenshots_supported) selectedScreenshotApp(self) else null;
+    const app = if (self.active == .flatpak and screenshotsEnabled(self)) selectedScreenshotApp(self) else null;
     if (app) |selected| {
         if (self.flatpak_state.screenshot_open and std.mem.eql(u8, selected.Id, self.flatpak_state.screenshot_app_id)) return;
         try openScreenshots(self, ctx);
@@ -312,14 +316,14 @@ pub fn moveScreenshotFromMouse(self: *Model, ctx: *vxfw.EventContext, forward: b
 }
 
 pub fn moveScreenshot(self: *Model, ctx: *vxfw.EventContext, forward: bool) !bool {
-    if (!self.flatpak_state.screenshot_open or !self.flatpak_state.screenshots_supported or self.flatpak_state.screenshot_items.len < 2) return false;
+    if (!self.flatpak_state.screenshot_open or !screenshotsEnabled(self) or self.flatpak_state.screenshot_items.len < 2) return false;
     self.flatpak_state.screenshot_index = if (forward) (self.flatpak_state.screenshot_index + 1) % self.flatpak_state.screenshot_items.len else (if (self.flatpak_state.screenshot_index == 0) self.flatpak_state.screenshot_items.len - 1 else self.flatpak_state.screenshot_index - 1);
     try queueScreenshot(self, ctx);
     return true;
 }
 
 pub fn queueScreenshot(self: *Model, ctx: *vxfw.EventContext) !void {
-    if (!self.flatpak_state.screenshot_open or !self.flatpak_state.screenshots_supported) return;
+    if (!self.flatpak_state.screenshot_open or !screenshotsEnabled(self)) return;
     // Trailing debounce: load only after the selection has stayed stable.
     // Let the sole in-flight download finish; generation checks discard it
     // if it belongs to an older selection. Never start another beside it.
@@ -357,7 +361,7 @@ pub fn onScreenshotTick(ptr: *anyopaque, ctx: *vxfw.EventContext, event: vxfw.Ev
 }
 
 pub fn startScreenshot(self: *Model, ctx: *vxfw.EventContext) !void {
-    if (!self.flatpak_state.screenshot_open or !self.flatpak_state.screenshots_supported) return;
+    if (!self.flatpak_state.screenshot_open or !screenshotsEnabled(self)) return;
     if (self.flatpak_state.screenshot_job != null) return;
     _ = ctx;
     self.flatpak_state.screenshot_request_after = null;
@@ -377,7 +381,7 @@ pub fn pollScreenshot(self: *Model, ctx: *vxfw.EventContext) !void {
         self.flatpak_state.screenshot_thread = null;
         self.flatpak_state.screenshot_job = null;
         defer job.deinit(self.gpa);
-        const current = self.flatpak_state.screenshot_open and !job.canceled.load(.acquire) and job.generation == self.flatpak_state.screenshot_generation and std.mem.eql(u8, job.url, self.flatpak_state.screenshot_items[self.flatpak_state.screenshot_index].url);
+        const current = screenshotsEnabled(self) and self.flatpak_state.screenshot_open and !job.canceled.load(.acquire) and job.generation == self.flatpak_state.screenshot_generation and std.mem.eql(u8, job.url, self.flatpak_state.screenshot_items[self.flatpak_state.screenshot_index].url);
         if (current) {
             self.flatpak_state.screenshot_failure = job.failure;
             if (job.bytes) |bytes| {
@@ -426,7 +430,7 @@ pub fn uploadScreenshot(self: *Model, app: *vxfw.App, bytes: []const u8) !vaxis.
 }
 
 pub fn screenshotView(self: *Model) ?image_view.View {
-    if (!self.flatpak_state.screenshot_open or !self.flatpak_state.screenshots_supported or self.flatpak_state.screenshot_items.len == 0) return null;
+    if (!self.flatpak_state.screenshot_open or !screenshotsEnabled(self) or self.flatpak_state.screenshot_items.len == 0) return null;
     // Hide captions until the shared AppStream parser selects their language correctly.
     return .{ .previous = &self.flatpak_state.screenshot_previous, .next = &self.flatpak_state.screenshot_next, .index = self.flatpak_state.screenshot_index, .count = self.flatpak_state.screenshot_items.len, .caption = "", .image = if (self.flatpak_state.screenshot_image_generation == self.flatpak_state.screenshot_generation) self.flatpak_state.screenshot_image else null, .failure = self.flatpak_state.screenshot_failure };
 }
@@ -1323,4 +1327,45 @@ test "Flatpak catalog installed markers match application IDs across scopes and 
     try std.testing.expect(!apps[3].Installed);
     markInstalledFlatpaks(&apps, &.{});
     for (apps) |app| try std.testing.expect(!app.Installed);
+}
+
+test "saved screenshot preference cancels images and preserves source state" {
+    const allocator = std.testing.allocator;
+    const model = try Model.init(allocator);
+    defer model.deinit();
+    model.settings_state.settings.flatpak_enabled = true;
+    model.settings_state.settings_draft = model.settings_state.settings;
+    model.flatpak_state.screenshots_supported = true;
+    model.updates_state.updates_checked = true;
+    model.settings_state.settings_selected = @import("settings_model.zig").screenshots_index;
+    var events: vxfw.EventContext = .{ .io = std.testing.io, .alloc = allocator, .cmds = .empty };
+    defer events.cmds.deinit(allocator);
+    try @import("settings_model.zig").toggleSetting(model, &events);
+    try std.testing.expect(screenshotsEnabled(model));
+    try std.testing.expect(!model.settings_state.settings_draft.show_flatpak_screenshots);
+    const job = try allocator.create(flatpak_images.Job);
+    job.* = .{ .url = try allocator.dupe(u8, "https://example.test/old.png"), .done = .init(true), .bytes = try std.heap.page_allocator.dupe(u8, "late image") };
+    model.flatpak_state.screenshot_job = job;
+    model.flatpak_state.screenshot_thread = try std.Thread.spawn(.{}, struct {
+        fn done() void {}
+    }.done, .{});
+    model.flatpak_state.screenshot_open = true;
+    @import("settings_model.zig").applySettings(model, model.settings_state.settings_draft);
+    try std.testing.expect(job.canceled.load(.acquire));
+    try std.testing.expect(!screenshotsEnabled(model));
+    try std.testing.expect(model.updates_state.updates_checked);
+    try std.testing.expect(model.settings_state.settings.flatpak_enabled);
+    try syncScreenshots(model, &events);
+    try queueScreenshot(model, &events);
+    try std.testing.expect(model.flatpak_state.screenshot_request_after == null);
+    try std.testing.expect(screenshotView(model) == null);
+    try std.testing.expect(!model.commandContext().screenshots_navigable);
+    try pollScreenshot(model, &events);
+    try std.testing.expect(model.flatpak_state.screenshot_job == null);
+    var enabled = model.settings_state.settings;
+    enabled.show_flatpak_screenshots = true;
+    @import("settings_model.zig").applySettings(model, enabled);
+    try std.testing.expect(screenshotsEnabled(model));
+    model.flatpak_state.screenshots_supported = false;
+    try std.testing.expect(!screenshotsEnabled(model));
 }

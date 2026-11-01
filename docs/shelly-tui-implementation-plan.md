@@ -253,6 +253,8 @@ Finish the baseline UI/UX across the remaining pages, starting with Flatpak, bef
 
 ### Inline Flatpak screenshots (2026-10-31)
 
+- Settings includes “Show Flatpak screenshots” (enabled by default; `ShowFlatpakScreenshots` in the settings file). Changes apply on explicit Save. Disabling cancels image work, hides screenshot controls and returns the space to metadata; enabling still requires terminal graphics support. Regression tests cover persistence, draft edits, cancellation and late results.
+
 - Vaxis's negotiated graphics capability enables automatic metadata screenshot previews within the package details pane. Unsupported terminals have no image area or downloads. The current renderer uses the Kitty graphics protocol independently of terminal brand.
 - Screenshots reserve roughly half of the details pane above independently scrolling metadata. Short/narrow panes prioritize metadata. Up/Down scroll details, Left returns to the selected package, and [ / ] browse screenshots only while details are focused. Clickable previous/next buttons sit beside the image count; single screenshots have no navigation controls. Help and the footer reflect the focused context.
 - Downloads use Shelly.Http in the background, with cancellation, a 15-second deadline, an 8 MiB response limit, and PNG/JPEG dimension limits. Preview metadata survives parsed catalog ownership changes; filtering and source changes discard stale previews immediately.

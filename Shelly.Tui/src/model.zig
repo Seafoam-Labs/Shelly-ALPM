@@ -911,8 +911,8 @@ pub const Model = struct {
             },
             .flatpak => |row| {
                 context.mode = .details;
-                context.screenshots_navigable = self.flatpak_state.screenshots_supported and self.flatpak_state.screenshot_open and self.flatpak_state.screenshot_items.len > 1;
-                context.screenshot_retry = self.flatpak_state.screenshots_supported and self.flatpak_state.screenshot_open and self.flatpak_state.screenshot_failure != null;
+                context.screenshots_navigable = flatpak_model.screenshotsEnabled(self) and self.flatpak_state.screenshot_open and self.flatpak_state.screenshot_items.len > 1;
+                context.screenshot_retry = flatpak_model.screenshotsEnabled(self) and self.flatpak_state.screenshot_open and self.flatpak_state.screenshot_failure != null;
                 context.installable = row == .catalog and row.catalog.Remotes.len > 0;
                 context.removable = row == .installed;
                 context.split_details = true;

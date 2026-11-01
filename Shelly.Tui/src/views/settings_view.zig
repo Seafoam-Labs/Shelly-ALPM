@@ -50,7 +50,7 @@ pub const View = struct {
         const content_ctx = ctx.withConstraints(.{}, .{ .width = width, .height = form_height });
         var children: std.ArrayList(vxfw.SubSurface) = .empty;
         var row: u16 = 0;
-        const detailed = form_height >= 16;
+        const detailed = form_height >= 14;
         const bright: vaxis.Style = .{ .fg = .{ .index = 7 }, .bold = true };
         const muted: vaxis.Style = .{ .fg = .{ .index = 250 } };
         if (detailed) {
@@ -58,28 +58,33 @@ pub const View = struct {
             try appendText(content_ctx, &children, &row, col, "Preferences", bright);
             row += 1;
         }
-        for (0..3) |index| {
+        for (0..4) |index| {
             // Retain the active control in compact layouts, including Save.
-            if (form_height < 4 and index != self.selected) continue;
-            const enabled = if (index == 0) self.settings.aur_enabled else self.settings.flatpak_enabled;
+            if (form_height < 5 and index != self.selected) continue;
+            const enabled = switch (index) {
+                0 => self.settings.aur_enabled,
+                1 => self.settings.flatpak_enabled,
+                else => self.settings.show_flatpak_screenshots,
+            };
             const title = if (index == 2)
                 try std.fmt.allocPrint(ctx.arena, "Header icons: {s}", .{self.settings.header_icons.title()})
             else
-                try std.fmt.allocPrint(ctx.arena, "[{s}] {s}", .{ if (enabled) "x" else " ", if (index == 0) "AUR" else "Flatpak" });
+                try std.fmt.allocPrint(ctx.arena, "[{s}] {s}", .{ if (enabled) "x" else " ", if (index == 0) "AUR" else if (index == 1) "Flatpak" else "Show Flatpak screenshots" });
             try appendText(content_ctx, &children, &row, col, title, .{ .fg = .{ .index = 7 }, .bold = true, .reverse = self.selected == index and !self.busy });
             if (detailed) {
                 try appendText(content_ctx, &children, &row, col, switch (index) {
                     0 => "Show AUR searches, installed packages, and updates.",
                     1 => "Show Flatpak applications, installed packages, and updates.",
-                    else => "Nerd Font icons require a compatible terminal font.",
+                    2 => "Nerd Font icons require a compatible terminal font.",
+                    else => "Display images in Flatpak details when supported.",
                 }, muted);
-                row += 1;
+                if (form_height >= 19) row += 1;
             }
         }
         try appendText(content_ctx, &children, &row, col, "[ Save changes ]", .{
             .fg = .{ .index = if (self.dirty and !self.busy) 7 else 250 },
             .bold = self.dirty,
-            .reverse = self.selected == 3 and !self.busy,
+            .reverse = self.selected == 4 and !self.busy,
         });
         if (self.failure) |err| {
             try appendText(content_ctx, &children, &row, col, try std.fmt.allocPrint(ctx.arena, "Settings error: {s}. The saved file was left intact.", .{@errorName(err)}), bright);

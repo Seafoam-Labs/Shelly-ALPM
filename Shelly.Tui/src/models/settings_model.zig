@@ -19,7 +19,8 @@ const Tab = coordinator.Tab;
 const UpdatesJob = updates_model.UpdatesJob;
 
 /// Page-owned state. Worker results are published to the UI loop before use.
-pub const save_index: usize = 3;
+pub const screenshots_index: usize = 3;
+pub const save_index: usize = 4;
 pub const control_count: usize = save_index + 1;
 
 pub const State = struct {
@@ -79,6 +80,7 @@ pub fn applySettings(self: *Model, saved: Settings) void {
         self.flatpak_state.flatpak_available = false;
         self.flatpak_state.flatpak_probe_error = null;
     }
+    if (!saved.show_flatpak_screenshots and self.settings_state.settings.show_flatpak_screenshots) flatpak_model.closeScreenshots(self);
     self.settings_state.settings = saved;
     self.settings_state.settings_draft = saved;
     self.settings_state.settings_failure = null;
@@ -110,6 +112,7 @@ pub fn toggleSetting(self: *Model, ctx: *vxfw.EventContext) !void {
         0 => draft.aur_enabled = !draft.aur_enabled,
         1 => draft.flatpak_enabled = !draft.flatpak_enabled,
         2 => draft.header_icons = draft.header_icons.next(),
+        screenshots_index => draft.show_flatpak_screenshots = !draft.show_flatpak_screenshots,
         else => unreachable,
     }
 }
@@ -259,6 +262,7 @@ test "settings keyboard edits survive tab changes and support Save Reload and Ct
     model.switchTab(1);
     try model.setTab(.settings, &ctx);
     try std.testing.expect(model.settings_state.settings_draft.aur_enabled);
+    try model.captureEvent(&ctx, .{ .key_press = commands.bindings.next });
     try model.captureEvent(&ctx, .{ .key_press = commands.bindings.next });
     try model.captureEvent(&ctx, .{ .key_press = commands.bindings.next });
     try model.captureEvent(&ctx, .{ .key_press = commands.bindings.next });

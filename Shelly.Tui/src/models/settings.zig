@@ -25,8 +25,9 @@ pub const Settings = struct {
     aur_enabled: bool = false,
     flatpak_enabled: bool = false,
     header_icons: HeaderIcons = .none,
+    show_flatpak_screenshots: bool = true,
 
     pub fn eql(self: Settings, other: Settings) bool {
-        return self.aur_enabled == other.aur_enabled and self.flatpak_enabled == other.flatpak_enabled and self.header_icons == other.header_icons;
+        return self.aur_enabled == other.aur_enabled and self.flatpak_enabled == other.flatpak_enabled and self.header_icons == other.header_icons and self.show_flatpak_screenshots == other.show_flatpak_screenshots;
     }
 };
