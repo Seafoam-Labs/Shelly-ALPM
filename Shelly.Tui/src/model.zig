@@ -984,7 +984,7 @@ pub const Model = struct {
             .settings => {
                 context.mode = .settings;
                 context.settings_save_selected = self.settings_state.settings_selected == settings_model.save_index;
-                context.settings_cycle_selected = self.settings_state.settings_selected == 2;
+                context.settings_cycle_selected = self.settings_state.settings_selected >= 2 and self.settings_state.settings_selected < settings_model.screenshots_index;
             },
         }
         return context;

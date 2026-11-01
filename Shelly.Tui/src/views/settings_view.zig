@@ -2,7 +2,8 @@ const std = @import("std");
 const vaxis = @import("vaxis");
 const vxfw = vaxis.vxfw;
 const Border = @import("border.zig");
-const Settings = @import("../models/settings.zig").Settings;
+const preferences = @import("../models/settings.zig");
+const Settings = preferences.Settings;
 const diagnostics = @import("diagnostics");
 const Allocator = std.mem.Allocator;
 
@@ -50,7 +51,7 @@ pub const View = struct {
         const content_ctx = ctx.withConstraints(.{}, .{ .width = width, .height = form_height });
         var children: std.ArrayList(vxfw.SubSurface) = .empty;
         var row: u16 = 0;
-        const detailed = form_height >= 14;
+        const detailed = form_height >= 17;
         const bright: vaxis.Style = .{ .fg = .{ .index = 7 }, .bold = true };
         const muted: vaxis.Style = .{ .fg = .{ .index = 250 } };
         if (detailed) {
@@ -58,33 +59,35 @@ pub const View = struct {
             try appendText(content_ctx, &children, &row, col, "Preferences", bright);
             row += 1;
         }
-        for (0..4) |index| {
+        for (0..preferences.save_index) |index| {
             // Retain the active control in compact layouts, including Save.
-            if (form_height < 5 and index != self.selected) continue;
+            if (form_height < preferences.save_index + 1 and index != self.selected) continue;
+            if (index == preferences.header_style_start and form_height >= preferences.save_index + 2) try appendText(content_ctx, &children, &row, col, "Header icons", muted);
+            const is_style = index >= preferences.header_style_start and index < preferences.screenshots_index;
             const enabled = switch (index) {
                 0 => self.settings.aur_enabled,
                 1 => self.settings.flatpak_enabled,
                 else => self.settings.show_flatpak_screenshots,
             };
-            const title = if (index == 2)
-                try std.fmt.allocPrint(ctx.arena, "Header icons: {s}", .{self.settings.header_icons.title()})
+            const title = if (is_style)
+                try std.fmt.allocPrint(ctx.arena, "  ({s}) {s}", .{ if (self.settings.header_icons == preferences.header_styles[index - preferences.header_style_start]) "x" else " ", preferences.header_styles[index - preferences.header_style_start].title() })
             else
                 try std.fmt.allocPrint(ctx.arena, "[{s}] {s}", .{ if (enabled) "x" else " ", if (index == 0) "AUR" else if (index == 1) "Flatpak" else "Show Flatpak screenshots" });
             try appendText(content_ctx, &children, &row, col, title, .{ .fg = .{ .index = 7 }, .bold = true, .reverse = self.selected == index and !self.busy });
-            if (detailed) {
+            if (detailed and (!is_style or index == 3)) {
                 try appendText(content_ctx, &children, &row, col, switch (index) {
                     0 => "Show AUR searches, installed packages, and updates.",
                     1 => "Show Flatpak applications, installed packages, and updates.",
-                    2 => "Nerd Font icons require a compatible terminal font.",
+                    3 => "Nerd Font icons require a compatible terminal font.",
                     else => "Display images in Flatpak details when supported.",
                 }, muted);
-                if (form_height >= 19) row += 1;
+                if (form_height >= 23) row += 1;
             }
         }
         try appendText(content_ctx, &children, &row, col, "[ Save changes ]", .{
             .fg = .{ .index = if (self.dirty and !self.busy) 7 else 250 },
             .bold = self.dirty,
-            .reverse = self.selected == 4 and !self.busy,
+            .reverse = self.selected == preferences.save_index and !self.busy,
         });
         if (self.failure) |err| {
             try appendText(content_ctx, &children, &row, col, try std.fmt.allocPrint(ctx.arena, "Settings error: {s}. The saved file was left intact.", .{@errorName(err)}), bright);

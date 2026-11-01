@@ -19,8 +19,8 @@ const Tab = coordinator.Tab;
 const UpdatesJob = updates_model.UpdatesJob;
 
 /// Page-owned state. Worker results are published to the UI loop before use.
-pub const screenshots_index: usize = 3;
-pub const save_index: usize = 4;
+pub const screenshots_index = @import("settings.zig").screenshots_index;
+pub const save_index = @import("settings.zig").save_index;
 pub const control_count: usize = save_index + 1;
 
 pub const State = struct {
@@ -111,7 +111,7 @@ pub fn toggleSetting(self: *Model, ctx: *vxfw.EventContext) !void {
     switch (self.settings_state.settings_selected) {
         0 => draft.aur_enabled = !draft.aur_enabled,
         1 => draft.flatpak_enabled = !draft.flatpak_enabled,
-        2 => draft.header_icons = draft.header_icons.next(),
+        2...4 => draft.header_icons = @import("settings.zig").header_styles[self.settings_state.settings_selected - 2],
         screenshots_index => draft.show_flatpak_screenshots = !draft.show_flatpak_screenshots,
         else => unreachable,
     }
@@ -262,10 +262,7 @@ test "settings keyboard edits survive tab changes and support Save Reload and Ct
     model.switchTab(1);
     try model.setTab(.settings, &ctx);
     try std.testing.expect(model.settings_state.settings_draft.aur_enabled);
-    try model.captureEvent(&ctx, .{ .key_press = commands.bindings.next });
-    try model.captureEvent(&ctx, .{ .key_press = commands.bindings.next });
-    try model.captureEvent(&ctx, .{ .key_press = commands.bindings.next });
-    try model.captureEvent(&ctx, .{ .key_press = commands.bindings.next });
+    for (0..save_index) |_| try model.captureEvent(&ctx, .{ .key_press = commands.bindings.next });
     try std.testing.expectEqual(save_index, model.settings_state.settings_selected);
     try std.testing.expect(model.commandContext().settings_save_selected);
     try model.captureEvent(&ctx, .{ .key_press = commands.bindings.confirm });
@@ -290,8 +287,11 @@ test "settings keyboard edits survive tab changes and support Save Reload and Ct
     model.settings_state.settings_selected = 2;
     model.updates_state.updates_checked = true;
     for ([_]@import("settings.zig").HeaderIcons{ .nerd_font, .ascii, .none }) |style| {
+        model.settings_state.settings_selected = 2 + @as(usize, @backingInt(style));
         const applied = model.settings_state.settings.header_icons;
         try model.captureEvent(&ctx, .{ .key_press = commands.bindings.confirm });
+        try std.testing.expectEqual(style, model.settings_state.settings_draft.header_icons);
+        try model.captureEvent(&ctx, .{ .key_press = commands.bindings.mark });
         try std.testing.expectEqual(style, model.settings_state.settings_draft.header_icons);
         try std.testing.expectEqual(applied, model.settings_state.settings.header_icons);
         try std.testing.expect(model.commandContext().settings_cycle_selected);
