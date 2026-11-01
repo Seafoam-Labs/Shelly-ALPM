@@ -19,6 +19,9 @@ const Tab = coordinator.Tab;
 const UpdatesJob = updates_model.UpdatesJob;
 
 /// Page-owned state. Worker results are published to the UI loop before use.
+pub const save_index: usize = 3;
+pub const control_count: usize = save_index + 1;
+
 pub const State = struct {
     settings: Settings = .{},
     settings_draft: Settings = .{},
@@ -46,6 +49,7 @@ pub fn loadSettings(self: *Model, io: std.Io, env: *const std.process.Environ.Ma
 }
 
 pub fn applySettings(self: *Model, saved: Settings) void {
+    const sources_changed = self.settings_state.settings.aur_enabled != saved.aur_enabled or self.settings_state.settings.flatpak_enabled != saved.flatpak_enabled;
     if (self.settings_state.settings.aur_enabled != saved.aur_enabled) {
         if (self.overlay) |overlay| {
             if (overlay == .aur) operation_model.closeOverlay(self);
@@ -78,13 +82,15 @@ pub fn applySettings(self: *Model, saved: Settings) void {
     self.settings_state.settings = saved;
     self.settings_state.settings_draft = saved;
     self.settings_state.settings_failure = null;
-    self.updates_state.updates_checked = false;
-    if (self.updates_state.updates_parsed) |*parsed| {
-        if (!saved.aur_enabled) parsed.value.Aur = &.{};
-        if (!saved.flatpak_enabled) parsed.value.Flatpak = &.{};
-        self.updates_state.updates_list.item_count = @intCast(parsed.value.count());
-        self.updates_state.updates_list.scroll = .{};
-        self.updates_state.updates_list.cursor = 0;
+    if (sources_changed) {
+        self.updates_state.updates_checked = false;
+        if (self.updates_state.updates_parsed) |*parsed| {
+            if (!saved.aur_enabled) parsed.value.Aur = &.{};
+            if (!saved.flatpak_enabled) parsed.value.Flatpak = &.{};
+            self.updates_state.updates_list.item_count = @intCast(parsed.value.count());
+            self.updates_state.updates_list.scroll = .{};
+            self.updates_state.updates_list.cursor = 0;
+        }
     }
     if (!self.tabEnabled(self.active)) {
         operation_model.closeOverlay(self);
@@ -98,9 +104,14 @@ pub fn hasChanges(self: *const Model) bool {
 
 pub fn toggleSetting(self: *Model, ctx: *vxfw.EventContext) !void {
     if (self.operation_state.install_job != null) return;
-    if (self.settings_state.settings_selected == 2) return saveSettings(self, ctx);
+    if (self.settings_state.settings_selected == save_index) return saveSettings(self, ctx);
     const draft = &self.settings_state.settings_draft;
-    if (self.settings_state.settings_selected == 0) draft.aur_enabled = !draft.aur_enabled else draft.flatpak_enabled = !draft.flatpak_enabled;
+    switch (self.settings_state.settings_selected) {
+        0 => draft.aur_enabled = !draft.aur_enabled,
+        1 => draft.flatpak_enabled = !draft.flatpak_enabled,
+        2 => draft.header_icons = draft.header_icons.next(),
+        else => unreachable,
+    }
 }
 
 pub fn saveSettings(self: *Model, ctx: *vxfw.EventContext) !void {
@@ -250,7 +261,8 @@ test "settings keyboard edits survive tab changes and support Save Reload and Ct
     try std.testing.expect(model.settings_state.settings_draft.aur_enabled);
     try model.captureEvent(&ctx, .{ .key_press = commands.bindings.next });
     try model.captureEvent(&ctx, .{ .key_press = commands.bindings.next });
-    try std.testing.expectEqual(@as(usize, 2), model.settings_state.settings_selected);
+    try model.captureEvent(&ctx, .{ .key_press = commands.bindings.next });
+    try std.testing.expectEqual(save_index, model.settings_state.settings_selected);
     try std.testing.expect(model.commandContext().settings_save_selected);
     try model.captureEvent(&ctx, .{ .key_press = commands.bindings.confirm });
     try std.testing.expect(model.tabEnabled(.aur));
@@ -271,4 +283,17 @@ test "settings keyboard edits survive tab changes and support Save Reload and Ct
     try std.testing.expect(!model.tabEnabled(.aur));
     try std.testing.expect(!hasChanges(model));
     try std.testing.expect(!(try model.settings_state.settings_store.?.load(io)).aur_enabled);
+    model.settings_state.settings_selected = 2;
+    model.updates_state.updates_checked = true;
+    for ([_]@import("settings.zig").HeaderIcons{ .nerd_font, .ascii, .none }) |style| {
+        const applied = model.settings_state.settings.header_icons;
+        try model.captureEvent(&ctx, .{ .key_press = commands.bindings.confirm });
+        try std.testing.expectEqual(style, model.settings_state.settings_draft.header_icons);
+        try std.testing.expectEqual(applied, model.settings_state.settings.header_icons);
+        try std.testing.expect(model.commandContext().settings_cycle_selected);
+        try model.captureEvent(&ctx, .{ .key_press = commands.bindings.save_settings });
+        try std.testing.expectEqual(style, model.settings_state.settings.header_icons);
+        try std.testing.expect(model.updates_state.updates_checked);
+        try std.testing.expectEqual(style, (try model.settings_state.settings_store.?.load(io)).header_icons);
+    }
 }

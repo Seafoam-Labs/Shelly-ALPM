@@ -40,6 +40,7 @@ pub const Store = struct {
         const alloc = document.arena.allocator();
         try document.value.object.put(alloc, "AurEnabled", .{ .bool = settings.aur_enabled });
         try document.value.object.put(alloc, "FlatpakEnabled", .{ .bool = settings.flatpak_enabled });
+        try document.value.object.put(alloc, "HeaderIcons", .{ .string = @tagName(settings.header_icons) });
         var staged = try std.Io.Dir.cwd().createFileAtomic(io, self.path, .{ .make_path = true, .replace = true });
         defer staged.deinit(io);
         var buffer: [4096]u8 = undefined;
@@ -62,6 +63,10 @@ fn decode(value: std.json.Value) !Settings {
         if (enabled != .bool) return error.InvalidSettings;
         result.flatpak_enabled = enabled.bool;
     }
+    if (value.object.get("HeaderIcons")) |icons| {
+        if (icons != .string) return error.InvalidSettings;
+        result.header_icons = if (std.mem.eql(u8, icons.string, "nerd_font")) .nerd_font else if (std.mem.eql(u8, icons.string, "ascii")) .ascii else if (std.mem.eql(u8, icons.string, "none") or std.mem.eql(u8, icons.string, "graphics") or std.mem.eql(u8, icons.string, "unicode")) .none else return error.InvalidSettings;
+    }
     return result;
 }
 
@@ -83,6 +88,10 @@ test "settings round trip preserves unknown keys and rejects invalid files" {
     const document = try store.read(io);
     defer document.deinit();
     try std.testing.expectEqual(@as(i64, 42), document.value.object.get("Other").?.object.get("value").?.integer);
+    for ([_]@import("../models/settings.zig").HeaderIcons{ .nerd_font, .ascii, .none }) |style| {
+        try store.save(io, .{ .header_icons = style });
+        try std.testing.expectEqual(style, (try store.load(io)).header_icons);
+    }
     file = try temporary.dir.createFile(io, "tui-settings.json", .{ .truncate = true });
     try file.writeStreamingAll(io, "{\"AurEnabled\":\"invalid\"}");
     file.close(io);
@@ -90,4 +99,18 @@ test "settings round trip preserves unknown keys and rejects invalid files" {
     const kept = try temporary.dir.readFileAlloc(io, "tui-settings.json", allocator, .limited(4096));
     defer allocator.free(kept);
     try std.testing.expectEqualStrings("{\"AurEnabled\":\"invalid\"}", kept);
+}
+
+test "header icons default for old files and reject unsupported values" {
+    const allocator = std.testing.allocator;
+    for ([_][]const u8{ "{}", "{\"AurEnabled\":true}", "{\"HeaderIcons\":\"unicode\"}", "{\"HeaderIcons\":\"graphics\"}" }) |json| {
+        const parsed = try std.json.parseFromSlice(std.json.Value, allocator, json, .{});
+        defer parsed.deinit();
+        try std.testing.expectEqual(@import("../models/settings.zig").HeaderIcons.none, (try decode(parsed.value)).header_icons);
+    }
+    for ([_][]const u8{ "{\"HeaderIcons\":true}", "{\"HeaderIcons\":\"nerd-font\"}" }) |json| {
+        const parsed = try std.json.parseFromSlice(std.json.Value, allocator, json, .{});
+        defer parsed.deinit();
+        try std.testing.expectError(error.InvalidSettings, decode(parsed.value));
+    }
 }

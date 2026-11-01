@@ -281,6 +281,7 @@ pub const Mode = enum { search, packages, details, aur, flatpak, updates, settin
 pub const Context = struct {
     source_wrap: bool = true,
     settings_save_selected: bool = false,
+    settings_cycle_selected: bool = false,
     multiple_choices: bool = false,
     preview_button: bool = false,
     mode: Mode = .search,
@@ -387,7 +388,7 @@ pub fn entries(arena: std.mem.Allocator, context: Context) std.mem.Allocator.Err
         .settings => {
             try add(arena, &list, .previous, "Previous", "Previous preference");
             try add(arena, &list, .next, "Next", "Next preference");
-            try add(arena, &list, .confirm, if (context.settings_save_selected) "Save" else "Toggle", if (context.settings_save_selected) "Save and apply pending settings" else "Edit the selected preference without saving");
+            try add(arena, &list, .confirm, if (context.settings_save_selected) "Save" else if (context.settings_cycle_selected) "Change" else "Toggle", if (context.settings_save_selected) "Save and apply pending settings" else if (context.settings_cycle_selected) "Cycle text-only headers, Nerd Font icons, and ASCII markers" else "Edit the selected preference without saving");
             try add(arena, &list, .mark, if (context.settings_save_selected) "Save" else "Toggle", "Activate the selected setting or Save action (alternative)");
             try add(arena, &list, .save_settings, "Save", "Save and apply pending settings");
             try add(arena, &list, .refresh, "Reload", "Discard pending edits and reload saved preferences");

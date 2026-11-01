@@ -8,6 +8,7 @@ const Allocator = std.mem.Allocator;
 
 pub const View = struct {
     settings: Settings,
+    dirty: bool = false,
     selected: usize,
     path: []const u8,
     failure: ?anyerror,
@@ -21,7 +22,7 @@ pub const View = struct {
         const body = try ctx.arena.create(View);
         body.* = self;
         const content: vxfw.Widget = .{ .userdata = body, .drawFn = drawBody };
-        const labels = [_]Border.BorderLabel{.{ .text = "Settings", .alignment = .top_left }};
+        const labels = [_]Border.BorderLabel{.{ .text = if (self.dirty) "Settings · Unsaved changes" else "Settings", .alignment = .top_left }};
         var border: Border = .{ .child = content, .labels = &labels, .style = .{ .fg = .{ .index = 7 }, .bold = true } };
         const height = size.height -| 2;
         try children.append(ctx.arena, .{
@@ -44,41 +45,63 @@ pub const View = struct {
         if (size.width == 0 or size.height == 0) return .{ .size = size, .widget = widget, .buffer = &.{}, .children = &.{} };
         const width = @min(size.width, 72);
         const col = (size.width - width) / 2;
-        const content_ctx = ctx.withConstraints(.{}, .{ .width = width, .height = size.height });
+        const show_path = size.height >= 8;
+        const form_height = size.height - @as(u16, if (show_path) 2 else 0);
+        const content_ctx = ctx.withConstraints(.{}, .{ .width = width, .height = form_height });
         var children: std.ArrayList(vxfw.SubSurface) = .empty;
         var row: u16 = 0;
-        const detailed = size.height >= 14;
+        const detailed = form_height >= 16;
         const bright: vaxis.Style = .{ .fg = .{ .index = 7 }, .bold = true };
         const muted: vaxis.Style = .{ .fg = .{ .index = 250 } };
         if (detailed) {
             row += 1;
-            try appendText(content_ctx, &children, &row, col, "Package sources", bright);
+            try appendText(content_ctx, &children, &row, col, "Preferences", bright);
             row += 1;
         }
-        for (0..2) |index| {
-            // Even a one-line viewport retains the active setting.
-            if (size.height == 1 and index != self.selected) continue;
+        for (0..3) |index| {
+            // Retain the active control in compact layouts, including Save.
+            if (form_height < 4 and index != self.selected) continue;
             const enabled = if (index == 0) self.settings.aur_enabled else self.settings.flatpak_enabled;
-            const title = try std.fmt.allocPrint(ctx.arena, "[{s}] {s}", .{ if (enabled) "x" else " ", if (index == 0) "AUR" else "Flatpak" });
+            const title = if (index == 2)
+                try std.fmt.allocPrint(ctx.arena, "Header icons: {s}", .{self.settings.header_icons.title()})
+            else
+                try std.fmt.allocPrint(ctx.arena, "[{s}] {s}", .{ if (enabled) "x" else " ", if (index == 0) "AUR" else "Flatpak" });
             try appendText(content_ctx, &children, &row, col, title, .{ .fg = .{ .index = 7 }, .bold = true, .reverse = self.selected == index and !self.busy });
             if (detailed) {
-                try appendText(content_ctx, &children, &row, col, if (index == 0) "Show AUR searches, installed packages, and updates." else "Show Flatpak applications, installed packages, and updates.", muted);
+                try appendText(content_ctx, &children, &row, col, switch (index) {
+                    0 => "Show AUR searches, installed packages, and updates.",
+                    1 => "Show Flatpak applications, installed packages, and updates.",
+                    else => "Nerd Font icons require a compatible terminal font.",
+                }, muted);
                 row += 1;
             }
         }
-        // Errors and operation locks take precedence over secondary information.
+        try appendText(content_ctx, &children, &row, col, "[ Save changes ]", .{
+            .fg = .{ .index = if (self.dirty and !self.busy) 7 else 250 },
+            .bold = self.dirty,
+            .reverse = self.selected == 3 and !self.busy,
+        });
         if (self.failure) |err| {
-            if (detailed) row += 1;
             try appendText(content_ctx, &children, &row, col, try std.fmt.allocPrint(ctx.arena, "Settings error: {s}. The saved file was left intact.", .{@errorName(err)}), bright);
         }
         if (self.busy) try appendText(content_ctx, &children, &row, col, "Settings are locked while an operation is running.", bright);
-        try appendText(content_ctx, &children, &row, col, try std.fmt.allocPrint(ctx.arena, "Flatpak backend: {s}", .{self.backendStatus()}), muted);
-        if (detailed) row += 1;
-        try appendText(content_ctx, &children, &row, col, "Changes are saved automatically.", muted);
-        if (detailed) {
-            row += 1;
-            try appendText(content_ctx, &children, &row, col, "Configuration file", bright);
-            try appendText(content_ctx, &children, &row, col, try std.fmt.allocPrint(ctx.arena, "{f}", .{diagnostics.safe(self.path)}), muted);
+        if (self.settings.flatpak_enabled) {
+            if (detailed) row += 1;
+            try appendText(content_ctx, &children, &row, col, try std.fmt.allocPrint(ctx.arena, "Flatpak backend: {s}", .{self.backendStatus()}), muted);
+        }
+        if (show_path) {
+            var path: vxfw.Text = .{
+                .text = try std.fmt.allocPrint(ctx.arena, "File: {f}", .{diagnostics.safe(self.path)}),
+                .style = muted,
+                .text_align = .center,
+                .width_basis = .parent,
+                .softwrap = false,
+                .overflow = .ellipsis,
+            };
+            try children.append(ctx.arena, .{
+                .origin = .{ .row = @intCast(size.height - 1), .col = 0 },
+                .surface = try path.draw(ctx.withConstraints(.{}, .{ .width = size.width, .height = 1 })),
+            });
         }
         return .{ .size = size, .widget = widget, .buffer = &.{}, .children = children.items };
     }

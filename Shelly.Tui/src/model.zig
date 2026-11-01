@@ -38,9 +38,30 @@ pub const Tab = enum {
         return switch (self) {
             .packages => "Packages",
             .aur => "AUR",
-            .upgrade => "Upgrade",
+            .upgrade => "Updates",
             .flatpak => "Flatpak",
             .settings => "Settings",
+        };
+    }
+    pub fn icon(self: Tab, style: @import("models/settings.zig").HeaderIcons) []const u8 {
+        return switch (style) {
+            .none => "",
+            // Nerd Fonts mappings: Octicons package/sync/gear, Font Logos Arch,
+            // and Font Awesome cube. See nerd-fonts/bin/scripts/lib upstream.
+            .nerd_font => switch (self) {
+                .packages => "\u{f487}",
+                .aur => "\u{f303}",
+                .flatpak => "\u{f1b2}",
+                .upgrade => "\u{f46a}",
+                .settings => "\u{f423}",
+            },
+            .ascii => switch (self) {
+                .packages => "[#]",
+                .aur => "[*]",
+                .flatpak => "[F]",
+                .upgrade => "[^]",
+                .settings => "[=]",
+            },
         };
     }
 };
@@ -387,8 +408,8 @@ pub const Model = struct {
                 if (self.active == .settings) {
                     if (commands.settings(key)) |action| {
                         switch (action) {
-                            .previous => self.settings_state.settings_selected = (self.settings_state.settings_selected + 2) % 3,
-                            .next => self.settings_state.settings_selected = (self.settings_state.settings_selected + 1) % 3,
+                            .previous => self.settings_state.settings_selected = (self.settings_state.settings_selected + settings_model.control_count - 1) % settings_model.control_count,
+                            .next => self.settings_state.settings_selected = (self.settings_state.settings_selected + 1) % settings_model.control_count,
                             .toggle => if (self.operation_state.install_job == null) try settings_model.toggleSetting(self, ctx),
                             .save => if (self.operation_state.install_job == null) try settings_model.saveSettings(self, ctx),
                             .reload => if (self.operation_state.install_job == null) try settings_model.reloadSettings(self, ctx),
@@ -836,8 +857,9 @@ pub const Model = struct {
         const tabs = self.visibleTabs();
         const spans = try arena.alloc(vxfw.RichText.TextSpan, tabs.len);
         for (tabs, 0..) |tab, i| {
+            const icon = tab.icon(self.settings_state.settings.header_icons);
             spans[i] = .{
-                .text = try std.fmt.allocPrint(arena, " {d} {s} ", .{ i + 1, tab.title() }),
+                .text = if (icon.len > 0) try std.fmt.allocPrint(arena, " {s} {s} ", .{ icon, tab.title() }) else try std.fmt.allocPrint(arena, " {s} ", .{tab.title()}),
                 .style = if (tab == self.active)
                     .{ .bold = true, .reverse = true, .fg = .{ .index = 7 } }
                 else
@@ -961,7 +983,8 @@ pub const Model = struct {
             },
             .settings => {
                 context.mode = .settings;
-                context.settings_save_selected = self.settings_state.settings_selected == 2;
+                context.settings_save_selected = self.settings_state.settings_selected == settings_model.save_index;
+                context.settings_cycle_selected = self.settings_state.settings_selected == 2;
             },
         }
         return context;
@@ -1046,6 +1069,7 @@ pub const TabBar = struct {
     first_visible: usize = 0,
     start_col: i16 = 0,
     label_row: i16 = 0,
+    label_widths: []const u16 = &.{},
 
     pub fn widget(self: *TabBar) vxfw.Widget {
         return .{
@@ -1069,24 +1093,38 @@ pub const TabBar = struct {
         var first: usize = 0;
         var end = self.tabs.len;
         var total: usize = (self.tabs.len -| 1) + caps;
-        for (self.rich.text) |span| total += span.text.len;
+        for (self.rich.text) |span| total += ctx.stringWidth(span.text);
         while (total > width and end - first > 1) {
             if (active - first > end - 1 - active) {
-                total -= self.rich.text[first].text.len + 1;
+                total -= ctx.stringWidth(self.rich.text[first].text) + 1;
                 first += 1;
             } else {
                 end -= 1;
-                total -= self.rich.text[end].text.len + 1;
+                total -= ctx.stringWidth(self.rich.text[end].text) + 1;
             }
         }
         const spans = try ctx.arena.dupe(vxfw.RichText.TextSpan, self.rich.text[first..end]);
-        if (total > width) {
+        const truncated = total > width;
+        if (truncated) {
             const label = std.mem.trim(u8, spans[0].text, " ");
-            spans[0].text = label[0..@min(width -| caps, label.len)];
-            total = spans[0].text.len + caps;
+            var iterator = ctx.graphemeIterator(label);
+            var bytes: usize = 0;
+            var columns: usize = 0;
+            while (iterator.next()) |grapheme| {
+                const text = grapheme.bytes(label);
+                const cells = ctx.stringWidth(text);
+                if (columns + cells > width -| caps) break;
+                bytes += text.len;
+                columns += cells;
+            }
+            spans[0].text = label[0..bytes];
+            total = columns + caps;
         }
         self.first_visible = first;
         self.rich.text = spans;
+        const label_widths = try ctx.arena.alloc(u16, spans.len);
+        for (spans, label_widths) |span, *label_width| label_width.* = @intCast(ctx.stringWidth(span.text));
+        self.label_widths = label_widths;
         const island_width: u16 = @intCast(total + padding);
         const island_col = (size.width - island_width) / 2;
         self.start_col = @intCast(island_col + padding / 2);
@@ -1109,13 +1147,16 @@ pub const TabBar = struct {
         for (spans) |span| {
             const selected = span.style.reverse;
             const selected_style: vaxis.Style = .{ .bg = .{ .index = 7 }, .fg = .{ .index = 0 }, .bold = true };
-            for (span.text, 0..) |_, offset| {
-                surface.writeCell(col + @as(u16, @intCast(offset)), @intCast(self.label_row), .{
-                    .char = .{ .grapheme = span.text[offset .. offset + 1], .width = 1 },
+            var iterator = ctx.graphemeIterator(span.text);
+            while (iterator.next()) |grapheme| {
+                const text = grapheme.bytes(span.text);
+                const cells: u8 = @intCast(ctx.stringWidth(text));
+                surface.writeCell(col, @intCast(self.label_row), .{
+                    .char = .{ .grapheme = text, .width = cells },
                     .style = if (selected) selected_style else span.style,
                 });
+                col += cells;
             }
-            col += @intCast(span.text.len);
             col +|= 1;
         }
         return surface;
@@ -1129,9 +1170,8 @@ pub const TabBar = struct {
                 if (mouse.button != .left or mouse.type != .press) return;
                 if (mouse.row != self.label_row or mouse.col < self.start_col) return;
                 var col = self.start_col;
-                for (self.rich.text, 0..) |span, i| {
-                    // Labels are ASCII, so byte length == display width
-                    const width: i16 = @intCast(span.text.len);
+                for (self.label_widths, 0..) |label_width, i| {
+                    const width: i16 = @intCast(label_width);
                     if (mouse.col >= col and mouse.col < col + width) {
                         try self.model.setTab(self.tabs[self.first_visible + i], ctx);
                         return ctx.consumeAndRedraw();
@@ -1255,34 +1295,41 @@ test "tab bar centers labels and retains the active tab on narrow terminals" {
     defer model.deinit();
     model.settings_state.settings = .{ .aur_enabled = true, .flatpak_enabled = true };
     model.active = .settings;
-    for ([_]u16{ 120, 80, 40, 18, 3 }) |width| {
-        var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-        defer arena.deinit();
-        const widget = try model.drawTabBar(arena.allocator());
-        const surface = try widget.draw(.{
-            .arena = arena.allocator(),
-            .min = .{},
-            .max = .{ .width = width, .height = 3 },
-            .cell_size = .{ .width = 10, .height = 20 },
-        });
-        try std.testing.expectEqual(width, surface.size.width);
-        try std.testing.expectEqual(@as(u16, 3), surface.size.height);
-        const bar: *TabBar = @ptrCast(@alignCast(widget.userdata));
-        try std.testing.expect(bar.first_visible + bar.rich.text.len > 4);
-        var total: usize = bar.rich.text.len -| 1;
-        for (bar.rich.text) |span| total += span.text.len;
-        const padding: usize = if (width >= 8) 4 else 0;
-        try std.testing.expectEqual(@as(i16, @intCast((width - total - padding) / 2 + padding / 2)), bar.start_col);
-        try std.testing.expect(bar.rich.text[bar.rich.text.len - 1].style.reverse);
-        if (width >= 8) {
-            var corners: usize = 0;
-            var caps: usize = 0;
+    for ([_]@import("models/settings.zig").HeaderIcons{ .none, .nerd_font, .ascii }) |style| {
+        model.settings_state.settings.header_icons = style;
+        for ([_]u16{ 120, 80, 40, 18, 3, 1 }) |width| {
+            var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+            defer arena.deinit();
+            const widget = try model.drawTabBar(arena.allocator());
+            const surface = try widget.draw(.{
+                .arena = arena.allocator(),
+                .min = .{},
+                .max = .{ .width = width, .height = 3 },
+                .cell_size = .{ .width = 10, .height = 20 },
+            });
             for (surface.buffer) |cell| {
-                if (std.mem.eql(u8, cell.char.grapheme, "┌") or std.mem.eql(u8, cell.char.grapheme, "┐")) corners += 1;
-                if (std.mem.eql(u8, cell.char.grapheme, "◖") or std.mem.eql(u8, cell.char.grapheme, "◗")) caps += 1;
+                try std.testing.expect(std.unicode.utf8ValidateSlice(cell.char.grapheme));
+                try std.testing.expect(cell.image == null);
             }
-            try std.testing.expectEqual(@as(usize, 2), corners);
-            try std.testing.expectEqual(@as(usize, 0), caps);
+            try std.testing.expectEqual(width, surface.size.width);
+            try std.testing.expectEqual(@as(u16, 3), surface.size.height);
+            const bar: *TabBar = @ptrCast(@alignCast(widget.userdata));
+            try std.testing.expect(bar.first_visible + bar.rich.text.len > 4);
+            var total: usize = bar.rich.text.len -| 1;
+            for (bar.label_widths) |label_width| total += label_width;
+            const padding: usize = if (width >= 8) 4 else 0;
+            try std.testing.expectEqual(@as(i16, @intCast((width - total - padding) / 2 + padding / 2)), bar.start_col);
+            try std.testing.expect(bar.rich.text[bar.rich.text.len - 1].style.reverse);
+            if (width >= 8) {
+                var corners: usize = 0;
+                var caps: usize = 0;
+                for (surface.buffer) |cell| {
+                    if (std.mem.eql(u8, cell.char.grapheme, "┌") or std.mem.eql(u8, cell.char.grapheme, "┐")) corners += 1;
+                    if (std.mem.eql(u8, cell.char.grapheme, "◖") or std.mem.eql(u8, cell.char.grapheme, "◗")) caps += 1;
+                }
+                try std.testing.expectEqual(@as(usize, 2), corners);
+                try std.testing.expectEqual(@as(usize, 0), caps);
+            }
         }
     }
 }
@@ -1291,21 +1338,25 @@ test "centered tab mouse targets exclude borders and padding" {
     vxfw.DrawContext.init(.unicode);
     const model = try Model.init(std.testing.allocator);
     defer model.deinit();
-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena.deinit();
-    const widget = try model.drawTabBar(arena.allocator());
-    _ = try widget.draw(.{ .arena = arena.allocator(), .min = .{}, .max = .{ .width = 100, .height = 3 }, .cell_size = .{ .width = 10, .height = 20 } });
-    const bar: *TabBar = @ptrCast(@alignCast(widget.userdata));
-    var ctx: vxfw.EventContext = .{ .io = std.testing.io, .alloc = std.testing.allocator, .cmds = .empty };
-    defer ctx.cmds.deinit(std.testing.allocator);
-    var col = bar.start_col;
-    for (bar.rich.text[0 .. bar.rich.text.len - 1]) |span| col += @intCast(span.text.len + 1);
-    try TabBar.handleEvent(bar, &ctx, .{ .mouse = .{ .button = .left, .type = .press, .col = @intCast(col), .row = 0, .mods = .{} } });
-    try std.testing.expectEqual(Tab.packages, model.active);
-    try TabBar.handleEvent(bar, &ctx, .{ .mouse = .{ .button = .left, .type = .press, .col = 0, .row = 1, .mods = .{} } });
-    try std.testing.expectEqual(Tab.packages, model.active);
-    try TabBar.handleEvent(bar, &ctx, .{ .mouse = .{ .button = .left, .type = .press, .col = @intCast(col), .row = 1, .mods = .{} } });
-    try std.testing.expectEqual(Tab.settings, model.active);
+    for ([_]@import("models/settings.zig").HeaderIcons{ .none, .nerd_font, .ascii }) |style| {
+        model.active = .packages;
+        model.settings_state.settings.header_icons = style;
+        var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+        defer arena.deinit();
+        const widget = try model.drawTabBar(arena.allocator());
+        _ = try widget.draw(.{ .arena = arena.allocator(), .min = .{}, .max = .{ .width = 100, .height = 3 }, .cell_size = .{ .width = 10, .height = 20 } });
+        const bar: *TabBar = @ptrCast(@alignCast(widget.userdata));
+        var ctx: vxfw.EventContext = .{ .io = std.testing.io, .alloc = std.testing.allocator, .cmds = .empty };
+        defer ctx.cmds.deinit(std.testing.allocator);
+        var col = bar.start_col;
+        for (bar.label_widths[0 .. bar.label_widths.len - 1]) |label_width| col += @intCast(label_width + 1);
+        try TabBar.handleEvent(bar, &ctx, .{ .mouse = .{ .button = .left, .type = .press, .col = @intCast(col), .row = 0, .mods = .{} } });
+        try std.testing.expectEqual(Tab.packages, model.active);
+        try TabBar.handleEvent(bar, &ctx, .{ .mouse = .{ .button = .left, .type = .press, .col = 0, .row = 1, .mods = .{} } });
+        try std.testing.expectEqual(Tab.packages, model.active);
+        try TabBar.handleEvent(bar, &ctx, .{ .mouse = .{ .button = .left, .type = .press, .col = @intCast(col), .row = 1, .mods = .{} } });
+        try std.testing.expectEqual(Tab.settings, model.active);
+    }
 }
 
 test "F1 help replaces details and restores selection focus and scroll" {
@@ -1399,4 +1450,23 @@ test {
     std.testing.refAllDecls(updates_model);
     std.testing.refAllDecls(settings_model);
     std.testing.refAllDecls(operation_model);
+}
+
+test "header labels default to raw text and use Nerd Font glyphs only when enabled" {
+    vxfw.DrawContext.init(.unicode);
+    const model = try Model.init(std.testing.allocator);
+    defer model.deinit();
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const widget = try model.drawTabBar(arena.allocator());
+    const bar: *TabBar = @ptrCast(@alignCast(widget.userdata));
+    try std.testing.expectEqualStrings(" Packages ", bar.rich.text[0].text);
+    try std.testing.expectEqualStrings(" Updates ", bar.rich.text[1].text);
+    try std.testing.expectEqualStrings(" Settings ", bar.rich.text[2].text);
+    model.settings_state.settings.header_icons = .nerd_font;
+    const icons_widget = try model.drawTabBar(arena.allocator());
+    const icons_bar: *TabBar = @ptrCast(@alignCast(icons_widget.userdata));
+    try std.testing.expect(std.mem.indexOf(u8, icons_bar.rich.text[0].text, "\u{f487}") != null);
+    try std.testing.expect(std.mem.indexOf(u8, icons_bar.rich.text[1].text, "\u{f46a}") != null);
+    try std.testing.expect(std.mem.indexOf(u8, icons_bar.rich.text[2].text, "\u{f423}") != null);
 }
