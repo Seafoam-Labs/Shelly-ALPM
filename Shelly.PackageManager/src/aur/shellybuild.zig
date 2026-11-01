@@ -1,4 +1,5 @@
 const std = @import("std");
+const user_account = @import("user_account");
 const diagnostics = @import("diagnostics");
 const toml = @import("toml");
 const process_runner = @import("builder.zig");
@@ -722,7 +723,7 @@ test "shellybuild signing policy merges field by field and rejects empty keys" {
     ));
 }
 
-test "shellybuild resolves XDG path with HOME fallback" {
+test "shellybuild resolves XDG path with caller home fallback" {
     var xdg_map = std.process.Environ.Map.init(std.testing.allocator);
     defer xdg_map.deinit();
     try xdg_map.put("HOME", "/home/invoker");
@@ -744,22 +745,55 @@ test "shellybuild resolves XDG path with HOME fallback" {
     defer fallback_environ.block.deinit(std.testing.allocator);
     const fallback_path = try resolveUserConfigurationPath(std.testing.allocator, std.testing.io, fallback_environ);
     defer std.testing.allocator.free(fallback_path);
-    try std.testing.expectEqualStrings("/home/invoker/.config/shelly/shellybuild.conf", fallback_path);
+    if (std.c.geteuid() == 0) {
+        // Direct root uses its account home even when HOME names another user.
+        const root = (try user_account.byUid(std.testing.allocator, 0)) orelse return error.InvokingUserUnavailable;
+        defer root.deinit(std.testing.allocator);
+        const expected = try std.fs.path.join(std.testing.allocator, &.{ root.home, ".config", "shelly", file_name });
+        defer std.testing.allocator.free(expected);
+        try std.testing.expectEqualStrings(expected, fallback_path);
+    } else {
+        try std.testing.expectEqualStrings("/home/invoker/.config/shelly/shellybuild.conf", fallback_path);
+    }
 }
 
 test "shellybuild elevated path ignores the coordinator XDG directory" {
+    const account = (try user_account.byName(std.testing.allocator, "nobody")) orelse return error.SkipZigTest;
+    defer account.deinit(std.testing.allocator);
     var elevated_map = std.process.Environ.Map.init(std.testing.allocator);
     defer elevated_map.deinit();
     try elevated_map.put("HOME", "/home/invoker");
     try elevated_map.put("XDG_CONFIG_HOME", "/root/custom-config");
-    try elevated_map.put("SUDO_USER", "shelly-test-user-not-in-passwd");
+    try elevated_map.put("SUDO_USER", account.username);
     const elevated_environ: std.process.Environ = .{
         .block = try elevated_map.createPosixBlock(std.testing.allocator, .{}),
     };
     defer elevated_environ.block.deinit(std.testing.allocator);
     const path = try resolveUserConfigurationPath(std.testing.allocator, std.testing.io, elevated_environ);
     defer std.testing.allocator.free(path);
-    try std.testing.expectEqualStrings("/home/invoker/.config/shelly/shellybuild.conf", path);
+    const expected_home = if (std.c.geteuid() == 0) account.home else "/home/invoker";
+    const expected = try std.fs.path.join(std.testing.allocator, &.{ expected_home, ".config", "shelly", file_name });
+    defer std.testing.allocator.free(expected);
+    try std.testing.expectEqualStrings(expected, path);
+}
+
+test "shellybuild rejects an unknown elevated caller only when running as root" {
+    var map = std.process.Environ.Map.init(std.testing.allocator);
+    defer map.deinit();
+    try map.put("HOME", "/home/invoker");
+    try map.put("XDG_CONFIG_HOME", "/root/custom-config");
+    try map.put("SUDO_USER", "shelly-test-user-not-in-passwd");
+    const environ: std.process.Environ = .{
+        .block = try map.createPosixBlock(std.testing.allocator, .{}),
+    };
+    defer environ.block.deinit(std.testing.allocator);
+    if (std.c.geteuid() == 0) {
+        try std.testing.expectError(error.InvokingUserUnavailable, resolveUserConfigurationPath(std.testing.allocator, std.testing.io, environ));
+    } else {
+        const path = try resolveUserConfigurationPath(std.testing.allocator, std.testing.io, environ);
+        defer std.testing.allocator.free(path);
+        try std.testing.expectEqualStrings("/home/invoker/.config/shelly/shellybuild.conf", path);
+    }
 }
 
 test "shellybuild extra_path defaults and user replacement follow configuration precedence" {

@@ -3526,6 +3526,10 @@ fn testEnvironWithHome(allocator: std.mem.Allocator, home: []const u8) !std.proc
     var map = std.process.Environ.Map.init(allocator);
     defer map.deinit();
     try map.put("HOME", home);
+    // Keep fixture configuration isolated even when the test runner is root.
+    const config_home = try std.fs.path.join(allocator, &.{ home, ".config" });
+    defer allocator.free(config_home);
+    try map.put("XDG_CONFIG_HOME", config_home);
     return .{ .block = try map.createPosixBlock(allocator, .{}) };
 }
 

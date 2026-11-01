@@ -14,18 +14,33 @@ const spec = @import("../cli/spec.zig");
 
 const command_path = "shelly downgrade standard";
 
+const DowngradeCandidate = PackageManager.Manager.DowngradeCandidate;
+
 const DowngradeError = error{
     PackageNotInstalled,
     TargetNotFound,
 };
 
 const CandidateSet = struct {
-    candidates: []PackageManager.Manager.DowngradeCandidate,
+    candidates: []DowngradeCandidate,
     owns_candidates: bool = false,
 
     fn deinit(self: *CandidateSet, allocator: std.mem.Allocator) void {
         if (self.owns_candidates)
-            PackageManager.Manager.DowngradeCandidate.deinitSlice(allocator, self.candidates);
+            DowngradeCandidate.deinitSlice(allocator, self.candidates);
+        self.* = undefined;
+    }
+};
+
+/// Candidates discovered for one requested package.
+const PackageGroup = struct {
+    name: []const u8,
+    candidates: []DowngradeCandidate,
+    owns_candidates: bool,
+
+    fn deinit(self: *PackageGroup, allocator: std.mem.Allocator) void {
+        if (self.owns_candidates)
+            DowngradeCandidate.deinitSlice(allocator, self.candidates);
         self.* = undefined;
     }
 };
@@ -66,7 +81,7 @@ const Real = struct {
         _: Real,
         context: *runtime.RuntimeContext,
         operation_context: *PackageManager.OperationContext,
-        candidate: *const PackageManager.Manager.DowngradeCandidate,
+        candidates: []const *const DowngradeCandidate,
     ) !void {
         const manager = try PackageManager.Manager.init(context.allocator, context.environ, .{ .config_path = context.config_path, .use_root = true, .operation_context = operation_context });
         defer manager.deinit();
@@ -77,20 +92,20 @@ const Real = struct {
         defer archive.deinit();
         archive.setOperationContext(operation_context);
         defer archive.setOperationContext(null);
-        try archive.install_candidate(manager, candidate, .{});
+        try archive.install_candidates(manager, candidates, .{});
     }
 
     fn ignore(
         _: Real,
         context: *runtime.RuntimeContext,
         operation_context: *PackageManager.OperationContext,
-        package_name: []const u8,
+        package_names: []const []const u8,
     ) !void {
         const manager = try PackageManager.Manager.init(context.allocator, context.environ, .{ .config_path = context.config_path, .use_root = true, .operation_context = operation_context });
         defer manager.deinit();
         manager.setOperationContext(operation_context);
         defer manager.setOperationContext(null);
-        try manager.ignore_package(package_name);
+        try manager.ignore_packages(package_names);
     }
 };
 
@@ -99,7 +114,7 @@ pub fn dispatch(
     invocation: *const parser.Invocation,
 ) !?u8 {
     if (!std.mem.eql(u8, invocation.command.path, command_path)) return null;
-    if (validationMessage(invocation)) |message|
+    if (try validationMessage(context, invocation)) |message|
         return try reportFailure(context, invocation, message);
 
     if (!invocation.globals.ui_mode) {
@@ -118,7 +133,7 @@ fn dispatchWithRunner(
     runner: anytype,
 ) anyerror!?u8 {
     if (!std.mem.eql(u8, invocation.command.path, command_path)) return null;
-    if (validationMessage(invocation)) |message|
+    if (try validationMessage(context, invocation)) |message|
         return try reportFailure(context, invocation, message);
     return try runWithRunner(context, invocation, runner);
 }
@@ -128,12 +143,13 @@ fn runWithRunner(
     invocation: *const parser.Invocation,
     runner: anytype,
 ) anyerror!u8 {
-    const package_name = invocation.positionals[0];
+    const package_names = try requestedPackages(context, invocation);
+
     if (!invocation.globals.ui_mode and !invocation.globals.json) {
         const looking_message = try std.fmt.allocPrint(
             context.allocator,
             "Looking for downgrade options for: {s}",
-            .{package_name},
+            .{try std.mem.join(context.allocator, ", ", package_names)},
         );
         defer context.allocator.free(looking_message);
         try output.writeSuccess(context, looking_message);
@@ -142,58 +158,79 @@ fn runWithRunner(
     var operation_context = PackageManager.OperationContext.init(context.allocator, context.io);
     context.attachTransactionLog(&operation_context);
     defer operation_context.deinit();
-    var candidates = runner.discover(
-        context,
-        &operation_context,
-        package_name,
-    ) catch |err| {
-        return try reportDiscoveryFailure(context, invocation, package_name, err);
-    };
-    defer candidates.deinit(context.allocator);
 
-    if (candidates.candidates.len == 0) {
-        const message = try std.fmt.allocPrint(
-            context.allocator,
-            "No older version of {0f} was found in the configured downgrade sources. Check the available versions before selecting a downgrade target.",
-            .{diagnostics.safe(package_name)},
-        );
-        defer context.allocator.free(message);
-        return try reportFailure(context, invocation, message);
+    var groups: std.ArrayList(PackageGroup) = .empty;
+    defer deinitGroups(context.allocator, &groups);
+    for (package_names) |package_name| {
+        const discovered = runner.discover(
+            context,
+            &operation_context,
+            package_name,
+        ) catch |err| {
+            return try reportDiscoveryFailure(context, invocation, package_name, err);
+        };
+        try groups.append(context.allocator, .{
+            .name = package_name,
+            .candidates = discovered.candidates,
+            .owns_candidates = discovered.owns_candidates,
+        });
+        if (discovered.candidates.len == 0) {
+            const message = try std.fmt.allocPrint(
+                context.allocator,
+                "No older version of {0f} was found in the configured downgrade sources. Check the available versions before selecting a downgrade target.",
+                .{diagnostics.safe(package_name)},
+            );
+            defer context.allocator.free(message);
+            return try reportFailure(context, invocation, message);
+        }
     }
 
     if (optionEnabled(invocation, "--list-options")) {
-        try writeCandidates(context, invocation, package_name, candidates.candidates);
+        try writeCandidates(context, invocation, groups.items);
         return 0;
     }
 
     const target = targetValue(invocation);
-    if (invocation.globals.ui_mode and target == null)
-        return try reportFailure(
+    if (invocation.globals.ui_mode) {
+        if (package_names.len != 1)
+            return try reportFailure(
+                context,
+                invocation,
+                "UI mode downgrade supports one package at a time. Downgrade the packages separately or use the terminal CLI for multiple packages.",
+            );
+        if (target == null)
+            return try reportFailure(
+                context,
+                invocation,
+                "UI mode downgrade requires --target. Use --list-options to inspect available versions.",
+            );
+    }
+
+    var selected: std.ArrayList(*const DowngradeCandidate) = .empty;
+    for (groups.items) |*group| {
+        const candidate = selectCandidate(
             context,
             invocation,
-            "UI mode downgrade requires --target. Use --list-options to inspect available versions.",
-        );
-
-    const selected = selectCandidate(
-        context,
-        invocation,
-        candidates.candidates,
-        target,
-    ) catch |err| switch (err) {
-        DowngradeError.TargetNotFound => {
-            const message = try std.fmt.allocPrint(
-                context.allocator,
-                "No downgrade option matched '{s}'. Use --list-options to inspect valid targets.",
-                .{target.?},
-            );
-            defer context.allocator.free(message);
-            return try reportFailure(context, invocation, message);
-        },
-        else => return err,
-    };
+            group.name,
+            group.candidates,
+            target,
+        ) catch |err| switch (err) {
+            DowngradeError.TargetNotFound => {
+                const message = try std.fmt.allocPrint(
+                    context.allocator,
+                    "No downgrade option matched '{s}'. Use --list-options to inspect valid targets.",
+                    .{target.?},
+                );
+                defer context.allocator.free(message);
+                return try reportFailure(context, invocation, message);
+            },
+            else => return err,
+        };
+        try selected.append(context.allocator, candidate);
+    }
 
     if (invocation.globals.ui_mode)
-        return executeUi(context, invocation, package_name, selected, runner);
+        return executeUi(context, invocation, groups.items[0], selected.items[0], runner);
 
     if (!invocation.globals.no_confirm and
         !try confirm(context, "Do you want to proceed with the installation?", true))
@@ -202,34 +239,59 @@ fn runWithRunner(
         return 0;
     }
 
-    if (!try executeStandard(context, invocation, selected, runner)) {
+    if (!try executeStandard(context, invocation, selected.items, runner)) {
         try output.writeFailure(context, "Could not downgrade the requested package.");
         return 1;
     }
 
-    var add_ignore = optionEnabled(invocation, "--ignore");
-    if (!add_ignore and !invocation.globals.no_confirm)
-        add_ignore = try confirm(context, "Do you want to add package to IgnorePkg list?", true);
-    if (add_ignore) {
+    const ignored = try ignoredPackages(context, invocation, package_names);
+    if (ignored.len > 0) {
         const message = try std.fmt.allocPrint(
             context.allocator,
             "Adding to IgnorePkg: {s}",
-            .{package_name},
+            .{try std.mem.join(context.allocator, ", ", ignored)},
         );
         defer context.allocator.free(message);
         try output.writeSuccess(context, message);
-        if (!try executeIgnore(context, invocation, package_name, runner)) return 1;
+        if (!try executeIgnore(context, invocation, ignored, runner)) return 1;
     }
 
     try output.writeSuccess(context, "Downgrade complete.");
     return 0;
 }
 
-fn validationMessage(invocation: *const parser.Invocation) ?[]const u8 {
-    if (invocation.positionals.len == 0 or
-        std.mem.trim(u8, invocation.positionals[0], " \t\r\n").len == 0)
+/// Requested package names in argument order, trimmed and deduplicated. The
+/// returned slice is owned by the context allocator.
+fn requestedPackages(
+    context: *runtime.RuntimeContext,
+    invocation: *const parser.Invocation,
+) ![]const []const u8 {
+    var names: std.ArrayList([]const u8) = .empty;
+    for (invocation.positionals) |positional| {
+        const name = std.mem.trim(u8, positional, " \t\r\n");
+        if (name.len == 0) continue;
+        for (names.items) |existing| {
+            if (std.mem.eql(u8, existing, name)) break;
+        } else try names.append(context.allocator, name);
+    }
+    return names.items;
+}
+
+fn deinitGroups(allocator: std.mem.Allocator, groups: *std.ArrayList(PackageGroup)) void {
+    for (groups.items) |*group| group.deinit(allocator);
+    groups.deinit(allocator);
+}
+
+fn validationMessage(
+    context: *runtime.RuntimeContext,
+    invocation: *const parser.Invocation,
+) !?[]const u8 {
+    const package_names = try requestedPackages(context, invocation);
+    if (package_names.len == 0)
         return "Specify at least one package name. See the command help for usage.";
     const has_target = targetValue(invocation) != null;
+    if (has_target and package_names.len > 1)
+        return "Cannot combine --target with multiple packages.";
     if (has_target and optionEnabled(invocation, "--oldest"))
         return "Cannot combine --target with --oldest.";
     if (has_target and optionEnabled(invocation, "--list-options"))
@@ -243,8 +305,15 @@ fn reportDiscoveryFailure(
     package_name: []const u8,
     err: anyerror,
 ) !u8 {
-    if (err == DowngradeError.PackageNotInstalled)
-        return reportFailure(context, invocation, "Could not downgrade the requested package because it is not installed. Check the package name and installed-package list.");
+    if (err == DowngradeError.PackageNotInstalled) {
+        const message = try std.fmt.allocPrint(
+            context.allocator,
+            "Could not downgrade {0f} because it is not installed. Check the package name and installed-package list.",
+            .{diagnostics.safe(package_name)},
+        );
+        defer context.allocator.free(message);
+        return reportFailure(context, invocation, message);
+    }
     const message = try std.fmt.allocPrint(
         context.allocator,
         "Could not find downgrade options for {0f}: {1s}\n\nTechnical details: {2s}",
@@ -273,19 +342,20 @@ fn reportFailure(
 fn selectCandidate(
     context: *runtime.RuntimeContext,
     invocation: *const parser.Invocation,
-    candidates: []const PackageManager.Manager.DowngradeCandidate,
+    package_name: []const u8,
+    candidates: []const DowngradeCandidate,
     target: ?[]const u8,
-) !*const PackageManager.Manager.DowngradeCandidate {
+) !*const DowngradeCandidate {
     if (target) |requested| return resolveTarget(candidates, requested);
     if (optionEnabled(invocation, "--oldest")) return &candidates[candidates.len - 1];
     if (invocation.globals.no_confirm) return &candidates[0];
-    return &candidates[try promptForCandidate(context, candidates)];
+    return &candidates[try promptForCandidate(context, package_name, candidates)];
 }
 
 fn resolveTarget(
-    candidates: []const PackageManager.Manager.DowngradeCandidate,
+    candidates: []const DowngradeCandidate,
     target: []const u8,
-) DowngradeError!*const PackageManager.Manager.DowngradeCandidate {
+) DowngradeError!*const DowngradeCandidate {
     const filename_target = std.mem.indexOf(u8, target, ".pkg.tar.") != null;
     for (candidates) |*candidate| {
         const value = if (filename_target) candidate.filename else candidate.version_release;
@@ -296,10 +366,11 @@ fn resolveTarget(
 
 fn promptForCandidate(
     context: *runtime.RuntimeContext,
-    candidates: []const PackageManager.Manager.DowngradeCandidate,
+    package_name: []const u8,
+    candidates: []const DowngradeCandidate,
 ) !usize {
     const reader = context.stdin orelse return 0;
-    try context.stdout.writeAll("Select Package\n");
+    try context.stdout.print("Select Package: {s}\n", .{package_name});
     for (0..candidates.len) |index| {
         const candidate = candidates[candidates.len - 1 - index];
         try context.stdout.print("  {d}) {s} ({s}", .{
@@ -349,18 +420,20 @@ fn confirm(
 fn executeStandard(
     context: *runtime.RuntimeContext,
     invocation: *const parser.Invocation,
-    candidate: *const PackageManager.Manager.DowngradeCandidate,
+    candidates: []const *const DowngradeCandidate,
     runner: anytype,
 ) anyerror!bool {
+    var filenames: std.ArrayList([]const u8) = .empty;
+    for (candidates) |candidate| try filenames.append(context.allocator, candidate.filename);
     const opening = try std.fmt.allocPrint(
         context.allocator,
         "Installing: {s}",
-        .{candidate.filename},
+        .{try std.mem.join(context.allocator, ", ", filenames.items)},
     );
     defer context.allocator.free(opening);
     const InstallAdapter = struct {
         runner: @TypeOf(runner),
-        candidate: *const PackageManager.Manager.DowngradeCandidate,
+        candidates: []const *const DowngradeCandidate,
 
         pub fn run(
             self: @This(),
@@ -368,25 +441,48 @@ fn executeStandard(
             operation_context: *PackageManager.OperationContext,
             _: *const parser.Invocation,
         ) !void {
-            return self.runner.install(runtime_context, operation_context, self.candidate);
+            return self.runner.install(runtime_context, operation_context, self.candidates);
         }
     };
     return standard_single_pane.output(
         context,
         opening,
         invocation.globals.no_confirm,
-        InstallAdapter{ .runner = runner, .candidate = candidate },
+        InstallAdapter{ .runner = runner, .candidates = candidates },
         invocation,
         null,
         null,
     );
 }
 
+/// Determines which downgraded packages join IgnorePkg. `--ignore` adds every
+/// package; interactive mode asks per package; `--no-confirm` adds none.
+fn ignoredPackages(
+    context: *runtime.RuntimeContext,
+    invocation: *const parser.Invocation,
+    package_names: []const []const u8,
+) ![]const []const u8 {
+    if (optionEnabled(invocation, "--ignore")) return package_names;
+    if (invocation.globals.no_confirm) return &.{};
+    var selected: std.ArrayList([]const u8) = .empty;
+    for (package_names) |package_name| {
+        const question = try std.fmt.allocPrint(
+            context.allocator,
+            "Do you want to add {s} to IgnorePkg list?",
+            .{package_name},
+        );
+        defer context.allocator.free(question);
+        if (try confirm(context, question, true))
+            try selected.append(context.allocator, package_name);
+    }
+    return selected.items;
+}
+
 fn executeUi(
     context: *runtime.RuntimeContext,
     invocation: *const parser.Invocation,
-    package_name: []const u8,
-    candidate: *const PackageManager.Manager.DowngradeCandidate,
+    group: PackageGroup,
+    candidate: *const DowngradeCandidate,
     runner: anytype,
 ) anyerror!u8 {
     var operation_context = PackageManager.OperationContext.init(context.allocator, context.io);
@@ -415,7 +511,8 @@ fn executeUi(
     try output.writeAlpmInfoFrame(context, "TransactionStart", opening);
     try ui_operation.flush(context);
 
-    runner.install(context, &operation_context, candidate) catch |err| {
+    const candidates = [_]*const DowngradeCandidate{candidate};
+    runner.install(context, &operation_context, candidates[0..]) catch |err| {
         const message = try std.fmt.allocPrint(context.allocator, "Could not downgrade the requested package. {0s}\n\nTechnical details: {1s}", .{ diagnostics.cause(err), @errorName(err) });
         defer context.allocator.free(message);
         try output.writeErrorFrame(context, message);
@@ -424,7 +521,8 @@ fn executeUi(
         return 1;
     };
     if (optionEnabled(invocation, "--ignore")) {
-        runner.ignore(context, &operation_context, package_name) catch |err| {
+        const package_names = [_][]const u8{group.name};
+        runner.ignore(context, &operation_context, package_names[0..]) catch |err| {
             const message = try std.fmt.allocPrint(
                 context.allocator,
                 "The package was downgraded, but the requested package could not be added to IgnorePkg. {0s} It may be upgraded again until the ignore setting is saved.\n\nTechnical details: {1s}",
@@ -446,17 +544,17 @@ fn executeUi(
 fn executeIgnore(
     context: *runtime.RuntimeContext,
     invocation: *const parser.Invocation,
-    package_name: []const u8,
+    package_names: []const []const u8,
     runner: anytype,
 ) anyerror!bool {
     var operation_context = PackageManager.OperationContext.init(context.allocator, context.io);
     context.attachTransactionLog(&operation_context);
     defer operation_context.deinit();
-    runner.ignore(context, &operation_context, package_name) catch |err| {
+    runner.ignore(context, &operation_context, package_names) catch |err| {
         const message = try std.fmt.allocPrint(
             context.allocator,
             "The package was downgraded, but {0f} could not be added to IgnorePkg. {1s} It may be upgraded again until the ignore setting is saved.\n\nTechnical details: {2s}",
-            .{ diagnostics.safe(package_name), diagnostics.cause(err), @errorName(err) },
+            .{ diagnostics.safe(try std.mem.join(context.allocator, ", ", package_names)), diagnostics.cause(err), @errorName(err) },
         );
         defer context.allocator.free(message);
         _ = try reportFailure(context, invocation, message);
@@ -468,85 +566,87 @@ fn executeIgnore(
 fn writeCandidates(
     context: *runtime.RuntimeContext,
     invocation: *const parser.Invocation,
-    package_name: []const u8,
-    candidates: []const PackageManager.Manager.DowngradeCandidate,
+    groups: []const PackageGroup,
 ) !void {
     if (invocation.globals.ui_mode) {
         var payload = std.Io.Writer.Allocating.init(context.allocator);
         defer payload.deinit();
-        try writeCandidatesJson(&payload.writer, candidates, true);
+        try writeCandidatesJson(&payload.writer, groups, true);
         try output.writeFrame(context, payload.writer.buffered());
         return;
     }
     if (invocation.globals.json) {
-        try writeCandidatesJson(context.stdout, candidates, false);
+        try writeCandidatesJson(context.stdout, groups, false);
         try context.stdout.writeByte('\n');
         return;
     }
 
-    const heading = try std.fmt.allocPrint(
-        context.allocator,
-        "Available downgrade options for: {s}",
-        .{package_name},
-    );
-    defer context.allocator.free(heading);
-    try output.writeSuccess(context, heading);
-
     var storage = std.heap.ArenaAllocator.init(context.allocator);
     defer storage.deinit();
     const allocator = storage.allocator();
-    const rows = try allocator.alloc([]const []const u8, candidates.len);
-    for (rows, 0..) |*cells, index| {
-        const candidate = candidates[candidates.len - 1 - index];
-        const values = try allocator.alloc([]const u8, 3);
-        values[0] = candidate.filename;
-        values[1] = locationName(candidate);
-        values[2] = if (candidate.is_installed) "True" else "False";
-        cells.* = values;
+    for (groups) |group| {
+        const heading = try std.fmt.allocPrint(
+            allocator,
+            "Available downgrade options for: {s}",
+            .{group.name},
+        );
+        try output.writeSuccess(context, heading);
+
+        const rows = try allocator.alloc([]const []const u8, group.candidates.len);
+        for (rows, 0..) |*cells, index| {
+            const candidate = group.candidates[group.candidates.len - 1 - index];
+            const values = try allocator.alloc([]const u8, 3);
+            values[0] = candidate.filename;
+            values[1] = locationName(candidate);
+            values[2] = if (candidate.is_installed) "True" else "False";
+            cells.* = values;
+        }
+        try table.write(
+            context,
+            &.{ "Filename", "Location", "Installed" },
+            rows,
+        );
     }
-    try table.write(
-        context,
-        &.{ "Filename", "Location", "Installed" },
-        rows,
-    );
 }
 
 fn writeCandidatesJson(
     writer: *std.Io.Writer,
-    candidates: []const PackageManager.Manager.DowngradeCandidate,
+    groups: []const PackageGroup,
     ui_mode: bool,
 ) !void {
     var json: std.json.Stringify = .{ .writer = writer };
     try json.beginArray();
-    var remaining = candidates.len;
-    while (remaining > 0) {
-        remaining -= 1;
-        const candidate = candidates[remaining];
-        try json.beginObject();
-        try json.objectField("Name");
-        try json.write(candidate.name);
-        try json.objectField("Filename");
-        try json.write(candidate.filename);
-        try json.objectField("Location");
-        if (ui_mode)
-            try json.write(locationName(candidate))
-        else
-            try json.write(@as(u8, if (candidate.source.is_remote()) 0 else 1));
-        try json.objectField("IsInstalled");
-        try json.write(candidate.is_installed);
-        if (!ui_mode) {
-            try json.objectField("Uri");
-            if (candidate.source.is_remote())
-                try json.write(candidate.location)
+    for (groups) |group| {
+        var remaining = group.candidates.len;
+        while (remaining > 0) {
+            remaining -= 1;
+            const candidate = group.candidates[remaining];
+            try json.beginObject();
+            try json.objectField("Name");
+            try json.write(candidate.name);
+            try json.objectField("Filename");
+            try json.write(candidate.filename);
+            try json.objectField("Location");
+            if (ui_mode)
+                try json.write(locationName(candidate))
             else
-                try json.write(null);
+                try json.write(@as(u8, if (candidate.source.is_remote()) 0 else 1));
+            try json.objectField("IsInstalled");
+            try json.write(candidate.is_installed);
+            if (!ui_mode) {
+                try json.objectField("Uri");
+                if (candidate.source.is_remote())
+                    try json.write(candidate.location)
+                else
+                    try json.write(null);
+            }
+            try json.endObject();
         }
-        try json.endObject();
     }
     try json.endArray();
 }
 
-fn locationName(candidate: PackageManager.Manager.DowngradeCandidate) []const u8 {
+fn locationName(candidate: DowngradeCandidate) []const u8 {
     return if (candidate.source.is_remote()) "Remote" else "Local";
 }
 
@@ -617,16 +717,23 @@ test "downgrade validation rejects missing packages and incompatible target mode
             return error.ShouldNotRun;
         }
 
-        fn install(_: @This(), _: *runtime.RuntimeContext, _: *PackageManager.OperationContext, _: *const PackageManager.Manager.DowngradeCandidate) !void {
+        fn install(_: @This(), _: *runtime.RuntimeContext, _: *PackageManager.OperationContext, _: []const *const PackageManager.Manager.DowngradeCandidate) !void {
             return error.ShouldNotRun;
         }
 
-        fn ignore(_: @This(), _: *runtime.RuntimeContext, _: *PackageManager.OperationContext, _: []const u8) !void {
+        fn ignore(_: @This(), _: *runtime.RuntimeContext, _: *PackageManager.OperationContext, _: []const []const u8) !void {
             return error.ShouldNotRun;
         }
     };
 
+    // The catalog requires at least one package, so the parser rejects a bare
+    // downgrade before the command runs.
     var outcome = try parser.parse(tc.arena.allocator(), &manifest, &.{"downgrade"});
+    try std.testing.expect(outcome == .failure);
+    try std.testing.expect(std.mem.indexOf(u8, outcome.failure.message, "requires 'packages'") != null);
+
+    tc.stdout.writer.end = 0;
+    outcome = try parser.parse(tc.arena.allocator(), &manifest, &.{ "downgrade", "  " });
     try std.testing.expectEqual(@as(?u8, 1), try dispatchWithRunner(&tc.context, &outcome.dispatch, Unused{}));
     try std.testing.expect(std.mem.indexOf(u8, tc.stdout.writer.buffered(), "Specify at least one package name") != null);
 
@@ -643,6 +750,28 @@ test "downgrade validation rejects missing packages and incompatible target mode
     });
     try std.testing.expectEqual(@as(?u8, 1), try dispatchWithRunner(&tc.context, &outcome.dispatch, Unused{}));
     try std.testing.expect(std.mem.indexOf(u8, tc.stdout.writer.buffered(), "Cannot combine --target with --list-options") != null);
+
+    tc.stdout.writer.end = 0;
+    outcome = try parser.parse(tc.arena.allocator(), &manifest, &.{
+        "downgrade", "--target", "1.0-1", "demo", "libdemo",
+    });
+    try std.testing.expectEqual(@as(?u8, 1), try dispatchWithRunner(&tc.context, &outcome.dispatch, Unused{}));
+    try std.testing.expect(std.mem.indexOf(u8, tc.stdout.writer.buffered(), "Cannot combine --target with multiple packages") != null);
+
+    // A repeated single package is deduplicated, so --target stays usable.
+    tc.stdout.writer.end = 0;
+    var demo_candidates = [_]PackageManager.Manager.DowngradeCandidate{
+        testCandidate("demo", "3.0", "1", "3.0-1", "x86_64", "demo-3.0-1-x86_64.pkg.tar.zst", "https://archive.example/demo-3.0-1-x86_64.pkg.tar.zst", .arch_linux, true),
+        testCandidate("demo", "2.0", "4", "2.0-4", "x86_64", "demo-2.0-4-x86_64.pkg.tar.zst", "/cache/demo-2.0-4-x86_64.pkg.tar.zst", .local_cache, false),
+    };
+    var capture: TestRunner = .{ .groups = &.{.{ .name = "demo", .candidates = &demo_candidates }} };
+    outcome = try parser.parse(tc.arena.allocator(), &manifest, &.{
+        "downgrade", "--target", "2.0-4", "--no-confirm", "demo", "demo",
+    });
+    try std.testing.expectEqual(@as(?u8, 0), try dispatchWithRunner(&tc.context, &outcome.dispatch, &capture));
+    try std.testing.expectEqual(@as(usize, 1), capture.discover_calls);
+    try std.testing.expectEqual(@as(usize, 1), capture.installed_count);
+    try std.testing.expectEqualStrings("demo-2.0-4-x86_64.pkg.tar.zst", capture.installed_filenames[0]);
 }
 
 test "downgrade lists candidates as C sharp compatible JSON and UI records" {
@@ -712,17 +841,19 @@ test "downgrade selects oldest and exact targets and updates IgnorePkg only when
         "downgrade", "--oldest", "--ignore", "--no-confirm", "demo",
     });
     try std.testing.expectEqual(@as(?u8, 0), try dispatchWithRunner(&tc.context, &outcome.dispatch, &capture));
-    try std.testing.expectEqualStrings("demo-1.0-2-x86_64.pkg.tar.zst", capture.installed_filename.?);
+    try std.testing.expectEqual(@as(usize, 1), capture.install_calls);
+    try std.testing.expectEqual(@as(usize, 1), capture.installed_count);
+    try std.testing.expectEqualStrings("demo-1.0-2-x86_64.pkg.tar.zst", capture.installed_filenames[0]);
     try std.testing.expectEqual(@as(usize, 1), capture.ignore_calls);
+    try std.testing.expectEqualStrings("demo", capture.ignored_names[0]);
 
-    capture.installed_filename = null;
-    capture.ignore_calls = 0;
+    capture.reset();
     tc.stdout.writer.end = 0;
     outcome = try parser.parse(tc.arena.allocator(), &manifest, &.{
         "downgrade", "--target", "2.0-4", "--no-confirm", "demo",
     });
     try std.testing.expectEqual(@as(?u8, 0), try dispatchWithRunner(&tc.context, &outcome.dispatch, &capture));
-    try std.testing.expectEqualStrings("demo-2.0-4-x86_64.pkg.tar.zst", capture.installed_filename.?);
+    try std.testing.expectEqualStrings("demo-2.0-4-x86_64.pkg.tar.zst", capture.installed_filenames[0]);
     try std.testing.expectEqual(@as(usize, 0), capture.ignore_calls);
 }
 
@@ -743,51 +874,228 @@ test "interactive downgrade selection and confirmations are honored" {
         @as(?u8, 0),
         try dispatchWithRunner(&tc.context, &outcome.dispatch, &capture),
     );
-    try std.testing.expectEqualStrings("demo-1.0-1-x86_64.pkg.tar.zst", capture.installed_filename.?);
+    try std.testing.expectEqual(@as(usize, 1), capture.installed_count);
+    try std.testing.expectEqualStrings("demo-1.0-1-x86_64.pkg.tar.zst", capture.installed_filenames[0]);
     try std.testing.expectEqual(@as(usize, 0), capture.ignore_calls);
     const rendered = tc.stdout.writer.buffered();
-    try std.testing.expect(std.mem.indexOf(u8, rendered, "Select Package") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "Select Package: demo") != null);
     try std.testing.expect(
         std.mem.indexOf(u8, rendered, "demo-1.0-1-x86_64.pkg.tar.zst").? <
             std.mem.indexOf(u8, rendered, "demo-2.0-1-x86_64.pkg.tar.zst").?,
     );
     try std.testing.expect(std.mem.indexOf(u8, rendered, "Select [1-2] (2):") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "Do you want to proceed with the installation?") != null);
-    try std.testing.expect(std.mem.indexOf(u8, rendered, "Do you want to add package to IgnorePkg list?") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "Do you want to add demo to IgnorePkg list?") != null);
 }
 
-const TestRunner = struct {
+test "downgrade installs multiple packages in one transaction" {
+    var tc: test_support.TestContext = .{};
+    tc.init();
+    defer tc.deinit();
+    const manifest = try spec.Manifest.load(tc.arena.allocator());
+    var demo_candidates = [_]PackageManager.Manager.DowngradeCandidate{
+        testCandidate("demo", "3.0", "1", "3.0-1", "x86_64", "demo-3.0-1-x86_64.pkg.tar.zst", "https://archive.example/demo-3.0-1-x86_64.pkg.tar.zst", .arch_linux, true),
+        testCandidate("demo", "2.0", "4", "2.0-4", "x86_64", "demo-2.0-4-x86_64.pkg.tar.zst", "/cache/demo-2.0-4-x86_64.pkg.tar.zst", .local_cache, false),
+        testCandidate("demo", "1.0", "2", "1.0-2", "x86_64", "demo-1.0-2-x86_64.pkg.tar.zst", "https://archive.example/demo-1.0-2-x86_64.pkg.tar.zst", .arch_linux, false),
+    };
+    var lib_candidates = [_]PackageManager.Manager.DowngradeCandidate{
+        testCandidate("libdemo", "9.0", "1", "9.0-1", "x86_64", "libdemo-9.0-1-x86_64.pkg.tar.zst", "https://archive.example/libdemo-9.0-1-x86_64.pkg.tar.zst", .arch_linux, true),
+        testCandidate("libdemo", "8.0", "3", "8.0-3", "x86_64", "libdemo-8.0-3-x86_64.pkg.tar.zst", "/cache/libdemo-8.0-3-x86_64.pkg.tar.zst", .local_cache, false),
+    };
+    const groups = [_]TestCandidateGroup{
+        .{ .name = "demo", .candidates = &demo_candidates },
+        .{ .name = "libdemo", .candidates = &lib_candidates },
+    };
+
+    // --oldest selects the oldest candidate of every package and --ignore
+    // adds every downgraded package within a single transaction.
+    var capture: TestRunner = .{ .groups = &groups };
+    var outcome = try parser.parse(tc.arena.allocator(), &manifest, &.{
+        "downgrade", "--oldest", "--ignore", "--no-confirm", "demo", "libdemo",
+    });
+    try std.testing.expectEqual(@as(?u8, 0), try dispatchWithRunner(&tc.context, &outcome.dispatch, &capture));
+    try std.testing.expectEqual(@as(usize, 1), capture.install_calls);
+    try std.testing.expectEqual(@as(usize, 2), capture.installed_count);
+    try std.testing.expect(installedContains(&capture, "demo-1.0-2-x86_64.pkg.tar.zst"));
+    try std.testing.expect(installedContains(&capture, "libdemo-8.0-3-x86_64.pkg.tar.zst"));
+    try std.testing.expectEqual(@as(usize, 2), capture.ignore_calls);
+    try std.testing.expectEqualStrings("demo", capture.ignored_names[0]);
+    try std.testing.expectEqualStrings("libdemo", capture.ignored_names[1]);
+
+    // Without --oldest, --no-confirm selects the newest candidate per package
+    // and no packages are added to IgnorePkg.
+    capture.reset();
+    tc.stdout.writer.end = 0;
+    outcome = try parser.parse(tc.arena.allocator(), &manifest, &.{
+        "downgrade", "--no-confirm", "demo", "libdemo",
+    });
+    try std.testing.expectEqual(@as(?u8, 0), try dispatchWithRunner(&tc.context, &outcome.dispatch, &capture));
+    try std.testing.expectEqual(@as(usize, 1), capture.install_calls);
+    try std.testing.expect(installedContains(&capture, "demo-3.0-1-x86_64.pkg.tar.zst"));
+    try std.testing.expect(installedContains(&capture, "libdemo-9.0-1-x86_64.pkg.tar.zst"));
+    try std.testing.expectEqual(@as(usize, 0), capture.ignore_calls);
+}
+
+test "downgrade aborts when a requested package cannot be resolved" {
+    var tc: test_support.TestContext = .{};
+    tc.init();
+    defer tc.deinit();
+    const manifest = try spec.Manifest.load(tc.arena.allocator());
+    var demo_candidates = [_]PackageManager.Manager.DowngradeCandidate{
+        testCandidate("demo", "1.0", "1", "1.0-1", "x86_64", "demo-1.0-1-x86_64.pkg.tar.zst", "/cache/demo-1.0-1-x86_64.pkg.tar.zst", .local_cache, false),
+    };
+    var empty_candidates = [_]PackageManager.Manager.DowngradeCandidate{};
+    const groups = [_]TestCandidateGroup{
+        .{ .name = "demo", .candidates = &demo_candidates },
+        .{ .name = "empty", .candidates = &empty_candidates },
+    };
+
+    // A package that is not installed aborts before anything is installed.
+    var capture: TestRunner = .{ .groups = &groups };
+    var outcome = try parser.parse(tc.arena.allocator(), &manifest, &.{
+        "downgrade", "--no-confirm", "demo", "missing",
+    });
+    try std.testing.expectEqual(@as(?u8, 1), try dispatchWithRunner(&tc.context, &outcome.dispatch, &capture));
+    try std.testing.expect(std.mem.indexOf(u8, tc.stdout.writer.buffered(), "Could not downgrade missing") != null);
+    try std.testing.expectEqual(@as(usize, 0), capture.install_calls);
+
+    // A package without candidates reports the specific package and aborts.
+    capture.reset();
+    tc.stdout.writer.end = 0;
+    outcome = try parser.parse(tc.arena.allocator(), &manifest, &.{
+        "downgrade", "--no-confirm", "demo", "empty",
+    });
+    try std.testing.expectEqual(@as(?u8, 1), try dispatchWithRunner(&tc.context, &outcome.dispatch, &capture));
+    const rendered = tc.stdout.writer.buffered();
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "No older version of empty was found") != null);
+    try std.testing.expectEqual(@as(usize, 0), capture.install_calls);
+}
+
+test "downgrade lists candidates for multiple packages in every output mode" {
+    var tc: test_support.TestContext = .{};
+    tc.init();
+    defer tc.deinit();
+    const manifest = try spec.Manifest.load(tc.arena.allocator());
+    var demo_candidates = [_]PackageManager.Manager.DowngradeCandidate{
+        testCandidate("demo", "2.0", "1", "2.0-1", "x86_64", "demo-2.0-1-x86_64.pkg.tar.zst", "https://archive.example/demo-2.0-1-x86_64.pkg.tar.zst", .arch_linux, true),
+        testCandidate("demo", "1.0", "2", "1.0-2", "x86_64", "demo-1.0-2-x86_64.pkg.tar.zst", "/var/cache/pacman/pkg/demo-1.0-2-x86_64.pkg.tar.zst", .local_cache, false),
+    };
+    var lib_candidates = [_]PackageManager.Manager.DowngradeCandidate{
+        testCandidate("libdemo", "8.0", "3", "8.0-3", "x86_64", "libdemo-8.0-3-x86_64.pkg.tar.zst", "/cache/libdemo-8.0-3-x86_64.pkg.tar.zst", .local_cache, false),
+    };
+    const groups = [_]TestCandidateGroup{
+        .{ .name = "demo", .candidates = &demo_candidates },
+        .{ .name = "libdemo", .candidates = &lib_candidates },
+    };
+    var capture: TestRunner = .{ .groups = &groups };
+
+    var outcome = try parser.parse(tc.arena.allocator(), &manifest, &.{
+        "downgrade", "--list-options", "--json", "demo", "libdemo",
+    });
+    try std.testing.expectEqual(@as(?u8, 0), try dispatchWithRunner(&tc.context, &outcome.dispatch, &capture));
+    const json_output = tc.stdout.writer.buffered();
+    const decoded = try std.json.parseFromSlice(std.json.Value, tc.arena.allocator(), json_output, .{});
+    defer decoded.deinit();
+    try std.testing.expectEqual(@as(usize, 3), decoded.value.array.items.len);
+    try std.testing.expectEqualStrings("demo", decoded.value.array.items[0].object.get("Name").?.string);
+    try std.testing.expectEqualStrings("libdemo", decoded.value.array.items[2].object.get("Name").?.string);
+    try std.testing.expect(
+        std.mem.indexOf(u8, json_output, "demo-1.0-2-x86_64.pkg.tar.zst").? <
+            std.mem.indexOf(u8, json_output, "demo-2.0-1-x86_64.pkg.tar.zst").?,
+    );
+
+    tc.stdout.writer.end = 0;
+    outcome = try parser.parse(tc.arena.allocator(), &manifest, &.{
+        "downgrade", "--list-options", "--ui-mode", "demo", "libdemo",
+    });
+    try std.testing.expectEqual(@as(?u8, 0), try dispatchWithRunner(&tc.context, &outcome.dispatch, &capture));
+    const frame = try decodeFirstFrame(tc.arena.allocator(), tc.stdout.writer.buffered());
+    try std.testing.expect(std.mem.indexOf(u8, frame, "\"Location\":\"Local\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, frame, "\"Name\":\"libdemo\"") != null);
+
+    tc.stdout.writer.end = 0;
+    capture.reset();
+    outcome = try parser.parse(tc.arena.allocator(), &manifest, &.{
+        "downgrade", "--list-options", "demo", "libdemo",
+    });
+    try std.testing.expectEqual(@as(?u8, 0), try dispatchWithRunner(&tc.context, &outcome.dispatch, &capture));
+    const plain_output = tc.stdout.writer.buffered();
+    try std.testing.expect(std.mem.indexOf(u8, plain_output, "Available downgrade options for: demo") != null);
+    try std.testing.expect(std.mem.indexOf(u8, plain_output, "Available downgrade options for: libdemo") != null);
+    try std.testing.expectEqual(@as(usize, 0), capture.install_calls);
+}
+
+const TestCandidateGroup = struct {
+    name: []const u8,
     candidates: []PackageManager.Manager.DowngradeCandidate,
-    installed_filename: ?[]const u8 = null,
+};
+
+const TestRunner = struct {
+    candidates: []PackageManager.Manager.DowngradeCandidate = &.{},
+    groups: []const TestCandidateGroup = &.{},
+    discover_calls: usize = 0,
+    install_calls: usize = 0,
+    installed_count: usize = 0,
+    installed_filenames: [8][]const u8 = .{ "", "", "", "", "", "", "", "" },
     ignore_calls: usize = 0,
+    ignored_names: [8][]const u8 = .{ "", "", "", "", "", "", "", "" },
+
+    fn reset(self: *TestRunner) void {
+        self.discover_calls = 0;
+        self.install_calls = 0;
+        self.installed_count = 0;
+        self.ignore_calls = 0;
+    }
 
     fn discover(
         self: *TestRunner,
         _: *runtime.RuntimeContext,
         _: *PackageManager.OperationContext,
-        _: []const u8,
+        package_name: []const u8,
     ) !CandidateSet {
-        return .{ .candidates = self.candidates };
+        self.discover_calls += 1;
+        if (self.groups.len == 0) return .{ .candidates = self.candidates };
+        for (self.groups) |group| {
+            if (std.mem.eql(u8, group.name, package_name))
+                return .{ .candidates = group.candidates };
+        }
+        return DowngradeError.PackageNotInstalled;
     }
 
     fn install(
         self: *TestRunner,
         _: *runtime.RuntimeContext,
         _: *PackageManager.OperationContext,
-        candidate: *const PackageManager.Manager.DowngradeCandidate,
+        candidates: []const *const PackageManager.Manager.DowngradeCandidate,
     ) !void {
-        self.installed_filename = candidate.filename;
+        self.install_calls += 1;
+        for (candidates) |candidate| {
+            if (self.installed_count < self.installed_filenames.len)
+                self.installed_filenames[self.installed_count] = candidate.filename;
+            self.installed_count += 1;
+        }
     }
 
     fn ignore(
         self: *TestRunner,
         _: *runtime.RuntimeContext,
         _: *PackageManager.OperationContext,
-        _: []const u8,
+        package_names: []const []const u8,
     ) !void {
-        self.ignore_calls += 1;
+        for (package_names) |package_name| {
+            if (self.ignore_calls < self.ignored_names.len)
+                self.ignored_names[self.ignore_calls] = package_name;
+            self.ignore_calls += 1;
+        }
     }
 };
+
+fn installedContains(runner: *const TestRunner, filename: []const u8) bool {
+    for (runner.installed_filenames[0..runner.installed_count]) |installed| {
+        if (std.mem.eql(u8, installed, filename)) return true;
+    }
+    return false;
+}
 
 fn testCandidate(
     name: [:0]const u8,

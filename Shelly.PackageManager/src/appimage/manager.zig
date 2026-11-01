@@ -1,4 +1,5 @@
 const std = @import("std");
+const caller_io = @import("user_account").caller_io;
 const diagnostics = @import("diagnostics");
 const builtin = @import("builtin");
 const appimage = @import("bindings.zig").appimage;
@@ -252,25 +253,15 @@ pub const AppImageManager = struct {
         defer self.allocator.free(clean_name);
 
         var working_dir: ?[]u8 = try self.createExtractionWorkingDir(clean_name);
-        errdefer freeWorkingDir(self.allocator, self.io, &working_dir);
+        errdefer freeWorkingDir(self.allocator, self.io, self.environ, &working_dir);
 
-        try std.Io.Dir.cwd().createDirPath(self.io, working_dir.?);
-
-        var extract_proc = try std.process.spawn(self.io, .{
-            .argv = &.{ path, "--appimage-extract" },
-            .cwd = .{ .path = working_dir.? },
-            .stdin = .ignore,
-            .stdout = .ignore,
-            .stderr = .ignore,
-        });
-
-        const term = try extract_proc.wait(self.io);
-        if (term != .exited or term.exited != 0) {
-            std.log.warn("Could not extract metadata from AppImage {0f}.", .{diagnostics.safe(path)});
+        caller_io.run(self.allocator, self.io, self.environ, &.{ path, "--appimage-extract" }, null, working_dir.?) catch |err| {
+            if (err != error.CallerOperationFailed) return err;
+            self.emitStatusFmt(.err, "Could not extract AppImage metadata as the calling user: {s}", .{@errorName(err)});
             operation_scope.finish(.failed);
-            freeWorkingDir(self.allocator, self.io, &working_dir);
+            freeWorkingDir(self.allocator, self.io, self.environ, &working_dir);
             return null;
-        }
+        };
 
         var squashfs_root: ?[]u8 = try std.fs.path.join(self.allocator, &.{ working_dir.?, "squashfs-root" });
         errdefer if (squashfs_root) |s| self.allocator.free(s);
@@ -358,6 +349,10 @@ pub const AppImageManager = struct {
 
         operation_scope.finish(.success);
 
+        // ExtractedContent can outlive its manager and the caller's environment.
+        var cleanup_map = try self.environ.createMap(self.allocator);
+        defer cleanup_map.deinit();
+        const cleanup_environment: std.process.Environ = .{ .block = try cleanup_map.createPosixBlock(self.allocator, .{}) };
         const result = ExtractedContent{
             .allocator = self.allocator,
             .io = self.io,
@@ -365,6 +360,8 @@ pub const AppImageManager = struct {
             .source_desktop_path = source_desktop_path,
             .icon_source = icon_source,
             .working_dir = working_dir.?,
+            .environ = cleanup_environment,
+            .owns_environ = true,
             .squashfs_root = squashfs_root.?,
         };
 
@@ -385,15 +382,14 @@ pub const AppImageManager = struct {
         const root = try std.fs.path.join(self.allocator, &.{ cache_home, "Shelly", "extractions" });
         defer self.allocator.free(root);
 
-        var root_handle = try std.Io.Dir.cwd().createDirPathOpen(self.io, root, .{});
-        root_handle.close(self.io);
+        try caller_io.makePath(self.allocator, self.io, self.environ, root);
 
         var random_suffix: [16]u8 = undefined;
         self.io.random(&random_suffix);
         const suffix_hex = std.fmt.bytesToHex(random_suffix, .lower);
         const path = try std.fmt.allocPrint(self.allocator, "{s}/{s}-{s}", .{ root, clean_name, suffix_hex[0..] });
         errdefer self.allocator.free(path);
-        try std.Io.Dir.createDirAbsolute(self.io, path, .default_dir);
+        try caller_io.run(self.allocator, self.io, self.environ, &.{ "/usr/bin/mkdir", "--", path }, null, null);
         return path;
     }
 
@@ -497,6 +493,8 @@ pub const AppImageManager = struct {
         source_desktop_path: ?[]const u8 = null,
         icon_source: ?IconSource = null,
         working_dir: []const u8,
+        environ: std.process.Environ = .empty,
+        owns_environ: bool = false,
         squashfs_root: []const u8,
         owns_metadata: bool = true,
 
@@ -506,7 +504,8 @@ pub const AppImageManager = struct {
             if (self.source_desktop_path) |p| allocator.free(p);
             if (self.icon_source) |src| allocator.free(src.path);
             allocator.free(self.squashfs_root);
-            std.Io.Dir.cwd().deleteTree(self.io, self.working_dir) catch {};
+            caller_io.deleteTree(allocator, self.io, self.environ, self.working_dir) catch {};
+            if (self.owns_environ) self.environ.block.deinit(allocator);
             allocator.free(self.working_dir);
             self.* = undefined;
         }
@@ -937,8 +936,13 @@ pub const AppImageManager = struct {
         defer operation_scope.finish(.success);
         errdefer operation_scope.fail();
         try self.checkCancelled();
+        var command = try caller_io.command(self.allocator, self.environ, &.{ appimage_path, "--appimage-updateinfo" });
+        defer command.deinit(self.allocator);
+        var environment_map = try self.environ.createMap(self.allocator);
+        defer environment_map.deinit();
         var proc = std.process.spawn(self.io, .{
-            .argv = &.{ appimage_path, "--appimage-updateinfo" },
+            .argv = command.asConst(),
+            .environ_map = &environment_map,
             .stdin = .ignore,
             .stdout = .pipe,
             .stderr = .ignore,
@@ -1685,9 +1689,9 @@ fn freeAppImageStatic(allocator: std.mem.Allocator, value: appimage.AppImage) vo
     if (value.repo_name) |v| allocator.free(v);
 }
 
-fn freeWorkingDir(allocator: std.mem.Allocator, io: std.Io, dir: *?[]u8) void {
+fn freeWorkingDir(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Environ, dir: *?[]u8) void {
     if (dir.*) |w| {
-        std.Io.Dir.cwd().deleteTree(io, w) catch |err| {
+        caller_io.deleteTree(allocator, io, environ, w) catch |err| {
             std.log.warn("Could not remove AppImage extraction directory {0f}. {1s}\n\nTechnical details: {2s}", .{ diagnostics.safe(w), diagnostics.cause(err), @errorName(err) });
         };
         allocator.free(w);

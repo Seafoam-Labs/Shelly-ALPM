@@ -656,7 +656,7 @@ test "native backend output observers receive preparation and transaction progre
     var capture: Capture = .{};
     const handler = try manager.dispatcher.addOperationHandler(.{ .function = Capture.event, .data = &capture });
     try manager.install_local_packages(&.{fixture.archive}, .{ .nohooks = true, .noscriptlet = true });
-    try t.expect(capture.checking_databases and !capture.internal_status_seen);
+    try t.expect(!capture.checking_databases and !capture.internal_status_seen);
     try t.expect(capture.checking_archives and capture.package_started and capture.progress);
     try t.expectEqual(@as(usize, 1), capture.completions);
     try manager.sync(false);

@@ -826,6 +826,7 @@ test "real AppImage runner persists and normalizes Forgejo release-page URLs" {
     var environment = std.process.Environ.Map.init(allocator);
     try environment.put("HOME", home);
     try environment.put("XDG_CONFIG_HOME", root);
+    try environment.put("XDG_BIN_HOME", install_directory);
     var stdout = std.Io.Writer.Allocating.init(std.testing.allocator);
     defer stdout.deinit();
     var stderr = std.Io.Writer.Allocating.init(std.testing.allocator);
@@ -893,6 +894,7 @@ test "real AppImage runner rejects invalid Forgejo paths without reporting succe
     var environment = std.process.Environ.Map.init(allocator);
     try environment.put("HOME", home);
     try environment.put("XDG_CONFIG_HOME", root);
+    try environment.put("XDG_BIN_HOME", install_directory);
     var stdout = std.Io.Writer.Allocating.init(std.testing.allocator);
     defer stdout.deinit();
     var stderr = std.Io.Writer.Allocating.init(std.testing.allocator);
@@ -961,6 +963,7 @@ test "real AppImage runner relocates into a missing install directory and handle
     var environment = std.process.Environ.Map.init(allocator);
     try environment.put("HOME", home);
     try environment.put("XDG_CONFIG_HOME", root);
+    try environment.put("XDG_BIN_HOME", try std.fs.path.join(allocator, &.{ home, ".local", "bin" }));
     try environment.put("XDG_DATA_HOME", try std.fs.path.join(allocator, &.{ root, "data" }));
     try environment.put("XDG_CACHE_HOME", try std.fs.path.join(allocator, &.{ root, "cache" }));
     const environ: std.process.Environ = .{ .block = try environment.createPosixBlock(allocator, .{}) };

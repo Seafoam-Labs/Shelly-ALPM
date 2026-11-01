@@ -86,6 +86,54 @@ test "install query reinstall upgrade downgrade remove persists to fresh Owners"
     try std.testing.expectError(error.FileNotFound, f.tmp.dir.access(io, "root/usr/data", .{}));
 }
 
+test "multiple package transactions do not scan unrelated database contents" {
+    var f = try Fixture.init();
+    defer f.deinit();
+    // A whole-database fingerprint would follow this dangling link and fail.
+    // No registered repository needs this unrelated sync entry.
+    try f.tmp.dir.createDirPath(io, "db/sync");
+    try f.tmp.dir.symLink(io, "missing", "db/sync/unrelated", .{});
+    var one = try Archive.init(&.{
+        .{ .path = ".PKGINFO", .contents = "pkgname = one\npkgver = 1-1\narch = any\n" },
+        .{ .path = "one", .contents = "one" },
+    }, .none);
+    defer one.deinit();
+    var two = try Archive.init(&.{
+        .{ .path = ".PKGINFO", .contents = "pkgname = two\npkgver = 1-1\narch = any\n" },
+        .{ .path = "two", .contents = "two" },
+    }, .none);
+    defer two.deinit();
+    var owner = try f.owner();
+    defer owner.deinit() catch unreachable;
+
+    var tx = try owner.initializeTransaction(io, flags);
+    try Fixture.add(tx, one.path);
+    try Fixture.add(tx, two.path);
+    try tx.prepare();
+    _ = try tx.downloadSize();
+    try tx.download();
+    try tx.download();
+    try tx.preflight();
+    try tx.revalidatePreflight();
+    try tx.commit();
+    try std.testing.expectEqual(.completed, tx.state);
+    try std.testing.expectEqual(2, tx.result().packages_committed);
+    try f.expect("root/one", "one");
+    try f.expect("root/two", "two");
+    try owner.releaseTransaction();
+
+    tx = try owner.initializeTransaction(io, flags);
+    defer owner.releaseTransaction() catch unreachable;
+    try tx.remove("one");
+    try tx.remove("two");
+    try tx.prepare();
+    try tx.commit();
+    try std.testing.expectEqual(.completed, tx.state);
+    try std.testing.expectEqual(2, tx.result().packages_committed);
+    try std.testing.expect((try owner.findPackage(owner.localDatabase().?, "one")) == null);
+    try std.testing.expect((try owner.findPackage(owner.localDatabase().?, "two")) == null);
+}
+
 fn string(obj: std.json.Value, name: []const u8) ?[]const u8 {
     const value = obj.object.get(name) orelse return null;
 

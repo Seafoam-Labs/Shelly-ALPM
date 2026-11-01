@@ -8,6 +8,7 @@ const format = @import("../output/format.zig");
 const parser = @import("../cli/parser.zig");
 const runtime = @import("../runtime/context.zig");
 const spec = @import("../cli/spec.zig");
+const elevation = @import("../runtime/elevation.zig");
 const xdg = @import("../runtime/xdg.zig");
 const aur_url = @import("../config/aur_url.zig");
 const install = @import("install.zig");
@@ -54,6 +55,9 @@ pub fn dispatch(
     invocation: *const parser.Invocation,
 ) !?u8 {
     if (!std.mem.eql(u8, invocation.command.path, command_path)) return null;
+    if (optionEnabled(invocation, "--export") and !optionEnabled(invocation, "--import")) {
+        if (try elevation.runAsInvokingUser(context, invocation.arguments)) |code| return code;
+    }
     return try executeWithRunner(context, invocation, Real{});
 }
 
