@@ -1605,7 +1605,7 @@ fn ensureSourcePgpFingerprints(
     defer context.allocator.free(executable_allocated);
     var command_context: SourcePgpCommandContext = .{
         .runtime_context = context,
-        .executable = std.mem.trimEnd(u8, executable_allocated, " (deleted)"),
+        .executable = elevation.liveExecutablePath(executable_allocated),
     };
     try PackageManager.source_pgp_keyring.ensurePinnedKeys(
         context.allocator,
@@ -1881,7 +1881,7 @@ fn runIsolatedCoordinator(
     defer root.deinit();
     const executable_allocated = try std.process.executablePathAlloc(context.io, context.allocator);
     defer context.allocator.free(executable_allocated);
-    const executable = std.mem.trimEnd(u8, executable_allocated, " (deleted)");
+    const executable = elevation.liveExecutablePath(executable_allocated);
     operation.status(.information, "Provisioning clean build root", "build.isolation.provision", null);
     try root.bootstrapPlanned(context.environ, executable, context.config_path, environment_json, &operation);
     try root.stageReviewedInputs(context.environ, pkgbuild_content, review.reviewed_files, &operation);
@@ -2256,7 +2256,7 @@ fn runHostBuildCoordinator(
         if (plan.aur_dependencies.len > 0) {
             const executable = try std.process.executablePathAlloc(context.io, context.allocator);
             defer context.allocator.free(executable);
-            const build_command = std.mem.trimEnd(u8, executable, " (deleted)");
+            const build_command = elevation.liveExecutablePath(executable);
             const aur_base = try aur_url.resolveFor(context, invocation);
             const aur_manager = try PackageManager.AurManager.init(context.allocator, context.environ, .{
                 .config_path = context.config_path,
