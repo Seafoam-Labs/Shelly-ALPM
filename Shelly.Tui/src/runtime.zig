@@ -1,9 +1,11 @@
 const std = @import("std");
-const builtin = @import("builtin");
-pub const is_debug = builtin.mode == .debug;
 const xdg_paths = @import("xdg_paths.zig").xdg_paths;
 
-// src/shellpers/runtime.zig
+/// Shared by read-only queries and transaction workers. Debug builds use the
+/// checkout CLI; release builds resolve Shelly through PATH.
+pub fn shellyBin() []const u8 {
+    return @import("cli_options").binary;
+}
 pub var terminal: ?*@import("vaxis").vxfw.App = null;
 
 pub fn supportsImages() bool {

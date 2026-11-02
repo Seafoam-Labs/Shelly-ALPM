@@ -43,6 +43,7 @@
         },
     },
     .paths = .{
+        "build.sh",
         "build.zig",
         "build.zig.zon",
         "src",

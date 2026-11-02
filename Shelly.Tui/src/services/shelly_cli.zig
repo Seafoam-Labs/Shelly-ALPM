@@ -76,10 +76,7 @@ pub const ShellyCli = struct {
     }
 
     fn runInner(self: ShellyCli, args: []const []const u8, comptime silent: bool) !RunResult {
-        const shelly_bin = self.binary orelse if (runtime.is_debug)
-            "../Shelly.Cli.Zig/zig-out/bin/shelly"
-        else
-            "shelly";
+        const shelly_bin = self.binary orelse runtime.shellyBin();
 
         var argv = try self.allocator.alloc([]const u8, args.len + 2);
         defer self.allocator.free(argv);

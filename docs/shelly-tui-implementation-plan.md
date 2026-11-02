@@ -317,3 +317,13 @@ Finish the baseline UI/UX across the remaining pages, starting with Flatpak, bef
 - Packages, AUR, Flatpak, Updates and Settings models own their browsing key handlers. Native/AUR details, Flatpak source/category choices, screenshots and fallback list keys are handled by their page models; operation review input belongs to the operation model.
 - The coordinator retains quit/help, shared resizing, modal precedence, tab navigation and routing between capture and fallback phases. Page handlers explicitly report whether they consumed input, preserving search editing and global navigation even when event contexts are reused. Existing integration tests remain, with focused page-boundary regressions beside the relevant models.
 - This step moves responsibility without changing bindings or layouts. Narrowing the remaining `*Model` dependencies is a separate refactor.
+
+### CLI binary selection (2026-11-02)
+
+- Queries and transactions share `runtime.shellyBin()`. Debug builds use the checkout's `Shelly.Cli.Zig/zig-out/bin/shelly` through a build-resolved absolute path, independent of launch directory. Build that CLI before running the TUI; a missing development binary does not fall back to the installed CLI.
+- Release builds use `shelly` from PATH. Override either default with `zig build run -Dshelly-bin=/absolute/path/to/shelly`.
+
+### Development build workflow (2026-11-02)
+
+- From `Shelly.Tui`, run `./build.sh` to build the Flatpak backend, build the CLI with its absolute backend library path, build the TUI against that CLI, and launch it. `./build.sh --build-only` performs the same builds without launching.
+- Additional Zig build arguments are forwarded to all three projects. The script explicitly selects the newly built CLI even for optimized builds. Standalone `zig build` retains its normal Debug/release defaults.

@@ -42,6 +42,13 @@ pub fn build(b: *std.Build) void {
         .target = target,
     });
     mod.addImport("diagnostics", diagnostics);
+    const cli_options = b.addOptions();
+    cli_options.addOption([]const u8, "binary", b.option([]const u8, "shelly-bin", "Shelly CLI executable (defaults to the checkout CLI in Debug, PATH in release builds)") orelse
+        if (optimize == .debug)
+            b.root.joinString(b.allocator, "../Shelly.Cli.Zig/zig-out/bin/shelly") catch @panic("Could not resolve development Shelly CLI path")
+        else
+            "shelly");
+    mod.addOptions("cli_options", cli_options);
 
     // Here we define an executable. An executable needs to have a root module
     // which needs to expose a `main` function. While we could add a main function

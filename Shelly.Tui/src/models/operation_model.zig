@@ -525,7 +525,7 @@ pub fn startElevatedInstall(self: *Model, ctx: *vxfw.EventContext, prompt: *Sudo
     // Schedule polling before starting so scheduling failure cannot orphan a worker.
     try ctx.tick(100, self.widget());
     self.operation_state.install_job = try shelly_operation.Operation.start(.{
-        .shelly_bin = shellyBin(),
+        .shelly_bin = runtime.shellyBin(),
         .environ_map = runtime.environ_map,
         .name = prompt.name,
         .targets = prompt.targets,
@@ -536,13 +536,6 @@ pub fn startElevatedInstall(self: *Model, ctx: *vxfw.EventContext, prompt: *Sudo
         .include_flatpak = prompt.include_flatpak,
         .include_aur = prompt.include_aur,
     });
-}
-
-pub fn shellyBin() []const u8 {
-    return if (runtime.is_debug)
-        "../Shelly.Cli.Zig/zig-out/bin/shelly"
-    else
-        "shelly";
 }
 
 pub fn popGrapheme(list: *std.ArrayList(u8)) void {
