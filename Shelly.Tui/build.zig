@@ -130,29 +130,11 @@ pub fn build(b: *std.Build) void {
     // command itself, like this: `zig build run -- arg1 arg2 etc`
     run_cmd.addPassthruArgs();
 
-    // Generate literal imports for every source file in a cache-only test tree.
-    // Keep all first-party files in one module so globals retain one identity.
-    const test_files = b.addWriteFiles();
-    _ = test_files.addCopyDirectory(b.path("src"), "src", .{ .include_extensions = &.{".zig"} });
-    var test_root: std.Io.Writer.Allocating = .init(b.allocator);
-    const writer = &test_root.writer;
-    writer.writeAll("const std = @import(\"std\");\ntest \"all source modules are included\" {\n") catch @panic("OOM");
-    for (discoverTestSources(b)) |path| {
-        writer.print("    std.testing.refAllDecls(@import(\"{f}\"));\n", .{std.zig.fmtString(path)}) catch @panic("OOM");
-    }
-    writer.writeAll("}\n") catch @panic("OOM");
-    const test_module = b.createModule(.{
-        .root_source_file = test_files.add("src/all_tests.zig", test_root.written()),
-        .target = target,
-        .optimize = optimize,
-    });
-    var imports = mod.import_table.iterator();
-    while (imports.next()) |entry| test_module.addImport(entry.key_ptr.*, entry.value_ptr.*);
-
+    // The library root explicitly registers all first-party test modules.
     const mod_tests = b.addTest(.{
         .use_lld = true,
         .use_llvm = true,
-        .root_module = test_module,
+        .root_module = mod,
     });
 
     // A run step that will run the test executable.
@@ -188,37 +170,4 @@ pub fn build(b: *std.Build) void {
     //
     // Lastly, the Zig build system is relatively simple and self-contained,
     // and reading its source code will allow you to master it.
-}
-
-/// Discover files even when lazy analysis leaves them outside the app's imports.
-/// main.zig has its own executable suite.
-fn discoverTestSources(b: *std.Build) []const []const u8 {
-    const io = b.graph.io;
-    var dir = b.root.openDir(io, "src", .{ .iterate = true }) catch @panic("Could not open TUI sources for test discovery");
-    defer dir.close(io);
-    var walker = dir.walk(b.allocator) catch @panic("Could not enumerate TUI test sources");
-    defer walker.deinit();
-    var paths: std.ArrayList([]const u8) = .empty;
-    b.dependOnDirectoryContents(b.path("src"));
-    while (walker.next(io) catch @panic("Could not enumerate TUI test sources")) |entry| {
-        var parts = std.mem.splitScalar(u8, entry.path, std.fs.path.sep);
-        var hidden = false;
-        while (parts.next()) |part| {
-            if (std.mem.startsWith(u8, part, ".")) hidden = true;
-        }
-        if (hidden) continue;
-        if (entry.kind == .directory) {
-            b.dependOnDirectoryContents(b.path(b.fmt("src/{s}", .{entry.path})));
-            continue;
-        }
-        if (entry.kind != .file or !std.mem.endsWith(u8, entry.path, ".zig")) continue;
-        if (std.mem.eql(u8, entry.path, "main.zig")) continue;
-        paths.append(b.allocator, b.dupe(entry.path)) catch @panic("Out of memory discovering TUI tests");
-    }
-    std.mem.sort([]const u8, paths.items, {}, struct {
-        fn less(_: void, a: []const u8, c: []const u8) bool {
-            return std.mem.lessThan(u8, a, c);
-        }
-    }.less);
-    return paths.toOwnedSlice(b.allocator) catch @panic("Out of memory discovering TUI tests");
 }

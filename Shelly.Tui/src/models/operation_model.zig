@@ -649,6 +649,45 @@ pub fn codepointCount(bytes: []const u8) usize {
     return count;
 }
 
+pub fn handleReviewKey(self: *Model, ctx: *vxfw.EventContext, key: vaxis.Key) anyerror!void {
+    const view = pkgbuildView(self);
+    if (view.handleKey(key)) |action| {
+        switch (action) {
+            .toggle_wrap => {
+                self.operation_state.pkgbuild_wrap = !self.operation_state.pkgbuild_wrap;
+                self.operation_state.pkgbuild_scroll.scroll.left = 0;
+                self.operation_state.pkgbuild_scroll.scroll.vertical_offset = 0;
+            },
+            .close => closePkgbuild(self),
+            .retry => if (self.operation_state.pkgbuild_job == null) try openPkgbuild(self, ctx, self.operation_state.pkgbuild_name),
+            .approve => try answerOperationQuestion(self, true),
+            .decline => try answerOperationQuestion(self, false),
+        }
+        return ctx.consumeAndRedraw();
+    }
+    if (choiceOptions(self)) |options| {
+        const cursor = self.operation_state.dependency_choices.cursor;
+        if (commands.matches(key, .mark) and cursor < options.len) {
+            if (self.operation_state.operation_question.?.value.question == .select_many) options[cursor].is_selected = !options[cursor].is_selected;
+        } else {
+            try self.operation_state.dependency_choices.handleEvent(ctx, .{ .key_press = commands.scrollKey(key) orelse key });
+        }
+        syncProviderSelection(self);
+        self.operation_state.answer_error = "";
+        return ctx.consumeAndRedraw();
+    }
+    if (self.operation_state.pkgbuild_document != null and self.operation_state.pkgbuild_job == null)
+        try self.operation_state.pkgbuild_scroll.handleEvent(ctx, .{ .key_press = commands.scrollKey(key) orelse key });
+    return ctx.consumeAndRedraw();
+}
+
+pub fn handleReviewMouse(self: *Model, ctx: *vxfw.EventContext, event: vxfw.Event) anyerror!void {
+    if (choiceOptions(self) != null) {
+        try self.operation_state.dependency_choices.handleEvent(ctx, event);
+        syncProviderSelection(self);
+    } else try self.operation_state.pkgbuild_scroll.handleEvent(ctx, event);
+}
+
 test "operation panel reserves one third of the terminal across stages" {
     vxfw.DrawContext.init(.unicode);
     const model = try Model.init(std.testing.allocator);

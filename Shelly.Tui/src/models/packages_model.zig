@@ -307,6 +307,99 @@ pub fn buildSelectedRow(ptr: *const anyopaque, idx: usize, _: usize) ?vxfw.Widge
     return .{ .userdata = @ptrCast(&self.packages_state.selected_packages.items[idx]), .drawFn = packages_view.drawSelectedRow };
 }
 
+/// Returns whether page input was consumed. Globals remain with the coordinator.
+pub fn handleKey(self: *Model, ctx: *vxfw.EventContext, key: vaxis.Key, global_command: bool) anyerror!bool {
+    if (!global_command) {
+        if (self.packages_state.package_list_active) {
+            if (commands.matches(key, .clear_selection)) {
+                self.packages_state.selected_packages.clearRetainingCapacity();
+                self.packages_state.selected_list_view.item_count = 0;
+                try self.setNotice("");
+                ctx.consumeAndRedraw();
+                return true;
+            }
+            if (commands.packageAction(key)) |action| {
+                try openNativePrompt(self, if (action == .install) .install else .remove);
+                ctx.consumeAndRedraw();
+                return true;
+            }
+        }
+        if (commands.packageNavigation(key, !self.packages_state.package_list_active)) |action| {
+            switch (action) {
+                .previous, .next => {
+                    if (action == .previous and self.packages_state.package_list_active and self.packages_state.list_view.cursor == 0) {
+                        self.packages_state.package_list_active = false;
+                    } else {
+                        self.packages_state.package_list_active = true;
+                        try self.packages_state.list_view.handleEvent(ctx, .{ .key_press = .{ .codepoint = if (action == .previous) vaxis.Key.up else vaxis.Key.down } });
+                    }
+                },
+                .details => if (selectedPackage(self)) |pkg| {
+                    self.overlay = .{ .package = pkg };
+                },
+                .search => self.packages_state.package_list_active = false,
+                .select => {
+                    self.packages_state.package_list_active = true;
+                    if (selectedPackage(self) != null) try toggleSelectedList(self);
+                },
+            }
+            ctx.consumeAndRedraw();
+            return true;
+        }
+    }
+    if (commands.togglesInstalled(key)) {
+        self.packages_state.installed_only = !self.packages_state.installed_only;
+        try rebuildFilter(self);
+        ctx.consumeAndRedraw();
+        return true;
+    }
+    if (self.packages_state.package_list_active and commands.matches(key, .mark)) {
+        if (self.packages_state.list_view.cursor < self.packages_state.filtered.items.len) try toggleSelectedList(self);
+        ctx.consumeAndRedraw();
+        return true;
+    }
+    if (self.packages_state.package_list_active and !global_command) {
+        ctx.consumeEvent();
+        return true;
+    }
+    return false;
+}
+
+/// Returns whether page input was consumed; globals remain with the coordinator.
+pub fn handleDetailsKey(self: *Model, ctx: *vxfw.EventContext, key: vaxis.Key, global_command: bool) anyerror!bool {
+    if (commands.leavesPackageDetails(key)) {
+        operation_model.closeOverlay(self);
+        self.packages_state.package_list_active = true;
+        ctx.consumeAndRedraw();
+        return true;
+    }
+    if (commands.detail(key)) |action| {
+        switch (action) {
+            .close => operation_model.closeOverlay(self),
+            .install => try operation_model.operationFromOverlay(self, .install),
+            .remove => try operation_model.operationFromOverlay(self, .remove),
+            .preview => {},
+        }
+        ctx.consumeAndRedraw();
+        return true;
+    }
+    if (global_command) return false;
+    try self.packages_state.package_details_scroll.handleEvent(ctx, .{ .key_press = commands.scrollKey(key) orelse key });
+    ctx.consumeAndRedraw();
+    return true;
+}
+
+pub fn handleUnhandledKey(self: *Model, ctx: *vxfw.EventContext, key: vaxis.Key) anyerror!void {
+    if (commands.matches(key, .select) and self.packages_state.filtered.items.len > 0 and self.packages_state.list_view.cursor < self.packages_state.filtered.items.len) {
+        self.packages_state.package_list_active = true;
+        try toggleSelectedList(self);
+        return ctx.consumeAndRedraw();
+    }
+    const previous = self.packages_state.list_view.cursor;
+    try self.packages_state.list_view.handleEvent(ctx, .{ .key_press = key });
+    if (previous != self.packages_state.list_view.cursor) self.packages_state.package_details_scroll.scroll = .{};
+}
+
 test "package refresh replaces borrowed data and preserves selection" {
     const model = try Model.init(std.testing.allocator);
     defer model.deinit();
@@ -644,4 +737,20 @@ test "clear selection includes filtered packages and preserves search and cursor
     commands.bindings.clear_selection = .{ .codepoint = 'k', .mods = .{ .ctrl = true } };
     try Model.typeErasedCaptureHandler(model, &ctx, .{ .key_press = .{ .codepoint = 'k', .mods = .{ .ctrl = true } } });
     try std.testing.expectEqual(@as(usize, 0), model.packages_state.selected_packages.items.len);
+}
+
+test "packages input preserves search editing and delegates global navigation" {
+    const model = try Model.init(std.testing.allocator);
+    defer model.deinit();
+    var ctx: vxfw.EventContext = .{ .io = std.testing.io, .alloc = std.testing.allocator, .cmds = .empty };
+    defer ctx.cmds.deinit(std.testing.allocator);
+    model.packages_state.package_list_active = false;
+    try std.testing.expect(!try handleKey(model, &ctx, .{ .codepoint = 'x' }, false));
+    try std.testing.expect(!ctx.consume_event);
+    model.packages_state.package_list_active = true;
+    try std.testing.expect(try handleKey(model, &ctx, .{ .codepoint = 'x' }, false));
+    try std.testing.expect(ctx.consume_event);
+    // A reused event context must not make the handler report a global key handled.
+    try std.testing.expect(!try handleKey(model, &ctx, commands.bindings.next_tab, true));
+    try std.testing.expect(model.packages_state.package_list_active);
 }

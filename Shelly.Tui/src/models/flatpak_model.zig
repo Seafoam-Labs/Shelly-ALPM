@@ -611,6 +611,147 @@ pub const screenshotButtonStyle: @TypeOf(@as(vxfw.Button, undefined).style) = .{
     .mouse_down = .{ .reverse = true },
 };
 
+/// Returns whether page input was consumed. Globals remain with the coordinator.
+pub fn handleKey(self: *Model, ctx: *vxfw.EventContext, key: vaxis.Key, global_command: bool) anyerror!bool {
+    if (self.flatpak_state.flatpak_list_active) {
+        if (commands.matches(key, .search)) {
+            self.flatpak_state.flatpak_list_active = false;
+            ctx.consumeAndRedraw();
+            return true;
+        }
+        if (commands.matches(key, .details) or commands.packageAction(key) != null) {
+            if (self.flatpak_state.flatpak_job == null and self.flatpak_state.flatpak_list.cursor < self.flatpak_state.flatpak_rows.items.len) {
+                self.overlay = .{ .flatpak = self.flatpak_state.flatpak_rows.items[self.flatpak_state.flatpak_list.cursor] };
+                if (commands.packageAction(key) != null) try handleDetailsKey(self, ctx, key, self.flatpak_state.flatpak_rows.items[self.flatpak_state.flatpak_list.cursor]);
+            }
+            ctx.consumeAndRedraw();
+            return true;
+        }
+    }
+    if (commands.matches(key, .previous) or commands.matches(key, .next)) {
+        if (self.flatpak_state.flatpak_list_active and self.flatpak_state.flatpak_list.cursor == 0 and commands.matches(key, .previous)) {
+            self.flatpak_state.flatpak_list_active = false;
+            ctx.consumeAndRedraw();
+            return true;
+        }
+        self.flatpak_state.flatpak_list_active = true;
+        try self.flatpak_state.flatpak_list.handleEvent(ctx, .{ .key_press = .{ .codepoint = if (commands.matches(key, .previous)) vaxis.Key.up else vaxis.Key.down } });
+        ctx.consumeAndRedraw();
+        return true;
+    }
+    if (commands.matches(key, .confirm)) {
+        if (self.flatpak_state.flatpak_job == null and self.flatpak_state.flatpak_failure == null and self.flatpak_state.flatpak_list.cursor < self.flatpak_state.flatpak_rows.items.len)
+            self.overlay = .{ .flatpak = self.flatpak_state.flatpak_rows.items[self.flatpak_state.flatpak_list.cursor] };
+        ctx.consumeAndRedraw();
+        return true;
+    }
+    if (commands.togglesInstalled(key)) {
+        if (self.flatpak_state.flatpak_job == null) {
+            self.flatpak_state.flatpak_installed_only = !self.flatpak_state.flatpak_installed_only;
+            self.flatpak_state.flatpak_rows.clearRetainingCapacity();
+            self.flatpak_state.flatpak_list.item_count = 0;
+            self.flatpak_state.flatpak_list.jumpToItem(0);
+            try startFlatpak(self, ctx);
+        }
+        ctx.consumeAndRedraw();
+        return true;
+    }
+    if (commands.refreshesList(key)) {
+        if (!self.flatpak_state.flatpak_available or self.flatpak_state.flatpak_failure != null) try startFlatpakProbe(self, ctx) else try startFlatpak(self, ctx);
+        ctx.consumeAndRedraw();
+        return true;
+    }
+    if (self.flatpak_state.flatpak_list_active and !global_command) {
+        ctx.consumeEvent();
+        return true;
+    }
+    return false;
+}
+
+pub fn handleDetailsKey(self: *Model, ctx: *vxfw.EventContext, key: vaxis.Key, row: flatpak_view.Row) anyerror!void {
+    if (self.flatpak_state.screenshot_open) {
+        if (commands.matches(key, .previous_screenshot) or commands.matches(key, .next_screenshot)) {
+            if (try moveScreenshot(self, ctx, commands.matches(key, .next_screenshot))) return ctx.consumeAndRedraw();
+            return ctx.consumeEvent();
+        }
+        if (commands.matches(key, .refresh_list) and self.flatpak_state.screenshot_failure != null and self.flatpak_state.screenshot_job == null) {
+            try queueScreenshot(self, ctx);
+            return ctx.consumeAndRedraw();
+        }
+    }
+    if (commands.matches(key, .back) or commands.matches(key, .search)) {
+        operation_model.closeOverlay(self);
+        self.flatpak_state.flatpak_list_active = !commands.matches(key, .search);
+        return ctx.consumeAndRedraw();
+    }
+    if (commands.detail(key)) |action| {
+        switch (action) {
+            .close => {
+                operation_model.closeOverlay(self);
+                self.flatpak_state.flatpak_list_active = true;
+            },
+            .install => if (row == .catalog and self.operation_state.install_job == null) {
+                try openFlatpakInstallChoice(self, row.catalog);
+            },
+            .remove => if (row == .installed) try openFlatpakPrompt(self, .remove, row.installed.Id, .{
+                .scope = row.installed.InstallLevel,
+                .remote = row.installed.Remote,
+                .arch = row.installed.Arch,
+                .branch = row.installed.Branch,
+                .kind = row.installed.Kind,
+                .reference = row.installed.FullRef,
+            }),
+            .preview => {},
+        }
+    } else try self.flatpak_state.flatpak_details_scroll.handleEvent(ctx, .{ .key_press = commands.scrollKey(key) orelse key });
+    return ctx.consumeAndRedraw();
+}
+
+pub fn handleInstallChoiceKey(self: *Model, ctx: *vxfw.EventContext, key: vaxis.Key, app: *const flatpak.AppstreamApp, selected: usize) anyerror!void {
+    if (commands.choice(key)) |action| switch (action) {
+        .close => self.overlay = .{ .flatpak = .{ .catalog = app } },
+        .previous => self.overlay.?.flatpak_install.selected = if (selected == 0) app.Remotes.len - 1 else selected - 1,
+        .next => self.overlay.?.flatpak_install.selected = (selected + 1) % app.Remotes.len,
+        .confirm => {
+            const remote = app.Remotes[selected];
+            try openFlatpakPrompt(self, .install, app.Id, .{
+                .scope = remote.Scope,
+                .remote = remote.Name,
+                .kind = if (std.mem.eql(u8, app.Type, "runtime")) .runtime else .app,
+            });
+        },
+    };
+    return ctx.consumeAndRedraw();
+}
+
+pub fn handleCategoryKey(self: *Model, ctx: *vxfw.EventContext, key: vaxis.Key) anyerror!void {
+    if (commands.matches(key, .close) or commands.matches(key, .back)) {
+        self.flatpak_state.flatpak_category_open = false;
+    } else if (commands.matches(key, .confirm)) {
+        const index = self.flatpak_state.flatpak_category_list.cursor;
+        if (index < self.flatpak_state.flatpak_categories.items.len) try chooseFlatpakCategory(self, self.flatpak_state.flatpak_categories.items[index].name);
+    } else try self.flatpak_state.flatpak_category_list.handleEvent(ctx, .{ .key_press = commands.scrollKey(key) orelse key });
+    return ctx.consumeAndRedraw();
+}
+
+pub fn handleUnhandledKey(self: *Model, ctx: *vxfw.EventContext, key: vaxis.Key) anyerror!void {
+    if (commands.matches(key, .confirm) and self.flatpak_state.flatpak_job == null and self.flatpak_state.flatpak_failure == null and self.flatpak_state.flatpak_list.cursor < self.flatpak_state.flatpak_rows.items.len) {
+        self.overlay = .{ .flatpak = self.flatpak_state.flatpak_rows.items[self.flatpak_state.flatpak_list.cursor] };
+        return ctx.consumeAndRedraw();
+    }
+    try self.flatpak_state.flatpak_list.handleEvent(ctx, .{ .key_press = key });
+}
+
+/// Category switching precedes details input, but never operation modals.
+pub fn handleCategoryShortcut(self: *Model, ctx: *vxfw.EventContext, key: vaxis.Key) anyerror!bool {
+    if (!self.flatpak_state.flatpak_installed_only and operation_model.operationPrompt(self) == null and self.operation_state.review_prompt == null and (self.overlay == null or self.overlay.? == .flatpak) and commands.matches(key, .categories)) {
+        try toggleFlatpakCategories(self, ctx);
+        ctx.consumeAndRedraw();
+        return true;
+    }
+    return false;
+}
+
 test "Flatpak probe publishes independently and failure does not hide an enabled tab" {
     const allocator = std.testing.allocator;
     const model = try Model.init(allocator);
@@ -1374,4 +1515,20 @@ test "saved screenshot preference cancels images and preserves source state" {
     try std.testing.expect(screenshotsEnabled(model));
     model.flatpak_state.screenshots_supported = false;
     try std.testing.expect(!screenshotsEnabled(model));
+}
+
+test "flatpak input preserves search editing and delegates global navigation" {
+    const model = try Model.init(std.testing.allocator);
+    defer model.deinit();
+    var ctx: vxfw.EventContext = .{ .io = std.testing.io, .alloc = std.testing.allocator, .cmds = .empty };
+    defer ctx.cmds.deinit(std.testing.allocator);
+    model.flatpak_state.flatpak_list_active = false;
+    try std.testing.expect(!try handleKey(model, &ctx, .{ .codepoint = 'x' }, false));
+    try std.testing.expect(!ctx.consume_event);
+    model.flatpak_state.flatpak_list_active = true;
+    try std.testing.expect(try handleKey(model, &ctx, .{ .codepoint = 'x' }, false));
+    try std.testing.expect(ctx.consume_event);
+    // A reused event context must not make the handler report a global key handled.
+    try std.testing.expect(!try handleKey(model, &ctx, commands.bindings.next_tab, true));
+    try std.testing.expect(model.flatpak_state.flatpak_list_active);
 }

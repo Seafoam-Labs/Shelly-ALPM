@@ -308,7 +308,12 @@ Finish the baseline UI/UX across the remaining pages, starting with Flatpak, bef
 - Removed obsolete frame decoding/failure aggregation APIs, dynamic operation-height measuring, and implicit-action review/prompt wrappers. Existing regressions now use the live frame iterator, explicit review actions, fixed operation panel, and page prompt entry points. Deleted tests apply only to retired behavior; active transaction, review, ownership, selection, and cancellation coverage remains.
 - Preserved CLI wire data definitions and their decoding tests. No GTK changes or package operations are part of this cleanup.
 
-### Complete unit-test discovery (2026-11-02)
+### Complete unit-test registration (2026-11-02)
 
-- Run `zig build test` from `Shelly.Tui` to execute all first-party source-module tests and the executable suite. The build discovers non-hidden `src/**/*.zig` files and generates literal imports in a cache-only source tree; source-directory dependencies invalidate discovery when files are added or removed. Manual registration in the coordinator/root module is no longer required.
-- Three live CLI smoke checks remain deliberately skipped in unit-test runs; unit tests do not initialize the real application environment. A temporary unreferenced failing module verified automatic discovery and failure propagation, then was removed.
+- Run `zig build test` from `Shelly.Tui` to execute the library and executable suites. `src/root.zig` explicitly registers all source modules in one test block. Add an import there when introducing a new module; `main.zig` has its own executable suite.
+
+### Page-owned input handling (2026-11-02)
+
+- Packages, AUR, Flatpak, Updates and Settings models own their browsing key handlers. Native/AUR details, Flatpak source/category choices, screenshots and fallback list keys are handled by their page models; operation review input belongs to the operation model.
+- The coordinator retains quit/help, shared resizing, modal precedence, tab navigation and routing between capture and fallback phases. Page handlers explicitly report whether they consumed input, preserving search editing and global navigation even when event contexts are reused. Existing integration tests remain, with focused page-boundary regressions beside the relevant models.
+- This step moves responsibility without changing bindings or layouts. Narrowing the remaining `*Model` dependencies is a separate refactor.

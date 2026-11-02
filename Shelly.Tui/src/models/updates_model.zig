@@ -176,6 +176,27 @@ pub fn upgradeFromUpdates(self: *Model, backend: OperationBackend) !void {
     self.overlay = .{ .sudo = prompt };
 }
 
+/// Returns whether page input was consumed. Globals remain with the coordinator.
+pub fn handleKey(self: *Model, ctx: *vxfw.EventContext, key: vaxis.Key) anyerror!bool {
+    if (commands.matches(key, .previous) or commands.matches(key, .next)) {
+        try handleScrollEvent(self, ctx, .{ .key_press = .{ .codepoint = if (commands.matches(key, .previous)) vaxis.Key.up else vaxis.Key.down } });
+        ctx.consumeAndRedraw();
+        return true;
+    }
+    if (updatesView(self).handleKey(key)) |action| {
+        switch (action) {
+            .refresh => try startUpdates(self, ctx),
+            .upgrade_all => try upgradeFromUpdates(self, .all),
+            .upgrade_system => try upgradeSystemFromUpdates(self),
+            .upgrade_aur => try upgradeFromUpdates(self, .aur),
+            .upgrade_flatpak => try upgradeFromUpdates(self, .flatpak),
+        }
+        ctx.consumeAndRedraw();
+        return true;
+    }
+    return false;
+}
+
 test "updates view renders source rows and distinguishes query states" {
     vxfw.DrawContext.init(.unicode);
     const model = try Model.init(std.testing.allocator);

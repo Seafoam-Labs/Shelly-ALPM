@@ -3,6 +3,7 @@ const updates_model = @import("updates_model.zig");
 const flatpak_model = @import("flatpak_model.zig");
 const operation_model = @import("operation_model.zig");
 const std = @import("std");
+const commands = @import("../commands.zig");
 const Settings = @import("settings.zig").Settings;
 const settings_service = @import("../services/settings.zig");
 const settings_view = @import("../views/settings_view.zig");
@@ -149,6 +150,22 @@ pub fn settingsView(self: *Model) settings_view.View {
     return .{ .settings = self.settings_state.settings_draft, .dirty = hasChanges(self), .selected = self.settings_state.settings_selected, .path = if (self.settings_state.settings_store) |store| store.path else "Settings could not be initialized", .failure = self.settings_state.settings_failure, .flatpak_checked = self.flatpak_state.flatpak_checked, .flatpak_available = self.flatpak_state.flatpak_available, .checking = self.flatpak_state.flatpak_probe_job != null, .busy = self.operation_state.install_job != null };
 }
 
+/// Returns whether page input was consumed. Globals remain with the coordinator.
+pub fn handleKey(self: *Model, ctx: *vxfw.EventContext, key: vaxis.Key) anyerror!bool {
+    if (commands.settings(key)) |action| {
+        switch (action) {
+            .previous => self.settings_state.settings_selected = (self.settings_state.settings_selected + control_count - 1) % control_count,
+            .next => self.settings_state.settings_selected = (self.settings_state.settings_selected + 1) % control_count,
+            .toggle => if (self.operation_state.install_job == null) try toggleSetting(self, ctx),
+            .save => if (self.operation_state.install_job == null) try saveSettings(self, ctx),
+            .reload => if (self.operation_state.install_job == null) try reloadSettings(self, ctx),
+        }
+        ctx.consumeAndRedraw();
+        return true;
+    }
+    return false;
+}
+
 test "settings determine source visibility before backend or native loading finishes" {
     const model = try Model.init(std.testing.allocator);
     defer model.deinit();
@@ -239,7 +256,6 @@ test "settings changes reject late update results and disabled source data" {
 }
 
 test "settings keyboard edits survive tab changes and support Save Reload and Ctrl S" {
-    const commands = @import("../commands.zig");
     const allocator = std.testing.allocator;
     const io = std.testing.io;
     runtime.io = io;

@@ -188,331 +188,49 @@ pub const Model = struct {
                     try self.help_panel.handleKey(ctx, key);
                     return ctx.consumeAndRedraw();
                 }
-                if (self.active == .flatpak and !self.flatpak_state.flatpak_installed_only and operation_model.operationPrompt(self) == null and self.operation_state.review_prompt == null and (self.overlay == null or self.overlay.? == .flatpak) and commands.matches(key, .categories)) {
-                    try flatpak_model.toggleFlatpakCategories(self, ctx);
-                    return ctx.consumeAndRedraw();
-                }
-                if (self.flatpak_state.flatpak_category_open) {
-                    if (commands.matches(key, .close) or commands.matches(key, .back)) {
-                        self.flatpak_state.flatpak_category_open = false;
-                    } else if (commands.matches(key, .confirm)) {
-                        const index = self.flatpak_state.flatpak_category_list.cursor;
-                        if (index < self.flatpak_state.flatpak_categories.items.len) try flatpak_model.chooseFlatpakCategory(self, self.flatpak_state.flatpak_categories.items[index].name);
-                    } else try self.flatpak_state.flatpak_category_list.handleEvent(ctx, .{ .key_press = commands.scrollKey(key) orelse key });
-                    return ctx.consumeAndRedraw();
-                }
+                if (self.active == .flatpak and try flatpak_model.handleCategoryShortcut(self, ctx, key)) return;
+                if (self.flatpak_state.flatpak_category_open) return flatpak_model.handleCategoryKey(self, ctx, key);
                 if (self.overlay) |overlay| {
                     switch (overlay) {
                         .flatpak => |row| {
-                            if (self.flatpak_state.screenshot_open) {
-                                if (commands.matches(key, .previous_screenshot) or commands.matches(key, .next_screenshot)) {
-                                    if (try flatpak_model.moveScreenshot(self, ctx, commands.matches(key, .next_screenshot))) return ctx.consumeAndRedraw();
-                                    return ctx.consumeEvent();
-                                }
-                                if (commands.matches(key, .refresh_list) and self.flatpak_state.screenshot_failure != null and self.flatpak_state.screenshot_job == null) {
-                                    try flatpak_model.queueScreenshot(self, ctx);
-                                    return ctx.consumeAndRedraw();
-                                }
-                            }
-                            if (commands.matches(key, .back) or commands.matches(key, .search)) {
-                                operation_model.closeOverlay(self);
-                                self.flatpak_state.flatpak_list_active = !commands.matches(key, .search);
-                                return ctx.consumeAndRedraw();
-                            }
-                            if (commands.detail(key)) |action| {
-                                switch (action) {
-                                    .close => {
-                                        operation_model.closeOverlay(self);
-                                        self.flatpak_state.flatpak_list_active = true;
-                                    },
-                                    .install => if (row == .catalog and self.operation_state.install_job == null) {
-                                        try flatpak_model.openFlatpakInstallChoice(self, row.catalog);
-                                    },
-                                    .remove => if (row == .installed) try flatpak_model.openFlatpakPrompt(self, .remove, row.installed.Id, .{
-                                        .scope = row.installed.InstallLevel,
-                                        .remote = row.installed.Remote,
-                                        .arch = row.installed.Arch,
-                                        .branch = row.installed.Branch,
-                                        .kind = row.installed.Kind,
-                                        .reference = row.installed.FullRef,
-                                    }),
-                                    .preview => {},
-                                }
-                            } else try self.flatpak_state.flatpak_details_scroll.handleEvent(ctx, .{ .key_press = commands.scrollKey(key) orelse key });
-                            return ctx.consumeAndRedraw();
+                            return flatpak_model.handleDetailsKey(self, ctx, key, row);
                         },
                         .flatpak_install => |choice| {
-                            if (commands.choice(key)) |action| switch (action) {
-                                .close => self.overlay = .{ .flatpak = .{ .catalog = choice.app } },
-                                .previous => self.overlay.?.flatpak_install.selected = if (choice.selected == 0) choice.app.Remotes.len - 1 else choice.selected - 1,
-                                .next => self.overlay.?.flatpak_install.selected = (choice.selected + 1) % choice.app.Remotes.len,
-                                .confirm => {
-                                    const remote = choice.app.Remotes[choice.selected];
-                                    try flatpak_model.openFlatpakPrompt(self, .install, choice.app.Id, .{
-                                        .scope = remote.Scope,
-                                        .remote = remote.Name,
-                                        .kind = if (std.mem.eql(u8, choice.app.Type, "runtime")) .runtime else .app,
-                                    });
-                                },
-                            };
-                            return ctx.consumeAndRedraw();
+                            return flatpak_model.handleInstallChoiceKey(self, ctx, key, choice.app, choice.selected);
                         },
                         .package, .aur => {
-                            if ((overlay == .package or overlay == .aur) and commands.leavesPackageDetails(key)) {
+                            const handled = if (overlay == .package)
+                                try packages_model.handleDetailsKey(self, ctx, key, command != null)
+                            else
+                                try aur_model.handleDetailsKey(self, ctx, key, command != null);
+                            if (handled) return;
+                            if (command) |action| {
                                 operation_model.closeOverlay(self);
-                                if (overlay == .package) self.packages_state.package_list_active = true else self.aur_state.aur_list_active = true;
-                                return ctx.consumeAndRedraw();
-                            }
-                            if (overlay == .aur) {
-                                if (commands.matches(key, .confirm) and self.aur_state.aur_preview_button.focused) {
-                                    try operation_model.openPkgbuild(self, ctx, overlay.aur.Name);
-                                    return ctx.consumeAndRedraw();
-                                }
-                                if (commands.matches(key, .next) and !self.aur_state.aur_details_scroll.scroll.has_more_vertical) {
-                                    self.aur_state.aur_preview_button.focused = true;
-                                    self.aur_state.aur_details_scroll.cursor = 1;
-                                    self.aur_state.aur_details_scroll.scroll.wants_cursor = true;
-                                    return ctx.consumeAndRedraw();
-                                }
-                                if (commands.matches(key, .previous)) self.aur_state.aur_preview_button.focused = false;
-                            }
-                            if (commands.detail(key)) |action| {
                                 switch (action) {
-                                    .close => operation_model.closeOverlay(self),
-                                    .install => try operation_model.operationFromOverlay(self, .install),
-                                    .remove => try operation_model.operationFromOverlay(self, .remove),
-                                    .preview => if (overlay == .aur) try operation_model.openPkgbuild(self, ctx, overlay.aur.Name),
+                                    .quit => unreachable,
+                                    .next_tab, .previous_tab => self.switchTab(if (action == .next_tab) 1 else -1),
+                                    .select_tab => |index| try self.setTab(self.visibleTabs()[index], ctx),
                                 }
-                                return ctx.consumeAndRedraw();
+                                try self.focusActiveTab(ctx);
+                                try updates_model.ensureUpdates(self, ctx);
+                                try flatpak_model.ensureFlatpak(self, ctx);
                             }
-                            if (overlay == .package or overlay == .aur) {
-                                if (command) |action| {
-                                    operation_model.closeOverlay(self);
-                                    switch (action) {
-                                        .quit => unreachable,
-                                        .next_tab, .previous_tab => self.switchTab(if (action == .next_tab) 1 else -1),
-                                        .select_tab => |index| try self.setTab(self.visibleTabs()[index], ctx),
-                                    }
-                                    try self.focusActiveTab(ctx);
-                                    try updates_model.ensureUpdates(self, ctx);
-                                    try flatpak_model.ensureFlatpak(self, ctx);
-                                } else if (overlay == .package) try self.packages_state.package_details_scroll.handleEvent(ctx, .{ .key_press = commands.scrollKey(key) orelse key }) else try self.aur_state.aur_details_scroll.handleEvent(ctx, .{ .key_press = commands.scrollKey(key) orelse key });
-                                return ctx.consumeAndRedraw();
-                            }
-                            return ctx.consumeEvent();
+                            return ctx.consumeAndRedraw();
                         },
                         .sudo => |prompt| {
                             return operation_model.handleSudoKey(self, prompt, ctx, key);
                         },
-                        .pkgbuild => {
-                            const view = operation_model.pkgbuildView(self);
-                            if (view.handleKey(key)) |action| {
-                                switch (action) {
-                                    .toggle_wrap => {
-                                        self.operation_state.pkgbuild_wrap = !self.operation_state.pkgbuild_wrap;
-                                        self.operation_state.pkgbuild_scroll.scroll.left = 0;
-                                        self.operation_state.pkgbuild_scroll.scroll.vertical_offset = 0;
-                                    },
-                                    .close => operation_model.closePkgbuild(self),
-                                    .retry => if (self.operation_state.pkgbuild_job == null) try operation_model.openPkgbuild(self, ctx, self.operation_state.pkgbuild_name),
-                                    .approve => try operation_model.answerOperationQuestion(self, true),
-                                    .decline => try operation_model.answerOperationQuestion(self, false),
-                                }
-                                return ctx.consumeAndRedraw();
-                            }
-                            if (operation_model.choiceOptions(self)) |options| {
-                                const cursor = self.operation_state.dependency_choices.cursor;
-                                if (commands.matches(key, .mark) and cursor < options.len) {
-                                    if (self.operation_state.operation_question.?.value.question == .select_many) options[cursor].is_selected = !options[cursor].is_selected;
-                                } else {
-                                    try self.operation_state.dependency_choices.handleEvent(ctx, .{ .key_press = commands.scrollKey(key) orelse key });
-                                }
-                                operation_model.syncProviderSelection(self);
-                                self.operation_state.answer_error = "";
-                                return ctx.consumeAndRedraw();
-                            }
-                            if (self.operation_state.pkgbuild_document != null and self.operation_state.pkgbuild_job == null)
-                                try self.operation_state.pkgbuild_scroll.handleEvent(ctx, .{ .key_press = commands.scrollKey(key) orelse key });
-                            return ctx.consumeAndRedraw();
-                        },
+                        .pkgbuild => return operation_model.handleReviewKey(self, ctx, key),
                     }
                 }
-                if (self.active == .flatpak and self.flatpak_state.flatpak_list_active) {
-                    if (commands.matches(key, .search)) {
-                        self.flatpak_state.flatpak_list_active = false;
-                        return ctx.consumeAndRedraw();
-                    }
-                    if (commands.matches(key, .details) or commands.packageAction(key) != null) {
-                        if (self.flatpak_state.flatpak_job == null and self.flatpak_state.flatpak_list.cursor < self.flatpak_state.flatpak_rows.items.len) {
-                            self.overlay = .{ .flatpak = self.flatpak_state.flatpak_rows.items[self.flatpak_state.flatpak_list.cursor] };
-                            if (commands.packageAction(key) != null) try self.captureEvent(ctx, event);
-                        }
-                        return ctx.consumeAndRedraw();
-                    }
-                }
-                if (self.active == .aur and self.aur_state.aur_list_active) {
-                    if (commands.matches(key, .select) or commands.matches(key, .mark)) {
-                        try aur_model.toggleAurSelection(self);
-                        return ctx.consumeAndRedraw();
-                    }
-                    if (commands.matches(key, .clear_selection)) {
-                        aur_model.clearAurSelection(self);
-                        return ctx.consumeAndRedraw();
-                    }
-                    if (commands.matches(key, .search)) {
-                        self.aur_state.aur_list_active = false;
-                        return ctx.consumeAndRedraw();
-                    }
-                    if (commands.matches(key, .details)) {
-                        if (aur_model.selectedAur(self)) |pkg| self.overlay = .{ .aur = pkg };
-                        return ctx.consumeAndRedraw();
-                    }
-                    if (commands.matches(key, .preview)) {
-                        if (aur_model.selectedAur(self)) |pkg| try operation_model.openPkgbuild(self, ctx, pkg.Name);
-                        return ctx.consumeAndRedraw();
-                    }
-                    if (commands.packageAction(key)) |action| {
-                        try aur_model.openAurPrompt(self, if (action == .install) .install else .remove);
-                        return ctx.consumeAndRedraw();
-                    }
-                }
-                if (self.active != .packages and self.active != .settings and
-                    (commands.matches(key, .previous) or commands.matches(key, .next)))
-                {
-                    if (self.active == .aur) {
-                        if (self.aur_state.aur_list_active and self.aur_state.aur_list.cursor == 0 and commands.matches(key, .previous)) {
-                            self.aur_state.aur_list_active = false;
-                            return ctx.consumeAndRedraw();
-                        }
-                        self.aur_state.aur_list_active = true;
-                    }
-                    if (self.active == .flatpak) {
-                        if (self.flatpak_state.flatpak_list_active and self.flatpak_state.flatpak_list.cursor == 0 and commands.matches(key, .previous)) {
-                            self.flatpak_state.flatpak_list_active = false;
-                            return ctx.consumeAndRedraw();
-                        }
-                        self.flatpak_state.flatpak_list_active = true;
-                    }
-                    const canonical: vxfw.Event = .{ .key_press = .{ .codepoint = if (commands.matches(key, .previous)) vaxis.Key.up else vaxis.Key.down } };
-                    switch (self.active) {
-                        .aur => try self.aur_state.aur_list.handleEvent(ctx, canonical),
-                        .flatpak => try self.flatpak_state.flatpak_list.handleEvent(ctx, canonical),
-                        .upgrade => try updates_model.handleScrollEvent(self, ctx, canonical),
-                        else => unreachable,
-                    }
-                    return ctx.consumeAndRedraw();
-                }
-                if (self.active == .aur and commands.matches(key, .confirm)) {
-                    const query = try self.aur_state.aur_field.buf.dupe();
-                    defer self.gpa.free(query);
-                    try aur_model.onAurSubmit(self, ctx, query);
-                    return ctx.consumeAndRedraw();
-                }
-                if (self.active == .flatpak and commands.matches(key, .confirm)) {
-                    if (self.flatpak_state.flatpak_job == null and self.flatpak_state.flatpak_failure == null and self.flatpak_state.flatpak_list.cursor < self.flatpak_state.flatpak_rows.items.len)
-                        self.overlay = .{ .flatpak = self.flatpak_state.flatpak_rows.items[self.flatpak_state.flatpak_list.cursor] };
-                    return ctx.consumeAndRedraw();
-                }
-                if (self.active == .settings) {
-                    if (commands.settings(key)) |action| {
-                        switch (action) {
-                            .previous => self.settings_state.settings_selected = (self.settings_state.settings_selected + settings_model.control_count - 1) % settings_model.control_count,
-                            .next => self.settings_state.settings_selected = (self.settings_state.settings_selected + 1) % settings_model.control_count,
-                            .toggle => if (self.operation_state.install_job == null) try settings_model.toggleSetting(self, ctx),
-                            .save => if (self.operation_state.install_job == null) try settings_model.saveSettings(self, ctx),
-                            .reload => if (self.operation_state.install_job == null) try settings_model.reloadSettings(self, ctx),
-                        }
-                        return ctx.consumeAndRedraw();
-                    }
-                }
-                if (self.active == .packages and command == null) {
-                    if (self.packages_state.package_list_active) {
-                        if (commands.matches(key, .clear_selection)) {
-                            self.packages_state.selected_packages.clearRetainingCapacity();
-                            self.packages_state.selected_list_view.item_count = 0;
-                            try self.setNotice("");
-                            return ctx.consumeAndRedraw();
-                        }
-                        if (commands.packageAction(key)) |action| {
-                            try packages_model.openNativePrompt(self, if (action == .install) .install else .remove);
-                            return ctx.consumeAndRedraw();
-                        }
-                    }
-                    if (commands.packageNavigation(key, !self.packages_state.package_list_active)) |action| {
-                        switch (action) {
-                            .previous, .next => {
-                                if (action == .previous and self.packages_state.package_list_active and self.packages_state.list_view.cursor == 0) {
-                                    self.packages_state.package_list_active = false;
-                                } else {
-                                    self.packages_state.package_list_active = true;
-                                    try self.packages_state.list_view.handleEvent(ctx, .{ .key_press = .{ .codepoint = if (action == .previous) vaxis.Key.up else vaxis.Key.down } });
-                                }
-                            },
-                            .details => if (packages_model.selectedPackage(self)) |pkg| {
-                                self.overlay = .{ .package = pkg };
-                            },
-                            .search => self.packages_state.package_list_active = false,
-                            .select => {
-                                self.packages_state.package_list_active = true;
-                                if (packages_model.selectedPackage(self) != null) try packages_model.toggleSelectedList(self);
-                            },
-                        }
-                        return ctx.consumeAndRedraw();
-                    }
-                }
-                if (self.active == .flatpak) {
-                    if (commands.togglesInstalled(key)) {
-                        if (self.flatpak_state.flatpak_job == null) {
-                            self.flatpak_state.flatpak_installed_only = !self.flatpak_state.flatpak_installed_only;
-                            self.flatpak_state.flatpak_rows.clearRetainingCapacity();
-                            self.flatpak_state.flatpak_list.item_count = 0;
-                            self.flatpak_state.flatpak_list.jumpToItem(0);
-                            try flatpak_model.startFlatpak(self, ctx);
-                        }
-                        return ctx.consumeAndRedraw();
-                    }
-                    if (commands.refreshesList(key)) {
-                        if (!self.flatpak_state.flatpak_available or self.flatpak_state.flatpak_failure != null) try flatpak_model.startFlatpakProbe(self, ctx) else try flatpak_model.startFlatpak(self, ctx);
-                        return ctx.consumeAndRedraw();
-                    }
-                }
-                if (self.active == .aur and self.aur_state.aur_installed_only and commands.refreshesList(key)) {
-                    if (self.aur_state.aur_job == null) try aur_model.startAurSearch(self, ctx, "");
-                    return ctx.consumeAndRedraw();
-                }
-                if (commands.togglesInstalled(key) and (self.active == .packages or self.active == .aur)) {
-                    if (self.active == .packages) {
-                        self.packages_state.installed_only = !self.packages_state.installed_only;
-                        try packages_model.rebuildFilter(self);
-                    } else if (self.aur_state.aur_job == null) {
-                        self.aur_state.aur_installed_only = !self.aur_state.aur_installed_only;
-                        try aur_model.startAurSearch(self, ctx, "");
-                        self.aur_state.aur_filtered.clearRetainingCapacity();
-                        self.aur_state.aur_list.item_count = 0;
-                        self.aur_state.aur_list.jumpToItem(0);
-                    }
-                    return ctx.consumeAndRedraw();
-                }
-                if (self.active == .upgrade) {
-                    if (updates_model.updatesView(self).handleKey(key)) |action| {
-                        switch (action) {
-                            .refresh => try updates_model.startUpdates(self, ctx),
-                            .upgrade_all => try updates_model.upgradeFromUpdates(self, .all),
-                            .upgrade_system => try updates_model.upgradeSystemFromUpdates(self),
-                            .upgrade_aur => try updates_model.upgradeFromUpdates(self, .aur),
-                            .upgrade_flatpak => try updates_model.upgradeFromUpdates(self, .flatpak),
-                        }
-                        return ctx.consumeAndRedraw();
-                    }
-                }
-                if (self.active == .packages and self.packages_state.package_list_active and commands.matches(key, .mark)) {
-                    if (self.packages_state.list_view.cursor < self.packages_state.filtered.items.len) try packages_model.toggleSelectedList(self);
-                    return ctx.consumeAndRedraw();
-                }
-                // Search editing is explicit while browsing: Up at the first
-                // package or / returns to the text field.
-                if (((self.active == .packages and self.packages_state.package_list_active) or (self.active == .aur and self.aur_state.aur_list_active) or (self.active == .flatpak and self.flatpak_state.flatpak_list_active)) and command == null)
-                    return ctx.consumeEvent();
+                const handled = switch (self.active) {
+                    .packages => try packages_model.handleKey(self, ctx, key, command != null),
+                    .aur => try aur_model.handleKey(self, ctx, key, command != null),
+                    .flatpak => try flatpak_model.handleKey(self, ctx, key, command != null),
+                    .upgrade => try updates_model.handleKey(self, ctx, key),
+                    .settings => try settings_model.handleKey(self, ctx, key),
+                };
+                if (handled) return;
 
                 if (command) |action| {
                     switch (action) {
@@ -534,10 +252,7 @@ pub const Model = struct {
                     return ctx.consumeAndRedraw();
                 }
                 if (self.active == .aur and self.overlay != null and self.overlay.? == .pkgbuild and self.operation_state.operation_question == null) {
-                    if (operation_model.choiceOptions(self) != null) {
-                        try self.operation_state.dependency_choices.handleEvent(ctx, event);
-                        operation_model.syncProviderSelection(self);
-                    } else try self.operation_state.pkgbuild_scroll.handleEvent(ctx, event);
+                    try operation_model.handleReviewMouse(self, ctx, event);
                     return ctx.consumeAndRedraw();
                 }
             },
@@ -596,46 +311,17 @@ pub const Model = struct {
                 }
                 return ctx.consumeAndRedraw();
             },
-            .key_press => |key| {
-                // Enter opens the details of the selected package. On the
-                // AUR tab Enter is consumed by the search field instead.
-                if (commands.matches(key, .confirm) or (self.active == .packages and commands.matches(key, .select))) {
-                    if (self.active == .flatpak and self.flatpak_state.flatpak_job == null and self.flatpak_state.flatpak_failure == null and self.flatpak_state.flatpak_list.cursor < self.flatpak_state.flatpak_rows.items.len) {
-                        self.overlay = .{ .flatpak = self.flatpak_state.flatpak_rows.items[self.flatpak_state.flatpak_list.cursor] };
-                        return ctx.consumeAndRedraw();
-                    }
-                    if (self.active == .packages and commands.matches(key, .select) and
-                        self.packages_state.filtered.items.len > 0 and
-                        @as(usize, self.packages_state.list_view.cursor) < self.packages_state.filtered.items.len)
-                    {
-                        self.packages_state.package_list_active = true;
-                        try packages_model.toggleSelectedList(self);
-                        return ctx.consumeAndRedraw();
-                    }
-                }
-                // Let the active list handle whatever the search field
-                // ignored (arrow keys, mouse wheel, ...)
-                return switch (self.active) {
-                    .packages => {
-                        const previous = self.packages_state.list_view.cursor;
-                        try self.packages_state.list_view.handleEvent(ctx, event);
-                        if (previous != self.packages_state.list_view.cursor) self.packages_state.package_details_scroll.scroll = .{};
-                    },
-                    .aur => self.aur_state.aur_list.handleEvent(ctx, event),
-                    .upgrade => updates_model.handleScrollEvent(self, ctx, event),
-                    .flatpak => self.flatpak_state.flatpak_list.handleEvent(ctx, event),
-                    .settings => {},
-                };
+            .key_press => |key| return switch (self.active) {
+                .packages => packages_model.handleUnhandledKey(self, ctx, key),
+                .aur => aur_model.handleUnhandledKey(self, ctx, key),
+                .flatpak => flatpak_model.handleUnhandledKey(self, ctx, key),
+                .upgrade => updates_model.handleScrollEvent(self, ctx, event),
+                .settings => {},
             },
             .mouse => {
                 if (self.overlay) |overlay| {
                     if (overlay == .pkgbuild and self.operation_state.pkgbuild_document != null and self.operation_state.pkgbuild_job == null) {
-                        if (operation_model.choiceOptions(self) != null) {
-                            try self.operation_state.dependency_choices.handleEvent(ctx, event);
-                            operation_model.syncProviderSelection(self);
-                            return;
-                        }
-                        return self.operation_state.pkgbuild_scroll.handleEvent(ctx, event);
+                        return operation_model.handleReviewMouse(self, ctx, event);
                     }
                 }
                 if (self.active == .upgrade and self.overlay == null)
