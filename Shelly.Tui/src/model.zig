@@ -373,6 +373,10 @@ pub const Model = struct {
     pub fn setTab(self: *Model, tab: Tab, ctx: *vxfw.EventContext) !void {
         if (!self.tabEnabled(tab)) return;
         if (tab == self.active) return;
+        if (self.overlay) |overlay| switch (overlay) {
+            .package, .aur, .flatpak => operation_model.closeOverlay(self),
+            .sudo, .pkgbuild, .flatpak_install => return,
+        };
         flatpak_model.closeScreenshots(self);
         self.flatpak_state.flatpak_category_open = false;
         self.active = tab;
@@ -1189,4 +1193,59 @@ test "quit is blocked across pages and help until the operation is collected" {
     try std.testing.expect(model.footerStatus() == null);
     try model.captureEvent(&ctx, .{ .key_press = commands.bindings.quit });
     try std.testing.expect(ctx.quit);
+}
+
+test "mouse tab changes dismiss details but preserve operation modals" {
+    vxfw.DrawContext.init(.unicode);
+    const model = try Model.init(std.testing.allocator);
+    defer model.deinit();
+    defer model.overlay = null;
+    model.settings_state.settings = .{ .aur_enabled = true, .flatpak_enabled = true };
+    model.updates_state.updates_checked = true;
+    var native: Package = .{ .Name = "installed", .Installed = true };
+    var aur: AurPackage = .{ .Name = "installed-git", .Installed = true };
+    const app: flatpak.AppstreamApp = .{ .Id = "org.example.App" };
+    var prompt: SudoPrompt = undefined; // Modal routing must not inspect its contents.
+    const cases = [_]struct { from: Tab, overlay: Overlay, allowed: bool }{
+        .{ .from = .packages, .overlay = .{ .package = &native }, .allowed = true },
+        .{ .from = .aur, .overlay = .{ .aur = &aur }, .allowed = true },
+        .{ .from = .flatpak, .overlay = .{ .flatpak = .{ .catalog = &app } }, .allowed = true },
+        .{ .from = .packages, .overlay = .{ .sudo = &prompt }, .allowed = false },
+        .{ .from = .aur, .overlay = .pkgbuild, .allowed = false },
+        .{ .from = .flatpak, .overlay = .{ .flatpak_install = .{ .app = &app, .selected = 0 } }, .allowed = false },
+    };
+    for (cases) |case| {
+        model.active = case.from;
+        model.overlay = case.overlay;
+        var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+        defer arena.deinit();
+        const widget = try model.drawTabBar(arena.allocator());
+        _ = try widget.draw(.{ .arena = arena.allocator(), .min = .{}, .max = .{ .width = 140, .height = 3 }, .cell_size = .{ .width = 10, .height = 20 } });
+        const bar: *TabBar = @ptrCast(@alignCast(widget.userdata));
+        var col = bar.start_col;
+        for (bar.label_widths, 0..) |width, index| {
+            if (bar.tabs[bar.first_visible + index] == .upgrade) break;
+            col += @intCast(width + 1);
+        }
+        var ctx: vxfw.EventContext = .{ .io = std.testing.io, .alloc = std.testing.allocator, .cmds = .empty };
+        defer ctx.cmds.deinit(std.testing.allocator);
+        // Padding must not dismiss the current details or modal.
+        try TabBar.handleEvent(bar, &ctx, .{ .mouse = .{ .button = .left, .type = .press, .col = 0, .row = bar.label_row, .mods = .{} } });
+        try std.testing.expect(model.overlay != null);
+        try TabBar.handleEvent(bar, &ctx, .{ .mouse = .{ .button = .left, .type = .press, .col = col, .row = bar.label_row, .mods = .{} } });
+        try std.testing.expectEqual(if (case.allowed) Tab.upgrade else case.from, model.active);
+        if (case.allowed) {
+            try std.testing.expect(model.overlay == null);
+            try std.testing.expectEqual(commands.Mode.updates, model.commandContext().mode);
+            // Refresh must route to Updates, never reopen the old removal prompt.
+            var pending: updates_model.UpdatesJob = .{};
+            model.updates_state.updates_job = &pending;
+            defer model.updates_state.updates_job = null;
+            try model.captureEvent(&ctx, .{ .key_press = commands.bindings.refresh });
+            try std.testing.expect(model.overlay == null);
+        } else {
+            try std.testing.expect(model.overlay != null);
+            try std.testing.expectEqualStrings(@tagName(case.overlay), @tagName(model.overlay.?));
+        }
+    }
 }

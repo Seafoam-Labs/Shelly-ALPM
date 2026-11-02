@@ -338,3 +338,8 @@ Finish the baseline UI/UX across the remaining pages, starting with Flatpak, bef
 
 - Escape/Ctrl+C are consumed while an operation worker is active, including review questions and help. A quit attempt displays an in-TUI warning rather than beginning shutdown and blanking the terminal while waiting for the worker.
 - Quit hints disappear from the footer/help until the operation result is collected. Quitting remains available before an operation starts and after completion. Fixtures cover every page, help, both quit bindings, the result-collection boundary and footer hints without running a package operation.
+
+### Mouse tab navigation (2026-11-02)
+
+- Direct tab changes dismiss native/AUR/Flatpak details through `setTab`, preventing stale details shortcuts from acting on the previous page. Authentication, operation reviews and Flatpak source-choice modals block page changes.
+- Mouse regressions cover details-to-Updates followed by Refresh, protected modals, and clicks on tab padding.
