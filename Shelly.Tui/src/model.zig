@@ -839,7 +839,7 @@ pub const Model = struct {
         }
         try children.append(arena, .{
             .origin = .{ .row = max.height - 1, .col = 0 },
-            .surface = try footer_view.draw(ctx.withConstraints(.{}, .{ .width = max.width, .height = 1 }), footer_context, if (self.help_open) null else try self.footerStatus(arena)),
+            .surface = try footer_view.draw(ctx.withConstraints(.{}, .{ .width = max.width, .height = 1 }), footer_context, if (self.help_open) null else self.footerStatus()),
         });
 
         // Modal overlay on top of everything
@@ -1002,16 +1002,9 @@ pub const Model = struct {
         return context;
     }
 
-    pub fn footerStatus(self: *Model, _: Allocator) Allocator.Error!?[]const u8 {
-        if (self.notice.len > 0) return self.notice;
-        if (operation_model.operationPrompt(self) != null) return null;
-        return switch (self.active) {
-            .packages => if (self.packages_state.loading) "Loading packages…" else if (self.packages_state.load_failed) "Package query failed" else null,
-            .aur => if (self.aur_state.aur_job != null) "Loading AUR results…" else if (self.aur_state.aur_failed) "AUR query failed" else null,
-            .flatpak => if (self.flatpak_state.flatpak_probe_job != null) "Checking Flatpak backend…" else if (self.flatpak_state.flatpak_job != null) "Loading Flatpaks…" else if (self.flatpak_state.flatpak_failure != null) "Flatpak query failed" else null,
-            .upgrade => if (self.updates_state.updates_job != null) "Checking for updates…" else if (self.updates_state.updates_failed) "Update check failed" else null,
-            .settings => null,
-        };
+    /// Source loading and query errors belong to their page, not shortcut hints.
+    pub fn footerStatus(self: *const Model) ?[]const u8 {
+        return if (self.notice.len > 0) self.notice else null;
     }
 
     pub fn statusText(self: *Model, arena: Allocator) Allocator.Error![]const u8 {

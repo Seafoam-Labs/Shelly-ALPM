@@ -112,7 +112,7 @@ pub const View = struct {
                     "Details",
                 .alignment = .top_left,
             }};
-            var empty: vxfw.Text = .{ .text = if (self.loading) "Loading packages…" else if (self.load_failed) "Package details unavailable." else "Select a package to see details." };
+            var empty: vxfw.Text = .{ .text = if (self.loading) (if (split) "" else "Loading packages…") else if (self.load_failed) "Package details unavailable." else "Select a package to see details." };
             var border: Border = .{
                 .child = if (self.selected != null and !self.loading and !self.load_failed) self.details_scroll.widget() else empty.widget(),
                 .labels = &labels,

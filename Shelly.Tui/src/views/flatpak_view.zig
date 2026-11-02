@@ -150,7 +150,7 @@ pub const View = struct {
                     .installed => |app| if (app.Name.len > 0) app.Name else app.Id,
                 })}) else "Flatpak details";
                 const labels = [_]Border.BorderLabel{.{ .text = title, .alignment = .top_left }};
-                var empty: vxfw.Text = .{ .text = if (self.loading) "Loading Flatpaks…" else "Select a result to see details." };
+                var empty: vxfw.Text = .{ .text = if (self.loading) (if (split) "" else "Loading Flatpaks…") else "Select a result to see details." };
                 const details = try arena.create(DetailsBody);
                 details.* = .{ .scroll = self.details_scroll, .images = self.images };
                 var border: Border = .{

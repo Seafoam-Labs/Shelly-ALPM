@@ -72,7 +72,7 @@ pub const View = struct {
             else blk: {
                 const title = if (self.selected) |pkg| try std.fmt.allocPrint(arena, "{f}", .{diagnostics.safe(pkg.Name)}) else "AUR details";
                 const labels = [_]Border.BorderLabel{.{ .text = title, .alignment = .top_left }};
-                var empty: vxfw.Text = .{ .text = if (self.searching) "Waiting for search results…" else "Select a result to see details." };
+                var empty: vxfw.Text = .{ .text = if (self.searching) (if (split) "" else "Waiting for search results…") else "Select a result to see details." };
                 var border: Border = .{
                     .child = if (self.selected != null and !self.searching) self.details_scroll.widget() else empty.widget(),
                     .labels = &labels,
