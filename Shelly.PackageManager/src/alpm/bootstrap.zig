@@ -890,7 +890,7 @@ test "bootstrap streams short diagnostics and progress before provisioning finis
             0 => DiagnosticOutput.handleScriptlet(&output, .{ .line = "initializing package" }),
             1 => DiagnosticOutput.handleHook(&output, .{ .name = "fixture.hook", .description = "Updating cache", .position = 1, .total = 1 }),
             2 => DiagnosticOutput.handleError(&output, .{ .message = "fixture failure" }),
-            3 => DiagnosticOutput.handleOperation(&output, .{ .status = .{ .envelope = operation.envelope, .level = .information, .message = "Checking package databases" } }),
+            3 => DiagnosticOutput.handleOperation(&output, .{ .status = .{ .envelope = operation.envelope, .level = .information, .message = "Checking package archive" } }),
             4 => DiagnosticOutput.handleOperation(&output, .{ .progress = .{ .envelope = operation.envelope, .update = .{ .stage = "download", .message = "fixture.pkg.tar", .bytes_completed = 4, .bytes_total = 8 } } }),
             5 => {
                 var finalizer: FinalizerOutput = .{ .writer = &writer.interface, .name = "ldconfig" };

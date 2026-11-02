@@ -47,10 +47,13 @@ pub fn dispatch(
         try context.stderr.writeAll(features.arch_news_unavailable ++ "\n");
         return 1;
     }
+    if (try elevation.runAsInvokingUser(context, invocation.arguments)) |code| return code;
     return try executeWithFetcher(context, invocation, Real{});
 }
 
 pub fn showUnread(context: *runtime.RuntimeContext) !u8 {
+    if (!features.arch_news_enabled) return 0;
+    if (try elevation.runAsInvokingUser(context, &.{ "news", "standard" })) |code| return code;
     return execute(context, .{}, Real{});
 }
 
@@ -70,7 +73,10 @@ pub fn showBeforeUpgrade(context: *runtime.RuntimeContext, ui_mode: bool) void {
 
 fn showBeforeUpgradeWithRunner(context: *runtime.RuntimeContext, ui_mode: bool, runner: anytype) void {
     if (!features.arch_news_enabled or ui_mode) return;
-    const result = runner.runAsInvokingUser(context) catch null;
+    const result = runner.runAsInvokingUser(context) catch {
+        context.stderr.writeAll("Skipping news: could not run as the calling user.\n") catch {};
+        return;
+    };
     if (result == null) {
         _ = runner.showUnread(context) catch {};
     }
@@ -899,7 +905,7 @@ test "upgrade news respects the distribution profile and UI mode including fallb
                 showBeforeUpgradeWithRunner(&tc.context, ui_mode, &runner);
                 const enabled = features.arch_news_enabled and !ui_mode;
                 try std.testing.expectEqual(@as(usize, @intFromBool(enabled)), runner.subprocess_calls);
-                try std.testing.expectEqual(@as(usize, @intFromBool(enabled and (result == null or fail))), runner.fallback_calls);
+                try std.testing.expectEqual(@as(usize, @intFromBool(enabled and result == null and !fail)), runner.fallback_calls);
             }
         }
     }

@@ -1,4 +1,6 @@
 const std = @import("std");
+const builtin = @import("builtin");
+const caller_io = @import("user_account").caller_io;
 const trackReturnError = @import("diagnostics").captureError;
 const diagnostics = @import("diagnostics");
 
@@ -320,7 +322,7 @@ pub const Manager = struct {
         const chroot_path = try allocator.dupe(u8, options.chroot_path);
         errdefer allocator.free(chroot_path);
 
-        try std.Io.Dir.cwd().createDirPath(alpm.io(), cache_root);
+        try caller_io.makePath(allocator, alpm.io(), environ, cache_root);
         if (options.show_hidden_packages and !alpm.show_hidden_packages) _ = alpm.toggle_hidden_packages();
 
         const self = try allocator.create(Self);
@@ -366,7 +368,7 @@ pub const Manager = struct {
     pub fn deinit(self: *Self) void {
         if (self.preparation_diagnostic) |*diagnostic| diagnostic.deinit();
         const allocator = self.allocator;
-        self.vcs_store.saveFile(self.io(), self.vcs_store_path) catch {};
+        self.saveVcsStore() catch {};
         self.vcs_store.deinit();
         var package_bases = self.pkgbase_cache.iterator();
         while (package_bases.next()) |entry| {
@@ -703,7 +705,7 @@ pub const Manager = struct {
                 if (metadata) |package| package.description orelse "" else "",
             ));
         }
-        if (vcs_store_changed) self.vcs_store.saveFile(self.io(), self.vcs_store_path) catch {};
+        if (vcs_store_changed) self.saveVcsStore() catch {};
         return updates.toOwnedSlice(self.allocator);
     }
 
@@ -1528,7 +1530,7 @@ pub const Manager = struct {
             defer self.allocator.free(cache_path);
             _ = self.removeCacheDirectory(cache_path) catch false;
         }
-        try self.vcs_store.saveFile(self.io(), self.vcs_store_path);
+        try self.saveVcsStore();
     }
 
     pub fn installPackageVersion(self: *Self, package_name: []const u8, commit: []const u8) !void {
@@ -2636,6 +2638,10 @@ pub const Manager = struct {
         review: *const package_builder.PreparedPkgbuildReview,
         purpose: SrcinfoPurpose,
     ) ![]u8 {
+        // Match secureBuilderProcess: root-run tests must reach their metadata
+        // fixtures, while production must reject root before evaluating PKGBUILDs.
+        if (!builtin.is_test)
+            try package_builder.requireNonRootEffectiveUid(std.c.geteuid());
         var standalone_context = operation_api.OperationContext.init(self.allocator, self.io());
         defer standalone_context.deinit();
         var standalone_operation: ?operation_api.Operation = null;
@@ -2663,9 +2669,9 @@ pub const Manager = struct {
         defer self.allocator.free(work_directory);
         const ephemeral_work_directory = self.shellybuild_config.destinations.build != null;
         if (ephemeral_work_directory)
-            try std.Io.Dir.cwd().createDirPath(self.io(), work_directory);
+            try caller_io.makePath(self.allocator, self.io(), self.environ, work_directory);
         defer if (ephemeral_work_directory)
-            std.Io.Dir.cwd().deleteTree(self.io(), work_directory) catch {};
+            caller_io.deleteTree(self.allocator, self.io(), self.environ, work_directory) catch {};
 
         var package_build = try package_builder.PackageBuilder.init(
             self.allocator,
@@ -2876,6 +2882,7 @@ pub const Manager = struct {
             defer self.allocator.free(previous_versions);
             var mkdir = try self.runAsInvokingUser(&.{ "mkdir", "-p", previous_versions }, null, null);
             defer mkdir.deinit(self.allocator);
+            if (mkdir.exit_code != 0) return error.CallerOperationFailed;
             if (mkdir.exit_code == 0) {
                 var backup_count: usize = 0;
                 if (std.Io.Dir.cwd().openDir(self.io(), previous_versions, .{ .iterate = true })) |directory_value| {
@@ -2892,6 +2899,7 @@ pub const Manager = struct {
                 defer self.allocator.free(backup_path);
                 var copy = try self.runAsInvokingUser(&.{ "cp", pkgbuild_path, backup_path }, null, null);
                 defer copy.deinit(self.allocator);
+                if (copy.exit_code != 0) return error.CallerOperationFailed;
             }
         } else |_| {}
 
@@ -2909,7 +2917,8 @@ pub const Manager = struct {
         }
         for (stale_paths.items) |path| {
             var remove = try self.runAsInvokingUser(&.{ "rm", "-f", path }, null, null);
-            remove.deinit(self.allocator);
+            defer remove.deinit(self.allocator);
+            if (remove.exit_code != 0) return error.CallerOperationFailed;
         }
     }
 
@@ -3075,7 +3084,7 @@ pub const Manager = struct {
             }
         }
         try self.vcs_store.set(package_name, entries);
-        try self.vcs_store.saveFile(self.io(), self.vcs_store_path);
+        try self.saveVcsStore();
     }
 
     fn importOtherAurHelperCaches(self: *Self) !void {
@@ -3115,7 +3124,7 @@ pub const Manager = struct {
             const destination = try self.cachePath(identity.package_base);
             defer self.allocator.free(destination);
             if (std.Io.Dir.cwd().statFile(self.io(), destination, .{})) |_| continue else |_| {}
-            var copy = try builder.runWithEnvironment(self.allocator, self.io(), self.environ, &.{ "cp", "-r", source, destination }, null, null);
+            var copy = try self.runAsInvokingUser(&.{ "cp", "-r", "--", source, destination }, null, null);
             defer copy.deinit(self.allocator);
             if (copy.exit_code == 0) {
                 const git = try std.fs.path.join(self.allocator, &.{ destination, ".git" });
@@ -3152,6 +3161,12 @@ pub const Manager = struct {
     fn cachePath(self: *Self, package_base: []const u8) ![]u8 {
         if (!endpoints.isValidPackageBase(package_base)) return error.InvalidAurPackageBase;
         return std.fs.path.join(self.allocator, &.{ self.cache_root, package_base });
+    }
+
+    fn saveVcsStore(self: *Self) !void {
+        const payload = try self.vcs_store.serialize();
+        defer self.allocator.free(payload);
+        try caller_io.writeFile(self.allocator, self.io(), self.environ, self.vcs_store_path, payload);
     }
 
     fn runAsInvokingUser(

@@ -136,33 +136,35 @@ test "losing owner and explicit unlock preserve foreign locks" {
     try std.testing.expect(fixture.locked());
 }
 
-test "replacement lock survives release and stale database fails before commit" {
-    var fixture = try Fixture.init();
-    defer fixture.deinit();
-    var owner = try fixture.owner(a);
-    defer owner.deinit() catch unreachable;
-    _ = try owner.initializeTransaction(io, .{});
-    try fixture.temporary.dir.deleteFile(io, "db.lck");
-    try fixture.temporary.dir.writeFile(io, .{ .sub_path = "db.lck", .data = "replacement" });
-    try std.testing.expectError(error.LockOwnershipLost, owner.releaseTransaction());
-    try std.testing.expect(owner.transaction() == null);
-    try std.testing.expect(fixture.locked());
-    try fixture.temporary.dir.deleteFile(io, "db.lck");
+test "replacement lock fails transaction boundaries and survives release" {
+    const Boundary = enum { prepare, download_size, download, preflight, revalidate, commit };
+    for (std.enums.values(Boundary)) |boundary| {
+        var fixture = try Fixture.init();
+        defer fixture.deinit();
+        try fixture.temporary.dir.writeFile(io, .{ .sub_path = "local/demo-1-1/files", .data = "%FILES%\n\n" });
+        var owner = try fixture.owner(a);
+        defer owner.deinit() catch unreachable;
+        const tx = try owner.initializeTransaction(io, .{ .no_hooks = true, .no_scriptlets = true });
+        errdefer owner.releaseTransaction() catch {};
+        try tx.remove("demo");
+        if (boundary != .prepare) try tx.prepare();
+        if (boundary == .revalidate) try tx.preflight();
 
-    const tx = try owner.initializeTransaction(io, .{});
-    try tx.remove("demo");
-    try tx.prepare();
-    try fixture.temporary.dir.writeFile(
-        io,
-        .{
-            .sub_path = "local/demo-1-1/desc",
-            .data = "%NAME%\ndemo\n\n%VERSION%\n2-1\n\n",
-        },
-    );
-
-    try std.testing.expectError(error.StaleDatabaseState, tx.commit());
-    try std.testing.expectEqual(.failed, tx.state);
-    try owner.releaseTransaction();
+        try fixture.temporary.dir.deleteFile(io, "db.lck");
+        try fixture.temporary.dir.writeFile(io, .{ .sub_path = "db.lck", .data = "replacement" });
+        switch (boundary) {
+            .prepare => try std.testing.expectError(error.LockOwnershipLost, tx.prepare()),
+            .download_size => try std.testing.expectError(error.LockOwnershipLost, tx.downloadSize()),
+            .download => try std.testing.expectError(error.LockOwnershipLost, tx.download()),
+            .preflight => try std.testing.expectError(error.LockOwnershipLost, tx.preflight()),
+            .revalidate => try std.testing.expectError(error.LockOwnershipLost, tx.revalidatePreflight()),
+            .commit => try std.testing.expectError(error.LockOwnershipLost, tx.commit()),
+        }
+        try std.testing.expectEqual(0, tx.result().packages_committed);
+        try std.testing.expectError(error.LockOwnershipLost, owner.releaseTransaction());
+        try std.testing.expect(owner.transaction() == null);
+        try std.testing.expect(fixture.locked());
+    }
 }
 
 test "cancelled and failed prepare retain diagnostics and remain releasable" {
@@ -619,7 +621,7 @@ test "missing lock release is harmless and permission denial never creates a tra
     }
 }
 
-test "stale state before prepare and during questions cannot become a prepared plan" {
+test "lock replacement during questions cannot become a prepared plan" {
     var fixture = try Fixture.init();
     defer fixture.deinit();
     var owner = try fixture.owner(a);
@@ -630,7 +632,8 @@ test "stale state before prepare and during questions cannot become a prepared p
 
         fn question(data: ?*anyopaque, q: *rlpm.Callbacks.Question) void {
             const self: *@This() = @ptrCast(@alignCast(data.?));
-            self.fixture.temporary.dir.writeFile(io, .{ .sub_path = "local/new-state", .data = "changed" }) catch
+            self.fixture.temporary.dir.deleteFile(io, "db.lck") catch unreachable;
+            self.fixture.temporary.dir.writeFile(io, .{ .sub_path = "db.lck", .data = "replacement" }) catch
                 unreachable;
 
             if (q.* == .remove_packages) q.remove_packages.skip = true;
@@ -650,17 +653,14 @@ test "stale state before prepare and during questions cannot become a prepared p
         .none,
     );
     defer archive.deinit();
-    var tx = try owner.initializeTransaction(io, .{});
+    const tx = try owner.initializeTransaction(io, .{});
     var input: ?rlpm.Package = try owner.loadPackage(io, archive.path, .local_file, .{});
     defer if (input) |*pkg| pkg.deinit();
     try tx.takeArchive(&input);
-    try std.testing.expectError(error.StaleDatabaseState, tx.prepare());
-    try owner.releaseTransaction();
-    try fixture.temporary.dir.deleteFile(io, "local/new-state");
-    tx = try owner.initializeTransaction(io, .{});
-    try fixture.temporary.dir.writeFile(io, .{ .sub_path = "local/new-state", .data = "again" });
-    try std.testing.expectError(error.StaleDatabaseState, tx.prepare());
-    try owner.releaseTransaction();
+    try std.testing.expectError(error.LockOwnershipLost, tx.prepare());
+    try std.testing.expectEqual(.failed, tx.state);
+    try std.testing.expectError(error.LockOwnershipLost, owner.releaseTransaction());
+    try std.testing.expect(fixture.locked());
 }
 
 test "transaction package references and system upgrade preserve CachyOS repository provenance" {
@@ -722,64 +722,21 @@ test "transaction package references and system upgrade preserve CachyOS reposit
     try owner.releaseTransaction();
 }
 
-test "database check output precedes initialization and supports cancellation without retaining the lock" {
-    for ([_]bool{ false, true }) |cancel| {
-        var fixture = try Fixture.init();
-        defer fixture.deinit();
-        var owner = try fixture.owner(a);
-        defer owner.deinit() catch unreachable;
+test "cancelled initialization leaves no lock and can be retried" {
+    var fixture = try Fixture.init();
+    defer fixture.deinit();
+    var owner = try fixture.owner(a);
+    defer owner.deinit() catch unreachable;
 
-        const Capture = struct {
-            owner: *rlpm.Owner,
-            cancel: bool,
-            started: usize = 0,
-            completed: usize = 0,
-            initialized: bool = false,
+    owner.requestCancellation();
+    try std.testing.expectError(error.Cancelled, owner.initializeTransaction(io, .{}));
+    try std.testing.expect(owner.transaction() == null);
+    try std.testing.expect(!fixture.locked());
 
-            fn log(data: ?*anyopaque, value: rlpm.Callbacks.Log) void {
-                const self: *@This() = @ptrCast(@alignCast(data.?));
-
-                if (std.mem.eql(u8, value.message, "Checking package databases")) {
-                    self.started += 1;
-
-                    if (self.cancel) self.owner.requestCancellation();
-                }
-
-                if (std.mem.startsWith(u8, value.message, "Package database checks complete"))
-                    self.completed += 1;
-            }
-
-            fn event(data: ?*anyopaque, value: rlpm.Callbacks.Event) void {
-                const self: *@This() = @ptrCast(@alignCast(data.?));
-
-                if (value == .lifecycle and value.lifecycle.state == .initialized)
-                    self.initialized = self.completed != 0;
-            }
-        };
-
-        var capture: Capture = .{ .owner = &owner, .cancel = cancel };
-        try owner.setCallbacks(
-            .{
-                .log = Capture.log,
-                .log_context = &capture,
-                .event = Capture.event,
-                .event_context = &capture,
-            },
-        );
-
-        if (cancel) {
-            try std.testing.expectError(error.Cancelled, owner.initializeTransaction(io, .{}));
-            try std.testing.expect(capture.started != 0 and capture.completed == 0 and !capture.initialized);
-        } else {
-            _ = try owner.initializeTransaction(io, .{});
-            try std.testing.expect(
-                capture.started != 0 and capture.started == capture.completed and
-                    capture.initialized,
-            );
-
-            try owner.releaseTransaction();
-        }
-
-        try std.testing.expect(!fixture.locked());
-    }
+    try owner.resetCancellation();
+    const tx = try owner.initializeTransaction(io, .{});
+    try std.testing.expectEqual(.initialized, tx.state);
+    try std.testing.expect(fixture.locked());
+    try owner.releaseTransaction();
+    try std.testing.expect(!fixture.locked());
 }

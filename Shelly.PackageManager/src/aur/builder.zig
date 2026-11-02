@@ -48,19 +48,7 @@ pub const BuildEnvironment = struct {
     distcc: bool = false,
 };
 
-pub const OwnedCommand = struct {
-    argv: [][]u8,
-
-    pub fn deinit(self: *OwnedCommand, allocator: std.mem.Allocator) void {
-        for (self.argv) |argument| allocator.free(argument);
-        allocator.free(self.argv);
-        self.* = undefined;
-    }
-
-    pub fn asConst(self: *const OwnedCommand) []const []const u8 {
-        return @ptrCast(self.argv);
-    }
-};
+pub const OwnedCommand = @import("user_account").caller_io.Command;
 
 pub fn directCommand(
     allocator: std.mem.Allocator,
@@ -395,20 +383,7 @@ pub fn resolveInvokingUserHome(
     _: std.Io,
     environ: std.process.Environ,
 ) ![]u8 {
-    const account = if (environ.getPosix("SUDO_USER")) |user|
-        (if (user.len != 0 and !std.mem.eql(u8, user, "root")) try user_account.byName(allocator, user) else null)
-    else if (environ.getPosix("DOAS_USER")) |user|
-        (if (user.len != 0 and !std.mem.eql(u8, user, "root")) try user_account.byName(allocator, user) else null)
-    else if (environ.getPosix("PKEXEC_UID")) |uid|
-        try user_account.byUidText(allocator, uid)
-    else
-        null;
-    if (account) |found| {
-        defer found.deinit(allocator);
-        if (found.home.len != 0) return allocator.dupe(u8, found.home);
-    }
-    const fallback = environ.getPosix("HOME") orelse return error.HomeNotSet;
-    return allocator.dupe(u8, fallback);
+    return user_account.callerHome(allocator, environ);
 }
 
 pub fn invokingUserCommand(
@@ -418,24 +393,12 @@ pub fn invokingUserCommand(
     command: []const u8,
     arguments: []const []const u8,
 ) !OwnedCommand {
-    var argv: std.ArrayList([]u8) = .empty;
-    errdefer {
-        for (argv.items) |argument| allocator.free(argument);
-        argv.deinit(allocator);
-    }
-
-    if (environ.getPosix("SUDO_USER")) |sudo_user| {
-        try appendOwned(allocator, &argv, &.{ "sudo", "--preserve-env=PATH", "-u", sudo_user, command });
-    } else if (environ.getPosix("DOAS_USER")) |doas_user| {
-        try appendOwned(allocator, &argv, &.{ "/usr/bin/runuser", "-u", doas_user, "-w", "PATH", "--", command });
-    } else if (environ.getPosix("PKEXEC_UID")) |uid| {
-        const username = try resolveUsernameForUid(allocator, io, uid);
-        defer allocator.free(username);
-        try appendOwned(allocator, &argv, &.{ "/usr/bin/runuser", "-u", username, "-w", "PATH", "--", command });
-    } else try appendOwned(allocator, &argv, &.{command});
-
-    try appendOwned(allocator, &argv, arguments);
-    return .{ .argv = try argv.toOwnedSlice(allocator) };
+    _ = io;
+    var argv: std.ArrayList([]const u8) = .empty;
+    defer argv.deinit(allocator);
+    try argv.append(allocator, command);
+    try argv.appendSlice(allocator, arguments);
+    return @import("user_account").caller_io.command(allocator, environ, argv.items);
 }
 
 /// Builds a command that executes as the original non-root caller with a
@@ -448,14 +411,14 @@ pub fn invokingUserCleanCommand(
     command: []const u8,
     arguments: []const []const u8,
 ) !OwnedCommand {
-    const username = try invokingUsername(allocator, io, environ);
-    defer allocator.free(username);
-    const account = (try user_account.byName(allocator, username)) orelse return error.InvokingUserUnavailable;
+    _ = io;
+    const account = try user_account.caller(allocator, environ);
+    const username = account.username;
     defer account.deinit(allocator);
     if (account.uid == 0 or account.home.len == 0) return error.InvokingUserUnavailable;
     var uid_buffer: [10]u8 = undefined;
     const uid = try std.fmt.bufPrint(&uid_buffer, "{d}", .{account.uid});
-    return cleanUserCommand(
+    var result = try cleanUserCommand(
         allocator,
         username,
         account.home,
@@ -465,6 +428,21 @@ pub fn invokingUserCleanCommand(
         command,
         arguments,
     );
+    if (std.c.geteuid() != 0) {
+        errdefer result.deinit(allocator);
+        const direct = try allocator.dupe([]u8, result.argv[4..]);
+        for (result.argv[0..4]) |arg| allocator.free(arg);
+        allocator.free(result.argv);
+        return .{ .argv = direct };
+    }
+    return result;
+}
+
+fn callerPathAssignment(allocator: std.mem.Allocator, environ: std.process.Environ, key: []const u8, home: []const u8, relative: []const u8) ![]u8 {
+    if (environ.getPosix(key)) |value| {
+        if (std.fs.path.isAbsolute(value)) return std.fmt.allocPrint(allocator, "{s}={s}", .{ key, value });
+    }
+    return std.fmt.allocPrint(allocator, "{s}={s}/{s}", .{ key, home, relative });
 }
 
 fn cleanUserCommand(
@@ -479,13 +457,13 @@ fn cleanUserCommand(
 ) !OwnedCommand {
     const home_environment = try std.fmt.allocPrint(allocator, "HOME={s}", .{home});
     defer allocator.free(home_environment);
-    const config_environment = try std.fmt.allocPrint(allocator, "XDG_CONFIG_HOME={s}/.config", .{home});
+    const config_environment = try callerPathAssignment(allocator, environ, "XDG_CONFIG_HOME", home, ".config");
     defer allocator.free(config_environment);
-    const data_environment = try std.fmt.allocPrint(allocator, "XDG_DATA_HOME={s}/.local/share", .{home});
+    const data_environment = try callerPathAssignment(allocator, environ, "XDG_DATA_HOME", home, ".local/share");
     defer allocator.free(data_environment);
-    const cache_environment = try std.fmt.allocPrint(allocator, "XDG_CACHE_HOME={s}/.cache", .{home});
+    const cache_environment = try callerPathAssignment(allocator, environ, "XDG_CACHE_HOME", home, ".cache");
     defer allocator.free(cache_environment);
-    const bin_environment = try std.fmt.allocPrint(allocator, "XDG_BIN_HOME={s}/.local/bin", .{home});
+    const bin_environment = try callerPathAssignment(allocator, environ, "XDG_BIN_HOME", home, ".local/bin");
     defer allocator.free(bin_environment);
     const runtime_environment = try std.fmt.allocPrint(allocator, "XDG_RUNTIME_DIR=/run/user/{s}", .{uid});
     defer allocator.free(runtime_environment);
@@ -615,13 +593,10 @@ pub fn makechrootpkgCommand(
         argv.deinit(allocator);
     }
     try appendOwned(allocator, &argv, &.{ "makechrootpkg", "-c", "-r", chroot_path });
-    if (environ.getPosix("SUDO_USER")) |user| {
-        try appendOwned(allocator, &argv, &.{ "-U", user });
-    } else if (environ.getPosix("PKEXEC_UID")) |uid| {
-        const user = try resolveUsernameForUid(allocator, io, uid);
-        defer allocator.free(user);
-        if (user.len != 0) try appendOwned(allocator, &argv, &.{ "-U", user });
-    }
+    _ = io;
+    const account = try user_account.caller(allocator, environ);
+    defer account.deinit(allocator);
+    if (account.uid != 0) try appendOwned(allocator, &argv, &.{ "-U", account.username });
     return .{ .argv = try argv.toOwnedSlice(allocator) };
 }
 
@@ -823,18 +798,21 @@ test "NSS invoking-user commands resolve all elevators without HOME" {
         defer environ.block.deinit(allocator);
         const home = try resolveInvokingUserHome(allocator, std.testing.io, environ);
         defer allocator.free(home);
-        try std.testing.expectEqualStrings(account.home, home);
+        const effective = (try user_account.byUid(allocator, std.c.geteuid())).?;
+        defer effective.deinit(allocator);
+        try std.testing.expectEqualStrings(if (std.c.geteuid() == 0) account.home else effective.home, home);
         var command = try invokingUserCleanCommand(allocator, std.testing.io, environ, "shelly", &.{"build"});
         defer command.deinit(allocator);
-        try std.testing.expectEqualStrings(account.username, command.argv[2]);
-        try std.testing.expectEqualStrings("/usr/bin/env", command.argv[4]);
-        try std.testing.expectEqualStrings("PATH=" ++ build_path.baseline, command.argv[13]);
-        const expected_home = try std.fmt.allocPrint(allocator, "HOME={s}", .{account.home});
+        const offset: usize = if (std.c.geteuid() == 0) 4 else 0;
+        if (std.c.geteuid() == 0) try std.testing.expectEqualStrings(account.username, command.argv[2]);
+        try std.testing.expectEqualStrings("/usr/bin/env", command.argv[offset]);
+        try std.testing.expectEqualStrings("PATH=" ++ build_path.baseline, command.argv[offset + 9]);
+        const expected_home = try std.fmt.allocPrint(allocator, "HOME={s}", .{if (std.c.geteuid() == 0) account.home else effective.home});
         defer allocator.free(expected_home);
-        try std.testing.expectEqualStrings(expected_home, command.argv[6]);
-        const expected_runtime = try std.fmt.allocPrint(allocator, "XDG_RUNTIME_DIR=/run/user/{s}", .{uid});
+        try std.testing.expectEqualStrings(expected_home, command.argv[offset + 2]);
+        const expected_runtime = try std.fmt.allocPrint(allocator, "XDG_RUNTIME_DIR=/run/user/{d}", .{if (std.c.geteuid() == 0) account.uid else effective.uid});
         defer allocator.free(expected_runtime);
-        try std.testing.expectEqualStrings(expected_runtime, command.argv[11]);
+        try std.testing.expectEqualStrings(expected_runtime, command.argv[offset + 7]);
     }
 }
 
@@ -848,7 +826,13 @@ test "NSS invoking-user validation rejects root and unresolved accounts" {
         try environment.put("PKEXEC_UID", uid);
         const environ: std.process.Environ = .{ .block = try environment.createPosixBlock(allocator, .{}) };
         defer environ.block.deinit(allocator);
-        try std.testing.expectError(error.InvokingUserUnavailable, invokingUserCleanCommand(allocator, std.testing.io, environ, "shelly", &.{}));
+        if (std.c.geteuid() == 0) {
+            try std.testing.expectError(error.InvokingUserUnavailable, invokingUserCleanCommand(allocator, std.testing.io, environ, "shelly", &.{}));
+        } else {
+            var command = try invokingUserCleanCommand(allocator, std.testing.io, environ, "shelly", &.{});
+            defer command.deinit(allocator);
+            try std.testing.expectEqualStrings("/usr/bin/env", command.argv[0]);
+        }
     }
 }
 

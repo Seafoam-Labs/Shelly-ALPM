@@ -73,39 +73,20 @@ fn resolve(
 }
 
 fn invokingUserHome(context: *const runtime.RuntimeContext) ![]const u8 {
-    if (getEnv(context, "SUDO_USER")) |user| {
-        if (user.len > 0 and !std.mem.eql(u8, user, "root")) {
-            if (try homeFromAccount(context, user, null)) |home| return home;
-        }
-    }
-    if (getEnv(context, "DOAS_USER")) |user| {
-        if (user.len > 0 and !std.mem.eql(u8, user, "root")) {
-            if (try homeFromAccount(context, user, null)) |home| return home;
-        }
-    }
-    if (getEnv(context, "PKEXEC_UID")) |uid| {
-        if (uid.len > 0) {
-            if (try homeFromAccount(context, null, uid)) |home| return home;
-        }
-    }
-    return getEnv(context, "HOME") orelse return error.HomeNotConfigured;
+    return invokingUserHomeFor(context, std.c.geteuid());
 }
 
-fn homeFromAccount(
-    context: *const runtime.RuntimeContext,
-    wanted_user: ?[]const u8,
-    wanted_uid: ?[]const u8,
-) !?[]const u8 {
-    const account = if (wanted_user) |user|
-        try user_account.byName(context.allocator, user)
-    else if (wanted_uid) |uid|
-        try user_account.byUidText(context.allocator, uid)
-    else
-        null;
-    const found = account orelse return null;
-    defer found.deinit(context.allocator);
-    if (found.home.len == 0) return null;
-    return try context.allocator.dupe(u8, found.home);
+fn invokingUserHomeFor(context: *const runtime.RuntimeContext, effective_uid: std.c.uid_t) ![]const u8 {
+    if (effective_uid != 0) {
+        if (getEnv(context, "HOME")) |home| {
+            if (std.fs.path.isAbsolute(home)) return home;
+        }
+        return error.HomeNotConfigured;
+    }
+    const account = try user_account.callerFor(context.allocator, effective_uid, getEnv(context, "SUDO_USER"), getEnv(context, "DOAS_USER"), getEnv(context, "PKEXEC_UID"));
+    defer account.deinit(context.allocator);
+    if (account.home.len == 0) return error.HomeNotConfigured;
+    return context.allocator.dupe(u8, account.home);
 }
 
 pub fn getEnv(context: *const runtime.RuntimeContext, key: []const u8) ?[]const u8 {
@@ -131,10 +112,10 @@ test "NSS XDG paths resolve the caller before falling back to HOME" {
             .stderr = &stderr.writer,
             .environment = &environment,
         };
-        try std.testing.expectEqualStrings(account.home, try invokingUserHome(&context));
+        try std.testing.expectEqualStrings(account.home, try invokingUserHomeFor(&context, 0));
         try environment.put("HOME", "/root");
-        try std.testing.expectEqualStrings(account.home, try invokingUserHome(&context));
-        try std.testing.expectEqualStrings(try std.fs.path.join(allocator, &.{ account.home, ".cache" }), try cacheHome(&context));
+        try std.testing.expectEqualStrings(account.home, try invokingUserHomeFor(&context, 0));
+        if (elevation.isRoot()) try std.testing.expectEqualStrings(try std.fs.path.join(allocator, &.{ account.home, ".cache" }), try cacheHome(&context));
         try environment.put("XDG_CACHE_HOME", "/tmp/custom-cache");
         try std.testing.expectEqualStrings("/tmp/custom-cache", try cacheHome(&context));
     }
@@ -183,9 +164,17 @@ test "uses absolute XDG paths and rejects relative overrides" {
         .environment = &environment,
     };
     try std.testing.expectEqualStrings("/tmp/config-root", try configHome(&context));
-    try std.testing.expectEqualStrings("/home/tester/.cache", try cacheHome(&context));
+    // Direct root falls back to its account home, regardless of HOME.
+    const expected_home = if (elevation.isRoot()) blk: {
+        const root = (try user_account.byUid(arena.allocator(), 0)) orelse return error.InvokingUserUnavailable;
+        break :blk root.home;
+    } else "/home/tester";
     try std.testing.expectEqualStrings(
-        "/home/tester/.cache/Shelly/db",
+        try std.fs.path.join(arena.allocator(), &.{ expected_home, ".cache" }),
+        try cacheHome(&context),
+    );
+    try std.testing.expectEqualStrings(
+        try std.fs.path.join(arena.allocator(), &.{ expected_home, ".cache", "Shelly", "db" }),
         try shellyCache(&context, &.{"db"}),
     );
     try std.testing.expectEqualStrings(

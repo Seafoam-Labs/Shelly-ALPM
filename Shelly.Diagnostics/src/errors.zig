@@ -249,6 +249,7 @@ pub fn cause(err: anyerror) []const u8 {
         error.ElevationFailed => "Could not request administrator privileges. Review the authorization helper output before retrying.",
         error.ElevationRequired => "Administrator privileges are required. Run Shelly from your regular user session and approve authorization when requested.",
         error.NoElevator => "No authorization helper was found. Install or configure sudo, doas, or pkexec.",
+        error.CallerOperationFailed => "Could not update files as the calling user. Check directory permissions and repair existing root-owned Shelly files explicitly if needed.",
         error.InvokingUserUnavailable, error.CannotBuildAsRoot => "Could not identify a regular user to run the build. Start Shelly from your regular user session and approve authorization when requested.",
         error.AccessDenied, error.PermissionDenied => "Access was denied. Check that the invoking user has the required permissions for the selected files and directories.",
         error.NoSpaceLeft => "The destination has insufficient capacity. Check the filesystem space or the reported buffer limit before retrying.",

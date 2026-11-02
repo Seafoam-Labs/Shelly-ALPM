@@ -112,7 +112,7 @@ pub fn init(operation: Operation, cause: anyerror, database: ?DatabaseRef) Diagn
             error.InvalidPackageOwnership,
             error.TransactionNotLocked,
             => .invalid_argument,
-            error.StaleDatabaseState, error.LockOwnershipLost, error.LockNotHeld => .stale_reference,
+            error.LockOwnershipLost, error.LockNotHeld => .stale_reference,
             error.CommitUnavailable, error.PreviewRootReadOnly, error.ReadOnlyDatabase => .unsupported,
             error.Cancelled => .cancelled,
             error.UnsupportedDatabaseBackend => .unsupported,

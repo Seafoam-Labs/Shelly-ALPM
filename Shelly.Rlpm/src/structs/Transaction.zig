@@ -8,7 +8,6 @@ const Package = @import("Package.zig");
 const Ref = @import("PackageRef.zig");
 const Resolver = @import("Resolver.zig");
 const Plan = @import("TransactionPlan.zig");
-const Snapshot = @import("DatabaseSnapshot.zig");
 pub const Executor = @import("Executor.zig");
 const Downloads = @import("Downloads.zig");
 const TransactionFlags = @import("TransactionFlags.zig");
@@ -58,7 +57,6 @@ downloaded_files: ?[]Downloads.File = null,
 owned_manifest: ?ExecutionManifest = null,
 owned_actions: ?TransactionActions = null,
 execution: Executor.Report = .{},
-snapshot: [32]u8,
 lock: ?DatabaseLock = null,
 
 /// Borrowed action outcomes, including nonfatal process and cleanup failures.
@@ -116,7 +114,7 @@ pub fn preflight(self: *Transaction) !void {
 }
 
 fn preflightInternal(self: *Transaction) !void {
-    try self.checkSnapshot();
+    try self.checkGuards();
 
     if (self.owned_manifest != null) return self.revalidateInternal();
 
@@ -128,7 +126,7 @@ fn preflightInternal(self: *Transaction) !void {
     );
 
     try Preflight.populate(self, &self.owned_manifest.?);
-    try self.checkSnapshot();
+    try self.checkGuards();
     try self.owned_manifest.?.revalidate(
         self.owner.configuration.root,
         self.owner.configuration.database_path,
@@ -147,7 +145,7 @@ pub fn revalidatePreflight(self: *Transaction) !void {
 }
 
 fn revalidateInternal(self: *Transaction) !void {
-    try self.checkSnapshot();
+    try self.checkGuards();
 
     const value = if (self.owned_manifest) |*value| value else return error.IncompletePreflight;
     try Preflight.reverify(self, value);
@@ -349,7 +347,7 @@ pub fn prepare(self: *Transaction) !void {
 }
 
 fn prepareInternal(self: *Transaction) !void {
-    try self.checkSnapshot();
+    try self.checkGuards();
 
     if (self.owned_plan) |*previous| previous.deinit();
 
@@ -384,7 +382,7 @@ fn prepareInternal(self: *Transaction) !void {
 
     try self.owned_plan.?.check();
     try self.resolveMigrations();
-    try self.checkSnapshot();
+    try self.checkGuards();
 }
 
 pub fn commit(self: *Transaction) !void {
@@ -394,7 +392,7 @@ pub fn commit(self: *Transaction) !void {
     if (self.flags.no_lock) return self.owner.transactionFailure(error.TransactionNotLocked);
     if (self.lock == null) return self.failed(error.LockNotHeld);
 
-    self.checkSnapshot() catch |err| return self.failed(err);
+    self.checkGuards() catch |err| return self.failed(err);
 
     const reviewed = &self.owned_plan.?;
 
@@ -430,12 +428,10 @@ pub fn interrupt(self: *Transaction) !void {
     self.transition(.interrupted, error.Cancelled);
 }
 
-fn checkSnapshot(self: *Transaction) !void {
+fn checkGuards(self: *Transaction) !void {
     try self.owner.checkCancelled();
 
     if (self.lock) |*lock| try lock.validate();
-    if (!std.mem.eql(u8, &self.snapshot, &try Snapshot.capture(self.owner, self.io)))
-        return error.StaleDatabaseState;
 }
 
 fn failed(self: *Transaction, err: anyerror) anyerror {
@@ -495,7 +491,7 @@ pub fn download(self: *Transaction) !void {
 }
 
 fn downloadInternal(self: *Transaction) !void {
-    try self.checkSnapshot();
+    try self.checkGuards();
 
     if (self.downloaded_files != null) return;
 
@@ -524,7 +520,7 @@ fn downloadInternal(self: *Transaction) !void {
         );
 
     self.downloaded_files = try Downloads.acquire(self.owner, self.io, requests.items);
-    try self.checkSnapshot();
+    try self.checkGuards();
 
     if (requests.items.len != 0)
         self.owner.transactionEvent(
@@ -581,7 +577,7 @@ pub fn downloadSize(self: *Transaction) !Downloads.Sizes {
         self.recordFailure(err);
     }
     defer self.owner.busy = false;
-    try trackReturnError(self.checkSnapshot(), &returned_error);
+    try trackReturnError(self.checkGuards(), &returned_error);
 
     var requests: std.ArrayList(Downloads.Request) = .empty;
     defer requests.deinit(self.owner.allocator);

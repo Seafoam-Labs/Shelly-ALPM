@@ -402,6 +402,20 @@ pub fn build(b: *std.Build) void {
     account_test_step.dependOn(&run_account_lookup_tests.step);
     test_step.dependOn(&run_account_lookup_tests.step);
 
+    const caller_cache_module = b.createModule(.{
+        .root_source_file = b.path("src/caller_cache_test.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{.{ .name = "PackageManager", .module = test_mod }},
+    });
+    const caller_cache_tests = b.addTest(.{ .root_module = caller_cache_module });
+    const run_caller_cache_tests = b.addSystemCommand(&.{ "bash", "../scripts/test-caller-cache-ownership.sh" });
+    run_caller_cache_tests.addArtifactArg(account_lookup_tests);
+    run_caller_cache_tests.addArtifactArg(caller_cache_tests);
+    run_caller_cache_tests.has_side_effects = true;
+    b.step("caller-cache-test", "Test caller cache ownership in a disposable subordinate-ID namespace")
+        .dependOn(&run_caller_cache_tests.step);
+
     const path_profile_tests = b.addTest(.{ .root_module = test_mod, .filters = &.{"native helper path defaults"} });
     b.step("path-profile-test", "Test helper defaults and explicit path overrides")
         .dependOn(&b.addRunArtifact(path_profile_tests).step);
@@ -1072,6 +1086,9 @@ pub fn build(b: *std.Build) void {
             "installAppImage reads desktop metadata and icons through standard AppImage symlinks",
             "installAppImage commits and reports diagnostics when cache refreshes fail",
             "installAppImage sanitizes a bundled icon filename containing spaces",
+            "installAppImage installs the entry under the desktop file name the AppImage ships",
+            "installAppImage leaves a desktop entry shipped by another application alone",
+            "installAppImage removes an entry superseded by the shipped desktop file name",
             "cache refresh reports a missing optional utility without failing",
             "installAppImage restores the previous binary when database commit fails",
             "writeDesktopEntry repairs omitted authoritative keys and escapes executable paths",
@@ -1080,6 +1097,7 @@ pub fn build(b: *std.Build) void {
             "update follows a symlinked install directory",
             "update: preserves GitHub provider configuration",
             "update: preserves stable desktop filename when display name changes",
+            "update: refreshes the entry to the desktop file name the AppImage ships",
             "update: preserves Exec= field codes",
             "update: failed database commit rolls back binary and desktop",
             "update: no embedded desktop file uses fallback entry",

@@ -212,6 +212,15 @@ This also removes caches for packages that are no longer installed. The cache
 root directory is retained; symlinks are removed without following their targets.
 Files outside Shelly's cache are not included.
 
+Shelly creates and updates the invoking user's cache with that user's credentials,
+including when launched through sudo, doas, pkexec, or run0. Running directly as
+root uses root's cache and creates root-owned entries. Absolute `XDG_CACHE_HOME`
+overrides are preserved. Failed user delegation never retries cache writes as root.
+
+Existing ownership damage is not repaired automatically. Use
+`shelly utility --fix-permissions` from your regular user session to repair Shelly's
+directories. This does not repair ownership of the parent `~/.cache` directory.
+
 `--aur-cache` can also be used without `--cache`; standard purify still checks
 for corrupted archives. The `--cache` retention count applies only to repository
 package archives, not to Shelly's cache. The UI's **Clean Package Cache** action
@@ -417,6 +426,20 @@ extension removed: `dsearch-x86_64-1.6.0.gz` becomes `dsearch-x86_64-1.6.0`.
 The original compressed file remains in `src`, and `noextract` entries stay
 compressed. Decompression rejects output collisions and files exceeding 4 GiB;
 failed source preparation discards the staging tree.
+
+Downgrades accept more than one installed package so a package and its
+dependencies can move to older versions together in a single transaction:
+
+```bash
+shelly downgrade --list-options linux mesa
+shelly downgrade --oldest linux mesa
+```
+
+`--oldest` selects the oldest candidate for every package, `--no-confirm`
+selects the newest candidate for each without prompting, and interactive mode
+prompts per package. `--ignore` adds every downgraded package to `IgnorePkg`.
+`--target` remains a single-package option and cannot be combined with
+multiple packages.
 
 ### CLI Configuration
 
