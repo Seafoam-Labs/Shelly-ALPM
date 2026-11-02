@@ -2,10 +2,7 @@ const std = @import("std");
 
 const Fixture = @This();
 
-const c = @cImport({
-    @cInclude("archive.h");
-    @cInclude("archive_entry.h");
-});
+const c = @import("rlpm_c");
 
 const io = std.testing.io;
 const allocator = std.testing.allocator;

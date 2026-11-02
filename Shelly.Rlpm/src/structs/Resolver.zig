@@ -31,7 +31,7 @@ pub const Repository = struct {
 };
 
 pub const Snapshot = struct {
-    owner: DatabaseRef.OwnerId = @enumFromInt(0),
+    owner: DatabaseRef.OwnerId = @fromBackingInt(@intCast(0)),
     local: []const Entry = &.{},
     repositories: []const Repository = &.{},
 };
@@ -109,13 +109,13 @@ fn matchesPatterns(
     if (patterns.len == 0) return false;
     if (std.mem.indexOfScalar(u8, value, 0) != null) return error.InvalidSnapshot;
 
-    const text = try allocator.dupeZ(u8, value);
+    const text = try allocator.dupeSentinel(u8, value, 0);
     defer allocator.free(text);
 
     for (patterns) |pattern| {
         if (std.mem.indexOfScalar(u8, pattern, 0) != null) return error.InvalidOption;
 
-        const pat = try allocator.dupeZ(u8, pattern);
+        const pat = try allocator.dupeSentinel(u8, pattern, 0);
         defer allocator.free(pat);
 
         if (fnmatch(pat, text, 0) == 0) return true;
@@ -196,7 +196,7 @@ pub fn resolve(
                 const ref: Ref = .{
                     .database = .{ .owner = snapshot.owner, .id = .archive },
                     .generation = generation,
-                    .id = @enumFromInt(candidates.items.len),
+                    .id = @fromBackingInt(@intCast(candidates.items.len)),
                 };
 
                 try archives.put(
@@ -333,7 +333,7 @@ fn appendCandidate(
 
     plan.candidates = list.items;
 
-    return @enumFromInt(list.items.len - 1);
+    return @fromBackingInt(@intCast(list.items.len - 1));
 }
 
 fn nextArchiveGeneration() !u64 {
@@ -402,7 +402,7 @@ const Solver = struct {
     }
 
     fn ref(self: *const Solver, id: Id) Ref {
-        return self.plan.candidates[@intFromEnum(id)].reference;
+        return self.plan.candidates[@backingInt(id)].reference;
     }
 
     fn cancel(self: *const Solver) !void {
@@ -623,7 +623,7 @@ const Solver = struct {
     }
 
     fn eligible(self: *Solver, id: Id, repo_index: ?usize, local_only: bool) bool {
-        const candidate = self.plan.candidates[@intFromEnum(id)];
+        const candidate = self.plan.candidates[@backingInt(id)];
 
         if (local_only) return candidate.package.origin == .local;
 
@@ -729,7 +729,7 @@ const Solver = struct {
 
                     if (!answer.replace.replace) continue;
                     if (self.byName(self.roots.items, self.pkg(new).name)) |existing| {
-                        if (self.plan.candidates[@intFromEnum(existing)].repository != ri) continue;
+                        if (self.plan.candidates[@backingInt(existing)].repository != ri) continue;
 
                         try self.replacements.append(self.a, .{ .new = existing, .old = old });
 
@@ -1039,20 +1039,20 @@ const Solver = struct {
 
             if (self.reverse.get(self.pkg(old).name)) |requiring|
                 for (requiring.items) |id| {
-                    affected[@intFromEnum(id)] = true;
+                    affected[@backingInt(id)] = true;
                 };
 
             for (self.pkg(old).provides) |dep|
                 if (self.reverse.get(dep.name)) |requiring|
                     for (requiring.items) |id| {
-                        affected[@intFromEnum(id)] = true;
+                        affected[@backingInt(id)] = true;
                     };
         }
 
         for (self.local.items) |id| {
             try self.cancel();
 
-            if (!affected[@intFromEnum(id)]) continue;
+            if (!affected[@backingInt(id)]) continue;
             if (has(self.removals.items, id) or self.byName(self.additions.items, self.pkg(id).name) != null)
                 continue;
 
@@ -1299,7 +1299,7 @@ const Solver = struct {
                         try self.event(
                             .{
                                 .optional_dependency_removed = .{
-                                    .package = self.plan.candidates[@intFromEnum(id)].reference,
+                                    .package = self.plan.candidates[@backingInt(id)].reference,
                                     .dependency = dep,
                                 },
                             },
@@ -1345,7 +1345,7 @@ const Solver = struct {
                 if (other != id and self.dependsOn(id, other))
                     try edges.append(
                         self.a,
-                        @enumFromInt(index_value),
+                        @fromBackingInt(@intCast(index_value)),
                     );
 
             var li: usize = 0;
@@ -1354,7 +1354,7 @@ const Solver = struct {
                 const other = remaining.items[li];
 
                 if (self.dependsOn(id, other)) {
-                    try edges.append(self.a, @enumFromInt(vertices.items.len));
+                    try edges.append(self.a, @fromBackingInt(@intCast(vertices.items.len)));
                     try vertices.append(self.a, other);
                     _ = remaining.orderedRemove(li);
                 } else li += 1;
@@ -1384,7 +1384,7 @@ const Solver = struct {
                 state[v] = 1;
 
                 if (next[v] < children.items[v].items.len) {
-                    const child = @intFromEnum(children.items[v].items[next[v]]);
+                    const child = @backingInt(children.items[v].items[next[v]]);
                     next[v] += 1;
 
                     if (state[child] == 0) {

@@ -279,7 +279,7 @@ pub const FlatpakPackageDetail = extern struct {
         gtk.Box.append(row, key.as(gtk.Widget));
 
         var mbuf: [256]u8 = undefined;
-        const markup = std.fmt.bufPrintZ(&mbuf, "<a href=\"{s}\">{s}</a>", .{ value, value }) catch value;
+        const markup = std.fmt.bufPrintSentinel(&mbuf, "<a href=\"{s}\">{s}</a>", .{ value, value }, 0) catch value;
         const val = gtk.Label.new(null);
         gtk.Label.setMarkup(val, markup);
         gtk.Widget.setHalign(val.as(gtk.Widget), .end);

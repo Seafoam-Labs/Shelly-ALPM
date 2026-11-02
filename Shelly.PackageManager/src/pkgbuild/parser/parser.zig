@@ -2690,6 +2690,35 @@ test "parser_content: Heroic array trimming resolves metadata and execution prel
     try std.testing.expect(std.mem.indexOf(u8, info.execution.?.shared_prelude, "declare -a noextract=('Heroic-2.22.3-linux-x64.pacman')") != null);
 }
 
+test "parser_content: issue 2088 indexed trimming resolves metadata and prepare execution" {
+    const allocator = std.testing.allocator;
+    const content =
+        \\pkgname=yukigram-bin
+        \\pkgver=7.2.9.1
+        \\pkgrel=1
+        \\arch=(x86_64)
+        \\url="https://github.com/yukigram/yukigram"
+        \\source=("${pkgname}-${pkgver}.tar.gz::${url}/releases/download/v${pkgver//_/-}/binary-${CARCH}.tar.gz")
+        \\sha256sums=(SKIP)
+        \\noextract=("${source[0]%%::*}")
+        \\prepare() { printf '%s\n' "${source[0]%%::*}" "${noextract[0]}"; }
+        \\package() { :; }
+    ;
+    var info = try parse_test_pkgbuild(.{ .allocator = allocator, .io = std.testing.io, .package_carch = "x86_64" }, content, null);
+    defer info.deinit(allocator);
+    try std.testing.expectEqual(@as(usize, 1), info.no_extract.?.len);
+    try std.testing.expectEqualStrings("yukigram-bin-7.2.9.1.tar.gz", info.no_extract.?[0]);
+    const plan = info.execution.?;
+    try std.testing.expectEqualStrings("prepare", plan.steps[0].name);
+    const script = try std.mem.concat(allocator, u8, &.{ plan.shared_prelude, "\n", plan.shared_helpers, "\n", plan.steps[0].expanded_body });
+    defer allocator.free(script);
+    const result = try std.process.run(allocator, std.testing.io, .{ .argv = &.{ "/bin/bash", "--noprofile", "--norc", "-c", script } });
+    defer allocator.free(result.stdout);
+    defer allocator.free(result.stderr);
+    try std.testing.expect(result.term == .exited and result.term.exited == 0);
+    try std.testing.expectEqualStrings("yukigram-bin-7.2.9.1.tar.gz\nyukigram-bin-7.2.9.1.tar.gz\n", result.stdout);
+}
+
 test "parser_content: lito-bin indexed source URLs resolve for both architectures" {
     const allocator = std.testing.allocator;
     const content =
@@ -2767,6 +2796,13 @@ test "parser_content: array trimming agrees with trusted Bash and preserves lite
 test "parser_content: indexed elements agree with trusted Bash and execution declarations" {
     const allocator = std.testing.allocator;
     const cases = [_][]const u8{
+        "_items=('a/b/c.tar.gz' 'file::url::tail')\nnoextract=(\"${_items[0]#*/}\" \"${_items[0]##*/}\" \"${_items[0]%.*}\" \"${_items[0]%%.*}\" \"${_items[1]%::*}\" \"${_items[1]%%::*}\")",
+        "_items=('' 'file.tar.gz')\nnoextract=(\"${_items[0]%%.*}\" \"${_items[99]#*}\" \"${_items[1]#}\" \"${_items[1]%%}\" \"${_items[1]#missing}\" \"${_items[1]#?}\")",
+        "_items=('dir/two words' 'dir/${pkgver}' 'dir/$(printf EXPANDED)' 'dir/back\\slash' 'dir/\"quoted\"' 'dir/caf\xc3\xa9')\nnoextract=(\"${_items[0]##*/}\" \"${_items[1]##*/}\" \"${_items[2]##*/}\" \"${_items[3]##*/}\" \"${_items[4]##*/}\" \"${_items[5]##*/}\")",
+        "_items=(dir/first)\n_alias=${_items[0]##*/}\n_alias+=\"-${_items[0]#*/}\"\nnoextract=(\"pre-${_items[0]##*/}-post\" \"$_alias\")\n_items+=(dir/second)\nnoextract+=(\"${_items[1]##*/}\")\n_items=(later)",
+        "_items=(dir/first dir/second)\n_items=(\"${_items[1]##*/}\" \"${_items[0]#dir/}\")\nnoextract=(\"${_items[0]}\" \"${_items[1]}\")",
+        "_scalar='dir/two words'\nnoextract=(\"${_scalar[0]##*/}\" \"${_scalar[1]##*/}\")",
+        "_items=(dir/first)\nnoextract=('${_items[0]##*/}' \"\\${_items[0]##*/}\")",
         "_items=(first second)\nnoextract=(\"pre-${_items[0]}-${_items[1]}-post\")",
         "_items=('' 'two words' '*.tar' 'caf\xc3\xa9')\nnoextract=(\"${_items[0]}\" \"${_items[1]}\" \"${_items[2]}\" \"${_items[3]}\" \"${_items[99]}\")",
         "_items=()\nnoextract=(\"${_items[0]}\" \"pre${_items[1]}post\")",
@@ -2814,7 +2850,7 @@ test "parser_content: unsupported indexed elements retain assignment diagnostics
     const allocator = arena.allocator();
     for ([_][]const u8{
         "\"${_items[-1]}\"",                                   "\"${_items[01]}\"", "\"${_items[1+1]}\"",
-        "\"${_items[index]}\"",                                "\"${_items[]}\"",   "\"${_items[0]##*/}\"",
+        "\"${_items[index]}\"",                                "\"${_items[]}\"",   "\"${_items[0]/a/b}\"",
         "\"${_items[999999999999999999999999999999999999]}\"", "${_items[0]}",      "\"${_items[9223372036854775808]}\"",
     }) |expression| {
         const content = try std.fmt.allocPrint(allocator, "pkgname=demo\narch=(any)\n_items=(first second)\nnoextract=({s})\npackage() {{ :; }}\n", .{expression});
@@ -2870,6 +2906,33 @@ test "parser_content: indexed elements preserve reviewed overrides and unsets" {
     for (unset.no_extract.?) |actual| try std.testing.expectEqualStrings("", actual);
 }
 
+test "parser_content: indexed trimming preserves reviewed overrides and unsets" {
+    const allocator = std.testing.allocator;
+    var overrides = std.StringHashMap([]const []const u8).init(allocator);
+    defer overrides.deinit();
+    try overrides.put("_items", &.{ "dir/${pkgver}", "dir/$(printf literal)", "" });
+    const content =
+        \\pkgname=demo
+        \\pkgver=1
+        \\_items=(old)
+        \\_alias="${_items[0]##*/}"
+        \\noextract=("$_alias" "${_items[1]##*/}" "${_items[2]##*/}" "${_items[99]##*/}")
+        \\package() { :; }
+    ;
+    var parser = PkgbuildParser{ .allocator = allocator, .io = std.testing.io, .dynamic_array_overrides = &overrides };
+    var info = try parse_test_pkgbuild(parser, content, null);
+    defer info.deinit(allocator);
+    for ([_][]const u8{ "${pkgver}", "$(printf literal)", "", "" }, info.no_extract.?) |expected, actual|
+        try std.testing.expectEqualStrings(expected, actual);
+    var unsets = std.StringHashMap(void).init(allocator);
+    defer unsets.deinit();
+    try unsets.put("_items", {});
+    parser.dynamic_array_unsets = &unsets;
+    var unset = try parse_test_pkgbuild(parser, content, null);
+    defer unset.deinit(allocator);
+    for (unset.no_extract.?) |actual| try std.testing.expectEqualStrings("", actual);
+}
+
 test "parser_content: indexed elements keep unknown and command dependent values deferred" {
     const allocator = std.testing.allocator;
     for ([_][]const u8{
@@ -2901,6 +2964,37 @@ test "parser_content: indexed elements keep unknown and command dependent values
     try std.testing.expectEqualStrings("${unknown}.patch", literal.local_source_files.?[1]);
 }
 
+test "parser_content: indexed trimming keeps unknown and command dependent values deferred" {
+    const allocator = std.testing.allocator;
+    for ([_][]const u8{
+        "_items=(\"$(printf should-not-execute)\")",
+        "_items=(\"$unknown\")",
+        "_items=(first)\nif false; then\n_items=(second)\nfi",
+        "",
+    }) |declarations| {
+        const content = try std.mem.concat(allocator, u8, &.{ "pkgname=demo\n", declarations, "\n_alias=\"${_items[0]%%::*}\"\nsource=(\"prefix-${_items[0]%%::*}.patch\" \"${_alias}.patch\")\npackage() { :; }\n" });
+        defer allocator.free(content);
+        var info = try parse_test_pkgbuild(.{ .allocator = allocator, .io = std.testing.io }, content, null);
+        defer info.deinit(allocator);
+        try std.testing.expectEqual(@as(usize, 0), info.local_source_files.?.len);
+        try std.testing.expectEqualStrings("prefix-${_items[0]%%::*}.patch", info.source.?[0]);
+    }
+    var arena = std.heap.ArenaAllocator.init(allocator);
+    defer arena.deinit();
+    try std.testing.expectError(error.UnresolvedPkgbuildVariable, parse_test_pkgbuild(.{ .allocator = arena.allocator(), .io = std.testing.io }, "pkgname=demo\n_items=(\"$unknown\")\ninstall=\"${_items[0]%%::*}.install\"\n", null));
+
+    var literal = try parse_test_pkgbuild(.{ .allocator = allocator, .io = std.testing.io },
+        \\pkgname=demo
+        \\_items=("$(printf should-not-execute)" '$(printf literal).patch' '${unknown}.patch')
+        \\source=("${_items[1]%%::*}" "${_items[2]%%::*}")
+        \\package() { :; }
+    , null);
+    defer literal.deinit(allocator);
+    try std.testing.expectEqual(@as(usize, 2), literal.local_source_files.?.len);
+    try std.testing.expectEqualStrings("$(printf literal).patch", literal.local_source_files.?[0]);
+    try std.testing.expectEqualStrings("${unknown}.patch", literal.local_source_files.?[1]);
+}
+
 test "parser_content: package scalar indexed elements see global and local arrays" {
     const allocator = std.testing.allocator;
     var info = try parse_test_pkgbuild(.{ .allocator = allocator, .io = std.testing.io, .selected_package_name = "demo" },
@@ -2923,6 +3017,18 @@ test "parser_content: unsupported array trimming reports the field and original 
     defer arena.deinit();
     const allocator = arena.allocator();
     const cases = [_][]const u8{
+        "\"${_files[0]##[ab]}\"",
+        "\"${_files[0]##${pattern}}\"",
+        "\"${_files[0]##'*/'}\"",
+        "\"${_files[0]##\\*}\"",
+        "\"${_files[0]##@(a)}\"",
+        "\"${_files[0]##\xc3\xa9}\"",
+        "\"${_files[0]#?}\"",
+        "\"${_files[-1]##*/}\"",
+        "\"${_files[01]##*/}\"",
+        "\"${_files[index]##*/}\"",
+        "\"${_files[0]:1}\"",
+        "${_files[0]##*/}",
         "\"${_files[@]##[ab]}\"",
         "\"${_files[@]##${pattern}}\"",
         "\"${_files[@]##'*/'}\"",

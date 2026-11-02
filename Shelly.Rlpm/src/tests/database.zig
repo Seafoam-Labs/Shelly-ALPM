@@ -4,9 +4,7 @@ const std = @import("std");
 const rlpm = @import("Shelly_Rlpm");
 const Archive = @import("archive_fixture.zig");
 
-const c = @cImport({
-    @cInclude("sqlite3.h");
-});
+const c = @import("rlpm_c");
 
 const allocator = std.testing.allocator;
 const io = std.testing.io;
@@ -413,7 +411,7 @@ test "tar and CachyOS SQLite records and regex search match pinned reference" {
         try std.testing.expectEqual(expected_groups.len, group_ids.len);
 
         for (group_ids, expected_groups) |id, expected_group| {
-            const group = (try owner.database(db)).groups.groups.items[@intFromEnum(id)];
+            const group = (try owner.database(db)).groups.groups.items[@backingInt(id)];
             try std.testing.expectEqualStrings(field(expected_group, "name").string, group.name);
             try std.testing.expectEqual(
                 field(expected_group, "packages").array.items.len,
@@ -524,7 +522,7 @@ test "all reference compression filters and files extension build shared indexes
         for (groups, [_][]const u8{ "z-tools", "common", "editors" }) |id, name|
             try std.testing.expectEqualStrings(
                 name,
-                (try owner.database(db)).groups.groups.items[@intFromEnum(id)].name,
+                (try owner.database(db)).groups.groups.items[@backingInt(id)].name,
             );
     }
 }
@@ -781,7 +779,7 @@ test "cache metadata regex and reload allocations clean up at every injected fai
         .{ .sub_path = "db/local/demo-1-1/changelog", .data = "history" },
     );
 
-    try std.testing.checkAllAllocationFailures(
+    try @import("allocation_failures.zig").checkAllAllocationFailures(
         allocator,
         allocationLifecycle,
         .{ fixture.root, fixture.db },
@@ -801,7 +799,7 @@ test "cache metadata regex and reload allocations clean up at every injected fai
         const bytes = try sqlImage(field(case, "columns").array.items, field(case, "rows").array.items);
         defer allocator.free(bytes);
         try fixture.sync("test.db", &.{.{ .path = "pacman.db", .contents = bytes }}, .zstd, null);
-        try std.testing.checkAllAllocationFailures(
+        try @import("allocation_failures.zig").checkAllAllocationFailures(
             allocator,
             allocationLifecycle,
             .{ fixture.root, fixture.db },

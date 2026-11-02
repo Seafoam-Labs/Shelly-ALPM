@@ -12,7 +12,7 @@ path: [:0]u8,
 fd: c_int,
 
 pub fn acquire(allocator: std.mem.Allocator, path: []const u8) !Lock {
-    const owned = try allocator.dupeZ(u8, path);
+    const owned = try allocator.dupeSentinel(u8, path, 0);
     errdefer allocator.free(owned);
     var fd: c_int = undefined;
     try check(rlpm_lock_acquire(owned, &fd));
@@ -35,7 +35,7 @@ pub fn release(self: *Lock, allocator: std.mem.Allocator) !void {
 fn check(result: c_int) !void {
     if (result == 0) return;
 
-    return switch (@as(std.c.E, @enumFromInt(result))) {
+    return switch (@as(std.c.E, @fromBackingInt(@intCast(result)))) {
         .EXIST => error.DatabaseLocked,
         .ACCES, .PERM, .ROFS => error.LockPermissionDenied,
         .STALE => error.LockOwnershipLost,

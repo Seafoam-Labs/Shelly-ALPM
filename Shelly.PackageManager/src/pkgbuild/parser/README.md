@@ -143,7 +143,14 @@ conditional values remain unresolved, and command-dependent values remain
 deferred for reviewed evaluation. Substituted dollars, quotes, and backslashes
 are literal data, never new expansion syntax.
 
-Arithmetic or variable subscripts, negative indices, indexed trimming, explicit
+Single elements also support prefix and suffix removal with `#`, `##`, `%`, and
+`%%`, for example `noextract=("${source[0]%%::*}")`. These expressions work in
+scalar assignments and double-quoted array words, including surrounding text.
+The selected element is resolved before trimming, using the same pattern subset
+and restrictions as whole-array trimming below. Unknown or command-dependent
+elements remain deferred; substituted bytes are never expanded again.
+
+Arithmetic or variable subscripts, negative indices, explicit
 subscript assignments (including sparse initializers), and scalar/array mutation
 forms outside the dense resolver are unsupported. Unquoted element references
 inside arrays are rejected because they would require word splitting and globbing.

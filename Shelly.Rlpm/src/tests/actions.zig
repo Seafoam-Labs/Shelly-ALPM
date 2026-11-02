@@ -9,16 +9,7 @@ const options = @import("action_fixtures");
 
 const a = std.testing.allocator;
 const io = std.testing.io;
-const c = @cImport({
-    @cUndef("_FORTIFY_SOURCE");
-    @cDefine("_FORTIFY_SOURCE", "0");
-    @cInclude("unistd.h");
-    @cInclude("sys/socket.h");
-    @cInclude("netinet/in.h");
-    @cInclude("fcntl.h");
-    @cInclude("sys/stat.h");
-    @cInclude("signal.h");
-});
+const c = @import("rlpm_c");
 
 const trigger = "[Trigger]\nOperation=Install\nType=Package\nTarget=*\n";
 const pre = "[Action]\nWhen=PreTransaction\n";
@@ -183,12 +174,12 @@ test "network namespace isolates while explicit and global permissions bypass it
     address.sin_family = c.AF_INET;
     address.sin_addr.s_addr = std.mem.nativeToBig(u32, 0x7f000001);
 
-    if (c.bind(socket, @ptrCast(&address), @sizeOf(@TypeOf(address))) != 0 or c.listen(socket, 8) != 0)
+    if (bind(socket, @ptrCast(&address), @sizeOf(@TypeOf(address))) != 0 or c.listen(socket, 8) != 0)
         return error.FixtureSocket;
 
     var len: c.socklen_t = @sizeOf(@TypeOf(address));
 
-    if (c.getsockname(socket, @ptrCast(&address), &len) != 0) return error.FixtureSocket;
+    if (getsockname(socket, @ptrCast(&address), &len) != 0) return error.FixtureSocket;
 
     const port = try std.fmt.allocPrint(a, "{d}", .{std.mem.bigToNative(u16, address.sin_port)});
     defer a.free(port);
@@ -967,3 +958,7 @@ test "phase callbacks can cancel before payload or post hooks" {
         try std.testing.expectError(error.FileNotFound, f.read("root/trace"));
     }
 }
+
+// POSIX pointer signatures avoid glibc GNU transparent-union typedefs.
+extern "c" fn bind(socket: c_int, address: *const c.struct_sockaddr, length: c.socklen_t) c_int;
+extern "c" fn getsockname(socket: c_int, address: *c.struct_sockaddr, length: *c.socklen_t) c_int;

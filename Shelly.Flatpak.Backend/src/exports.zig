@@ -228,11 +228,11 @@ fn dispatch(
 fn install(state: *State, request: wire.RequestEnvelope) ![]u8 {
     var args = try parseArgs(wire.InstallArguments, request);
     defer args.deinit();
-    const id = try allocator.dupeZ(u8, args.value.id);
+    const id = try allocator.dupeSentinel(u8, args.value.id, 0);
     defer allocator.free(id);
-    const remote = try allocator.dupeZ(u8, args.value.remote);
+    const remote = try allocator.dupeSentinel(u8, args.value.remote, 0);
     defer allocator.free(remote);
-    const branch = try allocator.dupeZ(u8, args.value.branch);
+    const branch = try allocator.dupeSentinel(u8, args.value.branch, 0);
     defer allocator.free(branch);
     var manager = managerFor(state);
     defer manager.deinit();
@@ -256,7 +256,7 @@ fn installFile(
 ) ![]u8 {
     var args = try parseArgs(wire.InstallFileArguments, request);
     defer args.deinit();
-    const path = try allocator.dupeZ(u8, args.value.path);
+    const path = try allocator.dupeSentinel(u8, args.value.path, 0);
     defer allocator.free(path);
     var manager = managerFor(state);
     defer manager.deinit();
@@ -282,10 +282,10 @@ fn updateInstalled(state: *State, request: wire.RequestEnvelope) ![]u8 {
     var manager = managerFor(state);
     defer manager.deinit();
     const result = if (args.value.scope) |scope| direct: {
-        const id = try allocator.dupeZ(u8, args.value.name_or_id);
+        const id = try allocator.dupeSentinel(u8, args.value.name_or_id, 0);
         defer allocator.free(id);
         const commit = if (args.value.commit) |value|
-            try allocator.dupeZ(u8, value)
+            try allocator.dupeSentinel(u8, value, 0)
         else
             null;
         defer if (commit) |value| allocator.free(value);
@@ -313,7 +313,7 @@ fn uninstallInstalled(
     var manager = managerFor(state);
     defer manager.deinit();
     const result = if (args.value.scope) |scope| direct: {
-        const id = try allocator.dupeZ(u8, args.value.name_or_id);
+        const id = try allocator.dupeSentinel(u8, args.value.name_or_id, 0);
         defer allocator.free(id);
         break :direct try manager.uninstall_flatpak(
             id,
@@ -557,7 +557,7 @@ fn listRunning(state: *State, request: wire.RequestEnvelope) ![]u8 {
 fn searchRemoteRefs(state: *State, request: wire.RequestEnvelope) ![]u8 {
     var args = try parseArgs(wire.QueryArguments, request);
     defer args.deinit();
-    const query = try allocator.dupeZ(u8, args.value.query);
+    const query = try allocator.dupeSentinel(u8, args.value.query, 0);
     defer allocator.free(query);
     var manager = managerFor(state);
     defer manager.deinit();
@@ -572,11 +572,11 @@ fn searchRemoteRefs(state: *State, request: wire.RequestEnvelope) ![]u8 {
 fn getRemoteRef(state: *State, request: wire.RequestEnvelope) ![]u8 {
     var args = try parseArgs(wire.RemoteRefArguments, request);
     defer args.deinit();
-    const remote = try allocator.dupeZ(u8, args.value.remote);
+    const remote = try allocator.dupeSentinel(u8, args.value.remote, 0);
     defer allocator.free(remote);
-    const name = try allocator.dupeZ(u8, args.value.name);
+    const name = try allocator.dupeSentinel(u8, args.value.name, 0);
     defer allocator.free(name);
-    const branch = try allocator.dupeZ(u8, args.value.branch);
+    const branch = try allocator.dupeSentinel(u8, args.value.branch, 0);
     defer allocator.free(branch);
     var manager = managerFor(state);
     defer manager.deinit();
@@ -604,7 +604,7 @@ fn getRemoteRef(state: *State, request: wire.RequestEnvelope) ![]u8 {
 fn launch(state: *State, request: wire.RequestEnvelope) ![]u8 {
     var args = try parseArgs(wire.NameArguments, request);
     defer args.deinit();
-    const name = try allocator.dupeZ(u8, args.value.name_or_id);
+    const name = try allocator.dupeSentinel(u8, args.value.name_or_id, 0);
     defer allocator.free(name);
     var manager = managerFor(state);
     defer manager.deinit();
@@ -617,7 +617,7 @@ fn launch(state: *State, request: wire.RequestEnvelope) ![]u8 {
 fn kill(state: *State, request: wire.RequestEnvelope) ![]u8 {
     var args = try parseArgs(wire.NameArguments, request);
     defer args.deinit();
-    const name = try allocator.dupeZ(u8, args.value.name_or_id);
+    const name = try allocator.dupeSentinel(u8, args.value.name_or_id, 0);
     defer allocator.free(name);
     var manager = managerFor(state);
     defer manager.deinit();
@@ -643,9 +643,9 @@ fn listRemotes(state: *State, request: wire.RequestEnvelope) ![]u8 {
 fn addRemote(state: *State, request: wire.RequestEnvelope) ![]u8 {
     var args = try parseArgs(wire.AddRemoteArguments, request);
     defer args.deinit();
-    const name = try allocator.dupeZ(u8, args.value.name);
+    const name = try allocator.dupeSentinel(u8, args.value.name, 0);
     defer allocator.free(name);
-    const url = try allocator.dupeZ(u8, args.value.url);
+    const url = try allocator.dupeSentinel(u8, args.value.url, 0);
     defer allocator.free(url);
     var manager = remoteManagerFor(state);
     return successResponse(
@@ -665,7 +665,7 @@ fn addRemote(state: *State, request: wire.RequestEnvelope) ![]u8 {
 fn removeRemote(state: *State, request: wire.RequestEnvelope) ![]u8 {
     var args = try parseArgs(wire.RemoteMutationArguments, request);
     defer args.deinit();
-    const name = try allocator.dupeZ(u8, args.value.name);
+    const name = try allocator.dupeSentinel(u8, args.value.name, 0);
     defer allocator.free(name);
     var manager = remoteManagerFor(state);
     return successResponse(
@@ -700,7 +700,7 @@ fn highestPriorityRemote(
 fn listRemoteRefs(state: *State, request: wire.RequestEnvelope) ![]u8 {
     var args = try parseArgs(wire.RemoteNameArguments, request);
     defer args.deinit();
-    const remote = try allocator.dupeZ(u8, args.value.remote);
+    const remote = try allocator.dupeSentinel(u8, args.value.remote, 0);
     defer allocator.free(remote);
     var manager = managerFor(state);
     defer manager.deinit();
@@ -784,11 +784,11 @@ fn loadCatalog(state: *State, request: wire.RequestEnvelope) ![]u8 {
 fn rebase(state: *State, request: wire.RequestEnvelope) ![]u8 {
     var args = try parseArgs(wire.RebaseArguments, request);
     defer args.deinit();
-    const old_ref = try allocator.dupeZ(u8, args.value.old_ref);
+    const old_ref = try allocator.dupeSentinel(u8, args.value.old_ref, 0);
     defer allocator.free(old_ref);
-    const new_ref = try allocator.dupeZ(u8, args.value.new_ref);
+    const new_ref = try allocator.dupeSentinel(u8, args.value.new_ref, 0);
     defer allocator.free(new_ref);
-    const remote = try allocator.dupeZ(u8, args.value.remote);
+    const remote = try allocator.dupeSentinel(u8, args.value.remote, 0);
     defer allocator.free(remote);
 
     var previous_ids = try allocator.alloc([:0]const u8, args.value.previous_ids.len);
@@ -796,7 +796,7 @@ fn rebase(state: *State, request: wire.RequestEnvelope) ![]u8 {
     var initialized: usize = 0;
     defer for (previous_ids[0..initialized]) |value| allocator.free(value);
     for (args.value.previous_ids) |value| {
-        previous_ids[initialized] = try allocator.dupeZ(u8, value);
+        previous_ids[initialized] = try allocator.dupeSentinel(u8, value, 0);
         initialized += 1;
     }
 

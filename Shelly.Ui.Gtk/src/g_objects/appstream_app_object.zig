@@ -179,16 +179,16 @@ pub const AppstreamAppObject = extern struct {
         while (url_iterator.next()) |entry| {
             try urls.map.put(
                 allocator,
-                try allocator.dupeZ(u8, entry.key_ptr.*),
-                try allocator.dupeZ(u8, entry.value_ptr.*),
+                try allocator.dupeSentinel(u8, entry.key_ptr.*, 0),
+                try allocator.dupeSentinel(u8, entry.value_ptr.*, 0),
             );
         }
 
         const icons = try allocator.alloc(flatpak.AppstreamIcon, source.Icons.len);
         for (source.Icons, 0..) |icon, index| {
             icons[index] = .{
-                .Type = try allocator.dupeZ(u8, icon.Type),
-                .Url = try allocator.dupeZ(u8, icon.Url),
+                .Type = try allocator.dupeSentinel(u8, icon.Type, 0),
+                .Url = try allocator.dupeSentinel(u8, icon.Url, 0),
                 .Width = icon.Width,
                 .Height = icon.Height,
                 .Scale = icon.Scale,
@@ -200,14 +200,14 @@ pub const AppstreamAppObject = extern struct {
             const images = try allocator.alloc(flatpak.AppstreamImage, screenshot.Images.len);
             for (screenshot.Images, 0..) |image, image_index| {
                 images[image_index] = .{
-                    .Type = try allocator.dupeZ(u8, image.Type),
-                    .Url = try allocator.dupeZ(u8, image.Url),
+                    .Type = try allocator.dupeSentinel(u8, image.Type, 0),
+                    .Url = try allocator.dupeSentinel(u8, image.Url, 0),
                     .Width = image.Width,
                     .Height = image.Height,
                 };
             }
             screenshots[index] = .{
-                .Caption = try allocator.dupeZ(u8, screenshot.Caption),
+                .Caption = try allocator.dupeSentinel(u8, screenshot.Caption, 0),
                 .IsDefault = screenshot.IsDefault,
                 .Images = images,
             };
@@ -216,18 +216,18 @@ pub const AppstreamAppObject = extern struct {
         const releases = try allocator.alloc(flatpak.AppstreamRelease, source.Releases.len);
         for (source.Releases, 0..) |release, index| {
             releases[index] = .{
-                .Version = try allocator.dupeZ(u8, release.Version),
-                .Type = try allocator.dupeZ(u8, release.Type),
+                .Version = try allocator.dupeSentinel(u8, release.Version, 0),
+                .Type = try allocator.dupeSentinel(u8, release.Type, 0),
                 .Timestamp = release.Timestamp,
-                .Description = try allocator.dupeZ(u8, release.Description),
+                .Description = try allocator.dupeSentinel(u8, release.Description, 0),
             };
         }
 
         const remotes = try allocator.alloc(flatpak.Remote, source.Remotes.len);
         for (source.Remotes, 0..) |remote, index| {
             remotes[index] = .{
-                .Name = try allocator.dupeZ(u8, remote.Name),
-                .Url = try allocator.dupeZ(u8, remote.Url),
+                .Name = try allocator.dupeSentinel(u8, remote.Name, 0),
+                .Url = try allocator.dupeSentinel(u8, remote.Url, 0),
                 .Scope = remote.Scope,
             };
         }
@@ -236,13 +236,13 @@ pub const AppstreamAppObject = extern struct {
         for (source.Addons, 0..) |addon, index| addons[index] = try cloneApp(allocator, addon);
 
         return .{
-            .Id = try allocator.dupeZ(u8, source.Id),
-            .Name = try allocator.dupeZ(u8, source.Name),
-            .Summary = try allocator.dupeZ(u8, source.Summary),
-            .Description = try allocator.dupeZ(u8, source.Description),
-            .Type = try allocator.dupeZ(u8, source.Type),
-            .ProjectLicense = try allocator.dupeZ(u8, source.ProjectLicense),
-            .DeveloperName = try allocator.dupeZ(u8, source.DeveloperName),
+            .Id = try allocator.dupeSentinel(u8, source.Id, 0),
+            .Name = try allocator.dupeSentinel(u8, source.Name, 0),
+            .Summary = try allocator.dupeSentinel(u8, source.Summary, 0),
+            .Description = try allocator.dupeSentinel(u8, source.Description, 0),
+            .Type = try allocator.dupeSentinel(u8, source.Type, 0),
+            .ProjectLicense = try allocator.dupeSentinel(u8, source.ProjectLicense, 0),
+            .DeveloperName = try allocator.dupeSentinel(u8, source.DeveloperName, 0),
             .Categories = try cloneStrings(allocator, source.Categories),
             .Keywords = try cloneStrings(allocator, source.Keywords),
             .Icons = icons,
@@ -250,9 +250,9 @@ pub const AppstreamAppObject = extern struct {
             .Releases = releases,
             .Urls = urls,
             .IsVerified = source.IsVerified,
-            .VerificationMethod = try allocator.dupeZ(u8, source.VerificationMethod),
+            .VerificationMethod = try allocator.dupeSentinel(u8, source.VerificationMethod, 0),
             .Remotes = remotes,
-            .Extends = if (source.Extends) |value| try allocator.dupeZ(u8, value) else null,
+            .Extends = if (source.Extends) |value| try allocator.dupeSentinel(u8, value, 0) else null,
             .Addons = addons,
             .Installed = source.Installed,
         };
@@ -260,7 +260,7 @@ pub const AppstreamAppObject = extern struct {
 
     fn cloneStrings(allocator: std.mem.Allocator, source: []const []const u8) ![]const []const u8 {
         const result = try allocator.alloc([]const u8, source.len);
-        for (source, 0..) |value, index| result[index] = try allocator.dupeZ(u8, value);
+        for (source, 0..) |value, index| result[index] = try allocator.dupeSentinel(u8, value, 0);
         return result;
     }
 

@@ -384,7 +384,7 @@ fn sentinelStrings(allocator: std.mem.Allocator, values: []const []const u8) ![]
         allocator.free(result);
     }
     for (values, result) |value, *destination| {
-        destination.* = try allocator.dupeZ(u8, value);
+        destination.* = try allocator.dupeSentinel(u8, value, 0);
         initialized += 1;
     }
     return result;
@@ -648,7 +648,7 @@ const EolUpdateTestManager = struct {
             .version = source.version,
             .latest_commit = source.latest_commit,
             .origin = source.origin,
-            .kind = @enumFromInt(@intFromEnum(source.kind)),
+            .kind = @fromBackingInt(@intCast(@backingInt(source.kind))),
             .installed_size = source.installed_size,
             .scope = PackageManager.flatpak.types.Scope.toWire(source.scope),
             .eol = source.eol,

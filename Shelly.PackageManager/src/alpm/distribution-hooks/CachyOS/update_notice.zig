@@ -1,4 +1,5 @@
 const std = @import("std");
+const caller_io = @import("user_account").caller_io;
 const types = @import("../../types.zig");
 const events = @import("../../events.zig");
 const xdg_paths = @import("../../../shared/xdg_paths.zig").xdg_paths;
@@ -75,15 +76,16 @@ pub const UpdateNotice = struct {
         dispatcher: *events.Dispatcher,
         raw_payload: []const u8,
     ) bool {
-        const cache_home = xdg_paths.xdgCacheHome(self.allocator, environ) catch return true;
-        defer self.allocator.free(cache_home);
+        const cache_home = xdg_paths.xdgCacheHome(self.allocator, environ) catch null;
+        defer if (cache_home) |home| self.allocator.free(home);
 
-        return self.handlePayloadAtCacheHome(cache_home, dispatcher, raw_payload);
+        return self.handlePayloadAtCacheHome(environ, cache_home, dispatcher, raw_payload);
     }
 
     fn handlePayloadAtCacheHome(
         self: UpdateNotice,
-        cache_home: []const u8,
+        environ: std.process.Environ,
+        cache_home: ?[]const u8,
         dispatcher: *events.Dispatcher,
         raw_payload: []const u8,
     ) bool {
@@ -98,13 +100,18 @@ pub const UpdateNotice = struct {
         const notice = parsed.value;
         if (std.mem.trim(u8, notice.body, " \t\r\n").len == 0) return true;
 
-        const state_path = std.fs.path.join(self.allocator, &.{ cache_home, cache_directory_name, notice_file_name }) catch return true;
-        defer self.allocator.free(state_path);
+        const state_path = if (cache_home) |home|
+            std.fs.path.join(self.allocator, &.{ home, cache_directory_name, notice_file_name }) catch null
+        else
+            null;
+        defer if (state_path) |path| self.allocator.free(path);
 
-        if (std.Io.Dir.cwd().readFileAlloc(self.io, state_path, self.allocator, .limited(max_notice_size))) |saved_id| {
-            defer self.allocator.free(saved_id);
-            if (std.mem.eql(u8, std.mem.trim(u8, saved_id, " \t\r\n"), notice.id)) return true;
-        } else |_| {}
+        if (state_path) |path| {
+            if (std.Io.Dir.cwd().readFileAlloc(self.io, path, self.allocator, .limited(max_notice_size))) |saved_id| {
+                defer self.allocator.free(saved_id);
+                if (std.mem.eql(u8, std.mem.trim(u8, saved_id, " \t\r\n"), notice.id)) return true;
+            } else |_| {}
+        }
 
         const yes_no = [_][]const u8{ "yes", "no" };
         const response = dispatcher.raiseQuestion(self.io, .{
@@ -114,17 +121,8 @@ pub const UpdateNotice = struct {
         });
         if (response.answer != 1) return false;
 
-        self.saveNoticeId(state_path, notice.id);
+        if (state_path) |path| caller_io.writeFile(self.allocator, self.io, environ, path, notice.id) catch {};
         return true;
-    }
-
-    fn saveNoticeId(self: UpdateNotice, state_path: []const u8, id: []const u8) void {
-        const parent = std.fs.path.dirname(state_path) orelse return;
-        std.Io.Dir.cwd().createDirPath(self.io, parent) catch return;
-
-        var file = std.Io.Dir.cwd().createFile(self.io, state_path, .{}) catch return;
-        defer file.close(self.io);
-        file.writeStreamingAll(self.io, id) catch {};
     }
 };
 
@@ -175,7 +173,7 @@ test "handlePayload accepts a notice and remembers its id" {
     _ = try dispatcher.addQuestionHandler(.{ .function = QuestionCapture.respond, .data = &capture });
 
     const hook = UpdateNotice.init(testing.allocator, testing.io);
-    try testing.expect(hook.handlePayloadAtCacheHome(cache_home, &dispatcher, "{\"id\":\"notice-1\",\"body\":\"Important update\"}"));
+    try testing.expect(hook.handlePayloadAtCacheHome(.empty, cache_home, &dispatcher, "{\"id\":\"notice-1\",\"body\":\"Important update\"}"));
     try testing.expectEqual(@as(usize, 1), capture.calls);
     try testing.expectEqual(@as(c_int, @intFromEnum(types.QuestionType.update_notice)), capture.question_type);
     try testing.expectEqualStrings("Important update", capture.question());
@@ -186,7 +184,7 @@ test "handlePayload accepts a notice and remembers its id" {
     defer testing.allocator.free(saved_id);
     try testing.expectEqualStrings("notice-1", saved_id);
 
-    try testing.expect(hook.handlePayloadAtCacheHome(cache_home, &dispatcher, "{\"id\":\"notice-1\",\"body\":\"Important update\"}"));
+    try testing.expect(hook.handlePayloadAtCacheHome(.empty, cache_home, &dispatcher, "{\"id\":\"notice-1\",\"body\":\"Important update\"}"));
     try testing.expectEqual(@as(usize, 1), capture.calls);
 }
 
@@ -206,7 +204,7 @@ test "handlePayload rejects a notice without remembering it" {
     _ = try dispatcher.addQuestionHandler(.{ .function = QuestionCapture.respond, .data = &capture });
 
     const hook = UpdateNotice.init(testing.allocator, testing.io);
-    try testing.expect(!hook.handlePayloadAtCacheHome(cache_home, &dispatcher, "{\"id\":\"notice-2\",\"body\":\"Read me\"}"));
+    try testing.expect(!hook.handlePayloadAtCacheHome(.empty, cache_home, &dispatcher, "{\"id\":\"notice-2\",\"body\":\"Read me\"}"));
 
     const state_path = try std.fs.path.join(testing.allocator, &.{ cache_home, cache_directory_name, notice_file_name });
     defer testing.allocator.free(state_path);
@@ -218,8 +216,18 @@ test "handlePayload ignores absent empty and malformed notices" {
     defer dispatcher.deinit();
     const hook = UpdateNotice.init(testing.allocator, testing.io);
 
-    try testing.expect(hook.handlePayloadAtCacheHome("unused", &dispatcher, ""));
-    try testing.expect(hook.handlePayloadAtCacheHome("unused", &dispatcher, "  No notice found\n"));
-    try testing.expect(hook.handlePayloadAtCacheHome("unused", &dispatcher, "not json"));
-    try testing.expect(hook.handlePayloadAtCacheHome("unused", &dispatcher, "{\"id\":\"notice-3\",\"body\":\"  \"}"));
+    try testing.expect(hook.handlePayloadAtCacheHome(.empty, "unused", &dispatcher, ""));
+    try testing.expect(hook.handlePayloadAtCacheHome(.empty, "unused", &dispatcher, "  No notice found\n"));
+    try testing.expect(hook.handlePayloadAtCacheHome(.empty, "unused", &dispatcher, "not json"));
+    try testing.expect(hook.handlePayloadAtCacheHome(.empty, "unused", &dispatcher, "{\"id\":\"notice-3\",\"body\":\"  \"}"));
+}
+
+test "handlePayload still asks when caller cache persistence is unavailable" {
+    var dispatcher = events.Dispatcher.init(testing.allocator);
+    defer dispatcher.deinit();
+    var capture = QuestionCapture{ .dispatcher = &dispatcher, .io = testing.io, .answer = 0 };
+    _ = try dispatcher.addQuestionHandler(.{ .function = QuestionCapture.respond, .data = &capture });
+    const hook = UpdateNotice.init(testing.allocator, testing.io);
+    try testing.expect(!hook.handlePayloadAtCacheHome(.empty, null, &dispatcher, "{\"id\":\"uncached\",\"body\":\"Read me\"}"));
+    try testing.expectEqual(@as(usize, 1), capture.calls);
 }

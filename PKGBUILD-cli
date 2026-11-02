@@ -2,7 +2,7 @@
 
 pkgbase=shelly-cli
 pkgname=('shelly-cli' 'shelly-cli-flatpak-backend')
-pkgver='3.1.9r4993.gd89a833'
+pkgver='3.1.10r5047.ga1ba267'
 pkgrel=1
 arch=('x86_64')
 url='https://github.com/Seafoam-Labs/Shelly-ALPM'
@@ -14,7 +14,7 @@ makedepends=(
   'gnupg'
   'git'
   'pkgconf'
-  'zig=0.16.0'
+  'zig=0.17.0'
   'flatpak'
   'ripgrep'
   'go-md2man'
@@ -31,13 +31,13 @@ makedepends+=('binutils' "${_shelly_native_depends[@]}")
 source=("${pkgname}::git+https://github.com/Seafoam-Labs/Shelly-ALPM.git#branch=development"
         'shellybuild.conf')
 sha256sums=('SKIP'
-            '9f551f28d79748c7e255a35cb577081b3263e65d290b4809e10066ed17ce30e5')
+            '4c30072655b7aa24c6b8472fc3c1b2be40bdda5bc7cc4a1a9bae26bf37fe957f')
 conflicts=('shelly' 'shelly-git' 'shelly-bin')
 
 pkgver() {
   cd "${srcdir}/${pkgname}"
 
-  printf '3.1.9r%s.g%s' \
+  printf '3.1.10r%s.g%s' \
     "$(git rev-list --count HEAD)" \
     "$(git rev-parse --short=7 HEAD)"
 }
@@ -48,17 +48,17 @@ build() {
   (cd Shelly.Flatpak.Backend && zig build --verbose \
     --prefix "${srcdir}/zig-out-flatpak-backend" \
     -Dcpu=baseline \
-    -Doptimize=ReleaseSafe)
+    -Doptimize=safe)
 
   (cd Shelly.Cli.Zig && zig build -Dlibalpm="${_shelly_libalpm}" --verbose \
     --prefix "${srcdir}/zig-out" \
     -Dcpu=baseline \
-    -Doptimize=ReleaseSmall)
+    -Doptimize=small)
 
   (cd Shelly.Key && zig build --verbose \
     --prefix "${srcdir}/zig-out-key" \
     -Dcpu=baseline \
-    -Doptimize=ReleaseSmall)
+    -Doptimize=small)
 
   for shell in bash fish zsh; do
     "${srcdir}/zig-out/bin/shelly" utility --completions "${shell}" \

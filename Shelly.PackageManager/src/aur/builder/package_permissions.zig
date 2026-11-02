@@ -54,7 +54,7 @@ pub const Access = struct {
 
     fn visitDirectory(self: *Access, parent: std.Io.Dir, name: []const u8, path: []const u8) !void {
         if (self.operation) |operation| try operation.checkCancelled();
-        const name_z = try self.allocator.dupeZ(u8, name);
+        const name_z = try self.allocator.dupeSentinel(u8, name, 0);
         defer self.allocator.free(name_z);
         // O_PATH works even for mode 0000; DIRECTORY|NOFOLLOW rejects symlinks.
         const result = linux.openat(parent.handle, name_z, .{
@@ -151,7 +151,7 @@ fn chmodPinned(handle: i32, mode: u32) !void {
         // refers to our still-open descriptor, never to a package-supplied path.
         .NOSYS, .INVAL, .OPNOTSUPP => {
             var buffer: [64]u8 = undefined;
-            const path = try std.fmt.bufPrintZ(&buffer, "/proc/self/fd/{d}", .{handle});
+            const path = try std.fmt.bufPrintSentinel(&buffer, "/proc/self/fd/{d}", .{handle}, 0);
             try checkResult(linux.fchmodat(linux.AT.FDCWD, path, mode));
         },
         else => try checkResult(result),

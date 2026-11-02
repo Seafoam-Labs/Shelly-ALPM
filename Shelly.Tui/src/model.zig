@@ -361,10 +361,10 @@ pub const Model = struct {
 
     fn switchTab(self: *Model, delta: i32) void {
         const count: i32 = @intCast(Tab.all.len);
-        var next: i32 = @intFromEnum(self.active);
+        var next: i32 = @backingInt(self.active);
         next = @rem(next + delta, count);
         if (next < 0) next += count;
-        self.active = @enumFromInt(@as(std.meta.Tag(Tab), @intCast(next)));
+        self.active = @fromBackingInt(@intCast(@as(std.meta.Tag(Tab), @intCast(next))));
     }
 
     fn setTab(self: *Model, tab: Tab, ctx: *vxfw.EventContext) !void {
@@ -715,7 +715,7 @@ pub const Model = struct {
     }
 
     fn shellyBin() []const u8 {
-        return if (builtin.mode == .Debug)
+        return if (builtin.optimize == .debug)
             "../Shelly.Cli.Zig/zig-out/bin/shelly"
         else
             "shelly";

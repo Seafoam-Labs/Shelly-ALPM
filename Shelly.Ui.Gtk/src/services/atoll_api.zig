@@ -240,10 +240,10 @@ pub const AtollApiService = struct {
     fn mapIndexEntry(allocator: std.mem.Allocator, wire: WireIndexEntry) !AurPackage {
         return .{
             .Id = 0,
-            .Name = try allocator.dupeZ(u8, wire.name),
+            .Name = try allocator.dupeSentinel(u8, wire.name, 0),
             .PackageBaseId = 0,
-            .PackageBase = try allocator.dupeZ(u8, wire.packageBase orelse wire.name),
-            .Version = try allocator.dupeZ(u8, wire.version orelse ""),
+            .PackageBase = try allocator.dupeSentinel(u8, wire.packageBase orelse wire.name, 0),
+            .Version = try allocator.dupeSentinel(u8, wire.version orelse "", 0),
             .Description = try dupeOptionalZ(allocator, wire.description),
             .Url = try dupeOptionalZ(allocator, wire.url),
             .NumVotes = toU32(wire.numVotes),
@@ -252,7 +252,7 @@ pub const AtollApiService = struct {
             .Maintainer = try dupeOptionalZ(allocator, wire.maintainer),
             .FirstSubmitted = wire.firstSubmitted orelse 0,
             .LastModified = wire.lastModified orelse 0,
-            .UrlPath = try allocator.dupeZ(u8, ""),
+            .UrlPath = try allocator.dupeSentinel(u8, "", 0),
             .Depends = try dupeStrings(allocator, wire.depends),
             .MakeDepends = try dupeStrings(allocator, wire.makeDepends),
             .OptDepends = try dupeStrings(allocator, wire.optDepends),
@@ -264,10 +264,10 @@ pub const AtollApiService = struct {
     fn mapMetadata(allocator: std.mem.Allocator, wire: WireMetadata) !AurPackage {
         return .{
             .Id = toU32(wire.id),
-            .Name = try allocator.dupeZ(u8, wire.name),
+            .Name = try allocator.dupeSentinel(u8, wire.name, 0),
             .PackageBaseId = toU32(wire.packageBaseId),
-            .PackageBase = try allocator.dupeZ(u8, wire.packageBase orelse wire.name),
-            .Version = try allocator.dupeZ(u8, wire.version orelse ""),
+            .PackageBase = try allocator.dupeSentinel(u8, wire.packageBase orelse wire.name, 0),
+            .Version = try allocator.dupeSentinel(u8, wire.version orelse "", 0),
             .Description = try dupeOptionalZ(allocator, wire.description),
             .Url = try dupeOptionalZ(allocator, wire.url),
             .NumVotes = toU32(wire.numVotes),
@@ -276,7 +276,7 @@ pub const AtollApiService = struct {
             .Maintainer = try dupeOptionalZ(allocator, wire.maintainer),
             .FirstSubmitted = wire.firstSubmitted orelse 0,
             .LastModified = wire.lastModified orelse 0,
-            .UrlPath = try allocator.dupeZ(u8, wire.urlPath orelse ""),
+            .UrlPath = try allocator.dupeSentinel(u8, wire.urlPath orelse "", 0),
             .Depends = try dupeStrings(allocator, wire.depends),
             .MakeDepends = try dupeStrings(allocator, wire.makeDepends),
             .OptDepends = try dupeStrings(allocator, wire.optDepends),
@@ -292,7 +292,7 @@ pub const AtollApiService = struct {
 
     fn dupeOptionalZ(allocator: std.mem.Allocator, value: ?[]const u8) !?[:0]const u8 {
         const raw = value orelse return null;
-        const duped: [:0]const u8 = try allocator.dupeZ(u8, raw);
+        const duped: [:0]const u8 = try allocator.dupeSentinel(u8, raw, 0);
         return duped;
     }
 
@@ -302,7 +302,7 @@ pub const AtollApiService = struct {
     ) !?[]const [:0]const u8 {
         const values = source orelse return null;
         const result = try allocator.alloc([:0]const u8, values.len);
-        for (values, 0..) |value, index| result[index] = try allocator.dupeZ(u8, value);
+        for (values, 0..) |value, index| result[index] = try allocator.dupeSentinel(u8, value, 0);
         return result;
     }
 

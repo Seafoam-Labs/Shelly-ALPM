@@ -65,10 +65,12 @@ jobs:
               - 'Shelly.Ui.Gtk/**'
               - 'Shelly.Diagnostics/**'
             devario:
+              - 'Shelly.Ui.Gtk/build.zig.zon'
               - '.github/actions/setup-zig/**'
               - '.github/workflows/build-and-publish.yml'
               - 'Shelly.Ui.Gtk/src/devario/**'
             tui:
+              - 'Shelly.PackageManager/**'
               - '.github/actions/setup-zig/**'
               - '.github/workflows/build-and-publish.yml'
               - 'Shelly.Tui/**'
@@ -194,9 +196,10 @@ jobs:
           scripts/check-flatpak-separation.sh \
             Shelly.Cli.Zig/zig-out/bin/shelly \
             Shelly.Flatpak.Backend/zig-out/lib/libshelly-flatpak-backend.so.1
-          Shelly.Cli.Zig/zig-out/bin/shelly --help >/dev/null
-          Shelly.Cli.Zig/zig-out/bin/shelly --version >/dev/null
-          Shelly.Cli.Zig/zig-out/bin/shelly utility --completions bash >/dev/null
+          useradd -m shelly-smoke
+          runuser -u shelly-smoke -- Shelly.Cli.Zig/zig-out/bin/shelly --help >/dev/null
+          runuser -u shelly-smoke -- Shelly.Cli.Zig/zig-out/bin/shelly --version >/dev/null
+          runuser -u shelly-smoke -- Shelly.Cli.Zig/zig-out/bin/shelly utility --completions bash >/dev/null
 
   gtk:
     needs: changes
@@ -294,7 +297,11 @@ jobs:
       fail-fast: false
       matrix:
         libalpm: ['true', 'false']
-        optimize: [Debug, ReleaseSafe, ReleaseSmall]
+        optimize: [debug, safe, small]
+        profile: [pacman, devario]
+        exclude:
+          - libalpm: 'true'
+            profile: devario
     steps:
       - run: |
           pacman -Syu --noconfirm
@@ -315,9 +322,13 @@ jobs:
           ! test -e /usr/lib/libalpm.so
       - name: Test loopback downloads and temporary-keyring signing
         working-directory: Shelly.PackageManager
-        run: zig build native-environment-test -Dlibalpm=${{ matrix.libalpm }} -Doptimize=${{ matrix.optimize }} --summary all
+        run: zig build native-environment-test -Dpath-profile=${{ matrix.profile }} -Dlibalpm=${{ matrix.libalpm }} -Doptimize=${{ matrix.optimize }} --summary all
       - name: Test selection, private-root transactions, copied Shelly worker modes and ELF dependencies
-        run: scripts/test-native-backends.sh '${{ matrix.libalpm }}' '${{ matrix.optimize }}'
+        run: |
+          useradd -m shelly-test
+          chown -R shelly-test "$GITHUB_WORKSPACE"
+          runuser -u shelly-test -- env HOME=/home/shelly-test PATH="$PATH" \
+            scripts/test-native-backends.sh '${{ matrix.libalpm }}' '${{ matrix.optimize }}' '${{ matrix.profile }}'
 
   rlpm:
     needs: changes
@@ -332,7 +343,7 @@ jobs:
       options: --security-opt seccomp=unconfined --security-opt apparmor=unconfined --cap-add SYS_ADMIN
     strategy:
       matrix:
-        optimize: [Debug, ReleaseSafe]
+        optimize: [debug, safe]
     steps:
       - run: |
           pacman -Syu --noconfirm
@@ -349,7 +360,7 @@ jobs:
         working-directory: Shelly.Download
         run: zig build test check-sandbox -Doptimize=${{ matrix.optimize }} --summary all
       - name: Verify GPG trust, key imports and signed archives
-        if: ${{ matrix.optimize == 'Debug' }}
+        if: ${{ matrix.optimize == 'debug' }}
         working-directory: Shelly.Rlpm
         run: zig build test-signature --summary all
       - name: Test RLPM deferred questions and cancellation adapter
@@ -376,7 +387,7 @@ jobs:
           zig build --verbose \
             --prefix ../zig-out-notifications \
             -Dcpu=baseline \
-            -Doptimize=ReleaseSafe
+            -Doptimize=safe
 
   pkgbuild:
     needs: changes

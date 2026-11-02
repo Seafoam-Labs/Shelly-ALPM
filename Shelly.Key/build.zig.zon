@@ -1,8 +1,8 @@
 .{
     .name = .Shelly_Key,
-    .version = "3.1.9",
+    .version = "3.1.10",
     .fingerprint = 0xd70998ff6ec3b771, // Changing this has security and trust implications.
-    .minimum_zig_version = "0.16.0",
+    .minimum_zig_version = "0.17.0",
     .dependencies = .{
         .shelly_paths = .{ .path = "../Shelly.Paths" },
         .shelly_diagnostics = .{ .path = "../Shelly.Diagnostics" },

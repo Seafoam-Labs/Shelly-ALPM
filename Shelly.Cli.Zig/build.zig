@@ -52,7 +52,7 @@ pub fn build(b: *std.Build) void {
 
     const run_command = b.addRunArtifact(executable);
     run_command.step.dependOn(b.getInstallStep());
-    if (b.args) |args| run_command.addArgs(args);
+    run_command.addPassthruArgs();
 
     const run_step = b.step("run", "Run Shelly");
     run_step.dependOn(&run_command.step);
@@ -68,6 +68,13 @@ pub fn build(b: *std.Build) void {
         },
     });
     test_cli.addOptions("build_options", build_options);
+    test_cli.addImport("Shelly_Rlpm", package_manager.import_table.get("Shelly_Rlpm").?);
+    const output_tests = b.addTest(.{
+        .root_module = test_cli,
+        .filters = &.{ "single-pane", "UI operation reporter", "terminal width" },
+    });
+    b.step("output-test", "Test terminal and structured operation output")
+        .dependOn(&b.addRunArtifact(output_tests).step);
     const test_executable_module = b.createModule(.{
         .root_source_file = b.path("src/main.zig"),
         .target = target,
@@ -175,6 +182,7 @@ pub fn build(b: *std.Build) void {
             "updpkgsums",
             "compression presets",
             "review-only accepts Heroic array trimming",
+            "review-only accepts issue 2088 indexed trimming",
             "review-only accepts filesystem here-strings",
             "sync deps",
             "dependency plan",

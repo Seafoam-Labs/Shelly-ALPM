@@ -3,6 +3,14 @@ const std = @import("std");
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
+    const native_translation = b.addTranslateC(.{
+        .root_source_file = b.path("src/native_bindings.h"),
+        .target = target,
+        .optimize = optimize,
+        .link_libc = true,
+    });
+    const native_bindings = native_translation.createModule();
+
     const diagnostics = b.dependency("shelly_diagnostics", .{ .target = target, .optimize = optimize }).module("diagnostics");
 
     const zsn_dep = b.dependency("conch", .{
@@ -26,13 +34,14 @@ pub fn build(b: *std.Build) void {
             },
         }),
     });
+    exe.root_module.addImport("gettext_c", native_bindings);
     exe.root_module.addImport("diagnostics", diagnostics);
     b.installArtifact(exe);
     exe.root_module.link_libc = true;
 
     const run_cmd = b.addRunArtifact(exe);
     run_cmd.step.dependOn(b.getInstallStep());
-    if (b.args) |args| run_cmd.addArgs(args);
+    run_cmd.addPassthruArgs();
     const run_step = b.step("run", "Run the app");
     run_step.dependOn(&run_cmd.step);
 

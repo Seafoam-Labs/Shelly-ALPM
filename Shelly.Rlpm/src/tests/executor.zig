@@ -86,6 +86,54 @@ test "install query reinstall upgrade downgrade remove persists to fresh Owners"
     try std.testing.expectError(error.FileNotFound, f.tmp.dir.access(io, "root/usr/data", .{}));
 }
 
+test "multiple package transactions do not scan unrelated database contents" {
+    var f = try Fixture.init();
+    defer f.deinit();
+    // A whole-database fingerprint would follow this dangling link and fail.
+    // No registered repository needs this unrelated sync entry.
+    try f.tmp.dir.createDirPath(io, "db/sync");
+    try f.tmp.dir.symLink(io, "missing", "db/sync/unrelated", .{});
+    var one = try Archive.init(&.{
+        .{ .path = ".PKGINFO", .contents = "pkgname = one\npkgver = 1-1\narch = any\n" },
+        .{ .path = "one", .contents = "one" },
+    }, .none);
+    defer one.deinit();
+    var two = try Archive.init(&.{
+        .{ .path = ".PKGINFO", .contents = "pkgname = two\npkgver = 1-1\narch = any\n" },
+        .{ .path = "two", .contents = "two" },
+    }, .none);
+    defer two.deinit();
+    var owner = try f.owner();
+    defer owner.deinit() catch unreachable;
+
+    var tx = try owner.initializeTransaction(io, flags);
+    try Fixture.add(tx, one.path);
+    try Fixture.add(tx, two.path);
+    try tx.prepare();
+    _ = try tx.downloadSize();
+    try tx.download();
+    try tx.download();
+    try tx.preflight();
+    try tx.revalidatePreflight();
+    try tx.commit();
+    try std.testing.expectEqual(.completed, tx.state);
+    try std.testing.expectEqual(2, tx.result().packages_committed);
+    try f.expect("root/one", "one");
+    try f.expect("root/two", "two");
+    try owner.releaseTransaction();
+
+    tx = try owner.initializeTransaction(io, flags);
+    defer owner.releaseTransaction() catch unreachable;
+    try tx.remove("one");
+    try tx.remove("two");
+    try tx.prepare();
+    try tx.commit();
+    try std.testing.expectEqual(.completed, tx.state);
+    try std.testing.expectEqual(2, tx.result().packages_committed);
+    try std.testing.expect((try owner.findPackage(owner.localDatabase().?, "one")) == null);
+    try std.testing.expect((try owner.findPackage(owner.localDatabase().?, "two")) == null);
+}
+
 fn string(obj: std.json.Value, name: []const u8) ?[]const u8 {
     const value = obj.object.get(name) orelse return null;
 
@@ -688,13 +736,11 @@ test "removal failure retains installed record and pending work" {
 }
 
 test "audit writes configured log and absolute symlinks cannot alter external attributes" {
-    const c = @cImport({
-        @cInclude("sys/stat.h");
-    });
+    const c = @import("rlpm_c");
 
     var f = try Fixture.init();
     defer f.deinit();
-    const outside_relative = "outside/" ++ ("long-path-" ** 12) ++ "/sentinel";
+    const outside_relative = "outside/" ++ ("long-path-long-path-long-path-long-path-long-path-long-path-long-path-long-path-long-path-long-path-long-path-long-path-") ++ "/sentinel";
     try f.write(outside_relative, "external sentinel");
 
     const outside = try f.tmp.dir.realPathFileAlloc(io, outside_relative, a);
@@ -748,14 +794,7 @@ test "audit writes configured log and absolute symlinks cannot alter external at
 }
 
 const Durability = rlpm.Transaction.Executor.PayloadDurability;
-const linux = @cImport({
-    @cUndef("_FORTIFY_SOURCE");
-    @cDefine("_FORTIFY_SOURCE", "0");
-    @cDefine("_GNU_SOURCE", "1");
-    @cInclude("fcntl.h");
-    @cInclude("unistd.h");
-    @cInclude("errno.h");
-});
+const linux = @import("rlpm_c");
 
 test "payload tracker holds readable descriptors before writes and releases allocations" {
     var f = try Fixture.init();
@@ -790,7 +829,7 @@ test "payload tracker holds readable descriptors before writes and releases allo
         }
     };
 
-    try std.testing.checkAllAllocationFailures(a, Allocation.run, .{parent});
+    try @import("allocation_failures.zig").checkAllAllocationFailures(a, Allocation.run, .{parent});
     try std.testing.expectEqual(Durability.test_hooks.opened, Durability.test_hooks.closed);
 }
 

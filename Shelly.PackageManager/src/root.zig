@@ -315,14 +315,14 @@ test "public library surface exposes package manager APIs" {
 
 test "backend dispatchers share one operation event stream" {
     const Capture = struct {
-        seen: [6]bool = .{false} ** 6,
+        seen: [6]bool = @splat(false),
         failures: usize = 0,
 
         fn receive(data: ?*anyopaque, event: operation.Event) void {
             const self: *@This() = @ptrCast(@alignCast(data.?));
             switch (event) {
                 .failure => |failure| {
-                    self.seen[@intFromEnum(failure.envelope.backend)] = true;
+                    self.seen[@backingInt(failure.envelope.backend)] = true;
                     self.failures += 1;
                 },
                 else => {},
@@ -378,11 +378,11 @@ test "backend dispatchers share one operation event stream" {
     local_operation.finish(.failed);
 
     try std.testing.expectEqual(@as(usize, 5), capture.failures);
-    try std.testing.expect(capture.seen[@intFromEnum(operation.Backend.alpm)]);
-    try std.testing.expect(capture.seen[@intFromEnum(operation.Backend.aur)]);
-    try std.testing.expect(capture.seen[@intFromEnum(operation.Backend.flatpak)]);
-    try std.testing.expect(capture.seen[@intFromEnum(operation.Backend.appimage)]);
-    try std.testing.expect(capture.seen[@intFromEnum(operation.Backend.local_package)]);
+    try std.testing.expect(capture.seen[@backingInt(operation.Backend.alpm)]);
+    try std.testing.expect(capture.seen[@backingInt(operation.Backend.aur)]);
+    try std.testing.expect(capture.seen[@backingInt(operation.Backend.flatpak)]);
+    try std.testing.expect(capture.seen[@backingInt(operation.Backend.appimage)]);
+    try std.testing.expect(capture.seen[@backingInt(operation.Backend.local_package)]);
 }
 
 test "ALPM and AUR questions use the shared response hook" {
@@ -417,7 +417,7 @@ test "ALPM and AUR questions use the shared response hook" {
     alpm_dispatcher.setOperation(&alpm_operation);
     const alpm_response = alpm_dispatcher.raiseQuestion(threaded.io(), .{
         .question = "Select an ALPM provider",
-        .question_type = @intFromEnum(Manager.types.QuestionType.select_provider),
+        .question_type = @backingInt(Manager.types.QuestionType.select_provider),
         .options = &.{ "provider-a", "provider-b" },
         .provider_options = &.{
             .{ .name = "provider-a", .description = "first", .is_installed = false },

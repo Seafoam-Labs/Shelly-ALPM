@@ -50,12 +50,12 @@ pub const FlatpakObject = extern struct {
     ) *Self {
         const self = gobject.ext.newInstance(Self, .{});
         const p = self.priv();
-        p.name = arena.dupeZ(u8, f.Name) catch "";
-        p.version = arena.dupeZ(u8, f.Version) catch "";
+        p.name = arena.dupeSentinel(u8, f.Name, 0) catch "";
+        p.version = arena.dupeSentinel(u8, f.Version, 0) catch "";
         p.installed_level = f.InstallLevel;
         p.installed_size = f.InstalledSize;
-        p.remotes = arena.dupeZ(u8, f.Remote) catch "";
-        p.id = arena.dupeZ(u8, f.Id) catch "";
+        p.remotes = arena.dupeSentinel(u8, f.Remote, 0) catch "";
+        p.id = arena.dupeSentinel(u8, f.Id, 0) catch "";
         p.kind = f.Kind;
 
         return self;

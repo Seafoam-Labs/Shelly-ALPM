@@ -195,7 +195,7 @@ fn execSandboxChild(
             const rc = std.os.linux.execve(argv[0].?, argv.ptr, environ.block.slice.ptr);
             stderr.print(
                 "Could not start {0f} inside the build sandbox. The operating system rejected the request. Review the technical details.\n\nTechnical details: {1t}\n",
-                .{ diagnostics.safe(child_argv[0]), std.os.linux.errno(@intCast(rc)) },
+                .{ diagnostics.safe(child_argv[0]), std.os.linux.errno(rc) },
             ) catch {};
             return 127;
         },
@@ -216,7 +216,7 @@ fn buildPosixArgv(
         allocator.free(argv);
     }
     for (args, 0..) |arg, index| {
-        argv[index] = (try allocator.dupeZ(u8, arg)).ptr;
+        argv[index] = (try allocator.dupeSentinel(u8, arg, 0)).ptr;
     }
     argv[args.len] = null;
     return argv[0..args.len :null];

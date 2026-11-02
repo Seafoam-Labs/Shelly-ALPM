@@ -121,6 +121,19 @@ available. `Megabytes` remains the default; restore it with
 `shelly config set FileSizeDisplay Megabytes`. This setting affects human-readable
 CLI output; structured output keeps numeric byte counts.
 
+## CLI progress animation
+
+`ProgressBarStyle` defaults to `Shell`: a small `<` / `=` shell opens and closes
+as progress advances through a line of dots. Completed bars use `=` throughout.
+To select it in an existing configuration:
+
+```bash
+shelly config set ProgressBarStyle Shell
+```
+
+`Blocks` and `Pacman` remain available, and saved style choices are preserved.
+Redirected output prints completed progress lines without animation.
+
 ## PKGBUILD review
 
 Terminal PKGBUILD reviews show changed lines with three unchanged lines of
@@ -199,6 +212,15 @@ This also removes caches for packages that are no longer installed. The cache
 root directory is retained; symlinks are removed without following their targets.
 Files outside Shelly's cache are not included.
 
+Shelly creates and updates the invoking user's cache with that user's credentials,
+including when launched through sudo, doas, pkexec, or run0. Running directly as
+root uses root's cache and creates root-owned entries. Absolute `XDG_CACHE_HOME`
+overrides are preserved. Failed user delegation never retries cache writes as root.
+
+Existing ownership damage is not repaired automatically. Use
+`shelly utility --fix-permissions` from your regular user session to repair Shelly's
+directories. This does not repair ownership of the parent `~/.cache` directory.
+
 `--aur-cache` can also be used without `--cache`; standard purify still checks
 for corrupted archives. The `--cache` retention count applies only to repository
 package archives, not to Shelly's cache. The UI's **Clean Package Cache** action
@@ -215,16 +237,14 @@ Upcoming features and development targets:
 
 ## Prerequisites
 
-- **Arch Linux** (or an Arch-based distribution)
-- **zig 0.16.0** (for building)
+- **Devario**, or Arch Linux for the libalpm-enabled variant
+- **zig 0.17.0** (for building)
 - **vala** (for building)
 - **libalpm** (provided by `pacman`; omitted from the CLI build with `-Dlibalpm=false`)
 
-CI installs the prebuilt Arch **zig 0.16.0-1** package with its LLVM 21 runtime
-dependencies. This package includes the `R_X86_64_PC64` linker fix required by
-newer glibc startup objects. The shared setup action installs it after system
-updates and verifies the package and compiler versions. Builds retain Zig's
-normal backend defaults; CI does not rebuild the compiler.
+CI installs the official Zig **0.17.0** Linux archive, verifies its SHA-256,
+and checks the compiler version. The shared setup action selects the matching
+runner architecture. Builds retain Zig's normal backend defaults.
 
 ### Optional Prerequisites
 
@@ -247,6 +267,15 @@ makepkg -si
 ```
 
 ### Manual Build
+
+Use Zig 0.17.0. Third-party libraries are pinned by URL and content hash in each
+component's `build.zig.zon`; Zig downloads them into its package cache on the
+first build. Dependencies use unchanged upstream sources, including transitive
+dependencies. No vendored copies or dependency source patches are maintained.
+
+To populate the dependency cache before building offline, run
+`zig build --fetch=all` in each component you intend to build. Subsequent builds
+reuse the downloaded packages.
 
 The native Zig components can be built and tested independently:
 
@@ -397,6 +426,20 @@ extension removed: `dsearch-x86_64-1.6.0.gz` becomes `dsearch-x86_64-1.6.0`.
 The original compressed file remains in `src`, and `noextract` entries stay
 compressed. Decompression rejects output collisions and files exceeding 4 GiB;
 failed source preparation discards the staging tree.
+
+Downgrades accept more than one installed package so a package and its
+dependencies can move to older versions together in a single transaction:
+
+```bash
+shelly downgrade --list-options linux mesa
+shelly downgrade --oldest linux mesa
+```
+
+`--oldest` selects the oldest candidate for every package, `--no-confirm`
+selects the newest candidate for each without prompting, and interactive mode
+prompts per package. `--ignore` adds every downgraded package to `IgnorePkg`.
+`--target` remains a single-package option and cannot be combined with
+multiple packages.
 
 ### CLI Configuration
 

@@ -13,6 +13,7 @@ const ShellyCli = @import("../services/shelly_cli.zig").ShellyCli;
 const SizeConverter = @import("../helpers/size_converts.zig").SizeConverter;
 const IconResolver = @import("../services/icon_resolver.zig").IconResolver;
 const Package = @import("../models/packages.zig").Package;
+const repositoryPackageList = @import("../models/packages.zig").repositoryPackageList;
 const runtime = @import("../services/runtime.zig");
 const c_string = @import("../helpers/c_string.zig");
 const ShellyConfig = @import("../models/shelly_config.zig").ShellyConfig;
@@ -327,7 +328,7 @@ pub const PackagePage = extern struct {
                 var buf: [512]u8 = undefined;
                 const escaped = glib.markupEscapeText(pkg.getName(), -1);
                 defer glib.free(escaped);
-                const markup = std.fmt.bufPrintZ(&buf, "<b>{s}</b>", .{escaped}) catch pkg.getName();
+                const markup = std.fmt.bufPrintSentinel(&buf, "<b>{s}</b>", .{escaped}, 0) catch pkg.getName();
                 gtk.Label.setMarkup(label, markup);
                 gtk.Label.setLabel(desc_label, pkg.getDescription());
                 gtk.Widget.setVisible(installed_w, @intFromBool(pkg.isInstalled()));
@@ -546,7 +547,7 @@ pub const PackagePage = extern struct {
                     }
                 }
                 var name_buf: [256]u8 = undefined;
-                const markup = std.fmt.bufPrintZ(&name_buf, "<b>{s}</b>", .{pkg.getName()}) catch pkg.getName();
+                const markup = std.fmt.bufPrintSentinel(&name_buf, "<b>{s}</b>", .{pkg.getName()}, 0) catch pkg.getName();
                 gtk.Label.setMarkup(title_label, markup);
                 gtk.Widget.setVisible(installed_check, @intFromBool(pkg.isInstalled()));
                 gtk.Label.setLabel(desc_label, pkg.getDescription());
@@ -827,24 +828,21 @@ pub const PackagePage = extern struct {
         const icli = ShellyCli{ .allocator = alloc, .io = threaded.io() };
         const installed = icli.get_installed_packages() catch null;
 
-        var all: std.ArrayListUnmanaged(Package) = .empty;
-        all.appendSlice(alloc, parsed.value) catch {};
-
-        if (installed) |inst| {
-            mergeInstalledPackages(alloc, &all, inst.value) catch |err| {
-                std.debug.print("Could not merge installed packages: {s}\n", .{@errorName(err)});
-            };
-        }
+        const packages = repositoryPackageList(alloc, parsed.value, if (installed) |inst| inst.value else null) catch {
+            arena_ptr.deinit();
+            std.heap.c_allocator.destroy(arena_ptr);
+            return;
+        };
 
         var set: std.StringHashMapUnmanaged(void) = .empty;
-        for (all.items) |pkg| {
+        for (packages) |pkg| {
             for (pkg.Groups) |g| set.put(alloc, g, {}) catch {};
         }
         var list: std.ArrayListUnmanaged([]const u8) = .empty;
         var it = set.keyIterator();
         while (it.next()) |k| list.append(alloc, k.*) catch {};
 
-        post_result(page, all.items, list.items, arena_ptr, generation);
+        post_result(page, packages, list.items, arena_ptr, generation);
     }
 
     fn post_result(
@@ -1057,7 +1055,7 @@ pub const PackagePage = extern struct {
 
         const total = install_count + remove_count;
         var cart_buf: [32]u8 = undefined;
-        gtk.Label.setLabel(p.cart_label, std.fmt.bufPrintZ(&cart_buf, "{d} {s}", .{ total, translations._("Selected") }) catch translations._("0 Selected"));
+        gtk.Label.setLabel(p.cart_label, std.fmt.bufPrintSentinel(&cart_buf, "{d} {s}", .{ total, translations._("Selected") }, 0) catch translations._("0 Selected"));
 
         const btn = p.install_button.as(gtk.Widget);
         gtk.Widget.removeCssClass(btn, "suggested-action");
@@ -1317,110 +1315,4 @@ pub const PackagePage = extern struct {
         const thread = std.Thread.spawn(.{}, load_worker, .{ self, p.generation, p.show_hidden }) catch return;
         thread.detach();
     }
-
-    const InstalledPackageEntry = struct {
-        pkg: *const Package,
-        matched: bool = false,
-    };
-
-    pub fn mergeInstalledPackages(
-        alloc: std.mem.Allocator,
-        all: *std.ArrayListUnmanaged(Package),
-        installed: []const Package,
-    ) !void {
-        var map: std.StringHashMapUnmanaged(InstalledPackageEntry) = .empty;
-        defer map.deinit(alloc);
-        try map.ensureTotalCapacity(alloc, @intCast(installed.len));
-        for (installed) |*pkg| {
-            map.putAssumeCapacity(pkg.Name, .{ .pkg = pkg, .matched = false });
-        }
-
-        for (all.items) |*pkg| {
-            if (map.getPtr(pkg.Name)) |entry| {
-                const ipkg = entry.pkg;
-                pkg.Installed = true;
-                pkg.Version = ipkg.Version;
-                pkg.Repository = ipkg.Repository;
-                pkg.InstallDate = ipkg.InstallDate;
-                pkg.InstalledSize = ipkg.InstalledSize;
-                pkg.InstallReason = ipkg.InstallReason;
-                if (ipkg.BuildDate.len > 0) {
-                    pkg.BuildDate = ipkg.BuildDate;
-                }
-                pkg.Explicit = std.mem.eql(u8, ipkg.InstallReason, "Explicit");
-                entry.matched = true;
-            } else {
-                pkg.Installed = false;
-            }
-        }
-
-        var it = map.valueIterator();
-        while (it.next()) |entry| {
-            if (!entry.matched) {
-                var extra = entry.pkg.*;
-                extra.Installed = true;
-                extra.Explicit = std.mem.eql(u8, extra.InstallReason, "Explicit");
-                try all.append(alloc, extra);
-            }
-        }
-    }
 };
-
-test "mergeInstalledPackages updates version and repository for installed packages" {
-    const testing = std.testing;
-    const alloc = testing.allocator;
-
-    var all: std.ArrayListUnmanaged(Package) = .empty;
-    defer all.deinit(alloc);
-
-    try all.append(alloc, .{
-        .Name = "plasma5support",
-        .Version = "6.7.5-1.1",
-        .Repository = "cachyos-extra-v3",
-        .InstalledSize = 0,
-    });
-    try all.append(alloc, .{
-        .Name = "uninstalled-pkg",
-        .Version = "1.0.0",
-        .Repository = "extra",
-    });
-
-    const installed = [_]Package{
-        .{
-            .Name = "plasma5support",
-            .Version = "6.8.0-1",
-            .Repository = "local",
-            .InstalledSize = 123456,
-            .InstallReason = "Explicit",
-            .InstallDate = "2026-10-14",
-        },
-        .{
-            .Name = "local-only-pkg",
-            .Version = "2.0.0",
-            .Repository = "local",
-            .InstallReason = "Dependency",
-        },
-    };
-
-    try PackagePage.mergeInstalledPackages(alloc, &all, &installed);
-
-    try testing.expectEqual(@as(usize, 3), all.items.len);
-
-    try testing.expectEqualStrings("plasma5support", all.items[0].Name);
-    try testing.expectEqualStrings("6.8.0-1", all.items[0].Version);
-    try testing.expectEqualStrings("local", all.items[0].Repository);
-    try testing.expectEqual(true, all.items[0].Installed);
-    try testing.expectEqual(true, all.items[0].Explicit);
-    try testing.expectEqual(@as(i64, 123456), all.items[0].InstalledSize);
-
-    try testing.expectEqualStrings("uninstalled-pkg", all.items[1].Name);
-    try testing.expectEqualStrings("1.0.0", all.items[1].Version);
-    try testing.expectEqualStrings("extra", all.items[1].Repository);
-    try testing.expectEqual(false, all.items[1].Installed);
-
-    try testing.expectEqualStrings("local-only-pkg", all.items[2].Name);
-    try testing.expectEqualStrings("2.0.0", all.items[2].Version);
-    try testing.expectEqualStrings("local", all.items[2].Repository);
-    try testing.expectEqual(true, all.items[2].Installed);
-    try testing.expectEqual(false, all.items[2].Explicit);
-}

@@ -25,9 +25,9 @@ fn package(name: []const u8, version: []const u8, origin: rlpm.Package.Origin) r
 fn entry(pkg: *const rlpm.Package, db: u64, id: u32) R.Entry {
     return .{
         .reference = .{
-            .database = .{ .owner = @enumFromInt(1), .id = @enumFromInt(db) },
+            .database = .{ .owner = @fromBackingInt(@intCast(1)), .id = @fromBackingInt(@intCast(db)) },
             .generation = 1,
-            .id = @enumFromInt(id),
+            .id = @fromBackingInt(@intCast(id)),
         },
         .package = pkg,
     };
@@ -35,7 +35,7 @@ fn entry(pkg: *const rlpm.Package, db: u64, id: u32) R.Entry {
 
 fn repository(packages: []const R.Entry) R.Repository {
     return .{
-        .reference = .{ .owner = @enumFromInt(1), .id = @enumFromInt(1) },
+        .reference = .{ .owner = @fromBackingInt(@intCast(1)), .id = @fromBackingInt(@intCast(1)) },
         .name = "test",
         .packages = packages,
     };
@@ -263,7 +263,7 @@ fn casePlan(alloc: std.mem.Allocator, case: Case) !rlpm.TransactionPlan {
 
     for (case.repositories, repositories, 0..) |input, *out, i| {
         out.* = .{
-            .reference = .{ .owner = @enumFromInt(1), .id = @enumFromInt(i + 1) },
+            .reference = .{ .owner = @fromBackingInt(@intCast(1)), .id = @fromBackingInt(@intCast(i + 1)) },
             .name = input.name,
             .usage = .{
                 .sync = input.usage & 1 != 0,
@@ -320,7 +320,7 @@ fn casePlan(alloc: std.mem.Allocator, case: Case) !rlpm.TransactionPlan {
     }
 
     return R.resolve(alloc, .{
-        .owner = @enumFromInt(1),
+        .owner = @fromBackingInt(@intCast(1)),
         .local = local,
         .repositories = repositories,
     }, .{
@@ -689,7 +689,7 @@ test "resolver frees all allocations in success, failure, questions, replacement
             "conflict-breaks-survivor",
         }) |name| {
             if (std.mem.eql(u8, case.name, name))
-                try std.testing.checkAllAllocationFailures(
+                try @import("allocation_failures.zig").checkAllAllocationFailures(
                     a,
                     allocationCase,
                     .{case},
@@ -798,7 +798,7 @@ test "Owner plans survive cache invalidation and release; provider callbacks hav
     try expectAdds(&plan, &.{ "z", "app" });
     try std.testing.expectEqualStrings("cachyos", plan.additions[0].installed_database.?);
 
-    const ref = plan.candidates[@intFromEnum(plan.additions[0].package)].reference;
+    const ref = plan.candidates[@backingInt(plan.additions[0].package)].reference;
     try owner.invalidateDatabase(owner.findDatabase("cachyos").?);
     try std.testing.expectError(
         error.StalePackageReference,
@@ -867,8 +867,8 @@ test "Owner resolver rejects invalid answers, cancellation and foreign reference
     defer plan.deinit();
     try expectAdds(&plan, &.{ "a", "app" });
 
-    var ref = plan.candidates[@intFromEnum(plan.additions[0].package)].reference;
-    ref.database.owner = @enumFromInt(0);
+    var ref = plan.candidates[@backingInt(plan.additions[0].package)].reference;
+    ref.database.owner = @fromBackingInt(@intCast(0));
     try owner.invalidateDatabase(owner.findDatabase("cachyos").?);
     try fixture.temp.dir.writeFile(
         io,
@@ -1041,13 +1041,13 @@ test "plans retain verified archive bytes after package release with independent
     var file = try owner.loadPackage(io, archive.path, .local_file, .{});
     var file_live = true;
     defer if (file_live) file.deinit();
-    try std.testing.checkAllAllocationFailures(a, sealedAllocation, .{&file});
+    try @import("allocation_failures.zig").checkAllAllocationFailures(a, sealedAllocation, .{&file});
 
     var plan = try owner.resolve(io, .{ .install = &.{.{ .archive = &file }} });
     defer plan.deinit();
     var other = try owner.resolve(io, .{ .install = &.{.{ .archive = &file }} });
     defer other.deinit();
-    const ref = plan.candidates[@intFromEnum(plan.additions[0].package)].reference;
+    const ref = plan.candidates[@backingInt(plan.additions[0].package)].reference;
     try std.testing.expect(other.findReference(ref) == null);
     try std.testing.expectError(error.StaleDatabaseReference, owner.package(ref));
     file.deinit();

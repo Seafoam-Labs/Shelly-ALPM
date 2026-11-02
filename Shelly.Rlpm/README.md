@@ -70,7 +70,7 @@ acceptance boundaries.
 
 ## Build and tests
 
-Use Linux with `openat2`, `/proc` and memfd sealing, Zig 0.16.0, libc, libarchive, SQLite and libcurl development headers/libraries
+Use Linux with `openat2`, `/proc` and memfd sealing, Zig 0.17.0, libc, libarchive, SQLite and libcurl development headers/libraries
 (SQLite must support `sqlite3_deserialize`). `Shelly.Key` is a local
 module dependency. From this directory:
 
@@ -102,7 +102,7 @@ module dependency. From this directory:
 | `zig build test-signature` | Fifteen real GPG regression, trust, key and publication cases |
 | `zig build test-host-readonly` | Opt-in smoke reads of `/var/lib/pacman/local` and `sync` |
 
-All test modules honor `-Doptimize=ReleaseSafe` and the other standard optimize
+All test modules honor `-Doptimize=safe` and the other standard optimize
 modes. CI runs `test` in Debug and ReleaseSafe and `test-signature` in Debug.
 Normal builds/tests do not link, load or call libalpm. Python is required for
 optional reference recording and the explicit pinned-binary interoperability test.

@@ -1,6 +1,7 @@
 const std = @import("std");
 const catalog = @import("catalog.zig");
 const spec = @import("spec.zig");
+const features = @import("../build_features.zig");
 
 pub const Translation = union(enum) {
     unchanged: []const []const u8,
@@ -40,6 +41,8 @@ pub fn translate(
         };
     }
     const token = args[0];
+    if (!features.arch_news_enabled and std.mem.startsWith(u8, token, "-N"))
+        return .{ .failure = features.arch_news_unavailable };
     if (try translateTopLevelHelp(allocator, manifest, args, token)) |translation|
         return translation;
     if (try translateBareCodeVariant(allocator, args, token)) |translation|
@@ -253,7 +256,7 @@ fn translateCombinedSearch(
 
     var selected: std.ArrayList(*const catalog.Variant) = .empty;
     var modifiers: std.ArrayList(u8) = .empty;
-    var seen = [_]bool{false} ** 256;
+    var seen = @as([256]bool, @splat(false));
     for (token[2..]) |code| {
         const variant = catalog.findVariantByCodes(token[1], code) orelse {
             try modifiers.append(allocator, code);

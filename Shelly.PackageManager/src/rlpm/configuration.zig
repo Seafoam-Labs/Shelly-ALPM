@@ -129,7 +129,7 @@ pub fn preparePreview(io: std.Io, allocator: std.mem.Allocator, c: *Config, dest
         .file => try std.Io.Dir.copyFile(src, entry.path, dst, entry.path, io, .{}),
         else => return error.InvalidLocalDatabaseEntry,
     };
-    c.database_path = try c.arena.allocator().dupeZ(u8, destination);
+    c.database_path = try c.arena.allocator().dupeSentinel(u8, destination, 0);
     // Read-only update previews match the native facade. Actual transactions
     // reopen the real database with its complete signature policy.
     const database_bits: u32 = @bitCast(SigLevel{ .database = true, .database_optional = true, .database_marginal_ok = true, .database_unknown_ok = true });

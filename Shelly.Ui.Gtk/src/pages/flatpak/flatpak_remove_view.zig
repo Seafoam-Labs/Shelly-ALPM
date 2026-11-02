@@ -190,15 +190,15 @@ pub const FlatpakRemoveView = extern struct {
         const info = if (version.len == 0)
             size_text
         else
-            std.fmt.bufPrintZ(&info_buf, "{s} • {s}", .{ version, size_text }) catch size_text;
+            std.fmt.bufPrintSentinel(&info_buf, "{s} • {s}", .{ version, size_text }, 0) catch size_text;
         gtk.Label.setLabel(info_label, info);
 
         var path_buf: [std.fs.max_path_bytes]u8 = undefined;
         const path: ?[:0]const u8 = blk: {
             const p = if (pkg.getInstallLevel() == .user) blk2: {
                 const data_home = runtime.data_home; // cached at startup
-                break :blk2 std.fmt.bufPrintZ(&path_buf, "{s}/flatpak/appstream/{s}/x86_64/active/icons/64x64/{s}.png", .{ data_home, pkg.getRemotes(), pkg.getId() }) catch break :blk null;
-            } else std.fmt.bufPrintZ(&path_buf, "/var/lib/flatpak/appstream/{s}/x86_64/active/icons/64x64/{s}.png", .{ pkg.getRemotes(), pkg.getId() }) catch break :blk null;
+                break :blk2 std.fmt.bufPrintSentinel(&path_buf, "{s}/flatpak/appstream/{s}/x86_64/active/icons/64x64/{s}.png", .{ data_home, pkg.getRemotes(), pkg.getId() }, 0) catch break :blk null;
+            } else std.fmt.bufPrintSentinel(&path_buf, "/var/lib/flatpak/appstream/{s}/x86_64/active/icons/64x64/{s}.png", .{ pkg.getRemotes(), pkg.getId() }, 0) catch break :blk null;
 
             std.Io.Dir.cwd().access(runtime.io, p, .{}) catch break :blk null;
             break :blk p;

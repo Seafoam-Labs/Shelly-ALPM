@@ -1,6 +1,7 @@
 const std = @import("std");
 const spec = @import("spec.zig");
 const diagnostics = @import("diagnostics");
+const features = @import("../build_features.zig");
 
 pub const GlobalOptions = struct {
     config_path: ?[]const u8 = null,
@@ -54,6 +55,18 @@ pub fn parse(
         if (!positional_only and std.mem.eql(u8, token, "--")) {
             positional_only = true;
             continue;
+        }
+
+        // Reserve the disabled root action instead of treating it as a package
+        // search. Explicit searches and values following -- remain available.
+        if (!features.arch_news_enabled and !positional_only and
+            command == manifest.root() and positionals.items.len == 0 and
+            (std.mem.eql(u8, token, "news") or std.mem.startsWith(u8, token, "-N")))
+        {
+            return .{ .failure = .{
+                .message = features.arch_news_unavailable,
+                .help_command = command,
+            } };
         }
 
         if (!positional_only and isOptionToken(token)) {

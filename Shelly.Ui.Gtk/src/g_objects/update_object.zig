@@ -70,11 +70,11 @@ pub const UpdateObject = extern struct {
         const self = gobject.ext.newInstance(Self, .{});
         const p = self.priv();
         p.source = source;
-        p.name = allocator.dupeZ(u8, name) catch "";
-        p.description = allocator.dupeZ(u8, description) catch "";
-        p.old_version = allocator.dupeZ(u8, old_version) catch "";
-        p.new_version = allocator.dupeZ(u8, new_version) catch "";
-        p.size = allocator.dupeZ(u8, size) catch "";
+        p.name = allocator.dupeSentinel(u8, name, 0) catch "";
+        p.description = allocator.dupeSentinel(u8, description, 0) catch "";
+        p.old_version = allocator.dupeSentinel(u8, old_version, 0) catch "";
+        p.new_version = allocator.dupeSentinel(u8, new_version, 0) catch "";
+        p.size = allocator.dupeSentinel(u8, size, 0) catch "";
         return self;
     }
 

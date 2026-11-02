@@ -1,16 +1,30 @@
 name: Set up project Zig
-description: Install patched Arch Zig 0.16.0-1
+description: Install verified official Zig 0.17.0
 runs:
   using: composite
   steps:
-    # Arch's package includes the PC64 linker fix missing from upstream 0.16.0.
-    # Run after system updates so they cannot upgrade the pinned compiler.
-    - name: Install patched Zig
+    - name: Install Zig 0.17.0
       shell: bash
       run: |
-        pacman -S --needed --noconfirm clang21 lld21 llvm21-libs
-        pacman -U --noconfirm \
-          https://archive.archlinux.org/packages/z/zig/zig-0.16.0-1-x86_64.pkg.tar.zst
-        test "$(pacman -Q zig)" = "zig 0.16.0-1"
-        test "$(zig version)" = "0.16.0"
-        zig version
+        set -euo pipefail
+        # Checksums from https://ziglang.org/download/index.json (0.17.0).
+        case "$(uname -m)" in
+          x86_64)
+            arch=x86_64
+            sha256=1cbe9df9f27e6b78d14ccbca43b6703a404ef79ef1c463de901d7f088d4e2026
+            ;;
+          aarch64)
+            arch=aarch64
+            sha256=9e8d11661d4ae3bd57702a3832781e23ad151dde5798e16a5ccd503f65234ff8
+            ;;
+          *) echo 'Unsupported Zig runner architecture' >&2; exit 1 ;;
+        esac
+        archive="zig-${arch}-linux-0.17.0.tar.xz"
+        destination="${RUNNER_TEMP}/shelly-zig-0.17.0"
+        mkdir -p "$destination"
+        curl --fail --location --retry 3 "https://ziglang.org/download/0.17.0/${archive}" -o "$destination/$archive"
+        printf '%s  %s\n' "$sha256" "$destination/$archive" | sha256sum --check --strict
+        tar -xJf "$destination/$archive" -C "$destination"
+        compiler="$destination/zig-${arch}-linux-0.17.0"
+        test "$("$compiler/zig" version)" = 0.17.0
+        echo "$compiler" >> "$GITHUB_PATH"

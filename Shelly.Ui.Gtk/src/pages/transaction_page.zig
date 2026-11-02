@@ -190,7 +190,7 @@ pub const TransactionPage = extern struct {
         setLabel(p.title_label, request.title);
 
         for (request.packages) |name| {
-            const owned = alloc.dupeZ(u8, name) catch continue;
+            const owned = alloc.dupeSentinel(u8, name, 0) catch continue;
             const row = build_row(alloc, owned) catch continue;
             gtk.Box.append(p.rows_box, row.root.as(gtk.Widget));
             p.rows.put(alloc, owned, row) catch {};
@@ -460,8 +460,8 @@ pub const TransactionPage = extern struct {
 
         const arena = p.arena orelse return null;
         const alloc = arena.allocator();
-        const owned_key = alloc.dupeZ(u8, key) catch return null;
-        const owned_display = alloc.dupeZ(u8, display) catch return null;
+        const owned_key = alloc.dupeSentinel(u8, key, 0) catch return null;
+        const owned_display = alloc.dupeSentinel(u8, display, 0) catch return null;
         const row = build_row(alloc, owned_display) catch return null;
 
         gtk.Box.append(p.rows_box, row.root.as(gtk.Widget));
@@ -765,7 +765,7 @@ pub const TransactionPage = extern struct {
     }
 
     fn setLabel(label: *gtk.Label, text: []const u8) void {
-        const value = std.heap.c_allocator.dupeZ(u8, text) catch return;
+        const value = std.heap.c_allocator.dupeSentinel(u8, text, 0) catch return;
         defer std.heap.c_allocator.free(value);
         gtk.Label.setLabel(label, value);
     }
@@ -781,7 +781,7 @@ pub const TransactionPage = extern struct {
         var end: gtk.TextIter = undefined;
         gtk.TextBuffer.getEndIter(buffer, &end);
 
-        const normalized_z = std.heap.c_allocator.dupeZ(u8, normalized) catch return;
+        const normalized_z = std.heap.c_allocator.dupeSentinel(u8, normalized, 0) catch return;
         defer std.heap.c_allocator.free(normalized_z);
         gtk.TextBuffer.insert(buffer, &end, normalized_z, @intCast(normalized.len));
         gtk.TextBuffer.insert(buffer, &end, "\n", 1);
@@ -981,17 +981,14 @@ pub const TransactionPage = extern struct {
             question_kind,
             "CacheCleanExtraEntries",
         )) {
-            return allocator.dupeZ(
-                u8,
-                translations._(
-                    "Would you like to remove extra cache entries?",
-                ),
-            );
+            return allocator.dupeSentinel(u8, translations._(
+                "Would you like to remove extra cache entries?",
+            ), 0);
         }
 
         if (std.mem.eql(u8, question_kind, "PackageConflict")) {
             if (arguments.len < 5) {
-                return allocator.dupeZ(u8, fallback);
+                return allocator.dupeSentinel(u8, fallback, 0);
             }
 
             const formatted = try formatPackageConflictQuestion(
@@ -1000,10 +997,10 @@ pub const TransactionPage = extern struct {
             );
             defer allocator.free(formatted);
 
-            return allocator.dupeZ(u8, formatted);
+            return allocator.dupeSentinel(u8, formatted, 0);
         }
 
-        return allocator.dupeZ(u8, fallback);
+        return allocator.dupeSentinel(u8, fallback, 0);
     }
 
     fn handle_question(self: *Self, pending: *PendingQuestion) void {
@@ -1081,21 +1078,21 @@ pub const TransactionPage = extern struct {
                 defer arena.deinit();
                 const a = arena.allocator();
 
-                const name = a.dupeZ(u8, q.package_name) catch return;
+                const name = a.dupeSentinel(u8, q.package_name, 0) catch return;
 
                 const lines = a.alloc([:0]const u8, q.diff_lines.len) catch return;
                 for (q.diff_lines, 0..) |line, i| {
-                    lines[i] = a.dupeZ(u8, line) catch return;
+                    lines[i] = a.dupeSentinel(u8, line, 0) catch return;
                 }
 
                 const warns = a.alloc(PkgbuildReviewDialog.Warning, q.warnings.len) catch return;
                 for (q.warnings, 0..) |w, i| {
                     warns[i] = .{
-                        .tool = a.dupeZ(u8, w.Tool) catch return,
-                        .hook = a.dupeZ(u8, w.Hook) catch return,
-                        .severity = a.dupeZ(u8, w.Severity) catch return,
-                        .message = a.dupeZ(u8, w.Message) catch return,
-                        .matched_line = a.dupeZ(u8, w.MatchedLine) catch return,
+                        .tool = a.dupeSentinel(u8, w.Tool, 0) catch return,
+                        .hook = a.dupeSentinel(u8, w.Hook, 0) catch return,
+                        .severity = a.dupeSentinel(u8, w.Severity, 0) catch return,
+                        .message = a.dupeSentinel(u8, w.Message, 0) catch return,
+                        .matched_line = a.dupeSentinel(u8, w.MatchedLine, 0) catch return,
                     };
                 }
 
@@ -1109,8 +1106,8 @@ pub const TransactionPage = extern struct {
 
                 for (q.source_files, sources) |source, *target| {
                     target.* = .{
-                        .name = a.dupeZ(u8, source.name) catch return,
-                        .content = a.dupeZ(u8, source.content) catch return,
+                        .name = a.dupeSentinel(u8, source.name, 0) catch return,
+                        .content = a.dupeSentinel(u8, source.content, 0) catch return,
                     };
                 }
 

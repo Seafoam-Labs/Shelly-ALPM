@@ -25,7 +25,7 @@ pub const Color = enum {
     highlight,
     dim,
 
-    const count = @typeInfo(Color).@"enum".fields.len;
+    const count = @typeInfo(Color).@"enum".field_names.len;
 };
 
 pub const reset = "\x1b[0m";
@@ -53,13 +53,13 @@ var palette = default_palette;
 
 /// Return the active ANSI escape code for a color.
 pub fn colorCode(color: Color) []const u8 {
-    return palette[@intFromEnum(color)];
+    return palette[@backingInt(color)];
 }
 
 /// Remap a color to a custom ANSI escape sequence (must have static lifetime,
 /// e.g. a string literal or a buffer owned by the caller).
 pub fn set(color: Color, code: []const u8) void {
-    palette[@intFromEnum(color)] = code;
+    palette[@backingInt(color)] = code;
 }
 
 /// Restore all colors to the default palette.

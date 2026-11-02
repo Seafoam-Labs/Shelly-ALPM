@@ -440,15 +440,10 @@ fn writeStandardUpgradePreview(
         .{ updates.len, if (updates.len == 1) "" else "s" },
     );
     for (updates) |update| {
-        try writer.print(
-            "  {s}/{s}: {s} -> {s}\n",
-            .{
-                if (update.repository.len == 0) "unknown" else update.repository,
-                update.name,
-                update.current_version,
-                update.new_version,
-            },
-        );
+        try writer.print("  {s}/", .{if (update.repository.len == 0) "unknown" else update.repository});
+        if (list_updates.isReplacement(update.old_name, update.name))
+            try writer.print("{s} -> ", .{update.old_name});
+        try writer.print("{s}: {s} -> {s}\n", .{ update.name, update.current_version, update.new_version });
     }
     try writer.writeAll("Requested packages (resolved together with the upgrade):\n");
     for (targets) |target| {
@@ -943,11 +938,11 @@ fn runFlatpak(
     const install_id = if (eol_replacement) |replacement| replacement.id else selected_id;
     const install_branch = if (eol_replacement) |replacement| replacement.branch else requested_branch;
 
-    const id_z = try context.allocator.dupeZ(u8, install_id);
+    const id_z = try context.allocator.dupeSentinel(u8, install_id, 0);
     defer context.allocator.free(id_z);
-    const remote_z = try context.allocator.dupeZ(u8, selected_remote);
+    const remote_z = try context.allocator.dupeSentinel(u8, selected_remote, 0);
     defer context.allocator.free(remote_z);
-    const branch_z = try context.allocator.dupeZ(u8, install_branch);
+    const branch_z = try context.allocator.dupeSentinel(u8, install_branch, 0);
     defer context.allocator.free(branch_z);
     if (!try manager.install_flatpak(
         id_z,
@@ -1003,7 +998,7 @@ fn runFlatpakFile(
     defer context.allocator.free(current_directory);
     const absolute_path = try std.fs.path.resolve(context.allocator, &.{ current_directory, location });
     defer context.allocator.free(absolute_path);
-    const path_z = try context.allocator.dupeZ(u8, absolute_path);
+    const path_z = try context.allocator.dupeSentinel(u8, absolute_path, 0);
     defer context.allocator.free(path_z);
 
     var manager = PackageManager.FlatpakManager{ .allocator = context.allocator, .io = context.io };
@@ -1222,7 +1217,7 @@ fn sentinelStrings(allocator: std.mem.Allocator, values: []const []const u8) ![]
         allocator.free(result);
     }
     for (values, result) |value, *destination| {
-        destination.* = try allocator.dupeZ(u8, value);
+        destination.* = try allocator.dupeSentinel(u8, value, 0);
         initialized += 1;
     }
     return result;
@@ -1856,6 +1851,7 @@ test "standard install upgrade UI previews available updates before confirmation
 
     const updates = [_]list_updates.StandardUpdate{
         .{
+            .old_name = "linux-old",
             .name = "linux",
             .current_version = "6.12.1-1",
             .new_version = "6.12.2-1",
@@ -1903,7 +1899,7 @@ test "standard install upgrade UI previews available updates before confirmation
         const decoded_size = try std.base64.standard.Decoder.calcSizeForSlice(payload);
         const decoded = try tc.arena.allocator().alloc(u8, decoded_size);
         try std.base64.standard.Decoder.decode(decoded, payload);
-        if (std.mem.indexOf(u8, decoded, "core/linux: 6.12.1-1 -> 6.12.2-1") != null and
+        if (std.mem.indexOf(u8, decoded, "core/linux-old -> linux: 6.12.1-1 -> 6.12.2-1") != null and
             std.mem.indexOf(u8, decoded, "extra/firefox: 127.0-1 -> 128.0-1") != null and
             std.mem.indexOf(u8, decoded, "extra-testing/filezilla") != null and
             std.mem.indexOf(u8, decoded, "in one transaction") != null)

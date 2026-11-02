@@ -38,8 +38,7 @@ pub fn match_array_ref(item: []const u8) ?[]const u8 {
 
 const ArrayExpansion = struct {
     name: []const u8,
-    operation: []const u8 = "",
-    pattern: []const u8 = "",
+    trim: expansion.ArrayTrim,
 };
 
 /// Recognize only an array parameter, not array-shaped bytes inside literals
@@ -53,17 +52,7 @@ fn match_array_expansion(text: []const u8) !?ArrayExpansion {
         return error.UnsupportedArrayExpansion;
     }
     const rest = text[name_end + 3 .. text.len - 1];
-    if (rest.len == 0) return .{ .name = text[2..name_end] };
-    if (rest[0] != '#' and rest[0] != '%') return error.UnsupportedArrayExpansion;
-    const op_len: usize = if (rest.len > 1 and rest[1] == rest[0]) 2 else 1;
-    const pattern = rest[op_len..];
-    // Quote removal, nested expansion, bracket expressions and extglobs need
-    // additional shell semantics. Never approximate them as literal patterns.
-    for (pattern) |c| {
-        if (c >= 0x80 or std.mem.indexOfScalar(u8, "\\\"'$`[](){}", c) != null)
-            return error.UnsupportedArrayExpansion;
-    }
-    return .{ .name = text[2..name_end], .operation = rest[0..op_len], .pattern = pattern };
+    return .{ .name = text[2..name_end], .trim = try expansion.parse_array_trim(rest) };
 }
 
 fn strip_version_constraint(dep: []const u8) []const u8 {
@@ -130,7 +119,7 @@ fn resolve_variable_references_mode(self: PkgbuildParser, content: []const u8, v
                 if (word.parts.len != 1) return error.UnsupportedArrayExpansion;
                 // Trimming unquoted arrays also invokes word splitting and
                 // pathname expansion. Only the quoted standalone form is static.
-                if (matched.operation.len != 0 and
+                if (matched.trim.operation.len != 0 and
                     !(part.start == 1 and part.end + 1 == item.len and item[0] == '"' and item[item.len - 1] == '"'))
                     return error.UnsupportedArrayExpansion;
                 reference = matched;
@@ -150,15 +139,10 @@ fn resolve_variable_references_mode(self: PkgbuildParser, content: []const u8, v
             for (nested) |it| {
                 if (resolved.items.len >= 4096) return error.ArrayExpansionTooLarge;
                 const unresolved = if (self.deferred_source_words) |deferred| deferred.contains(@intFromPtr(it.ptr)) else false;
-                // The scalar matcher consumes bytes. A '?' must not split a
-                // multibyte character or silently depend on the shell locale.
-                if (!unresolved and std.mem.indexOfScalar(u8, ref.pattern, '?') != null) {
-                    for (it) |byte| if (byte >= 0x80) return error.UnsupportedArrayExpansion;
-                }
                 const value = try self.allocator.dupe(u8, if (unresolved)
                     item
                 else
-                    expansion.apply_parameter_expansion(it, ref.operation, ref.pattern));
+                    try ref.trim.apply(it));
                 errdefer self.allocator.free(value);
                 if (unresolved) if (self.deferred_source_words) |deferred| try deferred.put(@intFromPtr(value.ptr), {});
                 try resolved.append(self.allocator, value);

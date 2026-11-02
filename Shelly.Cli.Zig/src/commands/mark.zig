@@ -487,7 +487,7 @@ fn reasonReal(
     defer manager.deinit();
     manager.setOperationContext(operation_context);
     defer manager.setOperationContext(null);
-    const package_z = try context.allocator.dupeZ(u8, package);
+    const package_z = try context.allocator.dupeSentinel(u8, package, 0);
     defer context.allocator.free(package_z);
     try manager.update_package_reason(
         package_z,

@@ -8,9 +8,7 @@ const Parsed = @import("ParsedDescription.zig");
 const Record = @import("DatabaseRecord.zig");
 const Package = @import("Package.zig");
 
-const c = @cImport({
-    @cInclude("sqlite3.h");
-});
+const c = @import("rlpm_c");
 
 pub const Format = enum { unknown, tar, sqlite, mixed };
 format: Format = .unknown,
