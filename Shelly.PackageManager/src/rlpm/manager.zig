@@ -354,40 +354,91 @@ pub const Manager = struct {
     }
     pub fn get_updates_available(self: *Manager) ![]types.OwnedPackageWithUpdate {
         try self.checkCancelled();
-        const db = self.owner.localDatabase().?;
-        try self.owner.ensureDatabase(self.io(), db);
+        const local = self.owner.localDatabase().?;
+        try self.owner.ensureDatabase(self.io(), local);
+
+        var repositories: std.ArrayList(PreviewRepository) = .empty;
+        defer {
+            for (repositories.items) |*repository| repository.replacers.deinit(self.allocator);
+            repositories.deinit(self.allocator);
+        }
+        for (self.owner.syncDatabases()) |db| {
+            if (!db.configurationView().usage.upgrade) continue;
+            const reference = db.identity.?;
+            self.owner.ensureDatabase(self.io(), reference) catch |err| {
+                if (err == error.FileNotFound) continue;
+                return err;
+            };
+            var repository: PreviewRepository = .{ .database = reference };
+            errdefer repository.replacers.deinit(self.allocator);
+            for (try self.owner.packageIds(reference)) |id| {
+                const ref = try self.owner.packageReference(reference, id);
+                if ((try self.owner.packageMetadata(self.io(), ref, .{})).replaces.len != 0)
+                    try repository.replacers.append(self.allocator, ref);
+            }
+            try repositories.append(self.allocator, repository);
+        }
+
+        var roots: std.StringHashMapUnmanaged(usize) = .empty;
+        defer roots.deinit(self.allocator);
         var result: std.ArrayList(types.OwnedPackageWithUpdate) = .empty;
         errdefer {
             for (result.items) |*item| item.deinit(self.allocator);
             result.deinit(self.allocator);
         }
-        for (try self.owner.packageIds(db)) |id| {
-            const ref = try self.owner.packageReference(db, id);
-            const pkg = try self.owner.packageMetadata(self.io(), ref, .{});
-            if (try self.upgradeFor(pkg)) |new| {
-                if (!self.show_hidden_packages and try self.owner.shouldIgnore(self.io(), new)) continue;
-                var old = try self.snapshot(ref, .{});
-                errdefer old.deinit(self.allocator);
-                var next = try self.snapshot(new, .{});
-                errdefer next.deinit(self.allocator);
-                try result.append(self.allocator, .{ .old_package = old, .new_package = next });
+        for (try self.owner.packageIds(local)) |id| {
+            try self.checkCancelled();
+            const old_ref = try self.owner.packageReference(local, id);
+            const old = try self.owner.packageMetadata(self.io(), old_ref, .{});
+            if (roots.contains(old.name)) continue;
+            for (repositories.items, 0..) |repository, index| {
+                var newly_replaced = false;
+                for (repository.replacers.items) |new_ref| {
+                    const new = try self.owner.package(new_ref);
+                    const replaces = for (new.replaces) |dependency| {
+                        if (std.mem.eql(u8, dependency.name, old.name) and dependency.matchesVersion(old.version.raw)) break true;
+                    } else false;
+                    if (!replaces or try self.hiddenUpdate(old_ref, new_ref)) continue;
+                    if (roots.get(new.name)) |root| {
+                        if (root != index) continue;
+                    } else {
+                        try roots.put(self.allocator, new.name, index);
+                        newly_replaced = true;
+                    }
+                    try self.appendPreviewUpdate(&result, old, new);
+                }
+                if (newly_replaced) break;
+                const new_ref = try self.owner.findPackage(repository.database, old.name) orelse continue;
+                const new = try self.owner.packageMetadata(self.io(), new_ref, .{});
+                if (rlpm.Version.compareStrings(new.version.raw, old.version.raw) == .greaterThan and
+                    !roots.contains(new.name) and !try self.hiddenUpdate(old_ref, new_ref))
+                {
+                    try roots.put(self.allocator, new.name, index);
+                    try self.appendPreviewUpdate(&result, old, new);
+                }
+                break;
             }
         }
         return result.toOwnedSlice(self.allocator);
     }
-    fn upgradeFor(self: *Manager, pkg: *const rlpm.Package) !?rlpm.PackageRef {
-        for (self.owner.syncDatabases()) |db| {
-            if (!db.configurationView().usage.upgrade) continue;
-            const ref = self.owner.queryPackage(self.io(), db.identity.?, pkg.name) catch |err| {
-                if (err == error.FileNotFound) continue;
-                return err;
-            };
-            if (ref) |value| {
-                const candidate = try self.owner.packageMetadata(self.io(), value, .{});
-                return if (rlpm.Version.compareStrings(candidate.version.raw, pkg.version.raw) == .greaterThan) value else null;
-            }
-        }
-        return null;
+
+    const PreviewRepository = struct {
+        database: rlpm.DatabaseRef,
+        replacers: std.ArrayList(rlpm.PackageRef) = .empty,
+    };
+
+    fn hiddenUpdate(self: *Manager, old: rlpm.PackageRef, new: rlpm.PackageRef) !bool {
+        if (self.show_hidden_packages) return false;
+        return try self.owner.shouldIgnore(self.io(), old) or try self.owner.shouldIgnore(self.io(), new);
+    }
+
+    fn appendPreviewUpdate(self: *Manager, result: *std.ArrayList(types.OwnedPackageWithUpdate), old: *const rlpm.Package, next: *const rlpm.Package) !void {
+        if (types.OwnedPackageWithUpdate.containsPair(result.items, old.name, next.name)) return;
+        var previous = try owned(self.allocator, old);
+        errdefer previous.deinit(self.allocator);
+        var replacement = try owned(self.allocator, next);
+        errdefer replacement.deinit(self.allocator);
+        try result.append(self.allocator, .{ .old_package = previous, .new_package = replacement });
     }
     fn satisfies(self: *Manager, db: rlpm.DatabaseRef, dependency: rlpm.PackageRelation, literal: bool) !?rlpm.PackageRef {
         try self.checkCancelled();
