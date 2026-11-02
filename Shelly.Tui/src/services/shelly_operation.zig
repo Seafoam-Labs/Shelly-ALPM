@@ -4,7 +4,6 @@ const diagnostics = @import("diagnostics");
 const JsonPackFrame = @import("ui_decode.zig").JsonPackFrame;
 const flatpak_models = @import("../models/flatpak.zig");
 const Scope = @import("../models/flatpak.zig").InstallLevel;
-const UpdateType = @import("../models/appimage.zig").UpdateType;
 
 pub const Backend = enum { standard, aur, flatpak, appimage, all };
 
@@ -18,14 +17,6 @@ pub const Action = enum {
             .install => "Install",
             .remove => "Remove",
             .upgrade => "Upgrade",
-        };
-    }
-
-    pub fn ongoing(self: Action) []const u8 {
-        return switch (self) {
-            .install => "Installing",
-            .remove => "Removing",
-            .upgrade => "Upgrading",
         };
     }
 
@@ -391,12 +382,6 @@ pub const OperationResult = struct {
         self.* = undefined;
     }
 };
-
-/// Blocking package operation using the current sudo password flow.
-/// The worker streams feedback; CLI questions still use automatic confirmation.
-pub fn elevatedInstall(io: std.Io, alloc: std.mem.Allocator, request: OperationRequest) OperationResult {
-    return runInstall(io, alloc, request, null);
-}
 
 fn interactive(request: OperationRequest) bool {
     return (std.mem.eql(u8, request.backend, "aur") and request.action != .remove) or isFlatpak(request) or combined(request);
@@ -1022,215 +1007,6 @@ pub fn encodeAnswer(allocator: std.mem.Allocator, question_id: []const u8, answe
     return std.fmt.allocPrint(allocator, "[JSON]{s}[/JSON]\n", .{encoded});
 }
 
-pub const ShellyCommands = struct {
-    pub fn install(alloc: std.mem.Allocator, names: []const []const u8) ![]const []const u8 {
-        var argv: std.ArrayListUnmanaged([]const u8) = .empty;
-        errdefer argv.deinit(alloc);
-        try argv.append(alloc, "install");
-        try argv.append(alloc, "standard");
-        for (names) |n| try argv.append(alloc, n);
-        return argv.toOwnedSlice(alloc);
-    }
-
-    pub fn upgrade(alloc: std.mem.Allocator, flatpak: bool, aur: bool, standard: bool) ![]const []const u8 {
-        var argv: std.ArrayListUnmanaged([]const u8) = .empty;
-        errdefer argv.deinit(alloc);
-
-        try argv.append(alloc, "upgrade");
-        try argv.append(alloc, "all");
-        if (!flatpak) try argv.append(alloc, "--no-flatpak");
-        if (!aur) try argv.append(alloc, "--no-aur");
-        if (!standard) try argv.append(alloc, "--no-repo");
-        return argv.toOwnedSlice(alloc);
-    }
-
-    pub fn sync_db(alloc: std.mem.Allocator) ![]const []const u8 {
-        var argv: std.ArrayListUnmanaged([]const u8) = .empty;
-        errdefer argv.deinit(alloc);
-        try argv.append(alloc, "sync");
-        try argv.append(alloc, "--force");
-        return argv.toOwnedSlice(alloc);
-    }
-
-    pub fn installFlatpak(alloc: std.mem.Allocator, names: []const u8, remote: Scope, remote_name: []const u8) ![]const []const u8 {
-        return installFlatpakEx(alloc, names, remote, remote_name, false);
-    }
-
-    pub fn installFlatpakEx(alloc: std.mem.Allocator, names: []const u8, remote: Scope, remote_name: []const u8, is_runtime: bool) ![]const []const u8 {
-        var argv: std.ArrayListUnmanaged([]const u8) = .empty;
-        errdefer argv.deinit(alloc);
-        try argv.append(alloc, "install");
-        try argv.append(alloc, "flatpak");
-        if (names.len > 0) try argv.append(alloc, names);
-        if (remote == .user) try argv.append(alloc, "--user");
-        if (remote_name.len > 0) {
-            try argv.append(alloc, "--remote");
-            try argv.append(alloc, remote_name);
-        }
-        if (is_runtime) try argv.append(alloc, "--runtime");
-        return argv.toOwnedSlice(alloc);
-    }
-
-    pub fn removeFlatpak(alloc: std.mem.Allocator, names: []const u8, config_removal: bool) ![]const []const u8 {
-        var argv: std.ArrayListUnmanaged([]const u8) = .empty;
-        errdefer argv.deinit(alloc);
-        try argv.append(alloc, "remove");
-        try argv.append(alloc, "flatpak");
-        if (names.len > 0) try argv.append(alloc, names);
-        if (config_removal) try argv.append(alloc, "--remove-config");
-        try argv.append(alloc, "--remove-unused");
-        return argv.toOwnedSlice(alloc);
-    }
-
-    pub fn remove_remote(alloc: std.mem.Allocator, name: []const u8, remote: Scope) ![]const []const u8 {
-        var argv: std.ArrayListUnmanaged([]const u8) = .empty;
-        errdefer argv.deinit(alloc);
-        try argv.append(alloc, "sync");
-        try argv.append(alloc, "flatpak");
-        try argv.append(alloc, "remote");
-        try argv.append(alloc, "remove");
-        if (name.len > 0) try argv.append(alloc, name);
-        try argv.append(alloc, "--system");
-        try argv.append(alloc, if (remote == .system) "true" else "false");
-        return argv.toOwnedSlice(alloc);
-    }
-
-    pub fn add_remote(alloc: std.mem.Allocator, name: []const u8, url: []const u8, scope: [:0]const u8) ![]const []const u8 {
-        var argv: std.ArrayListUnmanaged([]const u8) = .empty;
-        errdefer argv.deinit(alloc);
-        try argv.append(alloc, "sync");
-        try argv.append(alloc, "flatpak");
-        try argv.append(alloc, "remote");
-        try argv.append(alloc, "add");
-        if (name.len > 0) try argv.append(alloc, name);
-        try argv.append(alloc, "--remote-url");
-        try argv.append(alloc, url);
-        if (!std.mem.eql(u8, scope, "system")) try argv.append(alloc, "--system");
-        if (!std.mem.eql(u8, scope, "system")) try argv.append(alloc, "false");
-        return argv.toOwnedSlice(alloc);
-    }
-
-    pub fn install_local_flatpak_ref(alloc: std.mem.Allocator, path: []const u8, user: bool) ![]const []const u8 {
-        var argv: std.ArrayListUnmanaged([]const u8) = .empty;
-        errdefer argv.deinit(alloc);
-        try argv.append(alloc, "install");
-        try argv.append(alloc, "flatpak");
-        if (path.len > 0) try argv.append(alloc, path);
-        try argv.append(alloc, "--ref-file");
-        if (user) try argv.append(alloc, "--user");
-        return argv.toOwnedSlice(alloc);
-    }
-
-    pub fn install_local_flatpak_bundle(alloc: std.mem.Allocator, path: []const u8, user: bool) ![]const []const u8 {
-        var argv: std.ArrayListUnmanaged([]const u8) = .empty;
-        errdefer argv.deinit(alloc);
-        try argv.append(alloc, "install");
-        try argv.append(alloc, "flatpak");
-        if (path.len > 0) try argv.append(alloc, path);
-        try argv.append(alloc, "--bundle");
-        if (user) try argv.append(alloc, "--user");
-        return argv.toOwnedSlice(alloc);
-    }
-
-    pub fn fix_permissions(alloc: std.mem.Allocator) ![]const []const u8 {
-        var argv: std.ArrayListUnmanaged([]const u8) = .empty;
-        errdefer argv.deinit(alloc);
-        try argv.append(alloc, "utility");
-        try argv.append(alloc, "--fix-permissions");
-        return argv.toOwnedSlice(alloc);
-    }
-
-    pub fn purify(alloc: std.mem.Allocator) ![]const []const u8 {
-        var argv: std.ArrayListUnmanaged([]const u8) = .empty;
-        errdefer argv.deinit(alloc);
-        try argv.append(alloc, "purify");
-        try argv.append(alloc, "standard");
-        try argv.append(alloc, "--orphans");
-        return argv.toOwnedSlice(alloc);
-    }
-
-    pub fn clean_cache(alloc: std.mem.Allocator, keep_str: []const u8) ![]const []const u8 {
-        var argv: std.ArrayListUnmanaged([]const u8) = .empty;
-        errdefer argv.deinit(alloc);
-        try argv.append(alloc, "purify");
-        try argv.append(alloc, "standard");
-        try argv.append(alloc, "--cache");
-        try argv.append(alloc, keep_str);
-        try argv.append(alloc, "--aur-cache");
-        return argv.toOwnedSlice(alloc);
-    }
-
-    pub fn install_aur(alloc: std.mem.Allocator, names: []const []const u8) ![]const []const u8 {
-        var argv: std.ArrayListUnmanaged([]const u8) = .empty;
-        errdefer argv.deinit(alloc);
-        try argv.append(alloc, "install");
-        try argv.append(alloc, "aur");
-        for (names) |n| try argv.append(alloc, n);
-        return argv.toOwnedSlice(alloc);
-    }
-
-    pub fn install_appimage(
-        alloc: std.mem.Allocator,
-        path: []const u8,
-    ) ![]const []const u8 {
-        var argv: std.ArrayListUnmanaged([]const u8) = .empty;
-        errdefer argv.deinit(alloc);
-        try argv.append(alloc, "install");
-        try argv.append(alloc, "appimage");
-        if (path.len > 0) try argv.append(alloc, path);
-        return argv.toOwnedSlice(alloc);
-    }
-
-    pub fn remove_appimage(alloc: std.mem.Allocator, name: []const u8, remove_config: bool) ![]const []const u8 {
-        var argv: std.ArrayListUnmanaged([]const u8) = .empty;
-        errdefer argv.deinit(alloc);
-        try argv.append(alloc, "remove");
-        try argv.append(alloc, "appimage");
-        if (name.len > 0) try argv.append(alloc, name);
-        if (remove_config) try argv.append(alloc, "--remove-config");
-        return argv.toOwnedSlice(alloc);
-    }
-
-    pub fn upgrade_appimages(alloc: std.mem.Allocator) ![]const []const u8 {
-        var argv: std.ArrayListUnmanaged([]const u8) = .empty;
-        errdefer argv.deinit(alloc);
-        try argv.append(alloc, "upgrade");
-        try argv.append(alloc, "appimage");
-        return argv.toOwnedSlice(alloc);
-    }
-
-    pub fn sync_appimage(alloc: std.mem.Allocator, name: ?[]const u8) ![]const []const u8 {
-        var argv: std.ArrayListUnmanaged([]const u8) = .empty;
-        errdefer argv.deinit(alloc);
-        try argv.append(alloc, "sync");
-        try argv.append(alloc, "appimage");
-        if (name) |n| if (n.len > 0) try argv.append(alloc, n);
-        return argv.toOwnedSlice(alloc);
-    }
-
-    pub fn configure_appimage_environment(alloc: std.mem.Allocator, name: []const u8, json: []const u8) ![]const []const u8 {
-        return alloc.dupe([]const u8, &.{ "config", "appimage", name, "--replace-env", json });
-    }
-
-    pub fn configure_appimage(
-        alloc: std.mem.Allocator,
-        name: []const u8,
-        url: []const u8,
-        update_type: UpdateType,
-        prerelease: bool,
-    ) ![]const []const u8 {
-        var argv: std.ArrayListUnmanaged([]const u8) = .empty;
-        errdefer argv.deinit(alloc);
-        try argv.append(alloc, "sync");
-        try argv.append(alloc, "appimage");
-        try argv.append(alloc, name);
-        try argv.append(alloc, url);
-        try argv.append(alloc, update_type.toCliString());
-        if (prerelease) try argv.append(alloc, "--prerelease");
-        return argv.toOwnedSlice(alloc);
-    }
-};
-
 test "operation questions own their data after input is released" {
     const allocator = std.testing.allocator;
     const fixtures = [_][]const u8{
@@ -1310,7 +1086,8 @@ test "operation answers match CLI framing and answer fields" {
         const frame = try encodeAnswer(allocator, "42", answer);
         defer allocator.free(frame);
         try std.testing.expect(std.mem.endsWith(u8, frame, "[/JSON]\n"));
-        const payload = JsonPackFrame.extractPayload(frame).?;
+        var frames = JsonPackFrame.frames(frame);
+        const payload = frames.next().?;
         const json = try JsonPackFrame.decodeBase64(allocator, payload);
         defer allocator.free(json);
         const parsed = try std.json.parseFromSlice(std.json.Value, allocator, json, .{});
@@ -1340,24 +1117,6 @@ test "operation payload decoding accepts framed transaction events" {
     var message = try decodePayload(allocator, payload);
     defer message.deinit();
     try std.testing.expectEqualStrings("TransactionDone", message.value.event.info.event_type);
-}
-
-test "operation builders preserve package operands and source options" {
-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena.deinit();
-    const allocator = arena.allocator();
-    const native = try ShellyCommands.install(allocator, &.{ "extra/editor", "package with spaces" });
-    try std.testing.expectEqualStrings("extra/editor", native[2]);
-    try std.testing.expectEqualStrings("package with spaces", native[3]);
-    const flatpak = try ShellyCommands.installFlatpakEx(allocator, "org.example.Runtime", .user, "flathub", true);
-    try std.testing.expectEqualStrings("--user", flatpak[3]);
-    try std.testing.expectEqualStrings("--remote", flatpak[4]);
-    try std.testing.expectEqualStrings("--runtime", flatpak[6]);
-    const environment = try ShellyCommands.configure_appimage_environment(allocator, "Editor", "{\"KEY\":\" a=b \"}");
-    try std.testing.expectEqualStrings("{\"KEY\":\" a=b \"}", environment[4]);
-    const source = try ShellyCommands.configure_appimage(allocator, "Editor", "owner/repo", .GitHub, true);
-    try std.testing.expectEqualStrings("GitHub", source[4]);
-    try std.testing.expectEqualStrings("--prerelease", source[5]);
 }
 
 test "operation worker owns inputs and joins on launch failure" {
@@ -1440,14 +1199,14 @@ test "operation progress retains only bounded recent messages" {
 test "operation rejects removal from unsupported sources before launching" {
     var env: std.process.Environ.Map = .init(std.testing.allocator);
     defer env.deinit();
-    var result = elevatedInstall(undefined, std.testing.allocator, .{
+    var result = runInstall(undefined, std.testing.allocator, .{
         .action = .remove,
         .shelly_bin = "unused",
         .environ_map = &env,
         .name = "test",
         .backend = "appimage",
         .password = "",
-    });
+    }, null);
     defer result.deinit(std.testing.allocator);
     try std.testing.expect(result.failed);
     try std.testing.expectEqualStrings("Removal currently supports system, AUR and Flatpak packages only.", result.error_detail);

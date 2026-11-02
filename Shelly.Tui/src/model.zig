@@ -5,7 +5,6 @@ const updates_model = @import("models/updates_model.zig");
 const settings_model = @import("models/settings_model.zig");
 const operation_model = @import("models/operation_model.zig");
 const std = @import("std");
-const Border = @import("views/border.zig");
 const commands = @import("commands.zig");
 const help_view = @import("views/help_view.zig");
 const footer_view = @import("views/footer_view.zig");
@@ -1024,52 +1023,6 @@ pub const Model = struct {
             .upgrade => updates_model.updatesView(self).statusText(arena),
             .flatpak => flatpak_model.flatpakView(self).statusText(arena),
             .settings => "Settings — source preferences are saved for future sessions",
-        };
-    }
-
-    pub fn drawDetailsOverlay(self: *const Model, ctx: vxfw.DrawContext, arena: Allocator, max: vxfw.Size, overlay: Overlay) Allocator.Error!?vxfw.SubSurface {
-        var title: []const u8 = undefined;
-        var body: []const u8 = undefined;
-        switch (overlay) {
-            .package => |pkg| {
-                title = try std.fmt.allocPrint(arena, "{s} {s}", .{ pkg.Name, pkg.Version });
-                body = try packages_view.detailsText(arena, pkg);
-            },
-            .aur => |pkg| {
-                title = try std.fmt.allocPrint(arena, "{s} {s} (AUR)", .{ pkg.Name, pkg.Version });
-                body = try aur_view.detailsText(arena, pkg);
-            },
-            .flatpak => |row| {
-                title = try std.fmt.allocPrint(arena, "{f} (Flatpak)", .{diagnostics.safe(row.title())});
-                body = try row.details(arena);
-            },
-            .sudo, .pkgbuild, .flatpak_install => return null,
-        }
-        if (self.operation_state.install_job) |job| {
-            body = try std.fmt.allocPrint(arena, "{s}\n\n{s} {s}…", .{ body, job.request.action.ongoing(), job.request.name });
-        }
-
-        const box_width = @min(max.width -| 2, @as(u16, 80));
-        const box_height = @min(max.height -| 2, @as(u16, 28));
-        if (box_width < 20 or box_height < 6) return null;
-
-        var text: vxfw.Text = .{ .text = body };
-        const labels = [_]Border.BorderLabel{.{ .text = title, .alignment = .top_left }};
-        var border: Border = .{
-            .child = text.widget(),
-            .labels = &labels,
-        };
-        const surface = try border.widget().draw(ctx.withConstraints(
-            .{ .width = 0, .height = 0 },
-            .{ .width = box_width, .height = box_height },
-        ));
-        return .{
-            .origin = .{
-                .row = @divFloor(@as(i17, max.height) - @as(i17, surface.size.height), 2),
-                .col = @divFloor(@as(i17, max.width) - @as(i17, surface.size.width), 2),
-            },
-            .surface = surface,
-            .z_index = 2,
         };
     }
 };

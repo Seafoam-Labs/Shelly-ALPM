@@ -380,19 +380,6 @@ pub fn openPackageBatchPrompt(self: *Model, action: shelly_operation.Action, bac
     self.overlay = .{ .sudo = prompt };
 }
 
-pub fn openPackagePrompt(self: *Model, name: []const u8, backend: OperationBackend, action: shelly_operation.Action) !void {
-    if (self.operation_state.install_job != null) return;
-    const prompt = try self.gpa.create(SudoPrompt);
-    errdefer self.gpa.destroy(prompt);
-    prompt.* = .{
-        .name = try self.gpa.dupe(u8, name),
-        .backend = backend,
-        .action = action,
-        .password = .empty,
-    };
-    self.overlay = .{ .sudo = prompt };
-}
-
 pub fn closeOverlay(self: *Model) void {
     if (self.overlay) |overlay| {
         switch (overlay) {
@@ -884,8 +871,8 @@ test "cancelling native and AUR authentication or declining a review clears both
     for ([_]OperationBackend{ .standard, .aur }) |backend| {
         const model = try Model.init(std.testing.allocator);
         defer model.deinit();
-        var packages = [_]Package{.{ .Name = "native" }};
-        var aur = [_]AurPackage{.{ .Name = "aur" }};
+        var packages = [_]Package{.{ .Name = "native", .Installed = true }};
+        var aur = [_]AurPackage{.{ .Name = "aur", .Installed = true }};
         model.packages_state.packages = &packages;
         model.aur_state.aur_packages = &aur;
         model.settings_state.settings.aur_enabled = true;
@@ -894,7 +881,7 @@ test "cancelling native and AUR authentication or declining a review clears both
         try aur_model.rebuildAurFilter(model);
         try model.packages_state.selected_packages.append(std.testing.allocator, "native");
         try aur_model.toggleAurSelection(model);
-        try openPackagePrompt(model, "target", backend, .remove);
+        if (backend == .standard) try packages_model.openNativePrompt(model, .remove) else try aur_model.openAurPrompt(model, .remove);
         var ctx: vxfw.EventContext = .{ .io = std.testing.io, .alloc = std.testing.allocator, .cmds = .empty };
         defer ctx.cmds.deinit(std.testing.allocator);
         try Model.typeErasedCaptureHandler(model, &ctx, .{ .key_press = commands.bindings.cancel });

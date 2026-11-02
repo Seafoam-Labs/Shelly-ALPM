@@ -22,7 +22,7 @@ pub fn draw(ctx: vxfw.DrawContext, context: commands.Context, status: ?[]const u
     }
     for (try commands.entries(ctx.arena, context)) |entry| {
         // Resizing stays discoverable in F1 help without crowding the footer.
-        if (entry.id == .narrow_view or entry.id == .widen_view or entry.id == .narrow_view_coarse or entry.id == .widen_view_coarse) continue;
+        if (entry.id == .narrow_view or entry.id == .widen_view) continue;
         if ((entry.id == .mark and context.mode != .answers) or (context.mode == .search and (entry.id == .install or entry.id == .remove))) continue;
         if (entry.id == .next) continue;
         if (entry.id == .save_settings and context.mode == .settings and context.settings_save_selected) continue;

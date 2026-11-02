@@ -301,3 +301,9 @@ Finish the baseline UI/UX across the remaining pages, starting with Flatpak, bef
 - Package, AUR, and Flatpak list/details widths share a session-local split: Ctrl+Left narrows the list and Ctrl+Right widens it in five percentage-point steps. Both panes retain minimum widths; small terminals keep the single-pane fallback. Flatpak screenshots and image controls hide below a details interior of 36 columns or 14 rows, restoring metadata space. Authentication/operation panel sizing is unchanged.
 
 - Resize requests stop at effective terminal-dependent pane limits without scheduling unchanged layouts. Tiny viewport and zero-width detail guards avoid drawing unusable content. Regression coverage includes repeated minimum requests, narrow single-pane fallbacks, out-of-range proportions, and populated package details.
+
+### Dead-code cleanup (2026-11-01)
+
+- Removed the unimported root-level CLI copy, unused `ShellyCommands` builders, template exports, legacy floating details renderer, unused query wrappers and static shortcut hints. Transactions use `operationArgv`; active queries remain in `services/shelly_cli.zig`.
+- Removed obsolete frame decoding/failure aggregation APIs, dynamic operation-height measuring, and implicit-action review/prompt wrappers. Existing regressions now use the live frame iterator, explicit review actions, fixed operation panel, and page prompt entry points. Deleted tests apply only to retired behavior; active transaction, review, ownership, selection, and cancellation coverage remains.
+- Preserved CLI wire data definitions and their decoding tests. No GTK changes or package operations are part of this cleanup.

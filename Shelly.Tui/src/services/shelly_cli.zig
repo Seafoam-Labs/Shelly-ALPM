@@ -6,21 +6,11 @@ const AurPackage = @import("../models/packages.zig").AurPackage;
 const PkgBuild = @import("../models/pkgbuild.zig").PkgBuild;
 const Remote = @import("../models/flatpak.zig").Remote;
 const Flatpak = @import("../models/flatpak.zig").Flatpak;
-const AppImage = @import("../models/appimage.zig").AppImage;
-const AppImageUpdate = @import("../models/appimage.zig").AppImageUpdate;
 const AppstreamApp = @import("../models/flatpak.zig").AppstreamApp;
-const FlatpakSearchResponse = @import("../models/flatpak.zig").FlatpakSearchResponse;
 const CheckUpdates = @import("../models/sync.zig").CheckUpdates;
 const JsonPackFrame = @import("ui_decode.zig").JsonPackFrame;
 const RunResult = std.process.RunResult;
 const runtime = @import("../runtime.zig");
-
-fn containsPackageName(packages: []const Package, name: []const u8) bool {
-    for (packages) |pkg| {
-        if (std.mem.eql(u8, pkg.Name, name)) return true;
-    }
-    return false;
-}
 
 // Query responses may include informational frames before or after their data.
 // The caller owns the returned parse, independently of the process output.
@@ -79,10 +69,8 @@ pub const ShellyCli = struct {
         return self.runInner(args, false);
     }
 
-    /// Mutating operations report failures silently because debug output
-    /// would corrupt the alternate screen. `std.process.run` already gives
-    /// the child an ignored stdin, so an unexpected prompt fails fast
-    /// instead of hanging the TUI.
+    /// Query failures are returned to the caller without printing over the TUI.
+    /// An ignored stdin prevents unexpected CLI prompts from hanging the UI.
     fn runSilently(self: ShellyCli, args: []const []const u8) !RunResult {
         return self.runInner(args, true);
     }
@@ -131,17 +119,6 @@ pub const ShellyCli = struct {
         return decodeQuery([]Package, self.allocator, result.stdout, true);
     }
 
-    pub fn isPackageInstalled(self: ShellyCli, name: []const u8) !bool {
-        const result = try self.run(&.{ "-Ssi", name });
-        defer self.allocator.free(result.stdout);
-        defer self.allocator.free(result.stderr);
-
-        const parsed = try decodeQuery([]Package, self.allocator, result.stdout, true);
-        defer parsed.deinit();
-
-        return containsPackageName(parsed.value, name);
-    }
-
     /// Read-only usability probe through the CLI's backend loader. An empty
     /// remote list succeeds; missing/incompatible backends or query errors fail.
     pub fn probe_flatpak(self: ShellyCli) !void {
@@ -150,14 +127,6 @@ pub const ShellyCli = struct {
         defer self.allocator.free(result.stderr);
         const remotes = try decodeQuery([]Remote, self.allocator, result.stdout, false);
         defer remotes.deinit();
-    }
-
-    pub fn get_remotes(self: ShellyCli) !std.json.Parsed([]Remote) {
-        const result = try self.run(&.{ "list", "flatpak", "remote" });
-        defer self.allocator.free(result.stdout);
-        defer self.allocator.free(result.stderr);
-
-        return decodeQuery([]Remote, self.allocator, result.stdout, false);
     }
 
     pub fn get_installed_flatpaks(self: ShellyCli) !std.json.Parsed([]Flatpak) {
@@ -173,32 +142,6 @@ pub const ShellyCli = struct {
         defer self.allocator.free(result.stderr);
 
         return decodeQuery([]AppstreamApp, self.allocator, result.stdout, false);
-    }
-
-    pub fn get_flatpak_remote_info(self: ShellyCli, id: []const u8) !std.json.Parsed(FlatpakSearchResponse) {
-        const result = try self.run(&.{ "search", "flatpak", id });
-        defer self.allocator.free(result.stdout);
-        defer self.allocator.free(result.stderr);
-
-        return decodeQuery(FlatpakSearchResponse, self.allocator, result.stdout, false);
-    }
-
-    pub fn get_package_details(self: ShellyCli, name: []const u8) !std.json.Parsed(Package) {
-        const result = try self.run(&.{ "search", "standard", name, "--detail", "--installed" });
-        defer self.allocator.free(result.stdout);
-        defer self.allocator.free(result.stderr);
-        return decodeQuery(Package, self.allocator, result.stdout, false);
-    }
-
-    /// Searches system packages via the CLI. The caller owns the parsed result.
-    pub fn search_standard(self: ShellyCli, query: []const u8) !std.json.Parsed([]Package) {
-        const result = try self.run(&.{
-            "search", "standard", "--available", "--installed", query,
-        });
-        defer self.allocator.free(result.stdout);
-        defer self.allocator.free(result.stderr);
-
-        return decodeQuery([]Package, self.allocator, result.stdout, true);
     }
 
     /// Searches the AUR via the CLI. The caller owns the parsed result.
@@ -253,40 +196,6 @@ pub const ShellyCli = struct {
         return decodeQuery([]PkgBuild, self.allocator, result.stdout, false);
     }
 
-    pub fn search_flatpak(self: ShellyCli, query: []const u8) !std.json.Parsed(FlatpakSearchResponse) {
-        const result = try self.run(&.{ "search", "flatpak", query, "--limit", "50" });
-        defer self.allocator.free(result.stdout);
-        defer self.allocator.free(result.stderr);
-
-        return decodeQuery(FlatpakSearchResponse, self.allocator, result.stdout, false);
-    }
-
-    pub fn get_appimages(self: ShellyCli) !std.json.Parsed([]AppImage) {
-        const result = try self.run(&.{ "list", "appimage" });
-        defer self.allocator.free(result.stdout);
-        defer self.allocator.free(result.stderr);
-
-        return decodeQuery([]AppImage, self.allocator, result.stdout, false);
-    }
-
-    pub fn get_appimage_updates(self: ShellyCli) !std.json.Parsed([]AppImageUpdate) {
-        const result = try self.run(&.{ "list-updates", "appimage" });
-        defer self.allocator.free(result.stdout);
-        defer self.allocator.free(result.stderr);
-
-        return decodeQuery([]AppImageUpdate, self.allocator, result.stdout, false);
-    }
-
-    pub const InstallBackend = enum { standard, aur, flatpak, appimage };
-
-    /// Installs a package through the CLI without prompting. Fails with
-    /// error.CommandFailed when the CLI exits non-zero.
-    pub fn install_package(self: ShellyCli, backend: InstallBackend, name: []const u8) !void {
-        const result = try self.runSilently(&.{ "install", @tagName(backend), name, "--no-confirm" });
-        defer self.allocator.free(result.stdout);
-        defer self.allocator.free(result.stderr);
-    }
-
     fn sourceUpdates(self: ShellyCli, comptime T: type, source: []const u8) !std.json.Parsed([]T) {
         const result = try self.runSilently(&.{ "list-updates", source });
         defer self.allocator.free(result.stdout);
@@ -310,14 +219,6 @@ pub const ShellyCli = struct {
         defer self.allocator.free(json);
         return std.json.parseFromSlice(CheckUpdates, self.allocator, json, .{ .allocate = .alloc_always });
     }
-
-    pub fn check_updates(self: ShellyCli, show_hidden: bool) !std.json.Parsed(CheckUpdates) {
-        const result = try self.runSilently(if (show_hidden) &.{ "-P", "--show-hidden" } else &.{"-P"});
-        defer self.allocator.free(result.stdout);
-        defer self.allocator.free(result.stderr);
-
-        return decodeQuery(CheckUpdates, self.allocator, result.stdout, false);
-    }
 };
 
 test "get_packages" {
@@ -336,7 +237,7 @@ test "get_packages" {
     std.debug.print("{s} {s}\n", .{ parsed.value[0].Name, parsed.value[0].Version });
 }
 
-test "get_remotes" {
+test "probe_flatpak" {
     // Live CLI smoke test: requires runtime.setup and configured local sources.
     if (runtime.data_home.len == 0) return error.SkipZigTest;
     var threaded: std.Io.Threaded = .init(std.testing.allocator, .{});
@@ -344,12 +245,7 @@ test "get_remotes" {
 
     const cli: ShellyCli = .{ .allocator = std.testing.allocator, .io = threaded.io() };
 
-    const parsed = try cli.get_remotes();
-
-    defer parsed.deinit();
-
-    try std.testing.expect(parsed.value.len > 0);
-    std.debug.print("{s} {t}\n", .{ parsed.value[0].Name, parsed.value[0].Scope });
+    try cli.probe_flatpak();
 }
 
 test "get_flatpaks" {
@@ -389,8 +285,6 @@ test "query decoding owns package strings and handles informational frames" {
     allocator.free(output);
     defer parsed.deinit();
     try std.testing.expectEqualStrings("editor", parsed.value[0].Name);
-    try std.testing.expect(containsPackageName(parsed.value, "editor"));
-    try std.testing.expect(!containsPackageName(parsed.value, "edit"));
 }
 
 test "query decoding distinguishes empty native search from missing data" {

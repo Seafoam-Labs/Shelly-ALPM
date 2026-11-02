@@ -94,11 +94,6 @@ pub const Document = struct {
         return finish(&arena, &lines);
     }
 
-    /// Builds the actual CLI operation question, never a fetched browsing preview.
-    pub fn fromQuestion(allocator: std.mem.Allocator, question: operation.Question) !Document {
-        return fromQuestionForAction(allocator, question, .upgrade);
-    }
-
     pub fn fromQuestionForAction(allocator: std.mem.Allocator, question: operation.Question, action: operation.Action) !Document {
         var arena = std.heap.ArenaAllocator.init(allocator);
         errdefer arena.deinit();
@@ -511,7 +506,7 @@ test "preview and operation review share highlighting without changing source or
     defer preview.deinit();
     try std.testing.expectEqual(@as(usize, 3), preview.lines.len);
     try std.testing.expect(std.mem.endsWith(u8, preview.lines[0], "pkgname=demo"));
-    var review = try Document.fromQuestion(std.testing.allocator, .{ .pkgbuild = .{
+    var review = try Document.fromQuestionForAction(std.testing.allocator, .{ .pkgbuild = .{
         .question_id = "review-1",
         .package_name = "demo",
         .old_pkgbuild = "pkgver=1",
@@ -519,7 +514,7 @@ test "preview and operation review share highlighting without changing source or
         .diff_lines = &.{ "--- old/PKGBUILD", "+++ new/PKGBUILD", "@@ -1 +1 @@", "-pkgver=1", "+pkgver=2" },
         .warnings = &.{},
         .source_files = &.{.{ .name = "demo.install", .content = "post_install() { echo ok; }" }},
-    } });
+    } }, .upgrade);
     defer review.deinit();
     var addition = false;
     var deletion = false;
@@ -582,7 +577,7 @@ test "wrapped diff continuations retain addition and removal colors" {
     vxfw.DrawContext.init(.unicode);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    var document = try Document.fromQuestion(std.testing.allocator, .{ .pkgbuild = .{
+    var document = try Document.fromQuestionForAction(std.testing.allocator, .{ .pkgbuild = .{
         .question_id = "diff",
         .package_name = "demo",
         .old_pkgbuild = "pkgver=1",
@@ -590,7 +585,7 @@ test "wrapped diff continuations retain addition and removal colors" {
         .diff_lines = &.{ "+a long addition that wraps across several rows", "-a long removal that wraps across several rows" },
         .warnings = &.{},
         .source_files = &.{},
-    } });
+    } }, .upgrade);
     defer document.deinit();
     var checked: usize = 0;
     for (document.rows, 0..) |item, index| {
@@ -616,7 +611,7 @@ test "PKGBUILD review selects diff or full source without repeating revisions" {
         .warnings = &.{},
         .source_files = &.{},
     } };
-    var diff = try Document.fromQuestion(std.testing.allocator, review);
+    var diff = try Document.fromQuestionForAction(std.testing.allocator, review, .upgrade);
     defer diff.deinit();
     const diff_text = try std.mem.join(std.testing.allocator, "\n", diff.lines);
     defer std.testing.allocator.free(diff_text);
@@ -628,7 +623,7 @@ test "PKGBUILD review selects diff or full source without repeating revisions" {
     try std.testing.expectEqual(@as(usize, 3), install.lines.len);
     try std.testing.expect(std.mem.endsWith(u8, install.lines[2], "new_only=2"));
     review.pkgbuild.old_pkgbuild = "";
-    var fresh = try Document.fromQuestion(std.testing.allocator, review);
+    var fresh = try Document.fromQuestionForAction(std.testing.allocator, review, .upgrade);
     defer fresh.deinit();
     const fresh_text = try std.mem.join(std.testing.allocator, "\n", fresh.lines);
     defer std.testing.allocator.free(fresh_text);
@@ -644,7 +639,7 @@ test "PKGBUILD review selects diff or full source without repeating revisions" {
     // Missing diff data must still allow inspection of the proposed source.
     review.pkgbuild.old_pkgbuild = "old_only=1";
     review.pkgbuild.diff_lines = &.{};
-    var fallback = try Document.fromQuestion(std.testing.allocator, review);
+    var fallback = try Document.fromQuestionForAction(std.testing.allocator, review, .upgrade);
     defer fallback.deinit();
     const fallback_text = try std.mem.join(std.testing.allocator, "\n", fallback.lines);
     defer std.testing.allocator.free(fallback_text);
@@ -657,7 +652,7 @@ test "transaction review groups dependencies without source code gutters or wire
         \\{"$kind":"q.transaction","QuestionId":"1","QuestionText":"Proceed with AUR package installation?","Action":"install","Packages":[{"Name":"foot-git","Version":"1.2","Repository":"AUR","Source":"aur","Role":"requested"},{"Name":"scdoc","Repository":"extra","Source":"repository","Role":"build_dependency"},{"Name":"wayland-protocols","Repository":"extra","Source":"repository","Role":"build_dependency"},{"Name":"check","Source":"repository","Role":"check_dependency"},{"Name":"future","Source":"custom","Role":"future_role"}]}
     );
     defer message.deinit();
-    var document = try Document.fromQuestion(std.testing.allocator, message.value.question);
+    var document = try Document.fromQuestionForAction(std.testing.allocator, message.value.question, .upgrade);
     defer document.deinit();
     const text = try std.mem.join(std.testing.allocator, "\n", document.lines);
     defer std.testing.allocator.free(text);
@@ -685,7 +680,7 @@ test "dependency choices preserve answer indices without source line numbers" {
         .{ .select_one = .{ .question_id = "provider", .prompt = "Select a provider", .options = &options } },
     };
     for (questions) |question| {
-        var document = try Document.fromQuestion(std.testing.allocator, question);
+        var document = try Document.fromQuestionForAction(std.testing.allocator, question, .upgrade);
         defer document.deinit();
         const text = try std.mem.join(std.testing.allocator, "\n", document.lines);
         defer std.testing.allocator.free(text);

@@ -7,17 +7,6 @@ pub const UpdateType = enum(u8) {
     GitLab = 3,
     Codeberg = 4,
     Forgejo = 5,
-
-    pub fn toCliString(self: UpdateType) []const u8 {
-        return switch (self) {
-            .None => "None",
-            .StaticUrl => "StaticUrl",
-            .GitHub => "GitHub",
-            .GitLab => "GitLab",
-            .Codeberg => "Codeberg",
-            .Forgejo => "Forgejo",
-        };
-    }
 };
 
 pub const EnvironmentVariable = struct {
@@ -98,15 +87,6 @@ test "AppImageUpdate decodes from wire-format JSON" {
     try std.testing.expectEqualStrings("Blender", parsed.value.Name);
     try std.testing.expectEqualStrings("4.3.0", parsed.value.Version);
     try std.testing.expect(parsed.value.IsUpdateAvailable);
-}
-
-test "UpdateType.toCliString matches the spelling accepted by the CLI" {
-    try std.testing.expectEqualStrings("None", UpdateType.None.toCliString());
-    try std.testing.expectEqualStrings("StaticUrl", UpdateType.StaticUrl.toCliString());
-    try std.testing.expectEqualStrings("GitHub", UpdateType.GitHub.toCliString());
-    try std.testing.expectEqualStrings("GitLab", UpdateType.GitLab.toCliString());
-    try std.testing.expectEqualStrings("Codeberg", UpdateType.Codeberg.toCliString());
-    try std.testing.expectEqualStrings("Forgejo", UpdateType.Forgejo.toCliString());
 }
 
 test "AppImage decodes saved environment overrides from CLI JSON" {

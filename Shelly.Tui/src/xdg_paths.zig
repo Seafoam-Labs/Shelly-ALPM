@@ -14,20 +14,6 @@ pub const xdg_paths = struct {
         const home: []const u8 = env.get("HOME") orelse return error.HomeNotSet;
         return std.fs.path.join(allocator, &.{ home, ".config" });
     }
-
-    /// `XDG_CACHE_HOME` or `$HOME/.cache`.
-    pub fn xdgCacheHome(allocator: std.mem.Allocator, env: *const std.process.Environ.Map) ![]u8 {
-        if (env.get("XDG_CACHE_HOME")) |v| return try allocator.dupe(u8, v);
-        const home: []const u8 = env.get("HOME") orelse return error.HomeNotSet;
-        return std.fs.path.join(allocator, &.{ home, ".cache" });
-    }
-
-    /// `XDG_STATE_HOME` or `$HOME/.local/state`.
-    pub fn xdgStateHome(allocator: std.mem.Allocator, env: *const std.process.Environ.Map) ![]u8 {
-        if (env.get("XDG_STATE_HOME")) |v| return try allocator.dupe(u8, v);
-        const home: []const u8 = env.get("HOME") orelse return error.HomeNotSet;
-        return std.fs.path.join(allocator, &.{ home, ".local", "state" });
-    }
 };
 
 test "xdgConfigHome honors XDG_CONFIG_HOME" {

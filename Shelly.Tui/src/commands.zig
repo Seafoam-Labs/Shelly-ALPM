@@ -43,8 +43,6 @@ pub const Id = enum {
     half_page_down,
     narrow_view,
     widen_view,
-    narrow_view_coarse,
-    widen_view_coarse,
 };
 
 pub const Bindings = struct {
@@ -88,8 +86,6 @@ pub const Bindings = struct {
     half_page_down: vaxis.Key = .{ .codepoint = 'd', .mods = .{ .ctrl = true } },
     narrow_view: vaxis.Key = .{ .codepoint = vaxis.Key.left, .mods = .{ .ctrl = true } },
     widen_view: vaxis.Key = .{ .codepoint = vaxis.Key.right, .mods = .{ .ctrl = true } },
-    narrow_view_coarse: vaxis.Key = .{ .codepoint = vaxis.Key.left, .mods = .{ .ctrl = true, .alt = true } },
-    widen_view_coarse: vaxis.Key = .{ .codepoint = vaxis.Key.right, .mods = .{ .ctrl = true, .alt = true } },
 };
 
 /// Live bindings shared by dispatch and help/footer rendering. Settings will
@@ -205,16 +201,6 @@ pub fn refreshes(key: vaxis.Key) bool {
     return matches(key, .refresh);
 }
 
-pub fn detailsHint(installed: bool) []const u8 {
-    return if (installed)
-        "I: install/reinstall    R: remove    Q: close    Esc: quit"
-    else
-        "I: install    Q: close    Esc: quit";
-}
-
-pub const result_hint = "Enter/Q: close    Esc: quit";
-pub const authentication_hint = "Enter: confirm and run with sudo    Esc: quit";
-
 pub const Updates = enum { refresh, upgrade_all, upgrade_system, upgrade_aur, upgrade_flatpak };
 pub fn updates(key: vaxis.Key) ?Updates {
     if (refreshes(key)) return .refresh;
@@ -224,20 +210,10 @@ pub fn updates(key: vaxis.Key) ?Updates {
     if (matches(key, .upgrade_flatpak)) return .upgrade_flatpak;
     return null;
 }
-pub const updates_hint = "G: all    U: system    A: AUR    R: refresh";
-pub const flatpak_updates_hint = "G: all    U: system    A: AUR    F: Flatpak    R: refresh";
 
 pub fn closesPreview(key: vaxis.Key) bool {
     return matches(key, .close);
 }
-
-pub fn aurDetailsHint(installed: bool) []const u8 {
-    return if (installed)
-        "P: PKGBUILD    I: reinstall    R: remove    Q: close    Esc: quit"
-    else
-        "P: PKGBUILD    I: install    Q: close    Esc: quit";
-}
-pub const preview_hint = "↑↓/←→: scroll  Ctrl+D/U: page  R: retry  Q: back  Esc: quit";
 
 pub const Review = enum { approve, decline };
 pub fn review(key: vaxis.Key) ?Review {
@@ -245,8 +221,6 @@ pub fn review(key: vaxis.Key) ?Review {
     if (matches(key, .decline) or matches(key, .close)) return .decline;
     return null;
 }
-pub const review_hint = "↑↓/←→: scroll  Y: approve  N/Q: decline  Esc: quit";
-pub const choice_hint = "Enter indices, comma-separated for multiple choices; Enter: send";
 
 pub fn togglesInstalled(key: vaxis.Key) bool {
     return matches(key, .filter);
@@ -256,9 +230,6 @@ pub fn refreshesList(key: vaxis.Key) bool {
     return matches(key, .refresh_list);
 }
 
-pub const confirmation_hint = "Enter: confirm and run    Q: back    Esc: quit";
-pub const flatpak_catalog_hint = "I: install    Q: close    Esc: quit";
-pub const flatpak_installed_hint = "R: remove    Q: close    Esc: quit";
 pub const Choice = enum { previous, next, confirm, close };
 pub fn choice(key: vaxis.Key) ?Choice {
     if (matches(key, .previous)) return .previous;
@@ -267,7 +238,6 @@ pub fn choice(key: vaxis.Key) ?Choice {
     if (matches(key, .close)) return .close;
     return null;
 }
-pub const flatpak_choice_hint = "↑↓: select remote/scope    Enter: confirm    Q: back";
 
 pub const SettingsAction = enum { previous, next, toggle, save, reload };
 pub fn settings(key: vaxis.Key) ?SettingsAction {
@@ -278,7 +248,6 @@ pub fn settings(key: vaxis.Key) ?SettingsAction {
     if (matches(key, .refresh)) return .reload;
     return null;
 }
-pub const settings_hint = "↑↓: select    Enter/Space: toggle    Ctrl+S: save    R: reload    Esc: quit";
 
 /// Scroll review/output without sending navigation keys to password input.
 pub fn scrollsOperation(key: vaxis.Key) bool {

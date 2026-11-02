@@ -8,14 +8,6 @@ pub const HeaderIcons = enum {
     nerd_font,
     ascii,
 
-    pub fn next(self: HeaderIcons) HeaderIcons {
-        return switch (self) {
-            .none => .nerd_font,
-            .nerd_font => .ascii,
-            .ascii => .none,
-        };
-    }
-
     pub fn title(self: HeaderIcons) []const u8 {
         return switch (self) {
             .none => "Text only",

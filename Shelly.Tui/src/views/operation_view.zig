@@ -29,17 +29,6 @@ pub const View = struct {
         return if (self.state == .entering and self.elevated) 1 else 0;
     }
 
-    /// Measure wrapped content up to the panel limit instead of reserving
-    /// empty rows. Longer output is still handled by the scroll view.
-    pub fn preferredHeight(self: View, ctx: vxfw.DrawContext, limit: u16) Allocator.Error!u16 {
-        const width = ctx.max.size().width -| 2;
-        const reserved = self.inputRows(width) + 2;
-        if (limit <= reserved) return limit;
-        var text: vxfw.Text = .{ .text = try self.body(ctx.arena, width), .softwrap = true };
-        const measured = try text.draw(ctx.withConstraints(.{}, .{ .width = width, .height = limit - reserved }));
-        return @min(limit, @max(@as(u16, 1), measured.size.height) + reserved);
-    }
-
     fn confirmation(self: View, arena: Allocator) Allocator.Error![]const u8 {
         if (self.review.len > 0) return std.mem.trim(u8, self.review, "\r\n");
         const target = if (self.target) |value|
@@ -322,8 +311,7 @@ test "progress panels fit output without duplicated controls" {
         .max = .{ .width = 100, .height = 24 },
         .cell_size = .{ .width = 10, .height = 20 },
     };
-    const height = try view.preferredHeight(ctx, 9);
-    try std.testing.expectEqual(@as(u16, 6), height); // Four content rows and two borders.
+    const height: u16 = 6; // Four content rows and two borders.
     var panel: Panel = .{};
     const surface = try panel.draw(view, ctx.withConstraints(.{}, .{ .width = 100, .height = height }));
     const content = surface.children[0].surface;
@@ -332,9 +320,9 @@ test "progress panels fit output without duplicated controls" {
     try std.testing.expectEqual(@as(u16, 4), output.surface.size.height);
     try std.testing.expect(panel.ready);
     view.progress.percent = 50;
-    try std.testing.expectEqual(@as(u16, 7), try view.preferredHeight(ctx, 9));
+    try std.testing.expectEqual(height, (try panel.draw(view, ctx.withConstraints(.{}, .{ .width = 100, .height = height }))).size.height);
     view.state = .succeeded;
-    try std.testing.expectEqual(@as(u16, 7), try view.preferredHeight(ctx, 9));
+    try std.testing.expectEqual(height, (try panel.draw(view, ctx.withConstraints(.{}, .{ .width = 100, .height = height }))).size.height);
 }
 
 test "output remains scrollable without in-panel shortcut hints" {
