@@ -497,7 +497,7 @@ pub const UpdateManager = struct {
 
         var updated_app = appimage_manager.AppImageManager.mergeMetadata(app_to_update, new_metadata, appimage_ptr.version);
         updated_app.path = current_path;
-        var integration = manager.beginDesktopIntegration(updated_app, current_path, content.source_desktop_path, content.icon_source) catch |err| {
+        var integration = manager.beginDesktopIntegration(updated_app, current_path, content.source_desktop_path, content.icon_source, &.{}) catch |err| {
             std.log.warn("Could not refresh desktop integration for {0f}. {1s} Attempting to restore the previous version.\n\nTechnical details: {2s}", .{ diagnostics.safe(appimage_ptr.name), diagnostics.cause(err), @errorName(err) });
             self.emitStatusFmt(.err, "Could not refresh desktop integration for {0f}. {1s} Attempting to restore the previous version.\n\nTechnical details: {2s}", .{ diagnostics.safe(appimage_ptr.name), diagnostics.cause(err), @errorName(err) });
             manager.writeFileAtomically(backup_path, current_path, "restore") catch {};
@@ -512,6 +512,11 @@ pub const UpdateManager = struct {
             return false;
         };
         try integration.finish();
+        // Entries used to be named after the AppImage file. Refreshing the
+        // integration under the name the application ships must not leave the
+        // old entry behind, or the application appears in menus twice.
+        manager.removeSupersededDesktopEntry(app_to_update.name, integration.desktop_path, &.{current_path}) catch |err|
+            std.log.warn("Could not remove the superseded desktop entry for {0f}. {1s}\n\nTechnical details: {2s}", .{ diagnostics.safe(app_to_update.name), diagnostics.cause(err), @errorName(err) });
         manager.refreshDesktopCachesBestEffort(content.icon_source != null);
         self.emitStatus(.information, "Refreshed desktop integration.");
         std.Io.Dir.cwd().deleteFile(self.io, backup_path) catch |err| {
@@ -2426,6 +2431,18 @@ const newDesktopNameAppImage =
     \\exit 0
 ;
 
+/// An AppImage that ships its entry under the reverse-DNS name the application
+/// uses as its Wayland app ID. See issue #2126.
+const reverseDnsUpdateAppImage =
+    \\#!/bin/sh
+    \\if [ "$1" = "--appimage-extract" ]; then
+    \\  mkdir -p squashfs-root
+    \\  printf '%s\n' '[Desktop Entry]' 'Name=New Name' 'X-AppImage-Version=2.0.0' 'Exec=editor %U' 'Icon=editor' 'Categories=Utility;' > squashfs-root/com.example.newname.desktop
+    \\  exit 0
+    \\fi
+    \\exit 0
+;
+
 const noEmbeddedDesktopAppImage =
     \\#!/bin/sh
     \\if [ "$1" = "--appimage-extract" ]; then
@@ -2813,6 +2830,85 @@ test "update: preserves stable desktop filename when display name changes" {
         count += 1;
     }
     try std.testing.expectEqual(@as(usize, 1), count);
+}
+
+test "update: refreshes the entry to the desktop file name the AppImage ships" {
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    var path_buf: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const len = try tmp.dir.realPath(std.testing.io, &path_buf);
+    const dir_path = try std.testing.allocator.dupe(u8, path_buf[0..len]);
+    defer std.testing.allocator.free(dir_path);
+
+    const install_dir = try std.fs.path.join(std.testing.allocator, &.{ dir_path, "install" });
+    defer std.testing.allocator.free(install_dir);
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, install_dir);
+
+    const data_home = try std.fs.path.join(std.testing.allocator, &.{ dir_path, "data" });
+    defer std.testing.allocator.free(data_home);
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, data_home);
+
+    var environ = std.process.Environ.Map.init(std.testing.allocator);
+    defer environ.deinit();
+    try environ.put("HOME", dir_path);
+    try environ.put("XDG_DATA_HOME", data_home);
+    try environ.put("XDG_CACHE_HOME", dir_path);
+    var environ_block = try environ.createPosixBlock(std.testing.allocator, .{});
+    defer environ_block.deinit(std.testing.allocator);
+    const test_environ: std.process.Environ = .{ .block = environ_block };
+
+    const db_path = try std.fs.path.join(std.testing.allocator, &.{ dir_path, "apps.db" });
+    defer std.testing.allocator.free(db_path);
+
+    const app_name = "Editor";
+    const current_path = try std.fs.path.join(std.testing.allocator, &.{ install_dir, "Editor.AppImage" });
+    defer std.testing.allocator.free(current_path);
+    try writeUpdateFixture(std.testing.io, current_path, "#!/bin/sh\nexit 0\n");
+
+    // An entry from before entries followed the shipped desktop file name.
+    const desktop_dir = try std.fs.path.join(std.testing.allocator, &.{ data_home, "applications" });
+    defer std.testing.allocator.free(desktop_dir);
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, desktop_dir);
+    const legacy_path = try std.fs.path.join(std.testing.allocator, &.{ desktop_dir, "editor.desktop" });
+    defer std.testing.allocator.free(legacy_path);
+    const legacy_entry = try std.fmt.allocPrint(std.testing.allocator, "[Desktop Entry]\nName=Editor\nExec=\"{s}\" %U\n", .{current_path});
+    defer std.testing.allocator.free(legacy_entry);
+    try writeUpdateFixture(std.testing.io, legacy_path, legacy_entry);
+
+    try seedDb(std.testing.allocator, std.testing.io, db_path, &.{
+        .{ .name = app_name, .version = "1.0.0", .desktop_name = "Editor", .path = current_path },
+    });
+
+    const staged_path = try std.fs.path.join(std.testing.allocator, &.{ dir_path, "staged.AppImage" });
+    defer std.testing.allocator.free(staged_path);
+    try writeUpdateFixture(std.testing.io, staged_path, reverseDnsUpdateAppImage);
+
+    var um = makeStagedUpdateManager(std.testing.allocator, install_dir, db_path, staged_path);
+    um.environ = test_environ;
+    var dto = appimage.AppImageUpdate{
+        .name = app_name,
+        .version = "2.0.0",
+        .download_url = "https://example.com/Editor.AppImage",
+        .is_update_available = true,
+    };
+    try std.testing.expect(try um.update(&dto));
+
+    var dir = try std.Io.Dir.cwd().openDir(std.testing.io, desktop_dir, .{ .iterate = true });
+    defer dir.close(std.testing.io);
+    var it = dir.iterate();
+    var names: std.ArrayList([]const u8) = .empty;
+    defer {
+        for (names.items) |name| std.testing.allocator.free(name);
+        names.deinit(std.testing.allocator);
+    }
+    while (try it.next(std.testing.io)) |entry| {
+        if (entry.kind != .file) continue;
+        if (!std.mem.endsWith(u8, entry.name, ".desktop")) continue;
+        try names.append(std.testing.allocator, try std.testing.allocator.dupe(u8, entry.name));
+    }
+    try std.testing.expectEqual(@as(usize, 1), names.items.len);
+    try std.testing.expectEqualStrings("com.example.newname.desktop", names.items[0]);
 }
 
 test "update: preserves Exec= field codes" {
