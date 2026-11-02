@@ -74,7 +74,7 @@ pub const SudoPrompt = struct {
 
     pub fn deinit(self: *SudoPrompt, gpa: Allocator) void {
         // Scrub the password before releasing its memory.
-        @memset(self.password.items, 0);
+        std.crypto.secureZero(u8, self.password.items);
         self.password.deinit(gpa);
         gpa.free(self.name);
         for (self.targets) |target| gpa.free(target);
@@ -489,7 +489,7 @@ pub fn handleSudoKey(self: *Model, prompt: *SudoPrompt, ctx: *vxfw.EventContext,
         .close => closeOverlay(self),
         .confirm => {
             try startElevatedInstall(self, ctx, prompt);
-            @memset(prompt.password.items, 0);
+            std.crypto.secureZero(u8, prompt.password.items);
             prompt.password.clearRetainingCapacity();
             prompt.state = .running;
         },

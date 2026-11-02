@@ -3,6 +3,7 @@ const std = @import("std");
 const diagnostics = @import("diagnostics");
 const JsonPackFrame = @import("ui_decode.zig").JsonPackFrame;
 const flatpak_models = @import("../models/flatpak.zig");
+const askpass = @import("sudo_askpass.zig");
 const Scope = @import("../models/flatpak.zig").InstallLevel;
 
 pub const Backend = enum { standard, aur, flatpak, appimage, all };
@@ -338,7 +339,7 @@ pub const Operation = struct {
         self.request.backend = try alloc.dupe(u8, request.backend);
         if (request.flatpak) |target| self.request.flatpak = try target.clone(alloc);
         self.request.password = try alloc.dupe(u8, request.password);
-        errdefer @memset(@constCast(self.request.password), 0);
+        errdefer std.crypto.secureZero(u8, @constCast(self.request.password));
         self.thread = try std.Thread.spawn(.{}, run, .{self});
         return self;
     }
@@ -348,7 +349,7 @@ pub const Operation = struct {
             var threaded: std.Io.Threaded = .init(std.heap.page_allocator, .{});
             defer threaded.deinit();
             self.result = runInstall(threaded.io(), std.heap.page_allocator, self.request, self);
-            @memset(@constCast(self.request.password), 0);
+            std.crypto.secureZero(u8, @constCast(self.request.password));
         }
         self.done.store(true, .release);
     }
@@ -414,7 +415,7 @@ fn operationArgv(alloc: std.mem.Allocator, request: OperationRequest) ![][]const
     var argv: std.ArrayList([]const u8) = .empty;
     errdefer argv.deinit(alloc);
     if (elevated(request)) {
-        if (interactive(request)) try argv.appendSlice(alloc, &.{ request.sudo_bin, "-n" }) else try argv.appendSlice(alloc, &.{ request.sudo_bin, "-S", "-p", "" });
+        if (interactive(request)) try argv.appendSlice(alloc, &.{ request.sudo_bin, "-A" }) else try argv.appendSlice(alloc, &.{ request.sudo_bin, "-S", "-p", "" });
     }
     try argv.appendSlice(alloc, &.{ request.shelly_bin, @tagName(request.action), request.backend });
     if (request.action != .upgrade) {
@@ -438,32 +439,6 @@ fn operationArgv(alloc: std.mem.Allocator, request: OperationRequest) ![][]const
     return argv.toOwnedSlice(alloc);
 }
 
-/// Authenticate with a password-only stdin.
-fn authorize(io: std.Io, alloc: std.mem.Allocator, request: OperationRequest) !?[]const u8 {
-    var child = try std.process.spawn(io, .{
-        .argv = &.{ request.sudo_bin, "-S", "-p", "", "-v" },
-        .environ_map = request.environ_map,
-        .stdin = .pipe,
-        .stdout = .ignore,
-        .stderr = .pipe,
-    });
-    defer child.kill(io);
-    var write_buffer: [1024]u8 = undefined;
-    var writer = child.stdin.?.writer(io, &write_buffer);
-    writer.interface.writeAll(request.password) catch {};
-    writer.interface.writeByte('\n') catch {};
-    writer.interface.flush() catch {};
-    child.stdin.?.close(io);
-    child.stdin = null;
-    var read_buffer: [4096]u8 = undefined;
-    var reader = child.stderr.?.reader(io, &read_buffer);
-    const stderr = try reader.interface.allocRemaining(alloc, .limited(16 * 1024));
-    defer alloc.free(stderr);
-    const term = try child.wait(io);
-    if (term == .exited and term.exited == 0) return null;
-    return try diagnostics.sanitizeAlloc(alloc, if (stderr.len > 0) stderr else "Authorization failed.");
-}
-
 fn runInstall(io: std.Io, alloc: std.mem.Allocator, request: OperationRequest, operation: ?*Operation) OperationResult {
     var result: OperationResult = .{};
     if (interactive(request) and operation == null) {
@@ -476,18 +451,22 @@ fn runInstall(io: std.Io, alloc: std.mem.Allocator, request: OperationRequest, o
         result.error_detail = alloc.dupe(u8, "Removal currently supports system, AUR and Flatpak packages only.") catch "";
         return result;
     }
+    var broker: ?*askpass.Broker = null;
+    defer if (broker) |auth| auth.deinit();
+    var auth_environment: ?std.process.Environ.Map = null;
+    defer if (auth_environment) |*env| env.deinit();
     if (interactive(request) and elevated(request)) {
-        const failure = authorize(io, alloc, request) catch {
+        broker = askpass.Broker.start(alloc, io, request.password) catch {
             result.failed = true;
-            result.error_detail = alloc.dupe(u8, "Could not validate authorization for the operation.") catch "";
+            result.error_detail = alloc.dupe(u8, "Could not prepare the authorization channel.") catch "";
             return result;
         };
-        if (failure) |detail| {
+        auth_environment = broker.?.environment(request.environ_map) catch {
             result.failed = true;
-            result.error_detail = detail;
+            result.error_detail = alloc.dupe(u8, "Could not prepare the authorization helper.") catch "";
             return result;
-        }
-        if (operation) |op| @memset(@constCast(op.request.password), 0);
+        };
+        if (operation) |op| std.crypto.secureZero(u8, @constCast(op.request.password));
     }
     const argv = operationArgv(alloc, request) catch {
         result.failed = true;
@@ -498,7 +477,7 @@ fn runInstall(io: std.Io, alloc: std.mem.Allocator, request: OperationRequest, o
 
     var child = std.process.spawn(io, .{
         .argv = argv,
-        .environ_map = request.environ_map,
+        .environ_map = if (auth_environment) |*env| env else request.environ_map,
         .stdin = .pipe,
         .stdout = .pipe,
         .stderr = .pipe,
@@ -1263,13 +1242,13 @@ test "operation AUR installs and upgrades require interactive review" {
     };
     const install = try operationArgv(std.testing.allocator, request);
     defer std.testing.allocator.free(install);
-    const expected_install = [_][]const u8{ "sudo", "-n", "shelly", "install", "aur", "demo", "--ui-mode" };
+    const expected_install = [_][]const u8{ "sudo", "-A", "shelly", "install", "aur", "demo", "--ui-mode" };
     try std.testing.expectEqual(expected_install.len, install.len);
     for (expected_install, install) |expected, actual| try std.testing.expectEqualStrings(expected, actual);
     request.action = .upgrade;
     const upgrade = try operationArgv(std.testing.allocator, request);
     defer std.testing.allocator.free(upgrade);
-    const expected_upgrade = [_][]const u8{ "sudo", "-n", "shelly", "upgrade", "aur", "--ui-mode" };
+    const expected_upgrade = [_][]const u8{ "sudo", "-A", "shelly", "upgrade", "aur", "--ui-mode" };
     try std.testing.expectEqual(expected_upgrade.len, upgrade.len);
     for (expected_upgrade, upgrade) |expected, actual| try std.testing.expectEqualStrings(expected, actual);
 }
@@ -1323,7 +1302,7 @@ test "operation Flatpak arguments preserve install scope and keep user and upgra
     const system = try operationArgv(allocator, request);
     defer allocator.free(system);
     try std.testing.expectEqualStrings("sudo", system[0]);
-    try std.testing.expectEqualStrings("-n", system[1]);
+    try std.testing.expectEqualStrings("-A", system[1]);
     for (system) |arg| try std.testing.expect(!std.mem.eql(u8, arg, "--user") and !std.mem.eql(u8, arg, "--no-confirm"));
     request.action = .remove;
     request.flatpak.?.scope = .user;
@@ -1360,13 +1339,13 @@ test "operation combined upgrade is interactive and always excludes AppImages" {
     var request: OperationRequest = .{ .action = .upgrade, .shelly_bin = "shelly", .environ_map = &env, .name = "all supported packages", .backend = "all", .password = "" };
     const included = try operationArgv(allocator, request);
     defer allocator.free(included);
-    const expected = [_][]const u8{ "sudo", "-n", "shelly", "upgrade", "all", "--no-appimage", "--ui-mode" };
+    const expected = [_][]const u8{ "sudo", "-A", "shelly", "upgrade", "all", "--no-appimage", "--ui-mode" };
     try std.testing.expectEqual(expected.len, included.len);
     for (expected, included) |want, actual| try std.testing.expectEqualStrings(want, actual);
     request.include_flatpak = false;
     const excluded = try operationArgv(allocator, request);
     defer allocator.free(excluded);
-    const expected_excluded = [_][]const u8{ "sudo", "-n", "shelly", "upgrade", "all", "--no-appimage", "--no-flatpak", "--ui-mode" };
+    const expected_excluded = [_][]const u8{ "sudo", "-A", "shelly", "upgrade", "all", "--no-appimage", "--no-flatpak", "--ui-mode" };
     try std.testing.expectEqual(expected_excluded.len, excluded.len);
     for (expected_excluded, excluded) |want, actual| try std.testing.expectEqualStrings(want, actual);
     request.action = .install;
@@ -1495,5 +1474,33 @@ test "AUR single and batch removal retain CLI dependency defaults" {
             try std.testing.expect(!std.mem.eql(u8, arg, "--no-cascade"));
             try std.testing.expect(!std.mem.eql(u8, arg, "--cascade"));
         }
+    }
+}
+
+test "single sudo invocation authenticates without cached timestamps and preserves repeated answers" {
+    const fixture = @import("auth_test_options");
+    var env: std.process.Environ.Map = .init(std.testing.allocator);
+    defer env.deinit();
+    try env.put("SHELLY_FIXTURE_HELPER", fixture.helper);
+    for ([_][]const u8{ "always", "always", "cached", "wrong" }) |mode| {
+        try env.put("SHELLY_FIXTURE_AUTH", mode);
+        const wrong = std.mem.eql(u8, mode, "wrong");
+        const op = try Operation.start(.{ .sudo_bin = fixture.fixture, .shelly_bin = "fixture-cli", .environ_map = &env, .name = "fixture", .backend = "aur", .password = if (wrong) "incorrect" else "fixture-secret" });
+        defer op.deinit();
+        var questions: usize = 0;
+        for (0..5000) |_| {
+            if (op.poll() != null) break;
+            if (op.takeQuestion(std.testing.io)) |value| {
+                var message = value;
+                defer message.deinit();
+                questions += 1;
+                try op.sendAnswer(std.testing.io, questionId(message.value.question), .{ .yes_no = true });
+            }
+            try std.testing.io.sleep(.fromMilliseconds(1), .awake);
+        }
+        const result = op.poll() orelse return error.FixtureTimedOut;
+        try std.testing.expectEqual(wrong, result.failed);
+        try std.testing.expectEqual(@as(usize, if (wrong) 0 else 2), questions);
+        try std.testing.expect(std.mem.indexOf(u8, result.error_detail, "fixture-secret") == null);
     }
 }

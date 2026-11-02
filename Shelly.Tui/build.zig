@@ -138,10 +138,21 @@ pub fn build(b: *std.Build) void {
     run_cmd.addPassthruArgs();
 
     // The library root explicitly registers all first-party test modules.
+    const auth_fixture = b.addExecutable(.{
+        .name = "auth-sudo-fixture",
+        .root_module = b.createModule(.{ .root_source_file = b.path("tests/auth_sudo_fixture.zig"), .target = target, .optimize = optimize }),
+    });
+    const auth_test_options = b.addOptions();
+    auth_test_options.addOptionPath("fixture", auth_fixture.getEmittedBin());
+    auth_test_options.addOptionPath("helper", exe.getEmittedBin());
+    const test_module = b.createModule(.{ .root_source_file = b.path("src/root.zig"), .target = target, .optimize = optimize });
+    var test_imports = mod.import_table.iterator();
+    while (test_imports.next()) |entry| test_module.addImport(entry.key_ptr.*, entry.value_ptr.*);
+    test_module.addOptions("auth_test_options", auth_test_options);
     const mod_tests = b.addTest(.{
         .use_lld = true,
         .use_llvm = true,
-        .root_module = mod,
+        .root_module = test_module,
     });
 
     // A run step that will run the test executable.

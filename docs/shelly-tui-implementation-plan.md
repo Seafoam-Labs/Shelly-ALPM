@@ -343,3 +343,10 @@ Finish the baseline UI/UX across the remaining pages, starting with Flatpak, bef
 
 - Direct tab changes dismiss native/AUR/Flatpak details through `setTab`, preventing stale details shortcuts from acting on the previous page. Authentication, operation reviews and Flatpak source-choice modals block page changes.
 - Mouse regressions cover details-to-Updates followed by Refresh, protected modals, and clicks on tab padding.
+
+### Authentication without cached sudo credentials (2026-11-02)
+
+- Elevated interactive operations now use one `sudo -A` invocation instead of `sudo -v` followed by `sudo -n`. Authentication no longer depends on timestamp caching. Noninteractive native operations retain their existing single `sudo -S` invocation.
+- The TUI executable also serves as askpass before initializing Vaxis. A one-shot broker uses a random private directory (0700) and Unix socket; credentials remain in memory and are securely cleared. Neither arguments, environment values nor temporary files contain passwords. Shelly stdin remains reserved for framed review answers. Cached authentication cancels the unused broker; wrong-password retries cannot retrieve the credential again.
+- Unit tests cover private permissions, endpoint removal, one-shot delivery, unused-broker cancellation and metadata-only child environments. A harmless compiled sudo/CLI fixture invokes the built TUI helper and verifies consecutive uncached operations, cached credentials, wrong passwords and repeated protocol answers. These tests need local Unix sockets but never use real sudo or change packages. Explicit source-module registration remains in `root.zig`; the fixture is built only for the test suite.
+- Real sudo verification with a temporary user-scoped `timestamp_timeout=0` policy remains a manual acceptance check. Fingerprint/YubiKey support is still deferred.
