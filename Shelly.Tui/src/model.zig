@@ -80,6 +80,8 @@ pub const Overlay = union(enum) {
 
 pub const Model = struct {
     gpa: Allocator,
+    list_percent: u8 = 40,
+    viewport_width: ?u16 = null,
 
     active: Tab = .packages,
     visible_tabs: [5]Tab = undefined,
@@ -175,6 +177,13 @@ pub const Model = struct {
                 if (commands.matches(key, .help)) {
                     self.help_open = !self.help_open;
                     return ctx.consumeAndRedraw();
+                }
+                if (!self.help_open and operation_model.operationPrompt(self) == null and self.operation_state.review_prompt == null and (self.active == .packages or self.active == .aur or self.active == .flatpak) and (self.overlay == null or self.overlay.? == .package or self.overlay.? == .aur or self.overlay.? == .flatpak)) {
+                    if (commands.matches(key, .narrow_view) or commands.matches(key, .widen_view)) {
+                        const next_percent = @import("views/split_layout.zig").resize(self.viewport_width, self.list_percent, commands.matches(key, .widen_view)) orelse return ctx.consumeEvent();
+                        self.list_percent = next_percent;
+                        return ctx.consumeAndRedraw();
+                    }
                 }
                 if (self.help_open) {
                     try self.help_panel.handleKey(ctx, key);
@@ -725,6 +734,7 @@ pub const Model = struct {
         const self: *Model = @ptrCast(@alignCast(ptr));
         const arena = ctx.arena;
         const max = ctx.max.size();
+        self.viewport_width = max.width;
 
         // Need room for the tab bar, at least one content row and the
         // status bar
@@ -782,6 +792,9 @@ pub const Model = struct {
 
         const content_start = children.items.len;
         const content_ctx = ctx.withConstraints(.{}, .{ .width = max.width, .height = max.height - content_offset - panel_height });
+        const content_size = content_ctx.max.size();
+        const pane_width = if (max.width >= 64) max.width - @import("views/split_layout.zig").listWidth(max.width, self.list_percent) else max.width;
+        self.flatpak_state.screenshot_layout_available = @import("views/split_layout.zig").imagesFit(pane_width -| 2, content_size.height -| 4);
         self.help_panel.context = self.commandContext();
         if (show_browsing and self.help_open and self.active != .packages and self.active != .aur and self.active != .flatpak) {
             try children.append(arena, .{
@@ -1469,4 +1482,48 @@ test "header labels default to raw text and use Nerd Font glyphs only when enabl
     try std.testing.expect(std.mem.indexOf(u8, icons_bar.rich.text[0].text, "\u{f487}") != null);
     try std.testing.expect(std.mem.indexOf(u8, icons_bar.rich.text[1].text, "\u{f46a}") != null);
     try std.testing.expect(std.mem.indexOf(u8, icons_bar.rich.text[2].text, "\u{f423}") != null);
+}
+
+test "list resizing is shared bounded and does not change settings navigation" {
+    const model = try Model.init(std.testing.allocator);
+    defer model.deinit();
+    var events: vxfw.EventContext = .{ .io = std.testing.io, .alloc = std.testing.allocator, .cmds = .empty };
+    defer events.cmds.deinit(std.testing.allocator);
+    for ([_]Tab{ .packages, .aur, .flatpak }) |tab| {
+        model.active = tab;
+        model.list_percent = 40;
+        try model.captureEvent(&events, .{ .key_press = commands.bindings.widen_view });
+        try std.testing.expectEqual(@as(u8, 45), model.list_percent);
+        try model.captureEvent(&events, .{ .key_press = commands.bindings.narrow_view });
+        try std.testing.expectEqual(@as(u8, 40), model.list_percent);
+    }
+    for (0..100) |_| try model.captureEvent(&events, .{ .key_press = commands.bindings.widen_view });
+    try std.testing.expectEqual(@as(u8, 80), model.list_percent);
+    for (0..100) |_| try model.captureEvent(&events, .{ .key_press = commands.bindings.narrow_view });
+    try std.testing.expectEqual(@as(u8, 20), model.list_percent);
+    model.active = .settings;
+    try model.captureEvent(&events, .{ .key_press = commands.bindings.widen_view });
+    try std.testing.expectEqual(@as(u8, 20), model.list_percent);
+}
+
+test "package pages tolerate tiny terminals and repeated minimum splits" {
+    vxfw.DrawContext.init(.unicode);
+    const model = try Model.init(std.testing.allocator);
+    defer model.deinit();
+    model.packages_state.parsed = try std.json.parseFromSlice([]Package, std.testing.allocator, "[{\"Name\":\"editor\",\"Description\":\"A long description with wide characters 界界 and dependencies\"}]", .{ .allocate = .alloc_always });
+    model.packages_state.packages = model.packages_state.parsed.?.value;
+    try packages_model.rebuildFilter(model);
+    model.overlay = .{ .package = &model.packages_state.packages[0] };
+    for ([_]Tab{ .packages, .aur, .flatpak }) |tab| {
+        model.active = tab;
+        for ([_]vxfw.Size{ .{ .width = 1, .height = 4 }, .{ .width = 2, .height = 8 }, .{ .width = 27, .height = 5 }, .{ .width = 63, .height = 12 }, .{ .width = 64, .height = 24 }, .{ .width = 80, .height = 24 } }) |size| {
+            for ([_]u8{ 0, 20, 40, 80, 255 }) |percent| {
+                model.list_percent = percent;
+                var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+                defer arena.deinit();
+                const surface = try model.widget().draw(.{ .arena = arena.allocator(), .min = .{}, .max = .{ .width = size.width, .height = size.height }, .cell_size = .{ .width = 10, .height = 20 } });
+                try std.testing.expectEqual(size, surface.size);
+            }
+        }
+    }
 }

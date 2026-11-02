@@ -43,6 +43,7 @@ fn hyperlink(field: Field) vaxis.Cell.Hyperlink {
 pub fn draw(widget: vxfw.Widget, ctx: vxfw.DrawContext, fields: []const Field) Allocator.Error!vxfw.Surface {
     const arena = ctx.arena;
     const width = ctx.max.width orelse ctx.min.width;
+    if (width == 0) return .{ .size = .{ .width = 0, .height = 0 }, .widget = widget, .buffer = &.{}, .children = &.{} };
     const columns = width >= 36;
     const label_width: u16 = if (columns) 12 else width;
     const value_col: u16 = if (columns) 14 else 0;

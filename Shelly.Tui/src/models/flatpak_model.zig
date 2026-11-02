@@ -44,6 +44,7 @@ pub const State = struct {
     flatpak_details_cursor: ?u32 = null,
     flatpak_list_active: bool = false,
     screenshots_supported: bool = false,
+    screenshot_layout_available: bool = true,
     screenshot_open: bool = false,
     screenshot_app_id: []const u8 = "",
     screenshot_previous: vxfw.Button,
@@ -269,7 +270,7 @@ pub fn resetScreenshots(self: *Model, cancel_download: bool) void {
 }
 
 pub fn screenshotsEnabled(self: *const Model) bool {
-    return self.settings_state.settings.show_flatpak_screenshots and self.flatpak_state.screenshots_supported;
+    return self.flatpak_state.screenshot_layout_available and self.settings_state.settings.show_flatpak_screenshots and self.flatpak_state.screenshots_supported;
 }
 
 pub fn openScreenshots(self: *Model, ctx: *vxfw.EventContext) !void {
@@ -565,7 +566,7 @@ pub fn flatpakView(self: *Model) flatpak_view.View {
         self.flatpak_state.flatpak_details_scroll.scroll = .{};
         self.flatpak_state.flatpak_details_cursor = self.flatpak_state.flatpak_list.cursor;
     }
-    return .{ .images = screenshotView(self), .category = self.flatpak_state.flatpak_category, .category_button = if (!self.flatpak_state.flatpak_installed_only) &self.flatpak_state.flatpak_category_button else null, .category_list = &self.flatpak_state.flatpak_category_list, .category_open = self.flatpak_state.flatpak_category_open, .details_scroll = &self.flatpak_state.flatpak_details_scroll, .selected = if (self.flatpak_state.flatpak_job == null and self.flatpak_state.flatpak_list.cursor < self.flatpak_state.flatpak_rows.items.len) self.flatpak_state.flatpak_rows.items[self.flatpak_state.flatpak_list.cursor] else null, .list_active = self.flatpak_state.flatpak_list_active, .details_active = self.overlay != null and self.overlay.? == .flatpak, .help = if (self.help_open) &self.help_panel else null, .field = &self.flatpak_state.flatpak_field, .list = &self.flatpak_state.flatpak_list, .installed_only = self.flatpak_state.flatpak_installed_only, .loading = self.flatpak_state.flatpak_job != null, .checking_backend = self.flatpak_state.flatpak_probe_job != null, .backend_failure = self.flatpak_state.flatpak_probe_error, .failure = self.flatpak_state.flatpak_failure, .checked = if (self.flatpak_state.flatpak_installed_only) self.flatpak_state.flatpak_installed != null else self.flatpak_state.flatpak_catalog != null, .count = self.flatpak_state.flatpak_rows.items.len };
+    return .{ .list_percent = self.list_percent, .images = screenshotView(self), .category = self.flatpak_state.flatpak_category, .category_button = if (!self.flatpak_state.flatpak_installed_only) &self.flatpak_state.flatpak_category_button else null, .category_list = &self.flatpak_state.flatpak_category_list, .category_open = self.flatpak_state.flatpak_category_open, .details_scroll = &self.flatpak_state.flatpak_details_scroll, .selected = if (self.flatpak_state.flatpak_job == null and self.flatpak_state.flatpak_list.cursor < self.flatpak_state.flatpak_rows.items.len) self.flatpak_state.flatpak_rows.items[self.flatpak_state.flatpak_list.cursor] else null, .list_active = self.flatpak_state.flatpak_list_active, .details_active = self.overlay != null and self.overlay.? == .flatpak, .help = if (self.help_open) &self.help_panel else null, .field = &self.flatpak_state.flatpak_field, .list = &self.flatpak_state.flatpak_list, .installed_only = self.flatpak_state.flatpak_installed_only, .loading = self.flatpak_state.flatpak_job != null, .checking_backend = self.flatpak_state.flatpak_probe_job != null, .backend_failure = self.flatpak_state.flatpak_probe_error, .failure = self.flatpak_state.flatpak_failure, .checked = if (self.flatpak_state.flatpak_installed_only) self.flatpak_state.flatpak_installed != null else self.flatpak_state.flatpak_catalog != null, .count = self.flatpak_state.flatpak_rows.items.len };
 }
 
 pub fn openFlatpakInstallChoice(self: *Model, app: *const flatpak.AppstreamApp) !void {
@@ -960,6 +961,11 @@ test "inline screenshots require graphics and expose controls only in details" {
     try std.testing.expect(!model.flatpak_state.screenshot_open and model.flatpak_state.screenshot_job == null);
     try std.testing.expect(screenshotView(model) == null);
     model.flatpak_state.screenshots_supported = true;
+    model.flatpak_state.screenshot_layout_available = false;
+    try syncScreenshots(model, &events);
+    try std.testing.expect(!model.flatpak_state.screenshot_open);
+    try std.testing.expect(screenshotView(model) == null);
+    model.flatpak_state.screenshot_layout_available = true;
     try syncScreenshots(model, &events);
     try std.testing.expect(model.flatpak_state.screenshot_open and model.flatpak_state.screenshot_request_after != null);
     try std.testing.expect(model.overlay == null);

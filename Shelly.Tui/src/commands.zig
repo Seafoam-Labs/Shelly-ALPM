@@ -41,6 +41,10 @@ pub const Id = enum {
     page_down,
     half_page_up,
     half_page_down,
+    narrow_view,
+    widen_view,
+    narrow_view_coarse,
+    widen_view_coarse,
 };
 
 pub const Bindings = struct {
@@ -82,6 +86,10 @@ pub const Bindings = struct {
     page_down: vaxis.Key = .{ .codepoint = vaxis.Key.page_down },
     half_page_up: vaxis.Key = .{ .codepoint = 'u', .mods = .{ .ctrl = true } },
     half_page_down: vaxis.Key = .{ .codepoint = 'd', .mods = .{ .ctrl = true } },
+    narrow_view: vaxis.Key = .{ .codepoint = vaxis.Key.left, .mods = .{ .ctrl = true } },
+    widen_view: vaxis.Key = .{ .codepoint = vaxis.Key.right, .mods = .{ .ctrl = true } },
+    narrow_view_coarse: vaxis.Key = .{ .codepoint = vaxis.Key.left, .mods = .{ .ctrl = true, .alt = true } },
+    widen_view_coarse: vaxis.Key = .{ .codepoint = vaxis.Key.right, .mods = .{ .ctrl = true, .alt = true } },
 };
 
 /// Live bindings shared by dispatch and help/footer rendering. Settings will
@@ -314,6 +322,10 @@ fn add(arena: std.mem.Allocator, list: *std.ArrayList(Entry), id: Id, short: []c
 /// operation completes in the background.
 pub fn entries(arena: std.mem.Allocator, context: Context) std.mem.Allocator.Error![]const Entry {
     var list: std.ArrayList(Entry) = .empty;
+    if (context.mode == .search or context.mode == .packages or context.mode == .aur or context.mode == .flatpak or (context.mode == .details and context.split_details)) {
+        try add(arena, &list, .narrow_view, "Narrow list", "Reduce package list width");
+        try add(arena, &list, .widen_view, "Widen list", "Increase package list width");
+    }
     if (context.categories_available) try add(arena, &list, .categories, "Categories", "Choose a Flatpak category; All categories clears the filter");
     if (context.screenshots_navigable) {
         try add(arena, &list, .previous_screenshot, "Previous image", "Show the previous Flatpak screenshot");

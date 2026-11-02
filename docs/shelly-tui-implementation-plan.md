@@ -297,3 +297,7 @@ Finish the baseline UI/UX across the remaining pages, starting with Flatpak, bef
 - Zig 0.17 build succeeds; 163 tests pass and three live CLI tests skip. Checks cover the text default, explicit glyph mode, UTF-8/cell-width layout, narrow headers, mouse targets, persistence, legacy preferences, and explicit Save. A fake-CLI terminal check cycles all modes, verifies edits stay pending until Save, and confirms zero header image uploads without package operations.
 
 - Header styles are shown together as mutually exclusive Text only, Nerd Font, and ASCII radio choices. Up/Down focuses each option; Enter/Space selects it without cycling. Explicit Save applies the choice.
+
+- Package, AUR, and Flatpak list/details widths share a session-local split: Ctrl+Left narrows the list and Ctrl+Right widens it in five percentage-point steps. Both panes retain minimum widths; small terminals keep the single-pane fallback. Flatpak screenshots and image controls hide below a details interior of 36 columns or 14 rows, restoring metadata space. Authentication/operation panel sizing is unchanged.
+
+- Resize requests stop at effective terminal-dependent pane limits without scheduling unchanged layouts. Tiny viewport and zero-width detail guards avoid drawing unusable content. Regression coverage includes repeated minimum requests, narrow single-pane fallbacks, out-of-range proportions, and populated package details.

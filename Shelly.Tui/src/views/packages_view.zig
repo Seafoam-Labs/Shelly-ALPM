@@ -12,6 +12,7 @@ const formatSize = @import("detail_format.zig").formatSize;
 /// Borrows display state and widgets owned by the application.
 /// Query execution and user-action handling remain in Model.
 pub const View = struct {
+    list_percent: u8 = 40,
     installed_only: bool = false,
     text_field: *vxfw.TextField,
     list_view: *vxfw.ListView,
@@ -30,6 +31,7 @@ pub const View = struct {
     pub fn appendContent(self: View, ctx: vxfw.DrawContext, children: *std.ArrayList(vxfw.SubSurface)) Allocator.Error!void {
         const arena = ctx.arena;
         const max = ctx.max.size();
+        if (max.width < 2 or max.height < 3) return;
         const split = max.width >= 64;
         if (!split) if (self.help) |panel| {
             try children.append(arena, .{
@@ -38,7 +40,7 @@ pub const View = struct {
             });
             return;
         };
-        const left_w: u16 = if (split) @max(28, @as(u16, @intCast(@as(u32, max.width) * 2 / 5))) else max.width;
+        const left_w: u16 = if (split) @import("split_layout.zig").listWidth(max.width, self.list_percent) else max.width;
         const right_w: u16 = if (split) max.width - left_w else max.width;
         const list_width = left_w -| @as(u16, if (split) 1 else 0);
         const bordered_search = max.width >= 2 and max.height >= 8;
@@ -62,7 +64,7 @@ pub const View = struct {
                 try self.text_field.draw(ctx.withConstraints(.{}, .{ .width = list_width, .height = search_height })),
         });
 
-        if (split or !self.details_active) {
+        if ((split or !self.details_active) and height > 0) {
             const message: ?[]const u8 = if (self.loading)
                 "Loading packages…"
             else if (self.load_failed)

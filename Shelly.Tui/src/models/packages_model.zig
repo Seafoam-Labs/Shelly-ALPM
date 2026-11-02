@@ -260,6 +260,7 @@ pub fn packagesView(self: *Model) packages_view.View {
         }
     }
     return .{
+        .list_percent = self.list_percent,
         .text_field = &self.packages_state.text_field,
         .list_view = &self.packages_state.list_view,
         .details_scroll = &self.packages_state.package_details_scroll,

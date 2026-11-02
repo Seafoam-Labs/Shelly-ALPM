@@ -64,6 +64,7 @@ fn contains(text: []const u8, query: []const u8) bool {
 }
 
 pub const View = struct {
+    list_percent: u8 = 40,
     images: ?@import("image_view.zig").View = null,
     category_button: ?*vxfw.Button = null,
     category_list: ?*vxfw.ListView = null,
@@ -95,8 +96,9 @@ pub const View = struct {
     pub fn appendContent(self: View, ctx: vxfw.DrawContext, children: *std.ArrayList(vxfw.SubSurface)) Allocator.Error!void {
         const arena = ctx.arena;
         const max = ctx.max.size();
+        if (max.width < 2 or max.height < 3) return;
         const split = max.width >= 64;
-        const left_w: u16 = if (split) @max(28, @as(u16, @intCast(@as(u32, max.width) * 2 / 5))) else max.width;
+        const left_w: u16 = if (split) @import("split_layout.zig").listWidth(max.width, self.list_percent) else max.width;
         const right_w = if (split) max.width - left_w else max.width;
         const list_width = left_w -| @as(u16, if (split) 1 else 0);
         const search_height: u16 = if (max.width >= 2 and max.height >= 8) 3 else 1;
@@ -130,7 +132,7 @@ pub const View = struct {
             const labels = [_]Border.BorderLabel{.{ .text = if (self.installed_only) "Installed Flatpaks" else "Flatpak applications", .alignment = .top_left }};
             const content = if (message != null) label.widget() else self.list.widget();
             var border: Border = .{ .child = content, .labels = &labels, .style = if (self.list_active and !self.details_active) .{ .fg = .{ .index = 7 }, .bold = true } else .{} };
-            try children.append(arena, .{
+            if (list_height > 0) try children.append(arena, .{
                 .origin = .{ .row = @intCast(list_row), .col = 0 },
                 .surface = if (list_width >= 2 and list_height >= 2)
                     try border.draw(ctx.withConstraints(.{ .width = list_width, .height = list_height }, .{ .width = list_width, .height = list_height }))
@@ -303,7 +305,7 @@ const DetailsBody = struct {
     fn draw(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
         const self: *DetailsBody = @ptrCast(@alignCast(ptr));
         const size = ctx.max.size();
-        const image_height: u16 = if (self.images != null and size.height >= 9 and size.width >= 12) @max(4, size.height / 2) else 0;
+        const image_height: u16 = if (self.images != null and @import("split_layout.zig").imagesFit(size.width, size.height)) @max(4, size.height / 2) else 0;
         const details_row = if (image_height > 0) image_height + 1 else 0;
         var children: std.ArrayList(vxfw.SubSurface) = .empty;
         if (image_height > 0) try children.append(ctx.arena, .{ .origin = .{ .row = 0, .col = 0 }, .surface = try self.images.?.draw(ctx.withConstraints(.{}, .{ .width = size.width, .height = image_height })) });

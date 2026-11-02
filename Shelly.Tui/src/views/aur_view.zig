@@ -13,6 +13,7 @@ const formatEpoch = @import("detail_format.zig").formatEpoch;
 /// Borrows display state and widgets owned by the application.
 /// Query execution and user-action handling remain in Model.
 pub const View = struct {
+    list_percent: u8 = 40,
     installed_only: bool = false,
     aur_field: *vxfw.TextField,
     aur_list: *vxfw.ListView,
@@ -29,8 +30,9 @@ pub const View = struct {
     pub fn appendContent(self: View, ctx: vxfw.DrawContext, children: *std.ArrayList(vxfw.SubSurface)) Allocator.Error!void {
         const arena = ctx.arena;
         const max = ctx.max.size();
+        if (max.width < 2 or max.height < 3) return;
         const split = max.width >= 64;
-        const left_w: u16 = if (split) @max(28, @as(u16, @intCast(@as(u32, max.width) * 2 / 5))) else max.width;
+        const left_w: u16 = if (split) @import("split_layout.zig").listWidth(max.width, self.list_percent) else max.width;
         const right_w = if (split) max.width - left_w else max.width;
         const list_width = left_w -| @as(u16, if (split) 1 else 0);
         const search_height: u16 = if (max.width >= 2 and max.height >= 8) 3 else 1;
@@ -53,7 +55,7 @@ pub const View = struct {
             const labels = [_]Border.BorderLabel{.{ .text = if (self.installed_only) "Installed AUR packages" else "AUR packages", .alignment = .top_left }};
             const content = if (message != null) label.widget() else self.aur_list.widget();
             var border: Border = .{ .child = content, .labels = &labels, .style = if (self.list_active and !self.details_active) .{ .fg = .{ .index = 7 }, .bold = true } else .{} };
-            try children.append(arena, .{
+            if (list_height > 0) try children.append(arena, .{
                 .origin = .{ .row = @intCast(list_row), .col = 0 },
                 .surface = if (list_width >= 2 and list_height >= 2)
                     try border.draw(ctx.withConstraints(.{ .width = list_width, .height = list_height }, .{ .width = list_width, .height = list_height }))

@@ -292,6 +292,7 @@ pub fn aurView(self: *Model) aur_view.View {
         self.aur_state.aur_details_cursor = self.aur_state.aur_list.cursor;
     }
     return .{
+        .list_percent = self.list_percent,
         .aur_field = &self.aur_state.aur_field,
         .selected = selectedAur(self),
         .details_scroll = &self.aur_state.aur_details_scroll,
