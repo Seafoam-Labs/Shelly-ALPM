@@ -5,8 +5,3 @@ pub const model = @import("model.zig");
 /// that ShellyCli depends on. Do not import runtime.zig directly from
 /// another module — that would create a second copy of the globals.
 pub const runtime = @import("runtime.zig");
-
-test {
-    std.testing.refAllDecls(model);
-    _ = @import("services/ui_decode.zig");
-}

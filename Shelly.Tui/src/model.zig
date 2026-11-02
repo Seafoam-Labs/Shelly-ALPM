@@ -1402,15 +1402,6 @@ test "help and footer update live bindings without reopening help" {
     try std.testing.expectEqualStrings("F2 Help", help.items);
 }
 
-test {
-    std.testing.refAllDecls(packages_model);
-    std.testing.refAllDecls(aur_model);
-    std.testing.refAllDecls(flatpak_model);
-    std.testing.refAllDecls(updates_model);
-    std.testing.refAllDecls(settings_model);
-    std.testing.refAllDecls(operation_model);
-}
-
 test "header labels default to raw text and use Nerd Font glyphs only when enabled" {
     vxfw.DrawContext.init(.unicode);
     const model = try Model.init(std.testing.allocator);

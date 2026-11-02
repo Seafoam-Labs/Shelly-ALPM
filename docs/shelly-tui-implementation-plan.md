@@ -307,3 +307,8 @@ Finish the baseline UI/UX across the remaining pages, starting with Flatpak, bef
 - Removed the unimported root-level CLI copy, unused `ShellyCommands` builders, template exports, legacy floating details renderer, unused query wrappers and static shortcut hints. Transactions use `operationArgv`; active queries remain in `services/shelly_cli.zig`.
 - Removed obsolete frame decoding/failure aggregation APIs, dynamic operation-height measuring, and implicit-action review/prompt wrappers. Existing regressions now use the live frame iterator, explicit review actions, fixed operation panel, and page prompt entry points. Deleted tests apply only to retired behavior; active transaction, review, ownership, selection, and cancellation coverage remains.
 - Preserved CLI wire data definitions and their decoding tests. No GTK changes or package operations are part of this cleanup.
+
+### Complete unit-test discovery (2026-11-02)
+
+- Run `zig build test` from `Shelly.Tui` to execute all first-party source-module tests and the executable suite. The build discovers non-hidden `src/**/*.zig` files and generates literal imports in a cache-only source tree; source-directory dependencies invalidate discovery when files are added or removed. Manual registration in the coordinator/root module is no longer required.
+- Three live CLI smoke checks remain deliberately skipped in unit-test runs; unit tests do not initialize the real application environment. A temporary unreferenced failing module verified automatic discovery and failure propagation, then was removed.
