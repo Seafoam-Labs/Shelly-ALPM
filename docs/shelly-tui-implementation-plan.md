@@ -327,3 +327,9 @@ Finish the baseline UI/UX across the remaining pages, starting with Flatpak, bef
 
 - From `Shelly.Tui`, run `./build.sh` to build the Flatpak backend, build the CLI with its absolute backend library path, build the TUI against that CLI, and launch it. `./build.sh --build-only` performs the same builds without launching.
 - Additional Zig build arguments are forwarded to all three projects. The script explicitly selects the newly built CLI even for optimized builds. Standalone `zig build` retains its normal Debug/release defaults.
+
+### Removal refresh recovery (2026-11-02)
+
+- All CLI query failures are returned to views without writing diagnostics directly over Vaxis. Removed the mixed silent/printing query paths that corrupted the alternate screen after a failed native/AUR refresh.
+- Installed-AUR listing and native/AUR update checks share an in-process query lock: these CLI commands rebuild the same RLPM preview database and must not run concurrently from TUI workers.
+- Regression fixtures cover successful batch removal followed by refresh failure, recovery to an empty list, result dismissal and navigation; failed/successful child queries; and simultaneous preview queries using an exclusive filesystem marker. No real packages are removed by these tests.

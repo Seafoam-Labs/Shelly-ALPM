@@ -936,3 +936,58 @@ test "cancelling native and AUR authentication or declining a review clears both
         try std.testing.expectEqual(@as(u32, 0), model.packages_state.selected_list_view.item_count.?);
     }
 }
+
+test "AUR batch removal refresh failure and retry remain drawable and navigable" {
+    vxfw.DrawContext.init(.unicode);
+    runtime.io = std.testing.io;
+    const model = try Model.init(std.testing.allocator);
+    defer model.deinit();
+    model.active = .aur;
+    model.settings_state.settings.aur_enabled = true;
+    model.packages_state.loading = false;
+    model.aur_state.aur_installed_only = true;
+    model.aur_state.aur_list_active = true;
+    model.aur_state.aur_parsed = try std.json.parseFromSlice([]AurPackage, std.testing.allocator, "[{\"Name\":\"first-git\",\"Installed\":true},{\"Name\":\"second-git\",\"Installed\":true}]", .{ .allocate = .alloc_always });
+    model.aur_state.aur_packages = model.aur_state.aur_parsed.?.value;
+    try aur_model.rebuildAurFilter(model);
+    for (0..2) |index| {
+        model.aur_state.aur_list.cursor = @intCast(index);
+        try aur_model.toggleAurSelection(model);
+    }
+    try aur_model.openAurPrompt(model, .remove);
+    var env: std.process.Environ.Map = .init(std.testing.allocator);
+    defer env.deinit();
+    const job = try std.heap.page_allocator.create(shelly_operation.Operation);
+    job.* = .{ .arena = .init(std.heap.page_allocator), .done = .init(true), .request = .{
+        .shelly_bin = "unused",
+        .environ_map = &env,
+        .backend = "aur",
+        .action = .remove,
+        .name = "2 packages",
+        .targets = &.{ "first-git", "second-git" },
+        .password = "",
+    } };
+    model.operation_state.install_job = job;
+    try std.testing.expect(!try pollInstall(model));
+    for ([_]bool{ true, false }) |failed_refresh| {
+        const refresh = try std.testing.allocator.create(aur_model.AurSearchJob);
+        refresh.* = .{ .installed_only = true, .failed = failed_refresh, .done = .init(true), .result = if (failed_refresh) null else try std.json.parseFromSlice([]AurPackage, std.testing.allocator, "[]", .{}) };
+        model.aur_state.aur_job = refresh;
+        try std.testing.expect(!try aur_model.pollAurSearch(model));
+        try std.testing.expectEqual(failed_refresh, model.aur_state.aur_failed);
+        try std.testing.expect(model.overlay.?.sudo.state == .succeeded);
+        for ([_]vxfw.Size{ .{ .width = 100, .height = 30 }, .{ .width = 40, .height = 12 } }) |size| {
+            var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+            defer arena.deinit();
+            _ = try model.widget().draw(.{ .arena = arena.allocator(), .min = .{}, .max = .{ .width = size.width, .height = size.height }, .cell_size = .{ .width = 10, .height = 20 } });
+        }
+    }
+    closeOverlay(model);
+    var events: vxfw.EventContext = .{ .io = std.testing.io, .alloc = std.testing.allocator, .cmds = .empty };
+    defer events.cmds.deinit(std.testing.allocator);
+    for ([_]vaxis.Key{ commands.bindings.previous, commands.bindings.next, commands.bindings.details, commands.bindings.select, commands.bindings.clear_selection }) |key| {
+        try Model.typeErasedCaptureHandler(model, &events, .{ .key_press = key });
+    }
+    try std.testing.expect(model.overlay == null);
+    try std.testing.expectEqual(@as(usize, 0), model.aur_state.aur_selection.items.len);
+}

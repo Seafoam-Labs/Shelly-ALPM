@@ -1,5 +1,4 @@
 const std = @import("std");
-const diagnostics = @import("diagnostics");
 const Io = std.Io;
 const Package = @import("../models/packages.zig").Package;
 const AurPackage = @import("../models/packages.zig").AurPackage;
@@ -59,6 +58,8 @@ fn decodeQuery(comptime T: type, allocator: std.mem.Allocator, output: []const u
     return error.NoDataFrame;
 }
 
+var preview_query_mutex: Io.Mutex = .init;
+
 pub const ShellyCli = struct {
     binary: ?[]const u8 = null,
     environment: ?*const std.process.Environ.Map = null,
@@ -66,16 +67,6 @@ pub const ShellyCli = struct {
     io: Io,
 
     fn run(self: ShellyCli, args: []const []const u8) !RunResult {
-        return self.runInner(args, false);
-    }
-
-    /// Query failures are returned to the caller without printing over the TUI.
-    /// An ignored stdin prevents unexpected CLI prompts from hanging the UI.
-    fn runSilently(self: ShellyCli, args: []const []const u8) !RunResult {
-        return self.runInner(args, true);
-    }
-
-    fn runInner(self: ShellyCli, args: []const []const u8, comptime silent: bool) !RunResult {
         const shelly_bin = self.binary orelse runtime.shellyBin();
 
         var argv = try self.allocator.alloc([]const u8, args.len + 2);
@@ -91,13 +82,16 @@ pub const ShellyCli = struct {
         errdefer self.allocator.free(result.stdout);
         errdefer self.allocator.free(result.stderr);
         if (result.term != .exited or result.term.exited != 0) {
-            if (!silent) {
-                std.debug.print("The Shelly command did not complete successfully.\n\nTechnical details: {0any}; {1f}; {2f}\n", .{ result.term, diagnostics.safe(result.stderr), diagnostics.safe(result.stdout[0..@min(500, result.stdout.len)]) });
-            }
             return error.CommandFailed;
         }
 
         return result;
+    }
+
+    fn runPreviewQuery(self: ShellyCli, args: []const []const u8) !RunResult {
+        preview_query_mutex.lockUncancelable(self.io);
+        defer preview_query_mutex.unlock(self.io);
+        return self.run(args);
     }
 
     pub fn get_packages(self: ShellyCli, show_hidden: bool) !std.json.Parsed([]Package) {
@@ -119,7 +113,7 @@ pub const ShellyCli = struct {
     /// Read-only usability probe through the CLI's backend loader. An empty
     /// remote list succeeds; missing/incompatible backends or query errors fail.
     pub fn probe_flatpak(self: ShellyCli) !void {
-        const result = try self.runSilently(&.{ "list", "flatpak", "remote" });
+        const result = try self.run(&.{ "list", "flatpak", "remote" });
         defer self.allocator.free(result.stdout);
         defer self.allocator.free(result.stderr);
         const remotes = try decodeQuery([]Remote, self.allocator, result.stdout, false);
@@ -127,14 +121,14 @@ pub const ShellyCli = struct {
     }
 
     pub fn get_installed_flatpaks(self: ShellyCli) !std.json.Parsed([]Flatpak) {
-        const result = try self.runSilently(&.{"-Lf"});
+        const result = try self.run(&.{"-Lf"});
         defer self.allocator.free(result.stdout);
         defer self.allocator.free(result.stderr);
         return decodeQuery([]Flatpak, self.allocator, result.stdout, false);
     }
 
     pub fn get_remote_appstream_apps(self: ShellyCli) !std.json.Parsed([]AppstreamApp) {
-        const result = try self.runSilently(&.{ "list", "flatpak", "remote", "all" });
+        const result = try self.run(&.{ "list", "flatpak", "remote", "all" });
         defer self.allocator.free(result.stdout);
         defer self.allocator.free(result.stderr);
 
@@ -145,7 +139,7 @@ pub const ShellyCli = struct {
     pub const AurSource = struct { AurUrl: []const u8 = "https://aur.archlinux.org" };
 
     pub fn get_aur_source(self: ShellyCli) !std.json.Parsed(AurSource) {
-        const result = try self.runSilently(&.{ "config", "get", "AurUrl" });
+        const result = try self.run(&.{ "config", "get", "AurUrl" });
         defer self.allocator.free(result.stdout);
         defer self.allocator.free(result.stderr);
         return decodeQuery(AurSource, self.allocator, result.stdout, false);
@@ -160,10 +154,7 @@ pub const ShellyCli = struct {
     }
 
     pub fn list_aur_installed(self: ShellyCli) !std.json.Parsed([]AurPackage) {
-        const result = try self.run(&.{
-            "list",
-            "aur",
-        });
+        const result = try self.runPreviewQuery(&.{ "list", "aur" });
         defer self.allocator.free(result.stdout);
         defer self.allocator.free(result.stderr);
 
@@ -186,7 +177,7 @@ pub const ShellyCli = struct {
             .atoll_preview => &.{ "search", "aur", name, "--pkgbuild", "--aur-url", "https://atoll.seafoam-labs.org" },
             .atoll_scan => &.{ "search", "aur", name, "--pkgbuild", "--scan-pkgbuild", "--aur-url", "https://atoll.seafoam-labs.org" },
         };
-        const result = try self.runSilently(args);
+        const result = try self.run(args);
         defer self.allocator.free(result.stderr);
         defer self.allocator.free(result.stdout);
 
@@ -194,7 +185,11 @@ pub const ShellyCli = struct {
     }
 
     fn sourceUpdates(self: ShellyCli, comptime T: type, source: []const u8) !std.json.Parsed([]T) {
-        const result = try self.runSilently(&.{ "list-updates", source });
+        const args: []const []const u8 = &.{ "list-updates", source };
+        const result = if (std.mem.eql(u8, source, "standard") or std.mem.eql(u8, source, "aur"))
+            try self.runPreviewQuery(args)
+        else
+            try self.run(args);
         defer self.allocator.free(result.stdout);
         defer self.allocator.free(result.stderr);
         return decodeQuery([]T, self.allocator, result.stdout, false);
@@ -331,4 +326,53 @@ test "AUR source configuration decodes the CLI single-value frame" {
     const parsed = try decodeQuery(ShellyCli.AurSource, std.testing.allocator, frame, false);
     defer parsed.deinit();
     try std.testing.expectEqualStrings("https://atoll.seafoam-labs.org", parsed.value.AurUrl);
+}
+
+test "failed query captures child output and returns an error without terminal diagnostics" {
+    var env: std.process.Environ.Map = .init(std.testing.allocator);
+    defer env.deinit();
+    const cli: ShellyCli = .{ .allocator = std.testing.allocator, .io = std.testing.io, .binary = "/bin/sh", .environment = &env };
+    try std.testing.expectError(error.CommandFailed, cli.run(&.{ "-c", "printf 'query output'; printf 'backend initialization failed' >&2; exit 1" }));
+    const recovered = try cli.run(&.{ "-c", "printf 'recovered'" });
+    defer std.testing.allocator.free(recovered.stdout);
+    defer std.testing.allocator.free(recovered.stderr);
+    try std.testing.expectEqualStrings("recovered", recovered.stdout);
+    try std.testing.expectEqualStrings("", recovered.stderr);
+}
+
+test "preview queries cannot overlap their child processes" {
+    var temporary = std.testing.tmpDir(.{});
+    defer temporary.cleanup();
+    const directory = try temporary.dir.realPathFileAlloc(std.testing.io, ".", std.testing.allocator);
+    defer std.testing.allocator.free(directory);
+    var ready: std.atomic.Value(usize) = .init(0);
+    var failures: std.atomic.Value(usize) = .init(0);
+    const Worker = struct {
+        fn run(path: []const u8, barrier: *std.atomic.Value(usize), failed: *std.atomic.Value(usize)) void {
+            const alloc = std.heap.page_allocator;
+            var threaded: Io.Threaded = .init(alloc, .{});
+            defer threaded.deinit();
+            var env: std.process.Environ.Map = .init(alloc);
+            defer env.deinit();
+            const cli: ShellyCli = .{ .allocator = alloc, .io = threaded.io(), .binary = "/bin/sh", .environment = &env };
+            _ = barrier.fetchAdd(1, .acq_rel);
+            while (barrier.load(.acquire) < 2) std.atomic.spinLoopHint();
+            // An overlapping process would fail to create the exclusive marker.
+            const result = cli.runPreviewQuery(&.{ "-c", "mkdir \"$1/active\" || exit 23; sleep 0.05; rmdir \"$1/active\"", "fixture", path }) catch {
+                _ = failed.fetchAdd(1, .monotonic);
+                return;
+            };
+            alloc.free(result.stdout);
+            alloc.free(result.stderr);
+        }
+    };
+    const first = try std.Thread.spawn(.{}, Worker.run, .{ directory, &ready, &failures });
+    const second = std.Thread.spawn(.{}, Worker.run, .{ directory, &ready, &failures }) catch |err| {
+        _ = ready.fetchAdd(1, .acq_rel);
+        first.join();
+        return err;
+    };
+    first.join();
+    second.join();
+    try std.testing.expectEqual(@as(usize, 0), failures.load(.acquire));
 }
