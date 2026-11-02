@@ -333,3 +333,8 @@ Finish the baseline UI/UX across the remaining pages, starting with Flatpak, bef
 - All CLI query failures are returned to views without writing diagnostics directly over Vaxis. Removed the mixed silent/printing query paths that corrupted the alternate screen after a failed native/AUR refresh.
 - Installed-AUR listing and native/AUR update checks share an in-process query lock: these CLI commands rebuild the same RLPM preview database and must not run concurrently from TUI workers.
 - Regression fixtures cover successful batch removal followed by refresh failure, recovery to an empty list, result dismissal and navigation; failed/successful child queries; and simultaneous preview queries using an exclusive filesystem marker. No real packages are removed by these tests.
+
+### Quit guard during package operations (2026-11-02)
+
+- Escape/Ctrl+C are consumed while an operation worker is active, including review questions and help. A quit attempt displays an in-TUI warning rather than beginning shutdown and blanking the terminal while waiting for the worker.
+- Quit hints disappear from the footer/help until the operation result is collected. Quitting remains available before an operation starts and after completion. Fixtures cover every page, help, both quit bindings, the result-collection boundary and footer hints without running a package operation.

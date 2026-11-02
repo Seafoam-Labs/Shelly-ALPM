@@ -89,6 +89,7 @@ pub const Model = struct {
     overlay: ?Overlay = null,
 
     notice: []const u8 = "",
+    quit_blocked_notice: bool = false,
     help_open: bool = false,
     help_panel: help_view.Panel = .{},
 
@@ -169,6 +170,10 @@ pub const Model = struct {
                 const command = commands.global(key, self.visibleTabs().len);
                 if (command) |action| {
                     if (action == .quit) {
+                        if (self.operation_state.install_job != null) {
+                            self.quit_blocked_notice = true;
+                            return ctx.consumeAndRedraw();
+                        }
                         ctx.quit = true;
                         return ctx.consumeEvent();
                     }
@@ -574,7 +579,7 @@ pub const Model = struct {
     }
 
     pub fn commandContext(self: *Model) commands.Context {
-        var context: commands.Context = .{ .tab_count = self.visibleTabs().len };
+        var context: commands.Context = .{ .tab_count = self.visibleTabs().len, .quit_blocked = self.operation_state.install_job != null };
         if (operation_model.operationPrompt(self)) |prompt| {
             context.mode = switch (prompt.state) {
                 .entering => if (prompt.elevated) .authentication else .confirmation,
@@ -690,6 +695,7 @@ pub const Model = struct {
 
     /// Source loading and query errors belong to their page, not shortcut hints.
     pub fn footerStatus(self: *const Model) ?[]const u8 {
+        if (self.quit_blocked_notice and self.operation_state.install_job != null) return "Operation in progress. Wait for it to finish before quitting.  ";
         return if (self.notice.len > 0) self.notice else null;
     }
 
@@ -1149,4 +1155,38 @@ test "package pages tolerate tiny terminals and repeated minimum splits" {
             }
         }
     }
+}
+
+test "quit is blocked across pages and help until the operation is collected" {
+    const model = try Model.init(std.testing.allocator);
+    defer model.deinit();
+    var job: @import("services/shelly_operation.zig").Operation = .{ .arena = .init(std.testing.allocator), .request = undefined };
+    defer job.arena.deinit();
+    model.operation_state.install_job = &job;
+    defer model.operation_state.install_job = null;
+    var ctx: vxfw.EventContext = .{ .io = std.testing.io, .alloc = std.testing.allocator, .cmds = .empty };
+    defer ctx.cmds.deinit(std.testing.allocator);
+    for (Tab.all) |tab| {
+        model.active = tab;
+        for ([_]bool{ false, true }) |help_open| {
+            model.help_open = help_open;
+            for ([_]vaxis.Key{ commands.bindings.quit, commands.bindings.interrupt }) |key| {
+                ctx.consume_event = false;
+                ctx.redraw = false;
+                try model.captureEvent(&ctx, .{ .key_press = key });
+                try std.testing.expect(!ctx.quit and ctx.consume_event and ctx.redraw);
+                try std.testing.expect(model.commandContext().quit_blocked);
+                try std.testing.expect(model.footerStatus() != null);
+            }
+        }
+    }
+    // Even a finished worker remains protected until its result is collected.
+    job.done.store(true, .release);
+    try model.captureEvent(&ctx, .{ .key_press = commands.bindings.quit });
+    try std.testing.expect(!ctx.quit);
+    model.operation_state.install_job = null;
+    try std.testing.expect(!model.commandContext().quit_blocked);
+    try std.testing.expect(model.footerStatus() == null);
+    try model.captureEvent(&ctx, .{ .key_press = commands.bindings.quit });
+    try std.testing.expect(ctx.quit);
 }

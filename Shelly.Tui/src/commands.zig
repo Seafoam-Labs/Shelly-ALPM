@@ -256,6 +256,7 @@ pub fn scrollsOperation(key: vaxis.Key) bool {
 
 pub const Mode = enum { search, packages, details, aur, flatpak, updates, settings, authentication, confirmation, running, result, review, preview_document, answers, choice, help };
 pub const Context = struct {
+    quit_blocked: bool = false,
     source_wrap: bool = true,
     settings_save_selected: bool = false,
     settings_cycle_selected: bool = false,

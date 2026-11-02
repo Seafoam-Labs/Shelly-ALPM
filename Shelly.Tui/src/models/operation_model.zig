@@ -571,6 +571,7 @@ pub fn pollInstall(self: *Model) !bool {
 
     const failed = completed.failed;
     self.operation_state.install_job = null;
+    self.quit_blocked_notice = false;
     const is_flatpak = std.mem.eql(u8, job.request.backend, "flatpak");
     const is_combined = std.mem.eql(u8, job.request.backend, "all");
     const package_batch = job.request.targets.len > 0;

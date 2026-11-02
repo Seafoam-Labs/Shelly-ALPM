@@ -46,7 +46,7 @@ pub fn draw(ctx: vxfw.DrawContext, context: commands.Context, status: ?[]const u
     }
     const quit = try commands.label(ctx.arena, .quit);
     const quit_description = " Quit";
-    if (used + ctx.stringWidth(quit) + ctx.stringWidth(quit_description) <= main_width) {
+    if (!context.quit_blocked and used + ctx.stringWidth(quit) + ctx.stringWidth(quit_description) <= main_width) {
         try spans.append(ctx.arena, .{ .text = quit, .style = .{ .fg = .{ .index = 7 }, .bold = true } });
         try spans.append(ctx.arena, .{ .text = quit_description, .style = .{ .fg = .{ .index = 250 } } });
     }
@@ -69,13 +69,15 @@ test "footer reflects operation context and live wrapping state" {
         .{ .mode = .answers, .multiple_choices = true },
         .{ .mode = .review },
         .{ .mode = .running },
+        .{ .mode = .running, .quit_blocked = true },
     };
-    for (contexts, [_][]const u8{ "Unwrap", "Wrap", "Run", "Toggle", "Approve", "Quit" }) |context, expected| {
+    for (contexts, [_][]const u8{ "Unwrap", "Wrap", "Run", "Toggle", "Approve", "Quit", "Help" }) |context, expected| {
         const surface = try draw(.{ .arena = arena.allocator(), .min = .{}, .max = .{ .width = 140, .height = 1 }, .cell_size = .{ .width = 10, .height = 20 } }, context, null);
         var text: std.ArrayList(u8) = .empty;
         for (surface.children) |child| for (child.surface.buffer) |cell| try text.appendSlice(arena.allocator(), cell.char.grapheme);
         try std.testing.expect(std.mem.indexOf(u8, text.items, expected) != null);
         try std.testing.expect(std.mem.indexOf(u8, text.items, "F1 Help") != null);
+        if (context.quit_blocked) try std.testing.expect(std.mem.indexOf(u8, text.items, "Quit") == null);
         if (context.mode == .review) try std.testing.expectEqual(@as(usize, 1), std.mem.count(u8, text.items, "Decline"));
     }
 }

@@ -69,7 +69,11 @@ pub const Panel = struct {
             .{ .id = .quit, .description = "Quit the application" },
             .{ .id = .interrupt, .description = "Quit the application" },
         };
-        for (globals) |entry| try lines.append(arena, try std.fmt.allocPrint(arena, "{s}: {s}", .{ try commands.label(arena, entry.id), entry.description }));
+        for (globals) |entry| {
+            if (self.context.quit_blocked and (entry.id == .quit or entry.id == .interrupt)) continue;
+            try lines.append(arena, try std.fmt.allocPrint(arena, "{s}: {s}", .{ try commands.label(arena, entry.id), entry.description }));
+        }
+        if (self.context.quit_blocked) try lines.append(arena, "Quitting is disabled until the package operation finishes.");
         if (self.context.tab_count > 0) try lines.append(arena, try std.fmt.allocPrint(arena, "Alt+1…Alt+{d}: Select an enabled page (while browsing)", .{self.context.tab_count}));
         return std.mem.join(arena, "\n", lines.items);
     }
