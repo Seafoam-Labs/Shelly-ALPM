@@ -375,7 +375,7 @@ pub fn entries(arena: std.mem.Allocator, context: Context) std.mem.Allocator.Err
             if (context.mode == .flatpak or context.installed_only) try add(arena, &list, .refresh_list, "Refresh", "Refresh the current package list");
         },
         .updates => {
-            if (context.upgrade_all) try add(arena, &list, .upgrade_all, "Update all", "Upgrade all enabled sources; AppImages excluded");
+            if (context.upgrade_all) try add(arena, &list, .upgrade_all, "Update all", "Upgrade all enabled sources; AppImage updates are detected but not managed by the TUI");
             if (context.upgrade_system) try add(arena, &list, .upgrade_system, "System", "Upgrade native system packages");
             if (context.upgrade_aur) try add(arena, &list, .upgrade_aur, "AUR", "Upgrade AUR packages with PKGBUILD review");
             if (context.upgrade_flatpak) try add(arena, &list, .upgrade_flatpak, "Flatpak", "Upgrade system and user Flatpaks");

@@ -119,7 +119,7 @@ pub const View = struct {
         const data = self.data orelse return "";
         const aur = if (self.aur_enabled) try std.fmt.allocPrint(arena, " · AUR {d}", .{data.Aur.len}) else "";
         const flatpak = if (!self.flatpak_enabled) "" else if (self.flatpak_available) try std.fmt.allocPrint(arena, " · Flatpak {d}", .{data.Flatpak.len}) else " · Flatpak unavailable";
-        return std.fmt.allocPrint(arena, "System {d}{s}{s}", .{ data.Packages.len, aur, flatpak });
+        return std.fmt.allocPrint(arena, "System {d}{s}{s} · AppImage {d}", .{ data.Packages.len, aur, flatpak, data.AppImage.len });
     }
 };
 
@@ -328,12 +328,12 @@ test "update source summary respects settings and backend availability" {
     var view: View = .{ .list = &list, .data = &data, .loading = false, .failed = false, .checked = true, .aur_enabled = false, .flatpak_enabled = false };
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    try std.testing.expectEqualStrings("System 0", try view.sourceSummary(arena.allocator()));
+    try std.testing.expectEqualStrings("System 0 · AppImage 0", try view.sourceSummary(arena.allocator()));
     view.aur_enabled = true;
     view.flatpak_enabled = true;
-    try std.testing.expectEqualStrings("System 0 · AUR 0 · Flatpak unavailable", try view.sourceSummary(arena.allocator()));
+    try std.testing.expectEqualStrings("System 0 · AUR 0 · Flatpak unavailable · AppImage 0", try view.sourceSummary(arena.allocator()));
     view.flatpak_available = true;
-    try std.testing.expectEqualStrings("System 0 · AUR 0 · Flatpak 0", try view.sourceSummary(arena.allocator()));
+    try std.testing.expectEqualStrings("System 0 · AUR 0 · Flatpak 0 · AppImage 0", try view.sourceSummary(arena.allocator()));
 }
 
 test "updates panel centers its table below counts and retains empty source status" {
