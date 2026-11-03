@@ -605,11 +605,65 @@ pub const BuildProgress = struct {
     message: []const u8,
 };
 
+/// Returns the index just past an escape sequence starting at `index`,
+/// or null when `index` does not start one. Mirrors the GUI parser so
+/// colored makepkg output cannot hide progress markers (issue #2051).
+fn skipEscapeSequence(line: []const u8, index: usize) ?usize {
+    if (line[index] != 0x1b) return null;
+    if (index + 1 >= line.len) return line.len;
+    switch (line[index + 1]) {
+        '[' => {
+            var end = index + 2;
+            while (end < line.len) : (end += 1) {
+                const final = line[end];
+                if (final >= 0x40 and final <= 0x7e) return end + 1;
+            }
+            return line.len;
+        },
+        ']' => {
+            var end = index + 2;
+            while (end < line.len) : (end += 1) {
+                if (line[end] == 0x07) return end + 1;
+                if (line[end] == 0x1b and end + 1 < line.len and line[end + 1] == '\\')
+                    return end + 2;
+            }
+            return line.len;
+        },
+        else => return index + 2,
+    }
+}
+
+/// Finds the next occurrence of `needle` outside escape sequences.
+fn nextVisible(line: []const u8, from: usize, needle: u8) ?usize {
+    var index = from;
+    while (index < line.len) {
+        if (skipEscapeSequence(line, index)) |end| {
+            index = end;
+            continue;
+        }
+        if (line[index] == needle) return index;
+        index += 1;
+    }
+    return null;
+}
+
 pub fn parseBuildProgress(line: []const u8) ?BuildProgress {
-    const open = std.mem.indexOfScalar(u8, line, '[') orelse return null;
-    const percent_sign = std.mem.indexOfPos(u8, line, open + 1, "%") orelse return null;
-    const close = std.mem.indexOfPos(u8, line, percent_sign + 1, "]") orelse return null;
-    const percent_text = std.mem.trim(u8, line[open + 1 .. percent_sign], " \t");
+    const open = nextVisible(line, 0, '[') orelse return null;
+    const percent_sign = nextVisible(line, open + 1, '%') orelse return null;
+    const close = nextVisible(line, percent_sign + 1, ']') orelse return null;
+    var buffer: [16]u8 = undefined;
+    var count: usize = 0;
+    var index = open + 1;
+    while (index < percent_sign and count < buffer.len) {
+        if (skipEscapeSequence(line, index)) |end| {
+            index = end;
+            continue;
+        }
+        buffer[count] = line[index];
+        count += 1;
+        index += 1;
+    }
+    const percent_text = std.mem.trim(u8, buffer[0..count], " \t");
     const percent = std.fmt.parseInt(u8, percent_text, 10) catch return null;
     if (percent > 100) return null;
     return .{
@@ -697,6 +751,17 @@ test "build progress parser recognizes makepkg percentage lines" {
     try std.testing.expectEqual(@as(u8, 42), progress.percent);
     try std.testing.expectEqualStrings("Compiling source files", progress.message);
     try std.testing.expect(parseBuildProgress("ordinary output") == null);
+}
+
+test "build progress parser ignores colorized makepkg output" {
+    const colored = parseBuildProgress("\x1b[1;34m==> \x1b[0m\x1b[1;32m[ 67%\x1b[0m] Packaging demo").?;
+    try std.testing.expectEqual(@as(u8, 67), colored.percent);
+    try std.testing.expectEqualStrings("Packaging demo", colored.message);
+
+    // Trailing styling after the marker stays in the message for the GUI.
+    const trailing = parseBuildProgress("[  8%] \x1b[31mPacking\x1b[0m").?;
+    try std.testing.expectEqual(@as(u8, 8), trailing.percent);
+    try std.testing.expectEqualStrings("\x1b[31mPacking\x1b[0m", trailing.message);
 }
 
 test "execution PATH adds Arch Perl paths exactly once" {
