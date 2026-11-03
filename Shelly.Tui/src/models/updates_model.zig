@@ -407,3 +407,47 @@ test "updates scroll without selecting packages and reset after refresh" {
     try std.testing.expectEqual(@as(i17, 0), scroll.scroll.vertical_offset);
     try std.testing.expectEqual(@as(?u32, 0), scroll.item_count);
 }
+
+test "update confirmations keep the update document above the review panel" {
+    const contains = struct {
+        fn text(surface: vxfw.Surface, needle: []const u8, allocator: Allocator) !bool {
+            var chars: std.ArrayList(u8) = .empty;
+            defer chars.deinit(allocator);
+            for (surface.buffer) |cell| try chars.appendSlice(allocator, cell.char.grapheme);
+            if (std.mem.indexOf(u8, chars.items, needle) != null) return true;
+            for (surface.children) |child| if (try text(child.surface, needle, allocator)) return true;
+            return false;
+        }
+    }.text;
+    vxfw.DrawContext.init(.unicode);
+    const model = try Model.init(std.testing.allocator);
+    defer model.deinit();
+    model.active = .upgrade;
+    model.updates_state.updates_checked = true;
+    model.updates_state.updates_parsed = try std.json.parseFromSlice(CheckUpdates, std.testing.allocator,
+        \\{"Packages":[{"Name":"visible-update","CurrentVersion":"1","NewVersion":"2"}]}
+    , .{});
+    const prompt = try std.testing.allocator.create(SudoPrompt);
+    prompt.* = .{ .name = try std.testing.allocator.dupe(u8, "all"), .backend = .all, .action = .upgrade, .password = .empty, .state = .running };
+    model.overlay = .{ .sudo = prompt };
+    for ([_][]const u8{
+        \\{"$kind":"q.yesno","QuestionId":"1","QuestionText":"Proceed with updates?"}
+        ,
+        \\{"$kind":"q.optdeps","QuestionId":"2","QuestionText":"Choose dependencies","Options":[{"Index":0,"Name":"docs"}]}
+        ,
+        \\{"$kind":"q.pkgbuilddiff","QuestionId":"3","PackageName":"demo","OldPkgbuild":"pkgver=1","NewPkgbuild":"pkgver=2"}
+        ,
+    }) |json| {
+        try operation_model.showOperationQuestion(model, try shelly_operation.decodeJson(std.testing.allocator, json));
+        defer operation_model.finishOperationQuestion(model);
+        var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+        defer arena.deinit();
+        const surface = try model.widget().draw(.{ .arena = arena.allocator(), .min = .{}, .max = .{ .width = 100, .height = 30 }, .cell_size = .{ .width = 10, .height = 20 } });
+        try std.testing.expect(try contains(surface.children[1].surface, "visible-update", std.testing.allocator));
+        const review = surface.children[surface.children.len - 2];
+        try std.testing.expect(review.origin.row > surface.children[1].origin.row);
+        try std.testing.expect(surface.children[1].origin.row + surface.children[1].surface.size.height <= review.origin.row);
+        try std.testing.expect(!try contains(review.surface, "visible-update", std.testing.allocator));
+        try std.testing.expectEqual(@as(usize, 0), model.updates_state.updates_list.cursor);
+    }
+}

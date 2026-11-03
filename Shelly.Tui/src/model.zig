@@ -444,6 +444,7 @@ pub const Model = struct {
         var children: std.ArrayList(vxfw.SubSurface) = .empty;
 
         const reviewing = self.overlay != null and self.overlay.? == .pkgbuild and self.operation_state.operation_question != null;
+        const update_review = reviewing and self.active == .upgrade;
         const prompt = operation_model.operationPrompt(self) orelse self.operation_state.review_prompt;
         const choosing_flatpak = self.overlay != null and self.overlay.? == .flatpak_install;
         var navigation_height: u16 = if (max.width >= 2 and max.height >= 8) 3 else 1;
@@ -453,7 +454,13 @@ pub const Model = struct {
             // Keep the operation area stable across authentication, progress,
             // and results; long content scrolls within this reserved third.
             const preferred_height = @max(@as(u16, 4), max.height / 3 + @intFromBool(max.height % 3 != 0));
-            if (reviewing) {
+            if (update_review) {
+                panel_height = @max(preferred_height, max.height / 2);
+                if (max.height < navigation_height + panel_height + 5) {
+                    panel_height = max.height -| (navigation_height + 1);
+                    show_browsing = false;
+                }
+            } else if (reviewing) {
                 // Keep the review readable above the same operation panel.
                 // Tiny terminals give priority to answering the CLI question.
                 panel_height = if (max.height >= navigation_height + preferred_height + 7) preferred_height else 0;
@@ -495,7 +502,7 @@ pub const Model = struct {
                 .origin = .{ .row = 1, .col = 0 },
                 .surface = try self.help_panel.draw(content_ctx.withConstraints(.{}, .{ .width = max.width, .height = content_ctx.max.size().height -| 2 })),
             });
-        } else if (reviewing and !self.help_open and self.active != .aur) {
+        } else if (reviewing and !update_review and !self.help_open and self.active != .aur) {
             try children.append(arena, .{
                 .origin = .{ .row = 1, .col = 0 },
                 .surface = try operation_model.pkgbuildView(self).drawInPane(content_ctx.withConstraints(.{}, .{ .width = max.width, .height = content_ctx.max.size().height -| 2 })),
@@ -512,10 +519,13 @@ pub const Model = struct {
         if (panel_height > 0) if (prompt) |active_prompt| {
             try children.append(arena, .{
                 .origin = .{ .row = @intCast(max.height - panel_height - 1), .col = 0 },
-                .surface = try active_prompt.panel.draw(operation_model.promptView(self, active_prompt), ctx.withConstraints(
-                    .{},
-                    .{ .width = max.width, .height = panel_height },
-                )),
+                .surface = if (update_review and !self.help_open)
+                    try operation_model.pkgbuildView(self).drawInPane(ctx.withConstraints(.{}, .{ .width = max.width, .height = panel_height }))
+                else
+                    try active_prompt.panel.draw(operation_model.promptView(self, active_prompt), ctx.withConstraints(
+                        .{},
+                        .{ .width = max.width, .height = panel_height },
+                    )),
             });
         };
 
