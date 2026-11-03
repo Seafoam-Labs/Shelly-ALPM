@@ -1,0 +1,43 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: Shelly Notifications 0.0.1\n"
+"Report-Msgid-Bugs-To: https://github.com/Seafoam-Labs/conch/issues\n"
+"POT-Creation-Date: 2026-09-19 13:22-0400\n"
+"PO-Revision-Date: 2026-11-03 12:00+0700\n"
+"Last-Translator: dinhkarate <dinhkarat@gmail.com>\n"
+"Language-Team: Vietnamese <vi@li.org>\n"
+"Language: vi\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+msgid "updates available"
+msgstr "bản cập nhật có sẵn"
+
+msgid "Updates available"
+msgstr "Có bản cập nhật"
+
+msgid "Open Shelly"
+msgstr "Mở Shelly"
+
+msgid "Update Packages"
+msgstr "Cập nhật gói"
+
+msgid "Check for updates"
+msgstr "Kiểm tra cập nhật"
+
+msgid "Last Check: Never"
+msgstr "Lần kiểm tra cuối: Chưa bao giờ"
+
+msgid "No updates"
+msgstr "Không có bản cập nhật"
+
+msgid "Exit"
+msgstr "Thoát"
+
+msgid "Last Check: never"
+msgstr "Lần kiểm tra cuối: chưa bao giờ"
+
+msgid "Last Check:"
+msgstr "Lần kiểm tra cuối:"
