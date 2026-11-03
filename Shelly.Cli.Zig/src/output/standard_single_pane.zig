@@ -34,6 +34,7 @@ const Bar = struct {
     current: f64,
     total: f64,
     byte_counts: ?struct { current: u64, total: u64 } = null,
+    bytes_per_second: ?u64 = null,
     percentage: u8,
 };
 
@@ -342,6 +343,7 @@ pub const Renderer = struct {
             .current = current,
             .total = total,
             .byte_counts = if (has_byte_counts) .{ .current = raw_current, .total = raw_total } else null,
+            .bytes_per_second = update.bytes_per_second,
             .percentage = percentage,
         });
     }
@@ -374,6 +376,7 @@ pub const Renderer = struct {
             self.bars.items[index].current = bar.current;
             self.bars.items[index].total = bar.total;
             self.bars.items[index].byte_counts = bar.byte_counts;
+            self.bars.items[index].bytes_per_second = bar.bytes_per_second;
             self.bars.items[index].percentage = bar.percentage;
             if (!std.mem.eql(u8, self.bars.items[index].action, bar.action)) {
                 self.bars.items[index].action = try self.owned_data.allocator().dupe(u8, bar.action);
@@ -394,6 +397,7 @@ pub const Renderer = struct {
             .current = bar.current,
             .total = bar.total,
             .byte_counts = bar.byte_counts,
+            .bytes_per_second = bar.bytes_per_second,
             .percentage = bar.percentage,
         };
     }
@@ -475,10 +479,23 @@ pub const Renderer = struct {
         } else {
             try left_buffer.writer.print("({d:.0}/{d:.0}) {s} {s}", .{ bar.current, bar.total, bar.action, bar.name });
         }
-        const left = terminalPrefix(left_buffer.writer.buffered(), layout.label_width);
+        const label = left_buffer.writer.buffered();
+        const left = terminalPrefix(label, layout.label_width);
+        var speed_buffer: [64]u8 = undefined;
+        const speed: ?[]const u8 = if (bar.bytes_per_second) |rate| blk: {
+            const text = try formatSpeedInto(&speed_buffer, rate);
+            const fits = left.bytes.len == label.len and layout.label_width - left.columns > text.len;
+            break :blk if (fits) text else null;
+        } else null;
 
         try self.context.stdout.writeAll(left.bytes);
-        try self.context.stdout.splatByteAll(' ', layout.label_width - left.columns + layout.gap_width);
+        if (speed) |text| {
+            try self.context.stdout.splatByteAll(' ', layout.label_width - left.columns - text.len);
+            try self.context.stdout.writeAll(text);
+        } else {
+            try self.context.stdout.splatByteAll(' ', layout.label_width - left.columns);
+        }
+        try self.context.stdout.splatByteAll(' ', layout.gap_width);
         try renderBar(
             self.context.stdout,
             bar.percentage,
@@ -814,6 +831,12 @@ fn convertSize(display: SizeDisplay, bytes: u64) f64 {
     return @as(f64, @floatFromInt(bytes)) / divisor;
 }
 
+fn formatSpeedInto(buffer: []u8, bytes_per_second: u64) ![]const u8 {
+    var size_buffer: [32]u8 = undefined;
+    const size = try fmt.formatSizeInto(&size_buffer, .auto, bytes_per_second);
+    return std.fmt.bufPrint(buffer, "{s}/s", .{size});
+}
+
 fn transactionSizeText(
     buffer: []u8,
     display: SizeDisplay,
@@ -1066,6 +1089,60 @@ test "single-pane rendered progress line fits detected width" {
     try std.testing.expectEqual(@as(usize, 40), rendered.len);
     try std.testing.expectEqual(@as(u8, '\n'), rendered[rendered.len - 1]);
     try std.testing.expect(std.mem.endsWith(u8, rendered, "  50%\n"));
+}
+
+test "single-pane download speed only uses spare label columns" {
+    var buffer: [64]u8 = undefined;
+    try std.testing.expectEqualStrings("512 B/s", try formatSpeedInto(&buffer, 512));
+    try std.testing.expectEqualStrings("1.50 MiB/s", try formatSpeedInto(&buffer, 1572864));
+    try std.testing.expectEqualStrings("1023.99 KiB/s", try formatSpeedInto(&buffer, 1048565));
+
+    const Case = struct { columns: []const u8, name: []const u8, shows_speed: bool };
+    const cases = [_]Case{
+        .{ .columns = "80", .name = "demo.pkg.tar.zst", .shows_speed = true },
+        .{ .columns = "80", .name = "a-very-long-package-name-1.0-1-x86_64.pkg.tar.zst", .shows_speed = false },
+        .{ .columns = "40", .name = "demo.pkg.tar.zst", .shows_speed = false },
+    };
+    for (cases) |case| {
+        var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+        defer arena.deinit();
+        var stdout = std.Io.Writer.Allocating.init(std.testing.allocator);
+        defer stdout.deinit();
+        var stderr = std.Io.Writer.Allocating.init(std.testing.allocator);
+        defer stderr.deinit();
+        var environment = std.process.Environ.Map.init(arena.allocator());
+        try environment.put("COLUMNS", case.columns);
+        var context: runtime.RuntimeContext = .{
+            .allocator = arena.allocator(),
+            .io = std.testing.io,
+            .stdout = &stdout.writer,
+            .stderr = &stderr.writer,
+            .environment = &environment,
+        };
+        var renderer: Renderer = .{
+            .context = &context,
+            .settings = .{ .bar_width = 20 },
+            .no_confirm = true,
+            .animate = false,
+            .owned_data = std.heap.ArenaAllocator.init(arena.allocator()),
+        };
+        defer renderer.deinit();
+
+        try renderer.writeBarLine(.{
+            .operation_id = 1,
+            .name = case.name,
+            .action = "PackageDownload",
+            .current = 50,
+            .total = 100,
+            .bytes_per_second = 1572864,
+            .percentage = 50,
+        });
+        const rendered = stdout.writer.buffered();
+        try std.testing.expectEqual(try std.fmt.parseInt(usize, case.columns, 10), rendered.len);
+        try std.testing.expect(std.mem.endsWith(u8, rendered, "  50%\n"));
+        try std.testing.expectEqual(case.shows_speed, std.mem.indexOf(u8, rendered, " 1.50 MiB/s ") != null);
+        if (case.shows_speed) try std.testing.expect(std.mem.indexOf(u8, rendered, case.name) != null);
+    }
 }
 
 fn renderBar(
