@@ -12,6 +12,7 @@ owner: *rlpm.Owner,
 operation: *op.Operation,
 previous: rlpm.Callbacks,
 cancellation_subscription: op.SubscriptionId,
+last_failure: ?anyerror = null,
 active_package: ?[]u8 = null,
 active_reference: ?rlpm.PackageRef = null,
 active_action: ?output.PackageAction = null,
@@ -87,7 +88,7 @@ fn name(a: std.mem.Allocator, q: rlpm.Callbacks.Question, ref: rlpm.PackageRef) 
             for (value.views) |view| if (std.meta.eql(view.reference, ref)) return view.package.name;
         },
     }
-    return std.fmt.allocPrint(a, "package {d}:{d}:{d}", .{ @intFromEnum(ref.database.id), ref.generation, @intFromEnum(ref.id) });
+    return std.fmt.allocPrint(a, "package {d}:{d}:{d}", .{ @backingInt(ref.database.id), ref.generation, @backingInt(ref.id) });
 }
 fn question(data: ?*anyopaque, borrowed: *rlpm.Callbacks.Question) !void {
     const self = from(data);
@@ -179,6 +180,8 @@ fn formatFailure(
             },
             .target => |target| if (resolution.failure == .target_not_found) {
                 try text.writer.print("Requested package \"{f}\" could not be found in the configured repositories.\n", .{diagnostics.safe(target)});
+            } else if (resolution.failure == .ignored) {
+                try text.writer.print("Requested package \"{f}\" is excluded by the ignore configuration.\n", .{diagnostics.safe(target)});
             },
             .conflict => |conflict| {
                 const relation = try conflict.reason.formatAlloc(allocator);
@@ -203,14 +206,19 @@ fn formatFailure(
                     });
                 }
             },
-            else => {},
+            .architecture => |id| {
+                const package = resolution.package(id);
+                try text.writer.print("Package \"{f}\" has architecture \"{f}\", which is not accepted by the configured architectures.\n", .{ diagnostics.safe(package.name), diagnostics.safe(package.architecture orelse "unknown") });
+            },
+            .duplicate => |duplicate| try text.writer.print("Packages \"{f}\" and \"{f}\" select a duplicate transaction target.\n", .{ diagnostics.safe(resolution.package(duplicate.first).name), diagnostics.safe(resolution.package(duplicate.second).name) }),
+            .filename => |duplicate| try text.writer.print("Packages \"{f}\" and \"{f}\" share archive filename \"{f}\".\n", .{ diagnostics.safe(resolution.package(duplicate.first).name), diagnostics.safe(resolution.package(duplicate.second).name), diagnostics.safe(duplicate.filename) }),
         };
     }
     if (text.written().len != 0) {
         try text.writer.print("\nTechnical details: {s}", .{@errorName(err)});
         return allocator.dupe(u8, text.written());
     }
-    return diagnostics.format(allocator, err, .{
+    return rlpm.Diagnostic.init(.transaction, err, null).userMessage(allocator, .{
         .operation = diagnostics.operationDescription(operation.envelope.kind),
         .subject = operation.envelope.subject,
         .path = path,
@@ -228,12 +236,16 @@ fn reportFailure(self: *Adapter, err: anyerror) void {
     } else null;
     const allocator = operation.context.allocator;
     const message = formatFailure(allocator, err, operation, if (self.owner.transaction()) |tx| tx.plan() else null, if (issue) |failure| failure.path else null) catch {
-        operation.reportError(err, @errorName(err), "rlpm", null, false);
-        if (self.failure_handler) |handler| handler.function(handler.data, @errorName(err));
+        var buffer: [512]u8 = undefined;
+        const fallback = rlpm.Diagnostic.fallback(&buffer, err);
+        operation.reportError(err, fallback, "rlpm", null, false);
+        self.last_failure = err;
+        if (self.failure_handler) |handler| handler.function(handler.data, fallback);
         return;
     };
     defer allocator.free(message);
     operation.reportError(err, message, "rlpm", null, false);
+    self.last_failure = err;
     if (self.failure_handler) |handler| handler.function(handler.data, message);
 }
 fn event(data: ?*anyopaque, value: rlpm.Callbacks.Event) void {
@@ -243,7 +255,9 @@ fn event(data: ?*anyopaque, value: rlpm.Callbacks.Event) void {
             .completed => self.finishTransaction(.success),
             .interrupted => self.finishTransaction(.cancelled),
             .failed => {
-                if (result.cause) |err| self.reportFailure(err);
+                if (result.cause) |err| {
+                    if (self.last_failure == null or self.last_failure.? != err) self.reportFailure(err);
+                }
                 self.finishTransaction(.failed);
             },
             .released => self.finishTransaction(if (result.cause != null and result.cause.? != error.Cancelled) .failed else .cancelled),
@@ -267,10 +281,10 @@ fn event(data: ?*anyopaque, value: rlpm.Callbacks.Event) void {
                     self.active_action = action;
                     const message = output.packageMessage(self.operation.context.allocator, action, package_name, if (package) |pkg| pkg.version.raw else "?", if (old) |pkg| pkg.version.raw else null) catch null;
                     defer if (message) |text| self.operation.context.allocator.free(text);
-                    self.operation.status(.information, message orelse package_name, "alpm.information", @intFromEnum(output.EventType.package_operation_start));
+                    self.operation.status(.information, message orelse package_name, "alpm.information", @backingInt(output.EventType.package_operation_start));
                 },
                 .done => {
-                    self.operation.packageStatus(.information, output.information(.package_operation_done).?, action.completionCode(), @intFromEnum(output.EventType.package_operation_done), package_name);
+                    self.operation.packageStatus(.information, output.information(.package_operation_done).?, action.completionCode(), @backingInt(output.EventType.package_operation_done), package_name);
                     self.clearPackage();
                 },
                 .failed => self.clearPackage(),
@@ -297,22 +311,61 @@ fn event(data: ?*anyopaque, value: rlpm.Callbacks.Event) void {
                     .total = hook.total,
                     .percentage = if (hook.total == 0) 100 else @as(f64, @floatFromInt(hook.position)) * 100 / @as(f64, @floatFromInt(hook.total)),
                 });
-                self.operation.status(.information, message, "alpm.information", @intFromEnum(output.EventType.hook_run_start));
+                self.operation.status(.information, message, "alpm.information", @backingInt(output.EventType.hook_run_start));
             },
             .done => self.information(.hook_run_done),
             .failed => {},
         },
-        .diagnostic => |diagnostic| self.operation.reportError(diagnostic.cause, @errorName(diagnostic.cause), "rlpm", null, false),
+        .diagnostic => |diagnostic| {
+            const allocator = self.operation.context.allocator;
+            const message = formatDiagnostic(self.owner, allocator, diagnostic) catch null;
+            defer if (message) |owned| allocator.free(owned);
+            var buffer: [512]u8 = undefined;
+            const rendered = message orelse rlpm.Diagnostic.fallback(&buffer, diagnostic.cause);
+            self.operation.reportError(diagnostic.cause, rendered, "rlpm", null, false);
+            self.last_failure = diagnostic.cause;
+            if (self.failure_handler) |handler| {
+                handler.function(handler.data, rendered);
+                return; // Already delivered to the legacy handler with the same details.
+            }
+        },
     }
     if (self.previous.event) |callback| callback(self.previous.event_context, value);
 }
+fn formatDiagnostic(owner: *rlpm.Owner, allocator: std.mem.Allocator, diagnostic: rlpm.Diagnostic) ![]u8 {
+    if (owner.transaction()) |tx| if (tx.actions()) |actions| if (actions.outcomes.items.len != 0) {
+        const outcome = actions.outcomes.items[actions.outcomes.items.len - 1];
+        if (outcome.cause != null and outcome.cause.? == diagnostic.cause) return formatActionFailure(allocator, outcome);
+    };
+    return diagnostic.userMessage(allocator, .{ .operation = "the RLPM operation" });
+}
+
+pub fn formatActionFailure(allocator: std.mem.Allocator, outcome: anytype) ![]u8 {
+    const diagnostics = @import("diagnostics");
+    const err = outcome.cause.?;
+    var text: std.Io.Writer.Allocating = .init(allocator);
+    defer text.deinit();
+    try text.writer.print("Package setup {t} failed: {f}.\n{s}", .{ outcome.kind, diagnostics.safe(outcome.name), rlpm.Diagnostic.explanation(err) orelse "The action failed; review its output and technical details." });
+    if (outcome.function) |function| try text.writer.print("\nScriptlet function: {t}", .{function});
+    if (outcome.line != 0) try text.writer.print("\nHook line: {d}", .{outcome.line});
+    if (outcome.process) |process| {
+        switch (process.term) {
+            .exited => |code| try text.writer.print("\nExit status: {d}", .{code}),
+            else => try text.writer.print("\nProcess termination: {any}", .{process.term}),
+        }
+        if (process.setup_failure) |failure| try text.writer.print("\nWorker setup: {t} (errno {d})", .{ failure.stage, failure.errno });
+        if (process.network_warning) |code| try text.writer.print("\nNetwork setup warning: errno {d}", .{code});
+    }
+    return rlpm.Diagnostic.init(.transaction, err, null).userMessage(allocator, .{ .detail = text.written(), .stage = "package setup" });
+}
+
 fn packageView(views: []const rlpm.Callbacks.PackageView, ref: ?rlpm.PackageRef) ?*const rlpm.Package {
     const identity = ref orelse return null;
     for (views) |view| if (std.meta.eql(view.reference, identity)) return view.package;
     return null;
 }
 fn information(self: *Adapter, event_type: output.EventType) void {
-    self.operation.status(.information, output.information(event_type) orelse return, "alpm.information", @intFromEnum(event_type));
+    self.operation.status(.information, output.information(event_type) orelse return, "alpm.information", @backingInt(event_type));
 }
 fn phaseEvent(phase: rlpm.Callbacks.Phase, boundary: rlpm.Callbacks.Boundary) ?output.EventType {
     if (boundary == .failed) return switch (phase) {
@@ -351,7 +404,7 @@ fn progress(data: ?*anyopaque, value: rlpm.Callbacks.Progress) void {
     const self = from(data);
     const package_matches = value.package != null and self.active_reference != null and std.meta.eql(value.package.?, self.active_reference.?);
     const code: ?i64 = switch (value.phase) {
-        .transaction => if (package_matches and self.active_action != null) @intFromEnum(self.active_action.?) else null,
+        .transaction => if (package_matches and self.active_action != null) @backingInt(self.active_action.?) else null,
         .conflicts, .inter_conflicts, .file_conflicts => 5,
         .disk_space => 6,
         .integrity => 7,
@@ -505,7 +558,7 @@ test "adapter owns all seven deferred question payloads and copies only answers"
         }
     };
     context.setQuestionHandler(.{ .function = Handler.answer, .data = &context });
-    const ref: rlpm.PackageRef = .{ .database = .{ .owner = @enumFromInt(1), .id = .local }, .generation = 1, .id = @enumFromInt(0) };
+    const ref: rlpm.PackageRef = .{ .database = .{ .owner = @fromBackingInt(@intCast(1)), .id = .local }, .generation = 1, .id = @fromBackingInt(@intCast(0)) };
     var questions = [_]rlpm.Callbacks.Question{
         .{ .install_ignored = .{ .package = ref } },
         .{ .replace = .{ .old = ref, .new = ref, .database = ref.database } },
@@ -754,9 +807,9 @@ test "native presentation preserves actions hook numbering and per-file download
     try adapter.init(&owner, &operation);
     defer adapter.deinit() catch unreachable;
     const cb = owner.options().callbacks;
-    const old_ref: rlpm.PackageRef = .{ .database = .{ .owner = @enumFromInt(1), .id = .local }, .generation = 1, .id = @enumFromInt(0) };
+    const old_ref: rlpm.PackageRef = .{ .database = .{ .owner = @fromBackingInt(@intCast(1)), .id = .local }, .generation = 1, .id = @fromBackingInt(@intCast(0)) };
     var new_ref = old_ref;
-    new_ref.id = @enumFromInt(1);
+    new_ref.id = @fromBackingInt(@intCast(1));
     var old_version = try rlpm.Version.init("1-1", t.allocator);
     defer old_version.deinit(t.allocator);
     var new_version = try rlpm.Version.init("2-1", t.allocator);
@@ -1115,4 +1168,83 @@ test "processing retry uses a fresh child and skipped transfers create no proces
     }
     try t.expect(!operation.completed);
     try t.expectEqual(@as(usize, 1), context.active_operations.load(.acquire));
+}
+
+test "action diagnostics preserve long names exit status and worker setup details" {
+    const padding: [4096]u8 = @splat('a');
+    const action_name = try std.fmt.allocPrint(std.testing.allocator, "{s}\x1b https://user:secret@example.test/private?token=hidden", .{padding});
+    defer std.testing.allocator.free(action_name);
+    const outcome: rlpm.TransactionActions.Outcome = .{
+        .kind = .scriptlet,
+        .name = action_name,
+        .function = .post_install,
+        .cause = error.ScriptletFailed,
+        .line = 42,
+        .process = .{ .term = .{ .exited = 7 }, .setup_failure = .{ .stage = .execute, .errno = 13 } },
+    };
+    const message = try formatActionFailure(std.testing.allocator, outcome);
+    defer std.testing.allocator.free(message);
+    for ([_][]const u8{ "ScriptletFailed", "post_install", "Exit status: 7", "Hook line: 42", "execute (errno 13)", "\\x1b", "Backend: rlpm" }) |part|
+        try std.testing.expect(std.mem.indexOf(u8, message, part) != null);
+    for ([_][]const u8{ "secret", "private", "hidden", "\x1b" }) |part|
+        try std.testing.expect(std.mem.indexOf(u8, message, part) == null);
+    var failing = std.testing.FailingAllocator.init(std.testing.allocator, .{ .fail_index = 0 });
+    var buffer: [512]u8 = undefined;
+    const fallback = formatActionFailure(failing.allocator(), outcome) catch rlpm.Diagnostic.fallback(&buffer, outcome.cause.?);
+    try std.testing.expect(std.mem.indexOf(u8, fallback, "ScriptletFailed") != null);
+}
+
+test "RLPM diagnostic events keep database context and share one explanation with legacy handlers" {
+    const t = std.testing;
+    var temporary = t.tmpDir(.{});
+    defer temporary.cleanup();
+    const path = try temporary.dir.realPathFileAlloc(t.io, ".", t.allocator);
+    defer t.allocator.free(path);
+    var owner = try rlpm.Owner.init(t.io, t.allocator, .{ .root = path, .database_path = path }, &.{});
+    defer owner.deinit() catch unreachable;
+    var context = op.OperationContext.init(t.allocator, t.io);
+    defer context.deinit();
+    const Capture = struct {
+        events: usize = 0,
+        legacy_events: usize = 0,
+        message: std.Io.Writer.Allocating = .init(t.allocator),
+        legacy_message: std.Io.Writer.Allocating = .init(t.allocator),
+        original_cause: bool = false,
+        fn event(data: ?*anyopaque, value: op.Event) void {
+            const self: *@This() = @ptrCast(@alignCast(data.?));
+            if (value == .failure) {
+                self.events += 1;
+                self.original_cause = value.failure.err == error.InvalidDatabaseEntry;
+                self.message.writer.writeAll(value.failure.message) catch unreachable;
+            }
+        }
+        fn legacy(data: ?*anyopaque, message: []const u8) void {
+            const self: *@This() = @ptrCast(@alignCast(data.?));
+            self.legacy_events += 1;
+            self.legacy_message.writer.writeAll(message) catch unreachable;
+        }
+    };
+    var capture: Capture = .{};
+    defer capture.message.deinit();
+    defer capture.legacy_message.deinit();
+    _ = try context.subscribe(.{ .function = Capture.event, .data = &capture });
+    var operation = context.begin(.{ .backend = .alpm, .kind = .inspect });
+    defer operation.finish(.failed);
+    var adapter: Adapter = undefined;
+    try adapter.init(&owner, &operation);
+    adapter.failure_handler = .{ .function = Capture.legacy, .data = &capture };
+    defer adapter.deinit() catch unreachable;
+    const callbacks = owner.options().callbacks;
+    callbacks.event.?(callbacks.event_context, .{ .diagnostic = rlpm.Diagnostic.init(.load_database, error.InvalidDatabaseEntry, owner.localDatabase()) });
+    callbacks.event.?(callbacks.event_context, .{ .lifecycle = .{ .state = .failed, .cause = error.InvalidDatabaseEntry } });
+    try t.expectEqual(@as(usize, 1), capture.events);
+    try t.expectEqual(@as(usize, 1), capture.legacy_events);
+    try t.expect(capture.original_cause);
+    try t.expectEqualStrings(capture.message.written(), capture.legacy_message.written());
+    for ([_][]const u8{ "Stage: load_database", "Database ID: 0", "Diagnostic category: database", "invalid metadata" }) |part|
+        try t.expect(std.mem.indexOf(u8, capture.message.written(), part) != null);
+    const rendered = try @import("diagnostics").format(t.allocator, error.InvalidDatabaseEntry, .{ .detail = capture.message.written(), .domain = "rlpm" });
+    defer t.allocator.free(rendered);
+    try t.expectEqual(@as(usize, 1), std.mem.count(u8, rendered, "Backend: rlpm"));
+    try t.expectEqual(@as(usize, 1), std.mem.count(u8, rendered, "Technical details:"));
 }

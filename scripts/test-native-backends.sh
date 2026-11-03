@@ -4,7 +4,9 @@ set -euo pipefail
 unset LD_PRELOAD LD_LIBRARY_PATH LD_AUDIT
 cd "$(dirname "$0")/.."
 enabled=${1:-auto}
-optimize=${2:-Debug}
+optimize=${2:-debug}
+profile=${3:-pacman}
+case "$profile" in pacman|devario) ;; *) echo 'Expected pacman or devario path profile' >&2; exit 2;; esac
 case "$enabled" in auto|true|false) ;; *) echo 'Expected auto, true, or false' >&2; exit 2;; esac
 stage=$(mktemp -d)
 trap 'rm -rf "$stage"' EXIT
@@ -37,11 +39,11 @@ PROBE
         exit 1
     fi
 fi
-build_args=(-Dlibalpm="$enabled" -Doptimize="$optimize" --summary all)
+build_args=(-Dpath-profile="$profile" -Dlibalpm="$enabled" -Doptimize="$optimize" --summary all)
 (cd Shelly.PackageManager && zig build native-backend-test "${build_args[@]}")
 (cd Shelly.Cli.Zig && zig build test "${build_args[@]}")
 (cd Shelly.Cli.Zig && zig build --prefix "$stage/install" "${build_args[@]}")
-# Keep all settings and output in this disposable stage, including when run as root.
+# Keep all settings and output in this disposable stage.
 export XDG_CONFIG_HOME="$stage/config" XDG_CACHE_HOME="$stage/cache" XDG_DATA_HOME="$stage/data" XDG_STATE_HOME="$stage/state"
 unset SUDO_USER SUDO_UID DOAS_USER PKEXEC_UID
 cli="$stage/install/bin/shelly"

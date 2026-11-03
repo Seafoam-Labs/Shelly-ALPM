@@ -5,9 +5,7 @@ const Package = @import("Package.zig");
 
 const DatabaseSearch = @This();
 
-const c = @cImport({
-    @cInclude("regex.h");
-});
+const c = @import("rlpm_c");
 
 extern fn rlpm_regex_create(pattern: [*:0]const u8, out: *?*c.regex_t) c_int;
 extern fn rlpm_regex_destroy(regex: *c.regex_t) void;

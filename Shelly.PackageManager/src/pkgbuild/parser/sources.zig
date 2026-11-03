@@ -8,7 +8,7 @@ const PkgbuildParser = @import("parser.zig").PkgbuildParser;
 const split_entry = types.split_entry;
 
 fn is_remote_source(location: []const u8) !bool {
-    if (std.ascii.indexOfIgnoreCase(location, "://") != null) return true else return false;
+    if (std.mem.find(u8, location, "://") != null) return true else return false;
 }
 
 const max_local_source_size = 32 * 1024 * 1024;

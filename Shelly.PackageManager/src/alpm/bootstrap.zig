@@ -264,7 +264,7 @@ const DiagnosticOutput = struct {
         if (status.level == .debug) return;
         // Hooks and scriptlets also reach the dedicated legacy handlers.
         if (status.code) |code| if (std.mem.eql(u8, code, "alpm.scriptlet")) return;
-        if (status.native_code == @intFromEnum(native_output.EventType.hook_run_start)) return;
+        if (status.native_code == @backingInt(native_output.EventType.hook_run_start)) return;
         defer self.stderr.flush() catch {};
         if (status.package_name) |name| {
             self.stderr.print("shellystrap: {s}: {s}\n", .{ name, status.message }) catch {};
@@ -312,7 +312,7 @@ const DiagnosticOutput = struct {
         self.lock();
         defer self.unlock();
         if (self.observe_downloads and (args.event_type == .pkg_retrieve_start or args.event_type == .pkg_retrieve_done)) return;
-        self.writeStatus(.{ .level = operation_api.StatusLevel.information, .message = args.message, .package_name = args.package_name, .code = args.code, .native_code = @as(?i64, @intFromEnum(args.event_type)) });
+        self.writeStatus(.{ .level = operation_api.StatusLevel.information, .message = args.message, .package_name = args.package_name, .code = args.code, .native_code = @as(?i64, @backingInt(args.event_type)) });
     }
 
     fn handleProgress(data: ?*anyopaque, args: events.ProgressArgs) void {
@@ -523,7 +523,7 @@ fn bootstrapReporting(
     defer for (package_names[0..initialized]) |name| allocator.free(name);
     for (options.packages, package_names) |name, *owned_name| {
         if (!validPackageTarget(name)) return error.InvalidPackageTarget;
-        owned_name.* = try allocator.dupeZ(u8, name);
+        owned_name.* = try allocator.dupeSentinel(u8, name, 0);
         initialized += 1;
     }
     if (options.dependency_plan) |path| {
@@ -765,7 +765,7 @@ fn rootJoin(allocator: std.mem.Allocator, root: []const u8, relative: []const u8
 fn rootJoinSentinel(allocator: std.mem.Allocator, root: []const u8, relative: []const u8) ![:0]u8 {
     const path = try rootJoin(allocator, root, relative);
     defer allocator.free(path);
-    return allocator.dupeZ(u8, path);
+    return allocator.dupeSentinel(u8, path, 0);
 }
 
 fn requireFile(io: std.Io, allocator: std.mem.Allocator, root: []const u8, relative: []const u8) !void {
@@ -890,7 +890,7 @@ test "bootstrap streams short diagnostics and progress before provisioning finis
             0 => DiagnosticOutput.handleScriptlet(&output, .{ .line = "initializing package" }),
             1 => DiagnosticOutput.handleHook(&output, .{ .name = "fixture.hook", .description = "Updating cache", .position = 1, .total = 1 }),
             2 => DiagnosticOutput.handleError(&output, .{ .message = "fixture failure" }),
-            3 => DiagnosticOutput.handleOperation(&output, .{ .status = .{ .envelope = operation.envelope, .level = .information, .message = "Checking package databases" } }),
+            3 => DiagnosticOutput.handleOperation(&output, .{ .status = .{ .envelope = operation.envelope, .level = .information, .message = "Checking package archive" } }),
             4 => DiagnosticOutput.handleOperation(&output, .{ .progress = .{ .envelope = operation.envelope, .update = .{ .stage = "download", .message = "fixture.pkg.tar", .bytes_completed = 4, .bytes_total = 8 } } }),
             5 => {
                 var finalizer: FinalizerOutput = .{ .writer = &writer.interface, .name = "ldconfig" };

@@ -296,7 +296,7 @@ pub const PackageDetail = extern struct {
         gtk.Widget.addCssClass(key.as(gtk.Widget), "dim-label");
         gtk.Box.append(row, key.as(gtk.Widget));
         var mbuf: [256]u8 = undefined;
-        const markup = std.fmt.bufPrintZ(&mbuf, "<a href=\"{s}\">{s}</a>", .{ value, value }) catch return;
+        const markup = std.fmt.bufPrintSentinel(&mbuf, "<a href=\"{s}\">{s}</a>", .{ value, value }, 0) catch return;
         const val = gtk.Label.new(null);
         gtk.Label.setMarkup(val, markup);
         gtk.Widget.setHalign(val.as(gtk.Widget), .end);
@@ -355,7 +355,7 @@ pub const PackageDetail = extern struct {
         if (items.len == 0) return;
 
         var buf: [64]u8 = undefined;
-        const header = std.fmt.bufPrintZ(&buf, "{s} ({d})", .{ title, items.len }) catch translations._("Section");
+        const header = std.fmt.bufPrintSentinel(&buf, "{s} ({d})", .{ title, items.len }, 0) catch translations._("Section");
         const expander = gtk.Expander.new(header);
         gtk.Expander.setExpanded(expander, 0);
         gtk.Widget.addCssClass(expander.as(gtk.Widget), "spec-expander");
@@ -388,7 +388,7 @@ pub const PackageDetail = extern struct {
                 gtk.Box.append(row_content, lbl.as(gtk.Widget));
                 appendInstalledIndicator(row_content, is_installed);
                 gtk.Button.setChild(row_btn, row_content.as(gtk.Widget));
-                const name_owned = std.heap.c_allocator.dupeZ(u8, dep_name) catch continue;
+                const name_owned = std.heap.c_allocator.dupeSentinel(u8, dep_name, 0) catch continue;
                 gobject.Object.setDataFull(row_btn.as(gobject.Object), "dep-name", name_owned.ptr, &freeDepName);
                 gobject.Object.setData(row_btn.as(gobject.Object), "page", page);
                 _ = gtk.Button.signals.clicked.connect(row_btn, ?*anyopaque, &onDepClicked, null, .{});

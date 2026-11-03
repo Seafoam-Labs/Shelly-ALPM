@@ -8,7 +8,7 @@ pub const SizeConverter = struct {
         const abs: u64 = @intCast(if (neg) -%bytes else bytes);
 
         if (abs < 1024) {
-            return std.fmt.bufPrintZ(buf, "{d} B", .{bytes}) catch "?";
+            return std.fmt.bufPrintSentinel(buf, "{d} B", .{bytes}, 0) catch "?";
         }
 
         const bits = 63 - @clz(abs);
@@ -21,6 +21,6 @@ pub const SizeConverter = struct {
         const frac = (rem * 100) >> shift;
 
         const sign: []const u8 = if (neg) "-" else "";
-        return std.fmt.bufPrintZ(buf, "{s}{d}.{d:0>2} {s}", .{ sign, whole, frac, suffixes[i] }) catch "?";
+        return std.fmt.bufPrintSentinel(buf, "{s}{d}.{d:0>2} {s}", .{ sign, whole, frac, suffixes[i] }, 0) catch "?";
     }
 };

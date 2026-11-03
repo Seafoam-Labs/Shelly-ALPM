@@ -195,9 +195,9 @@ pub fn loadMetadata(
     }
 
     if (request.members) {
-        inline for (std.meta.fields(Package.Members)) |field| {
-            @field(package.members, field.name) = present: {
-                _ = dir.statFile(io, field.name, .{}) catch |err| switch (err) {
+        inline for (@typeInfo(Package.Members).@"struct".field_names) |field_name| {
+            @field(package.members, field_name) = present: {
+                _ = dir.statFile(io, field_name, .{}) catch |err| switch (err) {
                     error.FileNotFound => break :present .absent,
                     else => return err,
                 };

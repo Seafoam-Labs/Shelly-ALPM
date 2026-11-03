@@ -64,7 +64,7 @@ pub const PlanDialog = extern struct {
         p.ctx = ctx;
 
         var title_buf: [256]u8 = undefined;
-        const title = std.fmt.bufPrintZ(&title_buf, "{s}", .{question.question_text}) catch "";
+        const title = std.fmt.bufPrintSentinel(&title_buf, "{s}", .{question.question_text}, 0) catch "";
         gtk.Label.setLabel(p.title_label, title);
 
         set_summary(p, question);
@@ -92,14 +92,14 @@ pub const PlanDialog = extern struct {
                 SizeConverter.convert_null_term(&dl_buf, @intCast(size))
             else
                 translations._("Unknown");
-            const text = std.fmt.bufPrintZ(&buf, "{d} {s} {s} {s} — {s} {s}", .{
+            const text = std.fmt.bufPrintSentinel(&buf, "{d} {s} {s} {s} — {s} {s}", .{
                 q.packages.len,
                 translations._("package(s)"),
                 translations._("to"),
                 q.action,
                 removed,
                 translations._("removed size"),
-            }) catch "";
+            }, 0) catch "";
             gtk.Label.setLabel(p.summary_label, text);
             return;
         }
@@ -107,20 +107,16 @@ pub const PlanDialog = extern struct {
         const dl = SizeConverter.convert_null_term(&dl_buf, @intCast(q.total_download_size orelse 0));
         const net = SizeConverter.convert_null_term(&net_buf, q.net_installed_size orelse 0);
 
-        const text = std.fmt.bufPrintZ(
-            &buf,
-            "{d} {s} {s} {s} — {s} {s}, {s} {s}",
-            .{
-                q.packages.len,
-                translations._("package(s)"),
-                translations._("to"),
-                q.action,
-                dl,
-                translations._("download"),
-                net,
-                translations._("net"),
-            },
-        ) catch "";
+        const text = std.fmt.bufPrintSentinel(&buf, "{d} {s} {s} {s} — {s} {s}, {s} {s}", .{
+            q.packages.len,
+            translations._("package(s)"),
+            translations._("to"),
+            q.action,
+            dl,
+            translations._("download"),
+            net,
+            translations._("net"),
+        }, 0) catch "";
         gtk.Label.setLabel(p.summary_label, text);
     }
 
@@ -138,7 +134,7 @@ pub const PlanDialog = extern struct {
 
         var name_buf: [160]u8 = undefined;
         const name_z = if (pkg.version) |v|
-            std.fmt.bufPrintZ(&name_buf, "{s}  {s}", .{ pkg.name, v }) catch pkg_name_fallback(&name_buf, pkg.name)
+            std.fmt.bufPrintSentinel(&name_buf, "{s}  {s}", .{ pkg.name, v }, 0) catch pkg_name_fallback(&name_buf, pkg.name)
         else
             pkg_name_fallback(&name_buf, pkg.name);
         const name = gtk.Label.new(name_z);
@@ -148,7 +144,7 @@ pub const PlanDialog = extern struct {
 
         if (pkg.repository) |repo| {
             var repo_buf: [64]u8 = undefined;
-            const repo_z = std.fmt.bufPrintZ(&repo_buf, "{s}", .{repo}) catch "";
+            const repo_z = std.fmt.bufPrintSentinel(&repo_buf, "{s}", .{repo}, 0) catch "";
             const repo_label = gtk.Label.new(repo_z);
             gtk.Widget.addCssClass(repo_label.as(gtk.Widget), "dim-label");
             gtk.Box.append(row, repo_label.as(gtk.Widget));
@@ -167,7 +163,7 @@ pub const PlanDialog = extern struct {
     }
 
     fn pkg_name_fallback(buf: []u8, name: []const u8) [:0]const u8 {
-        return std.fmt.bufPrintZ(buf, "{s}", .{name}) catch "";
+        return std.fmt.bufPrintSentinel(buf, "{s}", .{name}, 0) catch "";
     }
 
     fn on_confirm(self: *Self) callconv(.c) void {

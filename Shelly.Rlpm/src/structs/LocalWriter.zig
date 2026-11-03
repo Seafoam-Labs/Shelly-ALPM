@@ -73,9 +73,9 @@ fn serializeDescription(a: std.mem.Allocator, p: *const Package) ![]const u8 {
     if (p.validation.none or p.validation.md5 or p.validation.sha256 or p.validation.pgp) {
         try w.writeAll("%VALIDATION%\n");
 
-        inline for (std.meta.fields(Package.Validation)) |item|
-            if (@field(p.validation, item.name)) {
-                try w.print("{s}\n", .{item.name});
+        inline for (@typeInfo(Package.Validation).@"struct".field_names) |item_name|
+            if (@field(p.validation, item_name)) {
+                try w.print("{s}\n", .{item_name});
             };
 
         try w.writeByte('\n');

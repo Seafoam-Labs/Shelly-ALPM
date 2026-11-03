@@ -9,8 +9,8 @@ pub const Backend = enum(u8) {
         return self == .rlpm or libalpm_enabled;
     }
     pub fn parse(value: []const u8) error{InvalidBackend}!Backend {
-        inline for (std.meta.fields(Backend)) |field| {
-            if (std.ascii.eqlIgnoreCase(field.name, value)) return @enumFromInt(field.value);
+        inline for (@typeInfo(Backend).@"enum".field_names, @typeInfo(Backend).@"enum".field_values) |field_name, field_value| {
+            if (std.ascii.eqlIgnoreCase(field_name, value)) return @fromBackingInt(@intCast(field_value));
         }
         return error.InvalidBackend;
     }

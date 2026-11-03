@@ -51,15 +51,15 @@ pub const Entry = struct {
     }
 
     fn clone(self: Entry, allocator: std.mem.Allocator) !Entry {
-        const name = try allocator.dupeZ(u8, self.name);
+        const name = try allocator.dupeSentinel(u8, self.name, 0);
         errdefer allocator.free(name);
-        const version = try allocator.dupeZ(u8, self.version);
+        const version = try allocator.dupeSentinel(u8, self.version, 0);
         errdefer allocator.free(version);
-        const release = try allocator.dupeZ(u8, self.release);
+        const release = try allocator.dupeSentinel(u8, self.release, 0);
         errdefer allocator.free(release);
-        const version_release = try allocator.dupeZ(u8, self.version_release);
+        const version_release = try allocator.dupeSentinel(u8, self.version_release, 0);
         errdefer allocator.free(version_release);
-        const arch = try allocator.dupeZ(u8, self.arch);
+        const arch = try allocator.dupeSentinel(u8, self.arch, 0);
         errdefer allocator.free(arch);
         return .{
             .name = name,
@@ -226,15 +226,15 @@ pub fn parsePackageFilename(
     const name = through_version[0..version_separator];
     if (name.len == 0 or version.len == 0 or release.len == 0 or arch.len == 0) return null;
 
-    const owned_name = try allocator.dupeZ(u8, name);
+    const owned_name = try allocator.dupeSentinel(u8, name, 0);
     errdefer allocator.free(owned_name);
-    const owned_version = try allocator.dupeZ(u8, version);
+    const owned_version = try allocator.dupeSentinel(u8, version, 0);
     errdefer allocator.free(owned_version);
-    const owned_release = try allocator.dupeZ(u8, release);
+    const owned_release = try allocator.dupeSentinel(u8, release, 0);
     errdefer allocator.free(owned_release);
     const version_release = try std.fmt.allocPrintSentinel(allocator, "{s}-{s}", .{ version, release }, 0);
     errdefer allocator.free(version_release);
-    const owned_arch = try allocator.dupeZ(u8, arch);
+    const owned_arch = try allocator.dupeSentinel(u8, arch, 0);
     errdefer allocator.free(owned_arch);
     return .{
         .name = owned_name,

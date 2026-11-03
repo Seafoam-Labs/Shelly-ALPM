@@ -25,11 +25,11 @@ pub const SearchResult = struct {
 pub fn clone(allocator: std.mem.Allocator, item: SearchResult) !SearchResult {
     return .{
         .source = item.source,
-        .name = try allocator.dupeZ(u8, item.name),
-        .install_target = try allocator.dupeZ(u8, item.install_target),
-        .version = try allocator.dupeZ(u8, item.version),
-        .description = try allocator.dupeZ(u8, item.description),
-        .repository = try allocator.dupeZ(u8, item.repository),
+        .name = try allocator.dupeSentinel(u8, item.name, 0),
+        .install_target = try allocator.dupeSentinel(u8, item.install_target, 0),
+        .version = try allocator.dupeSentinel(u8, item.version, 0),
+        .description = try allocator.dupeSentinel(u8, item.description, 0),
+        .repository = try allocator.dupeSentinel(u8, item.repository, 0),
         .installed = item.installed,
         .out_of_date = item.out_of_date,
         .verified = item.verified,

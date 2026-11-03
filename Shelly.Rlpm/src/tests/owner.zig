@@ -307,7 +307,7 @@ test "local queries retain repository provenance and reject invalidated package 
 
     try std.testing.expectError(
         error.StalePackageReference,
-        owner.packageReference(local, @enumFromInt(999)),
+        owner.packageReference(local, @fromBackingInt(@intCast(999))),
     );
 
     try owner.invalidateDatabase(local);
@@ -564,7 +564,7 @@ fn allocationLifecycle(failing: std.mem.Allocator, fixture: Fixture) !void {
 test "owner lifecycle propagates every allocation failure and releases all owned storage" {
     var fixture = try Fixture.init(true);
     defer fixture.deinit();
-    try std.testing.checkAllAllocationFailures(allocator, allocationLifecycle, .{fixture});
+    try @import("allocation_failures.zig").checkAllAllocationFailures(allocator, allocationLifecycle, .{fixture});
 }
 
 test "failed option replacement preserves old options and database identities" {

@@ -1,11 +1,9 @@
 const std = @import("std");
-const diagnostics = @import("diagnostics");
 const bindings = @import("Shelly_Ui_Gtk");
 const gtk = bindings.gtk;
 const gobject = bindings.gobject;
 const glib = bindings.glib;
 const ShellyCommands = @import("../services/shelly_operation.zig").ShellyCommands;
-const ShellyCli = @import("../services/shelly_cli.zig").ShellyCli;
 const support = @import("support.zig");
 const ShellyWindow = @import("../shelly_window.zig").ShellyWindow;
 const Toast = @import("../helpers/custom_ui_comps/toast.zig").Toast;
@@ -94,28 +92,17 @@ pub const ShellyUtilitiesPage = extern struct {
     }
 
     fn on_remove_db_lock(_: *gtk.Button, self: *Self) callconv(.c) void {
-        var arena = std.heap.ArenaAllocator.init(std.heap.c_allocator);
-        defer arena.deinit();
-        var threaded: std.Io.Threaded = .init(arena.allocator(), .{});
-        defer threaded.deinit();
-
-        var failure_detail: ?[]u8 = null;
-        const cli = ShellyCli{ .allocator = arena.allocator(), .io = threaded.io(), .failure_detail = &failure_detail };
-        const parsed = cli.repair_db() catch |err| {
-            std.log.err("Could not remove the package database lock. {0s}\n\nTechnical details: {1s}", .{ diagnostics.cause(err), @errorName(err) });
-            const message = arena.allocator().dupeZ(u8, failure_detail orelse "Could not remove the package database lock. Shelly returned no error details. Review the command output before retrying.") catch return;
-            self.priv().toast.show(.@"error", message);
-            return;
-        };
-        defer parsed.deinit();
-
-        const response = parsed.value;
-        if (response.isSuccess()) {
-            self.priv().toast.show(.success, translations._("Database lock removed successfully"));
-        } else {
-            const message = arena.allocator().dupeZ(u8, response.text()) catch return;
-            self.priv().toast.show(.@"error", message);
-        }
+        const win = support.getWindow(ShellyWindow, self) orelse return;
+        // Authentication can take minutes. Let the transaction runner wait for
+        // pkexec off the GTK thread, just like the other privileged utilities.
+        win.startTransaction(.{
+            .title = translations._("Removing stale database lock"),
+            .argv = &.{ "utility", "--repair-db" },
+            .packages = &.{},
+            .on_complete = &on_transaction_complete,
+            .privileged = true,
+            .ctx = self,
+        });
     }
 
     fn on_fix_permissions(_: *gtk.Button, self: *Self) callconv(.c) void {

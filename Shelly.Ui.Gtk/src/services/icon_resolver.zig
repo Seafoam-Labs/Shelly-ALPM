@@ -74,9 +74,9 @@ pub const IconResolver = struct {
 
     fn existingPath(io: std.Io, alloc: std.mem.Allocator, base_path: []const u8, relative: []const u8) ?[:0]const u8 {
         var buf: [std.fs.max_path_bytes]u8 = undefined;
-        const p = std.fmt.bufPrintZ(&buf, "{s}/{s}", .{ base_path, relative }) catch return null;
+        const p = std.fmt.bufPrintSentinel(&buf, "{s}/{s}", .{ base_path, relative }, 0) catch return null;
         std.Io.Dir.cwd().access(io, p, .{}) catch return null;
-        return alloc.dupeZ(u8, p) catch null;
+        return alloc.dupeSentinel(u8, p, 0) catch null;
     }
 };
 

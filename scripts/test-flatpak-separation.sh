@@ -2,6 +2,7 @@
 
 set -euo pipefail
 unset LD_PRELOAD
+native_args=(-Dlibalpm="${SHELLY_LIBALPM:-true}" -Dpath-profile="${SHELLY_PATH_PROFILE:-pacman}")
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 keep_build_root="${SHELLY_FLATPAK_KEEP_BUILD_ROOT:-0}"
@@ -34,9 +35,9 @@ mkdir -p \
     "${build_root}/cache" \
     "${build_root}/global-cache"
 
+export ZIG_GLOBAL_CACHE_DIR="${build_root}/global-cache"
 zig_common=(
     --cache-dir "${build_root}/cache"
-    --global-cache-dir "${build_root}/global-cache"
 )
 
 (
@@ -44,7 +45,7 @@ zig_common=(
     zig build "${zig_common[@]}" \
         --prefix "${build_root}/backend" \
         -Dcpu=baseline \
-        -Doptimize=ReleaseSafe
+        -Doptimize=safe
     zig build test "${zig_common[@]}"
     zig build abi-test "${zig_common[@]}"
     zig build integration-test "${zig_common[@]}"
@@ -52,16 +53,16 @@ zig_common=(
 
 (
     cd "${repo_root}/Shelly.PackageManager"
-    zig build flatpak-test "${zig_common[@]}"
+    zig build flatpak-test "${zig_common[@]}" "${native_args[@]}"
 )
 
 (
     cd "${repo_root}/Shelly.Cli.Zig"
-    zig build "${zig_common[@]}" \
+    zig build "${zig_common[@]}" "${native_args[@]}" \
         --prefix "${build_root}/cli" \
         -Dcpu=baseline \
-        -Doptimize=ReleaseSmall
-    zig build test "${zig_common[@]}"
+        -Doptimize=small
+    zig build test "${zig_common[@]}" "${native_args[@]}"
 )
 
 "${repo_root}/scripts/check-flatpak-separation.sh" \

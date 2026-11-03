@@ -72,7 +72,7 @@ resolver's accepted replacement relationships. The preflight manifest adds
 resolved adoptions with filesystem observations. See [migration.md](migration.md)
 for the Devario example, source validation, backup and persistence behavior.
 
-## Lock and snapshot contract
+## Lock and metadata contract
 
 Initialization creates `<database_path>/db.lck` with `O_EXCL|O_CLOEXEC`, mode 000,
 and no contents, matching the pinned library. It retains the descriptor until
@@ -96,15 +96,13 @@ servers, reload and invalidation are frozen until release. Lazy queries and
 verified archive loads remain available outside callbacks. Plans deep-copy their
 metadata; later lazy queries cannot change the reviewed set.
 
-A sorted SHA-256 content fingerprint of local/sync state is checked at
-initialization, before and after preparation, and before commit. Out-of-band
-edits fail with `StaleDatabaseState`; no silent reprepare or changed plan is
-committed. Regular file symlinks are read through; symlinked subdirectories are
-rejected because the walker would otherwise omit their contents. Full hashing is
-a deliberately conservative first implementation; repository refresh must
-integrate legitimate publication, and performance acceptance must measure
-hashing costs on large databases. The fingerprint is not a filesystem preflight
-or keyring validation substitute.
+Database consistency relies on cooperating writers honoring `db.lck`. RLPM
+checks cancellation and lock ownership at transaction and execution boundaries;
+it does not hash the local or sync database trees during initialization,
+preparation, downloads, preflight, or package execution. Changes made by writers
+that ignore the lock have no dedicated database content-change detection.
+Package checksums, signatures, sealed archives, and filesystem preflight
+validation remain enforced independently.
 
 ## Events, questions and cancellation
 
@@ -126,7 +124,7 @@ without copying arenas or acquiring file-descriptor ownership.
 
 Callbacks run synchronously and borrow payloads. Reentry fails with
 `CallbackReentry`. `Owner.requestCancellation` is the only cross-thread
-operation; it sets an atomic flag. Preparation checks it during hashing/solving,
+operation; it sets an atomic flag. Preparation checks it during dependency solving,
 before and after questions/events, and before the commit boundary. Release
 remains available after cancellation. Downloads, preflight, actions and payload
 mutations check cancellation. The executor retains partial work and

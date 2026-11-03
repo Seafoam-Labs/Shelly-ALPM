@@ -52,7 +52,7 @@ pub fn build(b: *std.Build) void {
 
     const run_command = b.addRunArtifact(executable);
     run_command.step.dependOn(b.getInstallStep());
-    if (b.args) |args| run_command.addArgs(args);
+    run_command.addPassthruArgs();
 
     const run_step = b.step("run", "Run Shelly");
     run_step.dependOn(&run_command.step);

@@ -20,7 +20,7 @@ const result = tx.result();
 // Inspect result.warnings, tx.execution and tx.actions() before release.
 ```
 
-Commit verifies the reviewed database snapshot and held lock, acquires packages,
+Commit verifies the held lock, checks cancellation, acquires packages,
 loads sealed archives, checks filesystem effects, then starts pre-transaction
 hooks. It processes resolved removals followed by additions. Package-operation
 start precedes the pre-scriptlet. Removal's post-scriptlet and operation-done event

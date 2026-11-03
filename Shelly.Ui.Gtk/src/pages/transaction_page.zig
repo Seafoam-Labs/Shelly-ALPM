@@ -6,6 +6,7 @@ const glib = bindings.glib;
 const gobject = bindings.gobject;
 const support = @import("support.zig");
 const a11y = @import("../helpers/a11y.zig");
+const ansi = @import("../helpers/ansi.zig");
 const ShellyOperation = @import("../services/shelly_operation.zig").ShellyOperation;
 const Event = @import("../services/shelly_operation.zig").Event;
 const ShellyWindow = @import("../shelly_window.zig").ShellyWindow;
@@ -105,6 +106,13 @@ const ProgressLine = struct {
     end: *gtk.TextMark,
 };
 
+/// Packs an optional ANSI color into a tag-name-safe integer; the value
+/// above the 24-bit color range marks "unset" without colliding with black.
+fn rgbValue(color: ?ansi.Rgb) u32 {
+    if (color) |c| return (@as(u32, c.r) << 16) | (@as(u32, c.g) << 8) | c.b;
+    return 0x1_0000_00;
+}
+
 pub const TransactionPage = extern struct {
     parent_instance: Parent,
     const Self = @This();
@@ -130,12 +138,12 @@ pub const TransactionPage = extern struct {
         on_complete_ctx: ?*anyopaque,
         operation: ?*ShellyOperation,
         progress_lines: std.StringHashMapUnmanaged(ProgressLine),
+        ansi_tags: std.StringHashMapUnmanaged(*gtk.TextTag),
         finished: bool,
         failure_message: ?[]const u8,
         privileged: bool,
         cancelled: bool,
         terminal_visible: bool,
-        scratch: [1024]u8 = undefined,
         var offset: c_int = 0;
     };
 
@@ -172,6 +180,7 @@ pub const TransactionPage = extern struct {
         p.cancelled = false;
         p.terminal_visible = true;
         p.progress_lines = .empty;
+        p.ansi_tags = .empty;
     }
 
     pub fn new() *Self {
@@ -190,7 +199,7 @@ pub const TransactionPage = extern struct {
         setLabel(p.title_label, request.title);
 
         for (request.packages) |name| {
-            const owned = alloc.dupeZ(u8, name) catch continue;
+            const owned = alloc.dupeSentinel(u8, name, 0) catch continue;
             const row = build_row(alloc, owned) catch continue;
             gtk.Box.append(p.rows_box, row.root.as(gtk.Widget));
             p.rows.put(alloc, owned, row) catch {};
@@ -359,10 +368,12 @@ pub const TransactionPage = extern struct {
                 append_terminal(self, e.message);
                 const p = self.priv();
                 if (p.arena) |arena| {
+                    // Plain labels cannot render SGR codes; keep the summary clean.
+                    const message = ansi.stripLine(arena.allocator(), e.message) catch e.message;
                     const previous = p.failure_message orelse "";
-                    if (std.mem.indexOf(u8, previous, e.message) == null)
+                    if (std.mem.indexOf(u8, previous, message) == null)
                         p.failure_message = std.fmt.allocPrint(arena.allocator(), "{s}{s}{s}", .{
-                            previous, if (previous.len > 0) "\n\n" else "", e.message,
+                            previous, if (previous.len > 0) "\n\n" else "", message,
                         }) catch p.failure_message;
                 }
             },
@@ -460,8 +471,8 @@ pub const TransactionPage = extern struct {
 
         const arena = p.arena orelse return null;
         const alloc = arena.allocator();
-        const owned_key = alloc.dupeZ(u8, key) catch return null;
-        const owned_display = alloc.dupeZ(u8, display) catch return null;
+        const owned_key = alloc.dupeSentinel(u8, key, 0) catch return null;
+        const owned_display = alloc.dupeSentinel(u8, display, 0) catch return null;
         const row = build_row(alloc, owned_display) catch return null;
 
         gtk.Box.append(p.rows_box, row.root.as(gtk.Widget));
@@ -760,12 +771,30 @@ pub const TransactionPage = extern struct {
     /// text is never announced. Writing the same text as the progress bar's
     /// accessible description fires a property change an AT will speak.
     fn setRowStatus(row: *PackageRow, text: []const u8) void {
-        setLabel(row.status_label, text);
-        a11y.setDescription(row.progress.as(gtk.Widget), text);
+        var strip_buf: [256]u8 = undefined;
+        const stripped = ansi.stripToBuffer(&strip_buf, text);
+        setLabel(row.status_label, stripped);
+        a11y.setDescription(row.progress.as(gtk.Widget), stripped);
     }
 
     fn setLabel(label: *gtk.Label, text: []const u8) void {
-        const value = std.heap.c_allocator.dupeZ(u8, text) catch return;
+        // Labels cannot render SGR codes; strip them so styled backend
+        // messages stay readable outside the terminal view.
+        var stripped_buf: [1024]u8 = undefined;
+        var owned: ?[]u8 = null;
+        defer if (owned) |bytes| std.heap.c_allocator.free(bytes);
+        var visible = text;
+        if (std.mem.indexOfScalar(u8, text, 0x1b) != null) {
+            if (text.len <= stripped_buf.len) {
+                visible = ansi.stripToBuffer(&stripped_buf, text);
+            } else {
+                if (ansi.stripLine(std.heap.c_allocator, text)) |stripped| {
+                    owned = stripped;
+                    visible = stripped;
+                } else |_| {}
+            }
+        }
+        const value = std.heap.c_allocator.dupeSentinel(u8, visible, 0) catch return;
         defer std.heap.c_allocator.free(value);
         gtk.Label.setLabel(label, value);
     }
@@ -773,54 +802,47 @@ pub const TransactionPage = extern struct {
     fn append_terminal(self: *Self, text: []const u8) void {
         const p = self.priv();
         const normalized = normalizeTerminalText(text);
+        var line = ansi.renderLine(std.heap.c_allocator, normalized) catch return;
+        defer line.deinit(std.heap.c_allocator);
         if (p.arena) |arena| {
-            if (!rememberTerminalLine(arena.allocator(), &p.terminal_lines, normalized)) return;
+            // Key deduplication on visible text so styled repeats collapse.
+            if (!rememberTerminalLine(arena.allocator(), &p.terminal_lines, line.text)) return;
         }
 
         const buffer = gtk.TextView.getBuffer(p.terminal_view);
         var end: gtk.TextIter = undefined;
         gtk.TextBuffer.getEndIter(buffer, &end);
 
-        const normalized_z = std.heap.c_allocator.dupeZ(u8, normalized) catch return;
-        defer std.heap.c_allocator.free(normalized_z);
-        gtk.TextBuffer.insert(buffer, &end, normalized_z, @intCast(normalized.len));
+        self.insertAnsiLine(buffer, &end, line);
         gtk.TextBuffer.insert(buffer, &end, "\n", 1);
 
         self.scrollTerminalToBottom();
     }
 
-    fn scratchZ(self: *Self, s: []const u8) [:0]const u8 {
-        const p = self.priv();
-        const n = @min(s.len, p.scratch.len - 1);
-        @memcpy(p.scratch[0..n], s[0..n]);
-        p.scratch[n] = 0;
-        return p.scratch[0..n :0];
-    }
-
     fn updateProgressLine(self: *Self, key: []const u8, text: []const u8) void {
         const p = self.priv();
         const normalized = normalizeTerminalText(text);
+        var line = ansi.renderLine(std.heap.c_allocator, normalized) catch return;
+        defer line.deinit(std.heap.c_allocator);
         const buffer = gtk.TextView.getBuffer(p.terminal_view);
 
-        const text_z = self.scratchZ(normalized);
-
-        if (p.progress_lines.get(key)) |line| {
+        if (p.progress_lines.get(key)) |progress_line| {
             var start: gtk.TextIter = undefined;
-            gtk.TextBuffer.getIterAtMark(buffer, &start, line.start);
+            gtk.TextBuffer.getIterAtMark(buffer, &start, progress_line.start);
 
             var end = start;
             if (gtk.TextIter.getCharsInLine(&end) > 0) {
                 _ = gtk.TextIter.forwardToLineEnd(&end);
             }
             gtk.TextBuffer.delete(buffer, &start, &end);
-            gtk.TextBuffer.getIterAtMark(buffer, &start, line.start);
-            gtk.TextBuffer.insert(buffer, &start, text_z, @intCast(normalized.len));
+            gtk.TextBuffer.getIterAtMark(buffer, &start, progress_line.start);
+            self.insertAnsiLine(buffer, &start, line);
         } else {
             const arena = p.arena orelse return;
             var end: gtk.TextIter = undefined;
             gtk.TextBuffer.getEndIter(buffer, &end);
             const start_mark = gtk.TextBuffer.createMark(buffer, null, &end, 1);
-            gtk.TextBuffer.insert(buffer, &end, text_z, @intCast(normalized.len));
+            self.insertAnsiLine(buffer, &end, line);
             const end_mark = gtk.TextBuffer.createMark(buffer, null, &end, 0);
             gtk.TextBuffer.insert(buffer, &end, "\n", 1);
 
@@ -848,6 +870,108 @@ pub const TransactionPage = extern struct {
         const mark = gtk.TextBuffer.createMark(buffer, null, &end, 0);
         gtk.TextView.scrollToMark(p.terminal_view, mark, 0, 1, 0, 1);
         gtk.TextBuffer.deleteMark(buffer, mark);
+    }
+
+    /// Inserts one parsed ANSI line at `iter`, tagging each styled run.
+    /// The insert call advances `iter` past the inserted text; the run's
+    /// start is recovered by offset because mutations invalidate any
+    /// iterator copies taken beforehand.
+    fn insertAnsiLine(self: *Self, buffer: *gtk.TextBuffer, iter: *gtk.TextIter, line: ansi.Line) void {
+        for (line.runs) |segment| {
+            if (segment.text.len == 0) continue;
+            const run_start_offset = gtk.TextIter.getOffset(iter);
+            const text_z = std.heap.c_allocator.dupeSentinel(u8, segment.text, 0) catch continue;
+            defer std.heap.c_allocator.free(text_z);
+            gtk.TextBuffer.insert(buffer, iter, text_z.ptr, @intCast(segment.text.len));
+            if (self.ansiTag(buffer, segment.attrs)) |tag| {
+                var run_start: gtk.TextIter = undefined;
+                gtk.TextBuffer.getIterAtOffset(buffer, &run_start, run_start_offset);
+                gtk.TextBuffer.applyTag(buffer, tag, &run_start, iter);
+            }
+        }
+    }
+
+    /// Lazily creates and caches a GtkTextTag matching the ANSI
+    /// attributes. Terminal semantics resolve here: reverse video swaps
+    /// colors against terminal defaults, dim halves the foreground, and
+    /// hidden text renders struck out. Non-SGR sequences were already
+    /// dropped by the parser; full terminal emulation stays out of scope.
+    fn ansiTag(self: *Self, buffer: *gtk.TextBuffer, attrs: ansi.Attrs) ?*gtk.TextTag {
+        const p = self.priv();
+        var fg = attrs.fg;
+        var bg = attrs.bg;
+        if (attrs.dim) {
+            if (fg) |color| {
+                fg = ansi.Rgb{ .r = color.r / 2, .g = color.g / 2, .b = color.b / 2 };
+            } else {
+                fg = ansi.Rgb{ .r = 0x92, .g = 0x92, .b = 0x92 };
+            }
+        }
+        if (attrs.inverse) {
+            const previous_fg = fg;
+            const previous_bg = bg;
+            fg = previous_bg orelse ansi.Rgb{ .r = 0xe5, .g = 0xe5, .b = 0xe5 };
+            bg = previous_fg orelse ansi.Rgb{ .r = 0x2d, .g = 0x2d, .b = 0x2d };
+        }
+        const strike = attrs.hidden;
+        if (fg == null and bg == null and !attrs.bold and !attrs.italic and !attrs.underline and !strike) return null;
+
+        var name_buf: [48]u8 = undefined;
+        const name = std.fmt.bufPrintSentinel(&name_buf, "ansi-{x}-{x}-{d}{d}{d}{d}", .{
+            rgbValue(fg),
+            rgbValue(bg),
+            @intFromBool(attrs.bold),
+            @intFromBool(attrs.italic),
+            @intFromBool(attrs.underline),
+            @intFromBool(strike),
+        }, 0) catch return null;
+
+        if (p.ansi_tags.get(name)) |tag| return tag;
+
+        const table = gtk.TextBuffer.getTagTable(buffer);
+        if (gtk.TextTagTable.lookup(table, name)) |existing| {
+            cacheTerminalTag(self, name, existing);
+            return existing;
+        }
+
+        const tag = gtk.TextBuffer.createTag(buffer, name, null);
+        if (fg) |color| {
+            var hex: [8:0]u8 = undefined;
+            const value = std.fmt.bufPrintSentinel(&hex, "#{x:0>2}{x:0>2}{x:0>2}", .{ color.r, color.g, color.b }, 0) catch null;
+            if (value) |v| setTagString(tag, "foreground", v);
+        }
+        if (bg) |color| {
+            var hex: [8:0]u8 = undefined;
+            const value = std.fmt.bufPrintSentinel(&hex, "#{x:0>2}{x:0>2}{x:0>2}", .{ color.r, color.g, color.b }, 0) catch null;
+            if (value) |v| setTagString(tag, "background", v);
+        }
+        if (attrs.bold) setTagInt(tag, "weight", 700);
+        if (attrs.italic) setTagInt(tag, "style", 2);
+        if (attrs.underline) setTagInt(tag, "underline", 1);
+        if (strike) setTagInt(tag, "strikethrough", 1);
+
+        cacheTerminalTag(self, name, tag);
+        return tag;
+    }
+
+    fn cacheTerminalTag(self: *Self, name: [:0]const u8, tag: *gtk.TextTag) void {
+        const p = self.priv();
+        const owned = std.heap.c_allocator.dupeSentinel(u8, name, 0) catch return;
+        p.ansi_tags.put(std.heap.c_allocator, owned, tag) catch {
+            std.heap.c_allocator.free(owned);
+        };
+    }
+
+    fn setTagString(tag: *gtk.TextTag, property: [*:0]const u8, value: [*:0]const u8) void {
+        var gvalue = gobject.ext.Value.newFrom(@as(?[*:0]const u8, value));
+        defer gvalue.unset();
+        gobject.Object.setProperty(@ptrCast(@alignCast(tag)), property, &gvalue);
+    }
+
+    fn setTagInt(tag: *gtk.TextTag, property: [*:0]const u8, value: c_int) void {
+        var gvalue = gobject.ext.Value.newFrom(value);
+        defer gvalue.unset();
+        gobject.Object.setProperty(@ptrCast(@alignCast(tag)), property, &gvalue);
     }
 
     fn rememberTerminalLine(
@@ -981,17 +1105,14 @@ pub const TransactionPage = extern struct {
             question_kind,
             "CacheCleanExtraEntries",
         )) {
-            return allocator.dupeZ(
-                u8,
-                translations._(
-                    "Would you like to remove extra cache entries?",
-                ),
-            );
+            return allocator.dupeSentinel(u8, translations._(
+                "Would you like to remove extra cache entries?",
+            ), 0);
         }
 
         if (std.mem.eql(u8, question_kind, "PackageConflict")) {
             if (arguments.len < 5) {
-                return allocator.dupeZ(u8, fallback);
+                return allocator.dupeSentinel(u8, fallback, 0);
             }
 
             const formatted = try formatPackageConflictQuestion(
@@ -1000,10 +1121,10 @@ pub const TransactionPage = extern struct {
             );
             defer allocator.free(formatted);
 
-            return allocator.dupeZ(u8, formatted);
+            return allocator.dupeSentinel(u8, formatted, 0);
         }
 
-        return allocator.dupeZ(u8, fallback);
+        return allocator.dupeSentinel(u8, fallback, 0);
     }
 
     fn handle_question(self: *Self, pending: *PendingQuestion) void {
@@ -1081,21 +1202,21 @@ pub const TransactionPage = extern struct {
                 defer arena.deinit();
                 const a = arena.allocator();
 
-                const name = a.dupeZ(u8, q.package_name) catch return;
+                const name = a.dupeSentinel(u8, q.package_name, 0) catch return;
 
                 const lines = a.alloc([:0]const u8, q.diff_lines.len) catch return;
                 for (q.diff_lines, 0..) |line, i| {
-                    lines[i] = a.dupeZ(u8, line) catch return;
+                    lines[i] = a.dupeSentinel(u8, line, 0) catch return;
                 }
 
                 const warns = a.alloc(PkgbuildReviewDialog.Warning, q.warnings.len) catch return;
                 for (q.warnings, 0..) |w, i| {
                     warns[i] = .{
-                        .tool = a.dupeZ(u8, w.Tool) catch return,
-                        .hook = a.dupeZ(u8, w.Hook) catch return,
-                        .severity = a.dupeZ(u8, w.Severity) catch return,
-                        .message = a.dupeZ(u8, w.Message) catch return,
-                        .matched_line = a.dupeZ(u8, w.MatchedLine) catch return,
+                        .tool = a.dupeSentinel(u8, w.Tool, 0) catch return,
+                        .hook = a.dupeSentinel(u8, w.Hook, 0) catch return,
+                        .severity = a.dupeSentinel(u8, w.Severity, 0) catch return,
+                        .message = a.dupeSentinel(u8, w.Message, 0) catch return,
+                        .matched_line = a.dupeSentinel(u8, w.MatchedLine, 0) catch return,
                     };
                 }
 
@@ -1109,8 +1230,8 @@ pub const TransactionPage = extern struct {
 
                 for (q.source_files, sources) |source, *target| {
                     target.* = .{
-                        .name = a.dupeZ(u8, source.name) catch return,
-                        .content = a.dupeZ(u8, source.content) catch return,
+                        .name = a.dupeSentinel(u8, source.name, 0) catch return,
+                        .content = a.dupeSentinel(u8, source.content, 0) catch return,
                     };
                 }
 
@@ -1522,4 +1643,74 @@ test "terminal output suppresses duplicate lines and preserves unique updates" {
         &lines,
         "Downloading firefox (10%)",
     ));
+}
+
+test "terminal output deduplicates styled lines by their visible text" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var lines: std.StringHashMapUnmanaged(void) = .empty;
+
+    const styled = try ansi.renderLine(arena.allocator(), "\x1b[33m==> WARNING\x1b[0m \x1b]8;;https://archlinux.org\x07already\x1b]8;;\x07 present");
+    try std.testing.expect(TransactionPage.rememberTerminalLine(arena.allocator(), &lines, styled.text));
+
+    // The same text arriving without color codes must still deduplicate.
+    const plain = try ansi.renderLine(arena.allocator(), "==> WARNING already present");
+    try std.testing.expect(!TransactionPage.rememberTerminalLine(arena.allocator(), &lines, plain.text));
+}
+
+test "terminal renders styled console output as tagged text without escape bytes" {
+    try @import("../helpers/gtk_test.zig").requireDisplay();
+    const page = TransactionPage.new();
+    _ = page.as(gobject.Object).refSink();
+    defer page.as(gobject.Object).unref();
+    const arena = try std.heap.c_allocator.create(std.heap.ArenaAllocator);
+    arena.* = std.heap.ArenaAllocator.init(std.heap.c_allocator);
+    page.priv().arena = arena;
+    defer page.reset();
+
+    page.append_terminal("\x1b[1;31merror\x1b[0m: could not install \x1b[4mpkg\x1b[0m");
+    // Duplicate (colorless) must not be appended a second time.
+    page.append_terminal("error: could not install pkg");
+
+    const buffer = gtk.TextView.getBuffer(page.priv().terminal_view);
+    var start: gtk.TextIter = undefined;
+    var end: gtk.TextIter = undefined;
+    gtk.TextBuffer.getStartIter(buffer, &start);
+    gtk.TextBuffer.getEndIter(buffer, &end);
+    const raw = gtk.TextBuffer.getText(buffer, &start, &end, 0);
+    defer glib.free(raw);
+    try std.testing.expectEqualStrings("error: could not install pkg\n", std.mem.span(raw));
+
+    // Offset 1 lands inside the bold-red run; offset 8 lands after the reset.
+    const table = gtk.TextBuffer.getTagTable(buffer);
+    const red_tag = gtk.TextTagTable.lookup(table, "ansi-cd0000-1000000-1000").?;
+    var colored: gtk.TextIter = undefined;
+    gtk.TextBuffer.getIterAtOffset(buffer, &colored, 1);
+    try std.testing.expect(gtk.TextIter.hasTag(&colored, red_tag) != 0);
+    var plain: gtk.TextIter = undefined;
+    gtk.TextBuffer.getIterAtOffset(buffer, &plain, 8);
+    try std.testing.expect(gtk.TextIter.hasTag(&plain, red_tag) == 0);
+}
+
+test "progress console rewrites colored lines in place" {
+    try @import("../helpers/gtk_test.zig").requireDisplay();
+    const page = TransactionPage.new();
+    _ = page.as(gobject.Object).refSink();
+    defer page.as(gobject.Object).unref();
+    const arena = try std.heap.c_allocator.create(std.heap.ArenaAllocator);
+    arena.* = std.heap.ArenaAllocator.init(std.heap.c_allocator);
+    page.priv().arena = arena;
+    defer page.reset();
+
+    page.updateProgressLine("AddStart:demo", "\x1b[32m[AddStart] demo — Installing (10%)\x1b[0m");
+    page.updateProgressLine("AddStart:demo", "\x1b[32m[AddStart] demo — Installing (20%)\x1b[0m");
+
+    const buffer = gtk.TextView.getBuffer(page.priv().terminal_view);
+    var start: gtk.TextIter = undefined;
+    var end: gtk.TextIter = undefined;
+    gtk.TextBuffer.getStartIter(buffer, &start);
+    gtk.TextBuffer.getEndIter(buffer, &end);
+    const raw = gtk.TextBuffer.getText(buffer, &start, &end, 0);
+    defer glib.free(raw);
+    try std.testing.expectEqualStrings("[AddStart] demo — Installing (20%)\n", std.mem.span(raw));
 }

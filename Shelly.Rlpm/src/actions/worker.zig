@@ -8,7 +8,7 @@ var control: c_int = 2;
 
 fn report(stage: protocol.Stage, fatal: bool, errno: i32) void {
     var bytes: [8]u8 = @splat(0);
-    bytes[0] = @intFromEnum(stage);
+    bytes[0] = @backingInt(stage);
     bytes[1] = @intFromBool(fatal);
     std.mem.writeInt(i32, bytes[4..8], errno, .little);
 
@@ -45,7 +45,7 @@ fn readExact(bytes: []u8) void {
 fn string(a: std.mem.Allocator, value: []const u8) [:0]const u8 {
     if (std.mem.indexOfScalar(u8, value, 0) != null) fail(.protocol);
 
-    return a.dupeZ(u8, value) catch fail(.protocol);
+    return a.dupeSentinel(u8, value, 0) catch fail(.protocol);
 }
 
 pub fn run(init: std.process.Init) noreturn {

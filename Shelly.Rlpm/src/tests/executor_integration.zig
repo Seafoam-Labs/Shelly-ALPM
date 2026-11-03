@@ -8,12 +8,7 @@ const Archive = @import("archive_fixture.zig");
 
 const io = std.testing.io;
 const a = std.testing.allocator;
-const c = @cImport({
-    @cInclude("sys/stat.h");
-    @cInclude("sys/xattr.h");
-    @cInclude("unistd.h");
-    @cInclude("errno.h");
-});
+const c = @import("rlpm_c");
 
 fn commit(owner: *rlpm.Owner, archive: []const u8, flags: rlpm.TransactionFlags) !void {
     const tx = try owner.initializeTransaction(io, flags);
@@ -291,9 +286,7 @@ test "hooks and scripts change backup inputs before extraction and post hooks se
 }
 
 test "out of space during extraction preserves coherent database and cleans staging" {
-    const mount = @cImport({
-        @cInclude("sys/mount.h");
-    });
+    const mount = @import("rlpm_c");
 
     var f = try Fixture.init();
     defer f.deinit();
@@ -336,9 +329,7 @@ test "out of space during extraction preserves coherent database and cleans stag
 }
 
 test "supported device nodes are created only inside the disposable mount" {
-    const mount = @cImport({
-        @cInclude("sys/mount.h");
-    });
+    const mount = @import("rlpm_c");
 
     var f = try Fixture.init();
     defer f.deinit();
@@ -428,9 +419,7 @@ test "pre-remove script can create a previously absent backup and it is saved" {
 }
 
 test "payload barrier covers nested and bind mounts before publishing on separate database filesystem" {
-    const mount = @cImport({
-        @cInclude("sys/mount.h");
-    });
+    const mount = @import("rlpm_c");
 
     const D = rlpm.Transaction.Executor.PayloadDurability;
 

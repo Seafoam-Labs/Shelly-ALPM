@@ -34,9 +34,9 @@ fn readRows() !std.ArrayList(Row) {
         var columns = std.mem.splitScalar(u8, line, '\t');
         var row: Row = undefined;
 
-        inline for (std.meta.fields(Row)) |field| {
-            @field(row, field.name) = columns.next() orelse return error.MissingColumn;
-            try std.testing.expect(@field(row, field.name).len > 0);
+        inline for (@typeInfo(Row).@"struct".field_names) |field_name| {
+            @field(row, field_name) = columns.next() orelse return error.MissingColumn;
+            try std.testing.expect(@field(row, field_name).len > 0);
         }
 
         try std.testing.expect(columns.next() == null);

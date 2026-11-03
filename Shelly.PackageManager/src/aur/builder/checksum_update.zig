@@ -32,7 +32,7 @@ pub fn generate(self: *PackageBuilder, operation: *Operation, evaluated: *const 
     defer arena.deinit();
     const scratch = arena.allocator();
     var replacements = Replacements.init(scratch);
-    var selected = [_]bool{false} ** algorithms.len;
+    var selected = @as([algorithms.len]bool, @splat(false));
     var names: std.ArrayList([]const u8) = .empty;
     var entries = evaluated.arrays.iterator();
     while (entries.next()) |entry| {
@@ -50,7 +50,7 @@ pub fn generate(self: *PackageBuilder, operation: *Operation, evaluated: *const 
     // Validate edit locations before downloading anything.
     const preflight = try render(allocator, self.io, content, &replacements);
     allocator.free(preflight);
-    if (std.mem.indexOfScalar(bool, &selected, true) == null) selected[@intFromEnum(checksums.ChecksumAlgorithm.sha256)] = true;
+    if (std.mem.indexOfScalar(bool, &selected, true) == null) selected[@backingInt(checksums.ChecksumAlgorithm.sha256)] = true;
     std.mem.sort([]const u8, names.items, {}, lessThan);
     // The shared cache is keyed by filename. Do not silently hash one
     // architecture's payload for another URL with the same cache name.

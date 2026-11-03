@@ -28,7 +28,7 @@ jobs:
           (cd Shelly.Flatpak.Backend && zig build \
             --prefix ../publish/build-flatpak-backend \
             -Dcpu=baseline \
-            -Doptimize=ReleaseSafe)
+            -Doptimize=safe)
           (cd Shelly.Flatpak.Backend && zig build test)
           (cd Shelly.Flatpak.Backend && zig build abi-test)
           (cd Shelly.Flatpak.Backend && zig build integration-test)
@@ -59,7 +59,7 @@ jobs:
         run: |
           rm -rf publish/shelly-cli publish/build-cli
           mkdir -p publish/shelly-cli
-          (cd Shelly.Cli.Zig && zig build --prefix ../publish/build-cli -Dcpu=baseline -Doptimize=ReleaseSmall)
+          (cd Shelly.Cli.Zig && zig build --prefix ../publish/build-cli -Dcpu=baseline -Doptimize=small)
           (cd Shelly.Cli.Zig && zig build test)
           install -Dm755 publish/build-cli/bin/shelly publish/shelly-cli/shelly
           # Generate completion scripts from the freshly built binary.
@@ -83,7 +83,7 @@ jobs:
         run: |
           rm -rf publish/shelly-ui
           mkdir -p publish/shelly-ui
-          (cd Shelly.Ui.Gtk && zig build --prefix ../publish/build-ui -Dflatpak-backend-package=shelly-flatpak-backend-bin -Dcpu=baseline -Doptimize=ReleaseSafe)
+          (cd Shelly.Ui.Gtk && zig build --prefix ../publish/build-ui -Dflatpak-backend-package=shelly-flatpak-backend-bin -Dcpu=baseline -Doptimize=safe)
           install -Dm755 publish/build-ui/bin/Shelly_Ui_Gtk publish/shelly-ui/shelly-ui
           install -m644 assets/shellylogo.png publish/shelly-ui/
           install -m644 assets/shellylogo-tray.png publish/shelly-ui/
@@ -118,14 +118,14 @@ jobs:
           (cd Shelly.Notifications.Zig && zig build --verbose \
             --prefix ../publish/build-notifications \
             -Dcpu=baseline \
-            -Doptimize=ReleaseSafe)
+            -Doptimize=safe)
           # Bundle Notifications into the UI directory.
           install -Dm755 publish/build-notifications/bin/shelly-notifications publish/shelly-ui/shelly-notifications
 
       - name: Publish Shelly.Key
         run: |
           mkdir -p publish/shelly-key
-          (cd Shelly.Key && zig build --prefix ../publish/build-key -Dcpu=baseline -Doptimize=ReleaseSmall)
+          (cd Shelly.Key && zig build --prefix ../publish/build-key -Dcpu=baseline -Doptimize=small)
           install -Dm755 publish/build-key/bin/shelly-key publish/shelly-key/shelly-key
           # Bundle Key into the UI directory so it ends up in Shelly-ALPM-linux-x64.tar.gz.
           install -m755 publish/shelly-key/shelly-key publish/shelly-ui/

@@ -85,13 +85,13 @@ pub fn configurationDigest(allocator: std.mem.Allocator, config: *const Configur
     defer output.deinit();
     var json: std.json.Stringify = .{ .writer = &output.writer };
     try json.beginObject();
-    inline for (std.meta.fields(Configuration.Config)) |field| {
-        if (comptime !std.mem.eql(u8, field.name, "arena")) {
-            try json.objectField(field.name);
-            const value = @field(config, field.name);
-            if (comptime std.mem.eql(u8, field.name, "repositories")) {
+    inline for (@typeInfo(Configuration.Config).@"struct".field_names, @typeInfo(Configuration.Config).@"struct".field_types) |field_name, field_type| {
+        if (comptime !std.mem.eql(u8, field_name, "arena")) {
+            try json.objectField(field_name);
+            const value = @field(config, field_name);
+            if (comptime std.mem.eql(u8, field_name, "repositories")) {
                 try json.write(try repositories(allocator, config));
-            } else if (comptime @typeInfo(field.type) == .@"struct" and @hasField(field.type, "items")) {
+            } else if (comptime @typeInfo(field_type) == .@"struct" and @hasField(field_type, "items")) {
                 try json.write(value.items);
             } else try json.write(value);
         }
@@ -112,7 +112,7 @@ pub fn resolve(allocator: std.mem.Allocator, io: std.Io, manager: *Manager, inpu
     var unresolved: std.ArrayList(Unresolved) = .empty;
     var targets: std.ArrayList([:0]const u8) = .empty;
     for (result.requirements) |requirement| {
-        const target = try allocator.dupeZ(u8, requirement.requirement);
+        const target = try allocator.dupeSentinel(u8, requirement.requirement, 0);
         // Bootstrap targets can be native package groups. Recipe requirements
         // are relations, never groups, and missing ones are not assumed to be AUR.
         if (requirement.role != .bootstrap) {

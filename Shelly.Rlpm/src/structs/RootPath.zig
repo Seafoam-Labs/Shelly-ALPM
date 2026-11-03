@@ -8,21 +8,7 @@ const Checksum = @import("Checksum.zig");
 
 const Root = @This();
 
-pub const c = @cImport({
-    // Import ABI declarations only. glibc's fortified variadic inline wrappers
-    // are not translatable by Zig; bounds are checked in terminated()/open().
-    @cUndef("_FORTIFY_SOURCE");
-    @cDefine("_FORTIFY_SOURCE", "0");
-    @cDefine("_GNU_SOURCE", "1");
-    @cInclude("fcntl.h");
-    @cInclude("stdio.h");
-    @cInclude("sys/file.h");
-    @cInclude("unistd.h");
-    @cInclude("sys/stat.h");
-    @cInclude("sys/statvfs.h");
-    @cInclude("sys/syscall.h");
-    @cInclude("errno.h");
-});
+pub const c = @import("rlpm_c");
 
 fd: c_int,
 
@@ -76,7 +62,7 @@ pub fn deinit(self: *Root) void {
 fn terminated(buffer: []u8, path: []const u8) ![:0]const u8 {
     if (path.len == 0 or std.mem.indexOfScalar(u8, path, 0) != null) return error.InvalidPath;
 
-    return std.fmt.bufPrintZ(buffer, "{s}", .{path}) catch return error.NameTooLong;
+    return std.fmt.bufPrintSentinel(buffer, "{s}", .{path}, 0) catch return error.NameTooLong;
 }
 
 /// Validate canonical archive/DB names before they become operations. Leading

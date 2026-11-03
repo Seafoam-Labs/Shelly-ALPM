@@ -227,7 +227,7 @@ test "refresh preserves CachyOS metadata and stale references change only on upd
     try std.testing.expectError(error.StalePackageReference, owner.package(reference));
 }
 
-test "DOWNLOADONLY commits cache without installed mutation" {
+test "DOWNLOADONLY commits cache without installed mutation or unrelated database scans" {
     var fixture = try Fixture.init();
     defer fixture.deinit();
     try fixture.repository("1-1");
@@ -239,10 +239,17 @@ test "DOWNLOADONLY commits cache without installed mutation" {
     defer refresh.deinit();
     try refresh.check();
 
+    // Fingerprinting would fail on this unrelated, dangling sync entry.
+    try fixture.temporary.dir.symLink(io, "missing", "sync/unrelated", .{});
     const tx = try owner.initializeTransaction(io, .{ .download_only = true });
     defer owner.releaseTransaction() catch unreachable;
     try tx.addTarget("demo");
     try tx.prepare();
+    _ = try tx.downloadSize();
+    try tx.download();
+    try tx.download();
+    const cached = try tx.downloadSize();
+    try std.testing.expectEqual(1, cached.cached);
     try tx.commit();
     try std.testing.expectEqual(.completed, tx.state);
     try std.testing.expectEqual(1, tx.downloaded_files.?.len);

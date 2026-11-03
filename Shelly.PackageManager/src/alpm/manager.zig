@@ -98,7 +98,10 @@ pub const Manager = struct {
     pub fn init(allocator: std.mem.Allocator, environ: std.process.Environ, options: contract.InitOptions) InitError!*Manager {
         const chosen = options.backend orelse selection.selectedDefault();
         try chosen.validate();
-        const self = allocator.create(Manager) catch return error.InitFailed;
+        const self = allocator.create(Manager) catch {
+            if (chosen == .rlpm) Rlpm.reportInitializationFailure(allocator, options, error.OutOfMemory, "allocate native facade", null);
+            return error.InitFailed;
+        };
         errdefer allocator.destroy(self);
         switch (chosen) {
             .libalpm => if (comptime selection.libalpm_enabled) {
@@ -149,7 +152,7 @@ pub const Manager = struct {
         if (comptime selection.libalpm_enabled) {
             if (selection.selectedDefault() == .libalpm) return Native.compare_package_versions(a, b);
         }
-        return @intFromEnum(rlpm_module.Version.compareStrings(a, b));
+        return @backingInt(rlpm_module.Version.compareStrings(a, b));
     }
     pub const version_compare = compare_package_versions;
     pub fn toggle_hidden_packages(self: *Manager) bool {
@@ -171,9 +174,14 @@ pub const Manager = struct {
     }
     /// Caller owns the returned snapshot, including archive metadata.
     pub fn load_archive(self: *Manager, path: []const u8) !libalpm.OwnedPackage {
-        return switch (self.engine orelse return error.NoHandle) {
+        const engine = self.engine orelse return error.NoHandle;
+        const error_generation = self.dispatcher.errorGeneration();
+        return switch (engine) {
             .libalpm => |value| if (comptime selection.libalpm_enabled) value.load_archive(path) else unreachable,
-            .rlpm => |value| value.load_archive(path),
+            .rlpm => |value| value.load_archive(path) catch |err| {
+                value.reportFailureSince(err, error_generation, .{ .operation = "load package archive", .path = path, .stage = "load package" });
+                return err;
+            },
         };
     }
     pub fn setOperationContext(self: *Manager, context: ?*operation_api.OperationContext) void {
@@ -193,81 +201,108 @@ pub const Manager = struct {
         };
     }
     pub fn sync(self: *Manager, force: bool) TransactionError!void {
-        return switch (self.engine orelse {
-            return error.NoHandle;
-        }) {
+        const engine = self.engine orelse return error.NoHandle;
+        const error_generation = self.dispatcher.errorGeneration();
+        return switch (engine) {
             .libalpm => |value| if (comptime selection.libalpm_enabled) value.sync(force) else unreachable,
-            .rlpm => |value| value.sync(force) catch |err| return mapTransaction(err),
+            .rlpm => |value| value.sync(force) catch |err| {
+                value.reportFailureSince(err, error_generation, .{ .operation = "sync", .path = value.config.database_path });
+                return mapTransaction(err);
+            },
         };
     }
     pub fn sync_for_update_check(self: *Manager, force: bool) TransactionError!void {
-        return switch (self.engine orelse {
-            return error.NoHandle;
-        }) {
+        const engine = self.engine orelse return error.NoHandle;
+        const error_generation = self.dispatcher.errorGeneration();
+        return switch (engine) {
             .libalpm => |value| if (comptime selection.libalpm_enabled) value.sync_for_update_check(force) else unreachable,
-            .rlpm => |value| value.sync_for_update_check(force) catch |err| return mapTransaction(err),
+            .rlpm => |value| value.sync_for_update_check(force) catch |err| {
+                value.reportFailureSince(err, error_generation, .{ .operation = "sync for update check", .path = value.config.database_path });
+                return mapTransaction(err);
+            },
         };
     }
     pub fn get_installed_packages(self: *Manager) TransactionError![]libalpm.OwnedPackage {
-        return switch (self.engine orelse {
-            return error.NoHandle;
-        }) {
+        const engine = self.engine orelse return error.NoHandle;
+        const error_generation = self.dispatcher.errorGeneration();
+        return switch (engine) {
             .libalpm => |value| if (comptime selection.libalpm_enabled) value.get_installed_packages() else unreachable,
-            .rlpm => |value| value.get_installed_packages() catch |err| return mapTransaction(err),
+            .rlpm => |value| value.get_installed_packages() catch |err| {
+                value.reportFailureSince(err, error_generation, .{ .operation = "get installed packages", .path = value.config.database_path });
+                return mapTransaction(err);
+            },
         };
     }
     pub fn get_installed_packages_with_reverse_dependencies(
         self: *Manager,
         reverse_dependencies: contract.ReverseDependencyOptions,
     ) TransactionError![]libalpm.OwnedPackage {
-        return switch (self.engine orelse {
-            return error.NoHandle;
-        }) {
+        const engine = self.engine orelse return error.NoHandle;
+        const error_generation = self.dispatcher.errorGeneration();
+        return switch (engine) {
             .libalpm => |value| if (comptime selection.libalpm_enabled) value.get_installed_packages_with_reverse_dependencies(reverse_dependencies) else unreachable,
-            .rlpm => |value| value.get_installed_packages_with_reverse_dependencies(reverse_dependencies) catch |err| return mapTransaction(err),
+            .rlpm => |value| value.get_installed_packages_with_reverse_dependencies(reverse_dependencies) catch |err| {
+                value.reportFailureSince(err, error_generation, .{ .operation = "get installed packages with reverse dependencies", .path = value.config.database_path });
+                return mapTransaction(err);
+            },
         };
     }
     pub fn get_single_installed_package(self: *Manager, package_name: [:0]const u8) TransactionError!?libalpm.OwnedPackage {
-        return switch (self.engine orelse {
-            return error.NoHandle;
-        }) {
+        const engine = self.engine orelse return error.NoHandle;
+        const error_generation = self.dispatcher.errorGeneration();
+        return switch (engine) {
             .libalpm => |value| if (comptime selection.libalpm_enabled) blk: {
                 const package = try value.get_single_installed_package(package_name) orelse break :blk null;
                 break :blk try libalpm.OwnedPackage.initWithReverseDependencies(self.allocator, package, .{ .required_by = true, .optional_for = true });
             } else unreachable,
-            .rlpm => |value| value.get_single_installed_package(package_name) catch |err| return mapTransaction(err),
+            .rlpm => |value| value.get_single_installed_package(package_name) catch |err| {
+                value.reportFailureSince(err, error_generation, .{ .operation = "get single installed package", .subject = package_name, .path = value.config.database_path });
+                return mapTransaction(err);
+            },
         };
     }
     pub fn get_foreign_packages(self: *Manager) TransactionError![]libalpm.OwnedPackage {
-        return switch (self.engine orelse {
-            return error.NoHandle;
-        }) {
+        const engine = self.engine orelse return error.NoHandle;
+        const error_generation = self.dispatcher.errorGeneration();
+        return switch (engine) {
             .libalpm => |value| if (comptime selection.libalpm_enabled) value.get_foreign_packages() else unreachable,
-            .rlpm => |value| value.get_foreign_packages() catch |err| return mapTransaction(err),
+            .rlpm => |value| value.get_foreign_packages() catch |err| {
+                value.reportFailureSince(err, error_generation, .{ .operation = "get foreign packages", .path = value.config.database_path });
+                return mapTransaction(err);
+            },
         };
     }
     pub fn get_available_packages(self: *Manager) TransactionError![]libalpm.OwnedPackage {
-        return switch (self.engine orelse {
-            return error.NoHandle;
-        }) {
+        const engine = self.engine orelse return error.NoHandle;
+        const error_generation = self.dispatcher.errorGeneration();
+        return switch (engine) {
             .libalpm => |value| if (comptime selection.libalpm_enabled) value.get_available_packages() else unreachable,
-            .rlpm => |value| value.get_available_packages() catch |err| return mapTransaction(err),
+            .rlpm => |value| value.get_available_packages() catch |err| {
+                value.reportFailureSince(err, error_generation, .{ .operation = "get available packages", .path = value.config.database_path });
+                return mapTransaction(err);
+            },
         };
     }
     pub fn get_available_packages_from_group(self: *Manager, groupName: [:0]const u8) TransactionError![]libalpm.OwnedPackage {
-        return switch (self.engine orelse {
-            return error.NoHandle;
-        }) {
+        const engine = self.engine orelse return error.NoHandle;
+        const error_generation = self.dispatcher.errorGeneration();
+        return switch (engine) {
             .libalpm => |value| if (comptime selection.libalpm_enabled) value.get_available_packages_from_group(groupName) else unreachable,
-            .rlpm => |value| value.get_available_packages_from_group(groupName) catch |err| return mapTransaction(err),
+            .rlpm => |value| value.get_available_packages_from_group(groupName) catch |err| {
+                value.reportFailureSince(err, error_generation, .{ .operation = "get available packages from group", .path = value.config.database_path });
+                return mapTransaction(err);
+            },
         };
     }
     pub fn get_updates_available(self: *Manager) TransactionError![]libalpm.OwnedPackageWithUpdate {
-        return switch (self.engine orelse {
-            return error.NoHandle;
-        }) {
+        const engine = self.engine orelse return error.NoHandle;
+        const error_generation = self.dispatcher.errorGeneration();
+        return switch (engine) {
             .libalpm => |value| if (comptime selection.libalpm_enabled) value.get_updates_available() else unreachable,
-            .rlpm => |value| value.get_updates_available() catch |err| return mapTransaction(err),
+            .rlpm => |value| value.get_updates_available() catch |err| {
+                value.reportFailureSince(err, error_generation, .{ .operation = "get updates available", .path = value.config.database_path });
+                return mapTransaction(err);
+            },
         };
     }
     /// Prepare using the same native transaction as installation, without committing.
@@ -306,9 +341,13 @@ pub const Manager = struct {
     }
 
     fn buildTransaction(self: *Manager, targets: [][:0]const u8, flags: TransFlag, request: build_transaction.Request) !void {
+        const error_generation = self.dispatcher.errorGeneration();
         switch (self.engine.?) {
             .libalpm => |value| if (comptime selection.libalpm_enabled) try value.installBuildTransaction(targets, flags, request) else unreachable,
-            .rlpm => |value| try value.installBuildTransaction(targets, flags, request),
+            .rlpm => |value| value.installBuildTransaction(targets, flags, request) catch |err| {
+                value.reportFailureSince(err, error_generation, .{ .operation = "install build dependencies", .path = value.config.database_path });
+                return err;
+            },
         }
     }
 
@@ -317,27 +356,36 @@ pub const Manager = struct {
         package_names: [][:0]const u8,
         trans_flags_arg: TransFlag,
     ) TransactionError!void {
-        return switch (self.engine orelse {
-            return error.NoHandle;
-        }) {
+        const engine = self.engine orelse return error.NoHandle;
+        const error_generation = self.dispatcher.errorGeneration();
+        return switch (engine) {
             .libalpm => |value| if (comptime selection.libalpm_enabled) value.install_packages(package_names, trans_flags_arg) else unreachable,
-            .rlpm => |value| value.install_packages(package_names, trans_flags_arg) catch |err| return mapTransaction(err),
+            .rlpm => |value| value.install_packages(package_names, trans_flags_arg) catch |err| {
+                value.reportFailureSince(err, error_generation, .{ .operation = "install packages", .path = value.config.database_path });
+                return mapTransaction(err);
+            },
         };
     }
     pub fn remove_packages(self: *Manager, packages_names: [][:0]const u8, flags: TransFlag, keep_optional_dependencis: bool) TransactionError!void {
-        return switch (self.engine orelse {
-            return error.NoHandle;
-        }) {
+        const engine = self.engine orelse return error.NoHandle;
+        const error_generation = self.dispatcher.errorGeneration();
+        return switch (engine) {
             .libalpm => |value| if (comptime selection.libalpm_enabled) value.remove_packages(packages_names, flags, keep_optional_dependencis) else unreachable,
-            .rlpm => |value| value.remove_packages(packages_names, flags, keep_optional_dependencis) catch |err| return mapTransaction(err),
+            .rlpm => |value| value.remove_packages(packages_names, flags, keep_optional_dependencis) catch |err| {
+                value.reportFailureSince(err, error_generation, .{ .operation = "remove packages", .path = value.config.database_path });
+                return mapTransaction(err);
+            },
         };
     }
     pub fn remove_packages_with_confirmation(self: *Manager, packages_names: [][:0]const u8, flags: TransFlag, keep_optional_dependencis: bool, confirmation: RemovalConfirmation) TransactionError!void {
-        return switch (self.engine orelse {
-            return error.NoHandle;
-        }) {
+        const engine = self.engine orelse return error.NoHandle;
+        const error_generation = self.dispatcher.errorGeneration();
+        return switch (engine) {
             .libalpm => |value| if (comptime selection.libalpm_enabled) value.remove_packages_with_confirmation(packages_names, flags, keep_optional_dependencis, confirmation) else unreachable,
-            .rlpm => |value| value.remove_packages_with_confirmation(packages_names, flags, keep_optional_dependencis, confirmation) catch |err| return mapTransaction(err),
+            .rlpm => |value| value.remove_packages_with_confirmation(packages_names, flags, keep_optional_dependencis, confirmation) catch |err| {
+                value.reportFailureSince(err, error_generation, .{ .operation = "remove packages with confirmation", .path = value.config.database_path });
+                return mapTransaction(err);
+            },
         };
     }
     pub fn sync_system_update(self: *Manager, flags: TransFlag) TransactionError!contract.RestartReport {
@@ -345,27 +393,36 @@ pub const Manager = struct {
     }
     /// Resolve explicit repository targets and the system upgrade together.
     pub fn sync_system_update_with_packages(self: *Manager, targets: [][:0]const u8, flags: TransFlag) TransactionError!contract.RestartReport {
-        return switch (self.engine orelse {
-            return error.NoHandle;
-        }) {
+        const engine = self.engine orelse return error.NoHandle;
+        const error_generation = self.dispatcher.errorGeneration();
+        return switch (engine) {
             .libalpm => |value| if (comptime selection.libalpm_enabled) value.sync_system_update_with_packages(targets, flags) else unreachable,
-            .rlpm => |value| value.sync_system_update_with_packages(targets, flags) catch |err| return mapTransaction(err),
+            .rlpm => |value| value.sync_system_update_with_packages(targets, flags) catch |err| {
+                value.reportFailureSince(err, error_generation, .{ .operation = "sync system update with packages", .path = value.config.database_path });
+                return mapTransaction(err);
+            },
         };
     }
     pub fn update_package_reason(self: *Manager, pkg_name: [:0]const u8, reason: libalpm.PackageReason) TransactionError!void {
-        return switch (self.engine orelse {
-            return error.NoHandle;
-        }) {
+        const engine = self.engine orelse return error.NoHandle;
+        const error_generation = self.dispatcher.errorGeneration();
+        return switch (engine) {
             .libalpm => |value| if (comptime selection.libalpm_enabled) value.update_package_reason(pkg_name, reason) else unreachable,
-            .rlpm => |value| value.update_package_reason(pkg_name, reason) catch |err| return mapTransaction(err),
+            .rlpm => |value| value.update_package_reason(pkg_name, reason) catch |err| {
+                value.reportFailureSince(err, error_generation, .{ .operation = "update package reason", .subject = pkg_name, .path = value.config.database_path });
+                return mapTransaction(err);
+            },
         };
     }
     pub fn install_local_packages(self: *Manager, paths: []const []const u8, flags: TransFlag) TransactionError!void {
-        return switch (self.engine orelse {
-            return error.NoHandle;
-        }) {
+        const engine = self.engine orelse return error.NoHandle;
+        const error_generation = self.dispatcher.errorGeneration();
+        return switch (engine) {
             .libalpm => |value| if (comptime selection.libalpm_enabled) value.install_local_packages(paths, flags) else unreachable,
-            .rlpm => |value| value.install_local_packages(paths, flags) catch |err| return mapTransaction(err),
+            .rlpm => |value| value.install_local_packages(paths, flags) catch |err| {
+                value.reportFailureSince(err, error_generation, .{ .operation = "install local packages", .path = value.config.database_path });
+                return mapTransaction(err);
+            },
         };
     }
     pub fn disable_transaction_hooks(self: *Manager) void {
@@ -377,62 +434,87 @@ pub const Manager = struct {
         };
     }
     pub fn get_package_from_provides(self: *Manager, provides: [:0]const u8) QueryError![:0]const u8 {
-        return switch (self.engine orelse {
-            return error.NoHandle;
-        }) {
+        const engine = self.engine orelse return error.NoHandle;
+        const error_generation = self.dispatcher.errorGeneration();
+        return switch (engine) {
             .libalpm => |value| if (comptime selection.libalpm_enabled) value.get_package_from_provides(provides) else unreachable,
-            .rlpm => |value| value.get_package_from_provides(provides) catch |err| return mapQuery(err),
+            .rlpm => |value| value.get_package_from_provides(provides) catch |err| {
+                if (err == error.PkgNotFound) return error.PkgNotFound;
+                value.reportFailureSince(err, error_generation, .{ .operation = "get package from provides", .subject = provides, .path = value.config.database_path });
+                return mapQuery(err);
+            },
         };
     }
     pub fn is_dependency_satisfied_by_installed_packages(self: *Manager, dependency: [:0]const u8) QueryError!bool {
-        return switch (self.engine orelse {
-            return error.NoHandle;
-        }) {
+        const engine = self.engine orelse return error.NoHandle;
+        const error_generation = self.dispatcher.errorGeneration();
+        return switch (engine) {
             .libalpm => |value| if (comptime selection.libalpm_enabled) value.is_dependency_satisfied_by_installed_packages(dependency) else unreachable,
-            .rlpm => |value| value.is_dependency_satisfied_by_installed_packages(dependency) catch |err| return mapQuery(err),
+            .rlpm => |value| value.is_dependency_satisfied_by_installed_packages(dependency) catch |err| {
+                if (err == error.PkgNotFound) return error.PkgNotFound;
+                value.reportFailureSince(err, error_generation, .{ .operation = "is dependency satisfied by installed packages", .subject = dependency, .path = value.config.database_path });
+                return mapQuery(err);
+            },
         };
     }
     pub fn find_remote_satisfier_for_dependency(self: *Manager, dependency: [:0]const u8) QueryError![:0]const u8 {
-        return switch (self.engine orelse {
-            return error.NoHandle;
-        }) {
+        const engine = self.engine orelse return error.NoHandle;
+        const error_generation = self.dispatcher.errorGeneration();
+        return switch (engine) {
             .libalpm => |value| if (comptime selection.libalpm_enabled) value.find_remote_satisfier_for_dependency(dependency) else unreachable,
-            .rlpm => |value| value.find_remote_satisfier_for_dependency(dependency) catch |err| return mapQuery(err),
+            .rlpm => |value| value.find_remote_satisfier_for_dependency(dependency) catch |err| {
+                if (err == error.PkgNotFound) return error.PkgNotFound;
+                value.reportFailureSince(err, error_generation, .{ .operation = "find remote satisfier for dependency", .subject = dependency, .path = value.config.database_path });
+                return mapQuery(err);
+            },
         };
     }
     pub fn find_remote_satisfier_for_dependency_details(
         self: *Manager,
         dependency: [:0]const u8,
     ) QueryError!contract.DependencySatisfier {
-        return switch (self.engine orelse {
-            return error.NoHandle;
-        }) {
+        const engine = self.engine orelse return error.NoHandle;
+        const error_generation = self.dispatcher.errorGeneration();
+        return switch (engine) {
             .libalpm => |value| if (comptime selection.libalpm_enabled) value.find_remote_satisfier_for_dependency_details(dependency) else unreachable,
-            .rlpm => |value| value.find_remote_satisfier_for_dependency_details(dependency) catch |err| return mapQuery(err),
+            .rlpm => |value| value.find_remote_satisfier_for_dependency_details(dependency) catch |err| {
+                if (err == error.PkgNotFound) return error.PkgNotFound;
+                value.reportFailureSince(err, error_generation, .{ .operation = "find remote satisfier for dependency details", .subject = dependency, .path = value.config.database_path });
+                return mapQuery(err);
+            },
         };
     }
     pub fn install_dependencies_only(self: *Manager, package_name: [:0]const u8, include_make_deps: bool, flags: TransFlag) TransactionError!void {
-        return switch (self.engine orelse {
-            return error.NoHandle;
-        }) {
+        const engine = self.engine orelse return error.NoHandle;
+        const error_generation = self.dispatcher.errorGeneration();
+        return switch (engine) {
             .libalpm => |value| if (comptime selection.libalpm_enabled) value.install_dependencies_only(package_name, include_make_deps, flags) else unreachable,
-            .rlpm => |value| value.install_dependencies_only(package_name, include_make_deps, flags) catch |err| return mapTransaction(err),
+            .rlpm => |value| value.install_dependencies_only(package_name, include_make_deps, flags) catch |err| {
+                value.reportFailureSince(err, error_generation, .{ .operation = "install dependencies only", .subject = package_name, .path = value.config.database_path });
+                return mapTransaction(err);
+            },
         };
     }
     pub fn update_packages(self: *Manager, package_list: [][:0]const u8, flags: libalpm.TransFlag) TransactionError!void {
-        return switch (self.engine orelse {
-            return error.NoHandle;
-        }) {
+        const engine = self.engine orelse return error.NoHandle;
+        const error_generation = self.dispatcher.errorGeneration();
+        return switch (engine) {
             .libalpm => |value| if (comptime selection.libalpm_enabled) value.update_packages(package_list, flags) else unreachable,
-            .rlpm => |value| value.update_packages(package_list, flags) catch |err| return mapTransaction(err),
+            .rlpm => |value| value.update_packages(package_list, flags) catch |err| {
+                value.reportFailureSince(err, error_generation, .{ .operation = "update packages", .path = value.config.database_path });
+                return mapTransaction(err);
+            },
         };
     }
     pub fn purify(self: *Manager, dry_run: bool, shoot_orphans: bool, purge_corruption: bool) TransactionError![][:0]const u8 {
-        return switch (self.engine orelse {
-            return error.NoHandle;
-        }) {
+        const engine = self.engine orelse return error.NoHandle;
+        const error_generation = self.dispatcher.errorGeneration();
+        return switch (engine) {
             .libalpm => |value| if (comptime selection.libalpm_enabled) value.purify(dry_run, shoot_orphans, purge_corruption) else unreachable,
-            .rlpm => |value| value.purify(dry_run, shoot_orphans, purge_corruption) catch |err| return mapTransaction(err),
+            .rlpm => |value| value.purify(dry_run, shoot_orphans, purge_corruption) catch |err| {
+                value.reportFailureSince(err, error_generation, .{ .operation = "purify", .path = value.config.database_path });
+                return mapTransaction(err);
+            },
         };
     }
     pub fn is_package_installed(self: *Manager, package_name: [:0]const u8) bool {
@@ -592,27 +674,36 @@ pub const Manager = struct {
         };
     }
     pub fn get_allowed_architecture(self: *Manager) QueryError![][:0]const u8 {
-        return switch (self.engine orelse {
-            return error.NoHandle;
-        }) {
+        const engine = self.engine orelse return error.NoHandle;
+        const error_generation = self.dispatcher.errorGeneration();
+        return switch (engine) {
             .libalpm => |value| if (comptime selection.libalpm_enabled) value.get_allowed_architecture() else unreachable,
-            .rlpm => |value| value.get_allowed_architecture() catch |err| return mapQuery(err),
+            .rlpm => |value| value.get_allowed_architecture() catch |err| {
+                value.reportFailureSince(err, error_generation, .{ .operation = "get allowed architecture", .path = value.config.database_path });
+                return mapQuery(err);
+            },
         };
     }
     pub fn refresh(self: *Manager) TransactionError!void {
-        return switch (self.engine orelse {
-            return error.NoHandle;
-        }) {
+        const engine = self.engine orelse return error.NoHandle;
+        const error_generation = self.dispatcher.errorGeneration();
+        return switch (engine) {
             .libalpm => |value| if (comptime selection.libalpm_enabled) value.refresh() else unreachable,
-            .rlpm => |value| value.refresh() catch |err| return mapTransaction(err),
+            .rlpm => |value| value.refresh() catch |err| {
+                value.reportFailureSince(err, error_generation, .{ .operation = "refresh", .path = value.config.database_path });
+                return mapTransaction(err);
+            },
         };
     }
     pub fn get_required_packages(self: *Manager, packageName: []const u8, databaseName: []const u8) TransactionError![][]const u8 {
-        return switch (self.engine orelse {
-            return error.NoHandle;
-        }) {
+        const engine = self.engine orelse return error.NoHandle;
+        const error_generation = self.dispatcher.errorGeneration();
+        return switch (engine) {
             .libalpm => |value| if (comptime selection.libalpm_enabled) value.get_required_packages(packageName, databaseName) else unreachable,
-            .rlpm => |value| value.get_required_packages(packageName, databaseName) catch |err| return mapTransaction(err),
+            .rlpm => |value| value.get_required_packages(packageName, databaseName) catch |err| {
+                value.reportFailureSince(err, error_generation, .{ .operation = "get required packages", .subject = packageName, .path = value.config.database_path });
+                return mapTransaction(err);
+            },
         };
     }
     pub fn io(self: *Manager) std.Io {
@@ -635,8 +726,45 @@ fn mapQuery(err: anyerror) QueryError {
 }
 fn mapTransaction(err: anyerror) TransactionError {
     if (err == error.DatabaseLocked or err == error.LockExists) return error.TransInitFailed;
-    inline for (@typeInfo(TransactionError).error_set.?) |field| {
-        if (err == @field(TransactionError, field.name)) return @field(TransactionError, field.name);
+    inline for (@typeInfo(TransactionError).error_set.error_names.?) |field| {
+        if (err == @field(TransactionError, field)) return @field(TransactionError, field);
     }
     return error.CommitFailed;
+}
+
+test "native facade returns NoHandle before accessing backend state" {
+    // A missing engine must be rejected before reading config or dispatcher.
+    var manager: Manager = undefined;
+    manager.engine = null;
+    const testing = std.testing;
+
+    try testing.expectError(error.NoHandle, manager.load_archive("missing.pkg.tar.zst"));
+    try testing.expectError(error.NoHandle, manager.sync(false));
+    try testing.expectError(error.NoHandle, manager.sync_for_update_check(false));
+    try testing.expectError(error.NoHandle, manager.get_installed_packages());
+    try testing.expectError(error.NoHandle, manager.get_installed_packages_with_reverse_dependencies(.{}));
+    try testing.expectError(error.NoHandle, manager.get_single_installed_package("demo"));
+    try testing.expectError(error.NoHandle, manager.get_foreign_packages());
+    try testing.expectError(error.NoHandle, manager.get_available_packages());
+    try testing.expectError(error.NoHandle, manager.get_available_packages_from_group("demo"));
+    try testing.expectError(error.NoHandle, manager.get_updates_available());
+
+    var packages = [_][:0]const u8{"demo"};
+    try testing.expectError(error.NoHandle, manager.install_packages(&packages, .{}));
+    try testing.expectError(error.NoHandle, manager.remove_packages(&packages, .{}, false));
+    try testing.expectError(error.NoHandle, manager.remove_packages_with_confirmation(&packages, .{}, false, .required));
+    try testing.expectError(error.NoHandle, manager.sync_system_update(.{}));
+    try testing.expectError(error.NoHandle, manager.sync_system_update_with_packages(&packages, .{}));
+    try testing.expectError(error.NoHandle, manager.update_package_reason("demo", .Explicit));
+    try testing.expectError(error.NoHandle, manager.install_local_packages(&.{"missing.pkg.tar.zst"}, .{}));
+    try testing.expectError(error.NoHandle, manager.get_package_from_provides("demo"));
+    try testing.expectError(error.NoHandle, manager.is_dependency_satisfied_by_installed_packages("demo"));
+    try testing.expectError(error.NoHandle, manager.find_remote_satisfier_for_dependency("demo"));
+    try testing.expectError(error.NoHandle, manager.find_remote_satisfier_for_dependency_details("demo"));
+    try testing.expectError(error.NoHandle, manager.install_dependencies_only("demo", false, .{}));
+    try testing.expectError(error.NoHandle, manager.update_packages(&packages, .{}));
+    try testing.expectError(error.NoHandle, manager.purify(true, false, false));
+    try testing.expectError(error.NoHandle, manager.get_allowed_architecture());
+    try testing.expectError(error.NoHandle, manager.refresh());
+    try testing.expectError(error.NoHandle, manager.get_required_packages("demo", "local"));
 }

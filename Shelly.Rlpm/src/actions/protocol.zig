@@ -33,20 +33,4 @@ pub const Result = struct {
 };
 
 pub const maximum_request = 1024 * 1024;
-pub const c = @cImport({
-    @cUndef("_FORTIFY_SOURCE");
-    @cDefine("_FORTIFY_SOURCE", "0");
-    @cDefine("_GNU_SOURCE", "1");
-    @cInclude("unistd.h");
-    @cInclude("fcntl.h");
-    @cInclude("sys/socket.h");
-    @cInclude("sys/stat.h");
-    @cInclude("sys/syscall.h");
-    @cInclude("sys/ioctl.h");
-    @cInclude("net/if.h");
-    @cInclude("sched.h");
-    @cInclude("signal.h");
-    @cInclude("stdlib.h");
-    @cInclude("poll.h");
-    @cInclude("errno.h");
-});
+pub const c = @import("rlpm_c");

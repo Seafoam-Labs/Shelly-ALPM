@@ -277,7 +277,7 @@ fn runRealFlatpakRemoteMutation(
     invocation: *const parser.Invocation,
 ) !void {
     const operation = invocation.positionals[1];
-    const name = try context.allocator.dupeZ(u8, invocation.positionals[2]);
+    const name = try context.allocator.dupeSentinel(u8, invocation.positionals[2], 0);
     defer context.allocator.free(name);
     const scope: PackageManager.flatpak.Scope =
         if (booleanOption(invocation, "--system", true)) .system else .user;
@@ -289,7 +289,7 @@ fn runRealFlatpakRemoteMutation(
     defer manager.setOperationContext(null);
 
     if (std.mem.eql(u8, operation, "add")) {
-        const url = try context.allocator.dupeZ(u8, optionValue(invocation, "--remote-url").?);
+        const url = try context.allocator.dupeSentinel(u8, optionValue(invocation, "--remote-url").?, 0);
         defer context.allocator.free(url);
         if (!try manager.addRemote(
             name,
@@ -826,6 +826,7 @@ test "real AppImage runner persists and normalizes Forgejo release-page URLs" {
     var environment = std.process.Environ.Map.init(allocator);
     try environment.put("HOME", home);
     try environment.put("XDG_CONFIG_HOME", root);
+    try environment.put("XDG_BIN_HOME", install_directory);
     var stdout = std.Io.Writer.Allocating.init(std.testing.allocator);
     defer stdout.deinit();
     var stderr = std.Io.Writer.Allocating.init(std.testing.allocator);
@@ -893,6 +894,7 @@ test "real AppImage runner rejects invalid Forgejo paths without reporting succe
     var environment = std.process.Environ.Map.init(allocator);
     try environment.put("HOME", home);
     try environment.put("XDG_CONFIG_HOME", root);
+    try environment.put("XDG_BIN_HOME", install_directory);
     var stdout = std.Io.Writer.Allocating.init(std.testing.allocator);
     defer stdout.deinit();
     var stderr = std.Io.Writer.Allocating.init(std.testing.allocator);
@@ -961,6 +963,7 @@ test "real AppImage runner relocates into a missing install directory and handle
     var environment = std.process.Environ.Map.init(allocator);
     try environment.put("HOME", home);
     try environment.put("XDG_CONFIG_HOME", root);
+    try environment.put("XDG_BIN_HOME", try std.fs.path.join(allocator, &.{ home, ".local", "bin" }));
     try environment.put("XDG_DATA_HOME", try std.fs.path.join(allocator, &.{ root, "data" }));
     try environment.put("XDG_CACHE_HOME", try std.fs.path.join(allocator, &.{ root, "cache" }));
     const environ: std.process.Environ = .{ .block = try environment.createPosixBlock(allocator, .{}) };

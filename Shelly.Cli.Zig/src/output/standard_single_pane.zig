@@ -14,6 +14,7 @@ const parser = @import("../cli/parser.zig");
 const SizeDisplay = fmt.SizeDisplay;
 
 const ProgressStyle = enum {
+    shell,
     blocks,
     pacman,
     nerdfont,
@@ -21,7 +22,7 @@ const ProgressStyle = enum {
 
 const Settings = struct {
     size_display: SizeDisplay = .megabytes,
-    progress_style: ProgressStyle = .blocks,
+    progress_style: ProgressStyle = .shell,
     bar_width: usize = 20,
     collapse_pkgbuild_diff: bool = true,
 };
@@ -33,6 +34,7 @@ const Bar = struct {
     current: f64,
     total: f64,
     byte_counts: ?struct { current: u64, total: u64 } = null,
+    bytes_per_second: ?u64 = null,
     percentage: u8,
 };
 
@@ -341,6 +343,7 @@ pub const Renderer = struct {
             .current = current,
             .total = total,
             .byte_counts = if (has_byte_counts) .{ .current = raw_current, .total = raw_total } else null,
+            .bytes_per_second = update.bytes_per_second,
             .percentage = percentage,
         });
     }
@@ -373,6 +376,7 @@ pub const Renderer = struct {
             self.bars.items[index].current = bar.current;
             self.bars.items[index].total = bar.total;
             self.bars.items[index].byte_counts = bar.byte_counts;
+            self.bars.items[index].bytes_per_second = bar.bytes_per_second;
             self.bars.items[index].percentage = bar.percentage;
             if (!std.mem.eql(u8, self.bars.items[index].action, bar.action)) {
                 self.bars.items[index].action = try self.owned_data.allocator().dupe(u8, bar.action);
@@ -393,6 +397,7 @@ pub const Renderer = struct {
             .current = bar.current,
             .total = bar.total,
             .byte_counts = bar.byte_counts,
+            .bytes_per_second = bar.bytes_per_second,
             .percentage = bar.percentage,
         };
     }
@@ -474,10 +479,23 @@ pub const Renderer = struct {
         } else {
             try left_buffer.writer.print("({d:.0}/{d:.0}) {s} {s}", .{ bar.current, bar.total, bar.action, bar.name });
         }
-        const left = terminalPrefix(left_buffer.writer.buffered(), layout.label_width);
+        const label = left_buffer.writer.buffered();
+        const left = terminalPrefix(label, layout.label_width);
+        var speed_buffer: [64]u8 = undefined;
+        const speed: ?[]const u8 = if (bar.bytes_per_second) |rate| blk: {
+            const text = try formatSpeedInto(&speed_buffer, rate);
+            const fits = left.bytes.len == label.len and layout.label_width - left.columns > text.len;
+            break :blk if (fits) text else null;
+        } else null;
 
         try self.context.stdout.writeAll(left.bytes);
-        try self.context.stdout.splatByteAll(' ', layout.label_width - left.columns + layout.gap_width);
+        if (speed) |text| {
+            try self.context.stdout.splatByteAll(' ', layout.label_width - left.columns - text.len);
+            try self.context.stdout.writeAll(text);
+        } else {
+            try self.context.stdout.splatByteAll(' ', layout.label_width - left.columns);
+        }
+        try self.context.stdout.splatByteAll(' ', layout.gap_width);
         try renderBar(
             self.context.stdout,
             bar.percentage,
@@ -773,7 +791,7 @@ fn loadSettings(context: *runtime.RuntimeContext) !Settings {
     const config = manager.read() catch try config_model.Config.defaults(context.allocator);
     return .{
         .size_display = fmt.parseSizeDisplay(stringValue(&config, "FileSizeDisplay") orelse "Megabytes"),
-        .progress_style = parseProgressStyle(stringValue(&config, "ProgressBarStyle") orelse "Blocks"),
+        .progress_style = parseProgressStyle(stringValue(&config, "ProgressBarStyle") orelse "Shell"),
         .bar_width = integerValue(&config, "ProgressBarWidth") orelse 20,
         .collapse_pkgbuild_diff = boolValue(&config, "CollapsePkgbuildDiff") orelse true,
     };
@@ -798,7 +816,10 @@ fn integerValue(config: *const config_model.Config, key: []const u8) ?usize {
 }
 
 fn parseProgressStyle(value: []const u8) ProgressStyle {
-    return if (std.ascii.eqlIgnoreCase(value, "Pacman")) .pacman else if (std.ascii.eqlIgnoreCase(value, "Nerdfont")) .nerdfont else .blocks;
+    if (std.ascii.eqlIgnoreCase(value, "Blocks")) return .blocks;
+    if (std.ascii.eqlIgnoreCase(value, "Pacman")) return .pacman;
+    if (std.ascii.eqlIgnoreCase(value, "Nerdfont")) return .nerdfont;
+    return .shell;
 }
 
 fn convertSize(display: SizeDisplay, bytes: u64) f64 {
@@ -808,6 +829,12 @@ fn convertSize(display: SizeDisplay, bytes: u64) f64 {
         .gigabytes => 1024 * 1024 * 1024,
     };
     return @as(f64, @floatFromInt(bytes)) / divisor;
+}
+
+fn formatSpeedInto(buffer: []u8, bytes_per_second: u64) ![]const u8 {
+    var size_buffer: [32]u8 = undefined;
+    const size = try fmt.formatSizeInto(&size_buffer, .auto, bytes_per_second);
+    return std.fmt.bufPrint(buffer, "{s}/s", .{size});
 }
 
 fn transactionSizeText(
@@ -1064,6 +1091,60 @@ test "single-pane rendered progress line fits detected width" {
     try std.testing.expect(std.mem.endsWith(u8, rendered, "  50%\n"));
 }
 
+test "single-pane download speed only uses spare label columns" {
+    var buffer: [64]u8 = undefined;
+    try std.testing.expectEqualStrings("512 B/s", try formatSpeedInto(&buffer, 512));
+    try std.testing.expectEqualStrings("1.50 MiB/s", try formatSpeedInto(&buffer, 1572864));
+    try std.testing.expectEqualStrings("1023.99 KiB/s", try formatSpeedInto(&buffer, 1048565));
+
+    const Case = struct { columns: []const u8, name: []const u8, shows_speed: bool };
+    const cases = [_]Case{
+        .{ .columns = "80", .name = "demo.pkg.tar.zst", .shows_speed = true },
+        .{ .columns = "80", .name = "a-very-long-package-name-1.0-1-x86_64.pkg.tar.zst", .shows_speed = false },
+        .{ .columns = "40", .name = "demo.pkg.tar.zst", .shows_speed = false },
+    };
+    for (cases) |case| {
+        var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+        defer arena.deinit();
+        var stdout = std.Io.Writer.Allocating.init(std.testing.allocator);
+        defer stdout.deinit();
+        var stderr = std.Io.Writer.Allocating.init(std.testing.allocator);
+        defer stderr.deinit();
+        var environment = std.process.Environ.Map.init(arena.allocator());
+        try environment.put("COLUMNS", case.columns);
+        var context: runtime.RuntimeContext = .{
+            .allocator = arena.allocator(),
+            .io = std.testing.io,
+            .stdout = &stdout.writer,
+            .stderr = &stderr.writer,
+            .environment = &environment,
+        };
+        var renderer: Renderer = .{
+            .context = &context,
+            .settings = .{ .bar_width = 20 },
+            .no_confirm = true,
+            .animate = false,
+            .owned_data = std.heap.ArenaAllocator.init(arena.allocator()),
+        };
+        defer renderer.deinit();
+
+        try renderer.writeBarLine(.{
+            .operation_id = 1,
+            .name = case.name,
+            .action = "PackageDownload",
+            .current = 50,
+            .total = 100,
+            .bytes_per_second = 1572864,
+            .percentage = 50,
+        });
+        const rendered = stdout.writer.buffered();
+        try std.testing.expectEqual(try std.fmt.parseInt(usize, case.columns, 10), rendered.len);
+        try std.testing.expect(std.mem.endsWith(u8, rendered, "  50%\n"));
+        try std.testing.expectEqual(case.shows_speed, std.mem.indexOf(u8, rendered, " 1.50 MiB/s ") != null);
+        if (case.shows_speed) try std.testing.expect(std.mem.indexOf(u8, rendered, case.name) != null);
+    }
+}
+
 fn renderBar(
     writer: *std.Io.Writer,
     percentage: u8,
@@ -1074,6 +1155,21 @@ fn renderBar(
 ) !void {
     const filled = width * percentage / 100;
     switch (style) {
+        .shell => {
+            if (width == 0) return;
+            if (percentage >= 100) {
+                try writer.splatByteAll('=', width);
+                return;
+            }
+            // One cell for the two valves, opening and closing on progress updates.
+            // Keep the shell visible even before the first cell is filled.
+            const position = @min(filled, width - 1);
+            try writer.splatByteAll(' ', position);
+            try writer.writeByte(if (frame & 1 == 0) '<' else '=');
+            for (position + 1..width) |index| {
+                try writer.writeByte(if (index % 2 == 0) '.' else ' ');
+            }
+        },
         .blocks => {
             if (ascii_only) {
                 try writer.splatByteAll('#', filled);
@@ -1108,6 +1204,42 @@ fn renderBar(
                 }
             }
         },
+    }
+}
+
+test "single-pane shell style defaults and legacy selections" {
+    try std.testing.expectEqual(ProgressStyle.shell, (Settings{}).progress_style);
+    try std.testing.expectEqual(ProgressStyle.shell, parseProgressStyle("sHeLl"));
+    try std.testing.expectEqual(ProgressStyle.shell, parseProgressStyle("unknown"));
+    try std.testing.expectEqual(ProgressStyle.blocks, parseProgressStyle("blocks"));
+    try std.testing.expectEqual(ProgressStyle.pacman, parseProgressStyle("pacman"));
+    try std.testing.expectEqual(ProgressStyle.nerdfont, parseProgressStyle("nerdfont"));
+}
+
+test "single-pane shell opens and closes across progress including narrow bars" {
+    const Case = struct { percentage: u8, frame: usize, width: usize, expected: []const u8 };
+    const cases = [_]Case{
+        .{ .percentage = 0, .frame = 0, .width = 10, .expected = "< . . . . " },
+        .{ .percentage = 0, .frame = 1, .width = 10, .expected = "= . . . . " },
+        .{ .percentage = 50, .frame = 0, .width = 10, .expected = "     <. . " },
+        .{ .percentage = 50, .frame = 1, .width = 10, .expected = "     =. . " },
+        .{ .percentage = 99, .frame = 0, .width = 10, .expected = "         <" },
+        .{ .percentage = 100, .frame = 0, .width = 10, .expected = "==========" },
+        .{ .percentage = 100, .frame = 1, .width = 10, .expected = "==========" },
+        .{ .percentage = 0, .frame = 0, .width = 0, .expected = "" },
+        .{ .percentage = 100, .frame = 1, .width = 0, .expected = "" },
+        .{ .percentage = 0, .frame = 0, .width = 1, .expected = "<" },
+        .{ .percentage = 99, .frame = 1, .width = 1, .expected = "=" },
+        .{ .percentage = 100, .frame = 0, .width = 1, .expected = "=" },
+    };
+    // Shell is ASCII in both interactive and plain output modes.
+    for ([_]bool{ false, true }) |ascii_only| {
+        for (cases) |case| {
+            var output_buffer = std.Io.Writer.Allocating.init(std.testing.allocator);
+            defer output_buffer.deinit();
+            try renderBar(&output_buffer.writer, case.percentage, case.frame, .shell, case.width, ascii_only);
+            try std.testing.expectEqualStrings(case.expected, output_buffer.writer.buffered());
+        }
     }
 }
 

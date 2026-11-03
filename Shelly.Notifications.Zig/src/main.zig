@@ -138,8 +138,8 @@ const Updates = struct {
     }
 
     fn queueNotif(self: *Updates, summary: []const u8, body: []const u8) void {
-        const s = self.allocator.dupeZ(u8, summary) catch return;
-        const b = self.allocator.dupeZ(u8, body) catch {
+        const s = self.allocator.dupeSentinel(u8, summary, 0) catch return;
+        const b = self.allocator.dupeSentinel(u8, body, 0) catch {
             self.allocator.free(s);
             return;
         };
@@ -307,7 +307,7 @@ const Worker = struct {
         self.updates.signalRefresh();
         if (count > 0) {
             var buf: [128]u8 = undefined;
-            const body = std.fmt.bufPrintZ(&buf, "{d} {s}", .{ count, trans("updates available") }) catch "0 updates";
+            const body = std.fmt.bufPrintSentinel(&buf, "{d} {s}", .{ count, trans("updates available") }, 0) catch "0 updates";
             self.updates.queueNotif(trans("Updates available"), body);
         }
     }
@@ -339,6 +339,32 @@ fn getIconsToUse(config: *ShellyConfig) IconsToUse {
     };
 }
 
+/// Applies the D-Bus specification's default session bus address fallback.
+///
+/// `goose` (and therefore zsn's `Service.init`) requires `DBUS_SESSION_BUS_ADDRESS`
+/// to be present in the environment and fails with `error.EnvVarNotFound` when it is
+/// missing. Launchers that do not export the variable — notably systemd user units
+/// started before the session manager propagated it — then leave the tray stuck in a
+/// silent reconnect loop. libdbus and sd-bus both fall back to
+/// `unix:path=$XDG_RUNTIME_DIR/bus`; do the same here so those launches work too.
+///
+/// Returns `true` when a usable session bus address is available afterwards.
+/// Returns `false` only when the address is missing and there is no valid
+/// `XDG_RUNTIME_DIR` to derive it from, which is a permanent condition: retrying
+/// inside the same process cannot help.
+fn ensureSessionBusAddress(allocator: std.mem.Allocator, vars: *std.process.Environ.Map) !bool {
+    if (vars.get("DBUS_SESSION_BUS_ADDRESS")) |address| {
+        if (address.len > 0) return true;
+    }
+    const runtime_dir = vars.get("XDG_RUNTIME_DIR") orelse return false;
+    if (runtime_dir.len == 0 or !std.fs.path.isAbsolute(runtime_dir)) return false;
+    const bus_address = try std.fmt.allocPrint(allocator, "unix:path={s}/bus", .{runtime_dir});
+    defer allocator.free(bus_address);
+    try vars.put("DBUS_SESSION_BUS_ADDRESS", bus_address);
+    log_main.info("DBUS_SESSION_BUS_ADDRESS is unset; falling back to {s}", .{bus_address});
+    return true;
+}
+
 pub fn main(init: std.process.Init) !void {
     const allocator = init.gpa;
     runtime.allocator = allocator;
@@ -346,6 +372,11 @@ pub fn main(init: std.process.Init) !void {
     runtime.environ_map = init.environ_map;
 
     _ = translations.init();
+
+    if (!try ensureSessionBusAddress(allocator, init.environ_map)) {
+        log_main.err("Cannot locate the D-Bus session bus: neither DBUS_SESSION_BUS_ADDRESS nor XDG_RUNTIME_DIR is set in this process environment. Set DBUS_SESSION_BUS_ADDRESS (for a systemd user service, a drop-in with Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=%t/bus works) and restart. Not retrying, because this cannot fix itself while the process runs.", .{});
+        return error.SessionBusAddressNotFound;
+    }
 
     while (true) {
         runSession(init) catch |err| {
@@ -691,6 +722,41 @@ fn onTrayActivate(ctx: ?*anyopaque, x: i32, y: i32) void {
     _ = y;
     launch_requested.store(true, .seq_cst);
 }
+test "ensureSessionBusAddress falls back to XDG_RUNTIME_DIR" {
+    var vars = std.process.Environ.Map.init(std.testing.allocator);
+    defer vars.deinit();
+
+    // Neither variable set: permanent failure, no address written.
+    try std.testing.expect(!try ensureSessionBusAddress(std.testing.allocator, &vars));
+    try std.testing.expect(vars.get("DBUS_SESSION_BUS_ADDRESS") == null);
+
+    // XDG_RUNTIME_DIR set: derive the spec default address.
+    try vars.put("XDG_RUNTIME_DIR", "/run/user/1000");
+    try std.testing.expect(try ensureSessionBusAddress(std.testing.allocator, &vars));
+    try std.testing.expectEqualStrings("unix:path=/run/user/1000/bus", vars.get("DBUS_SESSION_BUS_ADDRESS").?);
+
+    // An explicit non-empty address always wins over the fallback.
+    try vars.put("DBUS_SESSION_BUS_ADDRESS", "unix:abstract=/tmp/dbus-abc");
+    try std.testing.expect(try ensureSessionBusAddress(std.testing.allocator, &vars));
+    try std.testing.expectEqualStrings("unix:abstract=/tmp/dbus-abc", vars.get("DBUS_SESSION_BUS_ADDRESS").?);
+
+    // An empty address is as useless as a missing one and gets replaced.
+    try vars.put("DBUS_SESSION_BUS_ADDRESS", "");
+    try std.testing.expect(try ensureSessionBusAddress(std.testing.allocator, &vars));
+    try std.testing.expectEqualStrings("unix:path=/run/user/1000/bus", vars.get("DBUS_SESSION_BUS_ADDRESS").?);
+}
+
+test "ensureSessionBusAddress rejects unusable XDG_RUNTIME_DIR" {
+    var vars = std.process.Environ.Map.init(std.testing.allocator);
+    defer vars.deinit();
+
+    try vars.put("XDG_RUNTIME_DIR", "relative/path");
+    try std.testing.expect(!try ensureSessionBusAddress(std.testing.allocator, &vars));
+
+    try vars.put("XDG_RUNTIME_DIR", "");
+    try std.testing.expect(!try ensureSessionBusAddress(std.testing.allocator, &vars));
+}
+
 test {
     std.testing.refAllDecls(@This());
     _ = @import("services/next_notification.zig");

@@ -219,7 +219,7 @@ pub const Stage = struct {
         std.Io.random(io, &random);
 
         var label: [48:0]u8 = @splat(0);
-        _ = try std.fmt.bufPrintZ(&label, ".rlpm-{s}", .{std.fmt.bytesToHex(random, .lower)});
+        _ = try std.fmt.bufPrintSentinel(&label, ".rlpm-{s}", .{std.fmt.bytesToHex(random, .lower)}, 0);
         try durability.before(p.fd);
 
         if (c.mkdirat(p.fd, &label, 0o700) != 0) return failure();

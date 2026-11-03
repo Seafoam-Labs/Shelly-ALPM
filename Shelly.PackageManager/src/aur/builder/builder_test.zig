@@ -166,7 +166,7 @@ const Fixture = struct {
                 .source_destination = build_dir,
                 .log_destination = build_dir,
                 .sources_prepared = true,
-                .reviewed_pkgbuild_digest = [_]u8{0} ** std.crypto.hash.sha2.Sha256.digest_length,
+                .reviewed_pkgbuild_digest = @as([std.crypto.hash.sha2.Sha256.digest_length]u8, @splat(0)),
                 .pkgbuild_sha256sum = pkgbuild_digest,
                 .installed_packages = &.{"base-1-1-any"},
             },
@@ -251,7 +251,7 @@ const Fixture = struct {
                 .source_destination = build_dir,
                 .log_destination = build_dir,
                 .sources_prepared = true,
-                .reviewed_pkgbuild_digest = [_]u8{0} ** std.crypto.hash.sha2.Sha256.digest_length,
+                .reviewed_pkgbuild_digest = @as([std.crypto.hash.sha2.Sha256.digest_length]u8, @splat(0)),
                 .pkgbuild_sha256sum = pkgbuild_digest,
                 .installed_packages = &.{"base-1-1-any"},
             },
@@ -438,11 +438,11 @@ fn prepareSourcePgpHome(fixture: *Fixture) ![:0]u8 {
         .{std.fs.path.basename(fixture.build_dir)},
     );
     defer allocator.free(short_home_text);
-    const short_home = try allocator.dupeZ(u8, short_home_text);
+    const short_home = try allocator.dupeSentinel(u8, short_home_text, 0);
     errdefer allocator.free(short_home);
     try std.Io.Dir.cwd().symLink(io, actual_home, short_home, .{});
     fixture.short_gnupg_home = short_home;
-    const home = try allocator.dupeZ(u8, short_home);
+    const home = try allocator.dupeSentinel(u8, short_home, 0);
     errdefer allocator.free(home);
     const public_key = try fixture.temporary.dir.realPathFileAlloc(io, "source-test-public.asc", allocator);
     defer allocator.free(public_key);
@@ -480,10 +480,10 @@ fn prepareSigningPgpHome(fixture: *Fixture) ![:0]u8 {
         .{std.fs.path.basename(fixture.build_dir)},
     );
     defer allocator.free(short_home_text);
-    const short_home = try allocator.dupeZ(u8, short_home_text);
+    const short_home = try allocator.dupeSentinel(u8, short_home_text, 0);
     errdefer allocator.free(short_home);
     try std.Io.Dir.cwd().symLink(io, actual_home, short_home, .{});
-    const home = try allocator.dupeZ(u8, short_home);
+    const home = try allocator.dupeSentinel(u8, short_home, 0);
     errdefer allocator.free(home);
     const secret_key = try fixture.temporary.dir.realPathFileAlloc(io, "signing-test-secret.asc", allocator);
     defer allocator.free(secret_key);
@@ -640,7 +640,7 @@ test "PackageBuilder compression presets apply to every split package" {
             var header: [4]u8 = undefined;
             try testing.expectEqual(header.len, try file.readPositionalAll(testing.io, &header, 0));
             const expected = [_][]const u8{ "BZh1", "BZh3", "BZh5", "BZh7", "BZh9" };
-            try testing.expectEqualStrings(expected[@intFromEnum(preset) - 1], &header);
+            try testing.expectEqualStrings(expected[@backingInt(preset) - 1], &header);
             var reader = try archive.Reader.init(allocator, artifact.path);
             defer reader.deinit();
             var found: usize = 0;
@@ -683,7 +683,7 @@ test "PackageBuilder fails atomically when the signing key is unavailable" {
         .{std.fs.path.basename(fixture.build_dir)},
     );
     defer allocator.free(short_home_text);
-    const short_home = try allocator.dupeZ(u8, short_home_text);
+    const short_home = try allocator.dupeSentinel(u8, short_home_text, 0);
     try std.Io.Dir.cwd().symLink(io, actual_home, short_home, .{});
     fixture.short_gnupg_home = short_home;
     fixture.builder.options.sign = true;
@@ -2087,7 +2087,7 @@ test "PackageBuilder issue 2025 ownership journal is independent of package loca
         };
         var reader = try archive.Reader.init(allocator, artifacts[0].path);
         defer reader.deinit();
-        var seen = [_]bool{false} ** expected.len;
+        var seen = @as([expected.len]bool, @splat(false));
         while (try reader.next()) |entry| {
             for (expected, 0..) |item, index| {
                 if (!std.mem.eql(u8, entry.path, item.path)) continue;
@@ -2276,7 +2276,7 @@ test "PackageBuilder install option clusters preserve virtual ownership" {
 
     var reader = try archive.Reader.init(allocator, artifacts[0].path);
     defer reader.deinit();
-    var seen = [_]bool{false} ** expected.len;
+    var seen = @as([expected.len]bool, @splat(false));
     while (try reader.next()) |entry| {
         for (expected, 0..) |item, index| {
             if (!std.mem.eql(u8, std.mem.trimEnd(u8, entry.path, "/"), item.path)) continue;
@@ -3191,7 +3191,7 @@ test "PackageBuilder build.env reaches metadata SRCINFO and lifecycle steps" {
         defer builder_mod.deinitArtifacts(allocator, artifacts);
         const output = try readPackageEntry(allocator, artifacts[0].path, "usr/share/explicit-env-demo/phases");
         defer allocator.free(output);
-        try testing.expectEqualStrings("/opt/configured java\n" ** 4, output);
+        try testing.expectEqualStrings("/opt/configured java\n/opt/configured java\n/opt/configured java\n/opt/configured java\n", output);
         try testing.expectEqualStrings("C.UTF-8", environ.getPosix("LANG").?);
         try testing.expectEqualStrings("C", environ.getPosix("LC_ALL").?);
         try testing.expectError(error.FileNotFound, fixture.temporary.dir.access(io, "src/should-not-run", .{}));
@@ -4147,7 +4147,7 @@ test "PackageBuilder verify supports downloaded archives in shared and separate 
         // A bad sidecar must abort before replacing the committed src tree.
         try fixture.temporary.dir.writeFile(io, .{
             .sub_path = if (separate_cache) "cache/payload.sha256" else "payload.sha256",
-            .data = "0" ** 64 ++ "  downloaded.tar.gz\n",
+            .data = "0000000000000000000000000000000000000000000000000000000000000000" ++ "  downloaded.tar.gz\n",
         });
         try testing.expectError(error.BuildFailed, fixture.builder.BuildPackage());
         try fixture.temporary.dir.access(io, "src/demo/source.txt", .{});
@@ -6811,7 +6811,7 @@ test "PackageBuilder preserves selected split metadata in PKGINFO" {
     defer _ = raw_alpm.alpm_pkg_free(loaded.?);
     const candidates = raw_alpm.alpm_list_add(null, @ptrCast(loaded.?)) orelse return error.OutOfMemory;
     defer raw_alpm.alpm_list_free(candidates);
-    const virtual_dependency = try allocator.dupeZ(u8, "shelly");
+    const virtual_dependency = try allocator.dupeSentinel(u8, "shelly", 0);
     defer allocator.free(virtual_dependency);
     try testing.expectEqual(loaded.?, raw_alpm.alpm_find_satisfier(candidates, virtual_dependency.ptr).?);
 }
@@ -7736,15 +7736,15 @@ test "sandbox policy denies paths outside the allow-list" {
     // applied, the allowed path stayed readable, and the denied path was
     // rejected.
     const fork_rc = std.os.linux.fork();
-    try testing.expectEqual(std.os.linux.E.SUCCESS, std.os.linux.errno(@intCast(fork_rc)));
+    try testing.expectEqual(std.os.linux.E.SUCCESS, std.os.linux.errno(fork_rc));
     if (fork_rc == 0) {
         std.process.exit(probeSandboxPolicy(allocator, allowed_root, allowed_path, denied_path));
     }
-    var status: u32 = 0;
+    var status: i32 = 0;
     _ = std.os.linux.waitpid(@intCast(fork_rc), &status, 0);
-    try testing.expectEqual(@as(u32, 0), status & 0x7f);
+    try testing.expectEqual(@as(i32, 0), status & 0x7f);
     const exit_code = (status >> 8) & 0xff;
-    try testing.expectEqual(@as(u32, 0), exit_code);
+    try testing.expectEqual(@as(i32, 0), exit_code);
 }
 
 fn probeSandboxPolicy(
@@ -7764,9 +7764,9 @@ fn probeSandboxPolicy(
 }
 
 fn probePathReadable(allocator: std.mem.Allocator, path: []const u8) bool {
-    const path_z = allocator.dupeZ(u8, path) catch return false;
+    const path_z = allocator.dupeSentinel(u8, path, 0) catch return false;
     const rc = std.os.linux.open(path_z.ptr, .{}, 0);
-    if (std.os.linux.errno(@intCast(rc)) != .SUCCESS) return false;
+    if (std.os.linux.errno(rc) != .SUCCESS) return false;
     _ = std.os.linux.close(@intCast(rc));
     return true;
 }

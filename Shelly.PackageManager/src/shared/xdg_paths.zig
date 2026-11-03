@@ -14,8 +14,11 @@ pub const xdg_paths = struct {
     }
 
     pub fn xdgCacheHome(allocator: std.mem.Allocator, environ: std.process.Environ) ![]u8 {
-        if (environ.getPosix("XDG_CACHE_HOME")) |v| return try allocator.dupe(u8, v);
-        const home: []const u8 = environ.getPosix("HOME") orelse return error.HomeNotSet;
+        const home = try @import("user_account").callerHome(allocator, environ);
+        defer allocator.free(home);
+        if (environ.getPosix("XDG_CACHE_HOME")) |v| {
+            if (std.fs.path.isAbsolute(v)) return allocator.dupe(u8, v);
+        }
         return std.fs.path.join(allocator, &.{ home, ".cache" });
     }
 

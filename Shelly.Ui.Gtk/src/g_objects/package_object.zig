@@ -60,18 +60,18 @@ pub const PackageObject = extern struct {
         p.arena = arena;
         const a = arena.allocator();
 
-        p.name = a.dupeZ(u8, package.Name) catch "";
-        p.version = a.dupeZ(u8, package.Version) catch "";
-        p.repository = a.dupeZ(u8, package.Repository) catch "";
-        p.description = a.dupeZ(u8, package.Description) catch "";
-        p.install_date = if (package.InstallDate) |d| a.dupeZ(u8, d) catch "" else "";
+        p.name = a.dupeSentinel(u8, package.Name, 0) catch "";
+        p.version = a.dupeSentinel(u8, package.Version, 0) catch "";
+        p.repository = a.dupeSentinel(u8, package.Repository, 0) catch "";
+        p.description = a.dupeSentinel(u8, package.Description, 0) catch "";
+        p.install_date = if (package.InstallDate) |d| a.dupeSentinel(u8, d, 0) catch "" else "";
         p.installed_size = package.InstalledSize;
         p.installed = package.Installed;
         p.explicit = package.Explicit;
         p.selected = false;
 
         if (a.alloc([:0]const u8, package.Groups.len)) |g| {
-            for (package.Groups, 0..) |src, i| g[i] = a.dupeZ(u8, src) catch "";
+            for (package.Groups, 0..) |src, i| g[i] = a.dupeSentinel(u8, src, 0) catch "";
             p.groups = g;
         } else |_| {
             p.groups = &.{};

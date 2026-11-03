@@ -175,15 +175,26 @@ archive and the configured extraction/diff/merge tools. Missing owners or base
 archives retain the two-way diff fallback; unreadable owner metadata is an error.
 GPG and a populated host trust database remain necessary for signature verification.
 
+For the Seafoam Labs Arch release without libalpm, use
+`packaging/arch/PKGBUILD` and its adjacent `.SRCINFO`. It builds the release tag
+matching `pkgver` (currently `v3.1.10`) with `-Dlibalpm=false` and
+`-Dpath-profile=pacman`, preserving `/etc/pacman.conf`, `/var/lib/pacman`, and Arch
+news support. Pacman is an optional dependency for package-owner lookup.
+`packaging/arch/shelly-git/PKGBUILD` is the corresponding development recipe.
+
+```sh
+shelly build ./packaging/arch/PKGBUILD
+```
+
 `packaging/devario/PKGBUILD` builds the release tag matching `pkgver` (currently
-`v3.1.9`). `packaging/devario/shelly-git/PKGBUILD` tracks the `development` branch.
+`v3.1.10`). `packaging/devario/shelly-git/PKGBUILD` tracks the `development` branch.
 Both use `-Dlibalpm=false -Dpath-profile=devario`, including the matching key tool
 and backend tests. Neither recipe applies downstream patches
 or requires `devario-alpm-runtime`. Their checks include native pacfile ownership,
 helper path defaults, BUILDINFO database selection, and sandbox allow-list
 regressions.
 
-All three Devario Shelly recipes require sources containing the Devario Arch
+Both Devario Shelly recipes require sources containing the Devario Arch
 news build policy. Before generating documentation, `build()` verifies that
 the compiled CLI rejects `news --help` as unavailable on Devario. This check
 also runs with `--no-check`, so older sources cannot silently ship a CLI with
@@ -194,11 +205,6 @@ pass this check.
 shelly build ./packaging/devario/PKGBUILD
 ```
 
-The separate root `PKGBUILD-devario` is a historical pinned recipe. Its current
-`bcbba6aa` pin predates path-profile support even though the recipe passes that
-option. Refresh that pin to a published commit containing these fixes and the
-Devario news build policy before using it for a release. The release and
-development recipes above do not use that pin.
 Use `--config` for runtime configuration overrides; the former downstream
 `SHELLY_ALPM_CONFIG` variable is not supported.
 

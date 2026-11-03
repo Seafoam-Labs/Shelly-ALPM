@@ -92,11 +92,7 @@ pub const PkgbuildReviewDialog = extern struct {
     pub fn showPreview(self: *Self, name: []const u8) void {
         const p = self.priv();
         var buf: [512]u8 = undefined;
-        const heading = std.fmt.bufPrintZ(
-            &buf,
-            "{s}: {s}",
-            .{ "PKGBUILD", name },
-        ) catch "PKGBUILD";
+        const heading = std.fmt.bufPrintSentinel(&buf, "{s}: {s}", .{ "PKGBUILD", name }, 0) catch "PKGBUILD";
         gtk.Label.setLabel(p.heading_label, heading);
         p.scan_enabled = atoll_enabled();
         gtk.Notebook.setShowTabs(p.notebook, @intFromBool(p.scan_enabled));
@@ -331,7 +327,7 @@ pub const PkgbuildReviewDialog = extern struct {
             page.show_scan(scan, arena.allocator()) catch |err| page.request_failure(true, err, null);
             return 0;
         }
-        const text = arena.allocator().dupeZ(u8, package.PkgBuild) catch {
+        const text = arena.allocator().dupeSentinel(u8, package.PkgBuild, 0) catch {
             page.show_failure(error.OutOfMemory, null);
             return 0;
         };
@@ -361,16 +357,16 @@ pub const PkgbuildReviewDialog = extern struct {
         const warnings = try allocator.alloc(InstallReview.Warning, scan.findings.len);
         for (scan.findings, warnings) |finding, *warning| {
             warning.* = .{
-                .tool = try allocator.dupeZ(u8, finding.tool),
-                .hook = try allocator.dupeZ(u8, finding.hook),
-                .severity = try allocator.dupeZ(u8, if (std.mem.eql(u8, finding.severity, "critical")) "Critical" else finding.severity),
-                .message = try allocator.dupeZ(u8, finding.message),
-                .matched_line = try allocator.dupeZ(u8, finding.matched_line),
+                .tool = try allocator.dupeSentinel(u8, finding.tool, 0),
+                .hook = try allocator.dupeSentinel(u8, finding.hook, 0),
+                .severity = try allocator.dupeSentinel(u8, if (std.mem.eql(u8, finding.severity, "critical")) "Critical" else finding.severity, 0),
+                .message = try allocator.dupeSentinel(u8, finding.message, 0),
+                .matched_line = try allocator.dupeSentinel(u8, finding.matched_line, 0),
             };
         }
         const files = try allocator.alloc(InstallReview.SourceFile, scan.related_files.len);
         for (scan.related_files, files) |file, *row| {
-            row.* = .{ .name = try allocator.dupeZ(u8, file.name), .content = try allocator.dupeZ(u8, file.content) };
+            row.* = .{ .name = try allocator.dupeSentinel(u8, file.name, 0), .content = try allocator.dupeSentinel(u8, file.content, 0) };
         }
         const p = self.priv();
         clear_box(p.warnings_box);
@@ -390,7 +386,7 @@ pub const PkgbuildReviewDialog = extern struct {
         gtk.Image.setFromIconName(p.scan_icon, if (warnings.len > 0) "dialog-warning-symbolic" else "security-high-symbolic");
         var buffer: [128]u8 = undefined;
         const message = if (warnings.len > 0)
-            std.fmt.bufPrintZ(&buffer, "{s} {d} {s}", .{ translations._("Security scan completed -"), warnings.len, translations._("warning(s) found.") }) catch translations._("Security scan completed - warnings found.")
+            std.fmt.bufPrintSentinel(&buffer, "{s} {d} {s}", .{ translations._("Security scan completed -"), warnings.len, translations._("warning(s) found.") }, 0) catch translations._("Security scan completed - warnings found.")
         else
             translations._("Security scan completed - no issues found.");
         gtk.Label.setLabel(p.scan_label, message);
@@ -445,11 +441,7 @@ pub const PkgbuildReviewDialog = extern struct {
 
             var title_buffer: [512]u8 = undefined;
             const severity_color = if (std.mem.eql(u8, warning.severity, "Critical")) "#c01c28" else "#e5a50a";
-            const title_markup = std.fmt.bufPrintZ(
-                &title_buffer,
-                "<b><span foreground=\"{s}\">{s} {s} {s}</span></b>",
-                .{ severity_color, escaped_tool, used_in, escaped_hook },
-            ) catch null;
+            const title_markup = std.fmt.bufPrintSentinel(&title_buffer, "<b><span foreground=\"{s}\">{s} {s} {s}</span></b>", .{ severity_color, escaped_tool, used_in, escaped_hook }, 0) catch null;
 
             if (title_markup) |markup| {
                 gtk.TextBuffer.insertMarkup(buffer, &iter, markup, -1);

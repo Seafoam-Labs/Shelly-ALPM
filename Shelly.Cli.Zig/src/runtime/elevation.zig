@@ -240,7 +240,7 @@ pub fn runAsInvokingUser(
 ) !?u8 {
     const arguments = try context.childArguments(original_arguments);
     defer context.allocator.free(arguments);
-    const identity = (try invokingUser(context)) orelse return null;
+    const identity = (try executionIdentity(context)) orelse return null;
     defer identity.deinit(context.allocator);
     const home = try invokingUserHome(context, identity.username);
     defer context.allocator.free(home);
@@ -249,29 +249,13 @@ pub fn runAsInvokingUser(
     defer context.allocator.free(executable);
     const home_environment = try std.fmt.allocPrint(context.allocator, "HOME={s}", .{home});
     defer context.allocator.free(home_environment);
-    const config_environment = try std.fmt.allocPrint(
-        context.allocator,
-        "XDG_CONFIG_HOME={s}/.config",
-        .{home},
-    );
+    const config_environment = try userPathEnvironment(context, "XDG_CONFIG_HOME", home, ".config");
     defer context.allocator.free(config_environment);
-    const data_environment = try std.fmt.allocPrint(
-        context.allocator,
-        "XDG_DATA_HOME={s}/.local/share",
-        .{home},
-    );
+    const data_environment = try userPathEnvironment(context, "XDG_DATA_HOME", home, ".local/share");
     defer context.allocator.free(data_environment);
-    const cache_environment = try std.fmt.allocPrint(
-        context.allocator,
-        "XDG_CACHE_HOME={s}/.cache",
-        .{home},
-    );
+    const cache_environment = try userPathEnvironment(context, "XDG_CACHE_HOME", home, ".cache");
     defer context.allocator.free(cache_environment);
-    const bin_environment = try std.fmt.allocPrint(
-        context.allocator,
-        "XDG_BIN_HOME={s}/.local/bin",
-        .{home},
-    );
+    const bin_environment = try userPathEnvironment(context, "XDG_BIN_HOME", home, ".local/bin");
     defer context.allocator.free(bin_environment);
     const runtime_environment = try std.fmt.allocPrint(
         context.allocator,
@@ -285,11 +269,13 @@ pub fn runAsInvokingUser(
         .{identity.uid},
     );
     defer context.allocator.free(bus_environment);
+    var wrapped = try userEnvironmentArguments(context, home, safe_executable, arguments);
+    defer wrapped.deinit(context.allocator);
     const child_arguments = try buildInvokingUserArguments(
         context.allocator,
-        findElevator(context),
+        "/usr/bin/runuser",
         identity.username,
-        safe_executable,
+        "/usr/bin/env",
         home_environment,
         config_environment,
         data_environment,
@@ -297,7 +283,7 @@ pub fn runAsInvokingUser(
         bin_environment,
         runtime_environment,
         bus_environment,
-        arguments,
+        wrapped.asConst(),
     );
     defer context.allocator.free(child_arguments);
 
@@ -309,6 +295,69 @@ pub fn runAsInvokingUser(
     });
     errdefer child.kill(context.io);
     return @as(?u8, try exitCode(try child.wait(context.io)));
+}
+
+fn userEnvironmentArguments(context: *const context_module.RuntimeContext, home: []const u8, executable: []const u8, arguments: []const []const u8) !PackageManager.process_runner.OwnedCommand {
+    var argv: std.ArrayList([]u8) = .empty;
+    errdefer {
+        for (argv.items) |arg| context.allocator.free(arg);
+        argv.deinit(context.allocator);
+    }
+    try argv.append(context.allocator, try userPathEnvironment(context, "XDG_STATE_HOME", home, ".local/state"));
+    if (context.environment) |environment| {
+        for ([_][]const u8{ "http_proxy", "HTTP_PROXY", "https_proxy", "HTTPS_PROXY", "all_proxy", "ALL_PROXY", "no_proxy", "NO_PROXY" }) |key| {
+            if (environment.get(key)) |value| try argv.append(context.allocator, try std.fmt.allocPrint(context.allocator, "{s}={s}", .{ key, value }));
+        }
+    }
+    try argv.append(context.allocator, try context.allocator.dupe(u8, executable));
+    for (arguments) |arg| try argv.append(context.allocator, try context.allocator.dupe(u8, arg));
+    return .{ .argv = try argv.toOwnedSlice(context.allocator) };
+}
+
+fn userPathEnvironment(context: *const context_module.RuntimeContext, key: []const u8, home: []const u8, relative: []const u8) ![]u8 {
+    if (context.environment) |environment| {
+        if (environment.get(key)) |value| {
+            if (std.fs.path.isAbsolute(value)) return std.fmt.allocPrint(context.allocator, "{s}={s}", .{ key, value });
+        }
+    }
+    return std.fmt.allocPrint(context.allocator, "{s}={s}/{s}", .{ key, home, relative });
+}
+
+test "XDG caller environment preserves absolute overrides and proxy settings" {
+    var tc: @import("../commands/test_support.zig").TestContext = undefined;
+    tc.init();
+    defer tc.deinit();
+    var environment = std.process.Environ.Map.init(tc.context.allocator);
+    defer environment.deinit();
+    try environment.put("XDG_CACHE_HOME", "/tmp/custom cache");
+    try environment.put("XDG_STATE_HOME", "/tmp/custom state");
+    try environment.put("https_proxy", "http://proxy.invalid:8080");
+    tc.context.environment = &environment;
+    const cache = try userPathEnvironment(&tc.context, "XDG_CACHE_HOME", "/home/tester", ".cache");
+    try std.testing.expectEqualStrings("XDG_CACHE_HOME=/tmp/custom cache", cache);
+    try environment.put("XDG_CACHE_HOME", "relative");
+    const fallback = try userPathEnvironment(&tc.context, "XDG_CACHE_HOME", "/home/tester", ".cache");
+    try std.testing.expectEqualStrings("XDG_CACHE_HOME=/home/tester/.cache", fallback);
+    var wrapped = try userEnvironmentArguments(&tc.context, "/home/tester", "/usr/bin/shelly", &.{ "backup", "--export", "--json" });
+    defer wrapped.deinit(tc.context.allocator);
+    const expected = [_][]const u8{ "XDG_STATE_HOME=/tmp/custom state", "https_proxy=http://proxy.invalid:8080", "/usr/bin/shelly", "backup", "--export", "--json" };
+    try std.testing.expectEqual(expected.len, wrapped.argv.len);
+    for (expected, wrapped.argv) |wanted, actual| try std.testing.expectEqualStrings(wanted, actual);
+}
+
+/// Null means execution is already under the caller's identity, including
+/// direct root. Failed account resolution is an error, never a root fallback.
+fn executionIdentity(context: *const context_module.RuntimeContext) !?InvokingIdentity {
+    if (!isRoot()) return null;
+    const environment = context.environment;
+    const account = try user_account.callerFor(context.allocator, 0, if (environment) |env| env.get("SUDO_USER") else null, if (environment) |env| env.get("DOAS_USER") else null, if (environment) |env| env.get("PKEXEC_UID") else null);
+    defer account.deinit(context.allocator);
+    if (account.uid == 0) return null;
+    const uid = try std.fmt.allocPrint(context.allocator, "{d}", .{account.uid});
+    errdefer context.allocator.free(uid);
+    const gid = try std.fmt.allocPrint(context.allocator, "{d}", .{account.gid});
+    errdefer context.allocator.free(gid);
+    return .{ .username = try context.allocator.dupe(u8, account.username), .uid = uid, .gid = gid };
 }
 
 pub const CapturedRun = struct {
@@ -330,7 +379,7 @@ pub fn runAsInvokingUserCapture(
 ) !?CapturedRun {
     const arguments = try context.childArguments(original_arguments);
     defer context.allocator.free(arguments);
-    const identity = (try invokingUser(context)) orelse return null;
+    const identity = (try executionIdentity(context)) orelse return null;
     defer identity.deinit(context.allocator);
     const home = try invokingUserHome(context, identity.username);
     defer context.allocator.free(home);
@@ -339,23 +388,25 @@ pub fn runAsInvokingUserCapture(
     const executable = std.mem.trimEnd(u8, executable_allocated, " (deleted)");
     const home_environment = try std.fmt.allocPrint(context.allocator, "HOME={s}", .{home});
     defer context.allocator.free(home_environment);
-    const config_environment = try std.fmt.allocPrint(context.allocator, "XDG_CONFIG_HOME={s}/.config", .{home});
+    const config_environment = try userPathEnvironment(context, "XDG_CONFIG_HOME", home, ".config");
     defer context.allocator.free(config_environment);
-    const data_environment = try std.fmt.allocPrint(context.allocator, "XDG_DATA_HOME={s}/.local/share", .{home});
+    const data_environment = try userPathEnvironment(context, "XDG_DATA_HOME", home, ".local/share");
     defer context.allocator.free(data_environment);
-    const cache_environment = try std.fmt.allocPrint(context.allocator, "XDG_CACHE_HOME={s}/.cache", .{home});
+    const cache_environment = try userPathEnvironment(context, "XDG_CACHE_HOME", home, ".cache");
     defer context.allocator.free(cache_environment);
-    const bin_environment = try std.fmt.allocPrint(context.allocator, "XDG_BIN_HOME={s}/.local/bin", .{home});
+    const bin_environment = try userPathEnvironment(context, "XDG_BIN_HOME", home, ".local/bin");
     defer context.allocator.free(bin_environment);
     const runtime_environment = try std.fmt.allocPrint(context.allocator, "XDG_RUNTIME_DIR=/run/user/{s}", .{identity.uid});
     defer context.allocator.free(runtime_environment);
     const bus_environment = try std.fmt.allocPrint(context.allocator, "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/{s}/bus", .{identity.uid});
     defer context.allocator.free(bus_environment);
+    var wrapped = try userEnvironmentArguments(context, home, executable, arguments);
+    defer wrapped.deinit(context.allocator);
     const child_arguments = try buildInvokingUserArguments(
         context.allocator,
-        findElevator(context),
+        "/usr/bin/runuser",
         identity.username,
-        executable,
+        "/usr/bin/env",
         home_environment,
         config_environment,
         data_environment,
@@ -363,7 +414,7 @@ pub fn runAsInvokingUserCapture(
         bin_environment,
         runtime_environment,
         bus_environment,
-        arguments,
+        wrapped.asConst(),
     );
     defer context.allocator.free(child_arguments);
 
@@ -507,22 +558,24 @@ fn buildInvokingUserArguments(
         return result;
     }
 
-    const result = try allocator.alloc([]const u8, arguments.len + 14);
+    const offset: usize = @intFromBool(std.mem.eql(u8, std.fs.path.basename(elevator), "runuser"));
+    const result = try allocator.alloc([]const u8, arguments.len + 14 + offset);
     result[0] = elevator;
     result[1] = "-u";
     result[2] = user;
-    result[3] = "/usr/bin/env";
-    result[4] = "-i";
-    result[5] = home_environment;
-    result[6] = config_environment;
-    result[7] = data_environment;
-    result[8] = cache_environment;
-    result[9] = bin_environment;
-    result[10] = runtime_environment;
-    result[11] = bus_environment;
-    result[12] = "PATH=" ++ PackageManager.process_runner.build_path.baseline;
-    result[13] = executable;
-    @memcpy(result[14..], arguments);
+    if (offset != 0) result[3] = "--";
+    result[3 + offset] = "/usr/bin/env";
+    result[4 + offset] = "-i";
+    result[5 + offset] = home_environment;
+    result[6 + offset] = config_environment;
+    result[7 + offset] = data_environment;
+    result[8 + offset] = cache_environment;
+    result[9 + offset] = bin_environment;
+    result[10 + offset] = runtime_environment;
+    result[11 + offset] = bus_environment;
+    result[12 + offset] = "PATH=" ++ PackageManager.process_runner.build_path.baseline;
+    result[13 + offset] = executable;
+    @memcpy(result[14 + offset ..], arguments);
     return result;
 }
 

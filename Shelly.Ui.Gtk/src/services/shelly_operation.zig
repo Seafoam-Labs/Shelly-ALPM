@@ -513,7 +513,7 @@ pub const ShellyOperation = struct {
     }
 
     fn build_full_argv(self: *ShellyOperation, args: []const []const u8, cache_root: ?[]const u8) ![]const []const u8 {
-        const shelly_bin = if (builtin.mode == .Debug)
+        const shelly_bin = if (builtin.optimize == .debug)
             "../Shelly.Cli.Zig/zig-out/bin/shelly"
         else
             "shelly";
@@ -557,7 +557,7 @@ pub const ShellyOperation = struct {
         argv: []const []const u8,
         startup_frame: ?[]const u8,
     ) !void {
-        if (builtin.mode == .Debug) {
+        if (builtin.optimize == .debug) {
             if (std.mem.join(self.allocator, " ", argv)) |command| {
                 defer self.allocator.free(command);
                 log.debug("argv: {s}", .{command});
@@ -612,7 +612,7 @@ pub const ShellyOperation = struct {
         };
         const code: u8 = switch (term) {
             .exited => |code| code,
-            .signal => |signal| @truncate(128 + @intFromEnum(signal)),
+            .signal => |signal| @truncate(128 + @backingInt(signal)),
             .stopped, .unknown => 1,
         };
 

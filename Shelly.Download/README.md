@@ -1,6 +1,6 @@
 # Shelly.Download
 
-Shared Zig 0.16 transport and bounded queue extracted from
+Shared Zig 0.17 transport and bounded queue extracted from
 `Shelly.PackageManager/src/shared/downloader.zig` and `download_queue.zig`.
 Both PackageManager and RLPM consume the same module; backend callbacks and
 verification stay in those consumers. The existing `.succes` result spelling

@@ -84,7 +84,7 @@ pub const AddonsDialog = extern struct {
         gtk.Widget.setHexpand(text.as(gtk.Widget), 1);
 
         var name_buffer: [512]u8 = undefined;
-        const name_z = std.fmt.bufPrintZ(&name_buffer, "{s}", .{if (addon.Name.len > 0) addon.Name else addon.Id}) catch "";
+        const name_z = std.fmt.bufPrintSentinel(&name_buffer, "{s}", .{if (addon.Name.len > 0) addon.Name else addon.Id}, 0) catch "";
         const name_label = gtk.Label.new(name_z);
         gtk.Label.setXalign(name_label, 0);
         gtk.Label.setWrap(name_label, 1);
@@ -93,7 +93,7 @@ pub const AddonsDialog = extern struct {
 
         if (addon.Summary.len > 0) {
             var summary_buffer: [1024]u8 = undefined;
-            const summary_z = std.fmt.bufPrintZ(&summary_buffer, "{s}", .{addon.Summary}) catch "";
+            const summary_z = std.fmt.bufPrintSentinel(&summary_buffer, "{s}", .{addon.Summary}, 0) catch "";
             const summary_label = gtk.Label.new(summary_z);
             gtk.Label.setXalign(summary_label, 0);
             gtk.Label.setWrap(summary_label, 1);
@@ -103,7 +103,7 @@ pub const AddonsDialog = extern struct {
 
         if (addon.Name.len > 0) {
             var id_buffer: [512]u8 = undefined;
-            const id_z = std.fmt.bufPrintZ(&id_buffer, "{s}", .{addon.Id}) catch "";
+            const id_z = std.fmt.bufPrintSentinel(&id_buffer, "{s}", .{addon.Id}, 0) catch "";
             const id_label = gtk.Label.new(id_z);
             gtk.Label.setXalign(id_label, 0);
             gtk.Label.setWrap(id_label, 1);

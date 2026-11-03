@@ -21,9 +21,7 @@ const Program = extern struct {
     filter: [*]const Instruction,
 };
 
-const c = @cImport({
-    @cInclude("unistd.h");
-});
+const c = @import("rlpm_c");
 
 pub fn main() void {
     const filter = [_]Instruction{
@@ -37,7 +35,7 @@ pub fn main() void {
             .code = bpf.JMP | bpf.JEQ | bpf.K,
             .jt = 0,
             .jf = 1,
-            .k = @intFromEnum(linux.SYS.unshare),
+            .k = @backingInt(linux.SYS.unshare),
         },
         .{
             .code = bpf.RET | bpf.K,
@@ -55,12 +53,12 @@ pub fn main() void {
 
     const program: Program = .{ .len = filter.len, .filter = &filter };
 
-    if (linux.errno(linux.prctl(@intFromEnum(linux.PR.SET_NO_NEW_PRIVS), 1, 0, 0, 0)) != .SUCCESS)
+    if (linux.errno(linux.prctl(@backingInt(linux.PR.SET_NO_NEW_PRIVS), 1, 0, 0, 0)) != .SUCCESS)
         std.process.exit(126);
 
     if (linux.errno(
         linux.prctl(
-            @intFromEnum(linux.PR.SET_SECCOMP),
+            @backingInt(linux.PR.SET_SECCOMP),
             seccomp.MODE.FILTER,
             @intFromPtr(&program),
             0,

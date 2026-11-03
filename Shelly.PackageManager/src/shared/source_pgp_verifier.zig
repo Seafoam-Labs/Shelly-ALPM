@@ -174,7 +174,7 @@ pub fn evaluateStatus(
             else
                 .verification_error;
         } else if (std.mem.eql(u8, record, "VALIDSIG")) {
-            var values: [10]?[]const u8 = .{null} ** 10;
+            var values: [10]?[]const u8 = @splat(null);
             var count: usize = 0;
             while (fields.next()) |value| {
                 if (count < values.len) values[count] = value;

@@ -3,7 +3,7 @@
 RLPM implements local directory and sync archive backends behind
 `Database.Backend`. `Owner` still owns registrations, metadata arenas, typed IDs
 and cache generations. No production code or normal test links or loads libalpm.
-Dependencies are Zig 0.16.0, libc, libarchive and SQLite with
+Dependencies are Zig 0.17.0, libc, libarchive and SQLite with
 `sqlite3_deserialize` support. A small C helper allocates libc's opaque
 `regex_t`; search policy and queries remain Zig.
 

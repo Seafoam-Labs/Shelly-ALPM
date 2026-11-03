@@ -256,7 +256,7 @@ fn translateCombinedSearch(
 
     var selected: std.ArrayList(*const catalog.Variant) = .empty;
     var modifiers: std.ArrayList(u8) = .empty;
-    var seen = [_]bool{false} ** 256;
+    var seen = @as([256]bool, @splat(false));
     for (token[2..]) |code| {
         const variant = catalog.findVariantByCodes(token[1], code) orelse {
             try modifiers.append(allocator, code);

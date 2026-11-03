@@ -2,9 +2,7 @@
 
 const std = @import("std");
 
-const c = @cImport({
-    @cInclude("fnmatch.h");
-});
+const c = @import("rlpm_c");
 
 pub const Match = enum(i8) { unmatched = -1, matched = 0, excluded = 1 };
 

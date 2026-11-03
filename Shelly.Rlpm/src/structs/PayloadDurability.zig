@@ -75,7 +75,7 @@ pub fn registerBeforeMutation(self: *Self, parent: c_int) !void {
         return error.StaleFilesystemState;
 
     var proc_buffer: [64]u8 = undefined;
-    const proc_path = try std.fmt.bufPrintZ(&proc_buffer, "/proc/self/fd/{d}", .{fd});
+    const proc_path = try std.fmt.bufPrintSentinel(&proc_buffer, "/proc/self/fd/{d}", .{fd}, 0);
     var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const length = c.readlink(proc_path, &path_buffer, path_buffer.len);
 

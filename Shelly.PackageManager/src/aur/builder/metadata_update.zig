@@ -12,7 +12,7 @@ const Snapshot = struct {
         const requested_path = try allocator.dupe(u8, path);
         errdefer allocator.free(requested_path);
         const canonical = std.Io.Dir.cwd().realPathFileAlloc(io, path, allocator) catch |err| switch (err) {
-            error.FileNotFound => if (!required) try allocator.dupeZ(u8, path) else return err,
+            error.FileNotFound => if (!required) try allocator.dupeSentinel(u8, path, 0) else return err,
             else => return err,
         };
         errdefer allocator.free(canonical);

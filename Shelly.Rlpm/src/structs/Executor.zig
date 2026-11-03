@@ -2,6 +2,7 @@
 //! local cache generations change. Reports describe partial progress, not rollback.
 
 const std = @import("std");
+const trackReturnError = @import("diagnostics").captureError;
 const builtin = @import("builtin");
 const Tx = @import("Transaction.zig");
 const Plan = @import("TransactionPlan.zig");
@@ -13,7 +14,6 @@ pub const PayloadDurability = @import("PayloadDurability.zig");
 const Writer = @import("LocalWriter.zig");
 const Reader = @import("ArchiveReader.zig");
 const Audit = @import("Audit.zig");
-const DatabaseSnapshot = @import("DatabaseSnapshot.zig");
 const Diagnostic = @import("Diagnostic.zig");
 const Callbacks = @import("Callbacks.zig");
 const PathPatterns = @import("PathPatterns.zig");
@@ -78,7 +78,9 @@ fn checkpoint(tx: *Tx, boundary: Boundary, path: ?[]const u8) !void {
 }
 
 pub fn run(tx: *Tx) !void {
-    errdefer |err| {
+    var returned_error: ?anyerror = null;
+    errdefer {
+        const err = returned_error.?;
         tx.execution.cause = err;
 
         if (tx.owned_actions) |*actions| {
@@ -105,37 +107,36 @@ pub fn run(tx: *Tx) !void {
     tx.execution.adoptions_planned = tx.manifest().?.adoptions.items.len;
 
     const a = tx.storage.allocator();
-    const remaining = try a.alloc(Plan.Id, plan.removals.len + plan.additions.len);
+    const remaining = try trackReturnError(a.alloc(Plan.Id, plan.removals.len + plan.additions.len), &returned_error);
     @memcpy(remaining[0..plan.removals.len], plan.removals);
 
     for (plan.additions, remaining[plan.removals.len..]) |add, *id|
         id.* = add.package;
 
     tx.execution.remaining = remaining;
-    try checkpoint(tx, .pre_hooks, null);
+    try trackReturnError(checkpoint(tx, .pre_hooks, null), &returned_error);
 
-    const actions = try tx.startActions();
-    try validateAdoptions(tx, null);
+    const actions = try trackReturnError(tx.startActions(), &returned_error);
+    try trackReturnError(validateAdoptions(tx, null), &returned_error);
 
-    var observed_database = tx.snapshot;
-    try checkDatabase(tx, observed_database);
+    try trackReturnError(checkGuards(tx), &returned_error);
 
     // Reserve progress storage before the first mutation.
-    try tx.execution.completed.ensureTotalCapacity(a, plan.removals.len + plan.additions.len);
+    try trackReturnError(tx.execution.completed.ensureTotalCapacity(a, plan.removals.len + plan.additions.len), &returned_error);
 
     for (plan.removals) |id| {
         tx.execution.current = id;
         tx.execution.database_published = false;
-        try packageEvent(tx, id, null, .start);
-        try checkpoint(tx, .pre_scriptlet, null);
-        try actions.beforePackage(id);
-        try validateAdoptions(tx, id);
-        try checkDatabase(tx, observed_database);
+        try trackReturnError(packageEvent(tx, id, null, .start), &returned_error);
+        try trackReturnError(checkpoint(tx, .pre_scriptlet, null), &returned_error);
+        try trackReturnError(actions.beforePackage(id), &returned_error);
+        try trackReturnError(validateAdoptions(tx, id), &returned_error);
+        try trackReturnError(checkGuards(tx), &returned_error);
 
         var payload = Payload.init(tx, id, null);
         defer payload.deinit();
-        try removePayload(tx, id, &payload);
-        try payload.flush();
+        try trackReturnError(removePayload(tx, id, &payload), &returned_error);
+        try trackReturnError(payload.flush(), &returned_error);
         progress(tx, id, 100);
         Audit.log(
             tx,
@@ -146,27 +147,26 @@ pub fn run(tx: *Tx) !void {
             },
         );
 
-        try checkpoint(tx, .post_scriptlet, null);
-        try actions.afterPackage(id);
-        try validateAdoptions(tx, id);
-        try checkDatabase(tx, observed_database);
-        try packageEvent(tx, id, null, .done);
-        try checkpoint(tx, .database_write, null);
+        try trackReturnError(checkpoint(tx, .post_scriptlet, null), &returned_error);
+        try trackReturnError(actions.afterPackage(id), &returned_error);
+        try trackReturnError(validateAdoptions(tx, id), &returned_error);
+        try trackReturnError(checkGuards(tx), &returned_error);
+        try trackReturnError(packageEvent(tx, id, null, .done), &returned_error);
+        try trackReturnError(checkpoint(tx, .database_write, null), &returned_error);
 
-        var record = try Writer.Record.init(&tx.owned_manifest.?.database, tx.io, a);
+        var record = try trackReturnError(Writer.Record.init(&tx.owned_manifest.?.database, tx.io, a), &returned_error);
         defer record.deinit() catch |err| cleanupFailure(tx, err);
-        const old = try Writer.recordName(a, plan.package(id));
-        try validateAdoptions(tx, id);
-        try checkpoint(tx, .database_publish, old);
+        const old = try trackReturnError(Writer.recordName(a, plan.package(id)), &returned_error);
+        try trackReturnError(validateAdoptions(tx, id), &returned_error);
+        try trackReturnError(checkpoint(tx, .database_publish, old), &returned_error);
 
         const publication_start = std.Io.Clock.awake.now(tx.io);
-        try record.publish(old, null);
+        try trackReturnError(record.publish(old, null), &returned_error);
         tx.execution.database_publish_ms += publication_start.untilNow(tx.io, .awake).toMilliseconds();
         tx.execution.database_published = true;
-        observed_database = try DatabaseSnapshot.capture(tx.owner, tx.io);
         tx.execution.mutations += 1;
-        try checkpoint(tx, .cache_reload, null);
-        try reload(tx);
+        try trackReturnError(checkpoint(tx, .cache_reload, null), &returned_error);
+        try trackReturnError(reload(tx), &returned_error);
         tx.execution.completed.appendAssumeCapacity(id);
         tx.execution.remaining = tx.execution.remaining[1..];
     }
@@ -175,33 +175,33 @@ pub fn run(tx: *Tx) !void {
         const id = addition.package;
         tx.execution.current = id;
         tx.execution.database_published = false;
-        try packageEvent(tx, id, addition, .start);
-        try checkpoint(tx, .pre_scriptlet, null);
-        try actions.beforePackage(id);
-        try validateAdoptions(tx, id);
-        try checkDatabase(tx, observed_database);
+        try trackReturnError(packageEvent(tx, id, addition, .start), &returned_error);
+        try trackReturnError(checkpoint(tx, .pre_scriptlet, null), &returned_error);
+        try trackReturnError(actions.beforePackage(id), &returned_error);
+        try trackReturnError(validateAdoptions(tx, id), &returned_error);
+        try trackReturnError(checkGuards(tx), &returned_error);
 
         var payload = Payload.init(tx, id, addition.old);
         defer payload.deinit();
 
-        if (addition.old) |old| try removePayload(tx, old, &payload);
+        if (addition.old) |old| try trackReturnError(removePayload(tx, old, &payload), &returned_error);
 
-        try checkpoint(tx, .database_write, null);
+        try trackReturnError(checkpoint(tx, .database_write, null), &returned_error);
 
-        var record = try Writer.Record.init(&tx.owned_manifest.?.database, tx.io, a);
+        var record = try trackReturnError(Writer.Record.init(&tx.owned_manifest.?.database, tx.io, a), &returned_error);
         defer record.deinit() catch |err| cleanupFailure(tx, err);
-        var package = try install(tx, addition, &record, &payload);
-        try payload.flush();
-        try checkpoint(tx, .database_write, null);
-        try record.metadata(&package);
-        try validateAdoptions(tx, id);
+        var package = try trackReturnError(install(tx, addition, &record, &payload), &returned_error);
+        try trackReturnError(payload.flush(), &returned_error);
+        try trackReturnError(checkpoint(tx, .database_write, null), &returned_error);
+        try trackReturnError(record.metadata(&package), &returned_error);
+        try trackReturnError(validateAdoptions(tx, id), &returned_error);
 
-        const name = try Writer.recordName(a, &package);
-        const old = if (addition.old) |old_id| try Writer.recordName(a, plan.package(old_id)) else null;
-        try checkpoint(tx, .database_publish, name);
+        const name = try trackReturnError(Writer.recordName(a, &package), &returned_error);
+        const old = if (addition.old) |old_id| try trackReturnError(Writer.recordName(a, plan.package(old_id)), &returned_error) else null;
+        try trackReturnError(checkpoint(tx, .database_publish, name), &returned_error);
 
         const publication_start = std.Io.Clock.awake.now(tx.io);
-        try record.publish(old, name);
+        try trackReturnError(record.publish(old, name), &returned_error);
 
         for (tx.manifest().?.adoptions.items) |item| {
             if (item.package == id) tx.execution.adoptions_committed += 1;
@@ -209,10 +209,9 @@ pub fn run(tx: *Tx) !void {
 
         tx.execution.database_publish_ms += publication_start.untilNow(tx.io, .awake).toMilliseconds();
         tx.execution.database_published = true;
-        observed_database = try DatabaseSnapshot.capture(tx.owner, tx.io);
         tx.execution.mutations += 1;
-        try checkpoint(tx, .cache_reload, null);
-        try reload(tx);
+        try trackReturnError(checkpoint(tx, .cache_reload, null), &returned_error);
+        try trackReturnError(reload(tx), &returned_error);
         progress(tx, id, 100);
 
         switch (addition.action) {
@@ -243,17 +242,17 @@ pub fn run(tx: *Tx) !void {
             ),
         }
 
-        try checkpoint(tx, .post_scriptlet, null);
-        try actions.afterPackage(id);
-        try checkDatabase(tx, observed_database);
-        try packageEvent(tx, id, addition, .done);
+        try trackReturnError(checkpoint(tx, .post_scriptlet, null), &returned_error);
+        try trackReturnError(actions.afterPackage(id), &returned_error);
+        try trackReturnError(checkGuards(tx), &returned_error);
+        try trackReturnError(packageEvent(tx, id, addition, .done), &returned_error);
         tx.execution.completed.appendAssumeCapacity(id);
         tx.execution.remaining = tx.execution.remaining[1..];
     }
 
     tx.execution.current = null;
-    try checkpoint(tx, .post_hooks, null);
-    try actions.finish();
+    try trackReturnError(checkpoint(tx, .post_hooks, null), &returned_error);
+    try trackReturnError(actions.finish(), &returned_error);
     tx.execution.boundary = .complete;
     tx.execution.path = null;
 }
@@ -266,10 +265,9 @@ fn cleanupFailure(tx: *Tx, err: anyerror) void {
     );
 }
 
-fn checkDatabase(tx: *Tx, expected: [32]u8) !void {
-    const actual = try DatabaseSnapshot.capture(tx.owner, tx.io);
-
-    if (!std.mem.eql(u8, &expected, &actual)) return error.StaleDatabaseState;
+fn checkGuards(tx: *Tx) !void {
+    try tx.owner.checkCancelled();
+    try tx.lock.?.validate();
 }
 
 fn reload(tx: *Tx) !void {
@@ -285,7 +283,7 @@ fn packageEvent(
     boundary: Callbacks.Boundary,
 ) !void {
     const plan = tx.plan().?;
-    const reference = plan.candidates[@intFromEnum(id)].reference;
+    const reference = plan.candidates[@backingInt(id)].reference;
     const old_id = if (add) |item| item.old else id;
     const views = try tx.storage.allocator().alloc(
         Callbacks.PackageView,
@@ -296,7 +294,7 @@ fn packageEvent(
 
     if (views.len == 2)
         views[1] = .{
-            .reference = plan.candidates[@intFromEnum(old_id.?)].reference,
+            .reference = plan.candidates[@backingInt(old_id.?)].reference,
             .package = plan.package(old_id.?),
         };
 
@@ -308,7 +306,7 @@ fn packageEvent(
             .downgrade => .downgrade,
         } else .remove,
         .boundary = boundary,
-        .old = if (old_id) |old| plan.candidates[@intFromEnum(old)].reference else null,
+        .old = if (old_id) |old| plan.candidates[@backingInt(old)].reference else null,
         .new = if (add != null) reference else null,
         .views = views,
     } });
@@ -324,7 +322,7 @@ fn progress(tx: *Tx, id: Plan.Id, percent: u8) void {
             cb.progress_context,
             .{
                 .phase = .transaction,
-                .package = tx.plan().?.candidates[@intFromEnum(id)].reference,
+                .package = tx.plan().?.candidates[@backingInt(id)].reference,
                 .percent = percent,
                 .position = tx.execution.completed.items.len + 1,
                 .total = tx.plan().?.removals.len + tx.plan().?.additions.len,
@@ -543,7 +541,7 @@ fn removePayload(tx: *Tx, id: Plan.Id, payload: *Payload) !void {
                 .{
                     .pacsave_created = .{
                         .path = entry.path,
-                        .old = tx.plan().?.candidates[@intFromEnum(id)].reference,
+                        .old = tx.plan().?.candidates[@backingInt(id)].reference,
                     },
                 },
             );
@@ -728,7 +726,7 @@ fn extract(tx: *Tx, reader: *Reader, entry: Manifest.Entry, payload: *Payload) !
         if (!(try Root.state(source)).regular()) return error.InvalidHardlink;
 
         var buffer: [80]u8 = undefined;
-        const path = try std.fmt.bufPrintZ(&buffer, "/proc/{d}/fd/{d}", .{ c.getpid(), source });
+        const path = try std.fmt.bufPrintSentinel(&buffer, "/proc/{d}/fd/{d}", .{ c.getpid(), source }, 0);
 
         if (c.linkat(c.AT_FDCWD, path, stage.fd, "entry", c.AT_SYMLINK_FOLLOW) != 0) return Ops.failure();
     } else {
@@ -778,13 +776,13 @@ fn extract(tx: *Tx, reader: *Reader, entry: Manifest.Entry, payload: *Payload) !
             for (tx.plan().?.additions) |add|
                 if (add.package == entry.package)
                     break :blk if (add.old) |id|
-                        tx.plan().?.candidates[@intFromEnum(id)].reference
+                        tx.plan().?.candidates[@backingInt(id)].reference
                     else
                         null;
 
             break :blk null;
         },
-        .new = tx.plan().?.candidates[@intFromEnum(entry.package)].reference,
+        .new = tx.plan().?.candidates[@backingInt(entry.package)].reference,
         .from_no_upgrade = no_upgrade,
     } });
     stage_live = false;
@@ -808,7 +806,7 @@ fn writeArchiveEntry(
     const header = ac.archive_entry_clone(reader.current_entry.?) orelse return error.OutOfMemory;
     defer ac.archive_entry_free(header);
     var buffer: [96]u8 = undefined;
-    const path = try std.fmt.bufPrintZ(&buffer, "/proc/{d}/fd/{d}/{s}", .{ c.getpid(), directory, name });
+    const path = try std.fmt.bufPrintSentinel(&buffer, "/proc/{d}/fd/{d}/{s}", .{ c.getpid(), directory, name }, 0);
     ac.archive_entry_set_pathname(header, path);
     ac.archive_entry_set_hardlink(header, null);
 

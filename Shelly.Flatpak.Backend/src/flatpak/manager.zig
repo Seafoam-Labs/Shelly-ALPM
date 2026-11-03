@@ -184,7 +184,7 @@ pub const Manager = struct {
         }
 
         const resolved_branch: [:0]u8 = blk: {
-            if (branch.len > 0) break :blk try self.allocator.dupeZ(u8, branch);
+            if (branch.len > 0) break :blk try self.allocator.dupeSentinel(u8, branch, 0);
             const kind: c_int = if (runtime) rawflatpak.FLATPAK_REF_KIND_RUNTIME else rawflatpak.FLATPAK_REF_KIND_APP;
             break :blk (try self.resolve_remote_branch(installation, remote_name, flatpak_id, kind, cancellable)) orelse {
                 self.emitGError(g_error, "Could not resolve the branch for the selected Flatpak from its remote.", .{ .scope = @tagName(scope), .subject = flatpak_id });
@@ -625,11 +625,11 @@ pub const Manager = struct {
         defer if (remote_eol) |value| self.allocator.free(value);
         defer if (remote_rebase) |value| self.allocator.free(value);
         if (origin.len > 0) {
-            const id_z = try self.allocator.dupeZ(u8, id);
+            const id_z = try self.allocator.dupeSentinel(u8, id, 0);
             defer self.allocator.free(id_z);
-            const branch_z = try self.allocator.dupeZ(u8, branch);
+            const branch_z = try self.allocator.dupeSentinel(u8, branch, 0);
             defer self.allocator.free(branch_z);
-            const origin_z = try self.allocator.dupeZ(u8, origin);
+            const origin_z = try self.allocator.dupeSentinel(u8, origin, 0);
             defer self.allocator.free(origin_z);
             const remote_ref_ptr = rawflatpak.flatpak_installation_fetch_remote_ref_sync(
                 installation,
@@ -931,7 +931,7 @@ pub const Manager = struct {
         defer rawflatpak.g_object_unref(installation);
 
         const resolved_branch: [:0]u8 = blk: {
-            if (branch.len > 0) break :blk try self.allocator.dupeZ(u8, branch);
+            if (branch.len > 0) break :blk try self.allocator.dupeSentinel(u8, branch, 0);
             break :blk (try self.resolve_remote_branch(
                 installation,
                 remote_name,
@@ -1279,7 +1279,7 @@ pub const Manager = struct {
             if (default_branch_ptr != null) {
                 const default_branch = std.mem.span(default_branch_ptr);
                 if (default_branch.len > 0) {
-                    preferred = try self.allocator.dupeZ(u8, default_branch);
+                    preferred = try self.allocator.dupeSentinel(u8, default_branch, 0);
                 }
             }
         }
@@ -1313,7 +1313,7 @@ pub const Manager = struct {
         }
 
         const chosen = preferred_match orelse stable_match orelse first_match orelse return null;
-        return try self.allocator.dupeZ(u8, chosen);
+        return try self.allocator.dupeSentinel(u8, chosen, 0);
     }
 
     fn get_all_flatpaks_by_remote(self: Manager, remote: [:0]const u8, scope: flatpak.Scope, installation: [*c]rawflatpak.FlatpakInstallation) ![]flatpak.Flatpak {
