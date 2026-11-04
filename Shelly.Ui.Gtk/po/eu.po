@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Shelly-ALPM / Shelly: GTK\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-10-27 11:32-0400\n"
+"POT-Creation-Date: 2026-11-04 12:08-0500\n"
 "PO-Revision-Date: 2026-07-27 19:10+0200\n"
 "Last-Translator: bingen <bingenm@gmail.com>\n"
 "Language-Team: Basque <translation-team-eu@googlegroups.com>\n"
@@ -494,6 +494,17 @@ msgstr "Seafoam Labs-ek hautatutako iradokizunak"
 msgid "Refresh the recommended packages list from the network"
 msgstr "Freskatu gomendatutako paketeen zerrenda saretik"
 
+#| msgid "Mixed selection"
+msgid "Clear selection"
+msgstr ""
+
+#| msgid "Recommended Packages"
+msgid "Deselect all recommended packages"
+msgstr ""
+
+msgid "Install all selected packages in one transaction"
+msgstr ""
+
 msgid "Loading Recommended Packages..."
 msgstr "Gomendatutako paketeak kargatzen..."
 
@@ -838,10 +849,9 @@ msgstr "Hurrengoa"
 msgid "Start Shelly"
 msgstr "Abiarazi Shelly"
 
-#, fuzzy
 #| msgid "Enable AUR?"
 msgid "Enable Atoll?"
-msgstr "Gaitu AUR?"
+msgstr ""
 
 msgid ""
 "Atoll contains build scripts that are known as PKGBUILDs. Those scripts are "
@@ -1455,6 +1465,9 @@ msgstr "Paketeak kentzen"
 msgid "Installing packages"
 msgstr "Paketeak instalatzen"
 
+msgid "Select package for batch installation"
+msgstr ""
+
 msgid "Search standard repositories, Atoll and Flatpak"
 msgstr ""
 
@@ -1489,10 +1502,9 @@ msgstr ""
 msgid "Install the selected packages?"
 msgstr ""
 
-#, fuzzy
 #| msgid "Enable AUR"
 msgid "Enable Atoll"
-msgstr "Gaitu AUR"
+msgstr ""
 
 msgid ""
 "Could not save settings to the configured file. Your latest changes were not "
@@ -1754,10 +1766,9 @@ msgstr "Paketeak bertsio-berritzen"
 msgid "Refreshing package databases"
 msgstr "Paketeen datu-baseak freskatzen"
 
-#, fuzzy
 #| msgid "Removing Flatpak"
 msgid "Removing stale database lock"
-msgstr "Flatpak kentzen"
+msgstr ""
 
 msgid "Fixing permissions"
 msgstr "Baimenak bideratzen"

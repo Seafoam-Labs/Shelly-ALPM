@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shelly-ui 2.2.4.1\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-10-27 11:32-0400\n"
+"POT-Creation-Date: 2026-11-04 12:08-0500\n"
 "PO-Revision-Date: 2026-08-06 21:03+0900\n"
 "Last-Translator: UTUMI Hirosi <utuhiro78@yahoo.co.jp>\n"
 "Language-Team: csnyder@seafoam-labs.org\n"
@@ -502,6 +502,18 @@ msgstr "Seafoam Labs が厳選したおすすめです"
 msgid "Refresh the recommended packages list from the network"
 msgstr "ネットワークからおすすめパッケージのリストを更新する"
 
+#| msgid "Mixed selection"
+msgid "Clear selection"
+msgstr ""
+
+#| msgid "Recommended Packages"
+msgid "Deselect all recommended packages"
+msgstr ""
+
+#| msgid "Install the selected packages?"
+msgid "Install all selected packages in one transaction"
+msgstr ""
+
 msgid "Loading Recommended Packages..."
 msgstr "おすすめパッケージを読み込み中..."
 
@@ -848,12 +860,10 @@ msgstr "次へ"
 msgid "Start Shelly"
 msgstr "Shelly を起動"
 
-#, fuzzy
 #| msgid "Enable AUR?"
 msgid "Enable Atoll?"
-msgstr "AUR を有効にしますか？"
+msgstr ""
 
-#, fuzzy
 #| msgid ""
 #| "The Arch User Repository contains build scripts that are known as "
 #| "PKGBUILDs. Those scripts are uploaded by users, and are not verified or "
@@ -864,12 +874,7 @@ msgid ""
 "uploaded by users, and are not verified or vetted in any way. Only enable "
 "this feature if you are comfortable in verifying the build scripts."
 msgstr ""
-"Arch User Repository には PKGBUILD として知られるビルドスクリプトが含まれてい"
-"ます。これらのスクリプトはユーザーによってアップロードされており、検証や確認"
-"は何も行われていません。この機能は、ビルドスクリプトを自分で検証できる場合の"
-"み有効にしてください。"
 
-#, fuzzy
 #| msgid ""
 #| "<a href=\"https://www.seafoam-labs.org/shelly-alpm/docs/aur-safety/\">AUR "
 #| "Safety Guide</a>"
@@ -877,8 +882,6 @@ msgid ""
 "<a href=\"https://www.seafoam-labs.org/shelly-alpm/docs/aur-safety/\">Atoll "
 "Safety Guide</a>"
 msgstr ""
-"<a href=\"https://www.seafoam-labs.org/shelly-alpm/docs/aur-safety/\">AUR 安"
-"全ガイド</a>"
 
 msgid "System files"
 msgstr ""
@@ -1483,17 +1486,17 @@ msgstr "パッケージを削除中"
 msgid "Installing packages"
 msgstr "パッケージをインストール中"
 
-#, fuzzy
+msgid "Select package for batch installation"
+msgstr ""
+
 #| msgid "Search standard repositories, AUR and Flatpak"
 msgid "Search standard repositories, Atoll and Flatpak"
-msgstr "標準リポジトリ、AUR、Flatpak を検索"
+msgstr ""
 
-#, fuzzy
 #| msgid "Show results from the Arch User Repository"
 msgid "Show results from Atoll"
-msgstr "Arch User Repository からの結果を表示"
+msgstr ""
 
-#, fuzzy
 #| msgid ""
 #| "Search the standard repositories, the AUR, and Flatpak all at once. Type "
 #| "a name to begin."
@@ -1501,8 +1504,6 @@ msgid ""
 "Search the standard repositories, Atoll, and Flatpak all at once. Type a "
 "name to begin."
 msgstr ""
-"標準リポジトリ、AUR、Flatpak をすべて同時に検索します。名前を入力して開始して"
-"ください。"
 
 msgid ""
 "Search standard repositories, the AUR and Flatpak at once. Type a name to "
@@ -1529,10 +1530,9 @@ msgstr "パッケージをインストール"
 msgid "Install the selected packages?"
 msgstr "選択したパッケージをインストールしますか？"
 
-#, fuzzy
 #| msgid "Enable AUR"
 msgid "Enable Atoll"
-msgstr "AUR を有効にする"
+msgstr ""
 
 msgid ""
 "Could not save settings to the configured file. Your latest changes were not "
@@ -1798,10 +1798,9 @@ msgstr "パッケージをアップグレード中"
 msgid "Refreshing package databases"
 msgstr "パッケージデータベースを更新中"
 
-#, fuzzy
 #| msgid "Removing Flatpak"
 msgid "Removing stale database lock"
-msgstr "Flatpak を削除中"
+msgstr ""
 
 msgid "Fixing permissions"
 msgstr "権限を修正中"

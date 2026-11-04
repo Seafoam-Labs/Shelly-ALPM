@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shelly-ui 2.3.0.3\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-10-27 11:32-0400\n"
+"POT-Creation-Date: 2026-11-04 12:08-0500\n"
 "PO-Revision-Date: 2026-05-16 11:00+EST\n"
 "Last-Translator: momchil.nikolov@outlook.com\n"
 "Language-Team: Bulgarian (Bulgaria) momchil.nikolov@outlook.com\n"
@@ -476,6 +476,15 @@ msgstr ""
 msgid "Refresh the recommended packages list from the network"
 msgstr ""
 
+msgid "Clear selection"
+msgstr ""
+
+msgid "Deselect all recommended packages"
+msgstr ""
+
+msgid "Install all selected packages in one transaction"
+msgstr ""
+
 msgid "Loading Recommended Packages..."
 msgstr ""
 
@@ -810,10 +819,9 @@ msgstr ""
 msgid "Start Shelly"
 msgstr ""
 
-#, fuzzy
 #| msgid "Enable AUR?"
 msgid "Enable Atoll?"
-msgstr "Активиране на AUR?"
+msgstr ""
 
 msgid ""
 "Atoll contains build scripts that are known as PKGBUILDs. Those scripts are "
@@ -1421,6 +1429,9 @@ msgstr ""
 msgid "Installing packages"
 msgstr ""
 
+msgid "Select package for batch installation"
+msgstr ""
+
 msgid "Search standard repositories, Atoll and Flatpak"
 msgstr ""
 
@@ -1455,10 +1466,9 @@ msgstr ""
 msgid "Install the selected packages?"
 msgstr ""
 
-#, fuzzy
 #| msgid "Enable AUR"
 msgid "Enable Atoll"
-msgstr "Активиране на AUR"
+msgstr ""
 
 msgid ""
 "Could not save settings to the configured file. Your latest changes were not "

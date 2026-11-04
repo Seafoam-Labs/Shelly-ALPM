@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Shelly-ALPM / Shelly: UI\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-10-27 11:32-0400\n"
+"POT-Creation-Date: 2026-11-04 12:08-0500\n"
 "PO-Revision-Date: 2026-09-21 23:24-0400\n"
 "Last-Translator: Mehmet Akif Öngün <mehmetakif.ongun@proton.me>\n"
 "Language-Team: Turkish (Turkiye)<>\n"
@@ -500,6 +500,18 @@ msgstr "Seafoam Labs'ten seçilmiş öneriler"
 msgid "Refresh the recommended packages list from the network"
 msgstr "Önerilen paketler listesini ağdan yenile"
 
+#| msgid "Mixed selection"
+msgid "Clear selection"
+msgstr ""
+
+#| msgid "Recommended Packages"
+msgid "Deselect all recommended packages"
+msgstr ""
+
+#| msgid "Install the selected packages?"
+msgid "Install all selected packages in one transaction"
+msgstr ""
+
 msgid "Loading Recommended Packages..."
 msgstr "Önerilen Paketler Yükleniyor..."
 
@@ -847,12 +859,10 @@ msgstr "Sıradaki"
 msgid "Start Shelly"
 msgstr "Shell'i başlat"
 
-#, fuzzy
 #| msgid "Enable AUR?"
 msgid "Enable Atoll?"
-msgstr "AUR Etkinleştirilsin mi?"
+msgstr ""
 
-#, fuzzy
 #| msgid ""
 #| "The Arch User Repository contains build scripts that are known as "
 #| "PKGBUILDs. Those scripts are uploaded by users, and are not verified or "
@@ -863,10 +873,6 @@ msgid ""
 "uploaded by users, and are not verified or vetted in any way. Only enable "
 "this feature if you are comfortable in verifying the build scripts."
 msgstr ""
-"Arch Kullanıcı Deposu PKGBUILD olarak bilinen derleme betikleri içerir. Bu "
-"betikler kullanıcılar tarafından yüklenir ve kesinlikle doğrulanmış ve "
-"denetlenmiş değillerdir. Eğer betikleri kendiniz doğrulamak sizin için sorun "
-"değilse etkinleştiriniz."
 
 msgid ""
 "<a href=\"https://www.seafoam-labs.org/shelly-alpm/docs/aur-safety/\">Atoll "
@@ -1479,17 +1485,17 @@ msgstr "Paketler siliniyor"
 msgid "Installing packages"
 msgstr "Paketler kuruluyor"
 
-#, fuzzy
+msgid "Select package for batch installation"
+msgstr ""
+
 #| msgid "Search standard repositories, AUR and Flatpak"
 msgid "Search standard repositories, Atoll and Flatpak"
-msgstr "Standart depolarda arama yap, AUR ve Flatpak"
+msgstr ""
 
-#, fuzzy
 #| msgid "Show results from the Arch User Repository"
 msgid "Show results from Atoll"
-msgstr "Arch Kullanıcı Deposu'ndaki sonuçları göster"
+msgstr ""
 
-#, fuzzy
 #| msgid ""
 #| "Search the standard repositories, the AUR, and Flatpak all at once. Type "
 #| "a name to begin."
@@ -1497,7 +1503,6 @@ msgid ""
 "Search the standard repositories, Atoll, and Flatpak all at once. Type a "
 "name to begin."
 msgstr ""
-"Standart depolarda ara, AUR ve Flatpak beraber. Başlamak için bir isim yazın."
 
 msgid ""
 "Search standard repositories, the AUR and Flatpak at once. Type a name to "
@@ -1523,10 +1528,9 @@ msgstr "Paketleri kurun"
 msgid "Install the selected packages?"
 msgstr "Seçilmiş paketleri kurun"
 
-#, fuzzy
 #| msgid "Enable AUR"
 msgid "Enable Atoll"
-msgstr "AUR'u Etkinleştir"
+msgstr ""
 
 msgid ""
 "Could not save settings to the configured file. Your latest changes were not "
@@ -1795,10 +1799,9 @@ msgstr "Paketler yükseltiliyor"
 msgid "Refreshing package databases"
 msgstr "Paket veri tabanı yenileniyor"
 
-#, fuzzy
 #| msgid "Removing Flatpak"
 msgid "Removing stale database lock"
-msgstr "Flatpak kaldırılıyor"
+msgstr ""
 
 msgid "Fixing permissions"
 msgstr "İzinler düzeltiliyor"

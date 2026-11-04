@@ -603,3 +603,22 @@ Document any known issues that are being tracked:
 - [ ] Repeat with Landlock enabled and with `shelly build --isolated`. Confirm
   configured values reach build steps, paths refer to the guest in isolated
   mode, and assignments grant no filesystem access or host mounts.
+
+## Recommended packages batch installation (#1774)
+
+- [ ] Open Recommended, tick the check boxes of several not-installed packages across different
+  categories, and verify the `N Selected` count, the Clear selection button, and the
+  Install Selected button update as the selection changes.
+- [ ] Start Install Selected and verify a single transaction appears listing every selected
+  package as a row with one authorization prompt. After it completes, installed cards show the
+  installed state and the selection is emptied.
+- [ ] Verify installed cards show no check box and keep their remove button, and that the
+  per-card single install button still installs on its own.
+- [ ] With a selection active, press refresh and verify checks survive the rebuild and any
+  package installed in the meantime is dropped from the selection and the count.
+- [ ] Use Clear selection and verify every card unticks, the label returns to `0 Selected`,
+  and Install Selected becomes insensitive.
+- [ ] Select packages, navigate to another page and back; verify the selection resets with the
+  page and the action bar shows `0 Selected`.
+- [ ] Cancel the authorization prompt for a batch install and verify the selection is preserved
+  for a retry; verify a failed batch keeps unfinished packages selected.

@@ -63,6 +63,47 @@
       </object>
     </child>
     <child>
+      <object class="GtkBox" id="action_bar">
+        <property name="orientation">horizontal</property>
+        <property name="spacing">8</property>
+        <property name="margin-top">8</property>
+        <child>
+          <object class="GtkLabel" id="selected_label">
+            <property name="label" translatable="yes">0 Selected</property>
+            <property name="hexpand">true</property>
+            <property name="halign">start</property>
+            <style>
+              <class name="dim-label"/>
+            </style>
+          </object>
+        </child>
+        <child>
+          <object class="GtkButton" id="clear_button">
+            <property name="label" translatable="yes">Clear selection</property>
+            <property name="tooltip-text" translatable="yes">Deselect all recommended packages</property>
+            <property name="visible">false</property>
+            <property name="valign">center</property>
+            <signal name="clicked" handler="on_clear_selection_clicked" swapped="true"/>
+            <style>
+              <class name="flat"/>
+            </style>
+          </object>
+        </child>
+        <child>
+          <object class="GtkButton" id="install_selected_button">
+            <property name="label" translatable="yes">Install Selected</property>
+            <property name="tooltip-text" translatable="yes">Install all selected packages in one transaction</property>
+            <property name="sensitive">false</property>
+            <property name="valign">center</property>
+            <signal name="clicked" handler="on_install_selected_clicked" swapped="true"/>
+            <style>
+              <class name="suggested-action"/>
+            </style>
+          </object>
+        </child>
+      </object>
+    </child>
+    <child>
       <object class="GtkStack" id="recommend_stack">
         <property name="vexpand">true</property>
         <property name="transition-type">crossfade</property>

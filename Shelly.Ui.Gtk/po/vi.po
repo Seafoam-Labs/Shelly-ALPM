@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Shelly-ALPM / Shelly: UI\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-10-27 11:32-0400\n"
+"POT-Creation-Date: 2026-11-04 12:08-0500\n"
 "PO-Revision-Date: 2026-11-03 12:00+0700\n"
 "Last-Translator: dinhkarate <dinhkarat@gmail.com>\n"
 "Language-Team: Vietnamese <vi@li.org>\n"
@@ -497,6 +497,18 @@ msgstr "Gợi ý được Seafoam Labs chọn lọc"
 msgid "Refresh the recommended packages list from the network"
 msgstr "Làm mới danh sách gói được đề xuất từ mạng"
 
+#| msgid "Mixed selection"
+msgid "Clear selection"
+msgstr ""
+
+#| msgid "Recommended Packages"
+msgid "Deselect all recommended packages"
+msgstr ""
+
+#| msgid "Install the selected packages?"
+msgid "Install all selected packages in one transaction"
+msgstr ""
+
 msgid "Loading Recommended Packages..."
 msgstr "Đang tải gói được đề xuất..."
 
@@ -843,12 +855,10 @@ msgstr "Tiếp"
 msgid "Start Shelly"
 msgstr "Bắt đầu dùng Shelly"
 
-#, fuzzy
 #| msgid "Enable AUR?"
 msgid "Enable Atoll?"
-msgstr "Bật AUR?"
+msgstr ""
 
-#, fuzzy
 #| msgid ""
 #| "The Arch User Repository contains build scripts that are known as "
 #| "PKGBUILDs. Those scripts are uploaded by users, and are not verified or "
@@ -859,11 +869,7 @@ msgid ""
 "uploaded by users, and are not verified or vetted in any way. Only enable "
 "this feature if you are comfortable in verifying the build scripts."
 msgstr ""
-"Kho người dùng Arch (AUR) chứa các tập lệnh biên dịch gọi là PKGBUILD. Các "
-"tập lệnh này do người dùng tải lên và không hề được xác minh hay kiểm duyệt. "
-"Chỉ bật tính năng này nếu bạn tự tin kiểm tra được các tập lệnh biên dịch."
 
-#, fuzzy
 #| msgid ""
 #| "<a href=\"https://www.seafoam-labs.org/shelly-alpm/docs/aur-safety/\">AUR "
 #| "Safety Guide</a>"
@@ -871,8 +877,6 @@ msgid ""
 "<a href=\"https://www.seafoam-labs.org/shelly-alpm/docs/aur-safety/\">Atoll "
 "Safety Guide</a>"
 msgstr ""
-"<a href=\"https://www.seafoam-labs.org/shelly-alpm/docs/aur-safety/\">Hướng "
-"dẫn an toàn khi dùng AUR</a>"
 
 msgid "System files"
 msgstr "Tệp hệ thống"
@@ -1479,17 +1483,17 @@ msgstr "Đang gỡ bỏ gói"
 msgid "Installing packages"
 msgstr "Đang cài đặt gói"
 
-#, fuzzy
+msgid "Select package for batch installation"
+msgstr ""
+
 #| msgid "Search standard repositories, AUR and Flatpak"
 msgid "Search standard repositories, Atoll and Flatpak"
-msgstr "Tìm kiếm trong kho tiêu chuẩn, AUR và Flatpak"
+msgstr ""
 
-#, fuzzy
 #| msgid "Show results from the Arch User Repository"
 msgid "Show results from Atoll"
-msgstr "Hiện kết quả từ Kho người dùng Arch (AUR)"
+msgstr ""
 
-#, fuzzy
 #| msgid ""
 #| "Search the standard repositories, the AUR, and Flatpak all at once. Type "
 #| "a name to begin."
@@ -1497,8 +1501,6 @@ msgid ""
 "Search the standard repositories, Atoll, and Flatpak all at once. Type a "
 "name to begin."
 msgstr ""
-"Tìm kiếm đồng thời trong kho tiêu chuẩn, AUR và Flatpak. Hãy nhập tên để bắt "
-"đầu."
 
 msgid ""
 "Search standard repositories, the AUR and Flatpak at once. Type a name to "
@@ -1525,10 +1527,9 @@ msgstr "Cài đặt gói"
 msgid "Install the selected packages?"
 msgstr "Cài đặt các gói đã chọn?"
 
-#, fuzzy
 #| msgid "Enable AUR"
 msgid "Enable Atoll"
-msgstr "Bật AUR"
+msgstr ""
 
 msgid ""
 "Could not save settings to the configured file. Your latest changes were not "
@@ -1798,10 +1799,9 @@ msgstr "Đang nâng cấp gói"
 msgid "Refreshing package databases"
 msgstr "Đang làm mới cơ sở dữ liệu gói"
 
-#, fuzzy
 #| msgid "Removing Flatpak"
 msgid "Removing stale database lock"
-msgstr "Đang gỡ bỏ Flatpak"
+msgstr ""
 
 msgid "Fixing permissions"
 msgstr "Đang sửa quyền"

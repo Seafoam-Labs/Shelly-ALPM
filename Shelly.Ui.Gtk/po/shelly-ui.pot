@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Shelly-ALPM / Shelly: GTK\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-10-27 11:32-0400\n"
+"POT-Creation-Date: 2026-11-04 12:08-0500\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -476,6 +476,15 @@ msgid "Curated suggestions from Seafoam Labs"
 msgstr ""
 
 msgid "Refresh the recommended packages list from the network"
+msgstr ""
+
+msgid "Clear selection"
+msgstr ""
+
+msgid "Deselect all recommended packages"
+msgstr ""
+
+msgid "Install all selected packages in one transaction"
 msgstr ""
 
 msgid "Loading Recommended Packages..."
@@ -1415,6 +1424,9 @@ msgid "Removing packages"
 msgstr ""
 
 msgid "Installing packages"
+msgstr ""
+
+msgid "Select package for batch installation"
 msgstr ""
 
 msgid "Search standard repositories, Atoll and Flatpak"
