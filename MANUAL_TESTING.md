@@ -3,6 +3,15 @@
 This document tracks manual testing procedures for Shelly components that require human verification beyond automated
 tests.
 
+## Update terminal setting (#1836)
+
+- [ ] In Settings, leave the update terminal on "Default (auto-detect)", trigger "Update now" from the tray, and verify the update shell opens in the auto-detected terminal ($TERMINAL or the candidate list).
+- [ ] Select a terminal that is installed from the dropdown and trigger an update; verify it opens in that terminal without restarting the tray.
+- [ ] Select "Custom…" and enter the full path to a terminal binary; trigger an update and verify it uses that binary.
+- [ ] Enter a command that is not installed and verify the settings page warns with a toast, while the tray log records the fallback and the update still opens in an available terminal.
+- [ ] With the tray disabled, or with "Tray update with ui" enabled, verify the update terminal row is hidden in Settings.
+- [ ] Hand-edit `shelly/settings.json` to set `TerminalForUpdate` and verify the running tray picks it up on the next update without a restart.
+
 ## Tray refresh after CLI updates (#1591)
 
 - [ ] With pending updates visible in the tray, run `shelly upgrade` in a terminal. After completion, verify the tray rechecks and updates its icon and package submenus without restarting it.
