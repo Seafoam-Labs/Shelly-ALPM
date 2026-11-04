@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shelly-ui 2.3.0.1\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-10-11 18:31-0300\n"
+"POT-Creation-Date: 2026-10-27 11:32-0400\n"
 "PO-Revision-Date: 2026-09-14 21:25+0400\n"
 "Last-Translator: Andrei Stepanov <adem4ik@gmail.com>\n"
 "Language-Team: Russian (Russia) <anton@azdanov.dev>\n"
@@ -63,7 +63,6 @@ msgstr "Данные приложения будут безвозвратно у
 msgid "Confirm"
 msgstr "Подтвердить"
 
-#| msgid "No description available."
 msgid "Permissions unavailable"
 msgstr "Разрешения недоступны"
 
@@ -115,7 +114,6 @@ msgstr ""
 msgid "Review PKGBUILD"
 msgstr "Просмотреть PKGBUILD"
 
-#| msgid "Review PKGBUILD"
 msgid "PKGBUILD"
 msgstr "PKGBUILD"
 
@@ -124,6 +122,9 @@ msgstr "Повторить"
 
 msgid "Skip"
 msgstr "Пропустить"
+
+msgid "AppImage"
+msgstr "AppImage"
 
 msgid "Search..."
 msgstr "Поиск..."
@@ -211,10 +212,12 @@ msgstr "Синхронизировать"
 msgid "Remove"
 msgstr "Удалить"
 
+msgid "AUR"
+msgstr "AUR"
+
 msgid "Search the AUR by name or keyword"
 msgstr "Поиск в AUR по имени или ключевому слову"
 
-#| msgid "Search..."
 msgid "Search By"
 msgstr "Искать по"
 
@@ -230,7 +233,6 @@ msgstr "Предыдущая страница"
 msgid "Page 1 of 1"
 msgstr "Страница 1 из 1"
 
-#| msgid "Default page"
 msgid "Next page"
 msgstr "Следующая страница"
 
@@ -240,7 +242,6 @@ msgstr "Дополнительные параметры"
 msgid "Install Selected"
 msgstr "Установить выбранное"
 
-#| msgid "Selected"
 msgid "Select"
 msgstr "Выбрать"
 
@@ -350,6 +351,9 @@ msgstr "Разрешения приложения"
 msgid "Version History"
 msgstr "История версий"
 
+msgid "Flatpak"
+msgstr "Flatpak"
+
 msgid "Search packages..."
 msgstr "Поиск пакетов..."
 
@@ -407,7 +411,6 @@ msgstr "О программе"
 msgid "Shelly"
 msgstr "Shelly"
 
-#| msgid "Optional Depends"
 msgid "Install Optional Deps"
 msgstr "Установить необязательные зависимости"
 
@@ -428,6 +431,9 @@ msgstr "Отметить как зависимость"
 
 msgid "Package actions"
 msgstr "Действия с пакетами"
+
+msgid "Package"
+msgstr "Пакет"
 
 msgid "Package Group Filter"
 msgstr "Фильтр групп пакетов"
@@ -485,6 +491,9 @@ msgstr "Только зависимости"
 msgid "Show dependency packages only"
 msgstr "Показывать только пакеты зависимостей"
 
+msgid "Recommended"
+msgstr "Рекомендуемые"
+
 msgid "Recommended Packages"
 msgstr "Рекомендуемые пакеты"
 
@@ -504,6 +513,9 @@ msgstr ""
 "Рекомендации не найдены. Проверьте подключение к интернету и попробуйте ещё "
 "раз."
 
+msgid "Shelly Search"
+msgstr "Поиск Shelly"
+
 msgid "Search standard repositories, AUR and Flatpak"
 msgstr "Поиск в стандартных репозиториях, AUR и Flatpak"
 
@@ -513,14 +525,8 @@ msgstr "Стандартные"
 msgid "Show results from the configured ALPM sync databases"
 msgstr "Показывать результаты из настроенных баз синхронизации ALPM"
 
-msgid "AUR"
-msgstr "AUR"
-
 msgid "Show results from the Arch User Repository"
 msgstr "Показывать результаты из Arch User Repository"
-
-msgid "Flatpak"
-msgstr "Flatpak"
 
 msgid "Show results from the configured Flatpak remotes"
 msgstr "Показывать результаты из настроенных удалённых источников Flatpak"
@@ -537,6 +543,9 @@ msgid ""
 msgstr ""
 "Искать одновременно в стандартных репозиториях, AUR и Flatpak. Введите имя "
 "для начала."
+
+msgid "Settings"
+msgstr "Настройки"
 
 msgid "General"
 msgstr "Общие"
@@ -687,6 +696,9 @@ msgstr "Включить/отключить вывод"
 msgid "Done"
 msgstr "Готово"
 
+msgid "Update"
+msgstr "Обновить"
+
 msgid "Available Updates"
 msgstr "Доступные обновления"
 
@@ -756,16 +768,17 @@ msgid "Clean Package Cache"
 msgstr "Очистить кэш пакетов"
 
 msgid ""
-"Removes old cached package versions, keeping the selected number per package."
+"Keeps the selected number of repository package versions and clears the "
+"entire Shelly cache, including AUR sources and build directories."
 msgstr ""
-"Удаляет старые кэшированные версии пакетов, сохраняя выбранное количество на "
-"пакет."
 
 msgid "Keep"
 msgstr "Хранить"
 
-msgid "Number of cached versions to keep per package"
-msgstr "Количество кэшированных версий для хранения на пакет"
+msgid ""
+"Number of repository package versions to keep; the Shelly cache is cleared "
+"completely"
+msgstr ""
 
 msgid "Welcome to Shelly v3"
 msgstr "Добро пожаловать в Shelly v3"
@@ -793,14 +806,8 @@ msgstr "Пакеты сообщества Arch User Repository"
 msgid "Sandboxed universal Linux applications"
 msgstr "Изолированные универсальные приложения Linux"
 
-msgid "AppImage"
-msgstr "AppImage"
-
 msgid "Portable self-contained application bundles"
 msgstr "Переносимые автономные пакеты приложений"
-
-msgid "Recommended"
-msgstr "Рекомендуемые"
 
 msgid "Curated picks from Shelly"
 msgstr "Авторские подборки от Shelly"
@@ -842,7 +849,38 @@ msgstr "Далее"
 msgid "Start Shelly"
 msgstr "Запустить Shelly"
 
-#| msgid "System bus"
+#, fuzzy
+#| msgid "Enable AUR?"
+msgid "Enable Atoll?"
+msgstr "Включить AUR?"
+
+#, fuzzy
+#| msgid ""
+#| "The Arch User Repository contains build scripts that are known as "
+#| "PKGBUILDs. Those scripts are uploaded by users, and are not verified or "
+#| "vetted in any way. Only enable this feature if you are comfortable in "
+#| "verifying the build scripts."
+msgid ""
+"Atoll contains build scripts that are known as PKGBUILDs. Those scripts are "
+"uploaded by users, and are not verified or vetted in any way. Only enable "
+"this feature if you are comfortable in verifying the build scripts."
+msgstr ""
+"Arch User Repository содержит сборочные скрипты, известные как PKGBUILD. Эти "
+"скрипты загружаются пользователями и никак не проверяются и не "
+"верифицируются. Включайте эту функцию только если вы готовы самостоятельно "
+"проверять сборочные скрипты."
+
+#, fuzzy
+#| msgid ""
+#| "<a href=\"https://www.seafoam-labs.org/shelly-alpm/docs/aur-safety/\">AUR "
+#| "Safety Guide</a>"
+msgid ""
+"<a href=\"https://www.seafoam-labs.org/shelly-alpm/docs/aur-safety/\">Atoll "
+"Safety Guide</a>"
+msgstr ""
+"<a href=\"https://www.seafoam-labs.org/shelly-alpm/docs/aur-safety/"
+"\">Руководство по безопасности AUR</a>"
+
 msgid "System files"
 msgstr "Системные файлы"
 
@@ -873,7 +911,6 @@ msgstr "Шина сеанса"
 msgid "System bus"
 msgstr "Системная шина"
 
-#| msgid "Network"
 msgid "Network access"
 msgstr "Доступ к сети"
 
@@ -952,7 +989,6 @@ msgstr "всего"
 msgid "Scanning PKGBUILD…"
 msgstr "Сканирование PKGBUILD…"
 
-#| msgid "No description available."
 msgid "Security scan unavailable."
 msgstr "Сканирование безопасности недоступно."
 
@@ -965,7 +1001,6 @@ msgstr ""
 "PKGBUILD изменился. Закройте и снова откройте предпросмотр, чтобы "
 "просканировать текущую версию."
 
-#| msgid "Flatpak files"
 msgid "No related files."
 msgstr "Нет связанных файлов."
 
@@ -990,6 +1025,9 @@ msgstr "Codeberg"
 msgid "Forgejo"
 msgstr "Forgejo"
 
+msgid "Zsync"
+msgstr ""
+
 msgid "Update Available"
 msgstr "Доступно обновление"
 
@@ -1003,8 +1041,13 @@ msgid ""
 "Enter a Forgejo repository URL as http(s)://host/owner/repo or http(s)://"
 "host/owner/repo/releases."
 msgstr ""
-"Введите URL-адрес репозитория Forgejo в виде http(s)://хост/владелец/репо или "
-"http(s)://хост/владелец/репо/releases."
+"Введите URL-адрес репозитория Forgejo в виде http(s)://хост/владелец/репо "
+"или http(s)://хост/владелец/репо/releases."
+
+msgid ""
+"Enter the http(s) URL of the .zsync control file, optionally as a zsync|"
+"<url> update information string."
+msgstr ""
 
 msgid "Choose an AppImage file"
 msgstr "Выберите файл AppImage"
@@ -1405,7 +1448,6 @@ msgstr "Делает пакет зависимостью"
 msgid "Select Optional Dependencies to Install"
 msgstr "Выберите опциональные зависимости для установки"
 
-#| msgid "Installing packages"
 msgid "Installing optional dependencies"
 msgstr "Установка опциональных зависимостей"
 
@@ -1445,6 +1487,27 @@ msgstr "Удаление пакетов"
 msgid "Installing packages"
 msgstr "Установка пакетов"
 
+#, fuzzy
+#| msgid "Search standard repositories, AUR and Flatpak"
+msgid "Search standard repositories, Atoll and Flatpak"
+msgstr "Поиск в стандартных репозиториях, AUR и Flatpak"
+
+#, fuzzy
+#| msgid "Show results from the Arch User Repository"
+msgid "Show results from Atoll"
+msgstr "Показывать результаты из Arch User Repository"
+
+#, fuzzy
+#| msgid ""
+#| "Search the standard repositories, the AUR, and Flatpak all at once. Type "
+#| "a name to begin."
+msgid ""
+"Search the standard repositories, Atoll, and Flatpak all at once. Type a "
+"name to begin."
+msgstr ""
+"Искать одновременно в стандартных репозиториях, AUR и Flatpak. Введите имя "
+"для начала."
+
 msgid ""
 "Search standard repositories, the AUR and Flatpak at once. Type a name to "
 "begin."
@@ -1469,6 +1532,11 @@ msgstr "Установить пакеты"
 
 msgid "Install the selected packages?"
 msgstr "Установить выбранные пакеты?"
+
+#, fuzzy
+#| msgid "Enable AUR"
+msgid "Enable Atoll"
+msgstr "Включить AUR"
 
 msgid ""
 "Could not save settings to the configured file. Your latest changes were not "
@@ -1604,12 +1672,6 @@ msgstr "Китайский (упрощённый)"
 msgid "Packages"
 msgstr "Пакеты"
 
-msgid "Shelly Search"
-msgstr "Поиск Shelly"
-
-msgid "Update"
-msgstr "Обновить"
-
 msgid "Pending"
 msgstr "Ожидание"
 
@@ -1744,8 +1806,10 @@ msgstr "Обновление пакетов"
 msgid "Refreshing package databases"
 msgstr "Обновление баз данных пакетов"
 
-msgid "Database lock removed successfully"
-msgstr "Блокировка базы данных успешно удалена"
+#, fuzzy
+#| msgid "Removing Flatpak"
+msgid "Removing stale database lock"
+msgstr "Удаление Flatpak"
 
 msgid "Fixing permissions"
 msgstr "Исправление разрешений"
@@ -1775,14 +1839,8 @@ msgstr "Установка поддержки Flatpak и AppImage"
 msgid "Main menu"
 msgstr "Главное меню"
 
-msgid "Settings"
-msgstr "Настройки"
-
 msgid "Expand sidebar"
 msgstr "Развернуть боковую панель"
 
 msgid "Collapse sidebar"
 msgstr "Свернуть боковую панель"
-
-msgid "Package"
-msgstr "Пакет"

@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Shelly-ALPM / Shelly: GTK\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-10-11 18:31-0300\n"
+"POT-Creation-Date: 2026-10-27 11:32-0400\n"
 "PO-Revision-Date: 2026-08-05 17:02+0300\n"
 "Last-Translator: CozyKernel <antwnhs.mpl@gmail.com>\n"
 "Language-Team: \n"
@@ -57,7 +57,6 @@ msgstr ""
 msgid "Confirm"
 msgstr "Επιβεβαίωση"
 
-#| msgid "No description available."
 msgid "Permissions unavailable"
 msgstr ""
 
@@ -102,7 +101,6 @@ msgstr ""
 msgid "Review PKGBUILD"
 msgstr "Ανασκόπηση PKGBUILD"
 
-#| msgid "Review PKGBUILD"
 msgid "PKGBUILD"
 msgstr ""
 
@@ -111,6 +109,9 @@ msgstr ""
 
 msgid "Skip"
 msgstr "Παράβλεψη"
+
+msgid "AppImage"
+msgstr "AppImage"
 
 msgid "Search..."
 msgstr "Αναζήτηση..."
@@ -196,10 +197,12 @@ msgstr "Συγχρονισμός"
 msgid "Remove"
 msgstr "Κατάργηση"
 
+msgid "AUR"
+msgstr "AUR"
+
 msgid "Search the AUR by name or keyword"
 msgstr "Αναζήτηση στο AUR κατά όνομα ή λέξη-κλειδί"
 
-#| msgid "Search..."
 msgid "Search By"
 msgstr ""
 
@@ -215,7 +218,6 @@ msgstr ""
 msgid "Page 1 of 1"
 msgstr ""
 
-#| msgid "Default page"
 msgid "Next page"
 msgstr ""
 
@@ -225,7 +227,6 @@ msgstr "Πρόσθετες επιλογές"
 msgid "Install Selected"
 msgstr "Εγκατάσταση επιλεγμένων"
 
-#| msgid "Selected"
 msgid "Select"
 msgstr ""
 
@@ -335,6 +336,9 @@ msgstr "Δικαιώματα εφαρμογής"
 msgid "Version History"
 msgstr "Ιστορικό εκδόσεων"
 
+msgid "Flatpak"
+msgstr "Flatpak"
+
 msgid "Search packages..."
 msgstr "Αναζήτηση πακέτων..."
 
@@ -392,7 +396,6 @@ msgstr ""
 msgid "Shelly"
 msgstr "Shelly"
 
-#| msgid "Optional Depends"
 msgid "Install Optional Deps"
 msgstr ""
 
@@ -413,6 +416,9 @@ msgstr "Σήμανση Εξάρτησης"
 
 msgid "Package actions"
 msgstr "Ενέργειες πακέτου"
+
+msgid "Package"
+msgstr "Πακέτο"
 
 msgid "Package Group Filter"
 msgstr "Φίλτρο ομάδων πακέτων"
@@ -470,6 +476,9 @@ msgstr "Εμφάνιση μόνο εξαρτήσεων"
 msgid "Show dependency packages only"
 msgstr "Εμφάνιση μόνο πακέτων εξαρτήσεων"
 
+msgid "Recommended"
+msgstr "Προτεινόμενα"
+
 msgid "Recommended Packages"
 msgstr "Προτεινόμενα Πακέτα"
 
@@ -489,6 +498,9 @@ msgstr ""
 "Δεν βρέθηκαν προτάσεις. Παρακαλούμε ελέγξτε τη σύνδεσή σας στο διαδίκτυο και "
 "δοκιμάστε ξανά."
 
+msgid "Shelly Search"
+msgstr "Αναζήτηση Shelly"
+
 msgid "Search standard repositories, AUR and Flatpak"
 msgstr ""
 
@@ -498,14 +510,8 @@ msgstr ""
 msgid "Show results from the configured ALPM sync databases"
 msgstr ""
 
-msgid "AUR"
-msgstr "AUR"
-
 msgid "Show results from the Arch User Repository"
 msgstr ""
-
-msgid "Flatpak"
-msgstr "Flatpak"
 
 msgid "Show results from the configured Flatpak remotes"
 msgstr ""
@@ -520,6 +526,9 @@ msgid ""
 "Search the standard repositories, the AUR, and Flatpak all at once. Type a "
 "name to begin."
 msgstr ""
+
+msgid "Settings"
+msgstr "Ρυθμίσεις"
 
 msgid "General"
 msgstr "Γενικά"
@@ -670,6 +679,9 @@ msgstr "Εναλλαγή προβολής εξόδου"
 msgid "Done"
 msgstr "Ολοκληρώθηκε"
 
+msgid "Update"
+msgstr "Ενημέρωση"
+
 msgid "Available Updates"
 msgstr "Διαθέσιμες ενημερώσεις"
 
@@ -741,16 +753,17 @@ msgid "Clean Package Cache"
 msgstr "Καθαρισμός προσωρινής μνήμης πακέτων"
 
 msgid ""
-"Removes old cached package versions, keeping the selected number per package."
+"Keeps the selected number of repository package versions and clears the "
+"entire Shelly cache, including AUR sources and build directories."
 msgstr ""
-"Αφαιρεί παλιές αποθηκευμένες εκδόσεις πακέτων, διατηρώντας τον επιλεγμένο "
-"αριθμό ανά πακέτο."
 
 msgid "Keep"
 msgstr "Διατήρηση"
 
-msgid "Number of cached versions to keep per package"
-msgstr "Αριθμός εκδόσεων που θα διατηρούνται ανά πακέτο"
+msgid ""
+"Number of repository package versions to keep; the Shelly cache is cleared "
+"completely"
+msgstr ""
 
 msgid "Welcome to Shelly v3"
 msgstr "Καλώς ορίσατε στο Shelly v3"
@@ -776,14 +789,8 @@ msgstr "Πακέτα κοινότητας Arch User Repository"
 msgid "Sandboxed universal Linux applications"
 msgstr "Απομονωμένες (Sandboxed) καθολικές εφαρμογές Linux"
 
-msgid "AppImage"
-msgstr "AppImage"
-
 msgid "Portable self-contained application bundles"
 msgstr "Φορητά, αυτοτελή πακέτα εφαρμογών"
-
-msgid "Recommended"
-msgstr "Προτεινόμενα"
 
 msgid "Curated picks from Shelly"
 msgstr ""
@@ -825,7 +832,22 @@ msgstr "Επόμενο"
 msgid "Start Shelly"
 msgstr "Έναρξη Shelly"
 
-#| msgid "System bus"
+#, fuzzy
+#| msgid "Enable AUR?"
+msgid "Enable Atoll?"
+msgstr "Ενεργοποίηση του AUR;"
+
+msgid ""
+"Atoll contains build scripts that are known as PKGBUILDs. Those scripts are "
+"uploaded by users, and are not verified or vetted in any way. Only enable "
+"this feature if you are comfortable in verifying the build scripts."
+msgstr ""
+
+msgid ""
+"<a href=\"https://www.seafoam-labs.org/shelly-alpm/docs/aur-safety/\">Atoll "
+"Safety Guide</a>"
+msgstr ""
+
 msgid "System files"
 msgstr ""
 
@@ -856,7 +878,6 @@ msgstr "Δίαυλος συνεδρίας"
 msgid "System bus"
 msgstr "Δίαυλος συστήματος"
 
-#| msgid "Network"
 msgid "Network access"
 msgstr ""
 
@@ -935,7 +956,6 @@ msgstr "καθαρό"
 msgid "Scanning PKGBUILD…"
 msgstr ""
 
-#| msgid "No description available."
 msgid "Security scan unavailable."
 msgstr ""
 
@@ -946,7 +966,6 @@ msgid ""
 "PKGBUILD changed. Close and reopen the preview to scan the current version."
 msgstr ""
 
-#| msgid "Flatpak files"
 msgid "No related files."
 msgstr ""
 
@@ -971,6 +990,9 @@ msgstr "Codeberg"
 msgid "Forgejo"
 msgstr "Forgejo"
 
+msgid "Zsync"
+msgstr ""
+
 msgid "Update Available"
 msgstr "Διαθέσιμη Eνημέρωση"
 
@@ -983,6 +1005,11 @@ msgstr ""
 msgid ""
 "Enter a Forgejo repository URL as http(s)://host/owner/repo or http(s)://"
 "host/owner/repo/releases."
+msgstr ""
+
+msgid ""
+"Enter the http(s) URL of the .zsync control file, optionally as a zsync|"
+"<url> update information string."
 msgstr ""
 
 msgid "Choose an AppImage file"
@@ -1383,7 +1410,6 @@ msgstr "Ορισμός πακέτου ως εξάρτησης"
 msgid "Select Optional Dependencies to Install"
 msgstr ""
 
-#| msgid "Installing packages"
 msgid "Installing optional dependencies"
 msgstr ""
 
@@ -1423,6 +1449,17 @@ msgstr "Κατάργηση πακέτων"
 msgid "Installing packages"
 msgstr "Εγκατάσταση πακέτων"
 
+msgid "Search standard repositories, Atoll and Flatpak"
+msgstr ""
+
+msgid "Show results from Atoll"
+msgstr ""
+
+msgid ""
+"Search the standard repositories, Atoll, and Flatpak all at once. Type a "
+"name to begin."
+msgstr ""
+
 msgid ""
 "Search standard repositories, the AUR and Flatpak at once. Type a name to "
 "begin."
@@ -1445,6 +1482,11 @@ msgstr ""
 
 msgid "Install the selected packages?"
 msgstr ""
+
+#, fuzzy
+#| msgid "Enable AUR"
+msgid "Enable Atoll"
+msgstr "Ενεργοποίηση AUR"
 
 msgid ""
 "Could not save settings to the configured file. Your latest changes were not "
@@ -1576,12 +1618,6 @@ msgstr "Κινεζικά (Απλοποιημένα)"
 msgid "Packages"
 msgstr "Πακέτα"
 
-msgid "Shelly Search"
-msgstr "Αναζήτηση Shelly"
-
-msgid "Update"
-msgstr "Ενημέρωση"
-
 msgid "Pending"
 msgstr "Σε εκκρεμότητα"
 
@@ -1712,8 +1748,10 @@ msgstr "Αναβάθμιση πακέτων"
 msgid "Refreshing package databases"
 msgstr "Ανανέωση βάσεων δεδομένων πακέτων"
 
-msgid "Database lock removed successfully"
-msgstr "Το κλείδωμα της βάσης αφαιρέθηκε με επιτυχία"
+#, fuzzy
+#| msgid "Removing Flatpak"
+msgid "Removing stale database lock"
+msgstr "Αφαίρεση Flatpak"
 
 msgid "Fixing permissions"
 msgstr "Διόρθωση αδειών"
@@ -1744,14 +1782,8 @@ msgstr ""
 msgid "Main menu"
 msgstr ""
 
-msgid "Settings"
-msgstr "Ρυθμίσεις"
-
 msgid "Expand sidebar"
 msgstr ""
 
 msgid "Collapse sidebar"
 msgstr ""
-
-msgid "Package"
-msgstr "Πακέτο"
