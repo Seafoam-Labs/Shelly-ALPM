@@ -3864,40 +3864,6 @@ test "nested OperationScopes do not duplicate a detailed ALPM error" {
     try testing.expectEqualStrings("nested detailed ALPM failure", capture.last_message);
 }
 
-fn hasDeletedSharedLibrary(maps: []const u8) bool {
-    var lines = std.mem.splitScalar(u8, maps, '\n');
-    while (lines.next()) |line| {
-        if (std.mem.indexOf(u8, line, "(deleted)") != null and
-            std.mem.indexOf(u8, line, ".so") != null)
-        {
-            return true;
-        }
-    }
-    return false;
-}
-
-fn serviceFromCgroup(cgroup: []const u8) ?[]const u8 {
-    var lines = std.mem.splitScalar(u8, cgroup, '\n');
-    while (lines.next()) |line| {
-        const marker = "/system.slice/";
-        const marker_index = std.mem.indexOf(u8, line, marker) orelse continue;
-        var components = std.mem.splitScalar(u8, line[marker_index + marker.len ..], '/');
-        while (components.next()) |component| {
-            const trimmed = std.mem.trim(u8, component, " \t\r");
-            if (trimmed.len > ".service".len and std.mem.endsWith(u8, trimmed, ".service")) {
-                return trimmed;
-            }
-        }
-    }
-    return null;
-}
-
-fn isCriticalRestartProcess(command: []const u8) bool {
-    return std.mem.eql(u8, command, "systemd") or
-        std.mem.eql(u8, command, "dbus-daemon") or
-        std.mem.eql(u8, command, "dbus-broker");
-}
-
 fn stringBefore(_: void, lhs: []u8, rhs: []u8) bool {
     return std.mem.order(u8, lhs, rhs) == .lt;
 }
@@ -3987,21 +3953,21 @@ test "is_cachyos exposes the detected manager state" {
 }
 
 test "restart parsing identifies deleted shared libraries and system services" {
-    try testing.expect(hasDeletedSharedLibrary(
+    try testing.expect(restart_checks.hasDeletedSharedLibrary(
         "7f00-7f01 r-xp /usr/lib/libdemo.so.1 (deleted)\n",
     ));
-    try testing.expect(!hasDeletedSharedLibrary(
+    try testing.expect(!restart_checks.hasDeletedSharedLibrary(
         "7f00-7f01 r-xp /usr/lib/libdemo.so.1\n" ++
             "7f02-7f03 r-xp /usr/bin/demo (deleted)\n",
     ));
     try testing.expectEqualStrings(
         "demo.service",
-        serviceFromCgroup("0::/system.slice/system-demo.slice/demo.service/tasks\n").?,
+        restart_checks.serviceFromCgroup("0::/system.slice/system-demo.slice/demo.service/tasks\n").?,
     );
-    try testing.expect(serviceFromCgroup("0::/user.slice/session-1.scope\n") == null);
-    try testing.expect(isCriticalRestartProcess("systemd"));
-    try testing.expect(isCriticalRestartProcess("dbus-broker"));
-    try testing.expect(!isCriticalRestartProcess("demo"));
+    try testing.expect(restart_checks.serviceFromCgroup("0::/user.slice/session-1.scope\n") == null);
+    try testing.expect(restart_checks.isCriticalRestartProcess("systemd"));
+    try testing.expect(restart_checks.isCriticalRestartProcess("dbus-broker"));
+    try testing.expect(!restart_checks.isCriticalRestartProcess("demo"));
 }
 
 test "restart report detects kernels and records structured service results" {
