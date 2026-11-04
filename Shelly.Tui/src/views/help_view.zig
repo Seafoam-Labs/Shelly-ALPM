@@ -55,6 +55,21 @@ pub const Panel = struct {
             .help => "Help",
         };
         try lines.appendSlice(arena, &.{ heading, "" });
+        switch (self.context.mode) {
+            .search, .packages, .aur, .flatpak, .details => {
+                try lines.appendSlice(arena, &.{
+                    "Vim navigation",
+                    "Esc: Leave search and focus the package list",
+                    "j / k: Next / previous package, or scroll details down / up",
+                    "l: Open details from the package list",
+                    "h: Return from details to the package list",
+                    "/: Return to search",
+                    "While editing search, h/j/k/l remain ordinary text.",
+                    "",
+                });
+            },
+            else => {},
+        }
         if (self.context.mode == .running) try lines.append(arena, "The operation continues while help is open.");
         for (try commands.entries(arena, self.context)) |entry| {
             try lines.append(arena, try std.fmt.allocPrint(arena, "{s}: {s}", .{ try commands.label(arena, entry.id), entry.description }));
@@ -67,7 +82,6 @@ pub const Panel = struct {
             .{ .id = .next_tab, .description = "Next enabled page (while browsing)" },
             .{ .id = .previous_tab, .description = "Previous enabled page (while browsing)" },
             .{ .id = .quit, .description = "Quit the application" },
-            .{ .id = .interrupt, .description = "Quit the application" },
         };
         for (globals) |entry| {
             if (self.context.quit_blocked and (entry.id == .quit or entry.id == .interrupt)) continue;
@@ -94,3 +108,15 @@ pub const Panel = struct {
         return rich.draw(ctx.withConstraints(.{ .width = width }, .{ .width = width, .height = null }));
     }
 };
+
+test "browsing help explicitly lists Vim aliases and search escape" {
+    var arena: std.heap.ArenaAllocator = .init(std.testing.allocator);
+    defer arena.deinit();
+    for ([_]commands.Mode{ .search, .packages, .aur, .flatpak, .details }) |mode| {
+        const panel: Panel = .{ .context = .{ .mode = mode } };
+        const body = try panel.text(arena.allocator());
+        for ([_][]const u8{ "Esc:", "j / k:", "l:", "h:", "remain ordinary text" }) |expected| {
+            try std.testing.expect(std.mem.indexOf(u8, body, expected) != null);
+        }
+    }
+}

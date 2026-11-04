@@ -612,7 +612,13 @@ pub const screenshotButtonStyle: @TypeOf(@as(vxfw.Button, undefined).style) = .{
 };
 
 /// Returns whether page input was consumed. Globals remain with the coordinator.
-pub fn handleKey(self: *Model, ctx: *vxfw.EventContext, key: vaxis.Key, global_command: bool) anyerror!bool {
+pub fn handleKey(self: *Model, ctx: *vxfw.EventContext, input: vaxis.Key, global_command: bool) anyerror!bool {
+    if (input.matches(vaxis.Key.escape, .{})) {
+        self.flatpak_state.flatpak_list_active = true;
+        ctx.consumeAndRedraw();
+        return true;
+    }
+    const key = if (self.flatpak_state.flatpak_list_active) commands.vimNavigationKey(input) orelse input else input;
     if (self.flatpak_state.flatpak_list_active) {
         if (commands.matches(key, .search)) {
             self.flatpak_state.flatpak_list_active = false;
@@ -668,7 +674,8 @@ pub fn handleKey(self: *Model, ctx: *vxfw.EventContext, key: vaxis.Key, global_c
     return false;
 }
 
-pub fn handleDetailsKey(self: *Model, ctx: *vxfw.EventContext, key: vaxis.Key, row: flatpak_view.Row) anyerror!void {
+pub fn handleDetailsKey(self: *Model, ctx: *vxfw.EventContext, input: vaxis.Key, row: flatpak_view.Row) anyerror!void {
+    const key = commands.vimNavigationKey(input) orelse input;
     if (self.flatpak_state.screenshot_open) {
         if (commands.matches(key, .previous_screenshot) or commands.matches(key, .next_screenshot)) {
             if (try moveScreenshot(self, ctx, commands.matches(key, .next_screenshot))) return ctx.consumeAndRedraw();

@@ -46,7 +46,7 @@ pub const Id = enum {
 };
 
 pub const Bindings = struct {
-    quit: vaxis.Key = .{ .codepoint = vaxis.Key.escape },
+    quit: vaxis.Key = .{ .codepoint = 'c', .mods = .{ .ctrl = true } },
     interrupt: vaxis.Key = .{ .codepoint = 'c', .mods = .{ .ctrl = true } },
     help: vaxis.Key = .{ .codepoint = vaxis.Key.f1 },
     next_tab: vaxis.Key = .{ .codepoint = vaxis.Key.tab },
@@ -131,6 +131,7 @@ pub fn label(arena: std.mem.Allocator, id: Id) std.mem.Allocator.Error![]const u
 }
 
 pub fn scrollKey(key: vaxis.Key) ?vaxis.Key {
+    if (vimNavigationKey(key)) |mapped| return mapped;
     if (matches(key, .previous)) return .{ .codepoint = vaxis.Key.up };
     if (matches(key, .next)) return .{ .codepoint = vaxis.Key.down };
     if (matches(key, .back)) return .{ .codepoint = vaxis.Key.left };
@@ -171,7 +172,33 @@ pub fn packageAction(key: vaxis.Key) ?PackageAction {
 }
 
 pub const PackageNavigation = enum { previous, next, details, search, select };
+/// Only call outside editable inputs; never alias letters globally in matches().
+pub fn vimNavigationKey(key: vaxis.Key) ?vaxis.Key {
+    const aliases = .{ .{ 'h', vaxis.Key.left }, .{ 'j', vaxis.Key.down }, .{ 'k', vaxis.Key.up }, .{ 'l', vaxis.Key.right } };
+    inline for (aliases) |alias| {
+        if (key.matches(alias[0], .{})) return .{ .codepoint = alias[1] };
+    }
+    return null;
+}
+
+test "vim aliases preserve search text and modified shortcuts" {
+    try std.testing.expect(global(.{ .codepoint = vaxis.Key.escape }, 3) == null);
+    try std.testing.expectEqual(Global.quit, global(.{ .codepoint = 'c', .mods = .{ .ctrl = true } }, 3).?);
+    try std.testing.expectEqual(PackageNavigation.next, packageNavigation(.{ .codepoint = 'j' }, false).?);
+    try std.testing.expectEqual(PackageNavigation.previous, packageNavigation(.{ .codepoint = 'k' }, false).?);
+    try std.testing.expectEqual(PackageNavigation.details, packageNavigation(.{ .codepoint = 'l' }, false).?);
+    try std.testing.expect(leavesPackageDetails(.{ .codepoint = 'h' }));
+    for ("hjkl") |letter| {
+        try std.testing.expect(packageNavigation(.{ .codepoint = letter }, true) == null);
+        try std.testing.expect(vimNavigationKey(.{ .codepoint = letter, .mods = .{ .ctrl = true } }) == null);
+        try std.testing.expect(vimNavigationKey(.{ .codepoint = letter, .mods = .{ .alt = true } }) == null);
+    }
+    try std.testing.expectEqual(vaxis.Key.down, scrollKey(.{ .codepoint = 'j' }).?.codepoint);
+    try std.testing.expectEqual(vaxis.Key.up, scrollKey(.{ .codepoint = 'k' }).?.codepoint);
+}
+
 pub fn packageNavigation(key: vaxis.Key, searching: bool) ?PackageNavigation {
+    if (!searching) if (vimNavigationKey(key)) |mapped| return packageNavigation(mapped, false);
     if (matches(key, .previous)) return .previous;
     if (matches(key, .next)) return .next;
     if (matches(key, .select)) return .select;
@@ -183,6 +210,7 @@ pub fn packageNavigation(key: vaxis.Key, searching: bool) ?PackageNavigation {
 }
 
 pub fn leavesPackageDetails(key: vaxis.Key) bool {
+    if (key.matches('h', .{})) return true;
     return matches(key, .back) or matches(key, .close);
 }
 pub fn detail(key: vaxis.Key) ?Detail {
@@ -308,15 +336,15 @@ pub fn entries(arena: std.mem.Allocator, context: Context) std.mem.Allocator.Err
                 try add(arena, &list, .clear_selection, "Clear", "Clear all package selections, including entries hidden by filters");
             if (context.mode == .search) {
                 try add(arena, &list, .previous, "Browse", "Move from search into the package list");
-                try add(arena, &list, .next, "Browse", "Move from search into the package list");
+                try add(arena, &list, .next, "Browse", "Move from search into the package list (also Esc)");
             }
             try add(arena, &list, .select, "Select", "Toggle selection of the highlighted package");
             if (context.installable) try add(arena, &list, .install, "Install", "Install/reinstall selection, or the highlighted package (list focus)");
             if (context.removable) try add(arena, &list, .remove, "Remove", "Remove installed selections, or the highlighted installed package (list focus)");
             if (context.mode == .packages) {
-                try add(arena, &list, .previous, "Previous", "Previous package; at the first row, return to search");
-                try add(arena, &list, .next, "Next", "Next package");
-                try add(arena, &list, .details, "Details", "Focus package details");
+                try add(arena, &list, .previous, "Previous", "Previous package (also k); at the first row, return to search");
+                try add(arena, &list, .next, "Next", "Next package (also j)");
+                try add(arena, &list, .details, "Details", "Focus package details (also l); h returns to the list");
                 try add(arena, &list, .search, "Search", "Return to editing the search field");
                 try add(arena, &list, .mark, "Select", "Toggle selection (alternative to Enter)");
             }
@@ -325,8 +353,8 @@ pub fn entries(arena: std.mem.Allocator, context: Context) std.mem.Allocator.Err
         .details => {
             if (context.preview_button) try add(arena, &list, .confirm, "View PKGBUILD", "Activate the PKGBUILD preview button");
             if (context.scrollable) {
-                try add(arena, &list, .previous, "Scroll up", "Scroll package details up");
-                try add(arena, &list, .next, "Scroll down", "Scroll package details down");
+                try add(arena, &list, .previous, "Scroll up", "Scroll package details up (also k)");
+                try add(arena, &list, .next, "Scroll down", "Scroll package details down (also j)");
             }
             if (context.installable) try add(arena, &list, .install, "Install", "Install/reinstall selection, or the displayed package");
             if (context.removable) try add(arena, &list, .remove, "Remove", "Remove installed selections, or the displayed installed package");

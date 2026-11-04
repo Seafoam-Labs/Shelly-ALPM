@@ -311,6 +311,11 @@ pub fn buildSelectedRow(ptr: *const anyopaque, idx: usize, _: usize) ?vxfw.Widge
 
 /// Returns whether page input was consumed. Globals remain with the coordinator.
 pub fn handleKey(self: *Model, ctx: *vxfw.EventContext, key: vaxis.Key, global_command: bool) anyerror!bool {
+    if (key.matches(vaxis.Key.escape, .{})) {
+        self.packages_state.package_list_active = true;
+        ctx.consumeAndRedraw();
+        return true;
+    }
     if (!global_command) {
         if (self.packages_state.package_list_active) {
             if (commands.matches(key, .clear_selection)) {
@@ -436,6 +441,33 @@ test "empty startup lists have known bounds and navigation does not block loadin
     try std.testing.expect(!model.packages_state.loading);
     try std.testing.expectEqual(@as(?u32, 1), model.packages_state.list_view.item_count);
     try std.testing.expectEqualStrings("loaded", model.packages_state.filtered.items[0].Name);
+}
+
+test "vim package navigation moves focus without intercepting search letters" {
+    const model = try Model.init(std.testing.allocator);
+    defer model.deinit();
+    var packages = [_]Package{ .{ .Name = "first" }, .{ .Name = "second" } };
+    model.packages_state.packages = &packages;
+    try rebuildFilter(model);
+    model.packages_state.loading = false;
+    var ctx: vxfw.EventContext = .{ .io = std.testing.io, .alloc = std.testing.allocator, .cmds = .empty };
+    defer ctx.cmds.deinit(std.testing.allocator);
+    for ("hjkl") |letter| {
+        try std.testing.expect(!try handleKey(model, &ctx, .{ .codepoint = letter }, false));
+    }
+    _ = try handleKey(model, &ctx, .{ .codepoint = vaxis.Key.escape }, false);
+    try std.testing.expect(model.packages_state.package_list_active);
+    try std.testing.expectEqual(@as(u32, 0), model.packages_state.list_view.cursor);
+    model.packages_state.list_view.jumpToItem(0);
+    _ = try handleKey(model, &ctx, .{ .codepoint = 'j' }, false);
+    try std.testing.expectEqual(@as(u32, 1), model.packages_state.list_view.cursor);
+    _ = try handleKey(model, &ctx, .{ .codepoint = 'l' }, false);
+    try std.testing.expect(model.overlay != null);
+    _ = try handleDetailsKey(model, &ctx, .{ .codepoint = 'h' }, false);
+    try std.testing.expect(model.overlay == null);
+    try std.testing.expect(model.packages_state.package_list_active);
+    _ = try handleKey(model, &ctx, .{ .codepoint = 'k' }, false);
+    try std.testing.expectEqual(@as(u32, 0), model.packages_state.list_view.cursor);
 }
 
 test "package refresh replaces borrowed data and preserves selection" {

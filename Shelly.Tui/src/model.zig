@@ -930,29 +930,46 @@ test "shared commands quit from every tab and modal" {
         model.active = tab;
         ctx.quit = false;
         ctx.consume_event = false;
-        try Model.typeErasedCaptureHandler(model, &ctx, .{ .key_press = .{ .codepoint = vaxis.Key.escape } });
+        try Model.typeErasedCaptureHandler(model, &ctx, .{ .key_press = commands.bindings.quit });
         try std.testing.expect(ctx.quit and ctx.consume_event);
     }
     var pkg: Package = .{ .Name = "test" };
     model.overlay = .{ .package = &pkg };
     ctx.quit = false;
-    try Model.typeErasedCaptureHandler(model, &ctx, .{ .key_press = .{ .codepoint = vaxis.Key.escape } });
+    try Model.typeErasedCaptureHandler(model, &ctx, .{ .key_press = commands.bindings.quit });
     try std.testing.expect(ctx.quit);
     var prompt: SudoPrompt = .{ .name = "test", .backend = .standard, .password = .empty };
     for ([_]SudoPrompt.State{ .entering, .running, .succeeded, .failed }) |state| {
         prompt.state = state;
         model.overlay = .{ .sudo = &prompt };
         ctx.quit = false;
-        try Model.typeErasedCaptureHandler(model, &ctx, .{ .key_press = .{ .codepoint = vaxis.Key.escape } });
+        try Model.typeErasedCaptureHandler(model, &ctx, .{ .key_press = commands.bindings.quit });
         try std.testing.expect(ctx.quit);
     }
     model.overlay = .pkgbuild;
     ctx.quit = false;
-    try Model.typeErasedCaptureHandler(model, &ctx, .{ .key_press = .{ .codepoint = vaxis.Key.escape } });
+    try Model.typeErasedCaptureHandler(model, &ctx, .{ .key_press = commands.bindings.quit });
     try std.testing.expect(ctx.quit);
     model.overlay = null;
     try std.testing.expect(commands.global(.{ .codepoint = vaxis.Key.left }, Tab.all.len) == null);
     try std.testing.expect(commands.global(.{ .codepoint = '1' }, Tab.all.len) == null);
+}
+
+test "Escape leaves search without quitting on every package source" {
+    const model = try Model.init(std.testing.allocator);
+    defer model.deinit();
+    var ctx: vxfw.EventContext = .{ .io = std.testing.io, .alloc = std.testing.allocator, .cmds = .empty };
+    defer ctx.cmds.deinit(std.testing.allocator);
+    _ = try packages_model.handleKey(model, &ctx, .{ .codepoint = vaxis.Key.escape }, false);
+    _ = try aur_model.handleKey(model, &ctx, .{ .codepoint = vaxis.Key.escape }, false);
+    _ = try flatpak_model.handleKey(model, &ctx, .{ .codepoint = vaxis.Key.escape }, false);
+    try std.testing.expect(model.packages_state.package_list_active);
+    try std.testing.expect(model.aur_state.aur_list_active);
+    try std.testing.expect(model.flatpak_state.flatpak_list_active);
+    try std.testing.expectEqual(@as(u32, 0), model.packages_state.list_view.cursor);
+    try std.testing.expectEqual(@as(u32, 0), model.aur_state.aur_list.cursor);
+    try std.testing.expectEqual(@as(u32, 0), model.flatpak_state.flatpak_list.cursor);
+    try std.testing.expect(!ctx.quit);
 }
 
 test "tab bar centers labels and retains the active tab on narrow terminals" {
