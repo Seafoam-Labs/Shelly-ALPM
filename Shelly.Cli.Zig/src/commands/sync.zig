@@ -433,6 +433,7 @@ fn appImageValidationFailure(invocation: *const parser.Invocation) ?[]const u8 {
         .forgejo => "Invalid Forgejo URL. Use http(s)://host/owner/repo or http(s)://host/owner/repo/releases.",
         .github, .gitlab, .codeberg => "Invalid repository. Use owner/repo.",
         .static_url => "Invalid static update URL. Use an http:// or https:// URL.",
+        .zsync => "Invalid zsync update URL. Use an http(s) URL to the .zsync control file, optionally as a zsync|<url> update information string.",
         .none => "Could not save the AppImage update configuration for the requested package. Check the selected provider and its required URL or repository format.",
     };
     return null;
@@ -505,6 +506,7 @@ fn parseAppImageUpdateType(value: []const u8) ?PackageManager.appimage.UpdateTyp
     if (std.ascii.eqlIgnoreCase(value, "GitLab")) return .gitlab;
     if (std.ascii.eqlIgnoreCase(value, "Codeberg")) return .codeberg;
     if (std.ascii.eqlIgnoreCase(value, "Forgejo")) return .forgejo;
+    if (std.ascii.eqlIgnoreCase(value, "Zsync")) return .zsync;
     return null;
 }
 
@@ -805,6 +807,59 @@ test "AppImage configuration validation accepts Forgejo release pages and reject
     try std.testing.expectEqualStrings(
         "Invalid Forgejo URL. Use http(s)://host/owner/repo or http(s)://host/owner/repo/releases.",
         appImageValidationFailure(&outcome.dispatch).?,
+    );
+}
+
+test "AppImage configuration validation accepts zsync update information and rejects malformed URLs" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const manifest = try spec.Manifest.load(arena.allocator());
+
+    // A raw `zsync|<url>` update-information string is accepted.
+    var outcome = try parser.parse(arena.allocator(), &manifest, &.{
+        "sync",
+        "appimage",
+        "Editor",
+        "zsync|https://nightly.example.dev/latest/Editor.AppImage.zsync",
+        "Zsync",
+    });
+    try std.testing.expect(outcome == .dispatch);
+    try std.testing.expect(appImageValidationFailure(&outcome.dispatch) == null);
+
+    // A bare http(s) control-file URL is accepted too.
+    outcome = try parser.parse(arena.allocator(), &manifest, &.{
+        "sync",
+        "appimage",
+        "Editor",
+        "https://nightly.example.dev/latest/Editor.AppImage.zsync",
+        "Zsync",
+    });
+    try std.testing.expect(outcome == .dispatch);
+    try std.testing.expect(appImageValidationFailure(&outcome.dispatch) == null);
+
+    // Non-http URLs are rejected with guidance.
+    outcome = try parser.parse(arena.allocator(), &manifest, &.{
+        "sync",
+        "appimage",
+        "Editor",
+        "ftp://nightly.example.dev/Editor.AppImage.zsync",
+        "Zsync",
+    });
+    try std.testing.expect(outcome == .dispatch);
+    try std.testing.expectEqualStrings(
+        "Invalid zsync update URL. Use an http(s) URL to the .zsync control file, optionally as a zsync|<url> update information string.",
+        appImageValidationFailure(&outcome.dispatch).?,
+    );
+}
+
+test "parseAppImageUpdateType accepts the Zsync spelling" {
+    try std.testing.expectEqual(
+        PackageManager.appimage.UpdateType.zsync,
+        parseAppImageUpdateType("Zsync").?,
+    );
+    try std.testing.expectEqual(
+        PackageManager.appimage.UpdateType.zsync,
+        parseAppImageUpdateType("zsync").?,
     );
 }
 

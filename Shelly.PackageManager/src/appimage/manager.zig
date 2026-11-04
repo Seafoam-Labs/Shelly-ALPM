@@ -5,6 +5,7 @@ const builtin = @import("builtin");
 const appimage = @import("bindings.zig").appimage;
 const launch_environment = @import("environment.zig");
 const events = @import("events.zig");
+const zsync_update = @import("zsync.zig");
 const xdg_paths = @import("../shared/xdg_paths.zig").xdg_paths;
 const operation_api = @import("operation_context");
 
@@ -1453,8 +1454,25 @@ pub const AppImageManager = struct {
             var updated = content.metadata;
             if (existing) |ex| {
                 updated = mergeMetadata(ex, content.metadata, null);
+                // Repair records left by older versions that flagged an update
+                // type without storing a usable update URL. Embedded update
+                // information provides the missing source when it parses.
+                if (updated.update_type != .none and
+                    updated.update_url.len == 0 and
+                    updated.repo_owner == null and
+                    updated.repo_name == null and
+                    updated.raw_update_info.len > 0)
+                {
+                    _ = zsync_update.configureFromEmbeddedInfo(&updated);
+                }
             } else if (updated.raw_update_info.len > 0 and updated.update_url.len == 0) {
-                updated.update_type = .static_url;
+                // Configure the update source from the AppImage's embedded
+                // update information (AppImageSpec `zsync|...` and
+                // `gh-releases-zsync|...`). Fall back to the historical
+                // static-url marker when the information is unusable.
+                if (!zsync_update.configureFromEmbeddedInfo(&updated)) {
+                    updated.update_type = .static_url;
+                }
             }
 
             updated.path = appimage_path;
@@ -3681,6 +3699,132 @@ test "syncAppImageMeta removes a stale entry when the AppImage file is missing" 
     const result = try manager.getAppImagesFromLocalDb();
     defer manager.freeAppImages(result);
     try std.testing.expectEqual(0, result.len);
+}
+
+/// An AppImage fixture that publishes embedded zsync update information the
+/// way `--appimage-updateinfo` reports it (see issue #1135).
+const zsyncTestAppImage =
+    \\#!/bin/sh
+    \\if [ "$1" = "--appimage-extract" ]; then
+    \\  mkdir -p squashfs-root
+    \\  printf '%s\n' '[Desktop Entry]' 'Name=Editor' 'X-AppImage-Version=2.0.0' 'Exec=editor' > squashfs-root/editor.desktop
+    \\  exit 0
+    \\fi
+    \\if [ "$1" = "--appimage-updateinfo" ]; then
+    \\  printf '%s\n' 'zsync|https://nightly.example.dev/latest/Editor.AppImage.zsync'
+    \\  exit 0
+    \\fi
+    \\exit 0
+;
+
+const ZsyncSyncEnv = struct {
+    manager: AppImageManager,
+    install_dir: []const u8,
+    installed_path: []const u8,
+
+    fn init(allocator: std.mem.Allocator, root: []const u8) !ZsyncSyncEnv {
+        const install_dir = try std.fs.path.join(allocator, &.{ root, "install" });
+        try std.Io.Dir.cwd().createDirPath(std.testing.io, install_dir);
+        const database = try std.fs.path.join(allocator, &.{ root, "appimages.db" });
+        const installed_path = try std.fs.path.join(allocator, &.{ install_dir, "Editor.AppImage" });
+        try writeTestAppImageDb(installed_path, zsyncTestAppImage);
+        const environ = try createTestAppImageEnviron(allocator, root);
+        return .{
+            .manager = .{
+                .allocator = std.testing.allocator,
+                .io = std.testing.io,
+                .environ = environ,
+                .install_directory = install_dir,
+                .local_db_path = database,
+                .cache_command_run = successfulCacheCommand,
+            },
+            .install_dir = install_dir,
+            .installed_path = installed_path,
+        };
+    }
+};
+
+test "syncAppImageMeta configures zsync updates from embedded update information" {
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const root = buffer[0..try tmp.dir.realPath(std.testing.io, &buffer)];
+    const env = try ZsyncSyncEnv.init(allocator, root);
+
+    try std.testing.expect(try env.manager.syncAppImageMeta(&.{"Editor"}));
+
+    const apps = try env.manager.getAppImagesFromLocalDb();
+    defer env.manager.freeAppImages(apps);
+    try std.testing.expectEqual(@as(usize, 1), apps.len);
+    try std.testing.expectEqual(appimage.UpdateType.zsync, apps[0].update_type);
+    try std.testing.expectEqualStrings("https://nightly.example.dev/latest/Editor.AppImage.zsync", apps[0].update_url);
+    try std.testing.expectEqualStrings("zsync|https://nightly.example.dev/latest/Editor.AppImage.zsync", apps[0].raw_update_info);
+    try expectOnlyInstalledAppImage(env.install_dir, "Editor.AppImage");
+}
+
+test "syncAppImageMeta repairs legacy records that flagged an update type without a url" {
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const root = buffer[0..try tmp.dir.realPath(std.testing.io, &buffer)];
+    const env = try ZsyncSyncEnv.init(allocator, root);
+
+    // Reproduce the record older versions wrote during sync: an update type
+    // was flagged from the embedded information but no URL was stored.
+    try env.manager.addAppImageToLocalDb(.{
+        .name = "Editor",
+        .version = "2.0.0",
+        .raw_update_info = "zsync|https://nightly.example.dev/latest/Editor.AppImage.zsync",
+        .update_type = .static_url,
+        .update_url = "",
+        .path = env.installed_path,
+    });
+
+    try std.testing.expect(try env.manager.syncAppImageMeta(&.{"Editor"}));
+
+    const apps = try env.manager.getAppImagesFromLocalDb();
+    defer env.manager.freeAppImages(apps);
+    try std.testing.expectEqual(@as(usize, 1), apps.len);
+    try std.testing.expectEqual(appimage.UpdateType.zsync, apps[0].update_type);
+    try std.testing.expectEqualStrings("https://nightly.example.dev/latest/Editor.AppImage.zsync", apps[0].update_url);
+}
+
+test "syncAppImageMeta keeps user configuration untouched when repairing" {
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const root = buffer[0..try tmp.dir.realPath(std.testing.io, &buffer)];
+    const env = try ZsyncSyncEnv.init(allocator, root);
+
+    // An explicit user configuration must survive the sync even though the
+    // binary publishes embedded update information.
+    try env.manager.addAppImageToLocalDb(.{
+        .name = "Editor",
+        .version = "2.0.0",
+        .raw_update_info = "zsync|https://nightly.example.dev/latest/Editor.AppImage.zsync",
+        .update_type = .github,
+        .repo_owner = "example",
+        .repo_name = "editor",
+        .path = env.installed_path,
+    });
+
+    try std.testing.expect(try env.manager.syncAppImageMeta(&.{"Editor"}));
+
+    const apps = try env.manager.getAppImagesFromLocalDb();
+    defer env.manager.freeAppImages(apps);
+    try std.testing.expectEqual(@as(usize, 1), apps.len);
+    try std.testing.expectEqual(appimage.UpdateType.github, apps[0].update_type);
+    try std.testing.expectEqualStrings("example", apps[0].repo_owner.?);
+    try std.testing.expectEqualStrings("editor", apps[0].repo_name.?);
 }
 
 test "copyFile duplicates file contents" {

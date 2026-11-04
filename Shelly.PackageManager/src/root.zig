@@ -70,6 +70,7 @@ pub const appimage = struct {
     pub const update_manager = @import("appimage/update_manager.zig");
     pub const bindings = @import("appimage/bindings.zig");
     pub const events = @import("appimage/events.zig");
+    pub const zsync = @import("appimage/zsync.zig");
 
     pub const Manager = manager.AppImageManager;
     pub const UpdateManager = update_manager.UpdateManager;
