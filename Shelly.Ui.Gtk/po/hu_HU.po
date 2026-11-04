@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shelly-ui 2.2.4.1\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-10-27 11:32-0400\n"
+"POT-Creation-Date: 2026-11-04 12:08-0500\n"
 "PO-Revision-Date: 2026-08-13 11:51+0200\n"
 "Last-Translator: Impostor0729\n"
 "Language-Team: csnyder@seafoam-labs.org\n"
@@ -493,6 +493,18 @@ msgstr "A Seafoam Labs válogatott javaslatai"
 msgid "Refresh the recommended packages list from the network"
 msgstr "Az ajánlott csomagok listájának frissítése a hálózatról"
 
+#| msgid "Mixed selection"
+msgid "Clear selection"
+msgstr ""
+
+#| msgid "Recommended Packages"
+msgid "Deselect all recommended packages"
+msgstr ""
+
+#| msgid "Install the selected packages?"
+msgid "Install all selected packages in one transaction"
+msgstr ""
+
 msgid "Loading Recommended Packages..."
 msgstr "Ajánlott csomagok betöltése..."
 
@@ -838,10 +850,9 @@ msgstr "Következő"
 msgid "Start Shelly"
 msgstr "Shelly indítása"
 
-#, fuzzy
 #| msgid "Enable AUR?"
 msgid "Enable Atoll?"
-msgstr "Engedélyezi az AUR-t?"
+msgstr ""
 
 msgid ""
 "Atoll contains build scripts that are known as PKGBUILDs. Those scripts are "
@@ -1453,17 +1464,17 @@ msgstr "Csomagok eltávolítása"
 msgid "Installing packages"
 msgstr "Csomagok telepítése"
 
-#, fuzzy
+msgid "Select package for batch installation"
+msgstr ""
+
 #| msgid "Search standard repositories, AUR and Flatpak"
 msgid "Search standard repositories, Atoll and Flatpak"
-msgstr "Keresés az AUR és Flatpak szabványos tárolóiban"
+msgstr ""
 
-#, fuzzy
 #| msgid "Show results from the Arch User Repository"
 msgid "Show results from Atoll"
-msgstr "Eredmények megjelenítése az Arch User Repository-ból"
+msgstr ""
 
-#, fuzzy
 #| msgid ""
 #| "Search standard repositories, the AUR and Flatpak at once. Type a name to "
 #| "begin."
@@ -1471,8 +1482,6 @@ msgid ""
 "Search the standard repositories, Atoll, and Flatpak all at once. Type a "
 "name to begin."
 msgstr ""
-"Keresés a hivatalos tárolókban, az AUR-ban és a Flatpakben egyszerre. Írjon "
-"be egy nevet a kezdéshez."
 
 msgid ""
 "Search standard repositories, the AUR and Flatpak at once. Type a name to "
@@ -1499,10 +1508,9 @@ msgstr "Csomagok telepítése"
 msgid "Install the selected packages?"
 msgstr "Telepíti a kiválasztott csomagokat?"
 
-#, fuzzy
 #| msgid "Enable AUR"
 msgid "Enable Atoll"
-msgstr "AUR engedélyezése"
+msgstr ""
 
 msgid ""
 "Could not save settings to the configured file. Your latest changes were not "
@@ -1764,10 +1772,9 @@ msgstr "Csomagok frissítése"
 msgid "Refreshing package databases"
 msgstr "Csomagadatbázisok frissítése"
 
-#, fuzzy
 #| msgid "Removing Flatpak"
 msgid "Removing stale database lock"
-msgstr "Flatpak eltávolítása"
+msgstr ""
 
 msgid "Fixing permissions"
 msgstr "Engedélyek javítása"

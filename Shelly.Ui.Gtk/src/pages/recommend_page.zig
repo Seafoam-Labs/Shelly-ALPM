@@ -34,12 +34,24 @@ pub const RecommendPage = extern struct {
         list_page: *gtk.ScrolledWindow,
         content_box: *gtk.Box,
         empty_page: *gtk.Box,
+        selected_label: *gtk.Label,
+        clear_button: *gtk.Button,
+        install_selected_button: *gtk.Button,
 
         resolver: IconResolver,
         arena: ?*std.heap.ArenaAllocator,
         generation: u64,
         loaded: bool,
         loading: bool,
+
+        // Packages picked up for a batch install, keyed by name. The keys are
+        // owned by the c allocator because the page arena they were read from
+        // is torn down on every reload while the selection outlives it.
+        selection: std.StringHashMapUnmanaged(void) = .empty,
+        // Check buttons of the cards currently on screen. Cards are destroyed
+        // and rebuilt whenever the list reloads, so this lives only as long
+        // as the current cards do.
+        checks: std.ArrayListUnmanaged(*gtk.CheckButton) = .empty,
 
         var offset: c_int = 0;
     };
@@ -104,6 +116,10 @@ pub const RecommendPage = extern struct {
         while (gtk.Widget.getFirstChild(p.content_box.as(gtk.Widget))) |c| {
             gtk.Box.remove(p.content_box, c);
         }
+        // The cards are gone, so their check buttons must not be reached
+        // again, and the selection resets with the rest of the page.
+        p.checks.clearRetainingCapacity();
+        self.clear_selection();
 
         if (p.arena) |a| {
             a.deinit();
@@ -233,6 +249,18 @@ pub const RecommendPage = extern struct {
         const p = self.priv();
         const sizeGroup = gtk.SizeGroup.new(.horizontal);
 
+        // Prune before the cards are built so every check button shows the
+        // final state: names installed since the last listing, or gone from
+        // it entirely, cannot reach the batch install.
+        const arena = p.arena orelse return;
+        var installable: std.StringHashMapUnmanaged(void) = .empty;
+        for (categories) |cat| {
+            for (cat.packages) |*pkg| {
+                if (!pkg.Installed) installable.put(arena.allocator(), pkg.Name, {}) catch {};
+            }
+        }
+        finalize_selection(self, &installable);
+
         for (categories) |cat| {
             const section = gtk.Box.new(.vertical, 6);
 
@@ -333,6 +361,22 @@ pub const RecommendPage = extern struct {
         else
             "";
 
+        // Installed cards keep only their remove button; the check leads the
+        // card so selecting reads like the Packages grid view.
+        if (!pkg.Installed) {
+            const check = gtk.CheckButton.new();
+            gtk.Widget.setValign(check.as(gtk.Widget), .center);
+            gobject.Object.setData(check.as(gobject.Object), "pkg-name", @ptrCast(@constCast(name.ptr)));
+            gobject.Object.setData(check.as(gobject.Object), "page", self);
+            gtk.CheckButton.setActive(check, @intFromBool(p.selection.contains(pkg.Name)));
+            const select_hint = translations._("Select package for batch installation");
+            gtk.Widget.setTooltipText(check.as(gtk.Widget), select_hint);
+            a11y.setName(check.as(gtk.Widget), pkg.Name);
+            _ = gtk.CheckButton.signals.toggled.connect(check, ?*anyopaque, &on_check_toggled, null, .{});
+            gtk.Box.prepend(content, check.as(gtk.Widget));
+            p.checks.append(std.heap.c_allocator, check) catch {};
+        }
+
         const remove_button = gtk.Button.newFromIconName("edit-delete-symbolic");
         gtk.Widget.setVisible(remove_button.as(gtk.Widget), @intFromBool(pkg.Installed));
         gtk.Widget.addCssClass(remove_button.as(gtk.Widget), "destructive-action");
@@ -404,6 +448,145 @@ pub const RecommendPage = extern struct {
         }
     }
 
+    /// Builds the CLI argv for a batch install of `names`, mirroring the
+    /// Packages page: `install standard` followed by one argument per name.
+    /// A name that is already installed is dropped; if that empties the
+    /// selection no argv is produced and the caller must not start a
+    /// transaction.
+    pub fn build_install_argv(
+        alloc: std.mem.Allocator,
+        names: []const []const u8,
+        installed: []const []const u8,
+    ) !std.ArrayListUnmanaged([]const u8) {
+        var argv = std.ArrayListUnmanaged([]const u8).empty;
+        errdefer argv.deinit(alloc);
+
+        for (names) |name| {
+            var is_installed = false;
+            for (installed) |have| {
+                if (std.mem.eql(u8, name, have)) {
+                    is_installed = true;
+                    break;
+                }
+            }
+            if (!is_installed) try argv.append(alloc, name);
+        }
+        if (argv.items.len == 0) return argv;
+
+        try argv.insertSlice(alloc, 0, &.{ "install", "standard" });
+        return argv;
+    }
+
+    /// Toggled handlers fire for programmatic changes too, so the selection
+    /// always follows the check buttons rather than the other way around.
+    fn on_check_toggled(check: *gtk.CheckButton, _: ?*anyopaque) callconv(.c) void {
+        const page_ptr = gobject.Object.getData(check.as(gobject.Object), "page") orelse return;
+        const self: *Self = @ptrCast(@alignCast(page_ptr));
+        const name_ptr = gobject.Object.getData(check.as(gobject.Object), "pkg-name") orelse return;
+        const name: []const u8 = std.mem.span(@as([*:0]const u8, @ptrCast(name_ptr)));
+
+        const p = self.priv();
+        if (gtk.CheckButton.getActive(check) != 0) {
+            if (p.selection.contains(name)) return;
+            const owned = std.heap.c_allocator.dupeSentinel(u8, name, 0) catch return;
+            p.selection.put(std.heap.c_allocator, owned, {}) catch {
+                std.heap.c_allocator.free(owned);
+                return;
+            };
+        } else if (p.selection.fetchRemove(name)) |entry| {
+            free_key(entry.key);
+        }
+        self.update_action_bar();
+    }
+
+    /// Releases a key previously put into the selection map.
+    fn free_key(name: []const u8) void {
+        const z: [*:0]const u8 = @ptrCast(name.ptr);
+        std.heap.c_allocator.free(@constCast(std.mem.span(z)));
+    }
+
+    fn clear_selection(self: *Self) void {
+        const p = self.priv();
+        var it = p.selection.keyIterator();
+        while (it.next()) |key| free_key(key.*);
+        p.selection.clearRetainingCapacity();
+        self.update_action_bar();
+    }
+
+    /// Brings the selection in line with a rebuilt listing: only names it
+    /// still offers as installable survive. A null set (no cards at all)
+    /// clears everything.
+    fn finalize_selection(self: *Self, installable: ?*const std.StringHashMapUnmanaged(void)) void {
+        const p = self.priv();
+        var stale: std.ArrayListUnmanaged([]const u8) = .empty;
+        defer stale.deinit(std.heap.c_allocator);
+
+        var it = p.selection.keyIterator();
+        while (it.next()) |key| {
+            const keep = if (installable) |set| set.contains(key.*) else false;
+            if (!keep) stale.append(std.heap.c_allocator, key.*) catch {};
+        }
+        for (stale.items) |name| {
+            _ = p.selection.remove(name);
+            free_key(name);
+        }
+        self.update_action_bar();
+    }
+
+    fn update_action_bar(self: *Self) void {
+        const p = self.priv();
+        const count = p.selection.count();
+
+        var buf: [32]u8 = undefined;
+        const text = std.fmt.bufPrintSentinel(
+            &buf,
+            "{d} {s}",
+            .{ count, translations._("Selected") },
+            0,
+        ) catch translations._("0 Selected");
+        gtk.Label.setLabel(p.selected_label, text);
+
+        const has = count > 0;
+        gtk.Widget.setSensitive(p.install_selected_button.as(gtk.Widget), @intFromBool(has));
+        gtk.Widget.setVisible(p.clear_button.as(gtk.Widget), @intFromBool(has));
+    }
+
+    fn on_clear_selection_clicked(self: *Self) callconv(.c) void {
+        const p = self.priv();
+        for (p.checks.items) |check| gtk.CheckButton.setActive(check, 0);
+        // Deactivating dropped every name that had a card through
+        // on_check_toggled; this sweeps up the rest and the owned keys.
+        self.clear_selection();
+    }
+
+    fn on_install_selected_clicked(self: *Self) callconv(.c) void {
+        const p = self.priv();
+        if (p.selection.count() == 0) return;
+
+        var names: std.ArrayListUnmanaged([]const u8) = .empty;
+        defer names.deinit(std.heap.c_allocator);
+        var it = p.selection.keyIterator();
+        while (it.next()) |key| names.append(std.heap.c_allocator, key.*) catch break;
+
+        // No installed lookup here: buildSections already pruned the
+        // selection against the data this listing was built from, and the
+        // window is locked out between that prune and this click.
+        var argv = build_install_argv(std.heap.c_allocator, names.items, &.{}) catch return;
+        defer argv.deinit(std.heap.c_allocator);
+        if (argv.items.len == 0) return;
+
+        if (support.getWindow(ShellyWindow, self)) |win| {
+            win.startTransaction(.{
+                .title = translations._("Installing packages"),
+                .argv = argv.items,
+                .packages = names.items,
+                .on_complete = &on_transaction_complete,
+                .privileged = true,
+                .ctx = self,
+            });
+        }
+    }
+
     fn on_transaction_complete(ctx: *anyopaque, success: bool) void {
         if (!success) return;
         const self: *Self = @ptrCast(@alignCast(ctx));
@@ -422,6 +605,7 @@ pub const RecommendPage = extern struct {
         while (gtk.Widget.getFirstChild(p.content_box.as(gtk.Widget))) |c| {
             gtk.Box.remove(p.content_box, c);
         }
+        p.checks.clearRetainingCapacity();
         if (p.arena) |a| {
             a.deinit();
             std.heap.c_allocator.destroy(a);
@@ -455,6 +639,7 @@ pub const RecommendPage = extern struct {
 
     fn show_empty(self: *Self) void {
         const p = self.priv();
+        finalize_selection(self, null);
         gtk.Spinner.stop(p.loading_spinner);
         gtk.Stack.setVisibleChild(p.recommend_stack, p.empty_page.as(gtk.Widget));
     }
@@ -468,6 +653,9 @@ pub const RecommendPage = extern struct {
         .{ "list_page", @offsetOf(Private, "list_page") },
         .{ "content_box", @offsetOf(Private, "content_box") },
         .{ "empty_page", @offsetOf(Private, "empty_page") },
+        .{ "selected_label", @offsetOf(Private, "selected_label") },
+        .{ "clear_button", @offsetOf(Private, "clear_button") },
+        .{ "install_selected_button", @offsetOf(Private, "install_selected_button") },
     };
 
     pub const Class = extern struct {
@@ -482,6 +670,8 @@ pub const RecommendPage = extern struct {
                 support.bindChild(class, Private.offset, c[0], c[1]);
             }
             gtk.Widget.Class.bindTemplateCallbackFull(wc, "on_refresh_clicked", @ptrCast(&on_refresh_clicked));
+            gtk.Widget.Class.bindTemplateCallbackFull(wc, "on_clear_selection_clicked", @ptrCast(&on_clear_selection_clicked));
+            gtk.Widget.Class.bindTemplateCallbackFull(wc, "on_install_selected_clicked", @ptrCast(&on_install_selected_clicked));
         }
 
         pub fn as(class: *Class, comptime T: type) *T {
@@ -489,3 +679,48 @@ pub const RecommendPage = extern struct {
         }
     };
 };
+
+test "build_install_argv installs every selected package in one transaction" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+
+    var argv = try RecommendPage.build_install_argv(arena.allocator(), &.{ "firefox", "htop" }, &.{});
+    defer argv.deinit(arena.allocator());
+
+    try std.testing.expectEqual(@as(usize, 4), argv.items.len);
+    try std.testing.expectEqualStrings("install", argv.items[0]);
+    try std.testing.expectEqualStrings("standard", argv.items[1]);
+    try std.testing.expectEqualStrings("firefox", argv.items[2]);
+    try std.testing.expectEqualStrings("htop", argv.items[3]);
+}
+
+test "build_install_argv drops packages installed since the selection" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+
+    var argv = try RecommendPage.build_install_argv(
+        arena.allocator(),
+        &.{ "htop", "neofetch", "git" },
+        &.{"neofetch"},
+    );
+    defer argv.deinit(arena.allocator());
+
+    try std.testing.expectEqual(@as(usize, 4), argv.items.len);
+    try std.testing.expectEqualStrings("install", argv.items[0]);
+    try std.testing.expectEqualStrings("standard", argv.items[1]);
+    try std.testing.expectEqualStrings("htop", argv.items[2]);
+    try std.testing.expectEqualStrings("git", argv.items[3]);
+}
+
+test "build_install_argv declines to start a transaction with nothing to install" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+
+    var empty = try RecommendPage.build_install_argv(arena.allocator(), &.{}, &.{});
+    defer empty.deinit(arena.allocator());
+    try std.testing.expectEqual(@as(usize, 0), empty.items.len);
+
+    var all_installed = try RecommendPage.build_install_argv(arena.allocator(), &.{"htop"}, &.{"htop"});
+    defer all_installed.deinit(arena.allocator());
+    try std.testing.expectEqual(@as(usize, 0), all_installed.items.len);
+}

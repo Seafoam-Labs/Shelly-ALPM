@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shelly-ui 2.2.4.1\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-10-27 11:32-0400\n"
+"POT-Creation-Date: 2026-11-04 12:08-0500\n"
 "PO-Revision-Date: 2026-10-13 08:48+0000\n"
 "Last-Translator: juliazero <juliazero2@gmail.com>\n"
 "Language-Team: Polish\n"
@@ -507,6 +507,18 @@ msgstr "Wyselekcjonowane propozycje od Seafoam Labs"
 msgid "Refresh the recommended packages list from the network"
 msgstr "Odśwież listę polecanych pakietów z sieci"
 
+#| msgid "Mixed selection"
+msgid "Clear selection"
+msgstr ""
+
+#| msgid "Recommended Packages"
+msgid "Deselect all recommended packages"
+msgstr ""
+
+#| msgid "Install the selected packages?"
+msgid "Install all selected packages in one transaction"
+msgstr ""
+
 msgid "Loading Recommended Packages..."
 msgstr "Wczytywanie polecanych pakietów..."
 
@@ -857,12 +869,10 @@ msgstr "Dalej"
 msgid "Start Shelly"
 msgstr "Uruchom Shelly"
 
-#, fuzzy
 #| msgid "Enable AUR?"
 msgid "Enable Atoll?"
-msgstr "Włączyć obsługę AUR?"
+msgstr ""
 
-#, fuzzy
 #| msgid ""
 #| "The Arch User Repository contains build scripts that are known as "
 #| "PKGBUILDs. Those scripts are uploaded by users, and are not verified or "
@@ -873,12 +883,7 @@ msgid ""
 "uploaded by users, and are not verified or vetted in any way. Only enable "
 "this feature if you are comfortable in verifying the build scripts."
 msgstr ""
-"AUR zawiera skrypty budowania znane jako PKGBUILD. Skrypty te są przesyłane "
-"przez użytkowników i w żaden sposób nie są weryfikowane ani sprawdzane. "
-"Włącz tę funkcję tylko wtedy, jeśli masz pewność, że potrafisz samodzielnie "
-"zweryfikować skrypty budowania."
 
-#, fuzzy
 #| msgid ""
 #| "<a href=\"https://www.seafoam-labs.org/shelly-alpm/docs/aur-safety/\">AUR "
 #| "Safety Guide</a>"
@@ -886,8 +891,6 @@ msgid ""
 "<a href=\"https://www.seafoam-labs.org/shelly-alpm/docs/aur-safety/\">Atoll "
 "Safety Guide</a>"
 msgstr ""
-"<a href=\"https://www.seafoam-labs.org/shelly-alpm/docs/aur-safety/"
-"\">Przewodnik bezpieczeństwa AUR</a>"
 
 msgid "System files"
 msgstr "Systemowe pliki"
@@ -1495,17 +1498,17 @@ msgstr "Usuwanie pakietów"
 msgid "Installing packages"
 msgstr "Instalowanie pakietów"
 
-#, fuzzy
+msgid "Select package for batch installation"
+msgstr ""
+
 #| msgid "Search standard repositories, AUR and Flatpak"
 msgid "Search standard repositories, Atoll and Flatpak"
-msgstr "Przeszukuj standardowe repozytoria, AUR i Flatpak"
+msgstr ""
 
-#, fuzzy
 #| msgid "Show results from the Arch User Repository"
 msgid "Show results from Atoll"
-msgstr "Pokaż wyniki z Arch User Repository (AUR)"
+msgstr ""
 
-#, fuzzy
 #| msgid ""
 #| "Search the standard repositories, the AUR, and Flatpak all at once. Type "
 #| "a name to begin."
@@ -1513,8 +1516,6 @@ msgid ""
 "Search the standard repositories, Atoll, and Flatpak all at once. Type a "
 "name to begin."
 msgstr ""
-"Przeszukaj jednocześnie standardowe repozytoria, AUR i Flatpak. Wpisz nazwę, "
-"aby rozpocząć."
 
 msgid ""
 "Search standard repositories, the AUR and Flatpak at once. Type a name to "
@@ -1541,10 +1542,9 @@ msgstr "Zainstaluj pakiety"
 msgid "Install the selected packages?"
 msgstr "Zainstalować wybrane pakiety?"
 
-#, fuzzy
 #| msgid "Enable AUR"
 msgid "Enable Atoll"
-msgstr "Włącz obsługę AUR"
+msgstr ""
 
 msgid ""
 "Could not save settings to the configured file. Your latest changes were not "
@@ -1814,10 +1814,9 @@ msgstr "Aktualizowanie pakietów"
 msgid "Refreshing package databases"
 msgstr "Odświeżanie baz danych pakietów"
 
-#, fuzzy
 #| msgid "Removing Flatpak"
 msgid "Removing stale database lock"
-msgstr "Usuwanie pakietu Flatpak"
+msgstr ""
 
 msgid "Fixing permissions"
 msgstr "Naprawianie uprawnień"

@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shelly-ui 2.2.4.1\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-10-27 11:32-0400\n"
+"POT-Creation-Date: 2026-11-04 12:08-0500\n"
 "PO-Revision-Date: 2026-09-3 12:00+0800\n"
 "Last-Translator: DeepSeek AI\n"
 "Language-Team: China (Simplified)\n"
@@ -474,6 +474,18 @@ msgstr ""
 msgid "Refresh the recommended packages list from the network"
 msgstr "从网络刷新推荐包列表"
 
+#| msgid "Mixed selection"
+msgid "Clear selection"
+msgstr ""
+
+#| msgid "Recommended Packages"
+msgid "Deselect all recommended packages"
+msgstr ""
+
+#| msgid "Install the selected packages?"
+msgid "Install all selected packages in one transaction"
+msgstr ""
+
 msgid "Loading Recommended Packages..."
 msgstr "加载推荐..."
 
@@ -807,10 +819,9 @@ msgstr "下一步"
 msgid "Start Shelly"
 msgstr "启动 Shelly"
 
-#, fuzzy
 #| msgid "Enable AUR?"
 msgid "Enable Atoll?"
-msgstr "启用 AUR？"
+msgstr ""
 
 msgid ""
 "Atoll contains build scripts that are known as PKGBUILDs. Those scripts are "
@@ -1418,22 +1429,22 @@ msgstr "正在移除软件包"
 msgid "Installing packages"
 msgstr "正在安装软件包"
 
-#, fuzzy
+msgid "Select package for batch installation"
+msgstr ""
+
 #| msgid "Search standard repositories, AUR and Flatpak"
 msgid "Search standard repositories, Atoll and Flatpak"
-msgstr "搜索标准仓库，AUR和Flatpak"
+msgstr ""
 
-#, fuzzy
 #| msgid "Show results from the Arch User Repository"
 msgid "Show results from Atoll"
-msgstr "显示AUR中的结果"
+msgstr ""
 
-#, fuzzy
 #| msgid "Search standard repositories, AUR and Flatpak"
 msgid ""
 "Search the standard repositories, Atoll, and Flatpak all at once. Type a "
 "name to begin."
-msgstr "搜索标准仓库，AUR和Flatpak"
+msgstr ""
 
 msgid ""
 "Search standard repositories, the AUR and Flatpak at once. Type a name to "
@@ -1458,10 +1469,9 @@ msgstr "安装软件包"
 msgid "Install the selected packages?"
 msgstr "安装所选软件包？"
 
-#, fuzzy
 #| msgid "Enable AUR"
 msgid "Enable Atoll"
-msgstr "启用 AUR"
+msgstr ""
 
 msgid ""
 "Could not save settings to the configured file. Your latest changes were not "
@@ -1723,10 +1733,9 @@ msgstr "正在升级软件包"
 msgid "Refreshing package databases"
 msgstr "正在刷新软件包数据库"
 
-#, fuzzy
 #| msgid "Removing Flatpak"
 msgid "Removing stale database lock"
-msgstr "正在移除 Flatpak"
+msgstr ""
 
 msgid "Fixing permissions"
 msgstr "正在修复权限"

@@ -259,6 +259,41 @@
                               </object>
                             </child>
                             <child>
+                              <object class="GtkBox" id="terminal_update_box">
+                                <property name="orientation">horizontal</property>
+                                <property name="spacing">12</property>
+                                <child>
+                                  <object class="GtkLabel">
+                                    <property name="label" translatable="yes">Update terminal</property>
+                                    <property name="halign">start</property>
+                                    <property name="hexpand">true</property>
+                                  </object>
+                                </child>
+                                <child>
+                                  <object class="GtkBox">
+                                    <property name="orientation">horizontal</property>
+                                    <property name="spacing">8</property>
+                                    <child>
+                                      <object class="GtkDropDown" id="terminal_update_drop">
+                                        <accessibility>
+                                          <property name="label" translatable="yes">Update terminal</property>
+                                        </accessibility>
+                                      </object>
+                                    </child>
+                                    <child>
+                                      <object class="GtkEntry" id="terminal_update_entry">
+                                        <property name="visible">false</property>
+                                        <property name="placeholder-text" translatable="yes">Terminal command</property>
+                                        <accessibility>
+                                          <property name="label" translatable="yes">Custom update terminal command</property>
+                                        </accessibility>
+                                      </object>
+                                    </child>
+                                  </object>
+                                </child>
+                              </object>
+                            </child>
+                            <child>
                               <object class="GtkBox" id="tray_interval_box">
                                 <property name="orientation">horizontal</property>
                                 <property name="spacing">12</property>

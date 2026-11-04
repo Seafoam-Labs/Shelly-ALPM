@@ -23,6 +23,8 @@ const Flatpak = @import("models/update.zig").CheckUpdatesFlatpak;
 const runtime = @import("runtime.zig");
 const AppRunner = @import("services/app_runner.zig").AppRunner;
 const ConfigWatcher = @import("services/config-watcher.zig").ConfigWatcher;
+const LocalDbWatcher = @import("services/db-watcher.zig").LocalDbWatcher;
+const installedDatabaseDir = @import("services/db-watcher.zig").installedDatabaseDir;
 const ShellyConfig = @import("services/config.zig").ConfigResolver;
 const next_notification = @import("services/next_notification.zig");
 const ShellyCli = @import("services/shelly-cli.zig").ShellyCli;
@@ -457,6 +459,39 @@ fn runSession(init: std.process.Init) !void {
     defer watcher.stop();
     _ = watcher.changedSinceLast();
 
+    // The update command the tray launches is not the only thing that changes
+    // the installed-package database: terminals that hand their window to a
+    // session daemon exit long before the update finishes, and users also
+    // install straight from a shell or another front end. Watch the database
+    // itself so the icon re-checks shortly after any of those installs land.
+    var db_watcher: ?LocalDbWatcher = blk: {
+        const db_dir = installedDatabaseDir(allocator, init.io) catch |e| {
+            log_main.warn("Could not locate the installed-package database. The tray icon may keep a stale update state until the next scheduled check. {0s}\n\nTechnical details: {1s}", .{ diagnostics.cause(e), @errorName(e) });
+            break :blk null;
+        };
+        const dir = db_dir orelse {
+            log_main.warn("No supported distribution configuration was found, so the installed-package database is not watched. The tray icon may keep a stale update state until the next scheduled check.", .{});
+            break :blk null;
+        };
+        defer allocator.free(dir);
+
+        var watcher_db = LocalDbWatcher.init(allocator, init.io, dir, &onInstalledDbChanged, null) catch |e| {
+            log_main.err("Could not prepare the installed-package database watcher. {0s}\n\nTechnical details: {1s}", .{ diagnostics.cause(e), @errorName(e) });
+            break :blk null;
+        };
+        watcher_db.start() catch |e| {
+            log_main.err("Could not watch the installed-package database {0f}. The tray icon may keep a stale update state until the next scheduled check. {1s}\n\nTechnical details: {2s}", .{ diagnostics.safe(dir), diagnostics.cause(e), @errorName(e) });
+            watcher_db.deinit();
+            break :blk null;
+        };
+        log_main.info("watching installed-package database {f}", .{diagnostics.safe(dir)});
+        break :blk watcher_db;
+    };
+    defer if (db_watcher) |*w| {
+        w.stop();
+        w.deinit();
+    };
+
     var worker = Worker{
         .updates = &updates,
         .cli = ShellyCli{ .allocator = allocator, .io = init.io, .environ_map = init.environ_map },
@@ -712,6 +747,12 @@ fn formatCheckTime(arena: std.mem.Allocator, ts: i64) ![]const u8 {
 
 fn onUiRefresh(ctx: ?*anyopaque, msg: zsn.Message) void {
     _ = msg;
+    _ = ctx;
+    runtime.wakeWorker();
+}
+
+/// Runs on the database watcher thread; waking the worker is all it should do.
+fn onInstalledDbChanged(ctx: ?*anyopaque) void {
     _ = ctx;
     runtime.wakeWorker();
 }

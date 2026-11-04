@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Shelly-ALPM / Shelly: GTK\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-10-27 11:32-0400\n"
+"POT-Creation-Date: 2026-11-04 12:08-0500\n"
 "PO-Revision-Date: 2026-08-05 17:02+0300\n"
 "Last-Translator: CozyKernel <antwnhs.mpl@gmail.com>\n"
 "Language-Team: \n"
@@ -488,6 +488,17 @@ msgstr "Επιλεγμένες προτάσεις από τη Seafoam Labs"
 msgid "Refresh the recommended packages list from the network"
 msgstr "Ανανέωση της λίστας προτεινόμενων πακέτων από το δίκτυο"
 
+#| msgid "Mixed selection"
+msgid "Clear selection"
+msgstr ""
+
+#| msgid "Recommended Packages"
+msgid "Deselect all recommended packages"
+msgstr ""
+
+msgid "Install all selected packages in one transaction"
+msgstr ""
+
 msgid "Loading Recommended Packages..."
 msgstr "Φόρτωση προτεινόμενων πακέτων..."
 
@@ -832,10 +843,9 @@ msgstr "Επόμενο"
 msgid "Start Shelly"
 msgstr "Έναρξη Shelly"
 
-#, fuzzy
 #| msgid "Enable AUR?"
 msgid "Enable Atoll?"
-msgstr "Ενεργοποίηση του AUR;"
+msgstr ""
 
 msgid ""
 "Atoll contains build scripts that are known as PKGBUILDs. Those scripts are "
@@ -1449,6 +1459,9 @@ msgstr "Κατάργηση πακέτων"
 msgid "Installing packages"
 msgstr "Εγκατάσταση πακέτων"
 
+msgid "Select package for batch installation"
+msgstr ""
+
 msgid "Search standard repositories, Atoll and Flatpak"
 msgstr ""
 
@@ -1483,10 +1496,9 @@ msgstr ""
 msgid "Install the selected packages?"
 msgstr ""
 
-#, fuzzy
 #| msgid "Enable AUR"
 msgid "Enable Atoll"
-msgstr "Ενεργοποίηση AUR"
+msgstr ""
 
 msgid ""
 "Could not save settings to the configured file. Your latest changes were not "
@@ -1748,10 +1760,9 @@ msgstr "Αναβάθμιση πακέτων"
 msgid "Refreshing package databases"
 msgstr "Ανανέωση βάσεων δεδομένων πακέτων"
 
-#, fuzzy
 #| msgid "Removing Flatpak"
 msgid "Removing stale database lock"
-msgstr "Αφαίρεση Flatpak"
+msgstr ""
 
 msgid "Fixing permissions"
 msgstr "Διόρθωση αδειών"

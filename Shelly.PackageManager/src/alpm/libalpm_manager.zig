@@ -1507,9 +1507,27 @@ pub const Manager = struct {
         if (purge_corruption) {
             var dir = std.Io.Dir.cwd().openDir(self.io(), self.config.cache_directory, .{ .iterate = true }) catch return TransactionError.DirectoryReadFailed;
             defer dir.close(self.io());
-            var file_walker = dir.walk(self.allocator) catch return TransactionError.DirectoryReadFailed;
+            var file_walker = dir.walkSelectively(self.allocator) catch return TransactionError.DirectoryReadFailed;
             defer file_walker.deinit();
             while (file_walker.next(self.io()) catch return TransactionError.DatabaseReadFailed) |entry| {
+                if (entry.kind == .directory) {
+                    // Pacman creates these sandbox directories before checking
+                    // whether anything needs downloading and can leave them
+                    // behind, empty or with partial payloads.
+                    if (entry.depth() == 1 and isPacmanDownloadDirectory(entry.basename)) {
+                        const name = self.allocator.dupeSentinel(u8, entry.basename, 0) catch return TransactionError.OutOfMemory;
+                        target_names.append(self.allocator, name) catch {
+                            self.allocator.free(name);
+                            return TransactionError.OutOfMemory;
+                        };
+                        if (!dry_run) {
+                            entry.dir.deleteTree(self.io(), entry.basename) catch return TransactionError.RemovalFailed;
+                        }
+                        continue;
+                    }
+                    file_walker.enter(self.io(), entry) catch return TransactionError.DirectoryReadFailed;
+                    continue;
+                }
                 if (entry.kind != .file) continue;
                 if (std.mem.indexOf(u8, entry.basename, ".pkg.tar") == null) continue;
                 if (std.mem.endsWith(u8, entry.basename, ".sig")) continue;
@@ -3263,6 +3281,15 @@ fn syncDatabaseDirectory(io: std.Io, path: []const u8) !void {
     try directory_file.sync(io);
 }
 
+/// Matches pacman's `download-XXXXXX` sandbox directory template (a fixed
+/// prefix plus six alphanumeric characters).
+fn isPacmanDownloadDirectory(name: []const u8) bool {
+    const prefix = "download-";
+    if (name.len != prefix.len + 6 or !std.mem.startsWith(u8, name, prefix)) return false;
+    for (name[prefix.len..]) |byte| if (!std.ascii.isAlphanumeric(byte)) return false;
+    return true;
+}
+
 fn stalePartSweepDirectory(
     allocator: std.mem.Allocator,
     io: std.Io,
@@ -3864,40 +3891,6 @@ test "nested OperationScopes do not duplicate a detailed ALPM error" {
     try testing.expectEqualStrings("nested detailed ALPM failure", capture.last_message);
 }
 
-fn hasDeletedSharedLibrary(maps: []const u8) bool {
-    var lines = std.mem.splitScalar(u8, maps, '\n');
-    while (lines.next()) |line| {
-        if (std.mem.indexOf(u8, line, "(deleted)") != null and
-            std.mem.indexOf(u8, line, ".so") != null)
-        {
-            return true;
-        }
-    }
-    return false;
-}
-
-fn serviceFromCgroup(cgroup: []const u8) ?[]const u8 {
-    var lines = std.mem.splitScalar(u8, cgroup, '\n');
-    while (lines.next()) |line| {
-        const marker = "/system.slice/";
-        const marker_index = std.mem.indexOf(u8, line, marker) orelse continue;
-        var components = std.mem.splitScalar(u8, line[marker_index + marker.len ..], '/');
-        while (components.next()) |component| {
-            const trimmed = std.mem.trim(u8, component, " \t\r");
-            if (trimmed.len > ".service".len and std.mem.endsWith(u8, trimmed, ".service")) {
-                return trimmed;
-            }
-        }
-    }
-    return null;
-}
-
-fn isCriticalRestartProcess(command: []const u8) bool {
-    return std.mem.eql(u8, command, "systemd") or
-        std.mem.eql(u8, command, "dbus-daemon") or
-        std.mem.eql(u8, command, "dbus-broker");
-}
-
 fn stringBefore(_: void, lhs: []u8, rhs: []u8) bool {
     return std.mem.order(u8, lhs, rhs) == .lt;
 }
@@ -3987,21 +3980,21 @@ test "is_cachyos exposes the detected manager state" {
 }
 
 test "restart parsing identifies deleted shared libraries and system services" {
-    try testing.expect(hasDeletedSharedLibrary(
+    try testing.expect(restart_checks.hasDeletedSharedLibrary(
         "7f00-7f01 r-xp /usr/lib/libdemo.so.1 (deleted)\n",
     ));
-    try testing.expect(!hasDeletedSharedLibrary(
+    try testing.expect(!restart_checks.hasDeletedSharedLibrary(
         "7f00-7f01 r-xp /usr/lib/libdemo.so.1\n" ++
             "7f02-7f03 r-xp /usr/bin/demo (deleted)\n",
     ));
     try testing.expectEqualStrings(
         "demo.service",
-        serviceFromCgroup("0::/system.slice/system-demo.slice/demo.service/tasks\n").?,
+        restart_checks.serviceFromCgroup("0::/system.slice/system-demo.slice/demo.service/tasks\n").?,
     );
-    try testing.expect(serviceFromCgroup("0::/user.slice/session-1.scope\n") == null);
-    try testing.expect(isCriticalRestartProcess("systemd"));
-    try testing.expect(isCriticalRestartProcess("dbus-broker"));
-    try testing.expect(!isCriticalRestartProcess("demo"));
+    try testing.expect(restart_checks.serviceFromCgroup("0::/user.slice/session-1.scope\n") == null);
+    try testing.expect(restart_checks.isCriticalRestartProcess("systemd"));
+    try testing.expect(restart_checks.isCriticalRestartProcess("dbus-broker"));
+    try testing.expect(!restart_checks.isCriticalRestartProcess("demo"));
 }
 
 test "restart report detects kernels and records structured service results" {
