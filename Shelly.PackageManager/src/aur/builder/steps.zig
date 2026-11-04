@@ -400,6 +400,9 @@ fn wrapStepCommand(self: *PackageBuilder, child_argv: []const []const u8) !Wrapp
 }
 
 pub const DynamicArrayOverrides = std.StringHashMap([]const []const u8);
+/// Associative arrays captured from evaluated Bash state. Values are flat
+/// key/value pairs in Bash iteration order: [k0, v0, k1, v1, ...].
+pub const DynamicAssocArrayOverrides = std.StringHashMap([][]const u8);
 pub const DynamicScalarUnsets = std.StringHashMap(void);
 pub const DynamicArrayUnsets = std.StringHashMap(void);
 
@@ -427,6 +430,7 @@ pub const DynamicMetadataOverrides = struct {
     scalars: std.StringHashMap([]const u8),
     unset_scalars: DynamicScalarUnsets,
     arrays: DynamicArrayOverrides,
+    assoc_arrays: DynamicAssocArrayOverrides,
     unset_arrays: DynamicArrayUnsets,
     shell_options: ShellOptionDelta,
     functions: std.StringHashMap([]const u8),
@@ -435,6 +439,7 @@ pub const DynamicMetadataOverrides = struct {
         deinitDynamicScalarOverrides(allocator, &self.scalars);
         deinitDynamicScalarUnsets(allocator, &self.unset_scalars);
         deinitDynamicArrayOverrides(allocator, &self.arrays);
+        deinitDynamicAssocArrayOverrides(allocator, &self.assoc_arrays);
         deinitDynamicArrayUnsets(allocator, &self.unset_arrays);
         self.shell_options.deinit(allocator);
         deinitDynamicScalarOverrides(allocator, &self.functions);
@@ -488,6 +493,19 @@ pub fn deinitDynamicArrayUnsets(
     var iterator = unsets.keyIterator();
     while (iterator.next()) |name| allocator.free(name.*);
     unsets.deinit();
+}
+
+pub fn deinitDynamicAssocArrayOverrides(
+    allocator: std.mem.Allocator,
+    overrides: *DynamicAssocArrayOverrides,
+) void {
+    var iterator = overrides.iterator();
+    while (iterator.next()) |entry| {
+        allocator.free(entry.key_ptr.*);
+        for (entry.value_ptr.*) |item| allocator.free(item);
+        allocator.free(entry.value_ptr.*);
+    }
+    overrides.deinit();
 }
 
 fn isShellVariableName(name: []const u8) bool {
@@ -682,8 +700,9 @@ const dynamic_array_capture_prelude =
     \\  __shelly_attributes=${__shelly_declaration#declare }
     \\  __shelly_attributes=${__shelly_attributes%% *}
     \\  case "$__shelly_attributes" in
-    \\    *A*|*n*) return 1 ;;
-    \\    *a*) printf '%s' "$__shelly_declaration" ;;
+    \\    *n*) return 1 ;;
+    \\    *A*) printf 'M%s' "$__shelly_declaration" ;;
+    \\    *a*) printf 'A%s' "$__shelly_declaration" ;;
     \\    *) return 1 ;;
     \\  esac
     \\}
@@ -704,15 +723,23 @@ const dynamic_array_capture_prelude =
     \\  done < <(compgen -A variable)
     \\}
     \\__shelly_write_array_record() {
-    \\  local __shelly_path="$1" __shelly_name="$2" __shelly_count
+    \\  local __shelly_path="$1" __shelly_name="$2" __shelly_kind __shelly_count
+    \\  __shelly_kind=$(__shelly_array_declaration "$__shelly_name") || return 1
+    \\  __shelly_kind=${__shelly_kind:0:1}
     \\  local -n __shelly_array_ref="$__shelly_name"
     \\  __shelly_count=${#__shelly_array_ref[@]}
     \\  if ((__shelly_count > 4096)); then
-    \\    printf 'shelly: indexed array %s exceeds the 4096-element capture limit\n' "$__shelly_name" >&2
+    \\    printf 'shelly: %s array %s exceeds the 4096-element capture limit\n' \
+    \\      "$([ "$__shelly_kind" = M ] && printf associative || printf indexed)" "$__shelly_name" >&2
     \\    return 1
     \\  fi
-    \\  printf 'A\0%s\0%s\0' "$__shelly_name" "$__shelly_count" >> "$__shelly_path"
-    \\  if ((__shelly_count > 0)); then
+    \\  printf '%s\0%s\0%s\0' "$__shelly_kind" "$__shelly_name" "$__shelly_count" >> "$__shelly_path"
+    \\  if [ "$__shelly_kind" = M ]; then
+    \\    local __shelly_key
+    \\    for __shelly_key in "${!__shelly_array_ref[@]}"; do
+    \\      printf '%s\0%s\0' "$__shelly_key" "${__shelly_array_ref[$__shelly_key]}" >> "$__shelly_path"
+    \\    done
+    \\  elif ((__shelly_count > 0)); then
     \\    printf '%s\0' "${__shelly_array_ref[@]}" >> "$__shelly_path"
     \\  fi
     \\}
@@ -740,9 +767,15 @@ const dynamic_array_capture_prelude =
 fn parseDynamicArrayOutput(
     allocator: std.mem.Allocator,
     output: []const u8,
-) !struct { values: DynamicArrayOverrides, unsets: DynamicArrayUnsets } {
+) !struct {
+    values: DynamicArrayOverrides,
+    assoc_values: DynamicAssocArrayOverrides,
+    unsets: DynamicArrayUnsets,
+} {
     var values: DynamicArrayOverrides = .init(allocator);
     errdefer deinitDynamicArrayOverrides(allocator, &values);
+    var assoc_values: DynamicAssocArrayOverrides = .init(allocator);
+    errdefer deinitDynamicAssocArrayOverrides(allocator, &assoc_values);
     var unsets: DynamicArrayUnsets = .init(allocator);
     errdefer deinitDynamicArrayUnsets(allocator, &unsets);
     var fields = std.mem.splitScalar(u8, output, 0);
@@ -756,32 +789,37 @@ fn parseDynamicArrayOutput(
         record_count += 1;
         if (record_count > 1024) return error.InvalidDynamicArrayOutput;
         const name = fields.next() orelse return error.InvalidDynamicArrayOutput;
-        if (!isShellVariableName(name) or values.contains(name) or unsets.contains(name))
+        if (!isShellVariableName(name) or values.contains(name) or
+            assoc_values.contains(name) or unsets.contains(name))
+        {
             return error.InvalidDynamicArrayOutput;
+        }
         const key = try allocator.dupe(u8, name);
         errdefer allocator.free(key);
         if (std.mem.eql(u8, kind, "U")) {
             try unsets.put(key, {});
             continue;
         }
-        if (!std.mem.eql(u8, kind, "A")) return error.InvalidDynamicArrayOutput;
+        if (!std.mem.eql(u8, kind, "A") and !std.mem.eql(u8, kind, "M"))
+            return error.InvalidDynamicArrayOutput;
         const count_text = fields.next() orelse return error.InvalidDynamicArrayOutput;
         const count = std.fmt.parseInt(usize, count_text, 10) catch
             return error.InvalidDynamicArrayOutput;
         if (count > 4096) return error.InvalidDynamicArrayOutput;
-        const items = try allocator.alloc([]const u8, count);
+        // Associative records carry one key and one value field per entry.
+        const items = try allocator.alloc([]const u8, if (kind[0] == 'M') count * 2 else count);
         var item_count: usize = 0;
         errdefer {
             for (items[0..item_count]) |item| allocator.free(item);
             allocator.free(items);
         }
-        while (item_count < count) : (item_count += 1) {
+        while (item_count < items.len) : (item_count += 1) {
             const value = fields.next() orelse return error.InvalidDynamicArrayOutput;
             items[item_count] = try allocator.dupe(u8, value);
         }
-        try values.put(key, items);
+        if (kind[0] == 'M') try assoc_values.put(key, items) else try values.put(key, items);
     }
-    return .{ .values = values, .unsets = unsets };
+    return .{ .values = values, .assoc_values = assoc_values, .unsets = unsets };
 }
 
 // Function records contain a name and the complete Bash declaration. This is
@@ -883,6 +921,8 @@ pub fn evaluateDynamicMetadata(
 
     var array_result: DynamicArrayOverrides = .init(self.allocator);
     errdefer deinitDynamicArrayOverrides(self.allocator, &array_result);
+    var assoc_array_result: DynamicAssocArrayOverrides = .init(self.allocator);
+    errdefer deinitDynamicAssocArrayOverrides(self.allocator, &assoc_array_result);
     var unset_array_result: DynamicArrayUnsets = .init(self.allocator);
     errdefer deinitDynamicArrayUnsets(self.allocator, &unset_array_result);
     var scalar_result: std.StringHashMap([]const u8) = .init(self.allocator);
@@ -1052,6 +1092,8 @@ pub fn evaluateDynamicMetadata(
     const parsed = try parseDynamicArrayOutput(self.allocator, array_output);
     deinitDynamicArrayOverrides(self.allocator, &array_result);
     array_result = parsed.values;
+    deinitDynamicAssocArrayOverrides(self.allocator, &assoc_array_result);
+    assoc_array_result = parsed.assoc_values;
     deinitDynamicArrayUnsets(self.allocator, &unset_array_result);
     unset_array_result = parsed.unsets;
 
@@ -1072,6 +1114,7 @@ pub fn evaluateDynamicMetadata(
         .scalars = scalar_result,
         .unset_scalars = unset_scalar_result,
         .arrays = array_result,
+        .assoc_arrays = assoc_array_result,
         .unset_arrays = unset_array_result,
         .shell_options = shell_options,
     };
@@ -1158,6 +1201,7 @@ test "dynamic indexed array output preserves values and unsets with structural b
             "U\x00removed\x00",
     );
     defer deinitDynamicArrayOverrides(std.testing.allocator, &valid.values);
+    defer deinitDynamicAssocArrayOverrides(std.testing.allocator, &valid.assoc_values);
     defer deinitDynamicArrayUnsets(std.testing.allocator, &valid.unsets);
     try std.testing.expectEqual(@as(usize, 2), valid.values.get("source").?.len);
     try std.testing.expectEqualStrings("one", valid.values.get("source").?[0]);
@@ -1180,6 +1224,45 @@ test "dynamic indexed array output preserves values and unsets with structural b
     try std.testing.expectError(
         error.InvalidDynamicArrayOutput,
         parseDynamicArrayOutput(std.testing.allocator, "U\x00same\x00A\x00same\x000\x00"),
+    );
+}
+
+test "dynamic associative array output preserves key/value pairs with structural bounds" {
+    var valid = try parseDynamicArrayOutput(
+        std.testing.allocator,
+        "M\x00_arch\x002\x00x86_64\x00amd64\x00aarch64\x00arm64\x00" ++
+            "M\x00_empty\x000\x00" ++
+            "A\x00arch\x002\x00x86_64\x00aarch64\x00" ++
+            "U\x00_removed\x00",
+    );
+    defer deinitDynamicArrayOverrides(std.testing.allocator, &valid.values);
+    defer deinitDynamicAssocArrayOverrides(std.testing.allocator, &valid.assoc_values);
+    defer deinitDynamicArrayUnsets(std.testing.allocator, &valid.unsets);
+    const entries = valid.assoc_values.get("_arch").?;
+    try std.testing.expectEqual(@as(usize, 4), entries.len);
+    try std.testing.expectEqualStrings("x86_64", entries[0]);
+    try std.testing.expectEqualStrings("amd64", entries[1]);
+    try std.testing.expectEqualStrings("aarch64", entries[2]);
+    try std.testing.expectEqualStrings("arm64", entries[3]);
+    try std.testing.expectEqual(@as(usize, 0), valid.assoc_values.get("_empty").?.len);
+    try std.testing.expectEqual(@as(usize, 2), valid.values.get("arch").?.len);
+    try std.testing.expect(valid.unsets.contains("_removed"));
+
+    try std.testing.expectError(
+        error.InvalidDynamicArrayOutput,
+        parseDynamicArrayOutput(std.testing.allocator, "M\x00_arch\x002\x00x86_64\x00amd64\x00"),
+    );
+    try std.testing.expectError(
+        error.InvalidDynamicArrayOutput,
+        parseDynamicArrayOutput(std.testing.allocator, "M\x00_arch\x004097\x00"),
+    );
+    try std.testing.expectError(
+        error.InvalidDynamicArrayOutput,
+        parseDynamicArrayOutput(std.testing.allocator, "U\x00same\x00M\x00same\x000\x00"),
+    );
+    try std.testing.expectError(
+        error.InvalidDynamicArrayOutput,
+        parseDynamicArrayOutput(std.testing.allocator, "A\x00same\x000\x00M\x00same\x000\x00"),
     );
 }
 

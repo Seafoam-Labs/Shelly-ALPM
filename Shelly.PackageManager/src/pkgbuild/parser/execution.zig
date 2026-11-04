@@ -448,7 +448,7 @@ fn write_execution_declaration(
     }
 }
 
-fn write_shell_word(writer: *std.Io.Writer, value: []const u8) !void {
+pub fn write_shell_word(writer: *std.Io.Writer, value: []const u8) !void {
     try writer.writeAll("'");
     var start: usize = 0;
     for (value, 0..) |byte, index| {

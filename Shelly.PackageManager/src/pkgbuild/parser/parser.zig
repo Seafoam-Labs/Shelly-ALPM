@@ -2479,6 +2479,55 @@ test "architecture-specific build dependencies merge active suffixes" {
     try std.testing.expectEqualStrings("1", info.parsed_check_depends.?[1].version);
 }
 
+test "architecture directives defer unresolved expansions and enforce them after evaluation" {
+    const allocator = std.testing.allocator;
+    const parser = PkgbuildParser{ .allocator = allocator, .io = std.testing.io };
+    // AUR PKGBUILDs like zls-bin build arch from an associative-array key set;
+    // the static parser defers the directive and the post-evaluation reparse
+    // enforces makepkg rules against Bash's resolved array.
+    const content =
+        \\pkgname=zls-bin
+        \\pkgver=0.1
+        \\pkgrel=1
+        \\pkgdesc=deferred-arch-repro
+        \\declare -Ag _arch=([x86_64]=amd64 [aarch64]=arm64)
+        \\arch=("${!_arch[@]}")
+        \\package() {
+        \\  echo "${_arch[$CARCH]}"
+        \\}
+    ;
+    var deferred_parse = try parser.parser_content(content, null);
+    deferred_parse.deinit(allocator);
+
+    var overrides = std.StringHashMap([]const []const u8).init(allocator);
+    defer overrides.deinit();
+    const evaluated_arch = [_][]const u8{ "x86_64", "aarch64" };
+    try overrides.put("arch", &evaluated_arch);
+    var evaluated = PkgbuildParser{
+        .allocator = allocator,
+        .io = std.testing.io,
+        .dynamic_array_overrides = &overrides,
+    };
+    var info = try evaluated.parser_content(content, null);
+    info.deinit(allocator);
+
+    const unsupported_arch = [_][]const u8{"riscv64"};
+    _ = overrides.remove("arch");
+    try overrides.put("arch", &unsupported_arch);
+    try std.testing.expectError(
+        error.UnsupportedArchitecture,
+        evaluated.parser_content(content, null),
+    );
+
+    const invalid_arch = [_][]const u8{ "x86_64", "x86-64" };
+    _ = overrides.remove("arch");
+    try overrides.put("arch", &invalid_arch);
+    try std.testing.expectError(
+        error.InvalidArchitectureDirective,
+        evaluated.parser_content(content, null),
+    );
+}
+
 test "architecture directives enforce makepkg rules" {
     const parser = PkgbuildParser{ .allocator = std.testing.allocator, .io = std.testing.io };
 
