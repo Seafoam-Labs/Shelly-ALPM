@@ -1,5 +1,7 @@
 //! User-owned filesystem operations. Only the child changes credentials;
-//! runuser initializes the account's primary and supplementary groups.
+//! setpriv applies the account's primary and supplementary groups through
+//! initgroups without a PAM session, so the child stays in the caller's
+//! login session cgroup.
 const std = @import("std");
 const accounts = @import("user_account.zig");
 
@@ -31,7 +33,12 @@ pub fn command(allocator: std.mem.Allocator, environ: std.process.Environ, argv:
         args.deinit(allocator);
     }
     if (std.c.geteuid() == 0 and account.uid != 0) {
-        for ([_][]const u8{ "/usr/bin/runuser", "-u", account.username, "--", "/usr/bin/env", "-u", "SUDO_USER", "-u", "SUDO_UID", "-u", "SUDO_GID", "-u", "DOAS_USER", "-u", "PKEXEC_UID" }) |arg|
+        try appendOwned(allocator, &args, try allocator.dupe(u8, "/usr/bin/setpriv"));
+        try appendOwned(allocator, &args, try std.fmt.allocPrint(allocator, "--reuid={d}", .{account.uid}));
+        try appendOwned(allocator, &args, try std.fmt.allocPrint(allocator, "--regid={d}", .{account.gid}));
+        try appendOwned(allocator, &args, try allocator.dupe(u8, "--init-groups"));
+        try appendOwned(allocator, &args, try allocator.dupe(u8, "--"));
+        for ([_][]const u8{ "/usr/bin/env", "-u", "SUDO_USER", "-u", "SUDO_UID", "-u", "SUDO_GID", "-u", "DOAS_USER", "-u", "PKEXEC_UID" }) |arg|
             try appendOwned(allocator, &args, try allocator.dupe(u8, arg));
         try appendOwned(allocator, &args, try std.fmt.allocPrint(allocator, "HOME={s}", .{account.home}));
         for ([_][2][]const u8{
