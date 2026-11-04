@@ -1507,9 +1507,27 @@ pub const Manager = struct {
         if (purge_corruption) {
             var dir = std.Io.Dir.cwd().openDir(self.io(), self.config.cache_directory, .{ .iterate = true }) catch return TransactionError.DirectoryReadFailed;
             defer dir.close(self.io());
-            var file_walker = dir.walk(self.allocator) catch return TransactionError.DirectoryReadFailed;
+            var file_walker = dir.walkSelectively(self.allocator) catch return TransactionError.DirectoryReadFailed;
             defer file_walker.deinit();
             while (file_walker.next(self.io()) catch return TransactionError.DatabaseReadFailed) |entry| {
+                if (entry.kind == .directory) {
+                    // Pacman creates these sandbox directories before checking
+                    // whether anything needs downloading and can leave them
+                    // behind, empty or with partial payloads.
+                    if (entry.depth() == 1 and isPacmanDownloadDirectory(entry.basename)) {
+                        const name = self.allocator.dupeSentinel(u8, entry.basename, 0) catch return TransactionError.OutOfMemory;
+                        target_names.append(self.allocator, name) catch {
+                            self.allocator.free(name);
+                            return TransactionError.OutOfMemory;
+                        };
+                        if (!dry_run) {
+                            entry.dir.deleteTree(self.io(), entry.basename) catch return TransactionError.RemovalFailed;
+                        }
+                        continue;
+                    }
+                    file_walker.enter(self.io(), entry) catch return TransactionError.DirectoryReadFailed;
+                    continue;
+                }
                 if (entry.kind != .file) continue;
                 if (std.mem.indexOf(u8, entry.basename, ".pkg.tar") == null) continue;
                 if (std.mem.endsWith(u8, entry.basename, ".sig")) continue;
@@ -3261,6 +3279,15 @@ fn syncDatabaseDirectory(io: std.Io, path: []const u8) !void {
         .flags = .{ .nonblocking = false },
     };
     try directory_file.sync(io);
+}
+
+/// Matches pacman's `download-XXXXXX` sandbox directory template (a fixed
+/// prefix plus six alphanumeric characters).
+fn isPacmanDownloadDirectory(name: []const u8) bool {
+    const prefix = "download-";
+    if (name.len != prefix.len + 6 or !std.mem.startsWith(u8, name, prefix)) return false;
+    for (name[prefix.len..]) |byte| if (!std.ascii.isAlphanumeric(byte)) return false;
+    return true;
 }
 
 fn stalePartSweepDirectory(
