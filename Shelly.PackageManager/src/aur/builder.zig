@@ -413,16 +413,17 @@ pub fn invokingUserCleanCommand(
 ) !OwnedCommand {
     _ = io;
     const account = try user_account.caller(allocator, environ);
-    const username = account.username;
     defer account.deinit(allocator);
     if (account.uid == 0 or account.home.len == 0) return error.InvokingUserUnavailable;
     var uid_buffer: [10]u8 = undefined;
     const uid = try std.fmt.bufPrint(&uid_buffer, "{d}", .{account.uid});
+    var gid_buffer: [10]u8 = undefined;
+    const gid = try std.fmt.bufPrint(&gid_buffer, "{d}", .{account.gid});
     var result = try cleanUserCommand(
         allocator,
-        username,
         account.home,
         uid,
+        gid,
         build_path.baseline,
         environ,
         command,
@@ -430,8 +431,8 @@ pub fn invokingUserCleanCommand(
     );
     if (std.c.geteuid() != 0) {
         errdefer result.deinit(allocator);
-        const direct = try allocator.dupe([]u8, result.argv[4..]);
-        for (result.argv[0..4]) |arg| allocator.free(arg);
+        const direct = try allocator.dupe([]u8, result.argv[5..]);
+        for (result.argv[0..5]) |arg| allocator.free(arg);
         allocator.free(result.argv);
         return .{ .argv = direct };
     }
@@ -447,9 +448,9 @@ fn callerPathAssignment(allocator: std.mem.Allocator, environ: std.process.Envir
 
 fn cleanUserCommand(
     allocator: std.mem.Allocator,
-    username: []const u8,
     home: []const u8,
     uid: []const u8,
+    gid: []const u8,
     path: []const u8,
     environ: std.process.Environ,
     command: []const u8,
@@ -486,10 +487,18 @@ fn cleanUserCommand(
         for (argv.items) |argument| allocator.free(argument);
         argv.deinit(allocator);
     }
+    // setpriv applies uid/gid and initializes supplementary groups with
+    // --init-groups without opening a PAM session, so build children keep
+    // the elevated process's login session cgroup.
+    const reuid = try std.fmt.allocPrint(allocator, "--reuid={s}", .{uid});
+    defer allocator.free(reuid);
+    const regid = try std.fmt.allocPrint(allocator, "--regid={s}", .{gid});
+    defer allocator.free(regid);
     try appendOwned(allocator, &argv, &.{
-        "/usr/bin/runuser",
-        "-u",
-        username,
+        "/usr/bin/setpriv",
+        reuid,
+        regid,
+        "--init-groups",
         "--",
         "/usr/bin/env",
         "-i",
@@ -868,8 +877,12 @@ test "NSS invoking-user commands resolve all elevators without HOME" {
         try std.testing.expectEqualStrings(if (std.c.geteuid() == 0) account.home else effective.home, home);
         var command = try invokingUserCleanCommand(allocator, std.testing.io, environ, "shelly", &.{"build"});
         defer command.deinit(allocator);
-        const offset: usize = if (std.c.geteuid() == 0) 4 else 0;
-        if (std.c.geteuid() == 0) try std.testing.expectEqualStrings(account.username, command.argv[2]);
+        const offset: usize = if (std.c.geteuid() == 0) 5 else 0;
+        if (std.c.geteuid() == 0) {
+            const expected_reuid = try std.fmt.allocPrint(allocator, "--reuid={d}", .{account.uid});
+            defer allocator.free(expected_reuid);
+            try std.testing.expectEqualStrings(expected_reuid, command.argv[1]);
+        }
         try std.testing.expectEqualStrings("/usr/bin/env", command.argv[offset]);
         try std.testing.expectEqualStrings("PATH=" ++ build_path.baseline, command.argv[offset + 9]);
         const expected_home = try std.fmt.allocPrint(allocator, "HOME={s}", .{if (std.c.geteuid() == 0) account.home else effective.home});
@@ -912,8 +925,8 @@ test "clean invoking-user build command drops the elevated environment" {
     defer environ.block.deinit(allocator);
     var command = try cleanUserCommand(
         std.testing.allocator,
-        "zoey",
         "/home/zoey",
+        "1000",
         "1000",
         "/usr/bin:/bin",
         environ,
@@ -922,9 +935,10 @@ test "clean invoking-user build command drops the elevated environment" {
     );
     defer command.deinit(std.testing.allocator);
     const expected = [_][]const u8{
-        "/usr/bin/runuser",
-        "-u",
-        "zoey",
+        "/usr/bin/setpriv",
+        "--reuid=1000",
+        "--regid=1000",
+        "--init-groups",
         "--",
         "/usr/bin/env",
         "-i",
@@ -981,11 +995,11 @@ test "clean invoking-user build command preserves explicit locale and proxy sett
     inline for (overrides) |entry| try environment.put(entry[0], entry[1]);
     const environ: std.process.Environ = .{ .block = try environment.createPosixBlock(allocator, .{}) };
     defer environ.block.deinit(allocator);
-    var command = try cleanUserCommand(allocator, "nobody", "/tmp", "65534", "/usr/bin:/bin", environ, "/usr/bin/env", &.{});
+    var command = try cleanUserCommand(allocator, "/tmp", "65534", "65534", "/usr/bin:/bin", environ, "/usr/bin/env", &.{});
     defer command.deinit(allocator);
     // Execute the generated env command directly so the test needs no root or
-    // runuser/PAM setup while exercising the exact child environment.
-    var result = try run(allocator, std.testing.io, command.asConst()[4..], null, 10);
+    // credential-drop setup while exercising the exact child environment.
+    var result = try run(allocator, std.testing.io, command.asConst()[5..], null, 10);
     defer result.deinit(allocator);
     try std.testing.expectEqual(@as(u8, 0), result.exit_code);
     try std.testing.expect(std.mem.indexOf(u8, result.stdout, "\nLANG=en_US.UTF-8\n") != null);
@@ -1021,12 +1035,12 @@ test "clean invoking-user build command supports Unicode filenames and locale pr
         if (case.all) |value| try environment.put("LC_ALL", value);
         const environ: std.process.Environ = .{ .block = try environment.createPosixBlock(allocator, .{}) };
         defer environ.block.deinit(allocator);
-        var command = try cleanUserCommand(allocator, "nobody", "/tmp", "65534", "/usr/bin:/bin", environ, "/bin/bash", &.{
+        var command = try cleanUserCommand(allocator, "/tmp", "65534", "65534", "/usr/bin:/bin", environ, "/bin/bash", &.{
             "--noprofile", "--norc", "-c",
             "set -eu; character='∂'; printf '%s\\n' \"${#character}\"; cat -- \"${character}-unicode.txt\"",
         });
         defer command.deinit(allocator);
-        var result = try run(allocator, io, command.asConst()[4..], directory, 10);
+        var result = try run(allocator, io, command.asConst()[5..], directory, 10);
         defer result.deinit(allocator);
         try std.testing.expectEqual(@as(u8, 0), result.exit_code);
         try std.testing.expectEqualStrings("", result.stderr);

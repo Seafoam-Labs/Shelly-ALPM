@@ -6,7 +6,9 @@ test_binary=$(realpath "${1:?Expected the account-test executable}")
 integration_binary=${2:+$(realpath "$2")}
 cli_binary=${3:+$(realpath "$3")}
 if [[ ${SHELLY_CALLER_TEST_NAMESPACE:-0} != 1 ]]; then
-    exec unshare --user --map-auto --map-root-user --mount \
+    # --setgroups=allow lets the setpriv --init-groups credential drop
+    # initialize supplementary groups inside the unprivileged namespace.
+    exec unshare --user --map-auto --map-root-user --setgroups=allow --mount \
         env SHELLY_CALLER_TEST_NAMESPACE=1 bash "$0" "$test_binary" "${integration_binary:-}" "${cli_binary:-}"
 fi
 stage=$(mktemp -d /tmp/shelly-caller-ownership.XXXXXXXX)
@@ -33,7 +35,9 @@ if [[ -n "$cli_binary" ]]; then
     # The manager fixture supplies an empty native database; no network or
     # host package transactions are required for these exports.
     test -f "$stage/native.conf"
-    env SUDO_USER=nobody SHELLY_ELEVATOR=/usr/bin/runuser \
+    # The caller handoff uses setpriv unconditionally; it is not
+    # elevator-configurable, so no SHELLY_ELEVATOR override is needed here.
+    env SUDO_USER=nobody \
         XDG_CACHE_HOME="$stage/user/cli cache" XDG_CONFIG_HOME="$stage/user/config" \
         XDG_DATA_HOME="$stage/user/data" XDG_STATE_HOME="$stage/user/state" \
         "$cli_binary" --config "$stage/native.conf" backup --export --name caller > "$stage/backup-output"
