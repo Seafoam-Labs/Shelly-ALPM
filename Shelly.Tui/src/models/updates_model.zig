@@ -171,7 +171,6 @@ pub fn upgradeFromUpdates(self: *Model, backend: OperationBackend) !void {
         .action = .upgrade,
         .include_flatpak = self.settings_state.settings.flatpak_enabled and self.flatpak_state.flatpak_available,
         .include_aur = self.settings_state.settings.aur_enabled,
-        .password = .empty,
     };
     self.overlay = .{ .sudo = prompt };
 }
@@ -343,7 +342,7 @@ test "combined operation completion refreshes every included source after partia
             .arena = .init(std.heap.page_allocator),
             .done = .init(true),
             .result = .{ .failed = true },
-            .request = .{ .action = .upgrade, .shelly_bin = "unused", .environ_map = &env, .backend = "all", .name = "combined upgrade", .password = "", .include_flatpak = include_flatpak, .include_aur = true },
+            .request = .{ .action = .upgrade, .shelly_bin = "unused", .environ_map = &env, .backend = "all", .name = "combined upgrade", .include_flatpak = include_flatpak, .include_aur = true },
         };
         model.operation_state.install_job = job;
         try std.testing.expect(!try operation_model.pollInstall(model));
@@ -428,7 +427,7 @@ test "update confirmations retain the list while PKGBUILD reviews use the full c
         \\{"Packages":[{"Name":"visible-update","CurrentVersion":"1","NewVersion":"2"}]}
     , .{});
     const prompt = try std.testing.allocator.create(SudoPrompt);
-    prompt.* = .{ .name = try std.testing.allocator.dupe(u8, "all"), .backend = .all, .action = .upgrade, .password = .empty, .state = .running };
+    prompt.* = .{ .name = try std.testing.allocator.dupe(u8, "all"), .backend = .all, .action = .upgrade, .state = .running };
     model.overlay = .{ .sudo = prompt };
     for ([_][]const u8{
         \\{"$kind":"q.yesno","QuestionId":"1","QuestionText":"Proceed with updates?"}

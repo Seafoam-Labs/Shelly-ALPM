@@ -170,6 +170,14 @@ pub const Model = struct {
                 const command = commands.global(key, self.visibleTabs().len);
                 if (command) |action| {
                     if (action == .quit) {
+                        if (!self.help_open) if (self.operation_state.install_job) |job| {
+                            if (job.snapshot(runtime.io).authenticating) {
+                                job.sendAuthentication(runtime.io, "\x03") catch {
+                                    try self.setNotice("Could not interrupt sudo authentication.");
+                                };
+                                return ctx.consumeAndRedraw();
+                            }
+                        };
                         if (self.operation_state.install_job != null) {
                             self.quit_blocked_notice = true;
                             return ctx.consumeAndRedraw();
@@ -603,6 +611,7 @@ pub const Model = struct {
             };
             context.scrollable = prompt.panel.scroll.scroll.has_more_vertical or
                 prompt.panel.scroll.scroll.top > 0 or prompt.panel.scroll.scroll.vertical_offset != 0;
+            context.authenticating = prompt.progress.authenticating;
             return context;
         }
         context.categories_available = self.active == .flatpak and !self.flatpak_state.flatpak_installed_only and (self.overlay == null or self.overlay.? == .flatpak);
@@ -938,7 +947,7 @@ test "shared commands quit from every tab and modal" {
     ctx.quit = false;
     try Model.typeErasedCaptureHandler(model, &ctx, .{ .key_press = commands.bindings.quit });
     try std.testing.expect(ctx.quit);
-    var prompt: SudoPrompt = .{ .name = "test", .backend = .standard, .password = .empty };
+    var prompt: SudoPrompt = .{ .name = "test", .backend = .standard };
     for ([_]SudoPrompt.State{ .entering, .running, .succeeded, .failed }) |state| {
         prompt.state = state;
         model.overlay = .{ .sudo = &prompt };

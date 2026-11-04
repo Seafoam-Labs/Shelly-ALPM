@@ -26,7 +26,6 @@ pub const Id = enum {
     close,
     confirm,
     cancel,
-    erase,
     refresh,
     refresh_list,
     save_settings,
@@ -69,7 +68,6 @@ pub const Bindings = struct {
     close: vaxis.Key = .{ .codepoint = 'q' },
     confirm: vaxis.Key = .{ .codepoint = vaxis.Key.enter },
     cancel: vaxis.Key = .{ .codepoint = 'q', .mods = .{ .ctrl = true } },
-    erase: vaxis.Key = .{ .codepoint = vaxis.Key.backspace },
     refresh: vaxis.Key = .{ .codepoint = 'r' },
     save_settings: vaxis.Key = .{ .codepoint = 's', .mods = .{ .ctrl = true } },
     refresh_list: vaxis.Key = .{ .codepoint = 'r', .mods = .{ .ctrl = true } },
@@ -284,6 +282,7 @@ pub fn scrollsOperation(key: vaxis.Key) bool {
 
 pub const Mode = enum { search, packages, details, aur, flatpak, updates, settings, authentication, confirmation, running, result, review, preview_document, answers, choice, help };
 pub const Context = struct {
+    authenticating: bool = false,
     quit_blocked: bool = false,
     source_wrap: bool = true,
     settings_save_selected: bool = false,
@@ -407,9 +406,10 @@ pub fn entries(arena: std.mem.Allocator, context: Context) std.mem.Allocator.Err
             try add(arena, &list, .confirm, "Run", "Confirm and run the operation");
             try add(arena, &list, .cancel, "Back", "Dismiss confirmation without starting the operation");
             if (context.mode == .confirmation) try add(arena, &list, .close, "Back", "Dismiss confirmation without starting the operation");
-            if (context.mode == .authentication) try add(arena, &list, .erase, "Erase", "Remove the last password character; ordinary text enters the password");
         },
-        .running => {},
+        .running => {
+            if (context.authenticating) try add(arena, &list, .cancel, "Cancel auth", "Interrupt sudo authentication; typed credentials are sent without echo");
+        },
         .result => {
             try add(arena, &list, .confirm, "Close", "Dismiss the operation result");
             try add(arena, &list, .close, "Close", "Dismiss the operation result");

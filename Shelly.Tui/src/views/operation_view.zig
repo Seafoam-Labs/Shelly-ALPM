@@ -7,8 +7,7 @@ const vaxis = @import("vaxis");
 const vxfw = vaxis.vxfw;
 const Allocator = std.mem.Allocator;
 
-/// Borrowed operation state. Password contents stay with the coordinator;
-/// this component receives only the number of masking characters.
+/// Borrowed operation state. Password input goes directly to sudo's terminal.
 pub const View = struct {
     name: []const u8,
     backend: operation.Backend = .standard,
@@ -20,14 +19,9 @@ pub const View = struct {
     action: operation.Action = .install,
     state: enum { entering, running, succeeded, failed, declined },
     review: []const u8 = "",
-    password_length: usize = 0,
     detail: []const u8 = "",
     progress: operation.Progress = .{},
     refresh_pending: bool = false,
-
-    fn inputRows(self: View, _: u16) u16 {
-        return if (self.state == .entering and self.elevated) 1 else 0;
-    }
 
     fn confirmation(self: View, arena: Allocator) Allocator.Error![]const u8 {
         if (self.review.len > 0) return std.mem.trim(u8, self.review, "\r\n");
@@ -72,6 +66,10 @@ pub const View = struct {
             break :blk try std.fmt.allocPrint(arena, "[{s}] {d: >3}%", .{ bar, percent });
         } else "";
         var lines: std.ArrayList([]const u8) = .empty;
+        if (self.progress.authenticating) {
+            if (self.progress.authentication_len > 0)
+                try lines.append(arena, try diagnostics.sanitizeAlloc(arena, self.progress.authentication[0..self.progress.authentication_len]));
+        }
         var last: []const u8 = "";
         for (&self.progress.messages, self.progress.lengths) |*message, len| {
             const text = std.mem.trim(u8, message[0..len], " \t\r\n");
@@ -89,7 +87,7 @@ pub const View = struct {
     }
 };
 
-pub const Action = union(enum) { none, close, confirm, erase, text: []const u8 };
+pub const Action = enum { none, close, confirm };
 
 /// Persistent local interaction state. The coordinator owns this component and
 /// its borrowed View data; builders never retain pointers into the draw arena.
@@ -118,7 +116,7 @@ pub const Panel = struct {
         if (view.state == .entering) {
             if (commands.matches(key, .cancel) or (!view.elevated and commands.matches(key, .close))) return .close;
             if (commands.matches(key, .confirm)) {
-                if (self.ready and (!view.elevated or view.password_length > 0)) return .confirm;
+                if (self.ready) return .confirm;
                 return .none;
             }
         }
@@ -131,22 +129,20 @@ pub const Panel = struct {
             } else try self.scroll.handleEvent(ctx, .{ .key_press = scroll_key });
             return .none;
         }
-        if (view.state == .entering and view.elevated) {
-            if (commands.matches(key, .erase)) return .erase;
-            if (key.text) |text| return .{ .text = text };
-        }
         return .none;
     }
 
     pub fn draw(self: *Panel, view: View, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
         self.update(view);
         const size = ctx.max.size();
-        self.ready = size.width >= 24 and size.height >= view.inputRows(size.width -| 2) + 3;
+        self.ready = size.width >= 24 and size.height >= 3;
         if (!self.ready) {
             var text: vxfw.Text = .{ .text = "Enlarge the terminal to view the operation." };
             return text.draw(ctx);
         }
-        const title = if (view.state == .entering)
+        const title = if (view.progress.authenticating)
+            "Authentication"
+        else if (view.state == .entering)
             (if (view.elevated) "Authentication" else "Confirmation")
         else
             try std.fmt.allocPrint(ctx.arena, "{s} {f} — {s}", .{
@@ -180,8 +176,7 @@ pub const Panel = struct {
         const self: *Panel = @ptrCast(@alignCast(ptr));
         const view = self.view;
         const size = ctx.max.size();
-        const input_height = view.inputRows(size.width);
-        const review_height = size.height -| input_height;
+        const review_height = size.height;
         if (view.state != .entering) {
             // Upward keyboard or wheel navigation pauses following.
             if (self.scroll.scroll.pending_lines < 0) self.follow_output = false;
@@ -194,17 +189,30 @@ pub const Panel = struct {
         }
         const output = try self.scroll.draw(ctx.withConstraints(.{}, .{ .width = size.width, .height = review_height }));
         if (view.state != .entering and !self.scroll.scroll.has_more_vertical) self.follow_output = true;
-        const children = try ctx.arena.alloc(vxfw.SubSurface, if (input_height > 0) 2 else 1);
+        const children = try ctx.arena.alloc(vxfw.SubSurface, 1);
         children[0] = .{ .origin = .{ .row = 0, .col = 0 }, .surface = output };
-        if (input_height > 0) {
-            const mask = try ctx.arena.alloc(u8, @min(view.password_length, size.width -| 10));
-            @memset(mask, '*');
-            var text: vxfw.Text = .{ .text = try std.fmt.allocPrint(ctx.arena, "Password: {s}", .{mask}), .softwrap = false, .overflow = .ellipsis };
-            children[1] = .{ .origin = .{ .row = @intCast(review_height), .col = 0 }, .surface = try text.draw(ctx.withConstraints(.{}, .{ .width = size.width, .height = input_height })) };
-        }
         return .{ .size = size, .widget = .{ .userdata = self, .drawFn = drawContent }, .buffer = &.{}, .children = children };
     }
 };
+
+test "direct sudo authentication has no password field and sanitizes terminal output" {
+    var arena: std.heap.ArenaAllocator = .init(std.testing.allocator);
+    defer arena.deinit();
+    var view: View = .{ .name = "editor", .state = .entering };
+    var panel: Panel = .{ .ready = true };
+    var ctx: vxfw.EventContext = .{ .io = std.testing.io, .alloc = std.testing.allocator, .cmds = .empty };
+    defer ctx.cmds.deinit(std.testing.allocator);
+    try std.testing.expect((try panel.handleKey(view, &ctx, .{ .codepoint = vaxis.Key.enter })) == .confirm);
+    try std.testing.expect((try panel.handleKey(view, &ctx, .{ .codepoint = 's', .text = "secret" })) == .none);
+    view.state = .running;
+    view.progress.authenticating = true;
+    const output = "Fingerprint: touch sensor\n\x1b[2JPassword: ";
+    @memcpy(view.progress.authentication[0..output.len], output);
+    view.progress.authentication_len = output.len;
+    const body = try view.body(arena.allocator(), 80);
+    try std.testing.expect(std.mem.indexOf(u8, body, "Fingerprint:") != null);
+    try std.testing.expect(std.mem.indexOfScalar(u8, body, 0x1b) == null);
+}
 
 test "operation panel emits authentication actions without handling passwords" {
     vxfw.DrawContext.init(.unicode);
@@ -221,15 +229,13 @@ test "operation panel emits authentication actions without handling passwords" {
     _ = try panel.draw(view, draw_ctx);
     var events: vxfw.EventContext = .{ .io = undefined, .alloc = std.testing.allocator, .cmds = .empty };
     defer events.cmds.deinit(std.testing.allocator);
-    try std.testing.expect((try panel.handleKey(view, &events, .{ .codepoint = vaxis.Key.enter })) == .none);
-    const input = try panel.handleKey(view, &events, .{ .codepoint = 'q', .text = "q" });
-    try std.testing.expectEqualStrings("q", input.text); // q can be part of a password.
-    view.password_length = 3;
     try std.testing.expect((try panel.handleKey(view, &events, .{ .codepoint = vaxis.Key.enter })) == .confirm);
-    try std.testing.expect((try panel.handleKey(view, &events, .{ .codepoint = vaxis.Key.backspace })) == .erase);
+    const input = try panel.handleKey(view, &events, .{ .codepoint = 'q', .text = "q" });
+    try std.testing.expect(input == .none);
+    try std.testing.expect((try panel.handleKey(view, &events, .{ .codepoint = vaxis.Key.enter })) == .confirm);
+    try std.testing.expect((try panel.handleKey(view, &events, .{ .codepoint = vaxis.Key.backspace })) == .none);
     try std.testing.expect((try panel.handleKey(view, &events, .{ .codepoint = 'q', .mods = .{ .ctrl = true } })) == .close);
     view.elevated = false;
-    view.password_length = 0;
     try std.testing.expect((try panel.handleKey(view, &events, .{ .codepoint = vaxis.Key.enter })) == .confirm);
     view.state = .running;
     try std.testing.expect((try panel.handleKey(view, &events, .{ .codepoint = 'q' })) == .none);

@@ -75,7 +75,8 @@ pub const Panel = struct {
             try lines.append(arena, try std.fmt.allocPrint(arena, "{s}: {s}", .{ try commands.label(arena, entry.id), entry.description }));
         }
         if (self.context.mode == .search) try lines.append(arena, "While editing search, letters and Left/Right edit the text.");
-        if (self.context.mode == .authentication) try lines.append(arena, "Ordinary text enters the password. Help never submits or clears it.");
+        if (self.context.mode == .authentication) try lines.append(arena, "Enter starts sudo authentication in a private terminal. No password is collected before starting.");
+        if (self.context.authenticating) try lines.append(arena, "Follow sudo's password or fingerprint prompt. Password input is not echoed. Ctrl+c or Ctrl+q interrupts authentication; Backspace and Ctrl+u edit input.");
         try lines.appendSlice(arena, &.{ "", "Application", "" });
         const globals = [_]struct { id: commands.Id, description: []const u8 }{
             .{ .id = .help, .description = "Open/close help; return to the previous focus" },

@@ -597,7 +597,6 @@ pub fn openFlatpakPrompt(self: *Model, action: shelly_operation.Action, name: []
         .name = owned_name,
         .backend = .flatpak,
         .action = action,
-        .password = .empty,
         .elevated = shelly_operation.flatpakNeedsElevation(action, target),
         .flatpak_target = if (target) |value| try value.clone(self.gpa) else null,
     };
@@ -948,7 +947,7 @@ test "Flatpak operation completion refreshes Flatpak data without changing nativ
     job.* = .{
         .arena = .init(std.heap.page_allocator),
         .done = .init(true),
-        .request = .{ .shelly_bin = "unused", .environ_map = &env, .backend = "flatpak", .name = "org.example.App", .password = "" },
+        .request = .{ .shelly_bin = "unused", .environ_map = &env, .backend = "flatpak", .name = "org.example.App" },
     };
     model.operation_state.install_job = job;
     try std.testing.expect(!try operation_model.pollInstall(model));
@@ -1427,7 +1426,7 @@ test "Flatpak source authentication progress and results share the bottom operat
         try std.testing.expectEqual(source_size, try Check.panel(try model.widget().draw(ctx)));
         if (scope == .system) {
             try Model.typeErasedCaptureHandler(model, &events, .{ .key_press = .{ .codepoint = 'p', .text = "p" } });
-            try std.testing.expectEqual(@as(usize, 1), prompt.operationView().password_length);
+            try std.testing.expectEqual(operation_model.SudoPrompt.State.entering, prompt.state);
         }
         for ([_]SudoPrompt.State{ .running, .succeeded, .failed, .declined }) |state| {
             prompt.state = state;

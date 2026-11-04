@@ -37,6 +37,7 @@ pub const State = struct {
 
     /// The currently running install, if any.
     install_job: ?*shelly_operation.Operation = null,
+    sudo_session: shelly_operation.Session = .{},
     dependency_choices: vxfw.ListView,
     operation_question: ?shelly_operation.OwnedMessage = null,
     review_prompt: ?*SudoPrompt = null,
@@ -63,7 +64,6 @@ pub const SudoPrompt = struct {
     include_flatpak: bool = true,
     include_aur: bool = true,
     flatpak_target: ?shelly_operation.FlatpakTarget = null,
-    password: std.ArrayList(u8),
     state: SudoPrompt.State = .entering,
     /// Failure detail shown after a failed attempt; owned by `gpa`.
     detail: []const u8 = "",
@@ -73,9 +73,6 @@ pub const SudoPrompt = struct {
     pub const State = enum { entering, running, succeeded, failed, declined };
 
     pub fn deinit(self: *SudoPrompt, gpa: Allocator) void {
-        // Scrub the password before releasing its memory.
-        std.crypto.secureZero(u8, self.password.items);
-        self.password.deinit(gpa);
         gpa.free(self.name);
         for (self.targets) |target| gpa.free(target);
         if (self.targets.len > 0) gpa.free(self.targets);
@@ -95,7 +92,6 @@ pub const SudoPrompt = struct {
             .include_flatpak = self.include_flatpak,
             .target = self.flatpak_target,
             .review = self.review_text,
-            .password_length = codepointCount(self.password.items),
             .action = self.action,
             .detail = self.detail,
             .progress = self.progress,
@@ -135,6 +131,7 @@ pub fn deinit(self: *Model) void {
     if (self.operation_state.pkgbuild_document) |*document| document.deinit();
     if (self.operation_state.pkgbuild_name.len > 0) gpa.free(self.operation_state.pkgbuild_name);
     if (self.operation_state.install_job) |operation| operation.deinit();
+    self.operation_state.sudo_session.deinit(runtime.io);
     if (self.overlay) |overlay| {
         switch (overlay) {
             .sudo => |prompt| prompt.deinit(gpa),
@@ -155,6 +152,7 @@ pub fn openPkgbuild(self: *Model, ctx: *vxfw.EventContext, name: []const u8) !vo
     self.operation_state.pkgbuild_scroll.cursor = 0;
     self.operation_state.pkgbuild_scroll.item_count = 0;
     self.overlay = .pkgbuild;
+    if (runtime.terminal) |app| app.vx.queueRefresh();
     if (self.operation_state.pkgbuild_job == null) startPkgbuild(self, ctx) catch |err| {
         self.operation_state.pkgbuild_failure = err;
     };
@@ -362,7 +360,7 @@ pub fn openPackageBatchPrompt(self: *Model, action: shelly_operation.Action, bac
     }
     if (action == .remove) try review.appendSlice(self.gpa, "Unused dependencies and configuration will be kept.\n");
     const prompt = try self.gpa.create(SudoPrompt);
-    prompt.* = .{ .name = "", .backend = backend, .action = action, .password = .empty };
+    prompt.* = .{ .name = "", .backend = backend, .action = action };
     errdefer prompt.deinit(self.gpa);
     prompt.name = if (targets.items.len == 1) try self.gpa.dupe(u8, targets.items[0]) else try std.fmt.allocPrint(self.gpa, "{d} packages", .{targets.items.len});
     var owned: std.ArrayList([]const u8) = .empty;
@@ -426,6 +424,7 @@ pub fn showOperationQuestion(self: *Model, message: shelly_operation.OwnedMessag
     self.operation_state.answer_input.clearRetainingCapacity();
     self.operation_state.answer_error = "";
     self.overlay = .pkgbuild;
+    if (runtime.terminal) |app| app.vx.queueRefresh();
 }
 
 pub fn finishOperationQuestion(self: *Model) void {
@@ -437,6 +436,7 @@ pub fn finishOperationQuestion(self: *Model) void {
     self.operation_state.answer_error = "";
     if (self.operation_state.review_prompt) |prompt| self.overlay = .{ .sudo = prompt };
     self.operation_state.review_prompt = null;
+    if (runtime.terminal) |app| app.vx.queueRefresh();
 }
 
 pub fn dependencyAnswer(self: *const Model, indices: *std.ArrayList(usize)) !shelly_operation.Answer {
@@ -483,19 +483,41 @@ pub fn answerOperationQuestion(self: *Model, approve: bool) !void {
     finishOperationQuestion(self);
 }
 
+fn sendAuthenticationKey(job: *shelly_operation.Operation, key: vaxis.Key) !void {
+    // Do not retain, mask, or log credentials. Sudo owns line editing.
+    if (key.matches(vaxis.Key.enter, .{})) {
+        try job.sendAuthentication(runtime.io, "\n");
+    } else if (key.matches(vaxis.Key.backspace, .{})) {
+        try job.sendAuthentication(runtime.io, "\x7f");
+    } else if (key.matches('u', .{ .ctrl = true })) {
+        try job.sendAuthentication(runtime.io, "\x15");
+    } else if (key.matches('w', .{ .ctrl = true })) {
+        try job.sendAuthentication(runtime.io, "\x17");
+    } else if (key.matches('d', .{ .ctrl = true })) {
+        try job.sendAuthentication(runtime.io, "\x04");
+    } else if (commands.matches(key, .cancel)) {
+        try job.sendAuthentication(runtime.io, "\x03");
+    } else if (key.text) |text| {
+        for (text) |byte| if (byte < 0x20 or byte == 0x7f) return;
+        try job.sendAuthentication(runtime.io, text);
+    }
+}
+
 pub fn handleSudoKey(self: *Model, prompt: *SudoPrompt, ctx: *vxfw.EventContext, key: vaxis.Key) anyerror!void {
+    if (prompt.state == .running) if (self.operation_state.install_job) |job| {
+        if (job.snapshot(runtime.io).authenticating) {
+            sendAuthenticationKey(job, key) catch {
+                try self.setNotice("Could not send authentication input safely. No credentials were logged.");
+            };
+            return ctx.consumeAndRedraw();
+        }
+    };
     switch (try prompt.panel.handleKey(promptView(self, prompt), ctx, key)) {
         .none => {},
         .close => closeOverlay(self),
         .confirm => {
             try startElevatedInstall(self, ctx, prompt);
-            std.crypto.secureZero(u8, prompt.password.items);
-            prompt.password.clearRetainingCapacity();
             prompt.state = .running;
-        },
-        .erase => popGrapheme(&prompt.password),
-        .text => |text| for (text) |byte| {
-            if (byte >= 0x20) try prompt.password.append(self.gpa, byte);
         },
     }
     return ctx.consumeAndRedraw();
@@ -526,25 +548,16 @@ pub fn startElevatedInstall(self: *Model, ctx: *vxfw.EventContext, prompt: *Sudo
     try ctx.tick(100, self.widget());
     self.operation_state.install_job = try shelly_operation.Operation.start(.{
         .shelly_bin = runtime.shellyBin(),
+        .session = &self.operation_state.sudo_session,
         .environ_map = runtime.environ_map,
         .name = prompt.name,
         .targets = prompt.targets,
         .action = prompt.action,
         .backend = @tagName(prompt.backend),
-        .password = prompt.password.items,
         .flatpak = prompt.flatpak_target,
         .include_flatpak = prompt.include_flatpak,
         .include_aur = prompt.include_aur,
     });
-}
-
-pub fn popGrapheme(list: *std.ArrayList(u8)) void {
-    const len = list.items.len;
-    if (len == 0) return;
-    var n: usize = 1;
-    // Walk back over UTF-8 continuation bytes to drop a whole codepoint
-    while (n < len and (list.items[len - n] & 0xC0) == 0x80) n += 1;
-    list.shrinkRetainingCapacity(len - n);
 }
 
 pub fn pollInstall(self: *Model) !bool {
@@ -564,7 +577,13 @@ pub fn pollInstall(self: *Model) !bool {
     }
     if (result != null and self.operation_state.operation_question != null) finishOperationQuestion(self);
     if (self.overlay) |overlay| {
-        if (overlay == .sudo) overlay.sudo.progress = job.snapshot(runtime.io);
+        if (overlay == .sudo) {
+            const progress = job.snapshot(runtime.io);
+            if (overlay.sudo.progress.authenticating and !progress.authenticating) {
+                if (runtime.terminal) |app| app.vx.queueRefresh();
+            }
+            overlay.sudo.progress = progress;
+        }
     }
     const completed = result orelse return true;
     defer job.deinit();
@@ -630,17 +649,6 @@ pub fn pollInstall(self: *Model) !bool {
     }
 
     return false;
-}
-
-pub fn codepointCount(bytes: []const u8) usize {
-    var count: usize = 0;
-    var i: usize = 0;
-    while (i < bytes.len) {
-        const seq_len = std.unicode.utf8ByteSequenceLength(bytes[i]) catch 1;
-        i += @min(@as(usize, seq_len), bytes.len - i);
-        count += 1;
-    }
-    return count;
 }
 
 pub fn handleReviewKey(self: *Model, ctx: *vxfw.EventContext, key: vaxis.Key) anyerror!void {
@@ -743,7 +751,7 @@ test "operation completion and dismissal restore the browsing shortcut footer" {
     job.* = .{
         .arena = .init(std.heap.page_allocator),
         .done = .init(true),
-        .request = .{ .shelly_bin = "unused", .environ_map = &env, .backend = "standard", .action = .install, .name = "example", .targets = &.{"example"}, .password = "" },
+        .request = .{ .shelly_bin = "unused", .environ_map = &env, .backend = "standard", .action = .install, .name = "example", .targets = &.{"example"} },
     };
     const history = "Retained operation event";
     @memcpy(job.progress.messages[63][0..history.len], history);
@@ -764,7 +772,7 @@ test "operation completion and dismissal restore the browsing shortcut footer" {
     try std.testing.expectEqual(commands.Mode.packages, model.commandContext().mode);
 }
 
-test "help preserves authentication input and follows operation stages" {
+test "help preserves operation confirmation and follows operation stages" {
     vxfw.DrawContext.init(.unicode);
     const model = try Model.init(std.testing.allocator);
     defer model.deinit();
@@ -774,12 +782,12 @@ test "help preserves authentication input and follows operation stages" {
     try packages_model.rebuildFilter(model);
     try packages_model.openNativePrompt(model, .install);
     const prompt = model.overlay.?.sudo;
-    try prompt.password.appendSlice(std.testing.allocator, "fixture-secret");
     var events: vxfw.EventContext = .{ .io = std.testing.io, .alloc = std.testing.allocator, .cmds = .empty };
     defer events.cmds.deinit(std.testing.allocator);
     try Model.typeErasedCaptureHandler(model, &events, .{ .key_press = .{ .codepoint = vaxis.Key.f1 } });
     try Model.typeErasedCaptureHandler(model, &events, .{ .key_press = .{ .codepoint = 'x', .text = "x" } });
-    try std.testing.expectEqualStrings("fixture-secret", prompt.password.items);
+    try std.testing.expectEqual(SudoPrompt.State.entering, prompt.state);
+    try std.testing.expect(model.operation_state.install_job == null);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const ctx: vxfw.DrawContext = .{ .arena = arena.allocator(), .min = .{}, .max = .{ .width = 80, .height = 24 }, .cell_size = .{ .width = 10, .height = 20 } };
@@ -795,7 +803,7 @@ test "help preserves authentication input and follows operation stages" {
     try Model.typeErasedCaptureHandler(model, &events, .{ .key_press = .{ .codepoint = vaxis.Key.f1 } });
     try std.testing.expect(!model.help_open);
     try std.testing.expect(model.overlay.?.sudo == prompt);
-    try std.testing.expectEqualStrings("fixture-secret", prompt.password.items);
+    try std.testing.expectEqual(SudoPrompt.State.succeeded, prompt.state);
 }
 
 test "dependency checkboxes navigate toggle and submit actual CLI indices" {
@@ -803,7 +811,7 @@ test "dependency checkboxes navigate toggle and submit actual CLI indices" {
     const model = try Model.init(std.testing.allocator);
     defer model.deinit();
     const prompt = try std.testing.allocator.create(SudoPrompt);
-    prompt.* = .{ .name = try std.testing.allocator.dupe(u8, "demo"), .backend = .aur, .password = .empty, .state = .running };
+    prompt.* = .{ .name = try std.testing.allocator.dupe(u8, "demo"), .backend = .aur, .state = .running };
     model.overlay = .{ .sudo = prompt };
     try showOperationQuestion(model, try shelly_operation.decodeJson(std.testing.allocator,
         \\{"$kind":"q.optdeps","QuestionId":"101","QuestionText":"Optional dependencies","Options":[{"Index":0,"Name":"docs","IsSelected":true},{"Index":7,"Name":"plugin"}]}
@@ -866,7 +874,7 @@ test "successful native and AUR installs and removals deselect both lists throug
                 job.* = .{
                     .arena = .init(std.heap.page_allocator),
                     .done = .init(true),
-                    .request = .{ .shelly_bin = "unused", .environ_map = &env, .backend = backend, .action = action, .name = "target", .targets = if (batch) &.{"target"} else &.{}, .password = "" },
+                    .request = .{ .shelly_bin = "unused", .environ_map = &env, .backend = backend, .action = action, .name = "target", .targets = if (batch) &.{"target"} else &.{} },
                 };
                 model.operation_state.install_job = job;
                 try std.testing.expect(!try pollInstall(model));
@@ -928,7 +936,7 @@ test "cancelling native and AUR authentication or declining a review clears both
             .arena = .init(std.heap.page_allocator),
             .done = .init(true),
             .result = .{ .declined = true },
-            .request = .{ .shelly_bin = "unused", .environ_map = &env, .backend = @tagName(backend), .name = "target", .password = "" },
+            .request = .{ .shelly_bin = "unused", .environ_map = &env, .backend = @tagName(backend), .name = "target" },
         };
         model.operation_state.install_job = job;
         try std.testing.expect(!try pollInstall(model));
@@ -966,7 +974,6 @@ test "AUR batch removal refresh failure and retry remain drawable and navigable"
         .action = .remove,
         .name = "2 packages",
         .targets = &.{ "first-git", "second-git" },
-        .password = "",
     } };
     model.operation_state.install_job = job;
     try std.testing.expect(!try pollInstall(model));

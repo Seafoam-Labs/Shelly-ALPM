@@ -1,6 +1,7 @@
 //! By convention, root.zig is the root source file when making a package.
 const std = @import("std");
-pub const sudo_askpass = @import("services/sudo_askpass.zig");
+pub const sudo_terminal = @import("services/sudo_terminal.zig");
+pub const sudo_session = @import("services/sudo_session.zig");
 pub const model = @import("model.zig");
 /// Exported so consumers share the same runtime globals (io, environ_map)
 /// that ShellyCli depends on. Do not import runtime.zig directly from
@@ -29,7 +30,8 @@ test "all source modules are included" {
     std.testing.refAllDecls(@import("services/shelly_cli.zig"));
     std.testing.refAllDecls(@import("services/shelly_operation.zig"));
     std.testing.refAllDecls(@import("services/ui_decode.zig"));
-    std.testing.refAllDecls(sudo_askpass);
+    std.testing.refAllDecls(sudo_terminal);
+    std.testing.refAllDecls(sudo_session);
     std.testing.refAllDecls(@import("views/aur_view.zig"));
     std.testing.refAllDecls(@import("views/border.zig"));
     std.testing.refAllDecls(@import("views/detail_fields.zig"));

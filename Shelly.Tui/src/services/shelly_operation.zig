@@ -3,7 +3,9 @@ const std = @import("std");
 const diagnostics = @import("diagnostics");
 const JsonPackFrame = @import("ui_decode.zig").JsonPackFrame;
 const flatpak_models = @import("../models/flatpak.zig");
-const askpass = @import("sudo_askpass.zig");
+const sudo_terminal = @import("sudo_terminal.zig");
+const sudo_session = @import("sudo_session.zig");
+pub const Session = sudo_session.Session;
 const Scope = @import("../models/flatpak.zig").InstallLevel;
 
 pub const Backend = enum { standard, aur, flatpak, appimage, all };
@@ -69,7 +71,8 @@ pub const OperationRequest = struct {
     name: []const u8,
     targets: []const []const u8 = &.{},
     backend: []const u8,
-    password: []const u8,
+    launcher_bin: ?[]const u8 = null,
+    session: ?*Session = null,
     flatpak: ?FlatpakTarget = null,
     include_flatpak: bool = true,
     include_aur: bool = true,
@@ -77,6 +80,9 @@ pub const OperationRequest = struct {
 
 /// Fixed-size, owned display data; safe to copy between the worker and UI.
 pub const Progress = struct {
+    authenticating: bool = false,
+    authentication: [4096]u8 = @splat(0),
+    authentication_len: usize = 0,
     status: [512]u8 = @splat(0),
     status_len: usize = 0,
     percent: ?i64 = null,
@@ -220,6 +226,54 @@ pub const Operation = struct {
     expected_len: usize = 0,
     expected_answer: ?enum { yes_no, transaction, optional_dependencies, pkgbuild, provider } = null,
     user_declined: bool = false,
+    terminal: ?sudo_terminal.Terminal = null,
+    terminal_stop: std.atomic.Value(bool) = .init(false),
+    cancel_requested: std.atomic.Value(bool) = .init(false),
+    process_group: ?std.c.pid_t = null,
+
+    pub fn cancel(self: *Operation, io: std.Io) void {
+        self.cancel_requested.store(true, .release);
+        self.progress_mutex.lockUncancelable(io);
+        if (self.process_group) |pid| _ = std.c.kill(-pid, .KILL);
+        self.progress_mutex.unlock(io);
+        self.closeInput(io);
+    }
+
+    fn registerProcess(self: *Operation, io: std.Io, pid: std.c.pid_t) void {
+        self.progress_mutex.lockUncancelable(io);
+        defer self.progress_mutex.unlock(io);
+        self.process_group = pid;
+        // Cancellation may precede process creation or PID publication.
+        if (self.cancel_requested.load(.acquire)) _ = std.c.kill(-pid, .KILL);
+    }
+
+    pub fn sendAuthentication(self: *Operation, io: std.Io, bytes: []const u8) !void {
+        self.progress_mutex.lockUncancelable(io);
+        defer self.progress_mutex.unlock(io);
+        if (!self.progress.authenticating) return;
+        const terminal = self.terminal orelse return;
+        try terminal.write(bytes);
+    }
+
+    fn authenticationOutput(self: *Operation, io: std.Io, bytes: []const u8) void {
+        self.progress_mutex.lockUncancelable(io);
+        defer self.progress_mutex.unlock(io);
+        if (!self.progress.authenticating) return;
+        const take = @min(bytes.len, self.progress.authentication.len);
+        const keep = @min(self.progress.authentication_len, self.progress.authentication.len - take);
+        std.mem.copyForwards(u8, self.progress.authentication[0..keep], self.progress.authentication[self.progress.authentication_len - keep .. self.progress.authentication_len]);
+        @memcpy(self.progress.authentication[keep .. keep + take], bytes[bytes.len - take ..]);
+        self.progress.authentication_len = keep + take;
+    }
+
+    fn readTerminal(self: *Operation, terminal: sudo_terminal.Terminal, io: std.Io) void {
+        var buffer: [512]u8 = undefined;
+        defer std.crypto.secureZero(u8, &buffer);
+        while (!self.terminal_stop.load(.acquire)) {
+            const len = terminal.read(&buffer);
+            if (len > 0) self.authenticationOutput(io, buffer[0..len]);
+        }
+    }
 
     fn queueQuestion(self: *Operation, io: std.Io, message: OwnedMessage) !void {
         const question = message.value.question;
@@ -231,6 +285,7 @@ pub const Operation = struct {
         if (id.len > self.expected_id.len) return error.InvalidQuestionId;
         @memcpy(self.expected_id[0..id.len], id);
         self.expected_len = id.len;
+        self.progress.authenticating = false;
         self.expected_answer = switch (question) {
             .yes_no => .yes_no,
             .transaction => .transaction,
@@ -297,6 +352,7 @@ pub const Operation = struct {
     fn record(self: *Operation, io: std.Io, event: Event) void {
         self.progress_mutex.lockUncancelable(io);
         defer self.progress_mutex.unlock(io);
+        self.progress.authenticating = false;
         var buffer: [512]u8 = undefined;
         switch (event) {
             .info => |info| {
@@ -338,8 +394,7 @@ pub const Operation = struct {
         self.request.targets = targets;
         self.request.backend = try alloc.dupe(u8, request.backend);
         if (request.flatpak) |target| self.request.flatpak = try target.clone(alloc);
-        self.request.password = try alloc.dupe(u8, request.password);
-        errdefer std.crypto.secureZero(u8, @constCast(self.request.password));
+        if (request.launcher_bin) |path| self.request.launcher_bin = try alloc.dupe(u8, path);
         self.thread = try std.Thread.spawn(.{}, run, .{self});
         return self;
     }
@@ -349,7 +404,6 @@ pub const Operation = struct {
             var threaded: std.Io.Threaded = .init(std.heap.page_allocator, .{});
             defer threaded.deinit();
             self.result = runInstall(threaded.io(), std.heap.page_allocator, self.request, self);
-            std.crypto.secureZero(u8, @constCast(self.request.password));
         }
         self.done.store(true, .release);
     }
@@ -363,7 +417,7 @@ pub const Operation = struct {
         if (!self.done.load(.acquire)) {
             var threaded: std.Io.Threaded = .init(std.heap.page_allocator, .{});
             defer threaded.deinit();
-            self.closeInput(threaded.io());
+            self.cancel(threaded.io());
         }
         if (self.thread) |thread| thread.join();
         if (self.pending) |*pending| pending.deinit();
@@ -415,7 +469,7 @@ fn operationArgv(alloc: std.mem.Allocator, request: OperationRequest) ![][]const
     var argv: std.ArrayList([]const u8) = .empty;
     errdefer argv.deinit(alloc);
     if (elevated(request)) {
-        if (interactive(request)) try argv.appendSlice(alloc, &.{ request.sudo_bin, "-A" }) else try argv.appendSlice(alloc, &.{ request.sudo_bin, "-S", "-p", "" });
+        try argv.append(alloc, request.sudo_bin);
     }
     try argv.appendSlice(alloc, &.{ request.shelly_bin, @tagName(request.action), request.backend });
     if (request.action != .upgrade) {
@@ -441,33 +495,31 @@ fn operationArgv(alloc: std.mem.Allocator, request: OperationRequest) ![][]const
 
 fn runInstall(io: std.Io, alloc: std.mem.Allocator, request: OperationRequest, operation: ?*Operation) OperationResult {
     var result: OperationResult = .{};
-    if (interactive(request) and operation == null) {
-        result.failed = true;
-        result.error_detail = alloc.dupe(u8, "Interactive operations require an operation handle.") catch "";
-        return result;
-    }
     if (request.action == .remove and !std.mem.eql(u8, request.backend, "standard") and !std.mem.eql(u8, request.backend, "aur") and !isFlatpak(request)) {
         result.failed = true;
         result.error_detail = alloc.dupe(u8, "Removal currently supports system, AUR and Flatpak packages only.") catch "";
         return result;
     }
-    var broker: ?*askpass.Broker = null;
-    defer if (broker) |auth| auth.deinit();
-    var auth_environment: ?std.process.Environ.Map = null;
-    defer if (auth_environment) |*env| env.deinit();
-    if (interactive(request) and elevated(request)) {
-        broker = askpass.Broker.start(alloc, io, request.password) catch {
-            result.failed = true;
-            result.error_detail = alloc.dupe(u8, "Could not prepare the authorization channel.") catch "";
-            return result;
-        };
-        auth_environment = broker.?.environment(request.environ_map) catch {
-            result.failed = true;
-            result.error_detail = alloc.dupe(u8, "Could not prepare the authorization helper.") catch "";
-            return result;
-        };
-        if (operation) |op| std.crypto.secureZero(u8, @constCast(op.request.password));
+    if (operation == null) {
+        result.failed = true;
+        result.error_detail = alloc.dupe(u8, "Operations require an operation handle.") catch "";
+        return result;
     }
+    const active = operation.?;
+    if (active.cancel_requested.load(.acquire)) {
+        result.failed = true;
+        result.error_detail = alloc.dupe(u8, "The operation was cancelled before startup.") catch "";
+        return result;
+    }
+    var auth_environment = request.environ_map.clone(alloc) catch {
+        result.failed = true;
+        result.error_detail = alloc.dupe(u8, "Could not prepare the authorization environment.") catch "";
+        return result;
+    };
+    defer auth_environment.deinit();
+    // Never carry an external or obsolete helper into an operation's environment.
+    _ = auth_environment.swapRemove("SUDO_ASKPASS");
+    _ = auth_environment.swapRemove("SHELLY_TUI_ASKPASS_SOCKET");
     const argv = operationArgv(alloc, request) catch {
         result.failed = true;
         result.error_detail = alloc.dupe(u8, "Could not prepare the requested package operation.") catch "";
@@ -475,31 +527,79 @@ fn runInstall(io: std.Io, alloc: std.mem.Allocator, request: OperationRequest, o
     };
     defer alloc.free(argv);
 
-    var child = std.process.spawn(io, .{
+    var owned_session: Session = .{};
+    defer owned_session.deinit(io);
+    const session = request.session orelse &owned_session;
+    if (elevated(request)) session.acquire() catch {
+        result.failed = true;
+        result.error_detail = alloc.dupe(u8, "Another operation is using the authorization session.") catch "";
+        return result;
+    };
+    defer if (elevated(request)) session.release();
+    var terminal: ?sudo_terminal.Terminal = null;
+    var owned_launcher: ?[:0]u8 = null;
+    defer if (owned_launcher) |path| alloc.free(path);
+    if (elevated(request)) {
+        if (request.launcher_bin == null) {
+            owned_launcher = std.process.executablePathAlloc(io, alloc) catch {
+                result.failed = true;
+                result.error_detail = alloc.dupe(u8, "Could not locate the authorization launcher.") catch "";
+                return result;
+            };
+        }
+        const executable = request.launcher_bin orelse owned_launcher.?;
+        session.ensure(io, executable, &auth_environment, &active.cancel_requested) catch {
+            result.failed = true;
+            result.error_detail = alloc.dupe(u8, "Could not start the isolated authorization session.") catch "";
+            return result;
+        };
+        terminal = session.terminal;
+    }
+    if (active.cancel_requested.load(.acquire)) {
+        result.failed = true;
+        result.error_detail = alloc.dupe(u8, "The operation was cancelled before startup.") catch "";
+        return result;
+    }
+    var child = (if (elevated(request)) session.spawn(io, alloc, argv, &auth_environment, &active.cancel_requested) else sudo_session.Process.spawn(io, .{
         .argv = argv,
-        .environ_map = if (auth_environment) |*env| env else request.environ_map,
+        .environ_map = &auth_environment,
         .stdin = .pipe,
         .stdout = .pipe,
         .stderr = .pipe,
-    }) catch {
+        .pgid = 0,
+    })) catch {
         result.error_detail = alloc.dupe(u8, "Could not start the requested package operation.") catch "";
         result.failed = true;
         return result;
     };
     defer child.kill(io);
+    active.registerProcess(io, child.id.?);
 
-    if (operation != null and interactive(request)) {
-        operation.?.registerInput(io, child.stdin.?);
-        child.stdin = null;
-    } else {
-        var stdin_buffer: [1024]u8 = undefined;
-        var stdin_writer = child.stdin.?.writer(io, &stdin_buffer);
-        stdin_writer.interface.writeAll(request.password) catch {};
-        stdin_writer.interface.writeByte('\n') catch {};
-        stdin_writer.interface.flush() catch {};
-        child.stdin.?.close(io);
-        child.stdin = null;
+    var terminal_thread: ?std.Thread = null;
+    defer {
+        if (operation) |op| {
+            op.terminal_stop.store(true, .release);
+            if (terminal_thread) |thread| thread.join();
+            op.progress_mutex.lockUncancelable(io);
+            op.terminal = null;
+            op.process_group = null;
+            op.progress.authenticating = false;
+            op.progress_mutex.unlock(io);
+        }
     }
+    if (terminal) |value| if (operation) |op| {
+        op.progress_mutex.lockUncancelable(io);
+        op.terminal = value;
+        op.progress.authenticating = !op.cancel_requested.load(.acquire);
+        op.progress_mutex.unlock(io);
+        terminal_thread = std.Thread.spawn(.{}, Operation.readTerminal, .{ op, value, io }) catch {
+            result.failed = true;
+            return result;
+        };
+    };
+
+    operation.?.registerInput(io, child.stdin.?);
+    child.stdin = null;
 
     defer if (operation) |op| op.closeInput(io);
 
@@ -526,6 +626,7 @@ fn runInstall(io: std.Io, alloc: std.mem.Allocator, request: OperationRequest, o
         const stderr_reader = multi_reader.reader(1);
         const bytes = stderr_reader.buffered();
         if (bytes.len > 0) {
+            if (operation) |op| op.authenticationOutput(io, bytes);
             const take = @min(bytes.len, stderr_tail.len);
             const keep = @min(stderr_len, stderr_tail.len - take);
             std.mem.copyForwards(u8, stderr_tail[0..keep], stderr_tail[stderr_len - keep .. stderr_len]);
@@ -1107,13 +1208,13 @@ test "operation worker owns inputs and joins on launch failure" {
     var second_target = [_]u8{ 't', 'w', 'o' };
     var name = [_]u8{ 't', 'e', 's', 't' };
     const operation = try Operation.start(.{
+        .launcher_bin = @import("auth_test_options").launcher,
         .sudo_bin = "/nonexistent-shelly-sudo",
         .shelly_bin = "/nonexistent-shelly",
         .environ_map = &env,
         .name = &name,
         .targets = &.{ &first_target, &second_target },
         .backend = "standard",
-        .password = "",
     });
     defer operation.deinit();
     @memset(&name, 'x');
@@ -1184,7 +1285,6 @@ test "operation rejects removal from unsupported sources before launching" {
         .environ_map = &env,
         .name = "test",
         .backend = "appimage",
-        .password = "",
     }, null);
     defer result.deinit(std.testing.allocator);
     try std.testing.expect(result.failed);
@@ -1200,11 +1300,10 @@ test "operation native upgrade has no package operand or other sources" {
         .environ_map = &env,
         .name = "system packages",
         .backend = "standard",
-        .password = "",
     };
     const args = try operationArgv(std.testing.allocator, request);
     defer std.testing.allocator.free(args);
-    const expected = [_][]const u8{ "sudo", "-S", "-p", "", "shelly", "upgrade", "standard", "--no-confirm", "--ui-mode" };
+    const expected = [_][]const u8{ "sudo", "shelly", "upgrade", "standard", "--no-confirm", "--ui-mode" };
     try std.testing.expectEqual(expected.len, args.len);
     for (expected, args) |want, actual| try std.testing.expectEqualStrings(want, actual);
     request.backend = "appimage";
@@ -1238,17 +1337,16 @@ test "operation AUR installs and upgrades require interactive review" {
         .environ_map = &env,
         .name = "demo",
         .backend = "aur",
-        .password = "",
     };
     const install = try operationArgv(std.testing.allocator, request);
     defer std.testing.allocator.free(install);
-    const expected_install = [_][]const u8{ "sudo", "-A", "shelly", "install", "aur", "demo", "--ui-mode" };
+    const expected_install = [_][]const u8{ "sudo", "shelly", "install", "aur", "demo", "--ui-mode" };
     try std.testing.expectEqual(expected_install.len, install.len);
     for (expected_install, install) |expected, actual| try std.testing.expectEqualStrings(expected, actual);
     request.action = .upgrade;
     const upgrade = try operationArgv(std.testing.allocator, request);
     defer std.testing.allocator.free(upgrade);
-    const expected_upgrade = [_][]const u8{ "sudo", "-A", "shelly", "upgrade", "aur", "--ui-mode" };
+    const expected_upgrade = [_][]const u8{ "sudo", "shelly", "upgrade", "aur", "--ui-mode" };
     try std.testing.expectEqual(expected_upgrade.len, upgrade.len);
     for (expected_upgrade, upgrade) |expected, actual| try std.testing.expectEqualStrings(expected, actual);
 }
@@ -1260,7 +1358,7 @@ test "operation questions reject stale duplicate and wrong-kind answers" {
     defer env.deinit();
     var operation: Operation = .{
         .arena = .init(std.testing.allocator),
-        .request = .{ .shelly_bin = "unused", .environ_map = &env, .name = "demo", .backend = "aur", .password = "" },
+        .request = .{ .shelly_bin = "unused", .environ_map = &env, .name = "demo", .backend = "aur" },
         // Validation failures must occur before this sentinel descriptor is used.
         .input = .{ .handle = -1, .flags = .{ .nonblocking = false } },
     };
@@ -1290,7 +1388,6 @@ test "operation Flatpak arguments preserve install scope and keep user and upgra
         .environ_map = &env,
         .name = "org.example.App",
         .backend = "flatpak",
-        .password = "",
         .flatpak = .{ .scope = .user, .remote = "chosen remote", .branch = "beta", .kind = .runtime },
     };
     const user = try operationArgv(allocator, request);
@@ -1302,7 +1399,7 @@ test "operation Flatpak arguments preserve install scope and keep user and upgra
     const system = try operationArgv(allocator, request);
     defer allocator.free(system);
     try std.testing.expectEqualStrings("sudo", system[0]);
-    try std.testing.expectEqualStrings("-A", system[1]);
+    try std.testing.expectEqualStrings("shelly", system[1]);
     for (system) |arg| try std.testing.expect(!std.mem.eql(u8, arg, "--user") and !std.mem.eql(u8, arg, "--no-confirm"));
     request.action = .remove;
     request.flatpak.?.scope = .user;
@@ -1336,16 +1433,16 @@ test "operation combined upgrade is interactive and always excludes AppImages" {
     const allocator = std.testing.allocator;
     var env: std.process.Environ.Map = .init(allocator);
     defer env.deinit();
-    var request: OperationRequest = .{ .action = .upgrade, .shelly_bin = "shelly", .environ_map = &env, .name = "all supported packages", .backend = "all", .password = "" };
+    var request: OperationRequest = .{ .action = .upgrade, .shelly_bin = "shelly", .environ_map = &env, .name = "all supported packages", .backend = "all" };
     const included = try operationArgv(allocator, request);
     defer allocator.free(included);
-    const expected = [_][]const u8{ "sudo", "-A", "shelly", "upgrade", "all", "--no-appimage", "--ui-mode" };
+    const expected = [_][]const u8{ "sudo", "shelly", "upgrade", "all", "--no-appimage", "--ui-mode" };
     try std.testing.expectEqual(expected.len, included.len);
     for (expected, included) |want, actual| try std.testing.expectEqualStrings(want, actual);
     request.include_flatpak = false;
     const excluded = try operationArgv(allocator, request);
     defer allocator.free(excluded);
-    const expected_excluded = [_][]const u8{ "sudo", "-A", "shelly", "upgrade", "all", "--no-appimage", "--no-flatpak", "--ui-mode" };
+    const expected_excluded = [_][]const u8{ "sudo", "shelly", "upgrade", "all", "--no-appimage", "--no-flatpak", "--ui-mode" };
     try std.testing.expectEqual(expected_excluded.len, excluded.len);
     for (expected_excluded, excluded) |want, actual| try std.testing.expectEqualStrings(want, actual);
     request.action = .install;
@@ -1385,7 +1482,7 @@ test "settings disable AUR and Flatpak in combined upgrade arguments" {
     const allocator = std.testing.allocator;
     var env: std.process.Environ.Map = .init(allocator);
     defer env.deinit();
-    const argv = try operationArgv(allocator, .{ .action = .upgrade, .shelly_bin = "shelly", .environ_map = &env, .name = "enabled sources", .backend = "all", .password = "", .include_aur = false, .include_flatpak = false });
+    const argv = try operationArgv(allocator, .{ .action = .upgrade, .shelly_bin = "shelly", .environ_map = &env, .name = "enabled sources", .backend = "all", .include_aur = false, .include_flatpak = false });
     defer allocator.free(argv);
     var aur = false;
     var flatpak = false;
@@ -1410,14 +1507,13 @@ test "native batch operands stay separate in a single install or removal command
             .name = "2 packages",
             .targets = &.{ "editor", "package with spaces" },
             .backend = "standard",
-            .password = "",
         });
         defer std.testing.allocator.free(argv);
-        try std.testing.expectEqualStrings(@tagName(action), argv[5]);
-        try std.testing.expectEqualStrings("standard", argv[6]);
-        try std.testing.expectEqualStrings("editor", argv[7]);
-        try std.testing.expectEqualStrings("package with spaces", argv[8]);
-        try std.testing.expectEqualStrings("--no-confirm", argv[9]);
+        try std.testing.expectEqualStrings(@tagName(action), argv[2]);
+        try std.testing.expectEqualStrings("standard", argv[3]);
+        try std.testing.expectEqualStrings("editor", argv[4]);
+        try std.testing.expectEqualStrings("package with spaces", argv[5]);
+        try std.testing.expectEqualStrings("--no-confirm", argv[6]);
         if (action == .remove) try std.testing.expectEqualStrings("--no-cascade", argv[argv.len - 1]);
     }
 }
@@ -1425,14 +1521,14 @@ test "native batch operands stay separate in a single install or removal command
 test "AUR batch install retains separate operands and interactive review" {
     var env: std.process.Environ.Map = .init(std.testing.allocator);
     defer env.deinit();
-    const request: OperationRequest = .{ .shelly_bin = "shelly", .environ_map = &env, .name = "2 packages", .targets = &.{ "first", "second" }, .backend = "aur", .password = "" };
+    const request: OperationRequest = .{ .shelly_bin = "shelly", .environ_map = &env, .name = "2 packages", .targets = &.{ "first", "second" }, .backend = "aur" };
     const argv = try operationArgv(std.testing.allocator, request);
     defer std.testing.allocator.free(argv);
-    try std.testing.expectEqualStrings("install", argv[3]);
-    try std.testing.expectEqualStrings("aur", argv[4]);
-    try std.testing.expectEqualStrings("first", argv[5]);
-    try std.testing.expectEqualStrings("second", argv[6]);
-    try std.testing.expectEqualStrings("--ui-mode", argv[7]);
+    try std.testing.expectEqualStrings("install", argv[2]);
+    try std.testing.expectEqualStrings("aur", argv[3]);
+    try std.testing.expectEqualStrings("first", argv[4]);
+    try std.testing.expectEqualStrings("second", argv[5]);
+    try std.testing.expectEqualStrings("--ui-mode", argv[6]);
     for (argv) |arg| try std.testing.expect(!std.mem.eql(u8, arg, "--no-confirm"));
 }
 
@@ -1461,13 +1557,12 @@ test "AUR single and batch removal retain CLI dependency defaults" {
             .targets = targets,
             .backend = "aur",
             .action = .remove,
-            .password = "",
         });
         defer std.testing.allocator.free(argv);
-        try std.testing.expectEqualStrings("remove", argv[5]);
-        try std.testing.expectEqualStrings("aur", argv[6]);
-        try std.testing.expectEqualStrings("first-git", argv[7]);
-        if (targets.len > 0) try std.testing.expectEqualStrings("second-git", argv[8]);
+        try std.testing.expectEqualStrings("remove", argv[2]);
+        try std.testing.expectEqualStrings("aur", argv[3]);
+        try std.testing.expectEqualStrings("first-git", argv[4]);
+        if (targets.len > 0) try std.testing.expectEqualStrings("second-git", argv[5]);
         try std.testing.expectEqualStrings("--no-confirm", argv[argv.len - 2]);
         try std.testing.expectEqualStrings("--ui-mode", argv[argv.len - 1]);
         for (argv) |arg| {
@@ -1477,30 +1572,239 @@ test "AUR single and batch removal retain CLI dependency defaults" {
     }
 }
 
-test "single sudo invocation authenticates without cached timestamps and preserves repeated answers" {
+test "private sudo terminal captures fingerprint prompts and keeps credentials out of reviews" {
     const fixture = @import("auth_test_options");
-    var env: std.process.Environ.Map = .init(std.testing.allocator);
-    defer env.deinit();
-    try env.put("SHELLY_FIXTURE_HELPER", fixture.helper);
-    for ([_][]const u8{ "always", "always", "cached", "wrong" }) |mode| {
+    for ([_][]const u8{ "terminal", "fingerprint", "cached", "wrong" }) |mode| {
+        var env: std.process.Environ.Map = .init(std.testing.allocator);
+        defer env.deinit();
         try env.put("SHELLY_FIXTURE_AUTH", mode);
-        const wrong = std.mem.eql(u8, mode, "wrong");
-        const op = try Operation.start(.{ .sudo_bin = fixture.fixture, .shelly_bin = "fixture-cli", .environ_map = &env, .name = "fixture", .backend = "aur", .password = if (wrong) "incorrect" else "fixture-secret" });
+        try env.put("SUDO_ASKPASS", "/nonexistent-forbidden-authentication-helper");
+        try env.put("SHELLY_TUI_ASKPASS_SOCKET", "/nonexistent-obsolete-socket");
+        const op = try Operation.start(.{
+            .sudo_bin = fixture.fixture,
+            .launcher_bin = fixture.launcher,
+            .shelly_bin = "fixture-cli",
+            .environ_map = &env,
+            .name = "fixture",
+            .backend = "aur",
+        });
         defer op.deinit();
+        var attempts: usize = 0;
         var questions: usize = 0;
+        var saw_prompt = false;
         for (0..5000) |_| {
-            if (op.poll() != null) break;
+            const progress = op.snapshot(std.testing.io);
+            const authentication = progress.authentication[0..progress.authentication_len];
+            try std.testing.expect(std.mem.indexOf(u8, authentication, "fixture-secret") == null);
+            if (std.mem.indexOf(u8, authentication, "Fingerprint:") != null) saw_prompt = true;
+            if (std.mem.eql(u8, mode, "terminal") or std.mem.eql(u8, mode, "wrong")) {
+                if (attempts == 0 and std.mem.indexOf(u8, authentication, "Password:") != null) {
+                    try op.sendAuthentication(std.testing.io, "wrong\n");
+                    attempts = 1;
+                } else if (attempts == 1 and std.mem.indexOf(u8, authentication, "Try again.") != null) {
+                    try op.sendAuthentication(std.testing.io, if (std.mem.eql(u8, mode, "wrong")) "wrong\n" else "fixture-secret\n");
+                    attempts = 2;
+                }
+            }
             if (op.takeQuestion(std.testing.io)) |value| {
                 var message = value;
                 defer message.deinit();
                 questions += 1;
-                try op.sendAnswer(std.testing.io, questionId(message.value.question), .{ .yes_no = true });
+                try std.testing.expect(!op.snapshot(std.testing.io).authenticating);
+                const answer: Answer = if (message.value.question == .pkgbuild) .{ .pkgbuild = true } else .{ .yes_no = true };
+                try op.sendAnswer(std.testing.io, questionId(message.value.question), answer);
             }
+            if (op.poll() != null) break;
             try std.testing.io.sleep(.fromMilliseconds(1), .awake);
         }
-        const result = op.poll() orelse return error.FixtureTimedOut;
+        const result = op.poll() orelse return error.TerminalFixtureTimedOut;
+        const wrong = std.mem.eql(u8, mode, "wrong");
         try std.testing.expectEqual(wrong, result.failed);
         try std.testing.expectEqual(@as(usize, if (wrong) 0 else 2), questions);
         try std.testing.expect(std.mem.indexOf(u8, result.error_detail, "fixture-secret") == null);
+        try std.testing.expectEqualStrings("/nonexistent-forbidden-authentication-helper", env.get("SUDO_ASKPASS").?);
+        // Password mode waits for input, making observation deterministic.
+        if (std.mem.eql(u8, mode, "terminal")) {
+            try std.testing.expect(saw_prompt);
+            try std.testing.expectEqual(@as(usize, 2), attempts);
+            const progress = op.snapshot(std.testing.io);
+            try std.testing.expect(std.mem.indexOf(u8, progress.authentication[0..progress.authentication_len], "PAM message on stderr") != null);
+        }
     }
+}
+
+test "missing private-terminal launcher fails without trying another authentication path" {
+    const fixture = @import("auth_test_options");
+    var env: std.process.Environ.Map = .init(std.testing.allocator);
+    defer env.deinit();
+    try env.put("SHELLY_FIXTURE_AUTH", "cached");
+    const op = try Operation.start(.{
+        .sudo_bin = fixture.fixture,
+        .launcher_bin = "/nonexistent-shelly-terminal-launcher",
+        .shelly_bin = "fixture-cli",
+        .environ_map = &env,
+        .name = "fixture",
+        .backend = "aur",
+    });
+    defer op.deinit();
+    for (0..5000) |_| {
+        if (op.poll() != null) break;
+        try std.testing.io.sleep(.fromMilliseconds(1), .awake);
+    }
+    const result = op.poll() orelse return error.TerminalFixtureTimedOut;
+    try std.testing.expect(result.failed);
+    try std.testing.expectEqualStrings("Could not start the isolated authorization session.", result.error_detail);
+    try std.testing.expect(op.takeQuestion(std.testing.io) == null);
+}
+
+test "cancellation before worker startup is remembered without launching sudo" {
+    var env: std.process.Environ.Map = .init(std.testing.allocator);
+    defer env.deinit();
+    var session: Session = .{};
+    defer session.deinit(std.testing.io);
+    var operation: Operation = .{
+        .arena = .init(std.testing.allocator),
+        .request = .{ .shelly_bin = "unused", .environ_map = &env, .name = "fixture", .backend = "aur", .session = &session },
+    };
+    defer operation.arena.deinit();
+    defer operation.result.deinit(std.heap.page_allocator);
+    operation.cancel(std.testing.io);
+    operation.run();
+    try std.testing.expect(operation.done.load(.acquire));
+    try std.testing.expect(operation.result.failed);
+    try std.testing.expect(session.child == null and session.terminal == null);
+    try std.testing.expect(operation.process_group == null);
+}
+
+test "cancellation between spawn and PID publication terminates the exact pending process" {
+    const fixture = @import("auth_test_options");
+    var env: std.process.Environ.Map = .init(std.testing.allocator);
+    defer env.deinit();
+    try env.put("SHELLY_FIXTURE_AUTH", "terminal");
+    var session: Session = .{};
+    defer session.deinit(std.testing.io);
+    var not_cancelled: std.atomic.Value(bool) = .init(false);
+    try session.ensure(std.testing.io, fixture.launcher, &env, &not_cancelled);
+    var child = try session.spawn(std.testing.io, std.testing.allocator, &.{ fixture.fixture, "fixture-cli" }, &env, &not_cancelled);
+    defer child.kill(std.testing.io);
+    var operation: Operation = .{ .arena = .init(std.testing.allocator), .request = undefined };
+    defer operation.arena.deinit();
+    operation.cancel(std.testing.io);
+    try std.testing.expect(operation.process_group == null);
+    operation.registerProcess(std.testing.io, child.id.?);
+    const term = try child.wait(std.testing.io);
+    try std.testing.expect(!term.success());
+}
+
+test "immediate operation shutdown does not wait for a future password prompt" {
+    const fixture = @import("auth_test_options");
+    var env: std.process.Environ.Map = .init(std.testing.allocator);
+    defer env.deinit();
+    try env.put("SHELLY_FIXTURE_AUTH", "terminal");
+    var session: Session = .{};
+    defer session.deinit(std.testing.io);
+    for (0..16) |_| {
+        const operation = try Operation.start(.{
+            .sudo_bin = fixture.fixture,
+            .launcher_bin = fixture.launcher,
+            .shelly_bin = "fixture-cli",
+            .environ_map = &env,
+            .name = "fixture",
+            .backend = "aur",
+            .session = &session,
+        });
+        operation.deinit();
+        try std.testing.expect(!session.busy.load(.acquire));
+    }
+}
+
+test "successive operations retain the real terminal session used by sudo timestamps" {
+    const fixture = @import("auth_test_options");
+    var env: std.process.Environ.Map = .init(std.testing.allocator);
+    defer env.deinit();
+    var session: Session = .{};
+    defer session.deinit(std.testing.io);
+    var session_pid: ?std.c.pid_t = null;
+    var terminal_name: ?[]u8 = null;
+    defer if (terminal_name) |name| std.testing.allocator.free(name);
+    var sid_buffer: [32]u8 = undefined;
+    for (0..4) |index| {
+        const interrupt = index == 2;
+        try env.put("SHELLY_FIXTURE_AUTH", if (index == 0 or interrupt) "terminal" else "cached");
+        if (session_pid) |pid| try env.put("SHELLY_FIXTURE_EXPECT_SESSION", try std.fmt.bufPrint(&sid_buffer, "{d}", .{pid}));
+        const operation = try Operation.start(.{
+            .sudo_bin = fixture.fixture,
+            .launcher_bin = fixture.launcher,
+            .shelly_bin = "fixture-cli",
+            .environ_map = &env,
+            .name = "fixture",
+            .backend = "aur",
+            .session = &session,
+        });
+        defer operation.deinit();
+        var submitted = false;
+        var interrupted = false;
+        var questions: usize = 0;
+        for (0..5000) |_| {
+            const progress = operation.snapshot(std.testing.io);
+            if (std.mem.indexOf(u8, progress.authentication[0..progress.authentication_len], "Password:") != null) {
+                if (interrupt and !interrupted) {
+                    operation.cancel(std.testing.io);
+                    interrupted = true;
+                } else if (!interrupt and index == 0 and !submitted) {
+                    try operation.sendAuthentication(std.testing.io, "fixture-secret\n");
+                    submitted = true;
+                }
+            }
+            if (operation.takeQuestion(std.testing.io)) |value| {
+                var message = value;
+                defer message.deinit();
+                questions += 1;
+                try operation.sendAnswer(std.testing.io, questionId(message.value.question), if (message.value.question == .pkgbuild) .{ .pkgbuild = true } else .{ .yes_no = true });
+            }
+            if (operation.poll() != null) break;
+            try std.testing.io.sleep(.fromMilliseconds(1), .awake);
+        }
+        const result = operation.poll() orelse return error.TerminalFixtureTimedOut;
+        try std.testing.expectEqual(interrupt, result.failed);
+        try std.testing.expectEqual(@as(usize, if (interrupt) 0 else 2), questions);
+        try std.testing.expectEqual(index == 0, submitted);
+        try std.testing.expectEqual(interrupt, interrupted);
+        if (session_pid) |pid| {
+            try std.testing.expectEqual(pid, session.child.?.id.?);
+            try std.testing.expectEqualStrings(terminal_name.?, session.terminal.?.name());
+        } else {
+            session_pid = session.child.?.id.?;
+            terminal_name = try std.testing.allocator.dupe(u8, session.terminal.?.name());
+        }
+    }
+}
+
+test "private terminal authentication can be interrupted without protocol input" {
+    const fixture = @import("auth_test_options");
+    var env: std.process.Environ.Map = .init(std.testing.allocator);
+    defer env.deinit();
+    try env.put("SHELLY_FIXTURE_AUTH", "terminal");
+    const op = try Operation.start(.{
+        .sudo_bin = fixture.fixture,
+        .launcher_bin = fixture.launcher,
+        .shelly_bin = "fixture-cli",
+        .environ_map = &env,
+        .name = "fixture",
+        .backend = "aur",
+    });
+    defer op.deinit();
+    var interrupted = false;
+    for (0..5000) |_| {
+        const progress = op.snapshot(std.testing.io);
+        if (!interrupted and std.mem.indexOf(u8, progress.authentication[0..progress.authentication_len], "Password:") != null) {
+            try op.sendAuthentication(std.testing.io, "\x03");
+            interrupted = true;
+        }
+        if (op.poll() != null) break;
+        try std.testing.io.sleep(.fromMilliseconds(1), .awake);
+    }
+    const result = op.poll() orelse return error.TerminalFixtureTimedOut;
+    try std.testing.expect(interrupted and result.failed);
+    try std.testing.expect(!op.snapshot(std.testing.io).authenticating);
 }

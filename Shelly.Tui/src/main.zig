@@ -5,8 +5,10 @@ const Shelly_Tui = @import("Shelly_Tui");
 const Model = Shelly_Tui.model.Model;
 
 pub fn main(init: std.process.Init) !void {
-    if (init.environ_map.get(Shelly_Tui.sudo_askpass.socket_environment)) |socket_path| {
-        Shelly_Tui.sudo_askpass.respond(init.io, socket_path) catch std.process.exit(1);
+    const args = try init.minimal.args.toSlice(init.arena.allocator());
+    const session = Shelly_Tui.sudo_session;
+    if (args.len > 1 and std.mem.eql(u8, args[1], session.flag)) {
+        try session.launch(init, args);
         return;
     }
     // ShellyCli reads io and the environment map from the runtime globals.

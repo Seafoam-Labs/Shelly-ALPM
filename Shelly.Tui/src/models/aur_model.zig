@@ -555,7 +555,6 @@ test "operation PKGBUILD review owns each revision and returns to progress" {
         .name = try std.testing.allocator.dupe(u8, "demo"),
         .backend = .aur,
         .action = .upgrade,
-        .password = .empty,
         .state = .running,
     };
     model.overlay = .{ .sudo = prompt };

@@ -42,6 +42,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
     });
     mod.addImport("diagnostics", diagnostics);
+    mod.link_libc = true;
     const cli_options = b.addOptions();
     cli_options.addOption([]const u8, "binary", b.option([]const u8, "shelly-bin", "Shelly CLI executable (defaults to the checkout CLI in Debug, PATH in release builds)") orelse
         if (optimize == .debug)
@@ -144,8 +145,9 @@ pub fn build(b: *std.Build) void {
     });
     const auth_test_options = b.addOptions();
     auth_test_options.addOptionPath("fixture", auth_fixture.getEmittedBin());
-    auth_test_options.addOptionPath("helper", exe.getEmittedBin());
+    auth_test_options.addOptionPath("launcher", exe.getEmittedBin());
     const test_module = b.createModule(.{ .root_source_file = b.path("src/root.zig"), .target = target, .optimize = optimize });
+    test_module.link_libc = true;
     var test_imports = mod.import_table.iterator();
     while (test_imports.next()) |entry| test_module.addImport(entry.key_ptr.*, entry.value_ptr.*);
     test_module.addOptions("auth_test_options", auth_test_options);

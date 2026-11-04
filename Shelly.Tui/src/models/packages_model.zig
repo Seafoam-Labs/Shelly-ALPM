@@ -711,7 +711,7 @@ test "native batch selection survives filtering and confirms mixed targets" {
     try std.testing.expect(std.mem.indexOf(u8, model.notice, "No installed packages") != null);
 }
 
-test "native batch confirmation scrolls long reviews and keeps password entry visible" {
+test "native batch confirmation scrolls long reviews without collecting credentials" {
     vxfw.DrawContext.init(.unicode);
     const model = try Model.init(std.testing.allocator);
     defer model.deinit();
@@ -737,7 +737,7 @@ test "native batch confirmation scrolls long reviews and keeps password entry vi
     defer ctx.cmds.deinit(std.testing.allocator);
     try Model.typeErasedCaptureHandler(model, &ctx, .{ .key_press = .{ .codepoint = vaxis.Key.down } });
     try std.testing.expect(prompt.panel.scroll.scroll.pending_lines > 0);
-    try std.testing.expectEqual(@as(usize, 0), prompt.password.items.len);
+    try std.testing.expectEqual(operation_model.SudoPrompt.State.entering, prompt.state);
     try Model.typeErasedCaptureHandler(model, &ctx, .{ .key_press = .{ .codepoint = 'q', .mods = .{ .ctrl = true } } });
     try std.testing.expect(model.overlay == null);
     try std.testing.expectEqual(@as(usize, 0), model.packages_state.selected_packages.items.len);
@@ -757,7 +757,7 @@ test "native removal refreshes actual state and clears all successful selections
             .arena = .init(std.heap.page_allocator),
             .done = .init(true),
             .result = .{ .failed = failed },
-            .request = .{ .shelly_bin = "unused", .environ_map = &env, .backend = "standard", .action = .remove, .name = "installed", .targets = &.{"installed"}, .password = "" },
+            .request = .{ .shelly_bin = "unused", .environ_map = &env, .backend = "standard", .action = .remove, .name = "installed", .targets = &.{"installed"} },
         };
         model.operation_state.install_job = job;
         try std.testing.expect(!try operation_model.pollInstall(model));
