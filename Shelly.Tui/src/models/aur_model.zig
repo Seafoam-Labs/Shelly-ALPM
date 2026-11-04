@@ -575,7 +575,9 @@ test "operation PKGBUILD review owns each revision and returns to progress" {
                     try std.testing.expectEqual(@as(i17, size.height - 1), child.origin.row + child.surface.size.height);
                 }
             }
-            try std.testing.expectEqual(size.height >= 20, bottom_panel);
+            try std.testing.expect(!bottom_panel);
+            try std.testing.expectEqual(@as(usize, 3), surface.children.len);
+            try std.testing.expectEqual(size.height - 4, surface.children[1].surface.size.height);
             try std.testing.expectEqual(commands.Mode.review, model.commandContext().mode);
         }
     }

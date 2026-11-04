@@ -444,13 +444,14 @@ pub const Model = struct {
         var children: std.ArrayList(vxfw.SubSurface) = .empty;
 
         const reviewing = self.overlay != null and self.overlay.? == .pkgbuild and self.operation_state.operation_question != null;
-        const update_review = reviewing and self.active == .upgrade;
+        const fullscreen_review = reviewing and self.operation_state.operation_question.?.value.question == .pkgbuild;
+        const update_review = reviewing and !fullscreen_review and self.active == .upgrade;
         const prompt = operation_model.operationPrompt(self) orelse self.operation_state.review_prompt;
         const choosing_flatpak = self.overlay != null and self.overlay.? == .flatpak_install;
         var navigation_height: u16 = if (max.width >= 2 and max.height >= 8) 3 else 1;
         var panel_height: u16 = 0;
         var show_browsing = true;
-        if (prompt != null or choosing_flatpak) {
+        if (!fullscreen_review and (prompt != null or choosing_flatpak)) {
             // Keep the operation area stable across authentication, progress,
             // and results; long content scrolls within this reserved third.
             const preferred_height = @max(@as(u16, 4), max.height / 3 + @intFromBool(max.height % 3 != 0));
@@ -502,7 +503,7 @@ pub const Model = struct {
                 .origin = .{ .row = 1, .col = 0 },
                 .surface = try self.help_panel.draw(content_ctx.withConstraints(.{}, .{ .width = max.width, .height = content_ctx.max.size().height -| 2 })),
             });
-        } else if (reviewing and !update_review and !self.help_open and self.active != .aur) {
+        } else if (reviewing and !self.help_open and (fullscreen_review or (!update_review and self.active != .aur))) {
             try children.append(arena, .{
                 .origin = .{ .row = 1, .col = 0 },
                 .surface = try operation_model.pkgbuildView(self).drawInPane(content_ctx.withConstraints(.{}, .{ .width = max.width, .height = content_ctx.max.size().height -| 2 })),
