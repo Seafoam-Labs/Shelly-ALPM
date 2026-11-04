@@ -5,6 +5,7 @@ const appimage = @import("bindings.zig").appimage;
 const builtin = @import("builtin");
 const appimage_manager = @import("manager.zig");
 const events = @import("events.zig");
+const zsync = @import("zsync.zig");
 
 const downloader = @import("../shared/downloader.zig");
 const operation_api = @import("operation_context");
@@ -105,6 +106,16 @@ pub const UpdateManager = struct {
             .static_url => {
                 if (!isHttpUrl(trimmed)) return error.InvalidAppImageUpdateConfiguration;
                 app.update_url = trimmed;
+                app.update_type = update_type;
+                app.repo_owner = null;
+                app.repo_name = null;
+            },
+            .zsync => {
+                // Accept either the raw `zsync|<url>` update-information
+                // string or the bare http(s) URL of the control file.
+                const url = zsync.stripZsyncScheme(trimmed) orelse trimmed;
+                if (!isHttpUrl(url)) return error.InvalidAppImageUpdateConfiguration;
+                app.update_url = url;
                 app.update_type = update_type;
                 app.repo_owner = null;
                 app.repo_name = null;
@@ -274,9 +285,12 @@ pub const UpdateManager = struct {
                     self.emitMissingRepository(app.name);
                     return null;
                 };
+                // Honor the filename glob from embedded `gh-releases-zsync`
+                // update information when the repository provides it.
+                const asset_pattern = zsync.githubAssetPattern(app.raw_update_info);
                 return self.providerUpdateOrWarn(
                     app.name,
-                    self.guardInstalledRelease(app, try self.check_github_update(owner, repo, app.name, app.version, app.allow_prerelease)),
+                    self.guardInstalledRelease(app, try self.check_github_update_pattern(owner, repo, app.name, app.version, app.allow_prerelease, asset_pattern)),
                 );
             },
             .gitlab => {
@@ -316,6 +330,13 @@ pub const UpdateManager = struct {
                     app.name,
                     self.guardInstalledRelease(app, try self.check_forgejo_update(app.update_url, app.name, app.version, app.allow_prerelease)),
                 );
+            },
+            .zsync => {
+                if (app.update_url.len == 0) {
+                    self.emitStatusFmt(.warning, "AppImage {0f} has no zsync update URL. Set the URL of its .zsync control file in the update settings before checking for updates.", .{diagnostics.safe(app.name)});
+                    return null;
+                }
+                return self.guardInstalledRelease(app, try self.check_zsync_update(app.update_url, app.name, app.version));
             },
         }
     }
@@ -575,6 +596,39 @@ pub const UpdateManager = struct {
         return build_static_url(self.allocator, app_name, url, current_version, raw_version);
     }
 
+    /// Checks an update source described by a zsync control file, the format
+    /// referenced by the AppImageSpec embedded `zsync|<url>` update
+    /// information. The control-file `MTime` header acts as the remote
+    /// version token (zsync sources carry no semantic version) and the
+    /// AppImage download URL is derived from the `URL:` header, falling back
+    /// to the control-file URL without its `.zsync` suffix.
+    pub fn check_zsync_update(self: UpdateManager, url: []const u8, app_name: []const u8, current_version: []const u8) !?appimage.AppImageUpdate {
+        var operation_scope = events.OperationScope.init(self.operation_context, self.dispatcher, .search, app_name);
+        operation_scope.attach();
+        defer operation_scope.finish(.success);
+        errdefer operation_scope.fail();
+        try self.checkCancelled();
+
+        const body = (try self.fetchJson(url, "*/*")) orelse return null;
+        defer self.allocator.free(body);
+
+        const headers = zsync.parseControlHeaders(body);
+        const mtime = headers.mtime orelse {
+            std.log.warn("The zsync control file for AppImage {0f} is missing its MTime header. Check that the update URL points at a .zsync control file.", .{diagnostics.safe(app_name)});
+            self.emitStatusFmt(.warning, "The zsync control file for AppImage {0f} is missing its MTime header. Check that the update URL points at a .zsync control file.", .{diagnostics.safe(app_name)});
+            return null;
+        };
+
+        const download_url = try zsync.resolveTargetUrl(self.allocator, url, headers.url) orelse {
+            std.log.warn("Could not derive an AppImage download URL from the zsync control file for {0f}. Check the URL headers the control file publishes.", .{diagnostics.safe(app_name)});
+            self.emitStatusFmt(.warning, "Could not derive an AppImage download URL from the zsync control file for {0f}. Check the URL headers the control file publishes.", .{diagnostics.safe(app_name)});
+            return null;
+        };
+        defer self.allocator.free(download_url);
+
+        return @as(?appimage.AppImageUpdate, try makeUpdate(self.allocator, app_name, mtime, download_url, current_version));
+    }
+
     fn build_static_url(allocator: std.mem.Allocator, app_name: []const u8, url: []const u8, current_version: []const u8, raw_version: []const u8) !?appimage.AppImageUpdate {
         const version = normalizeStaticVersion(raw_version);
         return @as(?appimage.AppImageUpdate, try makeUpdate(allocator, app_name, version, url, current_version));
@@ -759,7 +813,32 @@ pub const UpdateManager = struct {
         assets: []const std.json.Value,
         app_name: []const u8,
         url_field: []const u8,
+        asset_pattern: ?[]const u8,
     ) !?[]const u8 {
+        // An explicit filename glob (AppImageSpec `gh-releases-zsync` pattern)
+        // wins over the name heuristics. Matched `.zsync` assets resolve to
+        // the AppImage published next to the control file.
+        if (asset_pattern) |pattern| {
+            var pattern_count: usize = 0;
+            var pattern_url: ?[]const u8 = null;
+            for (assets) |asset| {
+                if (asset != .object) continue;
+                const name_value = asset.object.get("name") orelse continue;
+                const url_value = asset.object.get(url_field) orelse continue;
+                if (name_value != .string or url_value != .string) continue;
+                if (!zsync.globMatchIgnoreCase(pattern, name_value.string)) continue;
+                if (!isHttpUrl(url_value.string)) continue;
+                if (!isCorrectArchitecture(name_value.string)) continue;
+                pattern_count += 1;
+                pattern_url = if (endsWithIgnoreCase(url_value.string, ".zsync"))
+                    url_value.string[0 .. url_value.string.len - ".zsync".len]
+                else
+                    url_value.string;
+            }
+            if (pattern_count == 1) return pattern_url;
+            if (pattern_count > 1) return null;
+        }
+
         const normalized_app_name = try normalizeAppImageStem(allocator, app_name);
         defer allocator.free(normalized_app_name);
 
@@ -859,6 +938,14 @@ pub const UpdateManager = struct {
     }
 
     pub fn check_github_update(self: UpdateManager, owner: []const u8, repo: []const u8, app_name: []const u8, current_version: []const u8, allow_prerelease: bool) !?appimage.AppImageUpdate {
+        return self.check_github_update_pattern(owner, repo, app_name, current_version, allow_prerelease, null);
+    }
+
+    /// Like `check_github_update` but prefers release assets whose filename
+    /// matches an AppImageSpec glob (for example the pattern embedded in
+    /// `gh-releases-zsync` update information) before falling back to the
+    /// name-based asset selection.
+    pub fn check_github_update_pattern(self: UpdateManager, owner: []const u8, repo: []const u8, app_name: []const u8, current_version: []const u8, allow_prerelease: bool, asset_pattern: ?[]const u8) !?appimage.AppImageUpdate {
         var operation_scope = events.OperationScope.init(self.operation_context, self.dispatcher, .search, app_name);
         operation_scope.attach();
         defer operation_scope.finish(.success);
@@ -869,10 +956,14 @@ pub const UpdateManager = struct {
 
         const body = (try self.fetchJson(url, "application/vnd.github+json")) orelse return null;
         defer self.allocator.free(body);
-        return parse_github_response(self.allocator, body, app_name, current_version, allow_prerelease);
+        return parse_github_response_pattern(self.allocator, body, app_name, current_version, allow_prerelease, asset_pattern);
     }
 
     fn parse_github_response(allocator: std.mem.Allocator, body: []const u8, app_name: []const u8, current_version: []const u8, allow_prerelease: bool) !?appimage.AppImageUpdate {
+        return parse_github_response_pattern(allocator, body, app_name, current_version, allow_prerelease, null);
+    }
+
+    fn parse_github_response_pattern(allocator: std.mem.Allocator, body: []const u8, app_name: []const u8, current_version: []const u8, allow_prerelease: bool, asset_pattern: ?[]const u8) !?appimage.AppImageUpdate {
         const parsed = std.json.parseFromSlice(std.json.Value, allocator, body, .{}) catch return null;
         defer parsed.deinit();
 
@@ -901,6 +992,7 @@ pub const UpdateManager = struct {
             assets_val.array.items,
             app_name,
             "browser_download_url",
+            asset_pattern,
         ) orelse return null;
 
         return @as(?appimage.AppImageUpdate, try makeUpdate(allocator, app_name, latest_version, download_url, current_version));
@@ -966,6 +1058,7 @@ pub const UpdateManager = struct {
             links.array.items,
             app_name,
             "url",
+            null,
         ) orelse return null;
 
         return @as(?appimage.AppImageUpdate, try makeUpdate(allocator, app_name, latest_version, download_url, current_version));
@@ -1472,6 +1565,51 @@ test "configureUpdates: StaticUrl rejects a non-http url without mutation" {
     try std.testing.expect(!app.allow_prerelease);
 }
 
+test "configureUpdates: Zsync stores a control-file url verbatim" {
+    var app = appimage.AppImage{
+        .name = "Test",
+        .repo_owner = "stale-owner",
+        .repo_name = "stale-repo",
+    };
+
+    try UpdateManager.configure_update("https://nightly.example.dev/latest/App.AppImage.zsync", .zsync, &app, false);
+
+    try std.testing.expectEqual(appimage.UpdateType.zsync, app.update_type);
+    try std.testing.expectEqualStrings("https://nightly.example.dev/latest/App.AppImage.zsync", app.update_url);
+    try std.testing.expect(app.repo_owner == null);
+    try std.testing.expect(app.repo_name == null);
+}
+
+test "configureUpdates: Zsync accepts a raw zsync| update-information string" {
+    var app = appimage.AppImage{ .name = "Test" };
+
+    try UpdateManager.configure_update("zsync|https://nightly.example.dev/latest/App.AppImage.zsync", .zsync, &app, false);
+
+    try std.testing.expectEqual(appimage.UpdateType.zsync, app.update_type);
+    try std.testing.expectEqualStrings("https://nightly.example.dev/latest/App.AppImage.zsync", app.update_url);
+}
+
+test "configureUpdates: Zsync rejects non-http urls without mutation" {
+    var app = appimage.AppImage{
+        .name = "Test",
+        .update_url = "https://old.example/App.zsync",
+        .update_type = .zsync,
+    };
+
+    try std.testing.expectError(
+        error.InvalidAppImageUpdateConfiguration,
+        UpdateManager.configure_update("file:///tmp/App.AppImage.zsync", .zsync, &app, true),
+    );
+    try std.testing.expectError(
+        error.InvalidAppImageUpdateConfiguration,
+        UpdateManager.configure_update("gh-releases-zsync|owner|repo|latest|App-*.zsync", .zsync, &app, false),
+    );
+
+    try std.testing.expectEqual(appimage.UpdateType.zsync, app.update_type);
+    try std.testing.expectEqualStrings("https://old.example/App.zsync", app.update_url);
+    try std.testing.expect(!app.allow_prerelease);
+}
+
 test "github_to_releases_api builds correct url" {
     const url = try UpdateManager.github_to_releases_api(std.testing.allocator, "ppy", "osu");
     defer std.testing.allocator.free(url);
@@ -1540,6 +1678,102 @@ test "parse_github_response: picks single AppImage asset (ppy/osu style)" {
     try std.testing.expectEqualStrings("2025.630.0", result.?.version);
     try std.testing.expectEqualStrings("https://github.com/ppy/osu/releases/download/2025.630.0/osu.AppImage", result.?.download_url);
     try std.testing.expect(result.?.is_update_available);
+}
+
+test "parse_github_response: asset pattern selects the globbed asset over other AppImages" {
+    const body =
+        \\[{
+        \\  "tag_name": "5.0.10",
+        \\  "prerelease": false,
+        \\  "assets": [
+        \\    {"name":"Subsurface-5.0.10-x86_64.AppImage","browser_download_url":"https://example.com/Subsurface-5.0.10-x86_64.AppImage"},
+        \\    {"name":"Subsurface-5.0.10-aarch64.AppImage","browser_download_url":"https://example.com/Subsurface-5.0.10-aarch64.AppImage"},
+        \\    {"name":"Other-1.0-x86_64.AppImage","browser_download_url":"https://example.com/Other-1.0-x86_64.AppImage"}
+        \\  ]
+        \\}]
+    ;
+    const result = try UpdateManager.parse_github_response_pattern(
+        std.testing.allocator,
+        body,
+        "Subsurface",
+        "5.0.9",
+        false,
+        "Subsurface-*x86_64.AppImage",
+    );
+    defer if (result) |r| r.deinit(std.testing.allocator);
+    try std.testing.expect(result != null);
+    try std.testing.expectEqualStrings("5.0.10", result.?.version);
+    try std.testing.expectEqualStrings("https://example.com/Subsurface-5.0.10-x86_64.AppImage", result.?.download_url);
+    try std.testing.expect(result.?.is_update_available);
+}
+
+test "parse_github_response: asset pattern resolves a zsync asset to its AppImage" {
+    const body =
+        \\[{
+        \\  "tag_name": "5.0.10",
+        \\  "prerelease": false,
+        \\  "assets": [
+        \\    {"name":"Subsurface-5.0.10-x86_64.AppImage.zsync","browser_download_url":"https://example.com/Subsurface-5.0.10-x86_64.AppImage.zsync"},
+        \\    {"name":"Unrelated.dmg","browser_download_url":"https://example.com/Unrelated.dmg"}
+        \\  ]
+        \\}]
+    ;
+    const result = try UpdateManager.parse_github_response_pattern(
+        std.testing.allocator,
+        body,
+        "Subsurface",
+        "5.0.9",
+        false,
+        "Subsurface-*x86_64.AppImage.zsync",
+    );
+    defer if (result) |r| r.deinit(std.testing.allocator);
+    try std.testing.expect(result != null);
+    try std.testing.expectEqualStrings("https://example.com/Subsurface-5.0.10-x86_64.AppImage", result.?.download_url);
+}
+
+test "parse_github_response: ambiguous asset pattern matches report no update" {
+    const body =
+        \\[{
+        \\  "tag_name": "5.0.10",
+        \\  "prerelease": false,
+        \\  "assets": [
+        \\    {"name":"Subsurface-5.0.10-x86_64.AppImage","browser_download_url":"https://example.com/a.AppImage"},
+        \\    {"name":"Subsurface-5.0.10-x86_64-v2.AppImage","browser_download_url":"https://example.com/b.AppImage"}
+        \\  ]
+        \\}]
+    ;
+    const result = try UpdateManager.parse_github_response_pattern(
+        std.testing.allocator,
+        body,
+        "Subsurface",
+        "5.0.9",
+        false,
+        "Subsurface-*x86_64*.AppImage",
+    );
+    try std.testing.expect(result == null);
+}
+
+test "parse_github_response: unmatched asset pattern falls back to name selection" {
+    const body =
+        \\[{
+        \\  "tag_name": "5.0.10",
+        \\  "prerelease": false,
+        \\  "assets": [
+        \\    {"name":"Subsurface-5.0.10-x86_64.AppImage","browser_download_url":"https://example.com/Subsurface-5.0.10-x86_64.AppImage"}
+        \\  ]
+        \\}]
+    ;
+    const result = try UpdateManager.parse_github_response_pattern(
+        std.testing.allocator,
+        body,
+        "Subsurface",
+        "5.0.9",
+        false,
+        "NoSuchPattern-*.AppImage",
+    );
+    defer if (result) |r| r.deinit(std.testing.allocator);
+    try std.testing.expect(result != null);
+    try std.testing.expectEqualStrings("https://example.com/Subsurface-5.0.10-x86_64.AppImage", result.?.download_url);
 }
 
 test "parse_github_response: picks exact installed basename when multiple AppImages present" {
@@ -2131,6 +2365,10 @@ test "get_update returns optional owned results for configured providers" {
 
     const incomplete = appimage.AppImage{ .name = "Incomplete", .update_type = .github };
     try std.testing.expect((try manager.get_update(&incomplete)) == null);
+    try std.testing.expectEqual(events.StatusKind.warning, capture.last_status.?);
+
+    const missing_zsync_url = appimage.AppImage{ .name = "MissingZsync", .update_type = .zsync };
+    try std.testing.expect((try manager.get_update(&missing_zsync_url)) == null);
     try std.testing.expectEqual(events.StatusKind.warning, capture.last_status.?);
 }
 

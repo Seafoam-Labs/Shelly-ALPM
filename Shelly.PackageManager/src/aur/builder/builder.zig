@@ -8,6 +8,7 @@ const user_errors = @import("../../shared/user_errors.zig");
 const builtin = @import("builtin");
 pub const ShellyBuildConfiguration = @import("../shellybuild.zig").ShellyBuildConfiguration;
 const pkgbuild_parser = @import("../../pkgbuild/pkgbuild_parser.zig");
+const pkgbuild_execution = @import("../../pkgbuild/parser/execution.zig");
 const PackageBuild = pkgbuild_parser.Pkgbuild;
 const op_context = @import("operation_context");
 const install_script = @import("../../pkgbuild/install_script.zig");
@@ -172,6 +173,8 @@ pub const BuilderErrors = error{
 pub const FailureLocation = struct {
     package_name: ?[]const u8 = null,
     step_name: ?[]const u8 = null,
+    /// Metadata key whose value was rejected while writing package metadata.
+    rejected_field: ?[]const u8 = null,
 };
 
 /// Non-root standalone package build engine.
@@ -392,11 +395,19 @@ pub const PackageBuilder = struct {
         }
         const artifacts = self.buildPackage(operation) catch |err| {
             const location = self.failure_location;
-            const detail = std.fmt.allocPrint(self.allocator, "{s}: {s}: {s}", .{
-                location.package_name orelse self.requested_names[0],
-                location.step_name orelse "build",
-                @errorName(err),
-            }) catch null;
+            const detail = if (location.rejected_field) |field|
+                std.fmt.allocPrint(self.allocator, "{s}: {s}: {s} (rejected metadata field: {s})", .{
+                    location.package_name orelse self.requested_names[0],
+                    location.step_name orelse "build",
+                    @errorName(err),
+                    field,
+                }) catch null
+            else
+                std.fmt.allocPrint(self.allocator, "{s}: {s}: {s}", .{
+                    location.package_name orelse self.requested_names[0],
+                    location.step_name orelse "build",
+                    @errorName(err),
+                }) catch null;
             if (detail) |message| {
                 defer self.allocator.free(message);
                 log.writeRecord("error", message) catch {};
@@ -893,7 +904,66 @@ pub const PackageBuilder = struct {
             if (evaluated.unset_arrays.count() > 0) &evaluated.unset_arrays else null,
         );
         try self.applyShellOptionDelta(evaluated.shell_options);
+        try self.applyAssociativeArrayOverrides(&evaluated.assoc_arrays);
         return evaluated;
+    }
+
+    /// Replays Bash's associative arrays into the lifecycle preludes so helper
+    /// state such as `declare -Ag` architecture maps survives the handoff from
+    /// metadata evaluation to the steps that call the lifecycle functions.
+    /// Applied after the statically reconstructed declarations so the
+    /// evaluated state, like the sourced PKGBUILD, has the last word.
+    fn applyAssociativeArrayOverrides(
+        self: *PackageBuilder,
+        overrides: *const steps.DynamicAssocArrayOverrides,
+    ) !void {
+        if (overrides.count() == 0) return;
+
+        var names: std.ArrayList([]const u8) = .empty;
+        defer names.deinit(self.allocator);
+        var iterator = overrides.keyIterator();
+        while (iterator.next()) |name| try names.append(self.allocator, name.*);
+        std.mem.sort([]const u8, names.items, {}, struct {
+            fn lessThan(_: void, lhs: []const u8, rhs: []const u8) bool {
+                return std.mem.order(u8, lhs, rhs) == .lt;
+            }
+        }.lessThan);
+
+        var replay: std.Io.Writer.Allocating = .init(self.allocator);
+        defer replay.deinit();
+        const writer = &replay.writer;
+        for (names.items) |name| {
+            const entries = overrides.get(name).?;
+            try writer.print("unset -v {s}\ndeclare -A {s}=(", .{ name, name });
+            var index: usize = 0;
+            while (index < entries.len) : (index += 2) {
+                if (index != 0) try writer.writeAll(" ");
+                try writer.writeByte('[');
+                try pkgbuild_execution.write_shell_word(writer, entries[index]);
+                try writer.writeAll("]=");
+                try pkgbuild_execution.write_shell_word(writer, entries[index + 1]);
+            }
+            try writer.writeAll(")\n");
+        }
+
+        for (self.package_builds) |*package_build| {
+            const execution = &(package_build.execution orelse continue);
+            const shared_prelude = try std.mem.concat(
+                self.allocator,
+                u8,
+                &.{ execution.shared_prelude, replay.written() },
+            );
+            errdefer self.allocator.free(shared_prelude);
+            const package_prelude = try std.mem.concat(
+                self.allocator,
+                u8,
+                &.{ execution.package_prelude, replay.written() },
+            );
+            self.allocator.free(execution.shared_prelude);
+            self.allocator.free(execution.package_prelude);
+            execution.shared_prelude = shared_prelude;
+            execution.package_prelude = package_prelude;
+        }
     }
 
     fn applyShellOptionDelta(

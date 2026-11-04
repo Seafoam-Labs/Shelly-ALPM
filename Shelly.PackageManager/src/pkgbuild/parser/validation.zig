@@ -72,21 +72,42 @@ pub fn validate_architecture_directives(
     content: []const u8,
     vars: *std.StringHashMap([]const u8),
 ) !void {
-    const global = try fields.resolve_array_field(self, content, vars, "arch");
+    // Elements whose expansions the static parser cannot resolve (for example
+    // arch=("${!_arch[@]}") fed by a `declare -Ag` map) stay inert here and
+    // defer the whole directive to the builder's post-evaluation reparse.
+    // That reparse receives Bash's final arrays as pure data, so this
+    // deferral cannot let an invalid directive reach a build.
+    var deferred = std.AutoHashMap(usize, void).init(self.allocator);
+    defer deferred.deinit();
+    var tracking = self;
+    tracking.deferred_source_words = &deferred;
+
+    const global = try fields.resolve_array_field(tracking, content, vars, "arch");
     defer variables.freeStringSlice(self.allocator, global);
+    if (contains_deferred_entry(global, &deferred)) return;
     if (global.len == 0) return error.InvalidArchitectureDirective;
     try validate_architecture_entries(global);
     if (!types.contains_string(global, "any") and !types.contains_string(global, self.package_carch))
         return error.UnsupportedArchitecture;
 
-    const names = try fields.resolve_array_field(self, content, vars, "pkgname");
+    const names = try fields.resolve_array_field(tracking, content, vars, "pkgname");
     defer variables.freeStringSlice(self.allocator, names);
     if (names.len > 0) {
         for (names) |name|
-            try validate_package_architecture_override(self, content, vars, global, name);
+            try validate_package_architecture_override(tracking, content, vars, global, name);
     } else if (vars.get("pkgname")) |name| {
-        try validate_package_architecture_override(self, content, vars, global, name);
+        try validate_package_architecture_override(tracking, content, vars, global, name);
     }
+}
+
+fn contains_deferred_entry(
+    values: []const []const u8,
+    deferred: *const std.AutoHashMap(usize, void),
+) bool {
+    if (deferred.count() == 0) return false;
+    for (values) |value|
+        if (deferred.contains(@intFromPtr(value.ptr))) return true;
+    return false;
 }
 
 fn validate_package_architecture_override(
@@ -101,6 +122,8 @@ fn validate_package_architecture_override(
     const override = try fields.resolve_package_array_field(package_parser, content, vars, "arch");
     defer variables.freeStringSlice(self.allocator, override);
     if (override.len == 0) return;
+    if (self.deferred_source_words) |deferred|
+        if (contains_deferred_entry(override, deferred)) return;
 
     try validate_architecture_entries(override);
     if (types.contains_string(override, "any")) return;

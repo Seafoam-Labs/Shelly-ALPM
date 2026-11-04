@@ -82,6 +82,18 @@ shelly config appimage YARC --clear-env
 - [ ] Installing a package shows progress correctly
 - [ ] Installation completes successfully
 
+### Console output styling (#2051)
+
+- [ ] Install an AUR package whose build output is colored. The transaction
+  console shows colors, bold, and underline instead of raw escape sequences
+  such as `^[[33m`.
+- [ ] A colored warning line (for example a Pacman "warning:" printed in
+  yellow) is fully readable, including the text that follows the color codes.
+- [ ] Progress lines rewrite in place while colored backend text arrives; no
+  escape fragments or doubled lines appear.
+- [ ] Package rows and the status label show plain text even when the backend
+  message carries color codes.
+
 ### Error Messages
 
 - [ ] In a disposable package database, trigger a database lock failure. CLI, GTK, and TUI show the configured `db.lck` path and the matching, quoted removal command. The message says to remove the file only when no package manager is running.
