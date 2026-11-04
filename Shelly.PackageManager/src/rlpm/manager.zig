@@ -1100,7 +1100,8 @@ fn owned(a: std.mem.Allocator, package: *const rlpm.Package) !types.OwnedPackage
     inline for (.{ "description", "url", "architecture" }) |field| if (@field(package, field)) |text| {
         @field(result, field ++ "_value") = try a.dupeSentinel(u8, text, 0);
     };
-    result.repository_value = try a.dupeSentinel(u8, if (package.origin == .local) package.installed_database orelse "local" else package.database_name, 0);
+    // Restoring repository value to be "local" to fix a current bug. Will be reworking  old response was package.installed_database
+    result.repository_value = try a.dupeSentinel(u8, if (package.origin == .local) "local" else package.database_name, 0);
     result.download_size_value = @intCast(package.download_size orelse package.compressed_size orelse 0);
     result.install_size_value = @intCast(package.installed_size orelse 0);
     result.build_date_value = package.build_date orelse 0;
