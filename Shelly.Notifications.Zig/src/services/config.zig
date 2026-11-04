@@ -478,3 +478,37 @@ test "save leaves no staging files beside the settings file" {
     try testing.expect(saw_settings);
     try testing.expectEqual(@as(usize, 0), others);
 }
+
+test "TerminalForUpdate reloads after a watcher-triggered load" {
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    try seedSettings(&tmp, "{\"TerminalForUpdate\":\"alacritty\"}");
+
+    var svc = makeService(&tmp);
+    defer svc.deinit();
+    try svc.load();
+
+    const loaded = try svc.get();
+    try testing.expectEqualStrings("alacritty", loaded.TerminalForUpdate);
+
+    try seedSettings(&tmp, "{\"TerminalForUpdate\":\"/opt/wezterm/bin/wezterm\"}");
+    try svc.reload();
+
+    const cfg = try svc.get();
+    try testing.expectEqualStrings("/opt/wezterm/bin/wezterm", cfg.TerminalForUpdate);
+}
+
+test "invalid TerminalForUpdate values fall back to the default" {
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    try seedSettings(&tmp, "{\"TerminalForUpdate\":[1,2]}");
+
+    var svc = makeService(&tmp);
+    defer svc.deinit();
+    try svc.load();
+
+    const cfg = try svc.get();
+    try testing.expectEqualStrings("", cfg.TerminalForUpdate);
+}
