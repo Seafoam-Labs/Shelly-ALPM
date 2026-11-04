@@ -113,7 +113,7 @@ pub const View = struct {
         const pane_height = max.height -| (pane_row + 1);
         const show_pane = split or (!self.category_open and self.details_active) or self.help != null;
         if (split or !show_pane) {
-            var search_border: Border = .{ .child = self.field.widget(), .style = if (!self.list_active and !self.details_active) .{ .fg = .{ .index = 7 }, .bold = true } else .{} };
+            var search_border: Border = .{ .child = self.field.widget(), .focused = !self.list_active and !self.details_active };
             try children.append(arena, .{
                 .origin = .{ .row = @intCast(search_row), .col = 0 },
                 .surface = if (search_height == 3)
@@ -131,7 +131,7 @@ pub const View = struct {
             var label: vxfw.Text = .{ .text = message orelse "", .style = .{ .fg = .{ .index = 250 } } };
             const labels = [_]Border.BorderLabel{.{ .text = if (self.installed_only) "Installed Flatpaks" else "Flatpak applications", .alignment = .top_left }};
             const content = if (message != null) label.widget() else self.list.widget();
-            var border: Border = .{ .child = content, .labels = &labels, .style = if (self.list_active and !self.details_active) .{ .fg = .{ .index = 7 }, .bold = true } else .{} };
+            var border: Border = .{ .child = content, .labels = &labels, .focused = self.list_active and !self.details_active };
             if (list_height > 0) try children.append(arena, .{
                 .origin = .{ .row = @intCast(list_row), .col = 0 },
                 .surface = if (list_width >= 2 and list_height >= 2)
@@ -156,7 +156,7 @@ pub const View = struct {
                 var border: Border = .{
                     .child = if (self.selected != null and !self.loading) details.widget() else empty.widget(),
                     .labels = &labels,
-                    .style = if (self.details_active) .{ .fg = .{ .index = 7 }, .bold = true } else .{},
+                    .focused = self.details_active,
                 };
                 break :blk try border.draw(pane_ctx.withConstraints(.{ .width = right_w, .height = pane_height }, .{ .width = right_w, .height = pane_height }));
             };

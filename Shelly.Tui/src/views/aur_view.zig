@@ -42,7 +42,7 @@ pub const View = struct {
         const pane_height = max.height -| (pane_row + 1);
         const show_pane = split or self.details_active or self.preview != null or self.help != null;
         if (split or !show_pane) {
-            var search_border: Border = .{ .child = self.aur_field.widget(), .style = if (!self.list_active and !self.details_active) .{ .fg = .{ .index = 7 }, .bold = true } else .{} };
+            var search_border: Border = .{ .child = self.aur_field.widget(), .focused = !self.list_active and !self.details_active };
             try children.append(arena, .{
                 .origin = .{ .row = 1, .col = 0 },
                 .surface = if (search_height == 3)
@@ -54,7 +54,7 @@ pub const View = struct {
             var label: vxfw.Text = .{ .text = if (message) |item| item.text else "", .style = .{ .fg = .{ .index = if (message != null and message.?.red) @as(u8, 1) else 250 } } };
             const labels = [_]Border.BorderLabel{.{ .text = if (self.installed_only) "Installed AUR packages" else "AUR packages", .alignment = .top_left }};
             const content = if (message != null) label.widget() else self.aur_list.widget();
-            var border: Border = .{ .child = content, .labels = &labels, .style = if (self.list_active and !self.details_active) .{ .fg = .{ .index = 7 }, .bold = true } else .{} };
+            var border: Border = .{ .child = content, .labels = &labels, .focused = self.list_active and !self.details_active };
             if (list_height > 0) try children.append(arena, .{
                 .origin = .{ .row = @intCast(list_row), .col = 0 },
                 .surface = if (list_width >= 2 and list_height >= 2)
@@ -76,7 +76,7 @@ pub const View = struct {
                 var border: Border = .{
                     .child = if (self.selected != null and !self.searching) self.details_scroll.widget() else empty.widget(),
                     .labels = &labels,
-                    .style = if (self.details_active) .{ .fg = .{ .index = 7 }, .bold = true } else .{},
+                    .focused = self.details_active,
                 };
                 break :blk try border.draw(pane_ctx.withConstraints(.{ .width = right_w, .height = pane_height }, .{ .width = right_w, .height = pane_height }));
             };
