@@ -864,7 +864,10 @@ pub const UpdateManager = struct {
         defer operation_scope.finish(.success);
         errdefer operation_scope.fail();
         try self.checkCancelled();
-        const url = try github_to_releases_api(self.allocator, owner, repo);
+        const url = if (allow_prerelease)
+            try github_to_releases_api(self.allocator, owner, repo)
+        else
+            try github_to_latest_release_api(self.allocator, owner, repo);
         defer self.allocator.free(url);
 
         const body = (try self.fetchJson(url, "application/vnd.github+json")) orelse return null;
@@ -877,16 +880,27 @@ pub const UpdateManager = struct {
         defer parsed.deinit();
 
         const root = parsed.value;
-        if (root != .array or root.array.items.len == 0) return null;
-
         var release: ?std.json.Value = null;
-        for (root.array.items) |r| {
-            if (!allow_prerelease) {
-                const pre = r.object.get("prerelease") orelse continue;
-                if (pre == .bool and pre.bool) continue;
+        if (root == .array) {
+            if (root.array.items.len == 0) return null;
+            for (root.array.items) |r| {
+                if (r != .object) continue;
+                if (!allow_prerelease) {
+                    const pre = r.object.get("prerelease") orelse continue;
+                    if (pre == .bool and pre.bool) continue;
+                }
+                release = r;
+                break;
             }
-            release = r;
-            break;
+        } else if (root == .object) {
+            if (!allow_prerelease) {
+                if (root.object.get("prerelease")) |pre| {
+                    if (pre == .bool and pre.bool) return null;
+                }
+            }
+            release = root;
+        } else {
+            return null;
         }
         const rel = release orelse return null;
 
@@ -922,6 +936,10 @@ pub const UpdateManager = struct {
 
     fn github_to_releases_api(allocator: std.mem.Allocator, owner: []const u8, repo: []const u8) ![]u8 {
         return std.fmt.allocPrint(allocator, "https://api.github.com/repos/{s}/{s}/releases", .{ owner, repo });
+    }
+
+    fn github_to_latest_release_api(allocator: std.mem.Allocator, owner: []const u8, repo: []const u8) ![]u8 {
+        return std.fmt.allocPrint(allocator, "https://api.github.com/repos/{s}/{s}/releases/latest", .{ owner, repo });
     }
 
     fn gitlab_to_releases_api(allocator: std.mem.Allocator, owner: []const u8, repo: []const u8) ![]u8 {
@@ -1478,6 +1496,12 @@ test "github_to_releases_api builds correct url" {
     try std.testing.expectEqualStrings("https://api.github.com/repos/ppy/osu/releases", url);
 }
 
+test "github_to_latest_release_api builds correct url" {
+    const url = try UpdateManager.github_to_latest_release_api(std.testing.allocator, "RPCS3", "rpcs3-binaries-linux");
+    defer std.testing.allocator.free(url);
+    try std.testing.expectEqualStrings("https://api.github.com/repos/RPCS3/rpcs3-binaries-linux/releases/latest", url);
+}
+
 test "gitlab_to_releases_api builds correct url with encoded path" {
     const url = try UpdateManager.gitlab_to_releases_api(std.testing.allocator, "gitlab-org", "gitlab");
     defer std.testing.allocator.free(url);
@@ -1507,6 +1531,35 @@ test "parse_github_response: skips prerelease when allow_prerelease=false" {
     defer if (result) |r| r.deinit(std.testing.allocator);
     try std.testing.expect(result != null);
     try std.testing.expectEqualStrings("2025.630.0", result.?.version);
+}
+
+test "parse_github_response: accepts latest release object for RPCS3 issue 2145" {
+    const body =
+        \\{
+        \\  "tag_name":"build-b2e52d6358f746662d118aacf28264918df950e3",
+        \\  "prerelease":false,
+        \\  "assets":[{
+        \\    "name":"rpcs3-v0.0.43-20561-b2e52d63_linux64.AppImage",
+        \\    "browser_download_url":"https://github.com/RPCS3/rpcs3-binaries-linux/releases/download/build-b2e52d6358f746662d118aacf28264918df950e3/rpcs3-v0.0.43-20561-b2e52d63_linux64.AppImage"
+        \\  }]
+        \\}
+    ;
+    const result = try UpdateManager.parse_github_response(
+        std.testing.allocator,
+        body,
+        "RPCS3",
+        "build-fff0c96bf38d1ada075e524c4753a7f263c06449",
+        false,
+    );
+    defer if (result) |release| release.deinit(std.testing.allocator);
+
+    try std.testing.expect(result != null);
+    try std.testing.expectEqualStrings("build-b2e52d6358f746662d118aacf28264918df950e3", result.?.version);
+    try std.testing.expectEqualStrings(
+        "https://github.com/RPCS3/rpcs3-binaries-linux/releases/download/build-b2e52d6358f746662d118aacf28264918df950e3/rpcs3-v0.0.43-20561-b2e52d63_linux64.AppImage",
+        result.?.download_url,
+    );
+    try std.testing.expect(result.?.is_update_available);
 }
 
 test "parse_github_response: includes prerelease when allow_prerelease=true" {
