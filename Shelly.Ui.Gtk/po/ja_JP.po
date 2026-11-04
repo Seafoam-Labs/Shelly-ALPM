@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shelly-ui 2.2.4.1\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-10-11 18:31-0300\n"
+"POT-Creation-Date: 2026-10-27 11:32-0400\n"
 "PO-Revision-Date: 2026-08-06 21:03+0900\n"
 "Last-Translator: UTUMI Hirosi <utuhiro78@yahoo.co.jp>\n"
 "Language-Team: csnyder@seafoam-labs.org\n"
@@ -63,7 +63,6 @@ msgstr "アプリのデータは完全に削除されます。"
 msgid "Confirm"
 msgstr "確認"
 
-#| msgid "No description available."
 msgid "Permissions unavailable"
 msgstr ""
 
@@ -115,7 +114,6 @@ msgstr ""
 msgid "Review PKGBUILD"
 msgstr "PKGBUILD を確認"
 
-#| msgid "Review PKGBUILD"
 msgid "PKGBUILD"
 msgstr ""
 
@@ -124,6 +122,9 @@ msgstr ""
 
 msgid "Skip"
 msgstr "スキップ"
+
+msgid "AppImage"
+msgstr "AppImage"
 
 msgid "Search..."
 msgstr "検索..."
@@ -208,10 +209,12 @@ msgstr "同期"
 msgid "Remove"
 msgstr "削除"
 
+msgid "AUR"
+msgstr "AUR"
+
 msgid "Search the AUR by name or keyword"
 msgstr "名前やキーワードで AUR を検索する"
 
-#| msgid "Search..."
 msgid "Search By"
 msgstr ""
 
@@ -227,7 +230,6 @@ msgstr ""
 msgid "Page 1 of 1"
 msgstr ""
 
-#| msgid "Default page"
 msgid "Next page"
 msgstr ""
 
@@ -237,7 +239,6 @@ msgstr "その他のオプション"
 msgid "Install Selected"
 msgstr "選択したものをインストール"
 
-#| msgid "Selected"
 msgid "Select"
 msgstr ""
 
@@ -349,6 +350,9 @@ msgstr "アプリの権限"
 msgid "Version History"
 msgstr "バージョン履歴"
 
+msgid "Flatpak"
+msgstr "Flatpak"
+
 msgid "Search packages..."
 msgstr "パッケージを検索..."
 
@@ -406,7 +410,6 @@ msgstr "About"
 msgid "Shelly"
 msgstr "Shelly"
 
-#| msgid "Optional Depends"
 msgid "Install Optional Deps"
 msgstr ""
 
@@ -427,6 +430,9 @@ msgstr "依存によるパッケージに変更"
 
 msgid "Package actions"
 msgstr "パッケージ操作"
+
+msgid "Package"
+msgstr "パッケージ"
 
 msgid "Package Group Filter"
 msgstr "パッケージグループフィルター"
@@ -484,6 +490,9 @@ msgstr "依存によるパッケージのみを表示"
 msgid "Show dependency packages only"
 msgstr "依存によるパッケージのみを表示する"
 
+msgid "Recommended"
+msgstr "おすすめ"
+
 msgid "Recommended Packages"
 msgstr "おすすめパッケージ"
 
@@ -503,6 +512,9 @@ msgstr ""
 "おすすめが見つかりませんでした。インターネット接続を確認して、もう一度お試し"
 "ください。"
 
+msgid "Shelly Search"
+msgstr "Shelly 検索"
+
 msgid "Search standard repositories, AUR and Flatpak"
 msgstr "標準リポジトリ、AUR、Flatpak を検索"
 
@@ -512,14 +524,8 @@ msgstr "標準"
 msgid "Show results from the configured ALPM sync databases"
 msgstr "設定された ALPM 同期データベースからの結果を表示"
 
-msgid "AUR"
-msgstr "AUR"
-
 msgid "Show results from the Arch User Repository"
 msgstr "Arch User Repository からの結果を表示"
-
-msgid "Flatpak"
-msgstr "Flatpak"
 
 msgid "Show results from the configured Flatpak remotes"
 msgstr "設定された Flatpak リモートからの結果を表示"
@@ -536,6 +542,9 @@ msgid ""
 msgstr ""
 "標準リポジトリ、AUR、Flatpak をすべて同時に検索します。名前を入力して開始して"
 "ください。"
+
+msgid "Settings"
+msgstr "設定"
 
 msgid "General"
 msgstr "全般"
@@ -686,6 +695,9 @@ msgstr "出力を切り替える"
 msgid "Done"
 msgstr "完了"
 
+msgid "Update"
+msgstr "アップデート"
+
 msgid "Available Updates"
 msgstr "利用可能なアップデート"
 
@@ -755,16 +767,17 @@ msgid "Clean Package Cache"
 msgstr "パッケージのキャッシュをクリア"
 
 msgid ""
-"Removes old cached package versions, keeping the selected number per package."
+"Keeps the selected number of repository package versions and clears the "
+"entire Shelly cache, including AUR sources and build directories."
 msgstr ""
-"選択した数のバージョンをパッケージごとに保持して、古いキャッシュを削除しま"
-"す。"
 
 msgid "Keep"
 msgstr "保持"
 
-msgid "Number of cached versions to keep per package"
-msgstr "パッケージごとに保持するキャッシュのバージョン数"
+msgid ""
+"Number of repository package versions to keep; the Shelly cache is cleared "
+"completely"
+msgstr ""
 
 msgid "Welcome to Shelly v3"
 msgstr "Shelly v3 へようこそ"
@@ -792,14 +805,8 @@ msgstr "Arch User Repository のコミュニティーパッケージ"
 msgid "Sandboxed universal Linux applications"
 msgstr "サンドボックス化されたユニバーサル Linux アプリケーション"
 
-msgid "AppImage"
-msgstr "AppImage"
-
 msgid "Portable self-contained application bundles"
 msgstr "ポータブルで独立したアプリケーションバンドル"
-
-msgid "Recommended"
-msgstr "おすすめ"
 
 msgid "Curated picks from Shelly"
 msgstr "Shelly が厳選したアイテム"
@@ -841,7 +848,38 @@ msgstr "次へ"
 msgid "Start Shelly"
 msgstr "Shelly を起動"
 
-#| msgid "System bus"
+#, fuzzy
+#| msgid "Enable AUR?"
+msgid "Enable Atoll?"
+msgstr "AUR を有効にしますか？"
+
+#, fuzzy
+#| msgid ""
+#| "The Arch User Repository contains build scripts that are known as "
+#| "PKGBUILDs. Those scripts are uploaded by users, and are not verified or "
+#| "vetted in any way. Only enable this feature if you are comfortable in "
+#| "verifying the build scripts."
+msgid ""
+"Atoll contains build scripts that are known as PKGBUILDs. Those scripts are "
+"uploaded by users, and are not verified or vetted in any way. Only enable "
+"this feature if you are comfortable in verifying the build scripts."
+msgstr ""
+"Arch User Repository には PKGBUILD として知られるビルドスクリプトが含まれてい"
+"ます。これらのスクリプトはユーザーによってアップロードされており、検証や確認"
+"は何も行われていません。この機能は、ビルドスクリプトを自分で検証できる場合の"
+"み有効にしてください。"
+
+#, fuzzy
+#| msgid ""
+#| "<a href=\"https://www.seafoam-labs.org/shelly-alpm/docs/aur-safety/\">AUR "
+#| "Safety Guide</a>"
+msgid ""
+"<a href=\"https://www.seafoam-labs.org/shelly-alpm/docs/aur-safety/\">Atoll "
+"Safety Guide</a>"
+msgstr ""
+"<a href=\"https://www.seafoam-labs.org/shelly-alpm/docs/aur-safety/\">AUR 安"
+"全ガイド</a>"
+
 msgid "System files"
 msgstr ""
 
@@ -872,7 +910,6 @@ msgstr "セッションバス"
 msgid "System bus"
 msgstr "システムバス"
 
-#| msgid "Network"
 msgid "Network access"
 msgstr ""
 
@@ -951,7 +988,6 @@ msgstr "使用"
 msgid "Scanning PKGBUILD…"
 msgstr ""
 
-#| msgid "No description available."
 msgid "Security scan unavailable."
 msgstr ""
 
@@ -962,7 +998,6 @@ msgid ""
 "PKGBUILD changed. Close and reopen the preview to scan the current version."
 msgstr ""
 
-#| msgid "Flatpak files"
 msgid "No related files."
 msgstr ""
 
@@ -987,6 +1022,9 @@ msgstr "Codeberg"
 msgid "Forgejo"
 msgstr "Forgejo"
 
+msgid "Zsync"
+msgstr ""
+
 msgid "Update Available"
 msgstr "アップデートがあります"
 
@@ -999,6 +1037,11 @@ msgstr ""
 msgid ""
 "Enter a Forgejo repository URL as http(s)://host/owner/repo or http(s)://"
 "host/owner/repo/releases."
+msgstr ""
+
+msgid ""
+"Enter the http(s) URL of the .zsync control file, optionally as a zsync|"
+"<url> update information string."
 msgstr ""
 
 msgid "Choose an AppImage file"
@@ -1401,7 +1444,6 @@ msgstr "依存によるパッケージに変更中"
 msgid "Select Optional Dependencies to Install"
 msgstr ""
 
-#| msgid "Installing packages"
 msgid "Installing optional dependencies"
 msgstr ""
 
@@ -1441,6 +1483,27 @@ msgstr "パッケージを削除中"
 msgid "Installing packages"
 msgstr "パッケージをインストール中"
 
+#, fuzzy
+#| msgid "Search standard repositories, AUR and Flatpak"
+msgid "Search standard repositories, Atoll and Flatpak"
+msgstr "標準リポジトリ、AUR、Flatpak を検索"
+
+#, fuzzy
+#| msgid "Show results from the Arch User Repository"
+msgid "Show results from Atoll"
+msgstr "Arch User Repository からの結果を表示"
+
+#, fuzzy
+#| msgid ""
+#| "Search the standard repositories, the AUR, and Flatpak all at once. Type "
+#| "a name to begin."
+msgid ""
+"Search the standard repositories, Atoll, and Flatpak all at once. Type a "
+"name to begin."
+msgstr ""
+"標準リポジトリ、AUR、Flatpak をすべて同時に検索します。名前を入力して開始して"
+"ください。"
+
 msgid ""
 "Search standard repositories, the AUR and Flatpak at once. Type a name to "
 "begin."
@@ -1465,6 +1528,11 @@ msgstr "パッケージをインストール"
 
 msgid "Install the selected packages?"
 msgstr "選択したパッケージをインストールしますか？"
+
+#, fuzzy
+#| msgid "Enable AUR"
+msgid "Enable Atoll"
+msgstr "AUR を有効にする"
 
 msgid ""
 "Could not save settings to the configured file. Your latest changes were not "
@@ -1595,12 +1663,6 @@ msgstr "中文（简体）"
 
 msgid "Packages"
 msgstr "パッケージ"
-
-msgid "Shelly Search"
-msgstr "Shelly 検索"
-
-msgid "Update"
-msgstr "アップデート"
 
 msgid "Pending"
 msgstr "保留中"
@@ -1736,8 +1798,10 @@ msgstr "パッケージをアップグレード中"
 msgid "Refreshing package databases"
 msgstr "パッケージデータベースを更新中"
 
-msgid "Database lock removed successfully"
-msgstr "データベースのロックが正常に解除されました"
+#, fuzzy
+#| msgid "Removing Flatpak"
+msgid "Removing stale database lock"
+msgstr "Flatpak を削除中"
 
 msgid "Fixing permissions"
 msgstr "権限を修正中"
@@ -1767,14 +1831,8 @@ msgstr "Flatpak と AppImage サポートをインストール中"
 msgid "Main menu"
 msgstr ""
 
-msgid "Settings"
-msgstr "設定"
-
 msgid "Expand sidebar"
 msgstr ""
 
 msgid "Collapse sidebar"
 msgstr ""
-
-msgid "Package"
-msgstr "パッケージ"

@@ -1072,6 +1072,7 @@ pub fn build(b: *std.Build) void {
             "build_static_url:",
             "normalizeStaticVersion:",
             "contentTypeIsNotAppImage:",
+            "zsync ",
             "configure_updates persists a normalized Forgejo release-page URL",
             "configure_updates leaves the database unchanged when Forgejo validation fails",
             "getAppImagesFromLocalDb ignores unknown fields from a newer database",

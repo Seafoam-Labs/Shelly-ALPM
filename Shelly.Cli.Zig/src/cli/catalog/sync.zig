@@ -38,7 +38,7 @@ pub const variants = [_]types.Variant{
             optionalArgumentWithChoices(
                 "type",
                 "Update source type when configuring updates",
-                &.{ "None", "StaticUrl", "GitHub", "GitLab", "Codeberg", "Forgejo" },
+                &.{ "None", "StaticUrl", "GitHub", "GitLab", "Codeberg", "Forgejo", "Zsync" },
             ),
         },
         .options = &.{
