@@ -91,9 +91,9 @@ pub fn init(gpa: Allocator, model: *Model) State {
             .focus = .{ .fg = .{ .index = 7 }, .bold = true },
             .mouse_down = .{ .reverse = true },
         } },
-        .flatpak_category_list = .{ .children = .{ .builder = .{ .userdata = model, .buildFn = buildFlatpakCategory } } },
+        .flatpak_category_list = .{ .item_count = 0, .children = .{ .builder = .{ .userdata = model, .buildFn = buildFlatpakCategory } } },
         .flatpak_field = .{ .buf = .init(gpa), .userdata = model, .onChange = onFlatpakQueryChange },
-        .flatpak_list = .{ .children = .{ .builder = .{ .userdata = model, .buildFn = buildFlatpakRow } } },
+        .flatpak_list = .{ .item_count = 0, .children = .{ .builder = .{ .userdata = model, .buildFn = buildFlatpakRow } } },
     };
 }
 

@@ -64,6 +64,7 @@ pub fn init(gpa: Allocator, model: *Model) State {
         } },
         .aur_details_scroll = .{ .item_count = 2, .children = .{ .builder = .{ .userdata = model, .buildFn = buildAurDetails } } },
         .aur_list = .{
+            .item_count = 0,
             .children = .{ .builder = .{
                 .userdata = model,
                 .buildFn = buildAurRow,

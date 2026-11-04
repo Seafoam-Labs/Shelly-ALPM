@@ -64,6 +64,7 @@ pub fn init(gpa: Allocator, model: *Model) !State {
         .filtered = .empty,
         .selected_packages = .empty,
         .list_view = .{
+            .item_count = 0,
             .children = .{ .builder = .{
                 .userdata = model,
                 .buildFn = buildRow,
@@ -75,6 +76,7 @@ pub fn init(gpa: Allocator, model: *Model) !State {
             .onChange = onQueryChange,
         },
         .selected_list_view = .{
+            .item_count = 0,
             .children = .{ .builder = .{
                 .userdata = model,
                 .buildFn = buildSelectedRow,
@@ -327,6 +329,10 @@ pub fn handleKey(self: *Model, ctx: *vxfw.EventContext, key: vaxis.Key, global_c
         if (commands.packageNavigation(key, !self.packages_state.package_list_active)) |action| {
             switch (action) {
                 .previous, .next => {
+                    if (self.packages_state.filtered.items.len == 0) {
+                        ctx.consumeAndRedraw();
+                        return true;
+                    }
                     if (action == .previous and self.packages_state.package_list_active and self.packages_state.list_view.cursor == 0) {
                         self.packages_state.package_list_active = false;
                     } else {
@@ -390,6 +396,7 @@ pub fn handleDetailsKey(self: *Model, ctx: *vxfw.EventContext, key: vaxis.Key, g
 }
 
 pub fn handleUnhandledKey(self: *Model, ctx: *vxfw.EventContext, key: vaxis.Key) anyerror!void {
+    if (self.packages_state.filtered.items.len == 0) return ctx.consumeEvent();
     if (commands.matches(key, .select) and self.packages_state.filtered.items.len > 0 and self.packages_state.list_view.cursor < self.packages_state.filtered.items.len) {
         self.packages_state.package_list_active = true;
         try toggleSelectedList(self);
@@ -398,6 +405,37 @@ pub fn handleUnhandledKey(self: *Model, ctx: *vxfw.EventContext, key: vaxis.Key)
     const previous = self.packages_state.list_view.cursor;
     try self.packages_state.list_view.handleEvent(ctx, .{ .key_press = key });
     if (previous != self.packages_state.list_view.cursor) self.packages_state.package_details_scroll.scroll = .{};
+}
+
+test "empty startup lists have known bounds and navigation does not block loading completion" {
+    const model = try Model.init(std.testing.allocator);
+    defer model.deinit();
+    var ctx: vxfw.EventContext = .{ .io = std.testing.io, .alloc = std.testing.allocator, .cmds = .empty };
+    defer ctx.cmds.deinit(std.testing.allocator);
+    const lists = [_]*vxfw.ListView{
+        &model.packages_state.list_view,
+        &model.packages_state.selected_list_view,
+        &model.aur_state.aur_list,
+        &model.flatpak_state.flatpak_list,
+        &model.flatpak_state.flatpak_category_list,
+        &model.operation_state.dependency_choices,
+    };
+    for (lists) |list| {
+        try std.testing.expectEqual(@as(?u32, 0), list.item_count);
+        list.nextItem(&ctx);
+        try std.testing.expectEqual(@as(u32, 0), list.cursor);
+    }
+    try std.testing.expect(model.packages_state.loading);
+    _ = try handleKey(model, &ctx, .{ .codepoint = vaxis.Key.down }, false);
+    try handleUnhandledKey(model, &ctx, .{ .codepoint = vaxis.Key.down });
+    model.packages_state.load.result = try std.json.parseFromSlice([]Package, std.testing.allocator,
+        \\[ {"Name":"loaded","Repository":"core","Version":"1"} ]
+    , .{ .allocate = .alloc_always });
+    model.packages_state.load.done.store(true, .release);
+    try std.testing.expect(!try pollLoad(model));
+    try std.testing.expect(!model.packages_state.loading);
+    try std.testing.expectEqual(@as(?u32, 1), model.packages_state.list_view.item_count);
+    try std.testing.expectEqualStrings("loaded", model.packages_state.filtered.items[0].Name);
 }
 
 test "package refresh replaces borrowed data and preserves selection" {

@@ -112,7 +112,7 @@ pub const SudoPrompt = struct {
 
 pub fn init(_: Allocator, model: *Model) State {
     return .{
-        .dependency_choices = .{ .children = .{ .builder = .{ .userdata = model, .buildFn = buildDependencyChoice } } },
+        .dependency_choices = .{ .item_count = 0, .children = .{ .builder = .{ .userdata = model, .buildFn = buildDependencyChoice } } },
         .pkgbuild_scroll = .{ .children = .{ .builder = .{
             .userdata = model,
             .buildFn = buildPkgbuildLine,
