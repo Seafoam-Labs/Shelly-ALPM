@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shelly-ui 2.2.4.1\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-10-11 18:31-0300\n"
+"POT-Creation-Date: 2026-11-04 12:08-0500\n"
 "PO-Revision-Date: 2026-10-13 08:48+0000\n"
 "Last-Translator: juliazero <juliazero2@gmail.com>\n"
 "Language-Team: Polish\n"
@@ -123,6 +123,9 @@ msgstr "Spróbuj ponownie"
 msgid "Skip"
 msgstr "Pomiń"
 
+msgid "AppImage"
+msgstr "AppImage"
+
 msgid "Search..."
 msgstr "Wyszukaj..."
 
@@ -210,6 +213,9 @@ msgstr "Synchronizuj"
 
 msgid "Remove"
 msgstr "Usuń"
+
+msgid "AUR"
+msgstr "AUR"
 
 msgid "Search the AUR by name or keyword"
 msgstr "Wyszukaj w AUR..."
@@ -349,6 +355,9 @@ msgstr "Uprawnienia aplikacji"
 msgid "Version History"
 msgstr "Historia wersji"
 
+msgid "Flatpak"
+msgstr "Flatpak"
+
 msgid "Search packages..."
 msgstr "Wyszukaj pakiety..."
 
@@ -427,6 +436,9 @@ msgstr "Oznacz jako zależność"
 msgid "Package actions"
 msgstr "Działania na pakiecie"
 
+msgid "Package"
+msgstr "Pakiet"
+
 msgid "Package Group Filter"
 msgstr "Filtr grup pakietów"
 
@@ -483,6 +495,9 @@ msgstr "Pokaż tylko zależności"
 msgid "Show dependency packages only"
 msgstr "Pokaż tylko pakiety będące zależnościami"
 
+msgid "Recommended"
+msgstr "Polecane"
+
 msgid "Recommended Packages"
 msgstr "Polecane pakiety"
 
@@ -491,6 +506,18 @@ msgstr "Wyselekcjonowane propozycje od Seafoam Labs"
 
 msgid "Refresh the recommended packages list from the network"
 msgstr "Odśwież listę polecanych pakietów z sieci"
+
+#| msgid "Mixed selection"
+msgid "Clear selection"
+msgstr ""
+
+#| msgid "Recommended Packages"
+msgid "Deselect all recommended packages"
+msgstr ""
+
+#| msgid "Install the selected packages?"
+msgid "Install all selected packages in one transaction"
+msgstr ""
 
 msgid "Loading Recommended Packages..."
 msgstr "Wczytywanie polecanych pakietów..."
@@ -502,6 +529,9 @@ msgstr ""
 "Nie znaleziono polecanych pakietów. Sprawdź połączenie z internetem i "
 "spróbuj ponownie."
 
+msgid "Shelly Search"
+msgstr "Wyszukiwarka Shelly"
+
 msgid "Search standard repositories, AUR and Flatpak"
 msgstr "Przeszukuj standardowe repozytoria, AUR i Flatpak"
 
@@ -511,14 +541,8 @@ msgstr "Standardowe"
 msgid "Show results from the configured ALPM sync databases"
 msgstr "Pokaż wyniki ze skonfigurowanych baz synchronizacji ALPM"
 
-msgid "AUR"
-msgstr "AUR"
-
 msgid "Show results from the Arch User Repository"
 msgstr "Pokaż wyniki z Arch User Repository (AUR)"
-
-msgid "Flatpak"
-msgstr "Flatpak"
 
 msgid "Show results from the configured Flatpak remotes"
 msgstr "Pokaż wyniki ze skonfigurowanych repozytoriów Flatpak"
@@ -535,6 +559,9 @@ msgid ""
 msgstr ""
 "Przeszukaj jednocześnie standardowe repozytoria, AUR i Flatpak. Wpisz nazwę, "
 "aby rozpocząć."
+
+msgid "Settings"
+msgstr "Ustawienia"
 
 msgid "General"
 msgstr "Ogólne"
@@ -688,6 +715,9 @@ msgstr "Przełącz widok konsoli"
 msgid "Done"
 msgstr "Gotowe"
 
+msgid "Update"
+msgstr "Zaktualizuj"
+
 msgid "Available Updates"
 msgstr "Dostępne aktualizacje"
 
@@ -758,16 +788,17 @@ msgid "Clean Package Cache"
 msgstr "Wyczyść pamięć podręczną pakietów"
 
 msgid ""
-"Removes old cached package versions, keeping the selected number per package."
+"Keeps the selected number of repository package versions and clears the "
+"entire Shelly cache, including AUR sources and build directories."
 msgstr ""
-"Usuwa stare wersje pakietów z pamięci podręcznej, zachowując wybraną liczbę "
-"wersji każdego pakietu."
 
 msgid "Keep"
 msgstr "Zachowaj"
 
-msgid "Number of cached versions to keep per package"
-msgstr "Liczba wersji w pamięci podręcznej do zachowania dla każdego pakietu"
+msgid ""
+"Number of repository package versions to keep; the Shelly cache is cleared "
+"completely"
+msgstr ""
 
 msgid "Welcome to Shelly v3"
 msgstr "Witaj w Shelly v3"
@@ -795,14 +826,8 @@ msgstr "Pakiety repozytorium użytkowników Arch"
 msgid "Sandboxed universal Linux applications"
 msgstr "Uniwersalne aplikacje Linuksa izolowane w piaskownicy (sandbox)"
 
-msgid "AppImage"
-msgstr "AppImage"
-
 msgid "Portable self-contained application bundles"
 msgstr "Przenośne, autonomiczne pakiety aplikacji"
-
-msgid "Recommended"
-msgstr "Polecane"
 
 msgid "Curated picks from Shelly"
 msgstr "Wyselekcjonowane propozycje od Shelly"
@@ -843,6 +868,29 @@ msgstr "Dalej"
 
 msgid "Start Shelly"
 msgstr "Uruchom Shelly"
+
+#| msgid "Enable AUR?"
+msgid "Enable Atoll?"
+msgstr ""
+
+#| msgid ""
+#| "The Arch User Repository contains build scripts that are known as "
+#| "PKGBUILDs. Those scripts are uploaded by users, and are not verified or "
+#| "vetted in any way. Only enable this feature if you are comfortable in "
+#| "verifying the build scripts."
+msgid ""
+"Atoll contains build scripts that are known as PKGBUILDs. Those scripts are "
+"uploaded by users, and are not verified or vetted in any way. Only enable "
+"this feature if you are comfortable in verifying the build scripts."
+msgstr ""
+
+#| msgid ""
+#| "<a href=\"https://www.seafoam-labs.org/shelly-alpm/docs/aur-safety/\">AUR "
+#| "Safety Guide</a>"
+msgid ""
+"<a href=\"https://www.seafoam-labs.org/shelly-alpm/docs/aur-safety/\">Atoll "
+"Safety Guide</a>"
+msgstr ""
 
 msgid "System files"
 msgstr "Systemowe pliki"
@@ -988,6 +1036,9 @@ msgstr "Codeberg"
 msgid "Forgejo"
 msgstr "Forgejo"
 
+msgid "Zsync"
+msgstr ""
+
 msgid "Update Available"
 msgstr "Dostępna aktualizacja"
 
@@ -1003,6 +1054,11 @@ msgid ""
 msgstr ""
 "Wprowadź adres URL repozytorium Forgejo w postaci http(s)://host/właściciel/"
 "repo lub http(s)://host/właściciel/repo/releases."
+
+msgid ""
+"Enter the http(s) URL of the .zsync control file, optionally as a zsync|"
+"<url> update information string."
+msgstr ""
 
 msgid "Choose an AppImage file"
 msgstr "Wybierz plik AppImage"
@@ -1442,6 +1498,25 @@ msgstr "Usuwanie pakietów"
 msgid "Installing packages"
 msgstr "Instalowanie pakietów"
 
+msgid "Select package for batch installation"
+msgstr ""
+
+#| msgid "Search standard repositories, AUR and Flatpak"
+msgid "Search standard repositories, Atoll and Flatpak"
+msgstr ""
+
+#| msgid "Show results from the Arch User Repository"
+msgid "Show results from Atoll"
+msgstr ""
+
+#| msgid ""
+#| "Search the standard repositories, the AUR, and Flatpak all at once. Type "
+#| "a name to begin."
+msgid ""
+"Search the standard repositories, Atoll, and Flatpak all at once. Type a "
+"name to begin."
+msgstr ""
+
 msgid ""
 "Search standard repositories, the AUR and Flatpak at once. Type a name to "
 "begin."
@@ -1466,6 +1541,10 @@ msgstr "Zainstaluj pakiety"
 
 msgid "Install the selected packages?"
 msgstr "Zainstalować wybrane pakiety?"
+
+#| msgid "Enable AUR"
+msgid "Enable Atoll"
+msgstr ""
 
 msgid ""
 "Could not save settings to the configured file. Your latest changes were not "
@@ -1601,12 +1680,6 @@ msgstr "Chiński (uproszczony)"
 msgid "Packages"
 msgstr "Pakiety"
 
-msgid "Shelly Search"
-msgstr "Wyszukiwarka Shelly"
-
-msgid "Update"
-msgstr "Zaktualizuj"
-
 msgid "Pending"
 msgstr "Oczekuje"
 
@@ -1741,8 +1814,9 @@ msgstr "Aktualizowanie pakietów"
 msgid "Refreshing package databases"
 msgstr "Odświeżanie baz danych pakietów"
 
-msgid "Database lock removed successfully"
-msgstr "Blokada bazy danych została pomyślnie usunięta"
+#| msgid "Removing Flatpak"
+msgid "Removing stale database lock"
+msgstr ""
 
 msgid "Fixing permissions"
 msgstr "Naprawianie uprawnień"
@@ -1773,14 +1847,8 @@ msgstr "Instalowanie obsługi Flatpak i AppImage"
 msgid "Main menu"
 msgstr "Menu główne"
 
-msgid "Settings"
-msgstr "Ustawienia"
-
 msgid "Expand sidebar"
 msgstr "Rozszerz boczny panel"
 
 msgid "Collapse sidebar"
 msgstr "Zwiń boczny panel"
-
-msgid "Package"
-msgstr "Pakiet"

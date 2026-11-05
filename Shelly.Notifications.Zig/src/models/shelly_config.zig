@@ -20,4 +20,7 @@ pub const ShellyConfig = struct {
     DaysOfWeek: []const DayOfWeek = &.{},
     UseUiForUpdate: bool = false,
     Time: []const u8 = "",
+    /// Terminal binary name or path chosen in Settings for the update shell.
+    /// Empty means auto-detect: $TERMINAL first, then the candidate list.
+    TerminalForUpdate: []const u8 = "",
 };

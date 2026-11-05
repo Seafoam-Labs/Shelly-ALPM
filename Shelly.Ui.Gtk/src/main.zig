@@ -277,6 +277,7 @@ test {
     _ = @import("helpers/custom_ui_comps/carousel_indicator_dots.zig");
     _ = @import("pages/flatpak/flatpak_install_view.zig");
     _ = @import("helpers/ui_decode.zig");
+    _ = @import("helpers/ansi.zig");
     _ = @import("helpers/datetime.zig");
     _ = @import("helpers/deep_link.zig");
     _ = @import("services/flathub_api.zig");

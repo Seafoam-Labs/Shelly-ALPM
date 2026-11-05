@@ -409,11 +409,41 @@ pub const ArchiveManager = struct {
         candidate: *const DowngradeCandidate,
         flags: bindings.libalpm.TransFlag,
     ) InstallError!void {
+        var candidates = [_]*const DowngradeCandidate{candidate};
+        return self.install_candidates(manager, candidates[0..], flags);
+    }
+
+    /// Prepares every selected candidate and installs all of them through one
+    /// `alpm.Manager.install_local_packages` transaction so related packages,
+    /// such as a package and its dependencies, downgrade together. Prepared
+    /// temporary downloads are removed when preparation or installation fails.
+    pub fn install_candidates(
+        self: *ArchiveManager,
+        manager: *alpm_manager.Manager,
+        candidates: []const *const DowngradeCandidate,
+        flags: bindings.libalpm.TransFlag,
+    ) InstallError!void {
         try self.checkCancelled();
-        var prepared = try self.prepare_candidate(candidate);
-        defer prepared.deinit(self.allocator, self.io);
-        var paths = [_][]const u8{prepared.path};
-        try manager.install_local_packages(paths[0..], flags);
+        if (candidates.len == 0) return;
+
+        var prepared: std.ArrayList(PreparedPackage) = .empty;
+        defer {
+            for (prepared.items) |*package| package.deinit(self.allocator, self.io);
+            prepared.deinit(self.allocator);
+        }
+        var paths: std.ArrayList([]const u8) = .empty;
+        defer paths.deinit(self.allocator);
+
+        for (candidates) |candidate| {
+            const package = try self.prepare_candidate(candidate);
+            prepared.append(self.allocator, package) catch |err| {
+                var owned = package;
+                owned.deinit(self.allocator, self.io);
+                return err;
+            };
+            try paths.append(self.allocator, package.path);
+        }
+        try manager.install_local_packages(paths.items, flags);
     }
 
     fn checkCancelled(self: *const ArchiveManager) error{Cancelled}!void {
@@ -864,6 +894,56 @@ test "prepare_candidate retains local cache files" {
         error.NoHandle,
         manager.install_candidate(&transaction_manager, &candidates[0], .{}),
     );
+}
+
+test "install_candidates prepares every candidate in one transaction" {
+    var temporary = testing.tmpDir(.{});
+    defer temporary.cleanup();
+    const cache_path = try std.fmt.allocPrint(testing.allocator, ".zig-cache/tmp/{s}", .{temporary.sub_path});
+    defer testing.allocator.free(cache_path);
+    for ([_][]const u8{
+        "demo-1.0-1-x86_64.pkg.tar.zst",
+        "libdemo-2.0-1-x86_64.pkg.tar.zst",
+    }) |filename| {
+        var file = try temporary.dir.createFile(testing.io, filename, .{});
+        file.close(testing.io);
+    }
+
+    var archive = ArchiveManager.init(testing.allocator, testing.io, .{});
+    defer archive.deinit();
+    const demo = try archive.list_local_cache("demo", null, &.{cache_path});
+    defer DowngradeCandidate.deinitSlice(testing.allocator, demo);
+    const libdemo = try archive.list_local_cache("libdemo", null, &.{cache_path});
+    defer DowngradeCandidate.deinitSlice(testing.allocator, libdemo);
+    try testing.expectEqual(@as(usize, 1), demo.len);
+    try testing.expectEqual(@as(usize, 1), libdemo.len);
+
+    var transaction_manager: alpm_manager.Manager = undefined;
+    transaction_manager.engine = null;
+
+    // An empty selection is a safe no-op and never starts a transaction.
+    try archive.install_candidates(&transaction_manager, &.{}, .{});
+
+    // Both prepared archives reach one transaction. The manager rejects it
+    // without a live handle and the local cache files are retained.
+    const selected = [_]*const DowngradeCandidate{ &demo[0], &libdemo[0] };
+    try testing.expectError(
+        error.NoHandle,
+        archive.install_candidates(&transaction_manager, selected[0..], .{}),
+    );
+    _ = try std.Io.Dir.cwd().statFile(testing.io, demo[0].location, .{});
+    _ = try std.Io.Dir.cwd().statFile(testing.io, libdemo[0].location, .{});
+
+    // A candidate whose local archive disappeared aborts before any
+    // transaction is submitted.
+    var missing = demo[0];
+    missing.location = @constCast("/nonexistent/shelly-missing-2.089-1-x86_64.pkg.tar.zst");
+    const with_missing = [_]*const DowngradeCandidate{ &demo[0], &missing };
+    try testing.expectError(
+        error.LocalPackageMissing,
+        archive.install_candidates(&transaction_manager, with_missing[0..], .{}),
+    );
+    _ = try std.Io.Dir.cwd().statFile(testing.io, demo[0].location, .{});
 }
 
 test "archive installation API delegates through the ALPM manager" {

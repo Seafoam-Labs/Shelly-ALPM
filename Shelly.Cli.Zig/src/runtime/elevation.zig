@@ -208,7 +208,7 @@ fn signalProcessGroup(process_id: std.posix.pid_t, owns_group: bool, signal: std
 }
 
 fn processTargetExists(process_id: std.posix.pid_t, owns_group: bool) bool {
-    const probe: std.posix.SIG = @enumFromInt(0);
+    const probe: std.posix.SIG = @fromBackingInt(@intCast(0));
     std.posix.kill(if (owns_group) -process_id else process_id, probe) catch |err| return switch (err) {
         error.ProcessNotFound => false,
         error.PermissionDenied => true,
@@ -218,7 +218,7 @@ fn processTargetExists(process_id: std.posix.pid_t, owns_group: bool) bool {
 }
 
 fn processExists(pid: std.posix.pid_t) bool {
-    const probe: std.posix.SIG = @enumFromInt(0);
+    const probe: std.posix.SIG = @fromBackingInt(@intCast(0));
     std.posix.kill(pid, probe) catch |err| return switch (err) {
         error.ProcessNotFound => false,
         error.PermissionDenied => true,
@@ -234,13 +234,19 @@ fn processExists(pid: std.posix.pid_t) bool {
 /// system-scope Flatpak operations can authenticate through the Flatpak
 /// helper. Returns null when the process was not elevated by a supported
 /// caller-preserving tool.
+///
+/// The credential drop uses setpriv: it applies the uid, gid, and
+/// supplementary groups without opening a PAM session, so the child keeps
+/// the invoking login session's cgroup. That cgroup is the scope polkit
+/// resolves when it evaluates the Flatpak system helper's actions, which are
+/// granted to subjects in an active local session.
 pub fn runAsInvokingUser(
     context: *context_module.RuntimeContext,
     original_arguments: []const []const u8,
 ) !?u8 {
     const arguments = try context.childArguments(original_arguments);
     defer context.allocator.free(arguments);
-    const identity = (try invokingUser(context)) orelse return null;
+    const identity = (try executionIdentity(context)) orelse return null;
     defer identity.deinit(context.allocator);
     const home = try invokingUserHome(context, identity.username);
     defer context.allocator.free(home);
@@ -249,29 +255,13 @@ pub fn runAsInvokingUser(
     defer context.allocator.free(executable);
     const home_environment = try std.fmt.allocPrint(context.allocator, "HOME={s}", .{home});
     defer context.allocator.free(home_environment);
-    const config_environment = try std.fmt.allocPrint(
-        context.allocator,
-        "XDG_CONFIG_HOME={s}/.config",
-        .{home},
-    );
+    const config_environment = try userPathEnvironment(context, "XDG_CONFIG_HOME", home, ".config");
     defer context.allocator.free(config_environment);
-    const data_environment = try std.fmt.allocPrint(
-        context.allocator,
-        "XDG_DATA_HOME={s}/.local/share",
-        .{home},
-    );
+    const data_environment = try userPathEnvironment(context, "XDG_DATA_HOME", home, ".local/share");
     defer context.allocator.free(data_environment);
-    const cache_environment = try std.fmt.allocPrint(
-        context.allocator,
-        "XDG_CACHE_HOME={s}/.cache",
-        .{home},
-    );
+    const cache_environment = try userPathEnvironment(context, "XDG_CACHE_HOME", home, ".cache");
     defer context.allocator.free(cache_environment);
-    const bin_environment = try std.fmt.allocPrint(
-        context.allocator,
-        "XDG_BIN_HOME={s}/.local/bin",
-        .{home},
-    );
+    const bin_environment = try userPathEnvironment(context, "XDG_BIN_HOME", home, ".local/bin");
     defer context.allocator.free(bin_environment);
     const runtime_environment = try std.fmt.allocPrint(
         context.allocator,
@@ -285,11 +275,12 @@ pub fn runAsInvokingUser(
         .{identity.uid},
     );
     defer context.allocator.free(bus_environment);
+    var wrapped = try userEnvironmentArguments(context, home, safe_executable, arguments);
+    defer wrapped.deinit(context.allocator);
     const child_arguments = try buildInvokingUserArguments(
         context.allocator,
-        findElevator(context),
-        identity.username,
-        safe_executable,
+        identity,
+        "/usr/bin/env",
         home_environment,
         config_environment,
         data_environment,
@@ -297,18 +288,86 @@ pub fn runAsInvokingUser(
         bin_environment,
         runtime_environment,
         bus_environment,
-        arguments,
+        wrapped.asConst(),
     );
     defer context.allocator.free(child_arguments);
 
-    var child = try std.process.spawn(context.io, .{
+    // A missing setpriv must abort the handoff. Callers never retry
+    // user-owned cache or Flatpak work as root after a failed drop.
+    var child = std.process.spawn(context.io, .{
         .argv = child_arguments,
         .stdin = .inherit,
         .stdout = .inherit,
         .stderr = .inherit,
-    });
+    }) catch |spawn_error| switch (spawn_error) {
+        error.FileNotFound => return error.ElevationFailed,
+        else => |failure| return failure,
+    };
     errdefer child.kill(context.io);
     return @as(?u8, try exitCode(try child.wait(context.io)));
+}
+
+fn userEnvironmentArguments(context: *const context_module.RuntimeContext, home: []const u8, executable: []const u8, arguments: []const []const u8) !PackageManager.process_runner.OwnedCommand {
+    var argv: std.ArrayList([]u8) = .empty;
+    errdefer {
+        for (argv.items) |arg| context.allocator.free(arg);
+        argv.deinit(context.allocator);
+    }
+    try argv.append(context.allocator, try userPathEnvironment(context, "XDG_STATE_HOME", home, ".local/state"));
+    if (context.environment) |environment| {
+        for ([_][]const u8{ "http_proxy", "HTTP_PROXY", "https_proxy", "HTTPS_PROXY", "all_proxy", "ALL_PROXY", "no_proxy", "NO_PROXY" }) |key| {
+            if (environment.get(key)) |value| try argv.append(context.allocator, try std.fmt.allocPrint(context.allocator, "{s}={s}", .{ key, value }));
+        }
+    }
+    try argv.append(context.allocator, try context.allocator.dupe(u8, executable));
+    for (arguments) |arg| try argv.append(context.allocator, try context.allocator.dupe(u8, arg));
+    return .{ .argv = try argv.toOwnedSlice(context.allocator) };
+}
+
+fn userPathEnvironment(context: *const context_module.RuntimeContext, key: []const u8, home: []const u8, relative: []const u8) ![]u8 {
+    if (context.environment) |environment| {
+        if (environment.get(key)) |value| {
+            if (std.fs.path.isAbsolute(value)) return std.fmt.allocPrint(context.allocator, "{s}={s}", .{ key, value });
+        }
+    }
+    return std.fmt.allocPrint(context.allocator, "{s}={s}/{s}", .{ key, home, relative });
+}
+
+test "XDG caller environment preserves absolute overrides and proxy settings" {
+    var tc: @import("../commands/test_support.zig").TestContext = undefined;
+    tc.init();
+    defer tc.deinit();
+    var environment = std.process.Environ.Map.init(tc.context.allocator);
+    defer environment.deinit();
+    try environment.put("XDG_CACHE_HOME", "/tmp/custom cache");
+    try environment.put("XDG_STATE_HOME", "/tmp/custom state");
+    try environment.put("https_proxy", "http://proxy.invalid:8080");
+    tc.context.environment = &environment;
+    const cache = try userPathEnvironment(&tc.context, "XDG_CACHE_HOME", "/home/tester", ".cache");
+    try std.testing.expectEqualStrings("XDG_CACHE_HOME=/tmp/custom cache", cache);
+    try environment.put("XDG_CACHE_HOME", "relative");
+    const fallback = try userPathEnvironment(&tc.context, "XDG_CACHE_HOME", "/home/tester", ".cache");
+    try std.testing.expectEqualStrings("XDG_CACHE_HOME=/home/tester/.cache", fallback);
+    var wrapped = try userEnvironmentArguments(&tc.context, "/home/tester", "/usr/bin/shelly", &.{ "backup", "--export", "--json" });
+    defer wrapped.deinit(tc.context.allocator);
+    const expected = [_][]const u8{ "XDG_STATE_HOME=/tmp/custom state", "https_proxy=http://proxy.invalid:8080", "/usr/bin/shelly", "backup", "--export", "--json" };
+    try std.testing.expectEqual(expected.len, wrapped.argv.len);
+    for (expected, wrapped.argv) |wanted, actual| try std.testing.expectEqualStrings(wanted, actual);
+}
+
+/// Null means execution is already under the caller's identity, including
+/// direct root. Failed account resolution is an error, never a root fallback.
+fn executionIdentity(context: *const context_module.RuntimeContext) !?InvokingIdentity {
+    if (!isRoot()) return null;
+    const environment = context.environment;
+    const account = try user_account.callerFor(context.allocator, 0, if (environment) |env| env.get("SUDO_USER") else null, if (environment) |env| env.get("DOAS_USER") else null, if (environment) |env| env.get("PKEXEC_UID") else null);
+    defer account.deinit(context.allocator);
+    if (account.uid == 0) return null;
+    const uid = try std.fmt.allocPrint(context.allocator, "{d}", .{account.uid});
+    errdefer context.allocator.free(uid);
+    const gid = try std.fmt.allocPrint(context.allocator, "{d}", .{account.gid});
+    errdefer context.allocator.free(gid);
+    return .{ .username = try context.allocator.dupe(u8, account.username), .uid = uid, .gid = gid };
 }
 
 pub const CapturedRun = struct {
@@ -330,7 +389,7 @@ pub fn runAsInvokingUserCapture(
 ) !?CapturedRun {
     const arguments = try context.childArguments(original_arguments);
     defer context.allocator.free(arguments);
-    const identity = (try invokingUser(context)) orelse return null;
+    const identity = (try executionIdentity(context)) orelse return null;
     defer identity.deinit(context.allocator);
     const home = try invokingUserHome(context, identity.username);
     defer context.allocator.free(home);
@@ -339,23 +398,24 @@ pub fn runAsInvokingUserCapture(
     const executable = std.mem.trimEnd(u8, executable_allocated, " (deleted)");
     const home_environment = try std.fmt.allocPrint(context.allocator, "HOME={s}", .{home});
     defer context.allocator.free(home_environment);
-    const config_environment = try std.fmt.allocPrint(context.allocator, "XDG_CONFIG_HOME={s}/.config", .{home});
+    const config_environment = try userPathEnvironment(context, "XDG_CONFIG_HOME", home, ".config");
     defer context.allocator.free(config_environment);
-    const data_environment = try std.fmt.allocPrint(context.allocator, "XDG_DATA_HOME={s}/.local/share", .{home});
+    const data_environment = try userPathEnvironment(context, "XDG_DATA_HOME", home, ".local/share");
     defer context.allocator.free(data_environment);
-    const cache_environment = try std.fmt.allocPrint(context.allocator, "XDG_CACHE_HOME={s}/.cache", .{home});
+    const cache_environment = try userPathEnvironment(context, "XDG_CACHE_HOME", home, ".cache");
     defer context.allocator.free(cache_environment);
-    const bin_environment = try std.fmt.allocPrint(context.allocator, "XDG_BIN_HOME={s}/.local/bin", .{home});
+    const bin_environment = try userPathEnvironment(context, "XDG_BIN_HOME", home, ".local/bin");
     defer context.allocator.free(bin_environment);
     const runtime_environment = try std.fmt.allocPrint(context.allocator, "XDG_RUNTIME_DIR=/run/user/{s}", .{identity.uid});
     defer context.allocator.free(runtime_environment);
     const bus_environment = try std.fmt.allocPrint(context.allocator, "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/{s}/bus", .{identity.uid});
     defer context.allocator.free(bus_environment);
+    var wrapped = try userEnvironmentArguments(context, home, executable, arguments);
+    defer wrapped.deinit(context.allocator);
     const child_arguments = try buildInvokingUserArguments(
         context.allocator,
-        findElevator(context),
-        identity.username,
-        executable,
+        identity,
+        "/usr/bin/env",
         home_environment,
         config_environment,
         data_environment,
@@ -363,16 +423,21 @@ pub fn runAsInvokingUserCapture(
         bin_environment,
         runtime_environment,
         bus_environment,
-        arguments,
+        wrapped.asConst(),
     );
     defer context.allocator.free(child_arguments);
 
-    var child = try std.process.spawn(context.io, .{
+    // As in runAsInvokingUser: a failed credential drop is terminal and must
+    // never degrade into root-owned cache or Flatpak work.
+    var child = std.process.spawn(context.io, .{
         .argv = child_arguments,
         .stdin = .inherit,
         .stdout = .pipe,
         .stderr = .inherit,
-    });
+    }) catch |spawn_error| switch (spawn_error) {
+        error.FileNotFound => return error.ElevationFailed,
+        else => |failure| return failure,
+    };
     errdefer child.kill(context.io);
     const Cancellation = struct {
         child: *std.process.Child,
@@ -434,10 +499,6 @@ fn findElevator(context: *const context_module.RuntimeContext) []const u8 {
     return "sudo";
 }
 
-fn isRun0(elevator: []const u8) bool {
-    return std.mem.eql(u8, std.fs.path.basename(elevator), "run0");
-}
-
 fn isOnPath(
     context: *const context_module.RuntimeContext,
     path_environment: []const u8,
@@ -469,8 +530,7 @@ fn buildArguments(
 
 fn buildInvokingUserArguments(
     allocator: std.mem.Allocator,
-    elevator: []const u8,
-    user: []const u8,
+    identity: InvokingIdentity,
     executable: []const u8,
     home_environment: []const u8,
     config_environment: []const u8,
@@ -481,48 +541,34 @@ fn buildInvokingUserArguments(
     bus_environment: []const u8,
     arguments: []const []const u8,
 ) ![]const []const u8 {
-    if (isRun0(elevator)) {
-        const result = try allocator.alloc([]const u8, arguments.len + 20);
-        result[0] = elevator;
-        result[1] = "--user";
-        result[2] = user;
-        result[3] = "--setenv";
-        result[4] = home_environment;
-        result[5] = "--setenv";
-        result[6] = config_environment;
-        result[7] = "--setenv";
-        result[8] = data_environment;
-        result[9] = "--setenv";
-        result[10] = cache_environment;
-        result[11] = "--setenv";
-        result[12] = bin_environment;
-        result[13] = "--setenv";
-        result[14] = runtime_environment;
-        result[15] = "--setenv";
-        result[16] = bus_environment;
-        result[17] = "--setenv";
-        result[18] = "PATH=" ++ PackageManager.process_runner.build_path.baseline;
-        result[19] = executable;
-        @memcpy(result[20..], arguments);
-        return result;
-    }
-
-    const result = try allocator.alloc([]const u8, arguments.len + 14);
-    result[0] = elevator;
-    result[1] = "-u";
-    result[2] = user;
-    result[3] = "/usr/bin/env";
-    result[4] = "-i";
-    result[5] = home_environment;
-    result[6] = config_environment;
-    result[7] = data_environment;
-    result[8] = cache_environment;
-    result[9] = bin_environment;
-    result[10] = runtime_environment;
-    result[11] = bus_environment;
-    result[12] = "PATH=" ++ PackageManager.process_runner.build_path.baseline;
-    result[13] = executable;
-    @memcpy(result[14..], arguments);
+    const result = try allocator.alloc([]const u8, arguments.len + 16);
+    errdefer allocator.free(result);
+    // setpriv drops to the caller's uid and gid and applies supplementary
+    // groups through initgroups without opening a PAM session, so the child
+    // keeps the invoking login session's cgroup. polkit resolves Flatpak
+    // system-helper authorizations against that cgroup, so it must remain a
+    // session that is both active and local.
+    const reuid = try std.fmt.allocPrint(allocator, "--reuid={s}", .{identity.uid});
+    errdefer allocator.free(reuid);
+    const regid = try std.fmt.allocPrint(allocator, "--regid={s}", .{identity.gid});
+    errdefer allocator.free(regid);
+    result[0] = "/usr/bin/setpriv";
+    result[1] = reuid;
+    result[2] = regid;
+    result[3] = "--init-groups";
+    result[4] = "--";
+    result[5] = "/usr/bin/env";
+    result[6] = "-i";
+    result[7] = home_environment;
+    result[8] = config_environment;
+    result[9] = data_environment;
+    result[10] = cache_environment;
+    result[11] = bin_environment;
+    result[12] = runtime_environment;
+    result[13] = bus_environment;
+    result[14] = "PATH=" ++ PackageManager.process_runner.build_path.baseline;
+    result[15] = executable;
+    @memcpy(result[16..], arguments);
     return result;
 }
 
@@ -586,7 +632,7 @@ fn invokingUserHome(
 fn exitCode(term: std.process.Child.Term) Error!u8 {
     return switch (term) {
         .exited => |code| code,
-        .signal => |signal| @truncate(128 + @intFromEnum(signal)),
+        .signal => |signal| @truncate(128 + @backingInt(signal)),
         .stopped, .unknown => error.ElevationFailed,
     };
 }
@@ -752,13 +798,17 @@ test "elevation child status maps to shell exit codes" {
     try std.testing.expectError(error.ElevationFailed, exitCode(.{ .unknown = 1 }));
 }
 
-test "calling-user arguments use a clean invoking-user environment" {
+test "calling-user arguments use setpriv with a clean invoking-user environment" {
     const arguments = [_][]const u8{ "upgrade", "flatpak", "--no-confirm" };
+    const identity = InvokingIdentity{
+        .username = "tester",
+        .uid = "1000",
+        .gid = "1000",
+    };
     const actual = try buildInvokingUserArguments(
         std.testing.allocator,
-        "sudo",
-        "tester",
-        "/usr/bin/shelly",
+        identity,
+        "/usr/bin/env",
         "HOME=/home/tester",
         "XDG_CONFIG_HOME=/home/tester/.config",
         "XDG_DATA_HOME=/home/tester/.local/share",
@@ -768,12 +818,18 @@ test "calling-user arguments use a clean invoking-user environment" {
         "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus",
         &arguments,
     );
+    // The builder formats --reuid/--regid into the vector; free them
+    // alongside the slice so the testing allocator reports no leaks.
     defer std.testing.allocator.free(actual);
+    defer std.testing.allocator.free(actual[1]);
+    defer std.testing.allocator.free(actual[2]);
 
     const expected = [_][]const u8{
-        "sudo",
-        "-u",
-        "tester",
+        "/usr/bin/setpriv",
+        "--reuid=1000",
+        "--regid=1000",
+        "--init-groups",
+        "--",
         "/usr/bin/env",
         "-i",
         "HOME=/home/tester",
@@ -784,60 +840,19 @@ test "calling-user arguments use a clean invoking-user environment" {
         "XDG_RUNTIME_DIR=/run/user/1000",
         "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus",
         "PATH=" ++ PackageManager.process_runner.build_path.baseline,
-        "/usr/bin/shelly",
+        "/usr/bin/env",
         "upgrade",
         "flatpak",
         "--no-confirm",
     };
     try std.testing.expectEqual(expected.len, actual.len);
     for (expected, actual) |wanted, value| try std.testing.expectEqualStrings(wanted, value);
-}
-
-test "run0 invoking-user arguments use native options" {
-    const arguments = [_][]const u8{ "upgrade", "flatpak", "--no-confirm" };
-    const actual = try buildInvokingUserArguments(
-        std.testing.allocator,
-        "/usr/bin/run0",
-        "tester",
-        "/usr/bin/shelly",
-        "HOME=/home/tester",
-        "XDG_CONFIG_HOME=/home/tester/.config",
-        "XDG_DATA_HOME=/home/tester/.local/share",
-        "XDG_CACHE_HOME=/home/tester/.cache",
-        "XDG_BIN_HOME=/home/tester/.local/bin",
-        "XDG_RUNTIME_DIR=/run/user/1000",
-        "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus",
-        &arguments,
-    );
-    defer std.testing.allocator.free(actual);
-
-    const expected = [_][]const u8{
-        "/usr/bin/run0",
-        "--user",
-        "tester",
-        "--setenv",
-        "HOME=/home/tester",
-        "--setenv",
-        "XDG_CONFIG_HOME=/home/tester/.config",
-        "--setenv",
-        "XDG_DATA_HOME=/home/tester/.local/share",
-        "--setenv",
-        "XDG_CACHE_HOME=/home/tester/.cache",
-        "--setenv",
-        "XDG_BIN_HOME=/home/tester/.local/bin",
-        "--setenv",
-        "XDG_RUNTIME_DIR=/run/user/1000",
-        "--setenv",
-        "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus",
-        "--setenv",
-        "PATH=" ++ PackageManager.process_runner.build_path.baseline,
-        "/usr/bin/shelly",
-        "upgrade",
-        "flatpak",
-        "--no-confirm",
-    };
-    try std.testing.expectEqual(expected.len, actual.len);
-    for (expected, actual) |wanted, value| try std.testing.expectEqualStrings(wanted, value);
+    // A PAM session tool would move the child into a different login session
+    // scope, so the handoff must not route through one.
+    for (actual) |value| {
+        try std.testing.expect(std.mem.indexOf(u8, value, "runuser") == null);
+        try std.testing.expect(value.len < 4 or !std.mem.eql(u8, value[0..4], "sudo"));
+    }
 }
 
 const TestAccounts = struct {

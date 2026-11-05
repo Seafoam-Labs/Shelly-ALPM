@@ -84,6 +84,9 @@ pub fn execute(
     var operation = operation_context.begin(.{ .backend = .aur, .kind = .cleanup });
     var completion: PackageManager.OperationCompletionStatus = .failed;
     defer operation.finish(completion);
+    const caller = try PackageManager.user_account.caller(context.allocator, context.environ);
+    defer caller.deinit(context.allocator);
+    const delegate = std.c.geteuid() == 0 and caller.uid != 0;
     for (plans, 0..) |removal, index| {
         if (operation.isCancelled()) return error.Cancelled;
         if (removal.dry_run) continue;
@@ -97,7 +100,10 @@ pub fn execute(
         // deleteTree walks relative to directory handles and never follows
         // symlinks, including a directory replaced by a link after preview.
         const name = std.fs.path.basename(removal.full_path);
-        if (removal.directory) {
+        if (delegate) {
+            // The subprocess opens and removes entries with the caller's rights.
+            try PackageManager.user_account.caller_io.runWithCwd(context.allocator, context.io, context.environ, &.{ "/usr/bin/rm", if (removal.directory) "-rf" else "-f", "--", name }, null, .{ .dir = root });
+        } else if (removal.directory) {
             try root.deleteTree(context.io, name);
         } else {
             root.deleteFile(context.io, name) catch |err| switch (err) {

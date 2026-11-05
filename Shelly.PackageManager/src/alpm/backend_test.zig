@@ -656,7 +656,7 @@ test "native backend output observers receive preparation and transaction progre
     var capture: Capture = .{};
     const handler = try manager.dispatcher.addOperationHandler(.{ .function = Capture.event, .data = &capture });
     try manager.install_local_packages(&.{fixture.archive}, .{ .nohooks = true, .noscriptlet = true });
-    try t.expect(capture.checking_databases and !capture.internal_status_seen);
+    try t.expect(!capture.checking_databases and !capture.internal_status_seen);
     try t.expect(capture.checking_archives and capture.package_started and capture.progress);
     try t.expectEqual(@as(usize, 1), capture.completions);
     try manager.sync(false);
@@ -1358,4 +1358,39 @@ test "RLPM preview root and held package refusal have specific diagnostics" {
     try t.expectError(error.CommitFailed, manager.install_local_packages(&.{fixture.archive}, .{}));
     try capture.expect(error.PreviewRootReadOnly, &.{ "temporary update-check root", fixture.options.root_directory.? });
     try capture.expectLegacy();
+}
+
+test "purify removes pacman temporary download directories" {
+    if (!pm.Manager.libalpm_enabled) return;
+    var fixture = try Fixture.init(.libalpm);
+    defer fixture.deinit();
+    const io = t.io;
+    try fixture.temp.dir.createDirPath(io, "cache/download-Ab12Cd");
+    try fixture.temp.dir.createDirPath(io, "cache/download-ef34GH");
+    try fixture.temp.dir.writeFile(io, .{ .sub_path = "cache/download-ef34GH/demo-1.0-1-any.pkg.tar.zst.part", .data = "partial" });
+    try fixture.temp.dir.createDirPath(io, "cache/download-12345");
+    try fixture.temp.dir.createDirPath(io, "cache/notdownload-Ab12Cd");
+
+    const manager = try fixture.manager();
+    defer manager.deinit();
+
+    const planned = try manager.purify(true, false, true);
+    defer {
+        for (planned) |target| t.allocator.free(target);
+        t.allocator.free(planned);
+    }
+    try t.expectEqual(@as(usize, 2), planned.len);
+    try fixture.temp.dir.access(io, "cache/download-Ab12Cd", .{});
+    try fixture.temp.dir.access(io, "cache/download-ef34GH", .{});
+
+    const removed = try manager.purify(false, false, true);
+    defer {
+        for (removed) |target| t.allocator.free(target);
+        t.allocator.free(removed);
+    }
+    try t.expectEqual(@as(usize, 2), removed.len);
+    try t.expectError(error.FileNotFound, fixture.temp.dir.access(io, "cache/download-Ab12Cd", .{}));
+    try t.expectError(error.FileNotFound, fixture.temp.dir.access(io, "cache/download-ef34GH", .{}));
+    try fixture.temp.dir.access(io, "cache/download-12345", .{});
+    try fixture.temp.dir.access(io, "cache/notdownload-Ab12Cd", .{});
 }

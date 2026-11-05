@@ -1,0 +1,1838 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: Shelly-ALPM / Shelly: UI\n"
+"Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
+"POT-Creation-Date: 2026-11-04 12:08-0500\n"
+"PO-Revision-Date: 2026-11-03 12:00+0700\n"
+"Last-Translator: dinhkarate <dinhkarat@gmail.com>\n"
+"Language-Team: Vietnamese <vi@li.org>\n"
+"Language: vi\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+msgid "No installable addons available"
+msgstr "Không có tiện ích bổ sung nào để cài đặt"
+
+msgid "Close"
+msgstr "Đóng"
+
+msgid "Enable AUR?"
+msgstr "Bật AUR?"
+
+msgid ""
+"The Arch User Repository contains build scripts that are known as PKGBUILDs. "
+"Those scripts are uploaded by users, and are not verified or vetted in any "
+"way. Only enable this feature if you are comfortable in verifying the build "
+"scripts."
+msgstr ""
+"Kho người dùng Arch (AUR) chứa các tập lệnh biên dịch gọi là PKGBUILD. Các "
+"tập lệnh này do người dùng tải lên và không hề được xác minh hay kiểm duyệt. "
+"Chỉ bật tính năng này nếu bạn tự tin kiểm tra được các tập lệnh biên dịch."
+
+msgid ""
+"<a href=\"https://www.seafoam-labs.org/shelly-alpm/docs/aur-safety/\">AUR "
+"Safety Guide</a>"
+msgstr ""
+"<a href=\"https://www.seafoam-labs.org/shelly-alpm/docs/aur-safety/\">Hướng "
+"dẫn an toàn khi dùng AUR</a>"
+
+msgid "Enable"
+msgstr "Bật"
+
+msgid "Cancel"
+msgstr "Hủy"
+
+msgid "Keep configuration"
+msgstr "Giữ cấu hình"
+
+msgid "App data and settings will be kept."
+msgstr "Dữ liệu và cài đặt của ứng dụng sẽ được giữ lại."
+
+msgid "Remove configuration"
+msgstr "Gỡ bỏ cấu hình"
+
+msgid "App data will be permanently removed."
+msgstr "Dữ liệu ứng dụng sẽ bị xóa vĩnh viễn."
+
+msgid "Confirm"
+msgstr "Xác nhận"
+
+msgid "Permissions unavailable"
+msgstr "Không có thông tin quyền"
+
+msgid "Shelly could not read the permissions for this app."
+msgstr "Shelly không thể đọc quyền của ứng dụng này."
+
+msgid "No special permissions requested"
+msgstr "Không yêu cầu quyền đặc biệt nào"
+
+msgid "Review PKGBUILD changes"
+msgstr "Xem lại thay đổi PKGBUILD"
+
+msgid "Changes"
+msgstr "Thay đổi"
+
+msgid "Warnings"
+msgstr "Cảnh báo"
+
+msgid ""
+"These commands fetch and execute code outside of shelly and libalpm's "
+"control. Review them before continuing."
+msgstr ""
+"Các lệnh này tải về và thực thi mã nằm ngoài tầm kiểm soát của shelly và "
+"libalpm. Hãy xem lại trước khi tiếp tục."
+
+msgid "Source Files"
+msgstr "Tệp nguồn"
+
+msgid "polkit is required"
+msgstr "Cần có polkit"
+
+msgid ""
+"Shelly's GUI needs <b>polkit</b> installed and running to authorize "
+"privileged actions, but it wasn't found on the system bus.\n"
+"\n"
+"Install and enable it, then retry.\n"
+"\n"
+"<a href=\"https://www.seafoam-labs.org/shelly-alpm/docs/polkit/\">seafoam-"
+"labs.org/shelly-alpm/docs/polkit</a>"
+msgstr ""
+"Giao diện đồ họa của Shelly cần <b>polkit</b> được cài đặt và đang chạy để "
+"cấp quyền cho các thao tác đặc quyền, nhưng không tìm thấy polkit trên bus "
+"hệ thống.\n"
+"\n"
+"Hãy cài đặt và bật polkit, sau đó thử lại.\n"
+"\n"
+"<a href=\"https://www.seafoam-labs.org/shelly-alpm/docs/polkit/\">seafoam-"
+"labs.org/shelly-alpm/docs/polkit</a>"
+
+msgid "Review PKGBUILD"
+msgstr "Xem lại PKGBUILD"
+
+msgid "PKGBUILD"
+msgstr "PKGBUILD"
+
+msgid "Retry"
+msgstr "Thử lại"
+
+msgid "Skip"
+msgstr "Bỏ qua"
+
+msgid "AppImage"
+msgstr "AppImage"
+
+msgid "Search..."
+msgstr "Tìm kiếm..."
+
+msgid "Sync metadata for all AppImages. Useful if AppImage self updated."
+msgstr ""
+"Đồng bộ siêu dữ liệu cho tất cả AppImage. Hữu ích khi AppImage đã tự cập "
+"nhật."
+
+msgid "Sync All"
+msgstr "Đồng bộ tất cả"
+
+msgid "Upgrade all AppImages to their latest versions"
+msgstr "Nâng cấp tất cả AppImage lên phiên bản mới nhất"
+
+msgid "Upgrade All"
+msgstr "Nâng cấp tất cả"
+
+msgid "Install a new AppImage from a file"
+msgstr "Cài đặt AppImage mới từ tệp"
+
+msgid "Install AppImage"
+msgstr "Cài đặt AppImage"
+
+msgid "Drop AppImage here to install"
+msgstr "Thả AppImage vào đây để cài đặt"
+
+msgid "App Name"
+msgstr "Tên ứng dụng"
+
+msgid "Version"
+msgstr "Phiên bản"
+
+msgid "Description goes here..."
+msgstr "Mô tả hiển thị ở đây..."
+
+msgid "Size on Disk"
+msgstr "Dung lượng trên đĩa"
+
+msgid "Update Strategy"
+msgstr "Phương thức cập nhật"
+
+msgid "Update URL / Repository Info"
+msgstr "URL cập nhật / thông tin kho"
+
+msgid "Get more information about Update URL / Repository Info"
+msgstr "Xem thêm thông tin về URL cập nhật / thông tin kho"
+
+msgid "e.g. owner/repo or https://..."
+msgstr "ví dụ: owner/repo hoặc https://..."
+
+msgid ""
+"Enter the repository as owner/repo, for example seafoam-labs/shelly-alpm."
+msgstr "Nhập kho theo dạng owner/repo, ví dụ seafoam-labs/shelly-alpm."
+
+msgid "Allow Prerelease"
+msgstr "Cho phép bản phát hành thử nghiệm"
+
+msgid "Installation Path"
+msgstr "Đường dẫn cài đặt"
+
+msgid "Launch Flags"
+msgstr "Tham số khởi chạy"
+
+msgid "Environment Variables"
+msgstr "Biến môi trường"
+
+msgid ""
+"One KEY=value per line. Remove a line to restore the normal environment."
+msgstr ""
+"Mỗi dòng một KEY=value. Xóa một dòng để khôi phục môi trường bình thường."
+
+msgid "Save Environment"
+msgstr "Lưu môi trường"
+
+msgid "Save"
+msgstr "Lưu"
+
+msgid "Sync"
+msgstr "Đồng bộ"
+
+msgid "Remove"
+msgstr "Gỡ bỏ"
+
+msgid "AUR"
+msgstr "AUR"
+
+msgid "Search the AUR by name or keyword"
+msgstr "Tìm kiếm trên AUR theo tên hoặc từ khóa"
+
+msgid "Search By"
+msgstr "Tìm kiếm theo"
+
+msgid "Installed Only"
+msgstr "Chỉ gói đã cài đặt"
+
+msgid "Show only installed packages"
+msgstr "Chỉ hiện các gói đã cài đặt"
+
+msgid "Previous page"
+msgstr "Trang trước"
+
+msgid "Page 1 of 1"
+msgstr "Trang 1 trên 1"
+
+msgid "Next page"
+msgstr "Trang sau"
+
+msgid "Additional Options"
+msgstr "Tùy chọn bổ sung"
+
+msgid "Install Selected"
+msgstr "Cài đặt mục đã chọn"
+
+msgid "Select"
+msgstr "Chọn"
+
+msgid "Name"
+msgstr "Tên"
+
+msgid "Votes"
+msgstr "Lượt bình chọn"
+
+msgid "Popularity"
+msgstr "Độ phổ biến"
+
+msgid "Loading the AUR index"
+msgstr "Đang tải chỉ mục AUR"
+
+msgid "Powered by Atoll."
+msgstr "Được hỗ trợ bởi Atoll."
+
+msgid "Run checks"
+msgstr "Chạy kiểm tra"
+
+msgid "Run the --check function during package build"
+msgstr "Chạy hàm --check trong khi biên dịch gói"
+
+msgid "Hide Detail Pane"
+msgstr "Ẩn khung chi tiết"
+
+msgid "Hide the detail pane on the right"
+msgstr "Ẩn khung chi tiết ở bên phải"
+
+msgid "Information"
+msgstr "Thông tin"
+
+msgid "Preview Pkgbuild"
+msgstr "Xem trước PKGBUILD"
+
+msgid "Search the AUR"
+msgstr "Tìm kiếm trên AUR"
+
+msgid "The AUR has no browsable index. Type a package name to begin."
+msgstr "AUR không có chỉ mục để duyệt. Hãy nhập tên gói để bắt đầu."
+
+msgid "Install a local Flatpak"
+msgstr "Cài đặt Flatpak cục bộ"
+
+msgid ""
+"Choose a .flatpak bundle from your system and install it for the current "
+"user or system-wide."
+msgstr ""
+"Chọn một tệp gói .flatpak trên máy và cài đặt cho người dùng hiện tại hoặc "
+"cho toàn hệ thống."
+
+msgid "Bundle"
+msgstr "Tệp gói"
+
+msgid "Choose file…"
+msgstr "Chọn tệp…"
+
+msgid "Install for"
+msgstr "Cài đặt cho"
+
+msgid "system"
+msgstr "hệ thống"
+
+msgid "user"
+msgstr "người dùng"
+
+msgid "Install"
+msgstr "Cài đặt"
+
+msgid "No matching applications found"
+msgstr "Không tìm thấy ứng dụng phù hợp"
+
+msgid "Loading Flatpak Data..."
+msgstr "Đang tải dữ liệu Flatpak..."
+
+msgid "Back"
+msgstr "Quay lại"
+
+msgid "Addons"
+msgstr "Tiện ích bổ sung"
+
+msgid "Install source"
+msgstr "Nguồn cài đặt"
+
+msgid "Author"
+msgstr "Tác giả"
+
+msgid "Version: -"
+msgstr "Phiên bản: -"
+
+msgid "Size: -"
+msgstr "Kích thước: -"
+
+msgid "License: -"
+msgstr "Giấy phép: -"
+
+msgid "Summary"
+msgstr "Tóm tắt"
+
+msgid "Show more"
+msgstr "Xem thêm"
+
+msgid "App Permissions"
+msgstr "Quyền của ứng dụng"
+
+msgid "Version History"
+msgstr "Lịch sử phiên bản"
+
+msgid "Flatpak"
+msgstr "Flatpak"
+
+msgid "Search packages..."
+msgstr "Tìm kiếm gói..."
+
+msgid "Browse"
+msgstr "Duyệt"
+
+msgid "Manage"
+msgstr "Quản lý"
+
+msgid "Manage Remote Refs"
+msgstr "Quản lý nguồn từ xa"
+
+msgid "Install Local"
+msgstr "Cài đặt cục bộ"
+
+msgid "Delete Selected Remote"
+msgstr "Xóa nguồn từ xa đã chọn"
+
+msgid "Add Remote"
+msgstr "Thêm nguồn từ xa"
+
+msgid "Add New Flatpak Remote"
+msgstr "Thêm nguồn Flatpak từ xa mới"
+
+msgid "Add"
+msgstr "Thêm"
+
+msgid "Remote Name"
+msgstr "Tên nguồn từ xa"
+
+msgid "e.g., flathub"
+msgstr "ví dụ: flathub"
+
+msgid "Remote URL"
+msgstr "URL nguồn từ xa"
+
+msgid "e.g., https://flathub.org/repo/flathub.flatpakrepo"
+msgstr "ví dụ: https://flathub.org/repo/flathub.flatpakrepo"
+
+msgid "Scope"
+msgstr "Phạm vi"
+
+msgid "Show Runtimes"
+msgstr "Hiện runtime"
+
+msgid "Flatpak Repair"
+msgstr "Sửa chữa Flatpak"
+
+msgid "Repairs Flatpak Installation (Experimental)"
+msgstr "Sửa chữa bản cài đặt Flatpak (thử nghiệm)"
+
+msgid "About"
+msgstr "Giới thiệu"
+
+msgid "Shelly"
+msgstr "Shelly"
+
+msgid "Install Optional Deps"
+msgstr "Cài đặt phụ thuộc tùy chọn"
+
+msgid "Reinstall"
+msgstr "Cài đặt lại"
+
+msgid "Add Ignore"
+msgstr "Thêm vào danh sách bỏ qua"
+
+msgid "Add Hold"
+msgstr "Thêm vào danh sách giữ"
+
+msgid "Make Explicit"
+msgstr "Đánh dấu cài đặt tường minh"
+
+msgid "Mark Dependency"
+msgstr "Đánh dấu là phụ thuộc"
+
+msgid "Package actions"
+msgstr "Thao tác với gói"
+
+msgid "Package"
+msgstr "Gói"
+
+msgid "Package Group Filter"
+msgstr "Lọc theo nhóm gói"
+
+msgid "Selected Packages"
+msgstr "Gói đã chọn"
+
+msgid "0 Selected"
+msgstr "0 mục đã chọn"
+
+msgid "Grid View"
+msgstr "Dạng lưới"
+
+msgid "List View"
+msgstr "Dạng danh sách"
+
+msgid "Size"
+msgstr "Kích thước"
+
+msgid "Repository"
+msgstr "Kho"
+
+msgid "Install Date"
+msgstr "Ngày cài đặt"
+
+msgid "No matching packages found"
+msgstr "Không tìm thấy gói phù hợp"
+
+msgid "Had an issue loading your packages. Check if you have a db lock."
+msgstr ""
+"Đã xảy ra sự cố khi tải các gói. Hãy kiểm tra xem cơ sở dữ liệu có đang bị "
+"khóa (db lock) không."
+
+msgid "Perform Upgrade"
+msgstr "Thực hiện nâng cấp"
+
+msgid "Perform a full system upgrade with install (-u)"
+msgstr "Nâng cấp toàn bộ hệ thống khi cài đặt (-u)"
+
+msgid "Show Hidden"
+msgstr "Hiện gói ẩn"
+
+msgid "Show packages in the IgnorePkg list from pacman.conf"
+msgstr "Hiện các gói trong danh sách IgnorePkg của pacman.conf"
+
+msgid "Show Explicit Only"
+msgstr "Chỉ hiện gói cài tường minh"
+
+msgid "Show only explicitly installed packages"
+msgstr "Chỉ hiện các gói được cài đặt tường minh"
+
+msgid "Show Dependency Only"
+msgstr "Chỉ hiện gói phụ thuộc"
+
+msgid "Show dependency packages only"
+msgstr "Chỉ hiện các gói phụ thuộc"
+
+msgid "Recommended"
+msgstr "Đề xuất"
+
+msgid "Recommended Packages"
+msgstr "Gói được đề xuất"
+
+msgid "Curated suggestions from Seafoam Labs"
+msgstr "Gợi ý được Seafoam Labs chọn lọc"
+
+msgid "Refresh the recommended packages list from the network"
+msgstr "Làm mới danh sách gói được đề xuất từ mạng"
+
+#| msgid "Mixed selection"
+msgid "Clear selection"
+msgstr ""
+
+#| msgid "Recommended Packages"
+msgid "Deselect all recommended packages"
+msgstr ""
+
+#| msgid "Install the selected packages?"
+msgid "Install all selected packages in one transaction"
+msgstr ""
+
+msgid "Loading Recommended Packages..."
+msgstr "Đang tải gói được đề xuất..."
+
+msgid ""
+"No recommendations found. Please check your internet connection and try "
+"again."
+msgstr ""
+"Không tìm thấy đề xuất nào. Vui lòng kiểm tra kết nối Internet rồi thử lại."
+
+msgid "Shelly Search"
+msgstr "Tìm kiếm Shelly"
+
+msgid "Search standard repositories, AUR and Flatpak"
+msgstr "Tìm kiếm trong kho tiêu chuẩn, AUR và Flatpak"
+
+msgid "Standard"
+msgstr "Tiêu chuẩn"
+
+msgid "Show results from the configured ALPM sync databases"
+msgstr "Hiện kết quả từ các cơ sở dữ liệu đồng bộ ALPM đã cấu hình"
+
+msgid "Show results from the Arch User Repository"
+msgstr "Hiện kết quả từ Kho người dùng Arch (AUR)"
+
+msgid "Show results from the configured Flatpak remotes"
+msgstr "Hiện kết quả từ các nguồn Flatpak từ xa đã cấu hình"
+
+msgid "Source"
+msgstr "Nguồn"
+
+msgid "Search everywhere"
+msgstr "Tìm kiếm ở mọi nơi"
+
+msgid ""
+"Search the standard repositories, the AUR, and Flatpak all at once. Type a "
+"name to begin."
+msgstr ""
+"Tìm kiếm đồng thời trong kho tiêu chuẩn, AUR và Flatpak. Hãy nhập tên để bắt "
+"đầu."
+
+msgid "Settings"
+msgstr "Cài đặt"
+
+msgid "General"
+msgstr "Chung"
+
+msgid "Enable AUR"
+msgstr "Bật AUR"
+
+msgid "Language"
+msgstr "Ngôn ngữ"
+
+msgid "Enable Flatpak"
+msgstr "Bật Flatpak"
+
+msgid "Enable Recommended"
+msgstr "Bật mục Đề xuất"
+
+msgid "Enable AppImage"
+msgstr "Bật AppImage"
+
+msgid "Enable Tray Icon"
+msgstr "Bật biểu tượng khay hệ thống"
+
+msgid "Add Tray To Auto Start"
+msgstr "Tự khởi động khay hệ thống"
+
+msgid "Use weekly schedule"
+msgstr "Dùng lịch hằng tuần"
+
+msgid "Run Tray as cron"
+msgstr "Chạy khay hệ thống dưới dạng cron"
+
+msgid "Tray update with ui"
+msgstr "Khay hệ thống cập nhật qua giao diện"
+
+msgid "Tray Check Interval (Hours)"
+msgstr "Chu kỳ kiểm tra của khay hệ thống (giờ)"
+
+msgid "Weekly Schedule"
+msgstr "Lịch hằng tuần"
+
+msgid "Sun"
+msgstr "CN"
+
+msgid "Mon"
+msgstr "T2"
+
+msgid "Tue"
+msgstr "T3"
+
+msgid "Wed"
+msgstr "T4"
+
+msgid "Thu"
+msgstr "T5"
+
+msgid "Fri"
+msgstr "T6"
+
+msgid "Sat"
+msgstr "T7"
+
+msgid "Update Time (24h):"
+msgstr "Giờ cập nhật (24h):"
+
+msgid ":"
+msgstr ":"
+
+msgid "Look & Feel"
+msgstr "Giao diện"
+
+msgid "Icons Enabled"
+msgstr "Bật biểu tượng"
+
+msgid ""
+"If enabled, Shelly will use appstream icons in the package list and details "
+"pages."
+msgstr ""
+"Nếu bật, Shelly sẽ dùng biểu tượng appstream trong danh sách gói và trang "
+"chi tiết."
+
+msgid "Use Symbolic Tray Icon"
+msgstr "Dùng biểu tượng khay dạng ký hiệu"
+
+msgid ""
+"If enabled, Shelly will use a symbolic svg icon instead of the default image "
+"one."
+msgstr ""
+"Nếu bật, Shelly sẽ dùng biểu tượng svg dạng ký hiệu thay cho biểu tượng ảnh "
+"mặc định."
+
+msgid "Tray Icon"
+msgstr "Biểu tượng khay hệ thống"
+
+msgid "Select File"
+msgstr "Chọn tệp"
+
+msgid "Clear"
+msgstr "Xóa"
+
+msgid "Tray Updates Icon"
+msgstr "Biểu tượng khay khi có cập nhật"
+
+msgid "Default page"
+msgstr "Trang mặc định"
+
+msgid "Navigation style"
+msgstr "Kiểu điều hướng"
+
+msgid "Advanced"
+msgstr "Nâng cao"
+
+msgid "Remove Cache on Uninstall"
+msgstr "Xóa bộ nhớ đệm khi gỡ cài đặt"
+
+msgid "No Confirm"
+msgstr "Không cần xác nhận"
+
+msgid "Enable Shelly Search"
+msgstr "Bật Tìm kiếm Shelly"
+
+msgid "Enable Atoll Powered AUR"
+msgstr "Bật AUR dùng Atoll"
+
+msgid "AppImage Install Path"
+msgstr "Đường dẫn cài đặt AppImage"
+
+msgid "Select Directory"
+msgstr "Chọn thư mục"
+
+msgid "View Changelog"
+msgstr "Xem nhật ký thay đổi"
+
+msgid "v0.0.0"
+msgstr "v0.0.0"
+
+msgid "GitHub"
+msgstr "GitHub"
+
+msgid "Community fluxer"
+msgstr "Cộng đồng Fluxer"
+
+msgid "Sponsor"
+msgstr "Tài trợ"
+
+msgid "Toggle output"
+msgstr "Hiện/ẩn đầu ra"
+
+msgid "Done"
+msgstr "Xong"
+
+msgid "Update"
+msgstr "Cập nhật"
+
+msgid "Available Updates"
+msgstr "Bản cập nhật hiện có"
+
+msgid "7 of 7 updates included"
+msgstr "7 trên 7 bản cập nhật được đưa vào"
+
+msgid "Check all enabled sources again"
+msgstr "Kiểm tra lại tất cả các nguồn đã bật"
+
+msgid "Check Again"
+msgstr "Kiểm tra lại"
+
+msgid "Upgrade"
+msgstr "Nâng cấp"
+
+msgid "System"
+msgstr "Hệ thống"
+
+msgid "Checking for updates…"
+msgstr "Đang kiểm tra cập nhật…"
+
+msgid "Your system is up to date"
+msgstr "Hệ thống của bạn đã được cập nhật đầy đủ"
+
+msgid "Could not check for updates."
+msgstr "Không thể kiểm tra cập nhật."
+
+msgid "Utilities"
+msgstr "Tiện ích"
+
+msgid "Maintenance and repair tools for your Shelly installation."
+msgstr "Công cụ bảo trì và sửa chữa cho bản cài đặt Shelly của bạn."
+
+msgid "Force Database Update"
+msgstr "Buộc cập nhật cơ sở dữ liệu"
+
+msgid "Force a synchronization of the package database."
+msgstr "Buộc đồng bộ cơ sở dữ liệu gói."
+
+msgid "Run"
+msgstr "Chạy"
+
+msgid "Remove db.lck"
+msgstr "Xóa db.lck"
+
+msgid ""
+"Removes the db.lck file if it was left behind by an interrupted alpm process."
+msgstr ""
+"Xóa tệp db.lck nếu tệp này còn sót lại do một tiến trình alpm bị gián đoạn."
+
+msgid "Fix Permissions"
+msgstr "Sửa quyền"
+
+msgid ""
+"Restores correct user ownership of Shelly configuration and cache folders if "
+"they were accidentally created by root."
+msgstr ""
+"Khôi phục đúng quyền sở hữu của người dùng đối với thư mục cấu hình và bộ "
+"nhớ đệm của Shelly nếu chúng vô tình được tạo bởi root."
+
+msgid "Purify Packages"
+msgstr "Làm sạch gói"
+
+msgid "Remove corrupted/orphaned packages."
+msgstr "Gỡ bỏ các gói bị hỏng/mồ côi."
+
+msgid "Clean Package Cache"
+msgstr "Dọn bộ nhớ đệm gói"
+
+msgid ""
+"Keeps the selected number of repository package versions and clears the "
+"entire Shelly cache, including AUR sources and build directories."
+msgstr ""
+
+msgid "Keep"
+msgstr "Giữ lại"
+
+msgid ""
+"Number of repository package versions to keep; the Shelly cache is cleared "
+"completely"
+msgstr ""
+
+msgid "Welcome to Shelly v3"
+msgstr "Chào mừng đến với Shelly v3"
+
+msgid ""
+"Shelly is a modern package manager for Arch Linux. Configure your sources "
+"and preferences to get started."
+msgstr ""
+"Shelly là trình quản lý gói hiện đại dành cho Arch Linux. Hãy cấu hình nguồn "
+"và tùy chọn của bạn để bắt đầu."
+
+msgid "Select Your Sources"
+msgstr "Chọn nguồn của bạn"
+
+msgid ""
+"Choose which package sources you want to browse. You can always change this "
+"later in settings."
+msgstr ""
+"Chọn những nguồn gói bạn muốn duyệt. Bạn luôn có thể thay đổi sau trong phần "
+"cài đặt."
+
+msgid "Arch User Repository community packages"
+msgstr "Gói cộng đồng từ Kho người dùng Arch"
+
+msgid "Sandboxed universal Linux applications"
+msgstr "Ứng dụng Linux phổ quát chạy trong hộp cát"
+
+msgid "Portable self-contained application bundles"
+msgstr "Gói ứng dụng khép kín, khả chuyển"
+
+msgid "Curated picks from Shelly"
+msgstr "Gợi ý được Shelly chọn lọc"
+
+msgid "Look and Feel"
+msgstr "Giao diện"
+
+msgid ""
+"Customize how Shelly looks and behaves. All of these can be changed later in "
+"preferences."
+msgstr ""
+"Tùy chỉnh giao diện và cách hoạt động của Shelly. Bạn có thể thay đổi tất cả "
+"các mục này sau trong phần tùy chọn."
+
+msgid "Navigation Style"
+msgstr "Kiểu điều hướng"
+
+msgid "Sidebar"
+msgstr "Thanh bên"
+
+msgid "Vertical icon rail on the left"
+msgstr "Thanh biểu tượng dọc ở bên trái"
+
+msgid "Top Bar"
+msgstr "Thanh trên cùng"
+
+msgid "Horizontal tab switcher at the top"
+msgstr "Thanh chuyển thẻ nằm ngang ở phía trên"
+
+msgid "System Tray"
+msgstr "Khay hệ thống"
+
+msgid "Run in system tray when minimized"
+msgstr "Chạy trong khay hệ thống khi thu nhỏ"
+
+msgid "Next"
+msgstr "Tiếp"
+
+msgid "Start Shelly"
+msgstr "Bắt đầu dùng Shelly"
+
+#| msgid "Enable AUR?"
+msgid "Enable Atoll?"
+msgstr ""
+
+#| msgid ""
+#| "The Arch User Repository contains build scripts that are known as "
+#| "PKGBUILDs. Those scripts are uploaded by users, and are not verified or "
+#| "vetted in any way. Only enable this feature if you are comfortable in "
+#| "verifying the build scripts."
+msgid ""
+"Atoll contains build scripts that are known as PKGBUILDs. Those scripts are "
+"uploaded by users, and are not verified or vetted in any way. Only enable "
+"this feature if you are comfortable in verifying the build scripts."
+msgstr ""
+
+#| msgid ""
+#| "<a href=\"https://www.seafoam-labs.org/shelly-alpm/docs/aur-safety/\">AUR "
+#| "Safety Guide</a>"
+msgid ""
+"<a href=\"https://www.seafoam-labs.org/shelly-alpm/docs/aur-safety/\">Atoll "
+"Safety Guide</a>"
+msgstr ""
+
+msgid "System files"
+msgstr "Tệp hệ thống"
+
+msgid "Other folders"
+msgstr "Thư mục khác"
+
+msgid "Running services"
+msgstr "Dịch vụ đang chạy"
+
+msgid "Other apps' data"
+msgstr "Dữ liệu của ứng dụng khác"
+
+msgid "Home folder"
+msgstr "Thư mục nhà"
+
+msgid "User folders"
+msgstr "Thư mục người dùng"
+
+msgid "Persistent files"
+msgstr "Tệp lưu trữ lâu dài"
+
+msgid "Devices"
+msgstr "Thiết bị"
+
+msgid "Session bus"
+msgstr "Bus phiên"
+
+msgid "System bus"
+msgstr "Bus hệ thống"
+
+msgid "Network access"
+msgstr "Truy cập mạng"
+
+msgid "Display server"
+msgstr "Máy chủ hiển thị"
+
+msgid "Sandbox features"
+msgstr "Tính năng hộp cát"
+
+msgid "Environment"
+msgstr "Môi trường"
+
+msgid "Sound"
+msgstr "Âm thanh"
+
+msgid "Printing"
+msgstr "In ấn"
+
+msgid "Inter-process communication"
+msgstr "Giao tiếp liên tiến trình"
+
+msgid "Other"
+msgstr "Khác"
+
+msgid "No network access"
+msgstr "Không có quyền truy cập mạng"
+
+msgid "No device access"
+msgstr "Không có quyền truy cập thiết bị"
+
+msgid "No access to system files"
+msgstr "Không có quyền truy cập tệp hệ thống"
+
+msgid "Review PKGBUILD changes for"
+msgstr "Xem lại thay đổi PKGBUILD của"
+
+msgid "Review Changes"
+msgstr "Xem lại thay đổi"
+
+msgid "Security scan completed -"
+msgstr "Quét bảo mật hoàn tất -"
+
+msgid "warning(s) found."
+msgstr "cảnh báo được phát hiện."
+
+msgid "Security scan completed - warnings found."
+msgstr "Quét bảo mật hoàn tất - phát hiện cảnh báo."
+
+msgid "Security scan completed - no issues found."
+msgstr "Quét bảo mật hoàn tất - không phát hiện vấn đề nào."
+
+msgid "used in"
+msgstr "được dùng trong"
+
+msgid "Install Anyway"
+msgstr "Vẫn cài đặt"
+
+msgid "Unknown"
+msgstr "Không rõ"
+
+msgid "package(s)"
+msgstr "gói"
+
+msgid "to"
+msgstr "cần"
+
+msgid "removed size"
+msgstr "dung lượng được giải phóng"
+
+msgid "download"
+msgstr "tải xuống"
+
+msgid "net"
+msgstr "chênh lệch dung lượng"
+
+msgid "Scanning PKGBUILD…"
+msgstr "Đang quét PKGBUILD…"
+
+msgid "Security scan unavailable."
+msgstr "Không thể quét bảo mật."
+
+msgid "Could not load the PKGBUILD preview."
+msgstr "Không thể tải bản xem trước PKGBUILD."
+
+msgid ""
+"PKGBUILD changed. Close and reopen the preview to scan the current version."
+msgstr ""
+"PKGBUILD đã thay đổi. Hãy đóng và mở lại bản xem trước để quét phiên bản "
+"hiện tại."
+
+msgid "No related files."
+msgstr "Không có tệp liên quan."
+
+msgid "Previous"
+msgstr "Trước"
+
+msgid "Dismiss"
+msgstr "Đóng"
+
+msgid "None"
+msgstr "Không có"
+
+msgid "Static URL"
+msgstr "URL cố định"
+
+msgid "GitLab"
+msgstr "GitLab"
+
+msgid "Codeberg"
+msgstr "Codeberg"
+
+msgid "Forgejo"
+msgstr "Forgejo"
+
+msgid "Zsync"
+msgstr ""
+
+msgid "Update Available"
+msgstr "Có bản cập nhật"
+
+msgid "Version ?"
+msgstr "Phiên bản ?"
+
+msgid "Enter a download URL beginning with http:// or https://."
+msgstr "Nhập URL tải xuống bắt đầu bằng http:// hoặc https://."
+
+msgid ""
+"Enter a Forgejo repository URL as http(s)://host/owner/repo or http(s)://"
+"host/owner/repo/releases."
+msgstr ""
+"Nhập URL kho Forgejo theo dạng http(s)://host/owner/repo hoặc http(s)://host/"
+"owner/repo/releases."
+
+msgid ""
+"Enter the http(s) URL of the .zsync control file, optionally as a zsync|"
+"<url> update information string."
+msgstr ""
+
+msgid "Choose an AppImage file"
+msgstr "Chọn tệp AppImage"
+
+msgid "AppImage files"
+msgstr "Tệp AppImage"
+
+msgid "Only.AppImage files can be installed"
+msgstr "Chỉ có thể cài đặt tệp .AppImage"
+
+msgid "Installing AppImage"
+msgstr "Đang cài đặt AppImage"
+
+msgid "No AppImages need to be upgraded"
+msgstr "Không có AppImage nào cần nâng cấp"
+
+msgid "Upgrading AppImages"
+msgstr "Đang nâng cấp AppImage"
+
+msgid "Syncing AppImages"
+msgstr "Đang đồng bộ AppImage"
+
+msgid "Syncing AppImage"
+msgstr "Đang đồng bộ AppImage"
+
+msgid ""
+"Use unique KEY=value lines. Keys must start with a letter or underscore and "
+"contain only letters, digits, or underscores."
+msgstr ""
+"Dùng các dòng KEY=value không trùng lặp. Khóa phải bắt đầu bằng chữ cái hoặc "
+"dấu gạch dưới và chỉ chứa chữ cái, chữ số hoặc dấu gạch dưới."
+
+msgid "Saving AppImage environment"
+msgstr "Đang lưu môi trường AppImage"
+
+msgid "Saving update configuration"
+msgstr "Đang lưu cấu hình cập nhật"
+
+msgid "Configuration files will be kept."
+msgstr "Các tệp cấu hình sẽ được giữ lại."
+
+msgid "Remove this AppImage?"
+msgstr "Gỡ bỏ AppImage này?"
+
+msgid "Remove AppImage"
+msgstr "Gỡ bỏ AppImage"
+
+msgid "Removing AppImage"
+msgstr "Đang gỡ bỏ AppImage"
+
+msgid "Operation completed successfully"
+msgstr "Thao tác đã hoàn tất thành công"
+
+msgid "Could not complete the requested operation."
+msgstr "Không thể hoàn tất thao tác được yêu cầu."
+
+msgid "Discard environment changes?"
+msgstr "Loại bỏ các thay đổi môi trường?"
+
+msgid "Your environment changes have not been saved."
+msgstr "Các thay đổi môi trường của bạn chưa được lưu."
+
+msgid "Discard"
+msgstr "Loại bỏ"
+
+msgid "No packages found"
+msgstr "Không tìm thấy gói nào"
+
+msgid "Try a shorter or more general keyword."
+msgstr "Hãy thử từ khóa ngắn hơn hoặc chung hơn."
+
+msgid "Could not reach Atoll"
+msgstr "Không thể kết nối tới Atoll"
+
+msgid "Check your connection and try again."
+msgstr "Hãy kiểm tra kết nối rồi thử lại."
+
+msgid "Flagged out of date"
+msgstr "Bị đánh dấu là lỗi thời"
+
+msgid "Installed"
+msgstr "Đã cài đặt"
+
+msgid "Remove Selected"
+msgstr "Gỡ bỏ mục đã chọn"
+
+msgid "Select one or more packages"
+msgstr "Chọn một hoặc nhiều gói"
+
+msgid "Package(s)"
+msgstr "gói"
+
+msgid "Page"
+msgstr "Trang"
+
+msgid "of"
+msgstr "trên"
+
+msgid "Remove Packages"
+msgstr "Gỡ bỏ gói"
+
+msgid "Remove the selected AUR packages?"
+msgstr "Gỡ bỏ các gói AUR đã chọn?"
+
+msgid "Build from AUR"
+msgstr "Biên dịch từ AUR"
+
+msgid "Build and install the selected packages? This may take a while."
+msgstr "Biên dịch và cài đặt các gói đã chọn? Việc này có thể mất một lúc."
+
+msgid "Build"
+msgstr "Biên dịch"
+
+msgid "Installing AUR packages"
+msgstr "Đang cài đặt gói AUR"
+
+msgid "Removing AUR packages"
+msgstr "Đang gỡ bỏ gói AUR"
+
+msgid "Maintainer"
+msgstr "Người bảo trì"
+
+msgid "Last Modified"
+msgstr "Sửa đổi lần cuối"
+
+msgid "First Submitted"
+msgstr "Gửi lần đầu"
+
+msgid "URL"
+msgstr "URL"
+
+msgid "Licenses"
+msgstr "Giấy phép"
+
+msgid "Depends"
+msgstr "Phụ thuộc"
+
+msgid "Optional Depends"
+msgstr "Phụ thuộc tùy chọn"
+
+msgid "Make Depends"
+msgstr "Phụ thuộc khi biên dịch"
+
+msgid "Section"
+msgstr "Mục"
+
+msgid "The AUR has no browsable index — type a package name to begin."
+msgstr "AUR không có chỉ mục để duyệt — hãy nhập tên gói để bắt đầu."
+
+msgid "Could not search the configured AUR service."
+msgstr "Không thể tìm kiếm trên dịch vụ AUR đã cấu hình."
+
+msgid "Choose a Flatpak file"
+msgstr "Chọn tệp Flatpak"
+
+msgid "Flatpak files"
+msgstr "Tệp Flatpak"
+
+msgid "Unsupported file type. Choose a.flatpak or.flatpakref file."
+msgstr "Loại tệp không được hỗ trợ. Hãy chọn tệp .flatpak hoặc .flatpakref."
+
+msgid "Installing local flatpak"
+msgstr "Đang cài đặt flatpak cục bộ"
+
+msgid "Could not install the selected packages."
+msgstr "Không thể cài đặt các gói đã chọn."
+
+msgid "Installation complete."
+msgstr "Cài đặt hoàn tất."
+
+msgid "Choose file..."
+msgstr "Chọn tệp..."
+
+msgid "Verified"
+msgstr "Đã xác minh"
+
+msgid "Show less"
+msgstr "Thu gọn"
+
+msgid "Installing flatpak"
+msgstr "Đang cài đặt flatpak"
+
+msgid "Remove this Flatpak?"
+msgstr "Gỡ bỏ Flatpak này?"
+
+msgid "Remove Flatpak"
+msgstr "Gỡ bỏ Flatpak"
+
+msgid "Removing Flatpak"
+msgstr "Đang gỡ bỏ Flatpak"
+
+msgid "Permissions"
+msgstr "Quyền"
+
+msgid "Available Addons"
+msgstr "Tiện ích bổ sung hiện có"
+
+msgid "Installing flatpak addon"
+msgstr "Đang cài đặt tiện ích bổ sung flatpak"
+
+msgid "Unknown developer"
+msgstr "Nhà phát triển không rõ"
+
+msgid "Version: Unknown"
+msgstr "Phiên bản: Không rõ"
+
+msgid "Size: Loading..."
+msgstr "Kích thước: Đang tải..."
+
+msgid "Size: Unknown"
+msgstr "Kích thước: Không rõ"
+
+msgid "License"
+msgstr "Giấy phép"
+
+msgid "License: Unknown"
+msgstr "Giấy phép: Không rõ"
+
+msgid "No summary available"
+msgstr "Không có tóm tắt"
+
+msgid "Size: Unavailable"
+msgstr "Kích thước: Không có"
+
+msgid "Download"
+msgstr "Tải xuống"
+
+msgid "No description available."
+msgstr "Không có mô tả."
+
+msgid "Could not load this application screenshot."
+msgstr "Không thể tải ảnh chụp màn hình của ứng dụng này."
+
+msgid "Could not download this application screenshot."
+msgstr "Không thể tải xuống ảnh chụp màn hình của ứng dụng này."
+
+msgid "Could not display the downloaded application screenshot."
+msgstr "Không thể hiển thị ảnh chụp màn hình ứng dụng đã tải xuống."
+
+msgid "Open link in browser"
+msgstr "Mở liên kết trong trình duyệt"
+
+msgid "Homepage"
+msgstr "Trang chủ"
+
+msgid "Bug tracker"
+msgstr "Trình theo dõi lỗi"
+
+msgid "Donation"
+msgstr "Quyên góp"
+
+msgid "FAQ"
+msgstr "Câu hỏi thường gặp"
+
+msgid "Help"
+msgstr "Trợ giúp"
+
+msgid "Vcs-browser"
+msgstr "Kho mã nguồn"
+
+msgid "Contact"
+msgstr "Liên hệ"
+
+msgid "Translate"
+msgstr "Dịch"
+
+msgid ""
+"Could not load Flatpak applications because Shelly ran out of memory. Close "
+"other applications and try again."
+msgstr ""
+"Không thể tải ứng dụng Flatpak vì Shelly đã hết bộ nhớ. Hãy đóng các ứng "
+"dụng khác rồi thử lại."
+
+msgid "Could not start loading Flatpak applications."
+msgstr "Không thể bắt đầu tải ứng dụng Flatpak."
+
+msgid "Could not load Flatpak applications from the selected remote."
+msgstr "Không thể tải ứng dụng Flatpak từ nguồn từ xa đã chọn."
+
+msgid "No Flatpak applications are available."
+msgstr "Không có ứng dụng Flatpak nào."
+
+msgid "Discover"
+msgstr "Khám phá"
+
+msgid "Categories"
+msgstr "Danh mục"
+
+msgid "All Applications"
+msgstr "Tất cả ứng dụng"
+
+msgid "Most Wanted"
+msgstr "Được quan tâm nhiều nhất"
+
+msgid "Recently Added"
+msgstr "Mới thêm gần đây"
+
+msgid "Recently Updated"
+msgstr "Mới cập nhật gần đây"
+
+msgid "Audio & Video"
+msgstr "Âm thanh & video"
+
+msgid "Development"
+msgstr "Phát triển"
+
+msgid "Education"
+msgstr "Giáo dục"
+
+msgid "Game"
+msgstr "Trò chơi"
+
+msgid "Graphics"
+msgstr "Đồ họa"
+
+msgid "Network"
+msgstr "Mạng"
+
+msgid "Office"
+msgstr "Văn phòng"
+
+msgid "Science"
+msgstr "Khoa học"
+
+msgid "Utility"
+msgstr "Tiện ích"
+
+msgid "Removing Remote"
+msgstr "Đang gỡ bỏ nguồn từ xa"
+
+msgid "Adding Remote"
+msgstr "Đang thêm nguồn từ xa"
+
+msgid "App ID"
+msgstr "ID ứng dụng"
+
+msgid "Remote"
+msgstr "Nguồn từ xa"
+
+msgid "Developer"
+msgstr "Nhà phát triển"
+
+msgid "Type"
+msgstr "Loại"
+
+msgid "Download Size"
+msgstr "Dung lượng tải xuống"
+
+msgid "Installed Size"
+msgstr "Dung lượng cài đặt"
+
+msgid "Yes"
+msgstr "Có"
+
+msgid "No"
+msgstr "Không"
+
+msgid "Keywords"
+msgstr "Từ khóa"
+
+msgid "Flathub"
+msgstr "Flathub"
+
+msgid "Loading..."
+msgstr "Đang tải..."
+
+msgid "Build Date"
+msgstr "Ngày biên dịch"
+
+msgid "Install Reason"
+msgstr "Lý do cài đặt"
+
+msgid "Provides"
+msgstr "Cung cấp"
+
+msgid "Conflicts"
+msgstr "Xung đột"
+
+msgid "Required By"
+msgstr "Được yêu cầu bởi"
+
+msgid "Reinstalling package"
+msgstr "Đang cài đặt lại gói"
+
+msgid "Adding to package ignore"
+msgstr "Đang thêm vào danh sách gói bỏ qua"
+
+msgid "Adding to package to hold"
+msgstr "Đang thêm vào danh sách gói giữ lại"
+
+msgid "Making Package Explicit"
+msgstr "Đang đánh dấu gói là cài đặt tường minh"
+
+msgid "Making Package Dependency"
+msgstr "Đang đánh dấu gói là phụ thuộc"
+
+msgid "Select Optional Dependencies to Install"
+msgstr "Chọn phụ thuộc tùy chọn để cài đặt"
+
+msgid "Installing optional dependencies"
+msgstr "Đang cài đặt phụ thuộc tùy chọn"
+
+msgid "Package is already installed"
+msgstr "Gói đã được cài đặt"
+
+msgid "Remove from selection"
+msgstr "Bỏ khỏi danh sách đã chọn"
+
+msgid "remove"
+msgstr "gỡ bỏ"
+
+msgid "install"
+msgstr "cài đặt"
+
+msgid "No packages selected"
+msgstr "Chưa chọn gói nào"
+
+msgid "Selected"
+msgstr "mục đã chọn"
+
+msgid "Mixed selection"
+msgstr "Lựa chọn không đồng nhất"
+
+msgid ""
+"Select only installed packages to remove, or only available ones to install."
+msgstr ""
+"Chỉ chọn các gói đã cài đặt để gỡ bỏ, hoặc chỉ chọn các gói có sẵn để cài "
+"đặt."
+
+msgid "Remove the selected packages?"
+msgstr "Gỡ bỏ các gói đã chọn?"
+
+msgid "Removing packages"
+msgstr "Đang gỡ bỏ gói"
+
+msgid "Installing packages"
+msgstr "Đang cài đặt gói"
+
+msgid "Select package for batch installation"
+msgstr ""
+
+#| msgid "Search standard repositories, AUR and Flatpak"
+msgid "Search standard repositories, Atoll and Flatpak"
+msgstr ""
+
+#| msgid "Show results from the Arch User Repository"
+msgid "Show results from Atoll"
+msgstr ""
+
+#| msgid ""
+#| "Search the standard repositories, the AUR, and Flatpak all at once. Type "
+#| "a name to begin."
+msgid ""
+"Search the standard repositories, Atoll, and Flatpak all at once. Type a "
+"name to begin."
+msgstr ""
+
+msgid ""
+"Search standard repositories, the AUR and Flatpak at once. Type a name to "
+"begin."
+msgstr ""
+"Tìm kiếm đồng thời trong kho tiêu chuẩn, AUR và Flatpak. Hãy nhập tên để bắt "
+"đầu."
+
+msgid "Could not search the selected sources."
+msgstr "Không thể tìm kiếm trong các nguồn đã chọn."
+
+msgid "Installation in progress"
+msgstr "Đang cài đặt"
+
+msgid "No sources selected"
+msgstr "Chưa chọn nguồn nào"
+
+msgid "Enable at least one source filter above."
+msgstr "Hãy bật ít nhất một bộ lọc nguồn ở trên."
+
+msgid "Install Packages"
+msgstr "Cài đặt gói"
+
+msgid "Install the selected packages?"
+msgstr "Cài đặt các gói đã chọn?"
+
+#| msgid "Enable AUR"
+msgid "Enable Atoll"
+msgstr ""
+
+msgid ""
+"Could not save settings to the configured file. Your latest changes were not "
+"saved."
+msgstr ""
+"Không thể lưu cài đặt vào tệp đã cấu hình. Các thay đổi gần nhất của bạn "
+"chưa được lưu."
+
+msgid "Settings saved"
+msgstr "Đã lưu cài đặt"
+
+msgid "Installing Flatpak support"
+msgstr "Đang cài đặt hỗ trợ Flatpak"
+
+msgid "Installing AppImage support"
+msgstr "Đang cài đặt hỗ trợ AppImage"
+
+msgid "Could not start installing Flatpak support."
+msgstr "Không thể bắt đầu cài đặt hỗ trợ Flatpak."
+
+msgid "Could not start installing AppImage support."
+msgstr "Không thể bắt đầu cài đặt hỗ trợ AppImage."
+
+msgid "Could not install Flatpak support."
+msgstr "Không thể cài đặt hỗ trợ Flatpak."
+
+msgid "Could not install AppImage support."
+msgstr "Không thể cài đặt hỗ trợ AppImage."
+
+msgid "Flatpak support enabled"
+msgstr "Đã bật hỗ trợ Flatpak"
+
+msgid "AppImage support enabled"
+msgstr "Đã bật hỗ trợ AppImage"
+
+msgid "No changelog entries found"
+msgstr "Không tìm thấy mục nào trong nhật ký thay đổi"
+
+msgid "No details for this release"
+msgstr "Không có thông tin chi tiết cho bản phát hành này"
+
+msgid "Could not load the release notes."
+msgstr "Không thể tải ghi chú phát hành."
+
+msgid "Changelog"
+msgstr "Nhật ký thay đổi"
+
+msgid "Select Tray Icon"
+msgstr "Chọn biểu tượng khay hệ thống"
+
+msgid "Select Icon"
+msgstr "Chọn biểu tượng"
+
+msgid "Select Tray Updates Icon"
+msgstr "Chọn biểu tượng khay khi có cập nhật"
+
+msgid "Select AppImage Install Directory"
+msgstr "Chọn thư mục cài đặt AppImage"
+
+msgid "Tray enabled"
+msgstr "Đã bật khay hệ thống"
+
+msgid ""
+"The tray is disabled, but its autostart service could not be removed. It may "
+"start again at the next login."
+msgstr ""
+"Đã tắt khay hệ thống nhưng không thể gỡ bỏ dịch vụ tự khởi động của nó. Khay "
+"có thể khởi động lại ở lần đăng nhập tiếp theo."
+
+msgid "Tray disabled"
+msgstr "Đã tắt khay hệ thống"
+
+msgid "Could not enable the tray autostart service."
+msgstr "Không thể bật dịch vụ tự khởi động của khay hệ thống."
+
+msgid "Systemd startup service added."
+msgstr "Đã thêm dịch vụ khởi động systemd."
+
+msgid "Could not disable the tray autostart service."
+msgstr "Không thể tắt dịch vụ tự khởi động của khay hệ thống."
+
+msgid "Systemd startup service removed."
+msgstr "Đã gỡ bỏ dịch vụ khởi động systemd."
+
+msgid "AUR enabled"
+msgstr "Đã bật AUR"
+
+msgid "System Default"
+msgstr "Mặc định hệ thống"
+
+msgid "English"
+msgstr "Tiếng Anh"
+
+msgid "Bulgarian"
+msgstr "Tiếng Bulgaria"
+
+msgid "Català"
+msgstr "Català"
+
+msgid "Deutsch"
+msgstr "Deutsch"
+
+msgid "Español"
+msgstr "Español"
+
+msgid "Français"
+msgstr "Français"
+
+msgid "Magyar"
+msgstr "Magyar"
+
+msgid "日本語"
+msgstr "日本語"
+
+msgid "Polski"
+msgstr "Polski"
+
+msgid "Português (Brasil)"
+msgstr "Português (Brasil)"
+
+msgid "Português (Portugal)"
+msgstr "Português (Portugal)"
+
+msgid "Русский"
+msgstr "Русский"
+
+msgid "Türkçe"
+msgstr "Türkçe"
+
+msgid "中文（简体）"
+msgstr "中文（简体）"
+
+msgid "Packages"
+msgstr "Gói"
+
+msgid "Pending"
+msgstr "Đang chờ"
+
+msgid "Working"
+msgstr "Đang xử lý"
+
+msgid "Upgraded"
+msgstr "Đã nâng cấp"
+
+msgid "Downgraded"
+msgstr "Đã hạ cấp"
+
+msgid "Reinstalled"
+msgstr "Đã cài đặt lại"
+
+msgid "Removed"
+msgstr "Đã gỡ bỏ"
+
+msgid "Failed"
+msgstr "Thất bại"
+
+msgid "Not processed"
+msgstr "Chưa xử lý"
+
+msgid "Interrupted"
+msgstr "Bị gián đoạn"
+
+msgid "Cancelled"
+msgstr "Đã hủy"
+
+msgid "Could not start the requested operation."
+msgstr "Không thể bắt đầu thao tác được yêu cầu."
+
+msgid "Synchronizing databases"
+msgstr "Đang đồng bộ cơ sở dữ liệu"
+
+msgid "Building"
+msgstr "Đang biên dịch"
+
+msgid "Downloading"
+msgstr "Đang tải xuống"
+
+msgid "Packaging"
+msgstr "Đang đóng gói"
+
+msgid "Installing"
+msgstr "Đang cài đặt"
+
+msgid "Upgrading"
+msgstr "Đang nâng cấp"
+
+msgid "Downgrading"
+msgstr "Đang hạ cấp"
+
+msgid "Reinstalling"
+msgstr "Đang cài đặt lại"
+
+msgid "Removing"
+msgstr "Đang gỡ bỏ"
+
+msgid "Checking keyring"
+msgstr "Đang kiểm tra chuỗi khóa"
+
+msgid "Checking integrity"
+msgstr "Đang kiểm tra tính toàn vẹn"
+
+msgid "Loading packages"
+msgstr "Đang tải gói"
+
+msgid "Checking conflicts"
+msgstr "Đang kiểm tra xung đột"
+
+msgid "Checking disk space"
+msgstr "Đang kiểm tra dung lượng đĩa"
+
+msgid "Transaction Completed"
+msgstr "Giao dịch đã hoàn tất"
+
+msgid "Operation failed"
+msgstr "Thao tác thất bại"
+
+msgid "Operation cancelled"
+msgstr "Đã hủy thao tác"
+
+msgid "Finished"
+msgstr "Hoàn tất"
+
+msgid "exit"
+msgstr "mã thoát"
+
+msgid "Operation cancelled."
+msgstr "Đã hủy thao tác."
+
+msgid "All operations finished successfully."
+msgstr "Tất cả thao tác đã hoàn tất thành công."
+
+msgid ""
+"Permission to manage packages was not granted. Try again and approve the "
+"authorization request to continue."
+msgstr ""
+"Chưa được cấp quyền quản lý gói. Hãy thử lại và chấp thuận yêu cầu cấp quyền "
+"để tiếp tục."
+
+msgid ""
+"{package_one}-{version_one} conflicts with {package_two}-{version_two}. "
+"Remove {package_to_remove}?"
+msgstr ""
+"{package_one}-{version_one} xung đột với {package_two}-{version_two}. Gỡ bỏ "
+"{package_to_remove}?"
+
+msgid "Would you like to remove extra cache entries?"
+msgstr "Bạn có muốn xóa các mục thừa trong bộ nhớ đệm không?"
+
+msgid "System package update"
+msgstr "Cập nhật gói hệ thống"
+
+msgid "AUR package update"
+msgstr "Cập nhật gói AUR"
+
+msgid "Update this package"
+msgstr "Cập nhật gói này"
+
+msgid "updates included"
+msgstr "bản cập nhật được đưa vào"
+
+msgid "Updates included"
+msgstr "Các bản cập nhật được đưa vào"
+
+msgid "Upgrading packages"
+msgstr "Đang nâng cấp gói"
+
+msgid "Refreshing package databases"
+msgstr "Đang làm mới cơ sở dữ liệu gói"
+
+#| msgid "Removing Flatpak"
+msgid "Removing stale database lock"
+msgstr ""
+
+msgid "Fixing permissions"
+msgstr "Đang sửa quyền"
+
+msgid "Purifying packages"
+msgstr "Đang làm sạch gói"
+
+msgid "Cleaning package cache"
+msgstr "Đang dọn bộ nhớ đệm gói"
+
+msgid "Welcome"
+msgstr "Chào mừng"
+
+msgid "Enable Recommended?"
+msgstr "Bật mục Đề xuất?"
+
+msgid ""
+"Recommended shows curated package suggestions based on your installed "
+"software. Package data is fetched from external sources."
+msgstr ""
+"Mục Đề xuất hiển thị các gợi ý gói được chọn lọc dựa trên phần mềm bạn đã "
+"cài đặt. Dữ liệu gói được lấy từ các nguồn bên ngoài."
+
+msgid "Installing Flatpak and AppImage support"
+msgstr "Đang cài đặt hỗ trợ Flatpak và AppImage"
+
+msgid "Main menu"
+msgstr "Trình đơn chính"
+
+msgid "Expand sidebar"
+msgstr "Mở rộng thanh bên"
+
+msgid "Collapse sidebar"
+msgstr "Thu gọn thanh bên"

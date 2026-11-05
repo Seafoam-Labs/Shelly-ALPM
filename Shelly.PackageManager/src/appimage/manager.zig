@@ -1,9 +1,11 @@
 const std = @import("std");
+const caller_io = @import("user_account").caller_io;
 const diagnostics = @import("diagnostics");
 const builtin = @import("builtin");
 const appimage = @import("bindings.zig").appimage;
 const launch_environment = @import("environment.zig");
 const events = @import("events.zig");
+const zsync_update = @import("zsync.zig");
 const xdg_paths = @import("../shared/xdg_paths.zig").xdg_paths;
 const operation_api = @import("operation_context");
 
@@ -125,7 +127,18 @@ pub const AppImageManager = struct {
 
         std.Io.Dir.rename(.cwd(), staging_path, .cwd(), dest_path, self.io) catch |err| return err;
 
-        var integration = self.beginDesktopIntegration(metadata, dest_path, content.source_desktop_path, content.icon_source) catch |err| {
+        // An entry written for an earlier release of this application still
+        // counts as ours even though it points at the previous install path.
+        var previous_buffer: [1][]const u8 = undefined;
+        var previous_exec_paths: []const []const u8 = &.{};
+        if (replaced) |existing| {
+            if (existing.path.len > 0 and !std.mem.eql(u8, existing.path, dest_path)) {
+                previous_buffer[0] = existing.path;
+                previous_exec_paths = &previous_buffer;
+            }
+        }
+
+        var integration = self.beginDesktopIntegration(metadata, dest_path, content.source_desktop_path, content.icon_source, previous_exec_paths) catch |err| {
             self.emitStatusFmt(.err, "Could not write desktop integration for {0f}. {1s}\n\nTechnical details: {2s}", .{ diagnostics.safe(app_name), diagnostics.cause(err), @errorName(err) });
             self.rollbackInstalledBinary(dest_path, backup_path, had_existing);
             operation_scope.finish(.failed);
@@ -145,12 +158,19 @@ pub const AppImageManager = struct {
         if (replaced) |existing| {
             const old_path = if (existing.path.len > 0) existing.path else dest_path;
             if (!std.ascii.eqlIgnoreCase(existing.name, metadata.name)) {
-                const removed_name = self.cleanDesktopEntries(existing.name, old_path) catch null;
+                // The name may change while the entry keeps its file name, so
+                // the entry just written must survive the cleanup of the old one.
+                const removed_name = self.cleanDesktopEntries(existing.name, old_path, integration.desktop_path) catch null;
                 if (removed_name) |name| self.allocator.free(name);
             }
             if (existing.path.len > 0 and !std.mem.eql(u8, existing.path, dest_path))
                 std.Io.Dir.cwd().deleteFile(self.io, existing.path) catch {};
         }
+        // Entries used to be named after the AppImage file itself. Reinstalling
+        // under the same file name would otherwise leave that entry beside the
+        // one the application asks to be installed under, showing it twice.
+        self.removeSupersededDesktopEntry(metadata.name, integration.desktop_path, &.{dest_path}) catch |err|
+            self.emitStatusFmt(.warning, "Could not remove the superseded desktop entry for {0f}. {1s}\n\nTechnical details: {2s}", .{ diagnostics.safe(app_name), diagnostics.cause(err), @errorName(err) });
         if (had_existing) std.Io.Dir.cwd().deleteFile(self.io, backup_path) catch |err| {
             self.emitStatusFmt(.warning, "Could not remove the backup for the requested package at the backup path. {0s} The backup remains on disk.\n\nTechnical details: {1s}", .{ diagnostics.cause(err), @errorName(err) });
         };
@@ -177,6 +197,79 @@ pub const AppImageManager = struct {
         const desktop_file_name = try std.fmt.allocPrint(self.allocator, "{s}.desktop", .{clean_name});
         defer self.allocator.free(desktop_file_name);
         return try std.fs.path.join(self.allocator, &.{ data_home, "applications", desktop_file_name });
+    }
+
+    /// Desktop environments derive the desktop file ID of an installed entry
+    /// from the *basename* of the file, and native Wayland applications publish
+    /// that ID as their application ID. Naming an entry after the AppImage file
+    /// leaves the ID unresolvable, so the icon and taskbar grouping break even
+    /// though menus still work. Returns the file name the application ships, as
+    /// `com.rtosta.zapzap.desktop` does, when it is usable.
+    fn bundledDesktopBaseName(self: AppImageManager, source_desktop_path: ?[]const u8) !?[]u8 {
+        const source = source_desktop_path orelse return null;
+        const base = std.fs.path.basename(source);
+        if (!std.ascii.eqlIgnoreCase(std.fs.path.extension(base), ".desktop")) return null;
+        const stem = std.fs.path.stem(base);
+        if (stem.len == 0) return null;
+        // A leading dot hides the entry from menus and `.` or `..` would not name
+        // a file inside the applications directory.
+        if (stem[0] == '.') return null;
+        for (stem) |character| {
+            if (character < 0x20 or character == 0x7f) return null;
+        }
+        const cleaned = try self.cleanInvalidNames(stem);
+        errdefer self.allocator.free(cleaned);
+        if (cleaned.len == 0 or cleaned[0] == '.') return null;
+        return cleaned;
+    }
+
+    /// Chooses the name the entry is written under: the desktop file name the
+    /// application ships whenever that entry is free or already belongs to this
+    /// application, and otherwise the historical name derived from the AppImage.
+    fn resolveDesktopBaseName(
+        self: AppImageManager,
+        metadata: appimage.AppImage,
+        source_desktop_path: ?[]const u8,
+        final_exec_path: []const u8,
+        previous_exec_paths: []const []const u8,
+    ) ![]u8 {
+        if (try self.bundledDesktopBaseName(source_desktop_path)) |base| {
+            errdefer self.allocator.free(base);
+            const shipped_path = try self.installedDesktopPath(base);
+            defer self.allocator.free(shipped_path);
+            if (self.ownsDesktopEntry(shipped_path, final_exec_path, previous_exec_paths)) return base;
+            // Two applications shipping the same desktop file name must not
+            // overwrite each other's entry, so fall back to our own naming.
+            const fallback = try self.cleanInvalidNames(metadata.name);
+            self.allocator.free(base);
+            return fallback;
+        }
+        return self.cleanInvalidNames(metadata.name);
+    }
+
+    /// Whether writing `desktop_path` preserves this application's entry: either
+    /// nothing is installed under that name yet, or the entry there already
+    /// launches a binary that belongs to this application.
+    fn ownsDesktopEntry(
+        self: AppImageManager,
+        desktop_path: []const u8,
+        final_exec_path: []const u8,
+        previous_exec_paths: []const []const u8,
+    ) bool {
+        _ = std.Io.Dir.cwd().statFile(self.io, desktop_path, .{}) catch |err| switch (err) {
+            // Nothing is installed under that name, so the entry is free to use.
+            error.FileNotFound => return true,
+            // Anything else, such as a permission problem, is treated as a name
+            // somebody else holds rather than as a free slot.
+            else => return false,
+        };
+        const contents = self.readFileAllocOwned(desktop_path) catch return false;
+        defer self.allocator.free(contents);
+        if (desktopEntryExecReferences(contents, final_exec_path)) return true;
+        for (previous_exec_paths) |previous| {
+            if (desktopEntryExecReferences(contents, previous)) return true;
+        }
+        return false;
     }
 
     pub fn copyFile(self: AppImageManager, src_path: []const u8, dest_path: []const u8) !void {
@@ -252,25 +345,15 @@ pub const AppImageManager = struct {
         defer self.allocator.free(clean_name);
 
         var working_dir: ?[]u8 = try self.createExtractionWorkingDir(clean_name);
-        errdefer freeWorkingDir(self.allocator, self.io, &working_dir);
+        errdefer freeWorkingDir(self.allocator, self.io, self.environ, &working_dir);
 
-        try std.Io.Dir.cwd().createDirPath(self.io, working_dir.?);
-
-        var extract_proc = try std.process.spawn(self.io, .{
-            .argv = &.{ path, "--appimage-extract" },
-            .cwd = .{ .path = working_dir.? },
-            .stdin = .ignore,
-            .stdout = .ignore,
-            .stderr = .ignore,
-        });
-
-        const term = try extract_proc.wait(self.io);
-        if (term != .exited or term.exited != 0) {
-            std.log.warn("Could not extract metadata from AppImage {0f}.", .{diagnostics.safe(path)});
+        caller_io.run(self.allocator, self.io, self.environ, &.{ path, "--appimage-extract" }, null, working_dir.?) catch |err| {
+            if (err != error.CallerOperationFailed) return err;
+            self.emitStatusFmt(.err, "Could not extract AppImage metadata as the calling user: {s}", .{@errorName(err)});
             operation_scope.finish(.failed);
-            freeWorkingDir(self.allocator, self.io, &working_dir);
+            freeWorkingDir(self.allocator, self.io, self.environ, &working_dir);
             return null;
-        }
+        };
 
         var squashfs_root: ?[]u8 = try std.fs.path.join(self.allocator, &.{ working_dir.?, "squashfs-root" });
         errdefer if (squashfs_root) |s| self.allocator.free(s);
@@ -358,6 +441,10 @@ pub const AppImageManager = struct {
 
         operation_scope.finish(.success);
 
+        // ExtractedContent can outlive its manager and the caller's environment.
+        var cleanup_map = try self.environ.createMap(self.allocator);
+        defer cleanup_map.deinit();
+        const cleanup_environment: std.process.Environ = .{ .block = try cleanup_map.createPosixBlock(self.allocator, .{}) };
         const result = ExtractedContent{
             .allocator = self.allocator,
             .io = self.io,
@@ -365,6 +452,8 @@ pub const AppImageManager = struct {
             .source_desktop_path = source_desktop_path,
             .icon_source = icon_source,
             .working_dir = working_dir.?,
+            .environ = cleanup_environment,
+            .owns_environ = true,
             .squashfs_root = squashfs_root.?,
         };
 
@@ -385,15 +474,14 @@ pub const AppImageManager = struct {
         const root = try std.fs.path.join(self.allocator, &.{ cache_home, "Shelly", "extractions" });
         defer self.allocator.free(root);
 
-        var root_handle = try std.Io.Dir.cwd().createDirPathOpen(self.io, root, .{});
-        root_handle.close(self.io);
+        try caller_io.makePath(self.allocator, self.io, self.environ, root);
 
         var random_suffix: [16]u8 = undefined;
         self.io.random(&random_suffix);
         const suffix_hex = std.fmt.bytesToHex(random_suffix, .lower);
         const path = try std.fmt.allocPrint(self.allocator, "{s}/{s}-{s}", .{ root, clean_name, suffix_hex[0..] });
         errdefer self.allocator.free(path);
-        try std.Io.Dir.createDirAbsolute(self.io, path, .default_dir);
+        try caller_io.run(self.allocator, self.io, self.environ, &.{ "/usr/bin/mkdir", "--", path }, null, null);
         return path;
     }
 
@@ -497,6 +585,8 @@ pub const AppImageManager = struct {
         source_desktop_path: ?[]const u8 = null,
         icon_source: ?IconSource = null,
         working_dir: []const u8,
+        environ: std.process.Environ = .empty,
+        owns_environ: bool = false,
         squashfs_root: []const u8,
         owns_metadata: bool = true,
 
@@ -506,7 +596,8 @@ pub const AppImageManager = struct {
             if (self.source_desktop_path) |p| allocator.free(p);
             if (self.icon_source) |src| allocator.free(src.path);
             allocator.free(self.squashfs_root);
-            std.Io.Dir.cwd().deleteTree(self.io, self.working_dir) catch {};
+            caller_io.deleteTree(allocator, self.io, self.environ, self.working_dir) catch {};
+            if (self.owns_environ) self.environ.block.deinit(allocator);
             allocator.free(self.working_dir);
             self.* = undefined;
         }
@@ -687,8 +778,9 @@ pub const AppImageManager = struct {
         final_exec_path: []const u8,
         source_desktop_path: ?[]const u8,
         icon_source: ?IconSource,
+        previous_exec_paths: []const []const u8,
     ) !void {
-        var integration = try self.beginDesktopIntegration(metadata, final_exec_path, source_desktop_path, icon_source);
+        var integration = try self.beginDesktopIntegration(metadata, final_exec_path, source_desktop_path, icon_source, previous_exec_paths);
         defer integration.deinit();
         try integration.finish();
         self.refreshDesktopCachesBestEffort(icon_source != null);
@@ -745,10 +837,11 @@ pub const AppImageManager = struct {
         final_exec_path: []const u8,
         source_desktop_path: ?[]const u8,
         icon_source: ?IconSource,
+        previous_exec_paths: []const []const u8,
     ) !DesktopIntegration {
-        const clean_name = try self.cleanInvalidNames(metadata.name);
-        defer self.allocator.free(clean_name);
-        const desktop_path = try self.installedDesktopPath(clean_name);
+        const desktop_base = try self.resolveDesktopBaseName(metadata, source_desktop_path, final_exec_path, previous_exec_paths);
+        defer self.allocator.free(desktop_base);
+        const desktop_path = try self.installedDesktopPath(desktop_base);
         var integration = DesktopIntegration{ .manager = self, .desktop_path = desktop_path, .active = false };
         errdefer {
             // Until every snapshot succeeds, no original artifact was changed.
@@ -770,31 +863,24 @@ pub const AppImageManager = struct {
         if (icon_source) |source| {
             try self.writeFileAtomically(source.path, integration.icon_path.?, "icon-stage");
         }
-        try self.writeDesktopEntry(clean_name, final_exec_path, source_desktop_path, metadata);
+        try self.writeDesktopEntry(desktop_path, final_exec_path, source_desktop_path, metadata);
 
         return integration;
     }
 
     fn writeDesktopEntry(
         self: AppImageManager,
-        clean_name: []const u8,
+        desktop_path: []const u8,
         exec_path: []const u8,
         source_desktop_file: ?[]const u8,
         metadata: appimage.AppImage,
     ) !void {
-        const data_home = try xdg_paths.xdgDataHome(self.allocator, self.environ);
-        defer self.allocator.free(data_home);
-        const desktop_dir = try std.fs.path.join(self.allocator, &.{ data_home, "applications" });
-        defer self.allocator.free(desktop_dir);
+        const desktop_dir = std.fs.path.dirname(desktop_path) orelse return error.NoDesktopEntryDirectory;
         {
             var desktop_dir_handle = try std.Io.Dir.cwd().createDirPathOpen(self.io, desktop_dir, .{});
             desktop_dir_handle.close(self.io);
         }
-
-        const desktop_file_name = try std.fmt.allocPrint(self.allocator, "{s}.desktop", .{clean_name});
-        defer self.allocator.free(desktop_file_name);
-        const desktop_file_path = try std.fs.path.join(self.allocator, &.{ desktop_dir, desktop_file_name });
-        defer self.allocator.free(desktop_file_path);
+        const desktop_file_path = desktop_path;
 
         const desktop_name: []const u8 = if (metadata.desktop_name.len > 0) metadata.desktop_name else metadata.name;
         const comment: []const u8 = if (metadata.description.len > 0) metadata.description else "application";
@@ -937,8 +1023,13 @@ pub const AppImageManager = struct {
         defer operation_scope.finish(.success);
         errdefer operation_scope.fail();
         try self.checkCancelled();
+        var command = try caller_io.command(self.allocator, self.environ, &.{ appimage_path, "--appimage-updateinfo" });
+        defer command.deinit(self.allocator);
+        var environment_map = try self.environ.createMap(self.allocator);
+        defer environment_map.deinit();
         var proc = std.process.spawn(self.io, .{
-            .argv = &.{ appimage_path, "--appimage-updateinfo" },
+            .argv = command.asConst(),
+            .environ_map = &environment_map,
             .stdin = .ignore,
             .stdout = .pipe,
             .stderr = .ignore,
@@ -1004,13 +1095,17 @@ pub const AppImageManager = struct {
         candidate.environment_variables = variables;
         var content = (try self.extractMetadataPure(candidate.path, null, null)) orelse return error.AppImageExtractionFailed;
         defer content.deinit();
-        var integration = try self.beginDesktopIntegration(candidate, candidate.path, content.source_desktop_path, content.icon_source);
+        var integration = try self.beginDesktopIntegration(candidate, candidate.path, content.source_desktop_path, content.icon_source, &.{candidate.path});
         defer integration.deinit();
         self.addAppImageToLocalDb(candidate) catch |err| {
             try integration.rollback();
             return err;
         };
         try integration.finish();
+        // The entry may still sit under the name derived from the AppImage file
+        // from before entries followed the name the application ships.
+        self.removeSupersededDesktopEntry(candidate.name, integration.desktop_path, &.{candidate.path}) catch |err|
+            std.log.warn("Could not remove the superseded desktop entry for {0f}. {1s}\n\nTechnical details: {2s}", .{ diagnostics.safe(candidate.name), diagnostics.cause(err), @errorName(err) });
         self.refreshDesktopCachesBestEffort(content.icon_source != null);
     }
 
@@ -1204,7 +1299,7 @@ pub const AppImageManager = struct {
 
         std.Io.Dir.cwd().deleteFile(self.io, appimage_path) catch {};
 
-        const desktop_app_name = self.cleanDesktopEntries(app_name, appimage_path) catch null;
+        const desktop_app_name = self.cleanDesktopEntries(app_name, appimage_path, null) catch null;
         defer if (desktop_app_name) |n| self.allocator.free(n);
 
         try self.removeAppImageIcons(clean_name);
@@ -1246,7 +1341,7 @@ pub const AppImageManager = struct {
         };
         self.emitStatusFmt(.warning, "AppImage file for {s} not found; removed stale metadata entry.", .{app_name});
 
-        const desktop_app_name = self.cleanDesktopEntries(app_name, appimage_path) catch null;
+        const desktop_app_name = self.cleanDesktopEntries(app_name, appimage_path, null) catch null;
         if (desktop_app_name) |n| self.allocator.free(n);
 
         const clean_name = self.cleanInvalidNames(app_name) catch return;
@@ -1359,8 +1454,25 @@ pub const AppImageManager = struct {
             var updated = content.metadata;
             if (existing) |ex| {
                 updated = mergeMetadata(ex, content.metadata, null);
+                // Repair records left by older versions that flagged an update
+                // type without storing a usable update URL. Embedded update
+                // information provides the missing source when it parses.
+                if (updated.update_type != .none and
+                    updated.update_url.len == 0 and
+                    updated.repo_owner == null and
+                    updated.repo_name == null and
+                    updated.raw_update_info.len > 0)
+                {
+                    _ = zsync_update.configureFromEmbeddedInfo(&updated);
+                }
             } else if (updated.raw_update_info.len > 0 and updated.update_url.len == 0) {
-                updated.update_type = .static_url;
+                // Configure the update source from the AppImage's embedded
+                // update information (AppImageSpec `zsync|...` and
+                // `gh-releases-zsync|...`). Fall back to the historical
+                // static-url marker when the information is unusable.
+                if (!zsync_update.configureFromEmbeddedInfo(&updated)) {
+                    updated.update_type = .static_url;
+                }
             }
 
             updated.path = appimage_path;
@@ -1372,7 +1484,16 @@ pub const AppImageManager = struct {
                 published = true;
             }
 
-            var integration = self.beginDesktopIntegration(updated, appimage_path, content.source_desktop_path, content.icon_source) catch |err| {
+            var relocated_buffer: [1][]const u8 = undefined;
+            var relocated_paths: []const []const u8 = &.{};
+            if (original_path) |path| {
+                if (!std.mem.eql(u8, path, appimage_path)) {
+                    relocated_buffer[0] = path;
+                    relocated_paths = &relocated_buffer;
+                }
+            }
+
+            var integration = self.beginDesktopIntegration(updated, appimage_path, content.source_desktop_path, content.icon_source, relocated_paths) catch |err| {
                 std.log.warn("Could not apply desktop integration for {0f}. {1s}\n\nTechnical details: {2s}", .{ diagnostics.safe(app_name), diagnostics.cause(err), @errorName(err) });
                 success = false;
                 continue;
@@ -1398,6 +1519,10 @@ pub const AppImageManager = struct {
                     std.log.warn("Could not remove the previous AppImage at {0f}. {1s} The new installation is ready, but the old copy remains on disk.\n\nTechnical details: {2s}", .{ diagnostics.safe(path), diagnostics.cause(err), @errorName(err) });
                 };
             }
+            // Synchronizing can move an entry to the name the application ships;
+            // the entry named after the AppImage file must not linger beside it.
+            self.removeSupersededDesktopEntry(updated.name, integration.desktop_path, relocated_paths) catch |err|
+                std.log.warn("Could not remove the superseded desktop entry for {0f}. {1s}\n\nTechnical details: {2s}", .{ diagnostics.safe(app_name), diagnostics.cause(err), @errorName(err) });
             self.refreshDesktopCachesBestEffort(content.icon_source != null);
         }
 
@@ -1409,7 +1534,10 @@ pub const AppImageManager = struct {
         return success;
     }
 
-    fn cleanDesktopEntries(self: AppImageManager, app_name: []const u8, app_path: []const u8) !?[]u8 {
+    /// Removes the entries belonging to `app_name`, either by name or by an
+    /// `Exec=` pointing at `app_path`. `keep_path` spares an entry that was just
+    /// written for the same application under a different file name.
+    fn cleanDesktopEntries(self: AppImageManager, app_name: []const u8, app_path: []const u8, keep_path: ?[]const u8) !?[]u8 {
         const clean_name = try self.cleanInvalidNames(app_name);
         defer self.allocator.free(clean_name);
 
@@ -1430,6 +1558,9 @@ pub const AppImageManager = struct {
 
             const df_path = try std.fs.path.join(self.allocator, &.{ desktop_dir, entry.name });
             defer self.allocator.free(df_path);
+            if (keep_path) |keep| {
+                if (std.mem.eql(u8, df_path, keep)) continue;
+            }
 
             const expected_name = try std.fmt.allocPrint(self.allocator, "{s}.desktop", .{clean_name});
             defer self.allocator.free(expected_name);
@@ -1480,6 +1611,31 @@ pub const AppImageManager = struct {
         }
 
         return desktop_app_name;
+    }
+
+    /// Removes an entry left under the name derived from an AppImage file name.
+    /// Entries used to be named after the AppImage itself, so an operation that
+    /// installs the entry under the name the application ships must clear the
+    /// old file or the application appears in menus twice. Only an entry whose
+    /// `Exec=` launches a binary this application owns is removed, so an
+    /// unrelated application that happens to hold that name is left alone.
+    pub fn removeSupersededDesktopEntry(
+        self: AppImageManager,
+        previous_name: []const u8,
+        keep_path: []const u8,
+        owned_exec_paths: []const []const u8,
+    ) !void {
+        const clean_name = try self.cleanInvalidNames(previous_name);
+        defer self.allocator.free(clean_name);
+        const previous_path = try self.installedDesktopPath(clean_name);
+        defer self.allocator.free(previous_path);
+        if (std.mem.eql(u8, previous_path, keep_path)) return;
+        if (!self.ownsDesktopEntry(previous_path, "", owned_exec_paths)) return;
+        std.Io.Dir.cwd().deleteFile(self.io, previous_path) catch |err| switch (err) {
+            error.FileNotFound => return,
+            else => |e| return e,
+        };
+        std.log.info("Removed the superseded AppImage desktop entry at {0f}.", .{diagnostics.safe(previous_path)});
     }
 
     fn removeAppConfigDirectories(self: AppImageManager, desktop_app_name: ?[]const u8) void {
@@ -1669,6 +1825,28 @@ fn startsWithDesktopEntryGroup(prefix: []const u8) bool {
     return false;
 }
 
+/// Whether the main entry of a desktop file launches `app_path`. Shelly quotes
+/// the installed path in `Exec=`, so a substring test covers both spellings.
+/// Only the main group counts: action groups may launch unrelated binaries.
+fn desktopEntryExecReferences(contents: []const u8, app_path: []const u8) bool {
+    if (app_path.len == 0) return false;
+    var in_entry_group = false;
+    var lines = std.mem.splitScalar(u8, contents, '\n');
+    while (lines.next()) |raw_line| {
+        const line = std.mem.trim(u8, raw_line, " \t\r");
+        if (line.len == 0 or line[0] == '#') continue;
+        if (line[0] == '[') {
+            in_entry_group = std.ascii.eqlIgnoreCase(line, "[Desktop Entry]");
+            continue;
+        }
+        if (!in_entry_group) continue;
+        if (line.len <= "Exec=".len) continue;
+        if (!std.ascii.eqlIgnoreCase(line[0.."Exec=".len], "Exec=")) continue;
+        if (std.mem.indexOf(u8, line["Exec=".len..], app_path) != null) return true;
+    }
+    return false;
+}
+
 fn freeAppImageStatic(allocator: std.mem.Allocator, value: appimage.AppImage) void {
     allocator.free(value.name);
     allocator.free(value.version);
@@ -1685,9 +1863,9 @@ fn freeAppImageStatic(allocator: std.mem.Allocator, value: appimage.AppImage) vo
     if (value.repo_name) |v| allocator.free(v);
 }
 
-fn freeWorkingDir(allocator: std.mem.Allocator, io: std.Io, dir: *?[]u8) void {
+fn freeWorkingDir(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Environ, dir: *?[]u8) void {
     if (dir.*) |w| {
-        std.Io.Dir.cwd().deleteTree(io, w) catch |err| {
+        caller_io.deleteTree(allocator, io, environ, w) catch |err| {
             std.log.warn("Could not remove AppImage extraction directory {0f}. {1s}\n\nTechnical details: {2s}", .{ diagnostics.safe(w), diagnostics.cause(err), @errorName(err) });
         };
         allocator.free(w);
@@ -1880,13 +2058,158 @@ test "configureEnvironment survives sync and replacement and rolls back failed w
     const cleared = try manager.getAppImagesFromLocalDb();
     defer manager.freeAppImages(cleared);
     try std.testing.expectEqual(@as(usize, 0), cleared[0].environment_variables.len);
-    const cleared_desktop_path = try manager.installedDesktopPath("editor-2");
+    // The application ships editor.desktop, so the entry keeps that file name
+    // across the replacement instead of following the new AppImage file name.
+    const cleared_desktop_path = try manager.installedDesktopPath("editor");
     defer std.testing.allocator.free(cleared_desktop_path);
     const cleared_desktop = try readTestAppImageDb(allocator, cleared_desktop_path);
     const action_exec = try std.fmt.allocPrint(allocator, "Exec=\"{s}\" --new", .{cleared[0].path});
     try std.testing.expect(std.mem.indexOf(u8, cleared_desktop, action_exec) != null);
     try std.testing.expect(std.mem.indexOf(u8, cleared_desktop, "Exec=/usr/bin/true") != null);
     try std.testing.expect(std.mem.indexOf(u8, cleared_desktop, "WEBKIT_DISABLE_DMABUF_RENDERER=1") == null);
+    try std.testing.expectEqualStrings(desktop_path, cleared_desktop_path);
+
+    var desktop_dir = try std.Io.Dir.cwd().openDir(std.testing.io, std.fs.path.dirname(cleared_desktop_path).?, .{ .iterate = true });
+    defer desktop_dir.close(std.testing.io);
+    var desktop_names: std.ArrayList([]const u8) = .empty;
+    defer {
+        for (desktop_names.items) |name| allocator.free(name);
+        desktop_names.deinit(allocator);
+    }
+    var it = desktop_dir.iterate();
+    while (try it.next(std.testing.io)) |entry| {
+        if (!std.mem.endsWith(u8, entry.name, ".desktop")) continue;
+        try desktop_names.append(allocator, try allocator.dupe(u8, entry.name));
+    }
+    try std.testing.expectEqual(@as(usize, 1), desktop_names.items.len);
+    try std.testing.expectEqualStrings("editor.desktop", desktop_names.items[0]);
+}
+
+/// A native Wayland application identifies itself with the basename of its
+/// installed desktop file, so an entry named after the AppImage file leaves the
+/// application without an icon or taskbar grouping. See issue #2126.
+const reverseDnsTestAppImage =
+    \\#!/bin/sh
+    \\if [ "$1" = "--appimage-extract" ]; then
+    \\  mkdir -p squashfs-root
+    \\  printf '%s\n' '[Desktop Entry]' 'Name=ZapZap' 'X-AppImage-Version=7.5.1' 'Exec=zapzap %U' 'StartupWMClass=zapzap' 'Categories=Utility;' > squashfs-root/com.rtosta.zapzap.desktop
+    \\  exit 0
+    \\fi
+    \\exit 0
+;
+
+test "installAppImage installs the entry under the desktop file name the AppImage ships" {
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var path_buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const root = path_buffer[0..try tmp.dir.realPath(std.testing.io, &path_buffer)];
+    const source = try std.fs.path.join(allocator, &.{ root, "ZapZap-7.5.1.AppImage" });
+    const install_dir = try std.fs.path.join(allocator, &.{ root, "install" });
+    const database = try std.fs.path.join(allocator, &.{ root, "appimages.db" });
+    try writeTestAppImageDb(source, reverseDnsTestAppImage);
+    var environ = try createTestAppImageEnviron(std.testing.allocator, root);
+    defer environ.block.deinit(std.testing.allocator);
+    var manager = AppImageManager{
+        .allocator = std.testing.allocator,
+        .io = std.testing.io,
+        .environ = environ,
+        .install_directory = install_dir,
+        .local_db_path = database,
+        .cache_command_run = successfulCacheCommand,
+    };
+
+    try std.testing.expect(try manager.installAppImage(source));
+
+    const shipped_path = try manager.installedDesktopPath("com.rtosta.zapzap");
+    defer std.testing.allocator.free(shipped_path);
+    const legacy_path = try manager.installedDesktopPath("zapzap-7.5.1");
+    defer std.testing.allocator.free(legacy_path);
+
+    const contents = try readTestAppImageDb(allocator, shipped_path);
+    try std.testing.expect(std.mem.indexOf(u8, contents, "Name=ZapZap\n") != null);
+    try std.testing.expect(std.mem.indexOf(u8, contents, "Categories=Utility;\n") != null);
+    try std.testing.expectError(error.FileNotFound, readTestAppImageDb(allocator, legacy_path));
+}
+
+test "installAppImage leaves a desktop entry shipped by another application alone" {
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var path_buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const root = path_buffer[0..try tmp.dir.realPath(std.testing.io, &path_buffer)];
+    const source = try std.fs.path.join(allocator, &.{ root, "ZapZap-7.5.1.AppImage" });
+    const install_dir = try std.fs.path.join(allocator, &.{ root, "install" });
+    const database = try std.fs.path.join(allocator, &.{ root, "appimages.db" });
+    try writeTestAppImageDb(source, reverseDnsTestAppImage);
+    var environ = try createTestAppImageEnviron(std.testing.allocator, root);
+    defer environ.block.deinit(std.testing.allocator);
+    var manager = AppImageManager{
+        .allocator = std.testing.allocator,
+        .io = std.testing.io,
+        .environ = environ,
+        .install_directory = install_dir,
+        .local_db_path = database,
+        .cache_command_run = successfulCacheCommand,
+    };
+
+    const foreign_contents = "[Desktop Entry]\nType=Application\nName=Other\nExec=/usr/bin/other-app\n";
+    const foreign_path = try manager.installedDesktopPath("com.rtosta.zapzap");
+    defer std.testing.allocator.free(foreign_path);
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, std.fs.path.dirname(foreign_path).?);
+    try writeTestAppImageDb(foreign_path, foreign_contents);
+
+    try std.testing.expect(try manager.installAppImage(source));
+
+    try std.testing.expectEqualStrings(foreign_contents, try readTestAppImageDb(allocator, foreign_path));
+    const legacy_path = try manager.installedDesktopPath("zapzap-7.5.1");
+    defer std.testing.allocator.free(legacy_path);
+    const contents = try readTestAppImageDb(allocator, legacy_path);
+    try std.testing.expect(std.mem.indexOf(u8, contents, "Name=ZapZap\n") != null);
+}
+
+test "installAppImage removes an entry superseded by the shipped desktop file name" {
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var path_buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const root = path_buffer[0..try tmp.dir.realPath(std.testing.io, &path_buffer)];
+    const source = try std.fs.path.join(allocator, &.{ root, "ZapZap-7.5.1.AppImage" });
+    const install_dir = try std.fs.path.join(allocator, &.{ root, "install" });
+    const database = try std.fs.path.join(allocator, &.{ root, "appimages.db" });
+    try writeTestAppImageDb(source, reverseDnsTestAppImage);
+    var environ = try createTestAppImageEnviron(std.testing.allocator, root);
+    defer environ.block.deinit(std.testing.allocator);
+    var manager = AppImageManager{
+        .allocator = std.testing.allocator,
+        .io = std.testing.io,
+        .environ = environ,
+        .install_directory = install_dir,
+        .local_db_path = database,
+        .cache_command_run = successfulCacheCommand,
+    };
+
+    try std.testing.expect(try manager.installAppImage(source));
+
+    // An installation made before entries followed the shipped file name.
+    const installed_path = try std.fs.path.join(allocator, &.{ install_dir, "ZapZap-7.5.1.AppImage" });
+    const superseded_path = try manager.installedDesktopPath("zapzap-7.5.1");
+    defer std.testing.allocator.free(superseded_path);
+    try writeTestAppImageDb(superseded_path, try std.fmt.allocPrint(allocator, "[Desktop Entry]\nType=Application\nName=ZapZap\nExec=\"{s}\" %U\n", .{installed_path}));
+
+    try std.testing.expect(try manager.installAppImage(source));
+
+    try std.testing.expectError(error.FileNotFound, readTestAppImageDb(allocator, superseded_path));
+    const shipped_path = try manager.installedDesktopPath("com.rtosta.zapzap");
+    defer std.testing.allocator.free(shipped_path);
+    const contents = try readTestAppImageDb(allocator, shipped_path);
+    try std.testing.expect(std.mem.indexOf(u8, contents, "Name=ZapZap\n") != null);
 }
 
 const symlinkLayoutTestAppImage =
@@ -2455,14 +2778,14 @@ test "writeDesktopEntry repairs omitted authoritative keys and escapes executabl
     };
     const executable = try std.fs.path.join(std.testing.allocator, &.{ root, "a \\\"quoted\\\"\\path.AppImage" });
     defer std.testing.allocator.free(executable);
-    try manager.writeDesktopEntry("editor", executable, source, .{
+    const desktop_path = try manager.installedDesktopPath("editor");
+    defer std.testing.allocator.free(desktop_path);
+    try manager.writeDesktopEntry(desktop_path, executable, source, .{
         .name = "Editor",
         .desktop_name = "Editor Display",
         .description = "An editor",
         .icon_name = "editor",
     });
-    const desktop_path = try manager.installedDesktopPath("editor");
-    defer std.testing.allocator.free(desktop_path);
     const desktop = try readTestAppImageDb(std.testing.allocator, desktop_path);
     defer std.testing.allocator.free(desktop);
     try std.testing.expect(std.mem.indexOf(u8, desktop, "Name=Editor Display\n") != null);
@@ -2520,13 +2843,13 @@ test "writeDesktopEntry emits unquoted TryExec for existing and omitted source k
             .install_directory = root,
             .local_db_path = source,
         };
-        try manager.writeDesktopEntry(case.clean_name, executable, source, .{
+        const desktop_path = try manager.installedDesktopPath(case.clean_name);
+        defer std.testing.allocator.free(desktop_path);
+        try manager.writeDesktopEntry(desktop_path, executable, source, .{
             .name = "Editor",
             .desktop_name = "Editor",
             .icon_name = "editor",
         });
-        const desktop_path = try manager.installedDesktopPath(case.clean_name);
-        defer std.testing.allocator.free(desktop_path);
         const desktop = try readTestAppImageDb(std.testing.allocator, desktop_path);
         defer std.testing.allocator.free(desktop);
         try std.testing.expect(std.mem.indexOf(u8, desktop, expected_try_exec) != null);
@@ -3376,6 +3699,132 @@ test "syncAppImageMeta removes a stale entry when the AppImage file is missing" 
     const result = try manager.getAppImagesFromLocalDb();
     defer manager.freeAppImages(result);
     try std.testing.expectEqual(0, result.len);
+}
+
+/// An AppImage fixture that publishes embedded zsync update information the
+/// way `--appimage-updateinfo` reports it (see issue #1135).
+const zsyncTestAppImage =
+    \\#!/bin/sh
+    \\if [ "$1" = "--appimage-extract" ]; then
+    \\  mkdir -p squashfs-root
+    \\  printf '%s\n' '[Desktop Entry]' 'Name=Editor' 'X-AppImage-Version=2.0.0' 'Exec=editor' > squashfs-root/editor.desktop
+    \\  exit 0
+    \\fi
+    \\if [ "$1" = "--appimage-updateinfo" ]; then
+    \\  printf '%s\n' 'zsync|https://nightly.example.dev/latest/Editor.AppImage.zsync'
+    \\  exit 0
+    \\fi
+    \\exit 0
+;
+
+const ZsyncSyncEnv = struct {
+    manager: AppImageManager,
+    install_dir: []const u8,
+    installed_path: []const u8,
+
+    fn init(allocator: std.mem.Allocator, root: []const u8) !ZsyncSyncEnv {
+        const install_dir = try std.fs.path.join(allocator, &.{ root, "install" });
+        try std.Io.Dir.cwd().createDirPath(std.testing.io, install_dir);
+        const database = try std.fs.path.join(allocator, &.{ root, "appimages.db" });
+        const installed_path = try std.fs.path.join(allocator, &.{ install_dir, "Editor.AppImage" });
+        try writeTestAppImageDb(installed_path, zsyncTestAppImage);
+        const environ = try createTestAppImageEnviron(allocator, root);
+        return .{
+            .manager = .{
+                .allocator = std.testing.allocator,
+                .io = std.testing.io,
+                .environ = environ,
+                .install_directory = install_dir,
+                .local_db_path = database,
+                .cache_command_run = successfulCacheCommand,
+            },
+            .install_dir = install_dir,
+            .installed_path = installed_path,
+        };
+    }
+};
+
+test "syncAppImageMeta configures zsync updates from embedded update information" {
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const root = buffer[0..try tmp.dir.realPath(std.testing.io, &buffer)];
+    const env = try ZsyncSyncEnv.init(allocator, root);
+
+    try std.testing.expect(try env.manager.syncAppImageMeta(&.{"Editor"}));
+
+    const apps = try env.manager.getAppImagesFromLocalDb();
+    defer env.manager.freeAppImages(apps);
+    try std.testing.expectEqual(@as(usize, 1), apps.len);
+    try std.testing.expectEqual(appimage.UpdateType.zsync, apps[0].update_type);
+    try std.testing.expectEqualStrings("https://nightly.example.dev/latest/Editor.AppImage.zsync", apps[0].update_url);
+    try std.testing.expectEqualStrings("zsync|https://nightly.example.dev/latest/Editor.AppImage.zsync", apps[0].raw_update_info);
+    try expectOnlyInstalledAppImage(env.install_dir, "Editor.AppImage");
+}
+
+test "syncAppImageMeta repairs legacy records that flagged an update type without a url" {
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const root = buffer[0..try tmp.dir.realPath(std.testing.io, &buffer)];
+    const env = try ZsyncSyncEnv.init(allocator, root);
+
+    // Reproduce the record older versions wrote during sync: an update type
+    // was flagged from the embedded information but no URL was stored.
+    try env.manager.addAppImageToLocalDb(.{
+        .name = "Editor",
+        .version = "2.0.0",
+        .raw_update_info = "zsync|https://nightly.example.dev/latest/Editor.AppImage.zsync",
+        .update_type = .static_url,
+        .update_url = "",
+        .path = env.installed_path,
+    });
+
+    try std.testing.expect(try env.manager.syncAppImageMeta(&.{"Editor"}));
+
+    const apps = try env.manager.getAppImagesFromLocalDb();
+    defer env.manager.freeAppImages(apps);
+    try std.testing.expectEqual(@as(usize, 1), apps.len);
+    try std.testing.expectEqual(appimage.UpdateType.zsync, apps[0].update_type);
+    try std.testing.expectEqualStrings("https://nightly.example.dev/latest/Editor.AppImage.zsync", apps[0].update_url);
+}
+
+test "syncAppImageMeta keeps user configuration untouched when repairing" {
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const root = buffer[0..try tmp.dir.realPath(std.testing.io, &buffer)];
+    const env = try ZsyncSyncEnv.init(allocator, root);
+
+    // An explicit user configuration must survive the sync even though the
+    // binary publishes embedded update information.
+    try env.manager.addAppImageToLocalDb(.{
+        .name = "Editor",
+        .version = "2.0.0",
+        .raw_update_info = "zsync|https://nightly.example.dev/latest/Editor.AppImage.zsync",
+        .update_type = .github,
+        .repo_owner = "example",
+        .repo_name = "editor",
+        .path = env.installed_path,
+    });
+
+    try std.testing.expect(try env.manager.syncAppImageMeta(&.{"Editor"}));
+
+    const apps = try env.manager.getAppImagesFromLocalDb();
+    defer env.manager.freeAppImages(apps);
+    try std.testing.expectEqual(@as(usize, 1), apps.len);
+    try std.testing.expectEqual(appimage.UpdateType.github, apps[0].update_type);
+    try std.testing.expectEqualStrings("example", apps[0].repo_owner.?);
+    try std.testing.expectEqualStrings("editor", apps[0].repo_name.?);
 }
 
 test "copyFile duplicates file contents" {

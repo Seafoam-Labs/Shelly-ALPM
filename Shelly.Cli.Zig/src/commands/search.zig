@@ -445,7 +445,12 @@ const ScoredLocal = struct { package: LocalPackage, score: u16 };
 
 fn scoredStandardLessThan(_: void, left: ScoredStandard, right: ScoredStandard) bool {
     if (left.score != right.score) return left.score > right.score;
-    return orderIgnoreCase(left.package.name, right.package.name) == .lt;
+    const name_order = orderIgnoreCase(left.package.name, right.package.name);
+    if (name_order != .eq) return name_order == .lt;
+    const left_local = std.mem.eql(u8, left.package.repository, "local");
+    const right_local = std.mem.eql(u8, right.package.repository, "local");
+    if (left_local != right_local) return left_local;
+    return orderIgnoreCase(left.package.repository, right.package.repository) == .lt;
 }
 
 fn scoredLocalLessThan(_: void, left: ScoredLocal, right: ScoredLocal) bool {
@@ -1964,4 +1969,34 @@ test "AUR preview scan renders findings in JSON and plain text without changing 
     try std.testing.expect(std.mem.indexOf(u8, text, "pkgname=demo") != null);
     try std.testing.expect(std.mem.indexOf(u8, text, "Security scan") == null);
     try std.testing.expect(std.mem.indexOf(u8, text, "Related files") == null);
+}
+
+test "scoredStandardLessThan prioritizes local repository when scores and names match" {
+    const local_pkg: StandardPackage = .{
+        .name = "plasma5support",
+        .repository = "local",
+        .version = "6.8.0-1",
+    };
+    const sync_pkg_a: StandardPackage = .{
+        .name = "plasma5support",
+        .repository = "cachyos-extra-v3",
+        .version = "6.7.5-1.1",
+    };
+    const sync_pkg_b: StandardPackage = .{
+        .name = "plasma5support",
+        .repository = "extra-testing",
+        .version = "6.8.0-1",
+    };
+    const scored_local: ScoredStandard = .{ .package = local_pkg, .score = 1000 };
+    const scored_sync_a: ScoredStandard = .{ .package = sync_pkg_a, .score = 1000 };
+    const scored_sync_b: ScoredStandard = .{ .package = sync_pkg_b, .score = 1000 };
+
+    // local should sort before sync
+    try std.testing.expect(scoredStandardLessThan({}, scored_local, scored_sync_a));
+    // sync should sort after local
+    try std.testing.expect(!scoredStandardLessThan({}, scored_sync_a, scored_local));
+
+    // deterministic order between sync repositories
+    try std.testing.expect(scoredStandardLessThan({}, scored_sync_a, scored_sync_b));
+    try std.testing.expect(!scoredStandardLessThan({}, scored_sync_b, scored_sync_a));
 }

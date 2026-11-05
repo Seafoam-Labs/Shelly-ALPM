@@ -592,66 +592,70 @@ pub const Manager = struct {
             for (package_updates.items) |*update| update.deinit(self.allocator);
             package_updates.deinit(self.allocator);
         }
-        var sync_databases = rawLibalpm.alpm_get_syncdbs(self.handle);
-        var usable_sync_databases: [*c]rawLibalpm.alpm_list_t = null;
-        defer rawLibalpm.alpm_list_free(usable_sync_databases);
+        if (rawLibalpm.alpm_trans_init(self.handle, rawLibalpm.ALPM_TRANS_FLAG_NOLOCK) != 0)
+            return TransactionError.TransInitFailed;
+        defer _ = rawLibalpm.alpm_trans_release(self.handle);
+        var preview: UpgradePreview = .{ .allocator = self.allocator, .updates = &package_updates };
+        const previous_callback = rawLibalpm.alpm_option_get_questioncb(self.handle);
+        const previous_context = rawLibalpm.alpm_option_get_questioncb_ctx(self.handle);
+        _ = rawLibalpm.alpm_option_set_questioncb(self.handle, UpgradePreview.question, &preview);
+        defer _ = rawLibalpm.alpm_option_set_questioncb(self.handle, previous_callback, previous_context);
+        if (rawLibalpm.alpm_sync_sysupgrade(self.handle, 0) != 0)
+            return TransactionError.UpdateFetchFailed;
+        if (preview.failed) return TransactionError.OutOfMemory;
+        try self.checkOperationCancelled();
 
-        while (sync_databases != null) : (sync_databases = sync_databases.*.next) {
-            const db_data = sync_databases.*.data orelse continue;
-            const database = libalpm.Database.from(db_data) orelse continue;
-
-            if (!database.allowUsage(.upgrade)) continue;
-
-            const updated = rawLibalpm.alpm_list_add(
-                usable_sync_databases,
-                @ptrCast(database.ptr),
-            );
-            if (updated == null) return TransactionError.OutOfMemory;
-
-            usable_sync_databases = updated;
+        // Accepted replacements can lose to another repository's package.
+        var index: usize = 0;
+        while (index < package_updates.items.len) {
+            const next = package_updates.items[index].new_package;
+            var additions = rawLibalpm.alpm_trans_get_add(self.handle);
+            const selected = while (additions != null) : (additions = additions.*.next) {
+                const package = libalpm.Package.from(additions.*.data orelse continue) orelse continue;
+                if (std.mem.eql(u8, package.name() orelse "", next.name_value) and
+                    std.mem.eql(u8, package.database().?.name() orelse "", next.repository_value orelse "")) break true;
+            } else false;
+            if (selected) {
+                index += 1;
+            } else {
+                var rejected = package_updates.orderedRemove(index);
+                rejected.deinit(self.allocator);
+            }
         }
 
-        const local_database = rawLibalpm.alpm_get_localdb(self.handle);
-        var local_packages = rawLibalpm.alpm_db_get_pkgcache(local_database);
-        while (local_packages != null) : (local_packages = local_packages.*.next) {
-            const package_data = local_packages.*.data orelse continue;
-            const local_pkg = libalpm.Package.from(package_data) orelse continue;
-            const new_version = rawLibalpm.alpm_sync_get_new_version(local_pkg.ptr, usable_sync_databases) orelse continue;
-            var owned_update = libalpm.OwnedPackageWithUpdate.init(
-                self.allocator,
-                local_pkg,
-                libalpm.Package{ .ptr = new_version },
-            ) catch return TransactionError.OutOfMemory;
-            var ignored = false;
-            for (self.config.ignore_package.items) |ign_pkg| {
-                if (std.ascii.eqlIgnoreCase(ign_pkg, owned_update.new_package.name() orelse "")) {
-                    ignored = true;
-                    break;
-                }
-            }
-            if (!ignored) {
-                for (self.config.ignore_group.items) |ign_group| {
-                    for (owned_update.new_package.groups()) |group| {
-                        if (std.ascii.eqlIgnoreCase(ign_group, group)) {
-                            ignored = true;
-
-                            break;
-                        }
-                    }
-                    if (ignored) {
-                        owned_update.deinit(self.allocator);
-                        break;
-                    }
-                }
-            }
-            if (ignored) continue;
-            package_updates.append(self.allocator, owned_update) catch {
-                owned_update.deinit(self.allocator);
-                return TransactionError.OutOfMemory;
-            };
+        const local = rawLibalpm.alpm_get_localdb(self.handle);
+        var additions = rawLibalpm.alpm_trans_get_add(self.handle);
+        while (additions != null) : (additions = additions.*.next) {
+            const next = libalpm.Package.from(additions.*.data orelse continue) orelse continue;
+            const old_ptr = rawLibalpm.alpm_db_get_pkg(local, (next.name() orelse continue).ptr) orelse continue;
+            try preview.append(.{ .ptr = old_ptr }, next);
         }
         return package_updates.toOwnedSlice(self.allocator) catch return TransactionError.OutOfMemory;
     }
+
+    const UpgradePreview = struct {
+        allocator: std.mem.Allocator,
+        updates: *std.ArrayList(libalpm.OwnedPackageWithUpdate),
+        failed: bool = false,
+
+        fn append(self: *UpgradePreview, old: libalpm.Package, next: libalpm.Package) error{OutOfMemory}!void {
+            if (libalpm.OwnedPackageWithUpdate.containsPair(self.updates.items, old.name() orelse "", next.name() orelse "")) return;
+            var update = try libalpm.OwnedPackageWithUpdate.init(self.allocator, old, next);
+            errdefer update.deinit(self.allocator);
+            try self.updates.append(self.allocator, update);
+        }
+
+        fn question(context: ?*anyopaque, value: [*c]rawLibalpm.alpm_question_t) callconv(.c) void {
+            const self: *UpgradePreview = @ptrCast(@alignCast(context.?));
+            if (value.*.type != rawLibalpm.ALPM_QUESTION_REPLACE_PKG) return;
+            const replacement = libalpm.ReplacePackageQuestion.from(@ptrCast(value)).?;
+            self.append(replacement.old_package(), replacement.new_package()) catch {
+                self.failed = true;
+                return;
+            };
+            replacement.confirm_replace(true);
+        }
+    };
 
     pub fn install_packages(
         self: *Manager,
@@ -1503,9 +1507,27 @@ pub const Manager = struct {
         if (purge_corruption) {
             var dir = std.Io.Dir.cwd().openDir(self.io(), self.config.cache_directory, .{ .iterate = true }) catch return TransactionError.DirectoryReadFailed;
             defer dir.close(self.io());
-            var file_walker = dir.walk(self.allocator) catch return TransactionError.DirectoryReadFailed;
+            var file_walker = dir.walkSelectively(self.allocator) catch return TransactionError.DirectoryReadFailed;
             defer file_walker.deinit();
             while (file_walker.next(self.io()) catch return TransactionError.DatabaseReadFailed) |entry| {
+                if (entry.kind == .directory) {
+                    // Pacman creates these sandbox directories before checking
+                    // whether anything needs downloading and can leave them
+                    // behind, empty or with partial payloads.
+                    if (entry.depth() == 1 and isPacmanDownloadDirectory(entry.basename)) {
+                        const name = self.allocator.dupeSentinel(u8, entry.basename, 0) catch return TransactionError.OutOfMemory;
+                        target_names.append(self.allocator, name) catch {
+                            self.allocator.free(name);
+                            return TransactionError.OutOfMemory;
+                        };
+                        if (!dry_run) {
+                            entry.dir.deleteTree(self.io(), entry.basename) catch return TransactionError.RemovalFailed;
+                        }
+                        continue;
+                    }
+                    file_walker.enter(self.io(), entry) catch return TransactionError.DirectoryReadFailed;
+                    continue;
+                }
                 if (entry.kind != .file) continue;
                 if (std.mem.indexOf(u8, entry.basename, ".pkg.tar") == null) continue;
                 if (std.mem.endsWith(u8, entry.basename, ".sig")) continue;
@@ -3259,6 +3281,15 @@ fn syncDatabaseDirectory(io: std.Io, path: []const u8) !void {
     try directory_file.sync(io);
 }
 
+/// Matches pacman's `download-XXXXXX` sandbox directory template (a fixed
+/// prefix plus six alphanumeric characters).
+fn isPacmanDownloadDirectory(name: []const u8) bool {
+    const prefix = "download-";
+    if (name.len != prefix.len + 6 or !std.mem.startsWith(u8, name, prefix)) return false;
+    for (name[prefix.len..]) |byte| if (!std.ascii.isAlphanumeric(byte)) return false;
+    return true;
+}
+
 fn stalePartSweepDirectory(
     allocator: std.mem.Allocator,
     io: std.Io,
@@ -3860,40 +3891,6 @@ test "nested OperationScopes do not duplicate a detailed ALPM error" {
     try testing.expectEqualStrings("nested detailed ALPM failure", capture.last_message);
 }
 
-fn hasDeletedSharedLibrary(maps: []const u8) bool {
-    var lines = std.mem.splitScalar(u8, maps, '\n');
-    while (lines.next()) |line| {
-        if (std.mem.indexOf(u8, line, "(deleted)") != null and
-            std.mem.indexOf(u8, line, ".so") != null)
-        {
-            return true;
-        }
-    }
-    return false;
-}
-
-fn serviceFromCgroup(cgroup: []const u8) ?[]const u8 {
-    var lines = std.mem.splitScalar(u8, cgroup, '\n');
-    while (lines.next()) |line| {
-        const marker = "/system.slice/";
-        const marker_index = std.mem.indexOf(u8, line, marker) orelse continue;
-        var components = std.mem.splitScalar(u8, line[marker_index + marker.len ..], '/');
-        while (components.next()) |component| {
-            const trimmed = std.mem.trim(u8, component, " \t\r");
-            if (trimmed.len > ".service".len and std.mem.endsWith(u8, trimmed, ".service")) {
-                return trimmed;
-            }
-        }
-    }
-    return null;
-}
-
-fn isCriticalRestartProcess(command: []const u8) bool {
-    return std.mem.eql(u8, command, "systemd") or
-        std.mem.eql(u8, command, "dbus-daemon") or
-        std.mem.eql(u8, command, "dbus-broker");
-}
-
 fn stringBefore(_: void, lhs: []u8, rhs: []u8) bool {
     return std.mem.order(u8, lhs, rhs) == .lt;
 }
@@ -3983,21 +3980,21 @@ test "is_cachyos exposes the detected manager state" {
 }
 
 test "restart parsing identifies deleted shared libraries and system services" {
-    try testing.expect(hasDeletedSharedLibrary(
+    try testing.expect(restart_checks.hasDeletedSharedLibrary(
         "7f00-7f01 r-xp /usr/lib/libdemo.so.1 (deleted)\n",
     ));
-    try testing.expect(!hasDeletedSharedLibrary(
+    try testing.expect(!restart_checks.hasDeletedSharedLibrary(
         "7f00-7f01 r-xp /usr/lib/libdemo.so.1\n" ++
             "7f02-7f03 r-xp /usr/bin/demo (deleted)\n",
     ));
     try testing.expectEqualStrings(
         "demo.service",
-        serviceFromCgroup("0::/system.slice/system-demo.slice/demo.service/tasks\n").?,
+        restart_checks.serviceFromCgroup("0::/system.slice/system-demo.slice/demo.service/tasks\n").?,
     );
-    try testing.expect(serviceFromCgroup("0::/user.slice/session-1.scope\n") == null);
-    try testing.expect(isCriticalRestartProcess("systemd"));
-    try testing.expect(isCriticalRestartProcess("dbus-broker"));
-    try testing.expect(!isCriticalRestartProcess("demo"));
+    try testing.expect(restart_checks.serviceFromCgroup("0::/user.slice/session-1.scope\n") == null);
+    try testing.expect(restart_checks.isCriticalRestartProcess("systemd"));
+    try testing.expect(restart_checks.isCriticalRestartProcess("dbus-broker"));
+    try testing.expect(!restart_checks.isCriticalRestartProcess("demo"));
 }
 
 test "restart report detects kernels and records structured service results" {

@@ -774,14 +774,14 @@ test "downgrade help renders its single default backend as a root command" {
         &rendered.writer,
     );
     const value = rendered.writer.buffered();
-    try std.testing.expect(std.mem.indexOf(u8, value, "shelly downgrade [<package>] [options]") != null);
+    try std.testing.expect(std.mem.indexOf(u8, value, "shelly downgrade <packages>... [options]") != null);
     try std.testing.expect(std.mem.indexOf(u8, value, "shelly downgrade [type]") == null);
     try std.testing.expect(std.mem.indexOf(u8, value, "--list-options") != null);
     try std.testing.expect(std.mem.indexOf(u8, value, "Implementation:") == null);
-    try std.testing.expect(std.mem.indexOf(u8, value, "shelly downgrade [<package>]  Long form") != null);
-    try std.testing.expect(std.mem.indexOf(u8, value, "-D [<package>]") != null);
-    try std.testing.expect(std.mem.indexOf(u8, value, "-Do [<package>]") != null);
-    try std.testing.expect(std.mem.indexOf(u8, value, "-Ds [<package>]") == null);
+    try std.testing.expect(std.mem.indexOf(u8, value, "shelly downgrade <packages>...  Long form") != null);
+    try std.testing.expect(std.mem.indexOf(u8, value, "-D <packages>...") != null);
+    try std.testing.expect(std.mem.indexOf(u8, value, "-Do <packages>...") != null);
+    try std.testing.expect(std.mem.indexOf(u8, value, "-Ds <packages>...") == null);
 }
 
 test "purify action help documents native standard and Flatpak backends" {
@@ -836,7 +836,7 @@ test "root help combines shortcodes with implemented top-level command examples"
     try std.testing.expect(std.mem.indexOf(u8, rendered, "-<UppercaseAction><lowercaseTypeOrCommand><modifiers...>") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "Shortcodes and top-level examples:") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "\n  Top-level examples:") == null);
-    for ([_][]const u8{ "-Ss [<package>]", "-Ih", "-U", "-D [<package>]", "-Mh", "-P", "-Ls", "-C", "-K / -Kh" }) |shortcode|
+    for ([_][]const u8{ "-Ss [<package>]", "-Ih", "-U", "-D <packages>...", "-Mh", "-P", "-Ls", "-C", "-K / -Kh" }) |shortcode|
         try std.testing.expect(std.mem.indexOf(u8, rendered, shortcode) != null);
     for ([_][]const u8{ "-Ife", "-Ifu", "-Iav", "-Mga", "-Ki", "-Ks", "-Sap", "-Ssa", "-Ssafv" }) |nested_example|
         try std.testing.expect(std.mem.indexOf(u8, rendered, nested_example) == null);

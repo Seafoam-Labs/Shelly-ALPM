@@ -5,6 +5,7 @@ const appimage = @import("bindings.zig").appimage;
 const builtin = @import("builtin");
 const appimage_manager = @import("manager.zig");
 const events = @import("events.zig");
+const zsync = @import("zsync.zig");
 
 const downloader = @import("../shared/downloader.zig");
 const operation_api = @import("operation_context");
@@ -105,6 +106,16 @@ pub const UpdateManager = struct {
             .static_url => {
                 if (!isHttpUrl(trimmed)) return error.InvalidAppImageUpdateConfiguration;
                 app.update_url = trimmed;
+                app.update_type = update_type;
+                app.repo_owner = null;
+                app.repo_name = null;
+            },
+            .zsync => {
+                // Accept either the raw `zsync|<url>` update-information
+                // string or the bare http(s) URL of the control file.
+                const url = zsync.stripZsyncScheme(trimmed) orelse trimmed;
+                if (!isHttpUrl(url)) return error.InvalidAppImageUpdateConfiguration;
+                app.update_url = url;
                 app.update_type = update_type;
                 app.repo_owner = null;
                 app.repo_name = null;
@@ -274,9 +285,12 @@ pub const UpdateManager = struct {
                     self.emitMissingRepository(app.name);
                     return null;
                 };
+                // Honor the filename glob from embedded `gh-releases-zsync`
+                // update information when the repository provides it.
+                const asset_pattern = zsync.githubAssetPattern(app.raw_update_info);
                 return self.providerUpdateOrWarn(
                     app.name,
-                    self.guardInstalledRelease(app, try self.check_github_update(owner, repo, app.name, app.version, app.allow_prerelease)),
+                    self.guardInstalledRelease(app, try self.check_github_update_pattern(owner, repo, app.name, app.version, app.allow_prerelease, asset_pattern)),
                 );
             },
             .gitlab => {
@@ -316,6 +330,13 @@ pub const UpdateManager = struct {
                     app.name,
                     self.guardInstalledRelease(app, try self.check_forgejo_update(app.update_url, app.name, app.version, app.allow_prerelease)),
                 );
+            },
+            .zsync => {
+                if (app.update_url.len == 0) {
+                    self.emitStatusFmt(.warning, "AppImage {0f} has no zsync update URL. Set the URL of its .zsync control file in the update settings before checking for updates.", .{diagnostics.safe(app.name)});
+                    return null;
+                }
+                return self.guardInstalledRelease(app, try self.check_zsync_update(app.update_url, app.name, app.version));
             },
         }
     }
@@ -497,7 +518,7 @@ pub const UpdateManager = struct {
 
         var updated_app = appimage_manager.AppImageManager.mergeMetadata(app_to_update, new_metadata, appimage_ptr.version);
         updated_app.path = current_path;
-        var integration = manager.beginDesktopIntegration(updated_app, current_path, content.source_desktop_path, content.icon_source) catch |err| {
+        var integration = manager.beginDesktopIntegration(updated_app, current_path, content.source_desktop_path, content.icon_source, &.{}) catch |err| {
             std.log.warn("Could not refresh desktop integration for {0f}. {1s} Attempting to restore the previous version.\n\nTechnical details: {2s}", .{ diagnostics.safe(appimage_ptr.name), diagnostics.cause(err), @errorName(err) });
             self.emitStatusFmt(.err, "Could not refresh desktop integration for {0f}. {1s} Attempting to restore the previous version.\n\nTechnical details: {2s}", .{ diagnostics.safe(appimage_ptr.name), diagnostics.cause(err), @errorName(err) });
             manager.writeFileAtomically(backup_path, current_path, "restore") catch {};
@@ -512,6 +533,11 @@ pub const UpdateManager = struct {
             return false;
         };
         try integration.finish();
+        // Entries used to be named after the AppImage file. Refreshing the
+        // integration under the name the application ships must not leave the
+        // old entry behind, or the application appears in menus twice.
+        manager.removeSupersededDesktopEntry(app_to_update.name, integration.desktop_path, &.{current_path}) catch |err|
+            std.log.warn("Could not remove the superseded desktop entry for {0f}. {1s}\n\nTechnical details: {2s}", .{ diagnostics.safe(app_to_update.name), diagnostics.cause(err), @errorName(err) });
         manager.refreshDesktopCachesBestEffort(content.icon_source != null);
         self.emitStatus(.information, "Refreshed desktop integration.");
         std.Io.Dir.cwd().deleteFile(self.io, backup_path) catch |err| {
@@ -568,6 +594,39 @@ pub const UpdateManager = struct {
 
         const raw_version = if (etag != null) etag.? else if (last_modified != null) last_modified.? else "";
         return build_static_url(self.allocator, app_name, url, current_version, raw_version);
+    }
+
+    /// Checks an update source described by a zsync control file, the format
+    /// referenced by the AppImageSpec embedded `zsync|<url>` update
+    /// information. The control-file `MTime` header acts as the remote
+    /// version token (zsync sources carry no semantic version) and the
+    /// AppImage download URL is derived from the `URL:` header, falling back
+    /// to the control-file URL without its `.zsync` suffix.
+    pub fn check_zsync_update(self: UpdateManager, url: []const u8, app_name: []const u8, current_version: []const u8) !?appimage.AppImageUpdate {
+        var operation_scope = events.OperationScope.init(self.operation_context, self.dispatcher, .search, app_name);
+        operation_scope.attach();
+        defer operation_scope.finish(.success);
+        errdefer operation_scope.fail();
+        try self.checkCancelled();
+
+        const body = (try self.fetchJson(url, "*/*")) orelse return null;
+        defer self.allocator.free(body);
+
+        const headers = zsync.parseControlHeaders(body);
+        const mtime = headers.mtime orelse {
+            std.log.warn("The zsync control file for AppImage {0f} is missing its MTime header. Check that the update URL points at a .zsync control file.", .{diagnostics.safe(app_name)});
+            self.emitStatusFmt(.warning, "The zsync control file for AppImage {0f} is missing its MTime header. Check that the update URL points at a .zsync control file.", .{diagnostics.safe(app_name)});
+            return null;
+        };
+
+        const download_url = try zsync.resolveTargetUrl(self.allocator, url, headers.url) orelse {
+            std.log.warn("Could not derive an AppImage download URL from the zsync control file for {0f}. Check the URL headers the control file publishes.", .{diagnostics.safe(app_name)});
+            self.emitStatusFmt(.warning, "Could not derive an AppImage download URL from the zsync control file for {0f}. Check the URL headers the control file publishes.", .{diagnostics.safe(app_name)});
+            return null;
+        };
+        defer self.allocator.free(download_url);
+
+        return @as(?appimage.AppImageUpdate, try makeUpdate(self.allocator, app_name, mtime, download_url, current_version));
     }
 
     fn build_static_url(allocator: std.mem.Allocator, app_name: []const u8, url: []const u8, current_version: []const u8, raw_version: []const u8) !?appimage.AppImageUpdate {
@@ -754,7 +813,32 @@ pub const UpdateManager = struct {
         assets: []const std.json.Value,
         app_name: []const u8,
         url_field: []const u8,
+        asset_pattern: ?[]const u8,
     ) !?[]const u8 {
+        // An explicit filename glob (AppImageSpec `gh-releases-zsync` pattern)
+        // wins over the name heuristics. Matched `.zsync` assets resolve to
+        // the AppImage published next to the control file.
+        if (asset_pattern) |pattern| {
+            var pattern_count: usize = 0;
+            var pattern_url: ?[]const u8 = null;
+            for (assets) |asset| {
+                if (asset != .object) continue;
+                const name_value = asset.object.get("name") orelse continue;
+                const url_value = asset.object.get(url_field) orelse continue;
+                if (name_value != .string or url_value != .string) continue;
+                if (!zsync.globMatchIgnoreCase(pattern, name_value.string)) continue;
+                if (!isHttpUrl(url_value.string)) continue;
+                if (!isCorrectArchitecture(name_value.string)) continue;
+                pattern_count += 1;
+                pattern_url = if (endsWithIgnoreCase(url_value.string, ".zsync"))
+                    url_value.string[0 .. url_value.string.len - ".zsync".len]
+                else
+                    url_value.string;
+            }
+            if (pattern_count == 1) return pattern_url;
+            if (pattern_count > 1) return null;
+        }
+
         const normalized_app_name = try normalizeAppImageStem(allocator, app_name);
         defer allocator.free(normalized_app_name);
 
@@ -854,34 +938,60 @@ pub const UpdateManager = struct {
     }
 
     pub fn check_github_update(self: UpdateManager, owner: []const u8, repo: []const u8, app_name: []const u8, current_version: []const u8, allow_prerelease: bool) !?appimage.AppImageUpdate {
+        return self.check_github_update_pattern(owner, repo, app_name, current_version, allow_prerelease, null);
+    }
+
+    /// Like `check_github_update` but prefers release assets whose filename
+    /// matches an AppImageSpec glob (for example the pattern embedded in
+    /// `gh-releases-zsync` update information) before falling back to the
+    /// name-based asset selection.
+    pub fn check_github_update_pattern(self: UpdateManager, owner: []const u8, repo: []const u8, app_name: []const u8, current_version: []const u8, allow_prerelease: bool, asset_pattern: ?[]const u8) !?appimage.AppImageUpdate {
         var operation_scope = events.OperationScope.init(self.operation_context, self.dispatcher, .search, app_name);
         operation_scope.attach();
         defer operation_scope.finish(.success);
         errdefer operation_scope.fail();
         try self.checkCancelled();
-        const url = try github_to_releases_api(self.allocator, owner, repo);
+        const url = if (allow_prerelease)
+            try github_to_releases_api(self.allocator, owner, repo)
+        else
+            try github_to_latest_release_api(self.allocator, owner, repo);
         defer self.allocator.free(url);
 
         const body = (try self.fetchJson(url, "application/vnd.github+json")) orelse return null;
         defer self.allocator.free(body);
-        return parse_github_response(self.allocator, body, app_name, current_version, allow_prerelease);
+        return parse_github_response_pattern(self.allocator, body, app_name, current_version, allow_prerelease, asset_pattern);
     }
 
     fn parse_github_response(allocator: std.mem.Allocator, body: []const u8, app_name: []const u8, current_version: []const u8, allow_prerelease: bool) !?appimage.AppImageUpdate {
+        return parse_github_response_pattern(allocator, body, app_name, current_version, allow_prerelease, null);
+    }
+
+    fn parse_github_response_pattern(allocator: std.mem.Allocator, body: []const u8, app_name: []const u8, current_version: []const u8, allow_prerelease: bool, asset_pattern: ?[]const u8) !?appimage.AppImageUpdate {
         const parsed = std.json.parseFromSlice(std.json.Value, allocator, body, .{}) catch return null;
         defer parsed.deinit();
 
         const root = parsed.value;
-        if (root != .array or root.array.items.len == 0) return null;
-
         var release: ?std.json.Value = null;
-        for (root.array.items) |r| {
-            if (!allow_prerelease) {
-                const pre = r.object.get("prerelease") orelse continue;
-                if (pre == .bool and pre.bool) continue;
+        if (root == .array) {
+            if (root.array.items.len == 0) return null;
+            for (root.array.items) |r| {
+                if (r != .object) continue;
+                if (!allow_prerelease) {
+                    const pre = r.object.get("prerelease") orelse continue;
+                    if (pre == .bool and pre.bool) continue;
+                }
+                release = r;
+                break;
             }
-            release = r;
-            break;
+        } else if (root == .object) {
+            if (!allow_prerelease) {
+                if (root.object.get("prerelease")) |pre| {
+                    if (pre == .bool and pre.bool) return null;
+                }
+            }
+            release = root;
+        } else {
+            return null;
         }
         const rel = release orelse return null;
 
@@ -896,6 +1006,7 @@ pub const UpdateManager = struct {
             assets_val.array.items,
             app_name,
             "browser_download_url",
+            asset_pattern,
         ) orelse return null;
 
         return @as(?appimage.AppImageUpdate, try makeUpdate(allocator, app_name, latest_version, download_url, current_version));
@@ -917,6 +1028,10 @@ pub const UpdateManager = struct {
 
     fn github_to_releases_api(allocator: std.mem.Allocator, owner: []const u8, repo: []const u8) ![]u8 {
         return std.fmt.allocPrint(allocator, "https://api.github.com/repos/{s}/{s}/releases", .{ owner, repo });
+    }
+
+    fn github_to_latest_release_api(allocator: std.mem.Allocator, owner: []const u8, repo: []const u8) ![]u8 {
+        return std.fmt.allocPrint(allocator, "https://api.github.com/repos/{s}/{s}/releases/latest", .{ owner, repo });
     }
 
     fn gitlab_to_releases_api(allocator: std.mem.Allocator, owner: []const u8, repo: []const u8) ![]u8 {
@@ -961,6 +1076,7 @@ pub const UpdateManager = struct {
             links.array.items,
             app_name,
             "url",
+            null,
         ) orelse return null;
 
         return @as(?appimage.AppImageUpdate, try makeUpdate(allocator, app_name, latest_version, download_url, current_version));
@@ -1467,10 +1583,61 @@ test "configureUpdates: StaticUrl rejects a non-http url without mutation" {
     try std.testing.expect(!app.allow_prerelease);
 }
 
+test "configureUpdates: Zsync stores a control-file url verbatim" {
+    var app = appimage.AppImage{
+        .name = "Test",
+        .repo_owner = "stale-owner",
+        .repo_name = "stale-repo",
+    };
+
+    try UpdateManager.configure_update("https://nightly.example.dev/latest/App.AppImage.zsync", .zsync, &app, false);
+
+    try std.testing.expectEqual(appimage.UpdateType.zsync, app.update_type);
+    try std.testing.expectEqualStrings("https://nightly.example.dev/latest/App.AppImage.zsync", app.update_url);
+    try std.testing.expect(app.repo_owner == null);
+    try std.testing.expect(app.repo_name == null);
+}
+
+test "configureUpdates: Zsync accepts a raw zsync| update-information string" {
+    var app = appimage.AppImage{ .name = "Test" };
+
+    try UpdateManager.configure_update("zsync|https://nightly.example.dev/latest/App.AppImage.zsync", .zsync, &app, false);
+
+    try std.testing.expectEqual(appimage.UpdateType.zsync, app.update_type);
+    try std.testing.expectEqualStrings("https://nightly.example.dev/latest/App.AppImage.zsync", app.update_url);
+}
+
+test "configureUpdates: Zsync rejects non-http urls without mutation" {
+    var app = appimage.AppImage{
+        .name = "Test",
+        .update_url = "https://old.example/App.zsync",
+        .update_type = .zsync,
+    };
+
+    try std.testing.expectError(
+        error.InvalidAppImageUpdateConfiguration,
+        UpdateManager.configure_update("file:///tmp/App.AppImage.zsync", .zsync, &app, true),
+    );
+    try std.testing.expectError(
+        error.InvalidAppImageUpdateConfiguration,
+        UpdateManager.configure_update("gh-releases-zsync|owner|repo|latest|App-*.zsync", .zsync, &app, false),
+    );
+
+    try std.testing.expectEqual(appimage.UpdateType.zsync, app.update_type);
+    try std.testing.expectEqualStrings("https://old.example/App.zsync", app.update_url);
+    try std.testing.expect(!app.allow_prerelease);
+}
+
 test "github_to_releases_api builds correct url" {
     const url = try UpdateManager.github_to_releases_api(std.testing.allocator, "ppy", "osu");
     defer std.testing.allocator.free(url);
     try std.testing.expectEqualStrings("https://api.github.com/repos/ppy/osu/releases", url);
+}
+
+test "github_to_latest_release_api builds correct url" {
+    const url = try UpdateManager.github_to_latest_release_api(std.testing.allocator, "RPCS3", "rpcs3-binaries-linux");
+    defer std.testing.allocator.free(url);
+    try std.testing.expectEqualStrings("https://api.github.com/repos/RPCS3/rpcs3-binaries-linux/releases/latest", url);
 }
 
 test "gitlab_to_releases_api builds correct url with encoded path" {
@@ -1504,6 +1671,35 @@ test "parse_github_response: skips prerelease when allow_prerelease=false" {
     try std.testing.expectEqualStrings("2025.630.0", result.?.version);
 }
 
+test "parse_github_response: accepts latest release object for RPCS3 issue 2145" {
+    const body =
+        \\{
+        \\  "tag_name":"build-b2e52d6358f746662d118aacf28264918df950e3",
+        \\  "prerelease":false,
+        \\  "assets":[{
+        \\    "name":"rpcs3-v0.0.43-20561-b2e52d63_linux64.AppImage",
+        \\    "browser_download_url":"https://github.com/RPCS3/rpcs3-binaries-linux/releases/download/build-b2e52d6358f746662d118aacf28264918df950e3/rpcs3-v0.0.43-20561-b2e52d63_linux64.AppImage"
+        \\  }]
+        \\}
+    ;
+    const result = try UpdateManager.parse_github_response(
+        std.testing.allocator,
+        body,
+        "RPCS3",
+        "build-fff0c96bf38d1ada075e524c4753a7f263c06449",
+        false,
+    );
+    defer if (result) |release| release.deinit(std.testing.allocator);
+
+    try std.testing.expect(result != null);
+    try std.testing.expectEqualStrings("build-b2e52d6358f746662d118aacf28264918df950e3", result.?.version);
+    try std.testing.expectEqualStrings(
+        "https://github.com/RPCS3/rpcs3-binaries-linux/releases/download/build-b2e52d6358f746662d118aacf28264918df950e3/rpcs3-v0.0.43-20561-b2e52d63_linux64.AppImage",
+        result.?.download_url,
+    );
+    try std.testing.expect(result.?.is_update_available);
+}
+
 test "parse_github_response: includes prerelease when allow_prerelease=true" {
     const body =
         \\[
@@ -1535,6 +1731,102 @@ test "parse_github_response: picks single AppImage asset (ppy/osu style)" {
     try std.testing.expectEqualStrings("2025.630.0", result.?.version);
     try std.testing.expectEqualStrings("https://github.com/ppy/osu/releases/download/2025.630.0/osu.AppImage", result.?.download_url);
     try std.testing.expect(result.?.is_update_available);
+}
+
+test "parse_github_response: asset pattern selects the globbed asset over other AppImages" {
+    const body =
+        \\[{
+        \\  "tag_name": "5.0.10",
+        \\  "prerelease": false,
+        \\  "assets": [
+        \\    {"name":"Subsurface-5.0.10-x86_64.AppImage","browser_download_url":"https://example.com/Subsurface-5.0.10-x86_64.AppImage"},
+        \\    {"name":"Subsurface-5.0.10-aarch64.AppImage","browser_download_url":"https://example.com/Subsurface-5.0.10-aarch64.AppImage"},
+        \\    {"name":"Other-1.0-x86_64.AppImage","browser_download_url":"https://example.com/Other-1.0-x86_64.AppImage"}
+        \\  ]
+        \\}]
+    ;
+    const result = try UpdateManager.parse_github_response_pattern(
+        std.testing.allocator,
+        body,
+        "Subsurface",
+        "5.0.9",
+        false,
+        "Subsurface-*x86_64.AppImage",
+    );
+    defer if (result) |r| r.deinit(std.testing.allocator);
+    try std.testing.expect(result != null);
+    try std.testing.expectEqualStrings("5.0.10", result.?.version);
+    try std.testing.expectEqualStrings("https://example.com/Subsurface-5.0.10-x86_64.AppImage", result.?.download_url);
+    try std.testing.expect(result.?.is_update_available);
+}
+
+test "parse_github_response: asset pattern resolves a zsync asset to its AppImage" {
+    const body =
+        \\[{
+        \\  "tag_name": "5.0.10",
+        \\  "prerelease": false,
+        \\  "assets": [
+        \\    {"name":"Subsurface-5.0.10-x86_64.AppImage.zsync","browser_download_url":"https://example.com/Subsurface-5.0.10-x86_64.AppImage.zsync"},
+        \\    {"name":"Unrelated.dmg","browser_download_url":"https://example.com/Unrelated.dmg"}
+        \\  ]
+        \\}]
+    ;
+    const result = try UpdateManager.parse_github_response_pattern(
+        std.testing.allocator,
+        body,
+        "Subsurface",
+        "5.0.9",
+        false,
+        "Subsurface-*x86_64.AppImage.zsync",
+    );
+    defer if (result) |r| r.deinit(std.testing.allocator);
+    try std.testing.expect(result != null);
+    try std.testing.expectEqualStrings("https://example.com/Subsurface-5.0.10-x86_64.AppImage", result.?.download_url);
+}
+
+test "parse_github_response: ambiguous asset pattern matches report no update" {
+    const body =
+        \\[{
+        \\  "tag_name": "5.0.10",
+        \\  "prerelease": false,
+        \\  "assets": [
+        \\    {"name":"Subsurface-5.0.10-x86_64.AppImage","browser_download_url":"https://example.com/a.AppImage"},
+        \\    {"name":"Subsurface-5.0.10-x86_64-v2.AppImage","browser_download_url":"https://example.com/b.AppImage"}
+        \\  ]
+        \\}]
+    ;
+    const result = try UpdateManager.parse_github_response_pattern(
+        std.testing.allocator,
+        body,
+        "Subsurface",
+        "5.0.9",
+        false,
+        "Subsurface-*x86_64*.AppImage",
+    );
+    try std.testing.expect(result == null);
+}
+
+test "parse_github_response: unmatched asset pattern falls back to name selection" {
+    const body =
+        \\[{
+        \\  "tag_name": "5.0.10",
+        \\  "prerelease": false,
+        \\  "assets": [
+        \\    {"name":"Subsurface-5.0.10-x86_64.AppImage","browser_download_url":"https://example.com/Subsurface-5.0.10-x86_64.AppImage"}
+        \\  ]
+        \\}]
+    ;
+    const result = try UpdateManager.parse_github_response_pattern(
+        std.testing.allocator,
+        body,
+        "Subsurface",
+        "5.0.9",
+        false,
+        "NoSuchPattern-*.AppImage",
+    );
+    defer if (result) |r| r.deinit(std.testing.allocator);
+    try std.testing.expect(result != null);
+    try std.testing.expectEqualStrings("https://example.com/Subsurface-5.0.10-x86_64.AppImage", result.?.download_url);
 }
 
 test "parse_github_response: picks exact installed basename when multiple AppImages present" {
@@ -2127,6 +2419,10 @@ test "get_update returns optional owned results for configured providers" {
     const incomplete = appimage.AppImage{ .name = "Incomplete", .update_type = .github };
     try std.testing.expect((try manager.get_update(&incomplete)) == null);
     try std.testing.expectEqual(events.StatusKind.warning, capture.last_status.?);
+
+    const missing_zsync_url = appimage.AppImage{ .name = "MissingZsync", .update_type = .zsync };
+    try std.testing.expect((try manager.get_update(&missing_zsync_url)) == null);
+    try std.testing.expectEqual(events.StatusKind.warning, capture.last_status.?);
 }
 
 test "providerUpdateOrWarn warns only when no provider asset is available" {
@@ -2421,6 +2717,18 @@ const newDesktopNameAppImage =
     \\if [ "$1" = "--appimage-extract" ]; then
     \\  mkdir -p squashfs-root
     \\  printf '%s\n' '[Desktop Entry]' 'Name=New Name' 'X-AppImage-Version=2.0.0' 'Exec=editor %U' 'TryExec=editor' 'Icon=editor' 'Categories=Utility;' > squashfs-root/editor.desktop
+    \\  exit 0
+    \\fi
+    \\exit 0
+;
+
+/// An AppImage that ships its entry under the reverse-DNS name the application
+/// uses as its Wayland app ID. See issue #2126.
+const reverseDnsUpdateAppImage =
+    \\#!/bin/sh
+    \\if [ "$1" = "--appimage-extract" ]; then
+    \\  mkdir -p squashfs-root
+    \\  printf '%s\n' '[Desktop Entry]' 'Name=New Name' 'X-AppImage-Version=2.0.0' 'Exec=editor %U' 'Icon=editor' 'Categories=Utility;' > squashfs-root/com.example.newname.desktop
     \\  exit 0
     \\fi
     \\exit 0
@@ -2813,6 +3121,85 @@ test "update: preserves stable desktop filename when display name changes" {
         count += 1;
     }
     try std.testing.expectEqual(@as(usize, 1), count);
+}
+
+test "update: refreshes the entry to the desktop file name the AppImage ships" {
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    var path_buf: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const len = try tmp.dir.realPath(std.testing.io, &path_buf);
+    const dir_path = try std.testing.allocator.dupe(u8, path_buf[0..len]);
+    defer std.testing.allocator.free(dir_path);
+
+    const install_dir = try std.fs.path.join(std.testing.allocator, &.{ dir_path, "install" });
+    defer std.testing.allocator.free(install_dir);
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, install_dir);
+
+    const data_home = try std.fs.path.join(std.testing.allocator, &.{ dir_path, "data" });
+    defer std.testing.allocator.free(data_home);
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, data_home);
+
+    var environ = std.process.Environ.Map.init(std.testing.allocator);
+    defer environ.deinit();
+    try environ.put("HOME", dir_path);
+    try environ.put("XDG_DATA_HOME", data_home);
+    try environ.put("XDG_CACHE_HOME", dir_path);
+    var environ_block = try environ.createPosixBlock(std.testing.allocator, .{});
+    defer environ_block.deinit(std.testing.allocator);
+    const test_environ: std.process.Environ = .{ .block = environ_block };
+
+    const db_path = try std.fs.path.join(std.testing.allocator, &.{ dir_path, "apps.db" });
+    defer std.testing.allocator.free(db_path);
+
+    const app_name = "Editor";
+    const current_path = try std.fs.path.join(std.testing.allocator, &.{ install_dir, "Editor.AppImage" });
+    defer std.testing.allocator.free(current_path);
+    try writeUpdateFixture(std.testing.io, current_path, "#!/bin/sh\nexit 0\n");
+
+    // An entry from before entries followed the shipped desktop file name.
+    const desktop_dir = try std.fs.path.join(std.testing.allocator, &.{ data_home, "applications" });
+    defer std.testing.allocator.free(desktop_dir);
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, desktop_dir);
+    const legacy_path = try std.fs.path.join(std.testing.allocator, &.{ desktop_dir, "editor.desktop" });
+    defer std.testing.allocator.free(legacy_path);
+    const legacy_entry = try std.fmt.allocPrint(std.testing.allocator, "[Desktop Entry]\nName=Editor\nExec=\"{s}\" %U\n", .{current_path});
+    defer std.testing.allocator.free(legacy_entry);
+    try writeUpdateFixture(std.testing.io, legacy_path, legacy_entry);
+
+    try seedDb(std.testing.allocator, std.testing.io, db_path, &.{
+        .{ .name = app_name, .version = "1.0.0", .desktop_name = "Editor", .path = current_path },
+    });
+
+    const staged_path = try std.fs.path.join(std.testing.allocator, &.{ dir_path, "staged.AppImage" });
+    defer std.testing.allocator.free(staged_path);
+    try writeUpdateFixture(std.testing.io, staged_path, reverseDnsUpdateAppImage);
+
+    var um = makeStagedUpdateManager(std.testing.allocator, install_dir, db_path, staged_path);
+    um.environ = test_environ;
+    var dto = appimage.AppImageUpdate{
+        .name = app_name,
+        .version = "2.0.0",
+        .download_url = "https://example.com/Editor.AppImage",
+        .is_update_available = true,
+    };
+    try std.testing.expect(try um.update(&dto));
+
+    var dir = try std.Io.Dir.cwd().openDir(std.testing.io, desktop_dir, .{ .iterate = true });
+    defer dir.close(std.testing.io);
+    var it = dir.iterate();
+    var names: std.ArrayList([]const u8) = .empty;
+    defer {
+        for (names.items) |name| std.testing.allocator.free(name);
+        names.deinit(std.testing.allocator);
+    }
+    while (try it.next(std.testing.io)) |entry| {
+        if (entry.kind != .file) continue;
+        if (!std.mem.endsWith(u8, entry.name, ".desktop")) continue;
+        try names.append(std.testing.allocator, try std.testing.allocator.dupe(u8, entry.name));
+    }
+    try std.testing.expectEqual(@as(usize, 1), names.items.len);
+    try std.testing.expectEqualStrings("com.example.newname.desktop", names.items[0]);
 }
 
 test "update: preserves Exec= field codes" {

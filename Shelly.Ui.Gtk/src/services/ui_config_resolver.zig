@@ -743,3 +743,39 @@ test "load accepts integer values for f64 fields" {
     const cfg = try svc.get();
     try testing.expectEqual(@as(i32, 48), cfg.TrayCheckIntervalHours);
 }
+
+test "TerminalForUpdate round-trips through save and load" {
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    try seedSettings(&tmp, "{\"TerminalForUpdate\":\"alacritty\"}");
+
+    var svc = makeService(&tmp);
+    defer svc.deinit();
+    try svc.load();
+
+    const loaded = try svc.get();
+    try testing.expectEqualStrings("alacritty", loaded.TerminalForUpdate);
+
+    try svc.updateField(.TerminalForUpdate, @as([]const u8, "kitty"));
+
+    var reloaded = makeService(&tmp);
+    defer reloaded.deinit();
+    try reloaded.load();
+    const cfg = try reloaded.get();
+    try testing.expectEqualStrings("kitty", cfg.TerminalForUpdate);
+}
+
+test "invalid TerminalForUpdate values fall back to the default" {
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    try seedSettings(&tmp, "{\"TerminalForUpdate\":42}");
+
+    var svc = makeService(&tmp);
+    defer svc.deinit();
+    try svc.load();
+
+    const cfg = try svc.get();
+    try testing.expectEqualStrings("", cfg.TerminalForUpdate);
+}

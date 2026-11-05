@@ -44,7 +44,7 @@ pub fn cause(err: anyerror) ?[]const u8 {
         error.LockOwnershipLost, error.LockNotHeld, error.TransactionNotLocked => "RLPM no longer holds the required database lock. Inspect the database state before starting another transaction.",
         error.OwnerBusy, error.TransactionActive, error.CallbackReentry => "Another operation is active on this RLPM instance. Finish it before starting this operation.",
         error.ForeignOwner, error.StaleDatabaseReference, error.StalePackageReference => "The package or database reference is no longer valid for this RLPM instance. Repeat the query to obtain current metadata.",
-        error.StaleDatabaseState, error.StaleFilesystemState, error.FileChanged => "The database or filesystem changed after RLPM inspected it. Review the affected state and resolve the transaction again.",
+        error.StaleFilesystemState, error.FileChanged => "The database or filesystem changed after RLPM inspected it. Review the affected state and resolve the transaction again.",
         error.InvalidTransactionState, error.InvalidActionState, error.TransactionNotInitialized, error.IncompletePreflight => "The transaction is not in the state required for this step. Report the operation and technical details if this persists.",
         error.InvalidTransactionFlags, error.InvalidMigrationFlags => "The requested transaction options are invalid or incompatible. Review the selected flags.",
         error.InvalidOption, error.ImmutablePath => "An RLPM configuration option is invalid or cannot be changed after initialization.",

@@ -67,6 +67,9 @@ pub const ShellySettingsPage = extern struct {
         tray_cron_box: *gtk.Box,
         use_ui: *gtk.Switch,
         use_ui_switch_box: *gtk.Box,
+        terminal_update_box: *gtk.Box,
+        terminal_update_drop: *gtk.DropDown,
+        terminal_update_entry: *gtk.Entry,
         tray_interval_box: *gtk.Box,
         tray_interval_spin: *gtk.SpinButton,
         weekly_schedule_box: *gtk.Box,
@@ -212,6 +215,20 @@ pub const ShellySettingsPage = extern struct {
             &onNavModeChanged,
             self,
             .{ .detail = "selected" },
+        );
+        _ = gobject.Object.signals.notify.connect(
+            p.terminal_update_drop.as(gobject.Object),
+            *Self,
+            &onTerminalDropSelected,
+            self,
+            .{ .detail = "selected" },
+        );
+        _ = gobject.Object.signals.notify.connect(
+            p.terminal_update_entry.as(gobject.Object),
+            *Self,
+            &onTerminalEntryText,
+            self,
+            .{ .detail = "text" },
         );
         _ = gobject.Object.signals.notify.connect(
             p.flatpak_switch.as(gobject.Object),
@@ -366,9 +383,13 @@ pub const ShellySettingsPage = extern struct {
         var updated = cfg.*;
         collectIntoConfig(p, arena.allocator(), &updated);
         const icons_enabled_before = cfg.ShellyIconsEnabled;
+        const terminal_warning = terminalNeedsWarning(cfg.TerminalForUpdate, updated.TerminalForUpdate);
         try svc.set(updated);
         try svc.save();
         applyIconsToggle(icons_enabled_before, updated.ShellyIconsEnabled);
+        if (terminal_warning) {
+            p.toast.show(.info, translations._(terminal_missing_warning));
+        }
 
         const lang_value = language_entries[gtk.DropDown.getSelected(p.language_drop)].value;
         _ = translations.initWithLocale(lang_value);
@@ -400,6 +421,7 @@ pub const ShellySettingsPage = extern struct {
         var updated = cfg.*;
         collectIntoConfig(p, arena.allocator(), &updated);
         const icons_enabled_before = cfg.ShellyIconsEnabled;
+        const terminal_warning = terminalNeedsWarning(cfg.TerminalForUpdate, updated.TerminalForUpdate);
 
         const page_drop_stale =
             updated.RecommendedEnabled != cfg.RecommendedEnabled or
@@ -418,6 +440,9 @@ pub const ShellySettingsPage = extern struct {
             return;
         };
         applyIconsToggle(icons_enabled_before, updated.ShellyIconsEnabled);
+        if (terminal_warning) {
+            p.toast.show(.info, translations._(terminal_missing_warning));
+        }
 
         const lang_value = language_entries[gtk.DropDown.getSelected(p.language_drop)].value;
         _ = translations.initWithLocale(lang_value);
@@ -709,7 +734,7 @@ pub const ShellySettingsPage = extern struct {
             return err;
         };
         if (fetch_result.status != .ok) {
-            std.log.warn("Could not download the release notes: the server returned HTTP {0d}.", .{@intFromEnum(fetch_result.status)});
+            std.log.warn("Could not download the release notes: the server returned HTTP {0d}.", .{@backingInt(fetch_result.status)});
             return error.HttpRequestFailed;
         }
 
@@ -817,7 +842,7 @@ pub const ShellySettingsPage = extern struct {
         var err: ?*glib.Error = null;
         const file = gtk.FileDialog.openFinish(dialog, result, &err);
         if (err) |e| {
-            if (e.f_code != @intFromEnum(gio.IOErrorEnum.cancelled)) {
+            if (e.f_code != @backingInt(gio.IOErrorEnum.cancelled)) {
                 std.log.warn("Could not select an icon file. {0f}", .{diagnostics.safe(e.f_message orelse "")});
             }
             glib.Error.free(e);
@@ -872,7 +897,7 @@ pub const ShellySettingsPage = extern struct {
         var err: ?*glib.Error = null;
         const file = gtk.FileDialog.openFinish(dialog, result, &err);
         if (err) |e| {
-            if (e.f_code != @intFromEnum(gio.IOErrorEnum.cancelled)) {
+            if (e.f_code != @backingInt(gio.IOErrorEnum.cancelled)) {
                 std.log.warn("Could not select an icon file. {0f}", .{diagnostics.safe(e.f_message orelse "")});
             }
             glib.Error.free(e);
@@ -927,7 +952,7 @@ pub const ShellySettingsPage = extern struct {
         var err: ?*glib.Error = null;
         const file = gtk.FileDialog.selectFolderFinish(dialog, result, &err);
         if (err) |e| {
-            if (e.f_code != @intFromEnum(gio.IOErrorEnum.cancelled)) {
+            if (e.f_code != @backingInt(gio.IOErrorEnum.cancelled)) {
                 std.log.warn("Could not select the AppImage installation directory. {0f}", .{diagnostics.safe(e.f_message orelse "")});
             }
             glib.Error.free(e);
@@ -969,8 +994,20 @@ pub const ShellySettingsPage = extern struct {
 
     fn onUseUiNotify(_: *gobject.Object, _: *gobject.ParamSpec, self: *Self) callconv(.c) void {
         const p = self.priv();
+        // The update terminal only matters when the tray runs updates in a
+        // terminal rather than in the UI.
+        applyScheduleVisibility(p);
         const active = gtk.Switch.getActive(p.use_ui) != 0;
         updateConfigField(.UseUiForUpdate, active);
+    }
+
+    fn onTerminalDropSelected(_: *gobject.Object, _: *gobject.ParamSpec, self: *Self) callconv(.c) void {
+        applyTerminalEntryVisibility(self.priv());
+        self.autosave();
+    }
+
+    fn onTerminalEntryText(_: *gobject.Object, _: *gobject.ParamSpec, self: *Self) callconv(.c) void {
+        self.scheduleAutosave();
     }
 
     fn onTrayNotify(_: *gobject.Object, _: *gobject.ParamSpec, self: *Self) callconv(.c) void {
@@ -1103,6 +1140,9 @@ pub const ShellySettingsPage = extern struct {
         .{ "tray_cron_box", @offsetOf(Private, "tray_cron_box") },
         .{ "use_ui", @offsetOf(Private, "use_ui") },
         .{ "use_ui_switch_box", @offsetOf(Private, "use_ui_switch_box") },
+        .{ "terminal_update_box", @offsetOf(Private, "terminal_update_box") },
+        .{ "terminal_update_drop", @offsetOf(Private, "terminal_update_drop") },
+        .{ "terminal_update_entry", @offsetOf(Private, "terminal_update_entry") },
         .{ "tray_interval_box", @offsetOf(Private, "tray_interval_box") },
         .{ "tray_interval_spin", @offsetOf(Private, "tray_interval_spin") },
         .{ "weekly_schedule_box", @offsetOf(Private, "weekly_schedule_box") },
@@ -1207,6 +1247,47 @@ const nav_mode_entries = [_]NavModeEntry{
     .{ .label = "Topbar", .value = .topbar },
 };
 
+/// Terminal emulators offered in Settings. Keep in sync with
+/// `terminal_candidates` in Shelly.Notifications.Zig/src/services/app_runner.zig.
+const known_terminals = [_][:0]const u8{
+    "alacritty",  "rio",   "ghostty",        "kitty",
+    "konsole",    "kgx",   "gnome-terminal", "xfce4-terminal",
+    "lxterminal", "xterm", "st",             "foot",
+    "terminator",
+};
+
+/// The update-terminal dropdown layout: default first, then the known
+/// terminals, then a custom entry that stores any binary name or path.
+const terminal_default_index: c_uint = 0;
+const terminal_custom_index: c_uint = known_terminals.len + 1;
+
+fn knownTerminalIndex(value: []const u8) ?c_uint {
+    for (known_terminals, 0..) |term, i| {
+        if (std.mem.eql(u8, value, term)) return @intCast(i + 1);
+    }
+    return null;
+}
+
+/// Mirrors `isCommandAvailable` in Shelly.Notifications.Zig app_runner.zig so
+/// Settings can warn about a terminal that could never be launched; the tray
+/// still checks again at update time and falls back.
+fn terminalCommandAvailable(command: []const u8) bool {
+    const cwd = std.Io.Dir.cwd();
+    if (std.fs.path.isAbsolute(command)) {
+        cwd.access(runtime.io, command, .{ .execute = true }) catch return false;
+        return true;
+    }
+    const path_env = runtime.environ_map.get("PATH") orelse "/usr/bin:/bin";
+    var it = std.mem.tokenizeScalar(u8, path_env, ':');
+    while (it.next()) |dir| {
+        var buf: [std.fs.max_path_bytes]u8 = undefined;
+        const full = std.fmt.bufPrint(&buf, "{s}/{s}", .{ dir, command }) catch continue;
+        cwd.access(runtime.io, full, .{ .execute = true }) catch continue;
+        return true;
+    }
+    return false;
+}
+
 const language_entries = [_]struct {
     label: [:0]const u8,
     value: [:0]const u8,
@@ -1258,7 +1339,56 @@ fn populateDropdowns(p: *ShellySettingsPage.Private) void {
         gtk.StringList.append(lang_strings, label);
     }
     gtk.DropDown.setModel(p.language_drop, lang_strings.as(gio.ListModel));
+
+    const terminal_strings = gtk.StringList.new(null);
+    gtk.StringList.append(terminal_strings, translations._("Default (auto-detect)"));
+    inline for (known_terminals) |term| {
+        gtk.StringList.append(terminal_strings, term);
+    }
+    gtk.StringList.append(terminal_strings, translations._("Custom…"));
+    gtk.DropDown.setModel(p.terminal_update_drop, terminal_strings.as(gio.ListModel));
 }
+
+/// Shows the free-form command entry only while "Custom…" is selected.
+fn applyTerminalEntryVisibility(p: *ShellySettingsPage.Private) void {
+    const custom = gtk.DropDown.getSelected(p.terminal_update_drop) == terminal_custom_index;
+    gtk.Widget.setVisible(p.terminal_update_entry.as(gtk.Widget), @intFromBool(custom));
+}
+
+/// Reflects a stored TerminalForUpdate value in the dropdown and entry.
+/// Anything that is neither empty nor a known terminal is custom.
+fn applyTerminalSelection(p: *ShellySettingsPage.Private, value: []const u8) void {
+    if (value.len == 0) {
+        gtk.DropDown.setSelected(p.terminal_update_drop, terminal_default_index);
+    } else if (knownTerminalIndex(value)) |idx| {
+        gtk.DropDown.setSelected(p.terminal_update_drop, idx);
+    } else {
+        gtk.DropDown.setSelected(p.terminal_update_drop, terminal_custom_index);
+        const z = std.heap.c_allocator.dupeSentinel(u8, value, 0) catch return;
+        defer std.heap.c_allocator.free(z);
+        gtk.Editable.setText(p.terminal_update_entry.as(gtk.Editable), z);
+    }
+    applyTerminalEntryVisibility(p);
+}
+
+fn collectTerminalUpdate(p: *ShellySettingsPage.Private, allocator: std.mem.Allocator) ![]const u8 {
+    const idx = gtk.DropDown.getSelected(p.terminal_update_drop);
+    if (idx <= terminal_default_index or idx > terminal_custom_index) return "";
+    if (idx < terminal_custom_index) return known_terminals[idx - 1];
+
+    const text = std.mem.span(gtk.Editable.getText(p.terminal_update_entry.as(gtk.Editable)));
+    return allocator.dupe(u8, std.mem.trim(u8, text, " \t"));
+}
+
+/// True when a newly stored terminal cannot be launched, so Settings can warn
+/// while the tray still re-checks and falls back when it runs the update.
+fn terminalNeedsWarning(previous: []const u8, updated: []const u8) bool {
+    if (updated.len == 0) return false;
+    if (std.mem.eql(u8, previous, updated)) return false;
+    return !terminalCommandAvailable(updated);
+}
+
+const terminal_missing_warning = "The selected terminal was not found on this system. Updates will try it first and fall back to another terminal.";
 
 fn hideSettingsRow(widget: anytype) void {
     if (gtk.Widget.getParent(widget.as(gtk.Widget))) |row| {
@@ -1366,6 +1496,7 @@ fn applyConfig(p: *ShellySettingsPage.Private, cfg: *ShellyConfig) void {
     setSwitch(p.daily_schedule, cfg.UseWeeklySchedule);
     setSwitch(p.tray_cron_switch, cfg.TrayRunAsCron);
     setSwitch(p.use_ui, cfg.UseUiForUpdate);
+    applyTerminalSelection(p, cfg.TerminalForUpdate);
 
     gtk.SpinButton.setValue(p.tray_interval_spin, @floatFromInt(cfg.TrayCheckIntervalHours));
 
@@ -1445,6 +1576,7 @@ fn collectIntoConfig(p: *ShellySettingsPage.Private, allocator: std.mem.Allocato
     cfg.UseWeeklySchedule = getSwitch(p.daily_schedule);
     cfg.TrayRunAsCron = getSwitch(p.tray_cron_switch);
     cfg.UseUiForUpdate = getSwitch(p.use_ui);
+    cfg.TerminalForUpdate = collectTerminalUpdate(p, allocator) catch cfg.TerminalForUpdate;
 
     cfg.TrayCheckIntervalHours = gtk.SpinButton.getValueAsInt(p.tray_interval_spin);
 
@@ -1529,6 +1661,7 @@ fn applyScheduleVisibility(p: *ShellySettingsPage.Private) void {
         gtk.Widget.setVisible(p.weekly_schedule_box.as(gtk.Widget), 0);
         gtk.Widget.setVisible(p.tray_interval_box.as(gtk.Widget), 0);
         gtk.Widget.setVisible(p.use_ui_switch_box.as(gtk.Widget), 0);
+        gtk.Widget.setVisible(p.terminal_update_box.as(gtk.Widget), 0);
         return;
     }
 
@@ -1537,6 +1670,9 @@ fn applyScheduleVisibility(p: *ShellySettingsPage.Private) void {
     gtk.Widget.setVisible(p.tray_cron_box.as(gtk.Widget), @intFromBool(daily_enabled));
     gtk.Widget.setVisible(p.weekly_schedule_box.as(gtk.Widget), @intFromBool(daily_enabled));
     gtk.Widget.setVisible(p.tray_interval_box.as(gtk.Widget), @intFromBool(!daily_enabled));
+    // A terminal is only used when the tray runs updates outside the UI.
+    const use_ui_enabled = gtk.Switch.getActive(p.use_ui) != 0;
+    gtk.Widget.setVisible(p.terminal_update_box.as(gtk.Widget), @intFromBool(!use_ui_enabled));
 }
 
 fn applyTrayVisibility(p: *ShellySettingsPage.Private) void {

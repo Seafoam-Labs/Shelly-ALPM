@@ -8,6 +8,7 @@ const flatpak_backend_loader = @import("flatpak/backend_loader.zig");
 pub const Manager = @import("alpm/manager.zig").Manager;
 
 pub const user_errors = @import("shared/user_errors.zig");
+pub const pseudo_file = @import("shared/pseudo_file.zig");
 pub const user_account = @import("user_account");
 
 pub const aur = @import("aur/manager.zig");
@@ -70,6 +71,7 @@ pub const appimage = struct {
     pub const update_manager = @import("appimage/update_manager.zig");
     pub const bindings = @import("appimage/bindings.zig");
     pub const events = @import("appimage/events.zig");
+    pub const zsync = @import("appimage/zsync.zig");
 
     pub const Manager = manager.AppImageManager;
     pub const UpdateManager = update_manager.UpdateManager;
@@ -457,6 +459,9 @@ test {
     _ = @import("alpm/events.zig");
     _ = @import("alpm/configuration.zig");
     _ = @import("alpm/cache_manager.zig");
+    // Collected explicitly so the restart-check regressions are covered even
+    // when the libalpm backend gates out the manager that normally imports it.
+    _ = @import("alpm/restarts.zig");
     _ = @import("alpm/archive_manager.zig");
     _ = @import("alpm/pacfile_manager.zig");
     _ = @import("alpm/distribution-hooks/CachyOS/update_notice.zig");
@@ -475,6 +480,7 @@ test {
     _ = @import("appimage/manager.zig");
     _ = @import("archive");
     _ = @import("shared/downloader.zig");
+    _ = @import("shared/pseudo_file.zig");
     _ = @import("shared/source_pgp_verifier.zig");
     _ = @import("shared/source_pgp_keyring.zig");
     _ = @import("shared/package_signer.zig");

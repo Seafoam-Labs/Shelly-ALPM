@@ -2,6 +2,9 @@ const std = @import("std");
 const environment = @import("environment.zig");
 
 pub const appimage = struct {
+    /// Wire values are the enum declaration order; the CLI serializes them as
+    /// integers. Append new providers at the end so stored databases and the
+    /// UI dropdown indices stay compatible.
     pub const UpdateType = enum {
         none,
         static_url,
@@ -9,6 +12,7 @@ pub const appimage = struct {
         gitlab,
         codeberg,
         forgejo,
+        zsync,
     };
 
     pub const AppImage = struct {

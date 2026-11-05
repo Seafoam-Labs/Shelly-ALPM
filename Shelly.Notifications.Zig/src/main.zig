@@ -23,6 +23,8 @@ const Flatpak = @import("models/update.zig").CheckUpdatesFlatpak;
 const runtime = @import("runtime.zig");
 const AppRunner = @import("services/app_runner.zig").AppRunner;
 const ConfigWatcher = @import("services/config-watcher.zig").ConfigWatcher;
+const LocalDbWatcher = @import("services/db-watcher.zig").LocalDbWatcher;
+const installedDatabaseDir = @import("services/db-watcher.zig").installedDatabaseDir;
 const ShellyConfig = @import("services/config.zig").ConfigResolver;
 const next_notification = @import("services/next_notification.zig");
 const ShellyCli = @import("services/shelly-cli.zig").ShellyCli;
@@ -339,6 +341,32 @@ fn getIconsToUse(config: *ShellyConfig) IconsToUse {
     };
 }
 
+/// Applies the D-Bus specification's default session bus address fallback.
+///
+/// `goose` (and therefore zsn's `Service.init`) requires `DBUS_SESSION_BUS_ADDRESS`
+/// to be present in the environment and fails with `error.EnvVarNotFound` when it is
+/// missing. Launchers that do not export the variable — notably systemd user units
+/// started before the session manager propagated it — then leave the tray stuck in a
+/// silent reconnect loop. libdbus and sd-bus both fall back to
+/// `unix:path=$XDG_RUNTIME_DIR/bus`; do the same here so those launches work too.
+///
+/// Returns `true` when a usable session bus address is available afterwards.
+/// Returns `false` only when the address is missing and there is no valid
+/// `XDG_RUNTIME_DIR` to derive it from, which is a permanent condition: retrying
+/// inside the same process cannot help.
+fn ensureSessionBusAddress(allocator: std.mem.Allocator, vars: *std.process.Environ.Map) !bool {
+    if (vars.get("DBUS_SESSION_BUS_ADDRESS")) |address| {
+        if (address.len > 0) return true;
+    }
+    const runtime_dir = vars.get("XDG_RUNTIME_DIR") orelse return false;
+    if (runtime_dir.len == 0 or !std.fs.path.isAbsolute(runtime_dir)) return false;
+    const bus_address = try std.fmt.allocPrint(allocator, "unix:path={s}/bus", .{runtime_dir});
+    defer allocator.free(bus_address);
+    try vars.put("DBUS_SESSION_BUS_ADDRESS", bus_address);
+    log_main.info("DBUS_SESSION_BUS_ADDRESS is unset; falling back to {s}", .{bus_address});
+    return true;
+}
+
 pub fn main(init: std.process.Init) !void {
     const allocator = init.gpa;
     runtime.allocator = allocator;
@@ -346,6 +374,11 @@ pub fn main(init: std.process.Init) !void {
     runtime.environ_map = init.environ_map;
 
     _ = translations.init();
+
+    if (!try ensureSessionBusAddress(allocator, init.environ_map)) {
+        log_main.err("Cannot locate the D-Bus session bus: neither DBUS_SESSION_BUS_ADDRESS nor XDG_RUNTIME_DIR is set in this process environment. Set DBUS_SESSION_BUS_ADDRESS (for a systemd user service, a drop-in with Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=%t/bus works) and restart. Not retrying, because this cannot fix itself while the process runs.", .{});
+        return error.SessionBusAddressNotFound;
+    }
 
     while (true) {
         runSession(init) catch |err| {
@@ -425,6 +458,39 @@ fn runSession(init: std.process.Init) !void {
     try watcher.start();
     defer watcher.stop();
     _ = watcher.changedSinceLast();
+
+    // The update command the tray launches is not the only thing that changes
+    // the installed-package database: terminals that hand their window to a
+    // session daemon exit long before the update finishes, and users also
+    // install straight from a shell or another front end. Watch the database
+    // itself so the icon re-checks shortly after any of those installs land.
+    var db_watcher: ?LocalDbWatcher = blk: {
+        const db_dir = installedDatabaseDir(allocator, init.io) catch |e| {
+            log_main.warn("Could not locate the installed-package database. The tray icon may keep a stale update state until the next scheduled check. {0s}\n\nTechnical details: {1s}", .{ diagnostics.cause(e), @errorName(e) });
+            break :blk null;
+        };
+        const dir = db_dir orelse {
+            log_main.warn("No supported distribution configuration was found, so the installed-package database is not watched. The tray icon may keep a stale update state until the next scheduled check.", .{});
+            break :blk null;
+        };
+        defer allocator.free(dir);
+
+        var watcher_db = LocalDbWatcher.init(allocator, init.io, dir, &onInstalledDbChanged, null) catch |e| {
+            log_main.err("Could not prepare the installed-package database watcher. {0s}\n\nTechnical details: {1s}", .{ diagnostics.cause(e), @errorName(e) });
+            break :blk null;
+        };
+        watcher_db.start() catch |e| {
+            log_main.err("Could not watch the installed-package database {0f}. The tray icon may keep a stale update state until the next scheduled check. {1s}\n\nTechnical details: {2s}", .{ diagnostics.safe(dir), diagnostics.cause(e), @errorName(e) });
+            watcher_db.deinit();
+            break :blk null;
+        };
+        log_main.info("watching installed-package database {f}", .{diagnostics.safe(dir)});
+        break :blk watcher_db;
+    };
+    defer if (db_watcher) |*w| {
+        w.stop();
+        w.deinit();
+    };
 
     var worker = Worker{
         .updates = &updates,
@@ -685,12 +751,53 @@ fn onUiRefresh(ctx: ?*anyopaque, msg: zsn.Message) void {
     runtime.wakeWorker();
 }
 
+/// Runs on the database watcher thread; waking the worker is all it should do.
+fn onInstalledDbChanged(ctx: ?*anyopaque) void {
+    _ = ctx;
+    runtime.wakeWorker();
+}
+
 fn onTrayActivate(ctx: ?*anyopaque, x: i32, y: i32) void {
     _ = ctx;
     _ = x;
     _ = y;
     launch_requested.store(true, .seq_cst);
 }
+test "ensureSessionBusAddress falls back to XDG_RUNTIME_DIR" {
+    var vars = std.process.Environ.Map.init(std.testing.allocator);
+    defer vars.deinit();
+
+    // Neither variable set: permanent failure, no address written.
+    try std.testing.expect(!try ensureSessionBusAddress(std.testing.allocator, &vars));
+    try std.testing.expect(vars.get("DBUS_SESSION_BUS_ADDRESS") == null);
+
+    // XDG_RUNTIME_DIR set: derive the spec default address.
+    try vars.put("XDG_RUNTIME_DIR", "/run/user/1000");
+    try std.testing.expect(try ensureSessionBusAddress(std.testing.allocator, &vars));
+    try std.testing.expectEqualStrings("unix:path=/run/user/1000/bus", vars.get("DBUS_SESSION_BUS_ADDRESS").?);
+
+    // An explicit non-empty address always wins over the fallback.
+    try vars.put("DBUS_SESSION_BUS_ADDRESS", "unix:abstract=/tmp/dbus-abc");
+    try std.testing.expect(try ensureSessionBusAddress(std.testing.allocator, &vars));
+    try std.testing.expectEqualStrings("unix:abstract=/tmp/dbus-abc", vars.get("DBUS_SESSION_BUS_ADDRESS").?);
+
+    // An empty address is as useless as a missing one and gets replaced.
+    try vars.put("DBUS_SESSION_BUS_ADDRESS", "");
+    try std.testing.expect(try ensureSessionBusAddress(std.testing.allocator, &vars));
+    try std.testing.expectEqualStrings("unix:path=/run/user/1000/bus", vars.get("DBUS_SESSION_BUS_ADDRESS").?);
+}
+
+test "ensureSessionBusAddress rejects unusable XDG_RUNTIME_DIR" {
+    var vars = std.process.Environ.Map.init(std.testing.allocator);
+    defer vars.deinit();
+
+    try vars.put("XDG_RUNTIME_DIR", "relative/path");
+    try std.testing.expect(!try ensureSessionBusAddress(std.testing.allocator, &vars));
+
+    try vars.put("XDG_RUNTIME_DIR", "");
+    try std.testing.expect(!try ensureSessionBusAddress(std.testing.allocator, &vars));
+}
+
 test {
     std.testing.refAllDecls(@This());
     _ = @import("services/next_notification.zig");

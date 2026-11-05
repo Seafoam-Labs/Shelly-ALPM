@@ -14,7 +14,6 @@ pub const PayloadDurability = @import("PayloadDurability.zig");
 const Writer = @import("LocalWriter.zig");
 const Reader = @import("ArchiveReader.zig");
 const Audit = @import("Audit.zig");
-const DatabaseSnapshot = @import("DatabaseSnapshot.zig");
 const Diagnostic = @import("Diagnostic.zig");
 const Callbacks = @import("Callbacks.zig");
 const PathPatterns = @import("PathPatterns.zig");
@@ -120,8 +119,7 @@ pub fn run(tx: *Tx) !void {
     const actions = try trackReturnError(tx.startActions(), &returned_error);
     try trackReturnError(validateAdoptions(tx, null), &returned_error);
 
-    var observed_database = tx.snapshot;
-    try trackReturnError(checkDatabase(tx, observed_database), &returned_error);
+    try trackReturnError(checkGuards(tx), &returned_error);
 
     // Reserve progress storage before the first mutation.
     try trackReturnError(tx.execution.completed.ensureTotalCapacity(a, plan.removals.len + plan.additions.len), &returned_error);
@@ -133,7 +131,7 @@ pub fn run(tx: *Tx) !void {
         try trackReturnError(checkpoint(tx, .pre_scriptlet, null), &returned_error);
         try trackReturnError(actions.beforePackage(id), &returned_error);
         try trackReturnError(validateAdoptions(tx, id), &returned_error);
-        try trackReturnError(checkDatabase(tx, observed_database), &returned_error);
+        try trackReturnError(checkGuards(tx), &returned_error);
 
         var payload = Payload.init(tx, id, null);
         defer payload.deinit();
@@ -152,7 +150,7 @@ pub fn run(tx: *Tx) !void {
         try trackReturnError(checkpoint(tx, .post_scriptlet, null), &returned_error);
         try trackReturnError(actions.afterPackage(id), &returned_error);
         try trackReturnError(validateAdoptions(tx, id), &returned_error);
-        try trackReturnError(checkDatabase(tx, observed_database), &returned_error);
+        try trackReturnError(checkGuards(tx), &returned_error);
         try trackReturnError(packageEvent(tx, id, null, .done), &returned_error);
         try trackReturnError(checkpoint(tx, .database_write, null), &returned_error);
 
@@ -166,7 +164,6 @@ pub fn run(tx: *Tx) !void {
         try trackReturnError(record.publish(old, null), &returned_error);
         tx.execution.database_publish_ms += publication_start.untilNow(tx.io, .awake).toMilliseconds();
         tx.execution.database_published = true;
-        observed_database = try trackReturnError(DatabaseSnapshot.capture(tx.owner, tx.io), &returned_error);
         tx.execution.mutations += 1;
         try trackReturnError(checkpoint(tx, .cache_reload, null), &returned_error);
         try trackReturnError(reload(tx), &returned_error);
@@ -182,7 +179,7 @@ pub fn run(tx: *Tx) !void {
         try trackReturnError(checkpoint(tx, .pre_scriptlet, null), &returned_error);
         try trackReturnError(actions.beforePackage(id), &returned_error);
         try trackReturnError(validateAdoptions(tx, id), &returned_error);
-        try trackReturnError(checkDatabase(tx, observed_database), &returned_error);
+        try trackReturnError(checkGuards(tx), &returned_error);
 
         var payload = Payload.init(tx, id, addition.old);
         defer payload.deinit();
@@ -212,7 +209,6 @@ pub fn run(tx: *Tx) !void {
 
         tx.execution.database_publish_ms += publication_start.untilNow(tx.io, .awake).toMilliseconds();
         tx.execution.database_published = true;
-        observed_database = try trackReturnError(DatabaseSnapshot.capture(tx.owner, tx.io), &returned_error);
         tx.execution.mutations += 1;
         try trackReturnError(checkpoint(tx, .cache_reload, null), &returned_error);
         try trackReturnError(reload(tx), &returned_error);
@@ -248,7 +244,7 @@ pub fn run(tx: *Tx) !void {
 
         try trackReturnError(checkpoint(tx, .post_scriptlet, null), &returned_error);
         try trackReturnError(actions.afterPackage(id), &returned_error);
-        try trackReturnError(checkDatabase(tx, observed_database), &returned_error);
+        try trackReturnError(checkGuards(tx), &returned_error);
         try trackReturnError(packageEvent(tx, id, addition, .done), &returned_error);
         tx.execution.completed.appendAssumeCapacity(id);
         tx.execution.remaining = tx.execution.remaining[1..];
@@ -269,10 +265,9 @@ fn cleanupFailure(tx: *Tx, err: anyerror) void {
     );
 }
 
-fn checkDatabase(tx: *Tx, expected: [32]u8) !void {
-    const actual = try DatabaseSnapshot.capture(tx.owner, tx.io);
-
-    if (!std.mem.eql(u8, &expected, &actual)) return error.StaleDatabaseState;
+fn checkGuards(tx: *Tx) !void {
+    try tx.owner.checkCancelled();
+    try tx.lock.?.validate();
 }
 
 fn reload(tx: *Tx) !void {

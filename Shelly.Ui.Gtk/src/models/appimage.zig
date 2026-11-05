@@ -7,6 +7,7 @@ pub const UpdateType = enum(u8) {
     GitLab = 3,
     Codeberg = 4,
     Forgejo = 5,
+    Zsync = 6,
 
     pub fn toCliString(self: UpdateType) []const u8 {
         return switch (self) {
@@ -16,6 +17,7 @@ pub const UpdateType = enum(u8) {
             .GitLab => "GitLab",
             .Codeberg => "Codeberg",
             .Forgejo => "Forgejo",
+            .Zsync => "Zsync",
         };
     }
 };
@@ -125,6 +127,7 @@ test "UpdateType.toCliString matches the spelling accepted by the CLI" {
     try std.testing.expectEqualStrings("GitLab", UpdateType.GitLab.toCliString());
     try std.testing.expectEqualStrings("Codeberg", UpdateType.Codeberg.toCliString());
     try std.testing.expectEqualStrings("Forgejo", UpdateType.Forgejo.toCliString());
+    try std.testing.expectEqualStrings("Zsync", UpdateType.Zsync.toCliString());
 }
 
 test "environment editor preserves empty values, whitespace and equals signs" {

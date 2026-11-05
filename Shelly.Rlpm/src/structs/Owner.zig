@@ -30,7 +30,6 @@ const TransactionPlan = @import("TransactionPlan.zig");
 const OwnedQuestion = @import("OwnedQuestion.zig");
 const TransactionFlags = @import("TransactionFlags.zig");
 const DatabaseLock = @import("DatabaseLock.zig");
-const DatabaseSnapshot = @import("DatabaseSnapshot.zig");
 const RootPath = @import("RootPath.zig");
 const Publication = @import("Publication.zig");
 
@@ -1406,7 +1405,6 @@ fn initializeTransactionInternal(
             self.lock_file,
         );
     errdefer if (lock) |*value| value.release(self.allocator) catch {};
-    const snapshot = try DatabaseSnapshot.capture(self, io);
     const local = if (self.local) |*db| db else return error.StaleDatabaseReference;
     try local.invalidateCache();
 
@@ -1415,8 +1413,8 @@ fn initializeTransactionInternal(
 
     try self.loadInternal(io, self.localDatabase().?);
 
-    if (!std.mem.eql(u8, &snapshot, &try DatabaseSnapshot.capture(self, io)))
-        return error.StaleDatabaseState;
+    try self.checkCancelled();
+    if (lock) |*value| try value.validate();
 
     const active = try self.allocator.create(Transaction);
     active.* = .{
@@ -1424,7 +1422,6 @@ fn initializeTransactionInternal(
         .io = io,
         .flags = flags,
         .storage = .init(self.allocator),
-        .snapshot = snapshot,
         .lock = lock,
     };
 

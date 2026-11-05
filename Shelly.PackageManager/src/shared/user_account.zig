@@ -1,5 +1,6 @@
 //! Owned account records resolved through libc NSS, including systemd-homed.
 const std = @import("std");
+pub const caller_io = @import("caller_io.zig");
 
 pub const Account = struct {
     username: []u8,
@@ -29,6 +30,68 @@ pub fn byUidText(allocator: std.mem.Allocator, text: []const u8) !?Account {
     for (text) |character| if (!std.ascii.isDigit(character)) return null;
     const uid = std.fmt.parseUnsigned(std.c.uid_t, text, 10) catch return null;
     return byUid(allocator, uid);
+}
+
+/// Elevation markers are meaningful only while actually running as root.
+/// Invalid markers are errors, never permission to fall back to root.
+pub fn caller(allocator: std.mem.Allocator, environ: std.process.Environ) !Account {
+    return callerFor(allocator, std.c.geteuid(), environ.getPosix("SUDO_USER"), environ.getPosix("DOAS_USER"), environ.getPosix("PKEXEC_UID"));
+}
+
+pub fn callerFor(allocator: std.mem.Allocator, effective_uid: std.c.uid_t, sudo_user: ?[]const u8, doas_user: ?[]const u8, pkexec_uid: ?[]const u8) !Account {
+    const account = if (effective_uid != 0)
+        try byUid(allocator, effective_uid)
+    else if (sudo_user) |name|
+        try byName(allocator, name)
+    else if (doas_user) |name|
+        try byName(allocator, name)
+    else if (pkexec_uid) |uid|
+        try byUidText(allocator, uid)
+    else
+        try byUid(allocator, 0);
+    const found = account orelse return error.InvokingUserUnavailable;
+    if (found.username.len == 0 or !std.fs.path.isAbsolute(found.home)) {
+        found.deinit(allocator);
+        return error.InvokingUserUnavailable;
+    }
+    return found;
+}
+
+pub fn callerHome(allocator: std.mem.Allocator, environ: std.process.Environ) ![]u8 {
+    const account = try caller(allocator, environ);
+    defer account.deinit(allocator);
+    // Ordinary user sessions may deliberately override HOME (including tests).
+    if (std.c.geteuid() != 0) {
+        if (environ.getPosix("HOME")) |home| {
+            if (std.fs.path.isAbsolute(home)) return allocator.dupe(u8, home);
+        }
+    }
+    return allocator.dupe(u8, account.home);
+}
+
+test "NSS caller distinguishes direct root, elevated callers and stale markers" {
+    const a = std.testing.allocator;
+    const nobody = (try byName(a, "nobody")) orelse return error.SkipZigTest;
+    defer nobody.deinit(a);
+    const uid = try std.fmt.allocPrint(a, "{d}", .{nobody.uid});
+    defer a.free(uid);
+    for ([_][3]?[]const u8{ .{ nobody.username, null, null }, .{ null, nobody.username, null }, .{ null, null, uid } }) |markers| {
+        const found = try callerFor(a, 0, markers[0], markers[1], markers[2]);
+        defer found.deinit(a);
+        try std.testing.expectEqual(nobody.uid, found.uid);
+        try std.testing.expectEqual(nobody.gid, found.gid);
+    }
+    for ([_][3]?[]const u8{ .{ null, null, null }, .{ "root", null, null }, .{ null, null, "0" } }) |markers| {
+        const root = try callerFor(a, 0, markers[0], markers[1], markers[2]);
+        defer root.deinit(a);
+        try std.testing.expectEqual(0, root.uid);
+    }
+    try std.testing.expectError(error.InvokingUserUnavailable, callerFor(a, 0, "", null, null));
+    try std.testing.expectError(error.InvokingUserUnavailable, callerFor(a, 0, "shelly-missing-caller-7419", null, null));
+    try std.testing.expectError(error.InvokingUserUnavailable, callerFor(a, 0, null, null, "invalid"));
+    const stale = try callerFor(a, nobody.uid, "root", null, "invalid");
+    defer stale.deinit(a);
+    try std.testing.expectEqual(nobody.uid, stale.uid);
 }
 
 const Query = union(enum) { name: [:0]const u8, uid: std.c.uid_t };
@@ -114,4 +177,8 @@ test "NSS account lookup resolves a local account by name and UID" {
     try std.testing.expectEqual(root.uid, named.uid);
     try std.testing.expectEqual(root.gid, named.gid);
     try std.testing.expectEqualStrings(root.home, named.home);
+}
+
+test {
+    std.testing.refAllDecls(caller_io);
 }

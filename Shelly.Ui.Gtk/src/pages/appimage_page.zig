@@ -35,6 +35,14 @@ fn isValidHttpUrl(value: []const u8) bool {
         std.ascii.eqlIgnoreCase(uri.scheme, "https")) and uri.host != null;
 }
 
+/// Accepts an http(s) URL for a .zsync control file, optionally written as a
+/// raw `zsync|<url>` update-information string.
+fn isValidZsyncUrl(value: []const u8) bool {
+    var url = value;
+    if (std.ascii.startsWithIgnoreCase(url, "zsync|")) url = url["zsync|".len..];
+    return isValidHttpUrl(std.mem.trim(u8, url, &std.ascii.whitespace));
+}
+
 fn isValidForgejoRepositoryUrl(value: []const u8) bool {
     const uri = std.Uri.parse(value) catch return false;
     if (!std.ascii.eqlIgnoreCase(uri.scheme, "http") and
@@ -174,6 +182,7 @@ pub const AppImagePage = extern struct {
             translations._("GitLab"),
             translations._("Codeberg"),
             translations._("Forgejo"),
+            translations._("Zsync"),
         }) |label| {
             gtk.StringList.append(type_strings, label);
         }
@@ -556,7 +565,7 @@ pub const AppImagePage = extern struct {
                     "";
                 gtk.Editable.setText(p.update_url_entry.as(gtk.Editable), text);
             },
-            .StaticUrl, .Forgejo => {
+            .StaticUrl, .Forgejo, .Zsync => {
                 gtk.Editable.setText(p.update_url_entry.as(gtk.Editable), c_string.cstr(&buf, app.UpdateURl));
             },
             .None => gtk.Editable.setText(p.update_url_entry.as(gtk.Editable), ""),
@@ -596,7 +605,7 @@ pub const AppImagePage = extern struct {
 
     fn selectedUpdateType(p: *Private) UpdateType {
         const selected = gtk.DropDown.getSelected(p.update_type_drop);
-        if (selected <= @backingInt(UpdateType.Forgejo)) {
+        if (selected <= @backingInt(UpdateType.Zsync)) {
             return @fromBackingInt(@intCast(@as(u8, @intCast(selected))));
         }
         return .None;
@@ -647,6 +656,11 @@ pub const AppImagePage = extern struct {
             .Forgejo => {
                 if (!isValidForgejoRepositoryUrl(trimmed)) {
                     error_text = translations._("Enter a Forgejo repository URL as http(s)://host/owner/repo or http(s)://host/owner/repo/releases.");
+                }
+            },
+            .Zsync => {
+                if (!isValidZsyncUrl(trimmed)) {
+                    error_text = translations._("Enter the http(s) URL of the .zsync control file, optionally as a zsync|<url> update information string.");
                 }
             },
         }
@@ -1107,4 +1121,27 @@ test "Forgejo update validation rejects unrelated and incomplete paths" {
     try std.testing.expect(!isValidForgejoRepositoryUrl(
         "git.eden-emu.dev/eden-ci/nightly",
     ));
+}
+
+test "Zsync update validation accepts control-file URLs and raw update information" {
+    try std.testing.expect(isValidZsyncUrl(
+        "https://nightly.example.dev/latest/Editor.AppImage.zsync",
+    ));
+    try std.testing.expect(isValidZsyncUrl(
+        "http://builds.example.dev/Editor.AppImage.zsync",
+    ));
+    try std.testing.expect(isValidZsyncUrl(
+        "zsync|https://nightly.example.dev/latest/Editor.AppImage.zsync",
+    ));
+    try std.testing.expect(isValidZsyncUrl(
+        "ZSYNC|https://nightly.example.dev/latest/Editor.AppImage.zsync",
+    ));
+}
+
+test "Zsync update validation rejects malformed sources" {
+    try std.testing.expect(!isValidZsyncUrl(""));
+    try std.testing.expect(!isValidZsyncUrl("ftp://example.dev/Editor.AppImage.zsync"));
+    try std.testing.expect(!isValidZsyncUrl("zsync|ftp://example.dev/Editor.AppImage.zsync"));
+    try std.testing.expect(!isValidZsyncUrl("gh-releases-zsync|owner|repo|latest|App-*.zsync"));
+    try std.testing.expect(!isValidZsyncUrl("example.dev/Editor.AppImage.zsync"));
 }

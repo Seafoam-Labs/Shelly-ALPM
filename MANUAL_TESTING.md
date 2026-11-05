@@ -3,6 +3,15 @@
 This document tracks manual testing procedures for Shelly components that require human verification beyond automated
 tests.
 
+## Update terminal setting (#1836)
+
+- [ ] In Settings, leave the update terminal on "Default (auto-detect)", trigger "Update now" from the tray, and verify the update shell opens in the auto-detected terminal ($TERMINAL or the candidate list).
+- [ ] Select a terminal that is installed from the dropdown and trigger an update; verify it opens in that terminal without restarting the tray.
+- [ ] Select "Custom…" and enter the full path to a terminal binary; trigger an update and verify it uses that binary.
+- [ ] Enter a command that is not installed and verify the settings page warns with a toast, while the tray log records the fallback and the update still opens in an available terminal.
+- [ ] With the tray disabled, or with "Tray update with ui" enabled, verify the update terminal row is hidden in Settings.
+- [ ] Hand-edit `shelly/settings.json` to set `TerminalForUpdate` and verify the running tray picks it up on the next update without a restart.
+
 ## Tray refresh after CLI updates (#1591)
 
 - [ ] With pending updates visible in the tray, run `shelly upgrade` in a terminal. After completion, verify the tray rechecks and updates its icon and package submenus without restarting it.
@@ -81,6 +90,18 @@ shelly config appimage YARC --clear-env
 
 - [ ] Installing a package shows progress correctly
 - [ ] Installation completes successfully
+
+### Console output styling (#2051)
+
+- [ ] Install an AUR package whose build output is colored. The transaction
+  console shows colors, bold, and underline instead of raw escape sequences
+  such as `^[[33m`.
+- [ ] A colored warning line (for example a Pacman "warning:" printed in
+  yellow) is fully readable, including the text that follows the color codes.
+- [ ] Progress lines rewrite in place while colored backend text arrives; no
+  escape fragments or doubled lines appear.
+- [ ] Package rows and the status label show plain text even when the backend
+  message carries color codes.
 
 ### Error Messages
 
@@ -591,3 +612,22 @@ Document any known issues that are being tracked:
 - [ ] Repeat with Landlock enabled and with `shelly build --isolated`. Confirm
   configured values reach build steps, paths refer to the guest in isolated
   mode, and assignments grant no filesystem access or host mounts.
+
+## Recommended packages batch installation (#1774)
+
+- [ ] Open Recommended, tick the check boxes of several not-installed packages across different
+  categories, and verify the `N Selected` count, the Clear selection button, and the
+  Install Selected button update as the selection changes.
+- [ ] Start Install Selected and verify a single transaction appears listing every selected
+  package as a row with one authorization prompt. After it completes, installed cards show the
+  installed state and the selection is emptied.
+- [ ] Verify installed cards show no check box and keep their remove button, and that the
+  per-card single install button still installs on its own.
+- [ ] With a selection active, press refresh and verify checks survive the rebuild and any
+  package installed in the meantime is dropped from the selection and the count.
+- [ ] Use Clear selection and verify every card unticks, the label returns to `0 Selected`,
+  and Install Selected becomes insensitive.
+- [ ] Select packages, navigate to another page and back; verify the selection resets with the
+  page and the action bar shows `0 Selected`.
+- [ ] Cancel the authorization prompt for a batch install and verify the selection is preserved
+  for a retry; verify a failed batch keeps unfinished packages selected.

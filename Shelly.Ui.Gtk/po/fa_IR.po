@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Shelly-ALPM / Shelly: UI\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-10-11 18:31-0300\n"
+"POT-Creation-Date: 2026-11-04 12:08-0500\n"
 "PO-Revision-Date: 2026-06-29 21:36+0330\n"
 "Last-Translator: Sohrab Behdani <behdanisohrab@proton.me>\n"
 "Language-Team: fa\n"
@@ -59,7 +59,6 @@ msgstr ""
 msgid "Confirm"
 msgstr "تایید"
 
-#| msgid "No description available."
 msgid "Permissions unavailable"
 msgstr ""
 
@@ -112,6 +111,9 @@ msgstr ""
 
 msgid "Skip"
 msgstr ""
+
+msgid "AppImage"
+msgstr "AppImage"
 
 msgid "Search..."
 msgstr "جست‌وجو...."
@@ -195,10 +197,12 @@ msgstr "همگام‌سازی"
 msgid "Remove"
 msgstr "حذف"
 
+msgid "AUR"
+msgstr "AUR"
+
 msgid "Search the AUR by name or keyword"
 msgstr ""
 
-#| msgid "Search..."
 msgid "Search By"
 msgstr ""
 
@@ -214,7 +218,6 @@ msgstr ""
 msgid "Page 1 of 1"
 msgstr ""
 
-#| msgid "Default page"
 msgid "Next page"
 msgstr ""
 
@@ -224,7 +227,6 @@ msgstr "تنظیمات بیشتر"
 msgid "Install Selected"
 msgstr "نصب انتخاب شده"
 
-#| msgid "0 Selected"
 msgid "Select"
 msgstr ""
 
@@ -332,6 +334,9 @@ msgstr "مجوزهای برنامه"
 msgid "Version History"
 msgstr "تاریخچه نگارش"
 
+msgid "Flatpak"
+msgstr "فلت‌پک"
+
 msgid "Search packages..."
 msgstr "جست‌جوی بسته‌ها..."
 
@@ -389,7 +394,6 @@ msgstr ""
 msgid "Shelly"
 msgstr ""
 
-#| msgid "Install Local"
 msgid "Install Optional Deps"
 msgstr ""
 
@@ -409,6 +413,9 @@ msgid "Mark Dependency"
 msgstr ""
 
 msgid "Package actions"
+msgstr ""
+
+msgid "Package"
 msgstr ""
 
 msgid "Package Group Filter"
@@ -467,6 +474,9 @@ msgstr ""
 msgid "Show dependency packages only"
 msgstr ""
 
+msgid "Recommended"
+msgstr "پیشنهاد شده‌ها"
+
 msgid "Recommended Packages"
 msgstr ""
 
@@ -474,6 +484,16 @@ msgid "Curated suggestions from Seafoam Labs"
 msgstr ""
 
 msgid "Refresh the recommended packages list from the network"
+msgstr ""
+
+msgid "Clear selection"
+msgstr ""
+
+#| msgid "Loading Recommended Packages..."
+msgid "Deselect all recommended packages"
+msgstr ""
+
+msgid "Install all selected packages in one transaction"
 msgstr ""
 
 msgid "Loading Recommended Packages..."
@@ -486,6 +506,9 @@ msgstr ""
 "هیچ پیشنهادی یافت نشد. لطفاً اتصال اینترنت خود را بررسی کنید و دوباره تلاش "
 "کنید."
 
+msgid "Shelly Search"
+msgstr "جست‌جوگر Shelly"
+
 msgid "Search standard repositories, AUR and Flatpak"
 msgstr ""
 
@@ -495,14 +518,8 @@ msgstr ""
 msgid "Show results from the configured ALPM sync databases"
 msgstr ""
 
-msgid "AUR"
-msgstr "AUR"
-
 msgid "Show results from the Arch User Repository"
 msgstr ""
-
-msgid "Flatpak"
-msgstr "فلت‌پک"
 
 msgid "Show results from the configured Flatpak remotes"
 msgstr ""
@@ -517,6 +534,9 @@ msgid ""
 "Search the standard repositories, the AUR, and Flatpak all at once. Type a "
 "name to begin."
 msgstr ""
+
+msgid "Settings"
+msgstr "تنظیمات"
 
 msgid "General"
 msgstr "عمومی"
@@ -667,6 +687,9 @@ msgstr ""
 msgid "Done"
 msgstr ""
 
+msgid "Update"
+msgstr ""
+
 msgid "Available Updates"
 msgstr "به‌روزرسانی‌های موجود"
 
@@ -738,13 +761,16 @@ msgid "Clean Package Cache"
 msgstr ""
 
 msgid ""
-"Removes old cached package versions, keeping the selected number per package."
+"Keeps the selected number of repository package versions and clears the "
+"entire Shelly cache, including AUR sources and build directories."
 msgstr ""
 
 msgid "Keep"
 msgstr ""
 
-msgid "Number of cached versions to keep per package"
+msgid ""
+"Number of repository package versions to keep; the Shelly cache is cleared "
+"completely"
 msgstr ""
 
 msgid "Welcome to Shelly v3"
@@ -769,14 +795,8 @@ msgstr ""
 msgid "Sandboxed universal Linux applications"
 msgstr ""
 
-msgid "AppImage"
-msgstr "AppImage"
-
 msgid "Portable self-contained application bundles"
 msgstr ""
-
-msgid "Recommended"
-msgstr "پیشنهاد شده‌ها"
 
 msgid "Curated picks from Shelly"
 msgstr ""
@@ -816,7 +836,21 @@ msgstr ""
 msgid "Start Shelly"
 msgstr ""
 
-#| msgid "System"
+#| msgid "Enable AUR?"
+msgid "Enable Atoll?"
+msgstr ""
+
+msgid ""
+"Atoll contains build scripts that are known as PKGBUILDs. Those scripts are "
+"uploaded by users, and are not verified or vetted in any way. Only enable "
+"this feature if you are comfortable in verifying the build scripts."
+msgstr ""
+
+msgid ""
+"<a href=\"https://www.seafoam-labs.org/shelly-alpm/docs/aur-safety/\">Atoll "
+"Safety Guide</a>"
+msgstr ""
+
 msgid "System files"
 msgstr ""
 
@@ -847,7 +881,6 @@ msgstr ""
 msgid "System bus"
 msgstr ""
 
-#| msgid "Network"
 msgid "Network access"
 msgstr ""
 
@@ -926,7 +959,6 @@ msgstr ""
 msgid "Scanning PKGBUILD…"
 msgstr ""
 
-#| msgid "No description available."
 msgid "Security scan unavailable."
 msgstr ""
 
@@ -961,6 +993,9 @@ msgstr "کدبرگ"
 msgid "Forgejo"
 msgstr "فورجیو"
 
+msgid "Zsync"
+msgstr ""
+
 msgid "Update Available"
 msgstr ""
 
@@ -973,6 +1008,11 @@ msgstr ""
 msgid ""
 "Enter a Forgejo repository URL as http(s)://host/owner/repo or http(s)://"
 "host/owner/repo/releases."
+msgstr ""
+
+msgid ""
+"Enter the http(s) URL of the .zsync control file, optionally as a zsync|"
+"<url> update information string."
 msgstr ""
 
 msgid "Choose an AppImage file"
@@ -1406,6 +1446,20 @@ msgstr ""
 msgid "Installing packages"
 msgstr ""
 
+msgid "Select package for batch installation"
+msgstr ""
+
+msgid "Search standard repositories, Atoll and Flatpak"
+msgstr ""
+
+msgid "Show results from Atoll"
+msgstr ""
+
+msgid ""
+"Search the standard repositories, Atoll, and Flatpak all at once. Type a "
+"name to begin."
+msgstr ""
+
 msgid ""
 "Search standard repositories, the AUR and Flatpak at once. Type a name to "
 "begin."
@@ -1427,6 +1481,10 @@ msgid "Install Packages"
 msgstr ""
 
 msgid "Install the selected packages?"
+msgstr ""
+
+#| msgid "Enable AUR"
+msgid "Enable Atoll"
 msgstr ""
 
 msgid ""
@@ -1559,12 +1617,6 @@ msgstr ""
 msgid "Packages"
 msgstr "بسته‌ها"
 
-msgid "Shelly Search"
-msgstr "جست‌جوگر Shelly"
-
-msgid "Update"
-msgstr ""
-
 msgid "Pending"
 msgstr ""
 
@@ -1695,7 +1747,7 @@ msgstr ""
 msgid "Refreshing package databases"
 msgstr ""
 
-msgid "Database lock removed successfully"
+msgid "Removing stale database lock"
 msgstr ""
 
 msgid "Fixing permissions"
@@ -1724,14 +1776,8 @@ msgstr ""
 msgid "Main menu"
 msgstr ""
 
-msgid "Settings"
-msgstr "تنظیمات"
-
 msgid "Expand sidebar"
 msgstr ""
 
 msgid "Collapse sidebar"
-msgstr ""
-
-msgid "Package"
 msgstr ""

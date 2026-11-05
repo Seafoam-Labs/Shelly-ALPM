@@ -1,6 +1,7 @@
 const std = @import("std");
 const builtin = @import("builtin");
 const contract = @import("contract.zig");
+const pseudo_file = @import("../shared/pseudo_file.zig");
 const RestartCheckOptions = contract.RestartCheckOptions;
 const RestartReport = contract.RestartReport;
 const AffectedProcess = contract.AffectedProcess;
@@ -43,10 +44,10 @@ pub fn check(self: anytype, options: RestartCheckOptions) error{OutOfMemory}!Res
     ) catch return error.OutOfMemory;
     defer self.allocator.free(osrelease_path);
 
-    if (std.Io.Dir.cwd().readFileAlloc(
+    if (pseudo_file.readAlloc(
         self.io(),
-        osrelease_path,
         self.allocator,
+        osrelease_path,
         .limited(4096),
     )) |contents| {
         defer self.allocator.free(contents);
@@ -108,10 +109,10 @@ pub fn check(self: anytype, options: RestartCheckOptions) error{OutOfMemory}!Res
             &.{ options.proc_root, entry.name, "maps" },
         ) catch return error.OutOfMemory;
         defer self.allocator.free(maps_path);
-        const maps = std.Io.Dir.cwd().readFileAlloc(
+        const maps = pseudo_file.readAlloc(
             self.io(),
-            maps_path,
             self.allocator,
+            maps_path,
             .limited(16 * 1024 * 1024),
         ) catch {
             skipped_processes += 1;
@@ -126,10 +127,10 @@ pub fn check(self: anytype, options: RestartCheckOptions) error{OutOfMemory}!Res
             &.{ options.proc_root, entry.name, "comm" },
         ) catch return error.OutOfMemory;
         defer self.allocator.free(comm_path);
-        if (std.Io.Dir.cwd().readFileAlloc(
+        if (pseudo_file.readAlloc(
             self.io(),
-            comm_path,
             self.allocator,
+            comm_path,
             .limited(4096),
         )) |comm_contents| {
             defer self.allocator.free(comm_contents);
@@ -149,10 +150,10 @@ pub fn check(self: anytype, options: RestartCheckOptions) error{OutOfMemory}!Res
             return error.OutOfMemory;
         };
         defer self.allocator.free(cgroup_path);
-        if (std.Io.Dir.cwd().readFileAlloc(
+        if (pseudo_file.readAlloc(
             self.io(),
-            cgroup_path,
             self.allocator,
+            cgroup_path,
             .limited(1024 * 1024),
         )) |cgroup| {
             defer self.allocator.free(cgroup);
@@ -319,18 +320,35 @@ pub fn check(self: anytype, options: RestartCheckOptions) error{OutOfMemory}!Res
         .failures = failure_slice,
     };
 }
-fn hasDeletedSharedLibrary(maps: []const u8) bool {
+/// A process is stale when it maps a shared object whose file was replaced.
+/// Only the mapped path's basename counts, and it must be `*.so` or
+/// `*.so.<version>`: `/etc/ld.so.cache (deleted)`, which ldconfig leaves in
+/// nearly every process (PID 1 included) after each transaction, and
+/// `/memfd:... (deleted)` are not shared libraries. Exotic suffixes such as
+/// `libfoo.so.1-1` are missed, which the next transaction's scan tolerates.
+pub fn hasDeletedSharedLibrary(maps: []const u8) bool {
+    const suffix = " (deleted)";
     var lines = std.mem.splitScalar(u8, maps, '\n');
     while (lines.next()) |line| {
-        if (std.mem.indexOf(u8, line, "(deleted)") != null and
-            std.mem.indexOf(u8, line, ".so") != null)
-        {
-            return true;
-        }
+        if (!std.mem.endsWith(u8, line, suffix)) continue;
+        const slash = std.mem.indexOfScalar(u8, line, '/') orelse continue;
+        if (isSharedObjectPath(line[slash .. line.len - suffix.len])) return true;
     }
     return false;
 }
-fn serviceFromCgroup(cgroup: []const u8) ?[]const u8 {
+
+fn isSharedObjectPath(path: []const u8) bool {
+    const name = std.fs.path.basename(path);
+    const index = std.mem.lastIndexOf(u8, name, ".so") orelse return false;
+    const rest = name[index + ".so".len ..];
+    if (rest.len == 0) return true;
+    if (rest.len == 1 or rest[0] != '.') return false;
+    for (rest[1..]) |ch| {
+        if (!std.ascii.isDigit(ch) and ch != '.') return false;
+    }
+    return true;
+}
+pub fn serviceFromCgroup(cgroup: []const u8) ?[]const u8 {
     var lines = std.mem.splitScalar(u8, cgroup, '\n');
     while (lines.next()) |line| {
         const marker = "/system.slice/";
@@ -345,11 +363,45 @@ fn serviceFromCgroup(cgroup: []const u8) ?[]const u8 {
     }
     return null;
 }
-fn isCriticalRestartProcess(command: []const u8) bool {
+pub fn isCriticalRestartProcess(command: []const u8) bool {
     return std.mem.eql(u8, command, "systemd") or
         std.mem.eql(u8, command, "dbus-daemon") or
         std.mem.eql(u8, command, "dbus-broker");
 }
 fn stringBefore(_: void, lhs: []u8, rhs: []u8) bool {
     return std.mem.order(u8, lhs, rhs) == .lt;
+}
+
+test "check reads the running kernel through the real procfs" {
+    if (builtin.os.tag != .linux) return error.SkipZigTest;
+    const testing = std.testing;
+    const ProcHost = struct {
+        allocator: std.mem.Allocator,
+        pub fn io(self: *@This()) std.Io {
+            _ = self;
+            return testing.io;
+        }
+    };
+    var host = ProcHost{ .allocator = testing.allocator };
+    // No fake fixture can cover the reader regression: regular files report a
+    // real stat size, so only the real procfs distinguishes a streaming read
+    // from a size-based one. Restarts stay off so the scan has no side effects.
+    var report = try check(&host, .{ .restart_services = false });
+    defer report.deinit();
+    try testing.expect(report.running_kernel != null);
+    try testing.expect(report.running_kernel.?.len > 0);
+    try testing.expect(report.process_scan_complete);
+}
+
+test "only deleted shared objects make a process stale" {
+    const testing = std.testing;
+    try testing.expect(hasDeletedSharedLibrary("7f00-7f01 r-xp 00000000 00:1f 42 /usr/lib/libXdmcp.so.6.0.0 (deleted)\n"));
+    try testing.expect(hasDeletedSharedLibrary("7f00-7f01 r-xp 00000000 00:1f 42 /usr/lib/ld-linux-x86-64.so.2 (deleted)\n"));
+    try testing.expect(hasDeletedSharedLibrary("7f00-7f01 r-xp 00000000 00:1f 42 /usr/lib/python3.14/lib-dynload/_ssl.cpython-314-x86_64-linux-gnu.so (deleted)\n"));
+    try testing.expect(hasDeletedSharedLibrary("7f00-7f01 r-xp 00000000 00:1f 42 /home/user/my libs/libfoo.so.1 (deleted)\n"));
+    try testing.expect(!hasDeletedSharedLibrary("7f00-7f01 r--p 00000000 00:1f 42 /etc/ld.so.cache (deleted)\n"));
+    try testing.expect(!hasDeletedSharedLibrary("7f00-7f01 rw-s 00000000 00:01 42 /memfd:doublemapper (deleted)\n"));
+    try testing.expect(!hasDeletedSharedLibrary("7f00-7f01 r-xp 00000000 00:1f 42 /var/log/journal/system.journal (deleted)\n"));
+    try testing.expect(!hasDeletedSharedLibrary("7f00-7f01 r-xp 00000000 00:1f 42 /usr/bin/demo (deleted)\n"));
+    try testing.expect(!hasDeletedSharedLibrary("7f00-7f01 r-xp 00000000 00:1f 42 /usr/lib/libdemo.so.1\n"));
 }

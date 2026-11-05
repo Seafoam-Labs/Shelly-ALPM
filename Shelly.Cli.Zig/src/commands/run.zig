@@ -406,7 +406,7 @@ fn processStatePath(context: *runtime.RuntimeContext, target: []const u8) ![]con
 fn processStartTime(context: *runtime.RuntimeContext, pid: std.posix.pid_t) !u64 {
     const path = try std.fmt.allocPrint(context.allocator, "/proc/{d}/stat", .{pid});
     defer context.allocator.free(path);
-    const contents = try readPseudoFileAlloc(context, path, 16 * 1024);
+    const contents = try PackageManager.pseudo_file.readAlloc(context.io, context.allocator, path, .limited(16 * 1024));
     defer context.allocator.free(contents);
 
     const command_end = std.mem.lastIndexOfScalar(u8, contents, ')') orelse
@@ -447,7 +447,7 @@ fn processHasAppImageEnvironment(
 ) !bool {
     const path = try std.fmt.allocPrint(context.allocator, "/proc/{d}/environ", .{pid});
     defer context.allocator.free(path);
-    const contents = readPseudoFileAlloc(context, path, 1024 * 1024) catch return false;
+    const contents = PackageManager.pseudo_file.readAlloc(context.io, context.allocator, path, .limited(1024 * 1024)) catch return false;
     defer context.allocator.free(contents);
     const expected = try std.fmt.allocPrint(context.allocator, "APPIMAGE={s}", .{target});
     defer context.allocator.free(expected);
@@ -456,32 +456,6 @@ fn processHasAppImageEnvironment(
         if (std.mem.eql(u8, variable, expected)) return true;
     }
     return false;
-}
-
-fn readPseudoFileAlloc(
-    context: *runtime.RuntimeContext,
-    path: []const u8,
-    max_len: usize,
-) ![]u8 {
-    // procfs reports a size of zero for files such as stat and environ, so
-    // read the descriptor directly instead of using size-based Io helpers.
-    const fd = try std.posix.openat(std.posix.AT.FDCWD, path, .{
-        .ACCMODE = .RDONLY,
-        .CLOEXEC = true,
-    }, 0);
-    var file: std.Io.File = .{ .handle = fd, .flags = .{ .nonblocking = false } };
-    defer file.close(context.io);
-
-    var contents: std.ArrayList(u8) = .empty;
-    errdefer contents.deinit(context.allocator);
-    var buffer: [4096]u8 = undefined;
-    while (true) {
-        const count = try std.posix.read(fd, &buffer);
-        if (count == 0) break;
-        if (contents.items.len + count > max_len) return error.StreamTooLong;
-        try contents.appendSlice(context.allocator, buffer[0..count]);
-    }
-    return contents.toOwnedSlice(context.allocator);
 }
 
 fn resolveAppImage(

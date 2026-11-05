@@ -474,36 +474,36 @@ fn writePackageInfo(
     var output: std.Io.Writer.Allocating = .init(self.allocator);
     defer output.deinit();
     const writer = &output.writer;
-    try writeKeyValue(writer, "pkgname", package_name);
-    try writeKeyValue(writer, "pkgbase", package_base);
-    try writeKeyValue(writer, "xdata", if (package_build.is_split) "pkgtype=split" else "pkgtype=pkg");
-    try writeKeyValues(writer, "xdata", package_build.xdata);
+    try writeKeyValue(self, writer, "pkgname", package_name);
+    try writeKeyValue(self, writer, "pkgbase", package_base);
+    try writeKeyValue(self, writer, "xdata", if (package_build.is_split) "pkgtype=split" else "pkgtype=pkg");
+    try writeKeyValues(self, writer, "xdata", package_build.xdata);
     const migration = @import("Shelly_Rlpm").Migration;
     if (package_build.shelly_migrate) |declarations| {
         try migration.validateDeclarations(self.allocator, declarations);
         for (declarations) |declaration| {
             const value = try std.fmt.allocPrint(self.allocator, "{s}={s}", .{ migration.metadata_key, declaration });
             defer self.allocator.free(value);
-            try writeKeyValue(writer, "xdata", value);
+            try writeKeyValue(self, writer, "xdata", value);
         }
     }
-    try writeKeyValue(writer, "pkgver", full_version);
+    try writeKeyValue(self, writer, "pkgver", full_version);
     if (package_build.pkg_desc) |value| try writeDescription(writer, value);
-    if (package_build.url) |value| try writeKeyValue(writer, "url", value);
+    if (package_build.url) |value| try writeKeyValue(self, writer, "url", value);
     try writer.print("builddate = {d}\n", .{build_date});
-    try writeKeyValue(writer, "packager", self.shellybuild_config.package.packager);
+    try writeKeyValue(self, writer, "packager", self.shellybuild_config.package.packager);
     try writer.print("size = {d}\n", .{payload_size});
-    try writeKeyValue(writer, "arch", package_arch);
-    try writeKeyValues(writer, "license", package_build.license);
-    try writeKeyValues(writer, "replaces", package_build.replaces);
-    try writeKeyValues(writer, "group", package_build.groups);
-    try writeKeyValues(writer, "conflict", package_build.conflicts);
-    try writeKeyValues(writer, "provides", package_build.provides);
-    try writeKeyValues(writer, "backup", package_build.backup);
-    try writeKeyValues(writer, "depend", package_build.depends);
-    try writeKeyValues(writer, "optdepend", package_build.opt_depends);
-    try writeKeyValues(writer, "makedepend", package_build.make_depends);
-    try writeKeyValues(writer, "checkdepend", package_build.check_depends);
+    try writeKeyValue(self, writer, "arch", package_arch);
+    try writeKeyValues(self, writer, "license", package_build.license);
+    try writeKeyValues(self, writer, "replaces", package_build.replaces);
+    try writeKeyValues(self, writer, "group", package_build.groups);
+    try writeKeyValues(self, writer, "conflict", package_build.conflicts);
+    try writeKeyValues(self, writer, "provides", package_build.provides);
+    try writeKeyValues(self, writer, "backup", package_build.backup);
+    try writeKeyValues(self, writer, "depend", package_build.depends);
+    try writeKeyValues(self, writer, "optdepend", package_build.opt_depends);
+    try writeKeyValues(self, writer, "makedepend", package_build.make_depends);
+    try writeKeyValues(self, writer, "checkdepend", package_build.check_depends);
     try writeMetadataFile(pkgdir, self.io, ".PKGINFO", output.written());
 }
 
@@ -521,19 +521,20 @@ fn writeBuildInfo(
     var output: std.Io.Writer.Allocating = .init(self.allocator);
     defer output.deinit();
     const writer = &output.writer;
-    try writeKeyValue(writer, "format", "2");
-    try writeKeyValue(writer, "pkgname", package_name);
-    try writeKeyValue(writer, "pkgbase", package_base);
-    try writeKeyValue(writer, "pkgver", full_version);
-    try writeKeyValue(writer, "pkgarch", package_arch);
+    try writeKeyValue(self, writer, "format", "2");
+    try writeKeyValue(self, writer, "pkgname", package_name);
+    try writeKeyValue(self, writer, "pkgbase", package_base);
+    try writeKeyValue(self, writer, "pkgver", full_version);
+    try writeKeyValue(self, writer, "pkgarch", package_arch);
     const pkgbuild_digest = self.options.pkgbuild_sha256sum orelse
         return error.MissingPkgbuildDigest;
     const pkgbuild_digest_hex = std.fmt.bytesToHex(pkgbuild_digest, .lower);
-    try writeKeyValue(writer, "pkgbuild_sha256sum", &pkgbuild_digest_hex);
-    try writeKeyValue(writer, "packager", self.shellybuild_config.package.packager);
+    try writeKeyValue(self, writer, "pkgbuild_sha256sum", &pkgbuild_digest_hex);
+    try writeKeyValue(self, writer, "packager", self.shellybuild_config.package.packager);
     try writer.print("builddate = {d}\n", .{build_date});
-    try writeKeyValue(writer, "builddir", self.options.work_directory);
+    try writeKeyValue(self, writer, "builddir", self.options.work_directory);
     try writeKeyValue(
+        self,
         writer,
         "startdir",
         if (self.options.pkgbuild_path) |path|
@@ -541,12 +542,12 @@ fn writeBuildInfo(
         else
             self.options.start_directory,
     );
-    try writeKeyValue(writer, "buildtool", "shelly");
-    try writeKeyValue(writer, "buildtoolver", package_options.version);
+    try writeKeyValue(self, writer, "buildtool", "shelly");
+    try writeKeyValue(self, writer, "buildtoolver", package_options.version);
 
-    try writeKeyValue(writer, "buildenv", if (self.options.run_check) "check" else "!check");
-    try writeKeyValue(writer, "buildenv", if (self.shellybuild_config.build.ccache) "ccache" else "!ccache");
-    try writeKeyValue(writer, "buildenv", if (self.shellybuild_config.build.distcc) "distcc" else "!distcc");
+    try writeKeyValue(self, writer, "buildenv", if (self.options.run_check) "check" else "!check");
+    try writeKeyValue(self, writer, "buildenv", if (self.shellybuild_config.build.ccache) "ccache" else "!ccache");
+    try writeKeyValue(self, writer, "buildenv", if (self.shellybuild_config.build.distcc) "distcc" else "!distcc");
 
     const effective_options = try metadata.effectivePackageOptions(
         self.allocator,
@@ -554,14 +555,14 @@ fn writeBuildInfo(
         package_build.options orelse &.{},
     );
     defer metadata.freeOwnedStrings(self.allocator, effective_options);
-    for (effective_options) |value| try writeKeyValue(writer, "options", value);
+    for (effective_options) |value| try writeKeyValue(self, writer, "options", value);
 
     if (self.options.installed_packages) |installed| {
-        for (installed) |value| try writeKeyValue(writer, "installed", value);
+        for (installed) |value| try writeKeyValue(self, writer, "installed", value);
     } else {
         const installed = try collectInstalledPackages(self.allocator, self.environ, self.options.native_database);
         defer metadata.freeOwnedStrings(self.allocator, installed);
-        for (installed) |value| try writeKeyValue(writer, "installed", value);
+        for (installed) |value| try writeKeyValue(self, writer, "installed", value);
     }
     try writeMetadataFile(pkgdir, self.io, ".BUILDINFO", output.written());
 }
@@ -661,9 +662,12 @@ fn deleteFileIgnoreMissing(directory: std.Io.Dir, io: std.Io, name: []const u8) 
     };
 }
 
-fn writeKeyValue(writer: *std.Io.Writer, key: []const u8, value: []const u8) !void {
+fn writeKeyValue(self: *PackageBuilder, writer: *std.Io.Writer, key: []const u8, value: []const u8) !void {
     if (value.len == 0) return;
-    if (std.mem.indexOfScalar(u8, value, '\n') != null) return error.InvalidPackageMetadata;
+    if (std.mem.indexOfScalar(u8, value, '\n') != null) {
+        self.failure_location.rejected_field = key;
+        return error.InvalidPackageMetadata;
+    }
     try writer.print("{s} = {s}\n", .{ key, value });
 }
 
@@ -678,11 +682,12 @@ fn writeDescription(writer: *std.Io.Writer, value: []const u8) !void {
 }
 
 fn writeKeyValues(
+    self: *PackageBuilder,
     writer: *std.Io.Writer,
     key: []const u8,
     values: ?[][]const u8,
 ) !void {
-    for (values orelse return) |value| try writeKeyValue(writer, key, value);
+    for (values orelse return) |value| try writeKeyValue(self, writer, key, value);
 }
 
 test "BUILDINFO reads selected configuration and database overrides" {

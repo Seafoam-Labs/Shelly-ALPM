@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shelly-ui 2.2.4.1\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-10-11 18:31-0300\n"
+"POT-Creation-Date: 2026-11-04 12:08-0500\n"
 "PO-Revision-Date: 2026-10-12 17:30-0300\n"
 "Last-Translator: Vinícius Fonseca <viniqf@proton.me>\n"
 "Language-Team: Portuguese (Brazil) <viniqf@proton.me>\n"
@@ -60,7 +60,6 @@ msgstr "Os dados do aplicativo serão removidos permanentemente"
 msgid "Confirm"
 msgstr "Confirmar"
 
-#| msgid "No description available."
 msgid "Permissions unavailable"
 msgstr "Permissões não disponíveis"
 
@@ -112,7 +111,6 @@ msgstr ""
 msgid "Review PKGBUILD"
 msgstr "Revisar PKGBUILD"
 
-#| msgid "Review PKGBUILD"
 msgid "PKGBUILD"
 msgstr ""
 
@@ -121,6 +119,9 @@ msgstr "Tentar novamente"
 
 msgid "Skip"
 msgstr "Pular"
+
+msgid "AppImage"
+msgstr "AppImage"
 
 msgid "Search..."
 msgstr "Pesquisar..."
@@ -176,7 +177,9 @@ msgstr "Ex: dono/repo ou https:// ..."
 
 msgid ""
 "Enter the repository as owner/repo, for example seafoam-labs/shelly-alpm."
-msgstr "Informe o repositório no formato proprietário/repositório, por exemplo, seafoam-labs/shelly-alpm."
+msgstr ""
+"Informe o repositório no formato proprietário/repositório, por exemplo, "
+"seafoam-labs/shelly-alpm."
 
 msgid "Allow Prerelease"
 msgstr "Permitir versões de teste"
@@ -207,10 +210,12 @@ msgstr "Sincronizar"
 msgid "Remove"
 msgstr "Remover"
 
+msgid "AUR"
+msgstr "AUR"
+
 msgid "Search the AUR by name or keyword"
 msgstr "Procure na AUR por nome ou palavra-chave"
 
-#| msgid "Search..."
 msgid "Search By"
 msgstr "Procurar por"
 
@@ -226,7 +231,6 @@ msgstr "Página anterior"
 msgid "Page 1 of 1"
 msgstr "Página 1 de 1"
 
-#| msgid "Default page"
 msgid "Next page"
 msgstr "Próxima Página"
 
@@ -236,7 +240,6 @@ msgstr "Opcões adicionais"
 msgid "Install Selected"
 msgstr "Instalar itens selecionados"
 
-#| msgid "Selected"
 msgid "Select"
 msgstr "Selecionar"
 
@@ -347,6 +350,9 @@ msgstr "Permissões do aplicativo"
 msgid "Version History"
 msgstr "Histórico de versões"
 
+msgid "Flatpak"
+msgstr "Flatpak"
+
 msgid "Search packages..."
 msgstr "Pesquisar pacotes..."
 
@@ -404,7 +410,6 @@ msgstr "Sobre"
 msgid "Shelly"
 msgstr ""
 
-#| msgid "Optional Depends"
 msgid "Install Optional Deps"
 msgstr "Instalar dependências opcionais"
 
@@ -425,6 +430,9 @@ msgstr "Marcar como dependência"
 
 msgid "Package actions"
 msgstr "Ações do pacote"
+
+msgid "Package"
+msgstr "Pacote"
 
 msgid "Package Group Filter"
 msgstr "Filtro de grupo de pacotes"
@@ -482,6 +490,9 @@ msgstr "Mostrar apenas dependências"
 msgid "Show dependency packages only"
 msgstr "Mostrar apenas pacotes de dependência"
 
+msgid "Recommended"
+msgstr "Recomendado"
+
 msgid "Recommended Packages"
 msgstr "Pacotes recomendados"
 
@@ -490,6 +501,18 @@ msgstr "Sugestões da Seafoam Labs"
 
 msgid "Refresh the recommended packages list from the network"
 msgstr "Atualizar a lista de pacotes recomendados pela network"
+
+#| msgid "Mixed selection"
+msgid "Clear selection"
+msgstr ""
+
+#| msgid "Recommended Packages"
+msgid "Deselect all recommended packages"
+msgstr ""
+
+#| msgid "Install the selected packages?"
+msgid "Install all selected packages in one transaction"
+msgstr ""
 
 msgid "Loading Recommended Packages..."
 msgstr "Carregando pacotes recomendados..."
@@ -501,6 +524,9 @@ msgstr ""
 "Nenhuma recomendação encontrada. Por favor, verifique sua conexão com a "
 "internet e tente novamente"
 
+msgid "Shelly Search"
+msgstr "Pesquisa Shelly"
+
 msgid "Search standard repositories, AUR and Flatpak"
 msgstr "Pesquise repositórios padrão, AUR e Flatpak"
 
@@ -511,14 +537,8 @@ msgid "Show results from the configured ALPM sync databases"
 msgstr ""
 "Mostrar resultados dos bancos de dados de sincronização ALPM configurados"
 
-msgid "AUR"
-msgstr "AUR"
-
 msgid "Show results from the Arch User Repository"
 msgstr "Mostrar resultados do Arch User Repository"
-
-msgid "Flatpak"
-msgstr "Flatpak"
 
 msgid "Show results from the configured Flatpak remotes"
 msgstr "Mostrar resultados dos remotos Flatpak configurados"
@@ -535,6 +555,9 @@ msgid ""
 msgstr ""
 "Pesquise nos repositórios padrão, na AUR e no Flatpak ao mesmo tempo. Digite "
 "um nome para começar."
+
+msgid "Settings"
+msgstr "Configurações"
 
 msgid "General"
 msgstr "Geral"
@@ -685,6 +708,9 @@ msgstr "Exibir resultado"
 msgid "Done"
 msgstr "Concluído"
 
+msgid "Update"
+msgstr "Atualizar"
+
 msgid "Available Updates"
 msgstr "Atualizações disponíveis"
 
@@ -755,15 +781,17 @@ msgid "Clean Package Cache"
 msgstr "Limpar cache de pacotes"
 
 msgid ""
-"Removes old cached package versions, keeping the selected number per package."
+"Keeps the selected number of repository package versions and clears the "
+"entire Shelly cache, including AUR sources and build directories."
 msgstr ""
-"Remove pacotes velhos em cache, mantendo a quantidade selecionada por pacote."
 
 msgid "Keep"
 msgstr "Manter"
 
-msgid "Number of cached versions to keep per package"
-msgstr "Número de versões em cache para manter por pacote"
+msgid ""
+"Number of repository package versions to keep; the Shelly cache is cleared "
+"completely"
+msgstr ""
 
 msgid "Welcome to Shelly v3"
 msgstr "Bem vindo(a) ao Shelly V3"
@@ -791,14 +819,8 @@ msgstr "Pacotes da comunidade no Arch User Repository"
 msgid "Sandboxed universal Linux applications"
 msgstr "Aplicações em sandbox universais no Linux"
 
-msgid "AppImage"
-msgstr "AppImage"
-
 msgid "Portable self-contained application bundles"
 msgstr "Bundles de applicação portáteis e contidos em si"
-
-msgid "Recommended"
-msgstr "Recomendado"
 
 msgid "Curated picks from Shelly"
 msgstr "Seleção do Shelly"
@@ -840,7 +862,29 @@ msgstr "Próximo"
 msgid "Start Shelly"
 msgstr "Inicializar o Shelly"
 
-#| msgid "System bus"
+#| msgid "Enable AUR?"
+msgid "Enable Atoll?"
+msgstr ""
+
+#| msgid ""
+#| "The Arch User Repository contains build scripts that are known as "
+#| "PKGBUILDs. Those scripts are uploaded by users, and are not verified or "
+#| "vetted in any way. Only enable this feature if you are comfortable in "
+#| "verifying the build scripts."
+msgid ""
+"Atoll contains build scripts that are known as PKGBUILDs. Those scripts are "
+"uploaded by users, and are not verified or vetted in any way. Only enable "
+"this feature if you are comfortable in verifying the build scripts."
+msgstr ""
+
+#| msgid ""
+#| "<a href=\"https://www.seafoam-labs.org/shelly-alpm/docs/aur-safety/\">AUR "
+#| "Safety Guide</a>"
+msgid ""
+"<a href=\"https://www.seafoam-labs.org/shelly-alpm/docs/aur-safety/\">Atoll "
+"Safety Guide</a>"
+msgstr ""
+
 msgid "System files"
 msgstr "Arquivos do sistema"
 
@@ -871,7 +915,6 @@ msgstr "Bus de sessão"
 msgid "System bus"
 msgstr "Bus de sistema"
 
-#| msgid "Network"
 msgid "Network access"
 msgstr "Acesso de rede"
 
@@ -950,7 +993,6 @@ msgstr ""
 msgid "Scanning PKGBUILD…"
 msgstr "Escaneando PKGBUILD…"
 
-#| msgid "No description available."
 msgid "Security scan unavailable."
 msgstr "Verificação de segurança indisponível."
 
@@ -959,9 +1001,10 @@ msgstr "Não foi possível carregar a visualização prévia de PKGBUILD"
 
 msgid ""
 "PKGBUILD changed. Close and reopen the preview to scan the current version."
-msgstr "O PKGBUILD mudou. Feche e reabra a visualização prévia para escanear a versão atual."
+msgstr ""
+"O PKGBUILD mudou. Feche e reabra a visualização prévia para escanear a "
+"versão atual."
 
-#| msgid "Flatpak files"
 msgid "No related files."
 msgstr "Sem arquivos relacionados"
 
@@ -986,6 +1029,9 @@ msgstr ""
 msgid "Forgejo"
 msgstr ""
 
+msgid "Zsync"
+msgstr ""
+
 msgid "Update Available"
 msgstr "Atualização disponível"
 
@@ -998,8 +1044,14 @@ msgstr "Insira uma URL de download que começa com http:// ou https://."
 msgid ""
 "Enter a Forgejo repository URL as http(s)://host/owner/repo or http(s)://"
 "host/owner/repo/releases."
-msgstr "Insira uma URL de repositório Forgejo como http(s)://host/dono/repo ou https://"
-"host/dono/repo/releases"
+msgstr ""
+"Insira uma URL de repositório Forgejo como http(s)://host/dono/repo ou "
+"https://host/dono/repo/releases"
+
+msgid ""
+"Enter the http(s) URL of the .zsync control file, optionally as a zsync|"
+"<url> update information string."
+msgstr ""
 
 msgid "Choose an AppImage file"
 msgstr "Escolha um arquivo AppImage"
@@ -1162,7 +1214,8 @@ msgid "Flatpak files"
 msgstr "Arquivos Flatpak"
 
 msgid "Unsupported file type. Choose a.flatpak or.flatpakref file."
-msgstr "Tipo de arquivo sem suporte. Escolha um arquivo .flatpak ou .flatpakref."
+msgstr ""
+"Tipo de arquivo sem suporte. Escolha um arquivo .flatpak ou .flatpakref."
 
 msgid "Installing local flatpak"
 msgstr "Instalando Flatpak local"
@@ -1272,13 +1325,17 @@ msgstr "Traduzir"
 msgid ""
 "Could not load Flatpak applications because Shelly ran out of memory. Close "
 "other applications and try again."
-msgstr "Não foi possível carregar aplicativos Flatpak porque o Shelly ficou sem memória. Feche outros aplicativos e tente novamente."
+msgstr ""
+"Não foi possível carregar aplicativos Flatpak porque o Shelly ficou sem "
+"memória. Feche outros aplicativos e tente novamente."
 
 msgid "Could not start loading Flatpak applications."
 msgstr "Não foi possível iniciar o carregamento de aplicações Flatpak"
 
 msgid "Could not load Flatpak applications from the selected remote."
-msgstr "Não foi possível carregar aplicações Flatpak do repositório remoto selecionado."
+msgstr ""
+"Não foi possível carregar aplicações Flatpak do repositório remoto "
+"selecionado."
 
 msgid "No Flatpak applications are available."
 msgstr "Nenhuma aplicação Flatpak está disponível."
@@ -1400,7 +1457,6 @@ msgstr "Criando dependência de pacote"
 msgid "Select Optional Dependencies to Install"
 msgstr "Selecione dependências opcionais para instalar"
 
-#| msgid "Installing packages"
 msgid "Installing optional dependencies"
 msgstr "Instalando dependências opcionais"
 
@@ -1440,6 +1496,25 @@ msgstr "Removendo pacotes"
 msgid "Installing packages"
 msgstr "Instalando pacotes"
 
+msgid "Select package for batch installation"
+msgstr ""
+
+#| msgid "Search standard repositories, AUR and Flatpak"
+msgid "Search standard repositories, Atoll and Flatpak"
+msgstr ""
+
+#| msgid "Show results from the Arch User Repository"
+msgid "Show results from Atoll"
+msgstr ""
+
+#| msgid ""
+#| "Search the standard repositories, the AUR, and Flatpak all at once. Type "
+#| "a name to begin."
+msgid ""
+"Search the standard repositories, Atoll, and Flatpak all at once. Type a "
+"name to begin."
+msgstr ""
+
 msgid ""
 "Search standard repositories, the AUR and Flatpak at once. Type a name to "
 "begin."
@@ -1465,11 +1540,16 @@ msgstr "Instalar pacotes"
 msgid "Install the selected packages?"
 msgstr "Instalar os pacotes selecionados?"
 
+#| msgid "Enable AUR"
+msgid "Enable Atoll"
+msgstr ""
+
 msgid ""
 "Could not save settings to the configured file. Your latest changes were not "
 "saved."
-msgstr "Não foi possível salvar as configurações para o arquivo selecionado. "
-"Suas últimas mudanças não foram salvas."
+msgstr ""
+"Não foi possível salvar as configurações para o arquivo selecionado. Suas "
+"últimas mudanças não foram salvas."
 
 msgid "Settings saved"
 msgstr "Configurações salvas"
@@ -1528,20 +1608,23 @@ msgstr "Bandeja habilitada"
 msgid ""
 "The tray is disabled, but its autostart service could not be removed. It may "
 "start again at the next login."
-msgstr "A bandeja está desativada, mas não foi possível remover seu serviço de inicialização automática. "
-"Ela poderá ser iniciada novamente no próximo login."
+msgstr ""
+"A bandeja está desativada, mas não foi possível remover seu serviço de "
+"inicialização automática. Ela poderá ser iniciada novamente no próximo login."
 
 msgid "Tray disabled"
 msgstr "Bandeja desabilitada"
 
 msgid "Could not enable the tray autostart service."
-msgstr "Não foi possível ativar o serviço de inicialização automática da bandeja."
+msgstr ""
+"Não foi possível ativar o serviço de inicialização automática da bandeja."
 
 msgid "Systemd startup service added."
 msgstr "Serviço de inicialização Systemd adicionado"
 
 msgid "Could not disable the tray autostart service."
-msgstr "Não foi possível desativar o serviço de inicialização automática da bandeja."
+msgstr ""
+"Não foi possível desativar o serviço de inicialização automática da bandeja."
 
 msgid "Systemd startup service removed."
 msgstr "Serviço de inicialização do systemd removido"
@@ -1596,12 +1679,6 @@ msgstr ""
 
 msgid "Packages"
 msgstr "Pacotes"
-
-msgid "Shelly Search"
-msgstr "Pesquisa Shelly"
-
-msgid "Update"
-msgstr "Atualizar"
 
 msgid "Pending"
 msgstr "Em espera"
@@ -1737,8 +1814,9 @@ msgstr "Atualizando pacotes"
 msgid "Refreshing package databases"
 msgstr "Atualizando bases de dados de pacote"
 
-msgid "Database lock removed successfully"
-msgstr "Trava de banco de dados (db.lck) removida com sucesso"
+#| msgid "Removing Flatpak"
+msgid "Removing stale database lock"
+msgstr ""
 
 msgid "Fixing permissions"
 msgstr "Corrigindo permissões"
@@ -1768,14 +1846,8 @@ msgstr "Instalando suporte ao Flatpak e ao AppImage"
 msgid "Main menu"
 msgstr "Menu principal"
 
-msgid "Settings"
-msgstr "Configurações"
-
 msgid "Expand sidebar"
 msgstr "Expandir barra lateral"
 
 msgid "Collapse sidebar"
 msgstr "Recolher barra lateral"
-
-msgid "Package"
-msgstr "Pacote"

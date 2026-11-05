@@ -532,11 +532,11 @@ fn writePlan(
         return;
     }
     if (targets.len == 0) {
-        try output.writeSuccess(context, "No packages found to purify!");
+        try output.writeSuccess(context, "No cleanup targets found!");
         return;
     }
 
-    try output.writeSuccess(context, if (options.dry_run) "Running would remove:" else "Packages to remove:");
+    try output.writeSuccess(context, if (options.dry_run) "Running would remove:" else "Cleanup targets:");
     var storage = std.heap.ArenaAllocator.init(context.allocator);
     defer storage.deinit();
     const rows = try storage.allocator().alloc([]const []const u8, targets.len);
@@ -544,7 +544,7 @@ fn writePlan(
         row.* = try storage.allocator().dupe([]const u8, &.{target});
     try table.write(
         context,
-        &.{"Package"},
+        &.{"Target"},
         rows,
     );
 }
@@ -558,7 +558,7 @@ fn planMessage(backend: Backend) []const u8 {
 
 fn planSummary(target_count: usize) []const u8 {
     return switch (target_count) {
-        0 => "No packages found to purify.",
+        0 => "No cleanup targets found.",
         1 => "Purify plan contains 1 target.",
         else => "Purify plan is ready for confirmation.",
     };
@@ -952,7 +952,7 @@ test "empty purify plans skip confirmation and backend mutation" {
         try dispatchWithRunner(&tc.context, &outcome.dispatch, &capture),
     );
     try std.testing.expectEqual(@as(usize, 1), capture.calls);
-    try std.testing.expect(std.mem.indexOf(u8, tc.stdout.writer.buffered(), "No packages found") != null);
+    try std.testing.expect(std.mem.indexOf(u8, tc.stdout.writer.buffered(), "No cleanup targets found") != null);
     try std.testing.expect(std.mem.indexOf(u8, tc.stdout.writer.buffered(), "Proceed with purify?") == null);
 }
 
