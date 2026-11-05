@@ -3560,6 +3560,10 @@ test "update: sync and automated update produce equivalent metadata" {
     defer update_env.deinit(std.testing.allocator);
 
     const app_name = "Editor";
+    const sync_versioned_path = try std.fs.path.join(std.testing.allocator, &.{ sync_env.install_dir, "Editor-1.0.0.AppImage" });
+    try std.Io.Dir.rename(.cwd(), sync_env.current_path, .cwd(), sync_versioned_path, std.testing.io);
+    std.testing.allocator.free(sync_env.current_path);
+    sync_env.current_path = sync_versioned_path;
 
     // Seed both databases with the same old record.
     try seedDb(std.testing.allocator, std.testing.io, sync_env.db_path, &.{
@@ -3594,6 +3598,12 @@ test "update: sync and automated update produce equivalent metadata" {
         .local_db_path = sync_env.db_path,
     };
     try std.testing.expect(try sync_manager.syncAppImageMeta(&.{app_name}));
+    const sync_apps_after = try sync_manager.getAppImagesFromLocalDb();
+    defer sync_manager.freeAppImages(sync_apps_after);
+    try std.testing.expectEqualStrings(sync_versioned_path, sync_apps_after[0].path);
+    const legacy_sync_path = try std.fs.path.join(std.testing.allocator, &.{ sync_env.install_dir, "Editor.AppImage" });
+    defer std.testing.allocator.free(legacy_sync_path);
+    try std.testing.expectError(error.FileNotFound, std.Io.Dir.cwd().statFile(std.testing.io, legacy_sync_path, .{}));
 
     // Run update against the update environment.
     var um = makeStagedUpdateManager(std.testing.allocator, update_env.install_dir, update_env.db_path, staged_path);
