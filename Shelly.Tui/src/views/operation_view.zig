@@ -68,7 +68,7 @@ pub const View = struct {
         var lines: std.ArrayList([]const u8) = .empty;
         if (self.progress.authenticating) {
             if (self.progress.authentication_len > 0)
-                try lines.append(arena, try diagnostics.sanitizeAlloc(arena, self.progress.authentication[0..self.progress.authentication_len]));
+                try lines.append(arena, try authenticationText(arena, self.progress.authentication[0..self.progress.authentication_len]));
         }
         var last: []const u8 = "";
         for (&self.progress.messages, self.progress.lengths) |*message, len| {
@@ -86,6 +86,19 @@ pub const View = struct {
         return std.mem.join(arena, "\n", lines.items);
     }
 };
+
+// PTYs emit CRLF and PAM can emit standalone carriage returns. Rendering both as line breaks before sanitizing.
+fn authenticationText(allocator: Allocator, bytes: []const u8) Allocator.Error![]const u8 {
+    const normalized = try allocator.alloc(u8, bytes.len);
+    defer allocator.free(normalized);
+    var len: usize = 0;
+    for (bytes, 0..) |byte, index| {
+        if (byte == '\n' and index > 0 and bytes[index - 1] == '\r') continue;
+        normalized[len] = if (byte == '\r') '\n' else byte;
+        len += 1;
+    }
+    return diagnostics.sanitizeAlloc(allocator, normalized[0..len]);
+}
 
 pub const Action = enum { none, close, confirm };
 
@@ -432,4 +445,26 @@ test "completion preserves history and scrolling without forcing the reader to t
     _ = try panel.draw(view, draw_ctx);
     try std.testing.expect(!panel.follow_output);
     try std.testing.expectEqual(Action.close, try panel.handleKey(view, &ctx, commands.bindings.close));
+}
+
+test "authentication normalizes PTY line endings while escaping other controls" {
+    var arena: std.heap.ArenaAllocator = .init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var view: View = .{ .name = "demo", .state = .running };
+    view.progress.authenticating = true;
+    const output = "Touch sensor\r\nTry again\rPassword: \x1b[2J\x00";
+    @memcpy(view.progress.authentication[0..output.len], output);
+    view.progress.authentication_len = output.len;
+    const body = try view.body(allocator, 80);
+    try std.testing.expectEqualStrings("Touch sensor\nTry again\nPassword: \\x1b[2J\\x00", body);
+    const split = "Touch sensor\r";
+    @memcpy(view.progress.authentication[0..split.len], split);
+    view.progress.authentication_len = split.len;
+    const before = try view.body(allocator, 80);
+    view.progress.authentication[split.len] = '\n';
+    view.progress.authentication_len += 1;
+    const after = try view.body(allocator, 80);
+    try std.testing.expectEqualStrings("Touch sensor\n", before);
+    try std.testing.expectEqualStrings(before, after);
 }
