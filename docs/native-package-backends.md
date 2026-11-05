@@ -177,7 +177,7 @@ GPG and a populated host trust database remain necessary for signature verificat
 
 For the Seafoam Labs Arch release without libalpm, use
 `packaging/arch/PKGBUILD` and its adjacent `.SRCINFO`. It builds the release tag
-matching `pkgver` (currently `v3.1.10`) with `-Dlibalpm=false` and
+matching `pkgver` (currently `v3.2.0`) with `-Dlibalpm=false` and
 `-Dpath-profile=pacman`, preserving `/etc/pacman.conf`, `/var/lib/pacman`, and Arch
 news support. Pacman is an optional dependency for package-owner lookup.
 `packaging/arch/shelly-git/PKGBUILD` is the corresponding development recipe.
@@ -187,7 +187,7 @@ shelly build ./packaging/arch/PKGBUILD
 ```
 
 `packaging/devario/PKGBUILD` builds the release tag matching `pkgver` (currently
-`v3.1.10`). `packaging/devario/shelly-git/PKGBUILD` tracks the `development` branch.
+`v3.2.0`). `packaging/devario/shelly-git/PKGBUILD` tracks the `development` branch.
 Both use `-Dlibalpm=false -Dpath-profile=devario`, including the matching key tool
 and backend tests. Neither recipe applies downstream patches
 or requires `devario-alpm-runtime`. Their checks include native pacfile ownership,
