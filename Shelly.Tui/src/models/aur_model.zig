@@ -299,7 +299,7 @@ pub fn aurView(self: *Model) aur_view.View {
         .details_scroll = &self.aur_state.aur_details_scroll,
         .details_active = !self.help_open and self.overlay != null and self.overlay.? == .aur,
         .list_active = self.aur_state.aur_list_active and !self.help_open,
-        .preview = if (self.overlay != null and self.overlay.? == .pkgbuild) operation_model.pkgbuildView(self) else null,
+        .preview = if (self.overlay != null and self.overlay.? == .pkgbuild and self.operation_state.operation_question == null) operation_model.pkgbuildView(self) else null,
         .help = if (self.help_open) &self.help_panel else null,
         .aur_list = &self.aur_state.aur_list,
         .searching = self.aur_state.aur_job != null,

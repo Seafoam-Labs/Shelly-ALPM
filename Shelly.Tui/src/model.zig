@@ -453,7 +453,7 @@ pub const Model = struct {
 
         const reviewing = self.overlay != null and self.overlay.? == .pkgbuild and self.operation_state.operation_question != null;
         const fullscreen_review = reviewing and self.operation_state.operation_question.?.value.question == .pkgbuild;
-        const update_review = reviewing and !fullscreen_review and self.active == .upgrade;
+        const panel_review = reviewing and !fullscreen_review;
         const prompt = operation_model.operationPrompt(self) orelse self.operation_state.review_prompt;
         const choosing_flatpak = self.overlay != null and self.overlay.? == .flatpak_install;
         var navigation_height: u16 = if (max.width >= 2 and max.height >= 8) 3 else 1;
@@ -463,16 +463,12 @@ pub const Model = struct {
             // Keep the operation area stable across authentication, progress,
             // and results; long content scrolls within this reserved third.
             const preferred_height = @max(@as(u16, 4), max.height / 3 + @intFromBool(max.height % 3 != 0));
-            if (update_review) {
+            if (panel_review) {
                 panel_height = @max(preferred_height, max.height / 2);
                 if (max.height < navigation_height + panel_height + 5) {
                     panel_height = max.height -| (navigation_height + 1);
                     show_browsing = false;
                 }
-            } else if (reviewing) {
-                // Keep the review readable above the same operation panel.
-                // Tiny terminals give priority to answering the CLI question.
-                panel_height = if (max.height >= navigation_height + preferred_height + 7) preferred_height else 0;
             } else if (max.height >= navigation_height + preferred_height + 5) {
                 panel_height = preferred_height;
             } else {
@@ -511,7 +507,7 @@ pub const Model = struct {
                 .origin = .{ .row = 1, .col = 0 },
                 .surface = try self.help_panel.draw(content_ctx.withConstraints(.{}, .{ .width = max.width, .height = content_ctx.max.size().height -| 2 })),
             });
-        } else if (reviewing and !self.help_open and (fullscreen_review or (!update_review and self.active != .aur))) {
+        } else if (fullscreen_review and !self.help_open) {
             try children.append(arena, .{
                 .origin = .{ .row = 1, .col = 0 },
                 .surface = try operation_model.pkgbuildView(self).drawInPane(content_ctx.withConstraints(.{}, .{ .width = max.width, .height = content_ctx.max.size().height -| 2 })),
@@ -528,7 +524,7 @@ pub const Model = struct {
         if (panel_height > 0) if (prompt) |active_prompt| {
             try children.append(arena, .{
                 .origin = .{ .row = @intCast(max.height - panel_height - 1), .col = 0 },
-                .surface = if (update_review and !self.help_open)
+                .surface = if (panel_review and !self.help_open)
                     try operation_model.pkgbuildView(self).drawInPane(ctx.withConstraints(.{}, .{ .width = max.width, .height = panel_height }))
                 else
                     try active_prompt.panel.draw(operation_model.promptView(self, active_prompt), ctx.withConstraints(
@@ -920,6 +916,66 @@ test "tab views preserve input widgets and render without background work" {
             }
             try std.testing.expect(found);
         }
+    }
+}
+
+test "ordinary operation questions use the full-width bottom panel on every package page" {
+    const contains = struct {
+        fn text(surface: vxfw.Surface, needle: []const u8, allocator: Allocator) !bool {
+            var chars: std.ArrayList(u8) = .empty;
+            defer chars.deinit(allocator);
+            for (surface.buffer) |cell| try chars.appendSlice(allocator, cell.char.grapheme);
+            if (std.mem.indexOf(u8, chars.items, needle) != null) return true;
+            for (surface.children) |child| if (try text(child.surface, needle, allocator)) return true;
+            return false;
+        }
+    }.text;
+    vxfw.DrawContext.init(.unicode);
+    for ([_]Tab{ .packages, .aur, .flatpak, .upgrade }) |tab| {
+        const model = try Model.init(std.testing.allocator);
+        defer model.deinit();
+        model.active = tab;
+        const prompt = try std.testing.allocator.create(SudoPrompt);
+        prompt.* = .{ .name = try std.testing.allocator.dupe(u8, "demo"), .backend = .aur, .state = .running };
+        model.overlay = .{ .sudo = prompt };
+        for ([_]struct { json: []const u8, title: []const u8 }{
+            .{ .json = "{\"$kind\":\"q.yesno\",\"QuestionId\":\"1\",\"QuestionText\":\"Proceed?\"}", .title = "Operation review" },
+            .{ .json = "{\"$kind\":\"q.optdeps\",\"QuestionId\":\"2\",\"QuestionText\":\"Choose dependencies\",\"Options\":[{\"Index\":0,\"Name\":\"docs\"}]}", .title = "Optional dependencies" },
+            .{ .json = "{\"$kind\":\"q.provider\",\"QuestionId\":\"3\",\"DependencyName\":\"java\",\"Options\":[{\"Index\":0,\"Name\":\"jdk\"}]}", .title = "Dependency selection" },
+            .{ .json = "{\"$kind\":\"q.transaction\",\"QuestionId\":\"4\",\"Action\":\"install\",\"Packages\":[{\"Name\":\"demo\",\"Repository\":\"aur\",\"Source\":\"aur\",\"Role\":\"requested\"}]}", .title = "Transaction review" },
+        }) |question| {
+            try operation_model.showOperationQuestion(model, try @import("services/shelly_operation.zig").decodeJson(std.testing.allocator, question.json));
+            defer operation_model.finishOperationQuestion(model);
+            if (tab == .aur) try std.testing.expect(aur_model.aurView(model).preview == null);
+            for ([_]vxfw.Size{ .{ .width = 100, .height = 30 }, .{ .width = 50, .height = 18 }, .{ .width = 30, .height = 8 } }) |size| {
+                var arena: std.heap.ArenaAllocator = .init(std.testing.allocator);
+                defer arena.deinit();
+                const surface = try model.widget().draw(.{ .arena = arena.allocator(), .min = .{}, .max = .{ .width = size.width, .height = size.height }, .cell_size = .{ .width = 10, .height = 20 } });
+                const review = surface.children[surface.children.len - 2];
+                try std.testing.expectEqual(@as(i17, 0), review.origin.col);
+                try std.testing.expect(review.surface.size.width <= size.width);
+                try std.testing.expect(@as(u16, @intCast(review.origin.row)) + review.surface.size.height <= size.height - 1);
+                if (size.height >= 18) {
+                    try std.testing.expectEqual(size.width, review.surface.size.width);
+                    try std.testing.expect(try contains(review.surface, question.title, std.testing.allocator));
+                } else try std.testing.expect(try contains(review.surface, "Enlarge", std.testing.allocator));
+                for (surface.children[0 .. surface.children.len - 2]) |child| {
+                    try std.testing.expect(!try contains(child.surface, question.title, std.testing.allocator));
+                    try std.testing.expect(child.origin.row + child.surface.size.height <= review.origin.row);
+                }
+            }
+        }
+        try std.testing.expect(model.overlay.?.sudo == prompt);
+        try operation_model.showOperationQuestion(model, try @import("services/shelly_operation.zig").decodeJson(std.testing.allocator,
+            \\{"$kind":"q.pkgbuilddiff","QuestionId":"5","PackageName":"demo","OldPkgbuild":"pkgver=1","NewPkgbuild":"pkgver=2"}
+        ));
+        defer operation_model.finishOperationQuestion(model);
+        var arena: std.heap.ArenaAllocator = .init(std.testing.allocator);
+        defer arena.deinit();
+        const fullscreen = try model.widget().draw(.{ .arena = arena.allocator(), .min = .{}, .max = .{ .width = 100, .height = 30 }, .cell_size = .{ .width = 10, .height = 20 } });
+        try std.testing.expectEqual(@as(usize, 3), fullscreen.children.len);
+        try std.testing.expectEqual(@as(u16, 26), fullscreen.children[1].surface.size.height);
+        try std.testing.expect(try contains(fullscreen.children[1].surface, "PKGBUILD review", std.testing.allocator));
     }
 }
 
