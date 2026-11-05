@@ -1,3 +1,4 @@
+const styles = @import("styles.zig");
 const std = @import("std");
 const vaxis = @import("vaxis");
 const vxfw = vaxis.vxfw;
@@ -25,7 +26,7 @@ pub const Panel = struct {
             return tiny.draw(ctx);
         }
         const labels = [_]Border.BorderLabel{.{ .text = "Help", .alignment = .top_left }};
-        var border: Border = .{ .child = self.scroll.widget(), .labels = &labels, .style = .{ .fg = .{ .index = 7 }, .bold = true } };
+        var border: Border = .{ .child = self.scroll.widget(), .labels = &labels, .style = styles.emphasis };
         return border.draw(ctx.withConstraints(size, .{ .width = size.width, .height = size.height }));
     }
 
@@ -100,9 +101,9 @@ pub const Panel = struct {
         var lines = std.mem.splitScalar(u8, try self.text(ctx.arena), '\n');
         while (lines.next()) |line| {
             if (std.mem.indexOf(u8, line, ": ")) |separator| {
-                try spans.append(ctx.arena, .{ .text = line[0 .. separator + 1], .style = .{ .bold = true, .fg = .{ .index = 7 } } });
-                try spans.append(ctx.arena, .{ .text = line[separator + 1 ..], .style = .{ .fg = .{ .index = 250 } } });
-            } else try spans.append(ctx.arena, .{ .text = line, .style = .{ .bold = true, .fg = .{ .index = 7 } } });
+                try spans.append(ctx.arena, .{ .text = line[0 .. separator + 1], .style = styles.emphasis });
+                try spans.append(ctx.arena, .{ .text = line[separator + 1 ..], .style = styles.secondary });
+            } else try spans.append(ctx.arena, .{ .text = line, .style = styles.emphasis });
             try spans.append(ctx.arena, .{ .text = "\n" });
         }
         var rich: vxfw.RichText = .{ .text = spans.items, .softwrap = true };

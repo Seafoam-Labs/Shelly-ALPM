@@ -1,3 +1,4 @@
+const styles = @import("styles.zig");
 const std = @import("std");
 const vaxis = @import("vaxis");
 const vxfw = vaxis.vxfw;
@@ -20,7 +21,7 @@ fn drawFn(ptr: *anyopaque, ctx: vxfw.DrawContext) std.mem.Allocator.Error!vxfw.S
 }
 
 pub fn draw(self: *const Border, ctx: vxfw.DrawContext) std.mem.Allocator.Error!vxfw.Surface {
-    var border: vxfw.Border = .{ .child = self.child, .style = if (self.focused) .{ .fg = .{ .index = 7 }, .bold = true } else self.style, .labels = self.labels };
+    var border: vxfw.Border = .{ .child = self.child, .style = if (self.focused) styles.emphasis else self.style, .labels = self.labels };
     var surface = try border.draw(ctx);
     surface.widget = self.widget();
     // Keep Vaxis sizing, labels and child placement; strengthen only frame cells.

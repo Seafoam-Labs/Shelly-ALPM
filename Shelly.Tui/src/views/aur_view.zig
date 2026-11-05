@@ -1,3 +1,4 @@
+const styles = @import("styles.zig");
 const std = @import("std");
 const vaxis = @import("vaxis");
 const vxfw = vaxis.vxfw;
@@ -51,7 +52,7 @@ pub const View = struct {
                     try self.aur_field.draw(ctx.withConstraints(.{}, .{ .width = list_width, .height = search_height })),
             });
             const message = try self.aurMessage(arena);
-            var label: vxfw.Text = .{ .text = if (message) |item| item.text else "", .style = .{ .fg = .{ .index = if (message != null and message.?.red) @as(u8, 1) else 250 } } };
+            var label: vxfw.Text = .{ .text = if (message) |item| item.text else "", .style = if (message != null and message.?.red) .{ .fg = .{ .index = 1 } } else styles.secondary };
             const labels = [_]Border.BorderLabel{.{ .text = if (self.installed_only) "Installed AUR packages" else "AUR packages", .alignment = .top_left }};
             const content = if (message != null) label.widget() else self.aur_list.widget();
             var border: Border = .{ .child = content, .labels = &labels, .focused = self.list_active and !self.details_active };

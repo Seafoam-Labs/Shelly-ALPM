@@ -1,3 +1,4 @@
+const styles = @import("styles.zig");
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 const Border = @import("border.zig");
@@ -206,7 +207,7 @@ pub const Document = struct {
         const summary = if (warnings.len > 0)
             if (critical > 0) try std.fmt.allocPrint(alloc, "Security scan: {d} finding{s}, {d} critical.", .{ warnings.len, if (warnings.len == 1) "" else "s", critical }) else try std.fmt.allocPrint(alloc, "Security scan: {d} finding{s}.", .{ warnings.len, if (warnings.len == 1) "" else "s" })
         else if (reported) "Security scan: no findings reported by the CLI." else "Security scan: results not supplied by the CLI.";
-        const style: vaxis.Style = if (warnings.len > 0) findingStyle(if (critical > 0) "Critical" else if (has_warning) "Warning" else "Info") else .{ .fg = .{ .index = if (reported) @as(u8, 2) else @as(u8, 250) }, .bold = true };
+        const style: vaxis.Style = if (warnings.len > 0) findingStyle(if (critical > 0) "Critical" else if (has_warning) "Warning" else "Info") else if (reported) .{ .fg = .{ .index = 2 }, .bold = true } else styles.emphasis;
         try append(alloc, lines, try displayText(alloc, summary, remaining), .{ .kind = .plain, .style = style });
         for (warnings) |finding| {
             try append(alloc, lines, "", .{ .kind = .plain });
@@ -695,7 +696,7 @@ pub fn drawChoice(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.S
     const width = ctx.max.width orelse ctx.min.width;
     const spans = try ctx.arena.alloc(vxfw.RichText.TextSpan, 2);
     spans[0] = .{ .text = try std.fmt.allocPrint(ctx.arena, "[{s}] {d}: {f}{s}", .{ if (option.is_selected) "x" else " ", option.index, @import("diagnostics").safe(option.name), if (option.is_installed) " [installed]" else "" }), .style = .{ .bold = true } };
-    spans[1] = .{ .text = if (option.description.len > 0) try std.fmt.allocPrint(ctx.arena, "\n    {f}", .{@import("diagnostics").safe(option.description)}) else "", .style = .{ .fg = .{ .index = 250 } } };
+    spans[1] = .{ .text = if (option.description.len > 0) try std.fmt.allocPrint(ctx.arena, "\n    {f}", .{@import("diagnostics").safe(option.description)}) else "", .style = styles.secondary };
     const rich = try ctx.arena.create(vxfw.RichText);
     rich.* = .{ .text = spans, .softwrap = true };
     return rich.draw(ctx.withConstraints(.{ .width = width }, .{ .width = width, .height = null }));

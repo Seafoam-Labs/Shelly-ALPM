@@ -1,5 +1,6 @@
 //! Lightweight display-only Bash and unified-diff highlighting. Source is
 //! sanitized by the document builder first; no shell or external tools run.
+const styles = @import("styles.zig");
 const std = @import("std");
 const vaxis = @import("vaxis");
 const Span = vaxis.vxfw.RichText.TextSpan;
@@ -28,14 +29,14 @@ fn emit(alloc: Allocator, spans: *std.ArrayList(Span), text: []const u8, style: 
 
 pub fn highlight(alloc: Allocator, text: []const u8, prefix: usize, kind: Kind, state: *State, budget: *usize) ![]const Span {
     var spans: std.ArrayList(Span) = .empty;
-    try emit(alloc, &spans, text[0..prefix], .{ .fg = .{ .index = 245 } });
+    try emit(alloc, &spans, text[0..prefix], styles.secondary);
     const source = text[prefix..];
     switch (kind) {
-        .heading => try emit(alloc, &spans, source, .{ .fg = .{ .index = 7 }, .bold = true }),
+        .heading => try emit(alloc, &spans, source, styles.emphasis),
         .plain => try emit(alloc, &spans, source, .{}),
         .diff => {
             const style: vaxis.Style = if (std.mem.startsWith(u8, source, "---") or std.mem.startsWith(u8, source, "+++"))
-                .{ .bold = true, .fg = .{ .index = 250 } }
+                styles.emphasis
             else if (std.mem.startsWith(u8, source, "+")) .{ .fg = .{ .index = 2 } } else if (std.mem.startsWith(u8, source, "-")) .{ .fg = .{ .index = 1 } } else if (std.mem.startsWith(u8, source, "@@")) .{ .fg = .{ .index = 6 }, .bold = true } else .{};
             try emit(alloc, &spans, source, style);
         },

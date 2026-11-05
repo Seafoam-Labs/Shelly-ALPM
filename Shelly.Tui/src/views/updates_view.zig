@@ -1,3 +1,4 @@
+const styles = @import("styles.zig");
 const std = @import("std");
 const Border = @import("border.zig");
 const commands = @import("../commands.zig");
@@ -57,7 +58,7 @@ pub const View = struct {
         body.* = self;
         const content: vxfw.Widget = .{ .userdata = body, .drawFn = drawBody };
         const labels = [_]Border.BorderLabel{.{ .text = "Updates", .alignment = .top_left }};
-        var border: Border = .{ .child = content, .labels = &labels, .style = .{ .fg = .{ .index = 7 }, .bold = true } };
+        var border: Border = .{ .child = content, .labels = &labels, .style = styles.emphasis };
         const height = size.height -| 2;
         try children.append(ctx.arena, .{
             .origin = .{ .row = 1, .col = 0 },
@@ -88,7 +89,7 @@ pub const View = struct {
             return label.draw(ctx);
         }
         var children: std.ArrayList(vxfw.SubSurface) = .empty;
-        var summary: vxfw.Text = .{ .text = try self.sourceSummary(ctx.arena), .text_align = .center, .width_basis = .parent, .softwrap = true, .style = .{ .fg = .{ .index = 7 }, .bold = true } };
+        var summary: vxfw.Text = .{ .text = try self.sourceSummary(ctx.arena), .text_align = .center, .width_basis = .parent, .softwrap = true, .style = styles.emphasis };
         const summary_surface = try summary.draw(ctx.withConstraints(.{}, .{ .width = size.width, .height = size.height }));
         try children.append(ctx.arena, .{ .origin = .{ .row = 0, .col = 0 }, .surface = summary_surface });
         var top = summary_surface.size.height;
@@ -210,7 +211,7 @@ fn drawColumns(ctx: vxfw.DrawContext, entry: Entry, heading: bool) Allocator.Err
             .text = try std.fmt.allocPrint(ctx.arena, "{f}", .{diagnostics.safe(value)}),
             .softwrap = false,
             .overflow = .ellipsis,
-            .style = .{ .bold = heading or i == 1, .fg = .{ .index = if (heading or i == 0) 250 else 7 } },
+            .style = .{ .bold = heading or i == 1 },
         };
         const cell = try text.draw(ctx.withConstraints(.{}, .{ .width = cell_width, .height = 1 }));
         @memcpy(surface.buffer[col .. col + cell.size.width], cell.buffer);
@@ -227,7 +228,7 @@ fn drawEntry(parent_ctx: vxfw.DrawContext, entry: Entry) Allocator.Error!vxfw.Su
     if (ctx.max.width.? >= table_min_width) return drawColumns(ctx, entry, false);
     const spans = [_]vxfw.RichText.TextSpan{
         .{ .text = try std.fmt.allocPrint(ctx.arena, "{f}", .{diagnostics.safe(entry.name)}), .style = .{ .bold = true } },
-        .{ .text = try std.fmt.allocPrint(ctx.arena, "  [{f}]\n", .{diagnostics.safe(entry.source)}), .style = .{ .fg = .{ .index = 250 } } },
+        .{ .text = try std.fmt.allocPrint(ctx.arena, "  [{f}]\n", .{diagnostics.safe(entry.source)}), .style = styles.secondary },
         .{ .text = try std.fmt.allocPrint(ctx.arena, "{f} ---> {f}", .{ diagnostics.safe(entry.current), diagnostics.safe(entry.available) }) },
     };
     var text: vxfw.RichText = .{ .text = &spans, .softwrap = true };

@@ -1,4 +1,5 @@
 //! Flatpak backend availability, catalog browsing, categories, and screenshots.
+const styles = @import("../views/styles.zig");
 const updates_model = @import("updates_model.zig");
 const operation_model = @import("operation_model.zig");
 const std = @import("std");
@@ -86,9 +87,9 @@ pub fn init(gpa: Allocator, model: *Model) State {
         .screenshot_previous = .{ .label = " < ", .userdata = model, .onClick = onPreviousScreenshot, .style = screenshotButtonStyle },
         .screenshot_next = .{ .label = " > ", .userdata = model, .onClick = onNextScreenshot, .style = screenshotButtonStyle },
         .flatpak_category_button = .{ .label = "All categories ▾", .userdata = model, .onClick = onFlatpakCategoryClick, .style = .{
-            .default = .{ .fg = .{ .index = 250 } },
-            .hover = .{ .fg = .{ .index = 7 }, .bold = true },
-            .focus = .{ .fg = .{ .index = 7 }, .bold = true },
+            .default = styles.secondary,
+            .hover = styles.emphasis,
+            .focus = styles.emphasis,
             .mouse_down = .{ .reverse = true },
         } },
         .flatpak_category_list = .{ .item_count = 0, .children = .{ .builder = .{ .userdata = model, .buildFn = buildFlatpakCategory } } },
@@ -604,9 +605,9 @@ pub fn openFlatpakPrompt(self: *Model, action: shelly_operation.Action, name: []
 }
 
 pub const screenshotButtonStyle: @TypeOf(@as(vxfw.Button, undefined).style) = .{
-    .default = .{ .fg = .{ .index = 250 } },
-    .hover = .{ .fg = .{ .index = 7 }, .bold = true },
-    .focus = .{ .fg = .{ .index = 7 }, .bold = true },
+    .default = styles.secondary,
+    .hover = styles.emphasis,
+    .focus = styles.emphasis,
     .mouse_down = .{ .reverse = true },
 };
 

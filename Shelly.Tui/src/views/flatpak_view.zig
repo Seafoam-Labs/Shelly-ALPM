@@ -1,3 +1,4 @@
+const styles = @import("styles.zig");
 const std = @import("std");
 const Border = @import("border.zig");
 const diagnostics = @import("diagnostics");
@@ -128,7 +129,7 @@ pub const View = struct {
                 try children.append(arena, .{ .origin = .{ .row = 1, .col = if (side_by_side) @intCast(search_width + 1) else 0 }, .surface = if (search_height == 3) try border.draw(selector_ctx) else try categoryButtonWidget(button).draw(selector_ctx) });
             }
             const message = self.contentMessage();
-            var label: vxfw.Text = .{ .text = message orelse "", .style = .{ .fg = .{ .index = 250 } } };
+            var label: vxfw.Text = .{ .text = message orelse "", .style = styles.secondary };
             const labels = [_]Border.BorderLabel{.{ .text = if (self.installed_only) "Installed Flatpaks" else "Flatpak applications", .alignment = .top_left }};
             const content = if (message != null) label.widget() else self.list.widget();
             var border: Border = .{ .child = content, .labels = &labels, .focused = self.list_active and !self.details_active };

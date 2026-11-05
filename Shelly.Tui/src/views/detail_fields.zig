@@ -1,3 +1,4 @@
+const styles = @import("styles.zig");
 const std = @import("std");
 const vaxis = @import("vaxis");
 const vxfw = vaxis.vxfw;
@@ -52,7 +53,7 @@ pub fn draw(widget: vxfw.Widget, ctx: vxfw.DrawContext, fields: []const Field) A
     var row: u16 = 0;
     for (fields) |field| {
         if (field.gap or (!columns and row > 0)) row += 1;
-        var label: vxfw.Text = .{ .text = field.label, .style = .{ .bold = true, .fg = .{ .index = 7 } } };
+        var label: vxfw.Text = .{ .text = field.label, .style = styles.emphasis };
         const label_surface = try label.draw(ctx.withConstraints(.{}, .{ .width = label_width, .height = null }));
         try children.append(arena, .{ .origin = .{ .row = row, .col = 0 }, .surface = label_surface });
         const value_row = row + if (columns) @as(u16, 0) else label_surface.size.height;

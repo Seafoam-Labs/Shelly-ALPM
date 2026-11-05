@@ -1,3 +1,4 @@
+const styles = @import("styles.zig");
 const std = @import("std");
 const vaxis = @import("vaxis");
 const vxfw = vaxis.vxfw;
@@ -17,7 +18,7 @@ pub fn draw(ctx: vxfw.DrawContext, context: commands.Context, status: ?[]const u
     else
         "";
     if (prefix.len > 0) {
-        try spans.append(ctx.arena, .{ .text = prefix, .style = .{ .fg = .{ .index = 250 } } });
+        try spans.append(ctx.arena, .{ .text = prefix, .style = styles.secondary });
         used = ctx.stringWidth(prefix);
     }
     for (try commands.entries(ctx.arena, context)) |entry| {
@@ -40,18 +41,18 @@ pub fn draw(ctx: vxfw.DrawContext, context: commands.Context, status: ?[]const u
         const description = try std.fmt.allocPrint(ctx.arena, " {s}  ", .{short});
         const width = ctx.stringWidth(key) + ctx.stringWidth(description);
         if (used + width > main_width) continue;
-        try spans.append(ctx.arena, .{ .text = key, .style = .{ .fg = .{ .index = 7 }, .bold = true } });
-        try spans.append(ctx.arena, .{ .text = description, .style = .{ .fg = .{ .index = 250 } } });
+        try spans.append(ctx.arena, .{ .text = key, .style = styles.emphasis });
+        try spans.append(ctx.arena, .{ .text = description, .style = styles.secondary });
         used += width;
     }
     const quit = try commands.label(ctx.arena, .quit);
     const quit_description = " Quit";
     if (!context.quit_blocked and used + ctx.stringWidth(quit) + ctx.stringWidth(quit_description) <= main_width) {
-        try spans.append(ctx.arena, .{ .text = quit, .style = .{ .fg = .{ .index = 7 }, .bold = true } });
-        try spans.append(ctx.arena, .{ .text = quit_description, .style = .{ .fg = .{ .index = 250 } } });
+        try spans.append(ctx.arena, .{ .text = quit, .style = styles.emphasis });
+        try spans.append(ctx.arena, .{ .text = quit_description, .style = styles.secondary });
     }
     var main: vxfw.RichText = .{ .text = spans.items, .softwrap = false, .overflow = .ellipsis };
-    var help: vxfw.Text = .{ .text = help_label, .softwrap = false, .style = .{ .fg = .{ .index = 7 }, .bold = true } };
+    var help: vxfw.Text = .{ .text = help_label, .softwrap = false, .style = styles.emphasis };
     const children = try ctx.arena.alloc(vxfw.SubSurface, 2);
     children[0] = .{ .origin = .{ .row = 0, .col = 0 }, .surface = try main.draw(ctx.withConstraints(.{}, .{ .width = main_width, .height = 1 })) };
     children[1] = .{ .origin = .{ .row = 0, .col = @intCast(size.width - help_width) }, .surface = try help.draw(ctx.withConstraints(.{}, .{ .width = help_width, .height = 1 })) };

@@ -1,3 +1,4 @@
+const styles = @import("views/styles.zig");
 const packages_model = @import("models/packages_model.zig");
 const aur_model = @import("models/aur_model.zig");
 const flatpak_model = @import("models/flatpak_model.zig");
@@ -583,9 +584,9 @@ pub const Model = struct {
             spans[i] = .{
                 .text = if (icon.len > 0) try std.fmt.allocPrint(arena, " {s} {s} ", .{ icon, tab.title() }) else try std.fmt.allocPrint(arena, " {s} ", .{tab.title()}),
                 .style = if (tab == self.active)
-                    .{ .bold = true, .reverse = true, .fg = .{ .index = 7 } }
+                    styles.selected
                 else
-                    .{ .fg = .{ .index = 250 } },
+                    styles.secondary,
             };
         }
         const bar = try arena.create(TabBar);
@@ -816,15 +817,13 @@ pub const TabBar = struct {
         }
         var col: u16 = @intCast(self.start_col);
         for (spans) |span| {
-            const selected = span.style.reverse;
-            const selected_style: vaxis.Style = .{ .bg = .{ .index = 7 }, .fg = .{ .index = 0 }, .bold = true };
             var iterator = ctx.graphemeIterator(span.text);
             while (iterator.next()) |grapheme| {
                 const text = grapheme.bytes(span.text);
                 const cells: u8 = @intCast(ctx.stringWidth(text));
                 surface.writeCell(col, @intCast(self.label_row), .{
                     .char = .{ .grapheme = text, .width = cells },
-                    .style = if (selected) selected_style else span.style,
+                    .style = span.style,
                 });
                 col += cells;
             }

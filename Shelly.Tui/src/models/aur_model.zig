@@ -1,4 +1,5 @@
 //! AUR searches, installed listings, batch selection, and details.
+const styles = @import("../views/styles.zig");
 const operation_model = @import("operation_model.zig");
 const std = @import("std");
 const commands = @import("../commands.zig");
@@ -57,9 +58,9 @@ pub const AurSelection = struct { name: []const u8, installed: bool };
 pub fn init(gpa: Allocator, model: *Model) State {
     return .{
         .aur_preview_button = .{ .label = " PKGBUILD ", .userdata = model, .onClick = onAurPreviewClick, .style = .{
-            .default = .{ .fg = .{ .index = 0 }, .bg = .{ .index = 7 } },
-            .focus = .{ .fg = .{ .index = 0 }, .bg = .{ .index = 15 }, .bold = true },
-            .hover = .{ .fg = .{ .index = 0 }, .bg = .{ .index = 15 }, .bold = true },
+            .default = styles.button,
+            .focus = styles.selected,
+            .hover = styles.selected,
             .mouse_down = .{ .reverse = true },
         } },
         .aur_details_scroll = .{ .item_count = 2, .children = .{ .builder = .{ .userdata = model, .buildFn = buildAurDetails } } },
