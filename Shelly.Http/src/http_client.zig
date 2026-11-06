@@ -33,14 +33,14 @@ const posix = std.posix;
 
 pub const disable_tls = std.options.http_disable_tls;
 
-// Proxy configuration is process-wide, just like the environment it mirrors.
-// Executables register their stable environment map before starting HTTP work;
-// individual clients then copy the relevant values into client-owned storage.
+// HTTP defaults are process-wide, just like the environment they mirror.
+// Executables register a stable environment map before HTTP work; clients own
+// parsed proxy settings and look up GitHub authentication from that map.
 var default_proxy_environment = std.atomic.Value(usize).init(0);
 
-/// Registers the environment used by clients that do not provide explicit
-/// `http_proxy` or `https_proxy` values. `environ_map` must remain valid until
-/// every client in the process has been deinitialized.
+/// Registers the environment used by clients for proxy settings and GitHub
+/// authentication. `environ_map` must remain valid until every client in the
+/// process has been deinitialized.
 ///
 /// Call this during process startup, before starting HTTP worker threads.
 pub fn setDefaultProxyEnvironment(environ_map: *const std.process.Environ.Map) void {
@@ -50,6 +50,18 @@ pub fn setDefaultProxyEnvironment(environ_map: *const std.process.Environ.Map) v
 fn defaultProxyEnvironment() ?*const std.process.Environ.Map {
     const address = default_proxy_environment.load(.acquire);
     return if (address == 0) null else @ptrFromInt(address);
+}
+
+fn defaultGitHubToken() ?[]const u8 {
+    if (defaultProxyEnvironment()) |environ_map| return environ_map.get("GITHUB_TOKEN");
+    if (!builtin.link_libc) return null;
+    const env_ptr = std.c.getenv("GITHUB_TOKEN") orelse return null;
+    return std.mem.span(env_ptr);
+}
+
+pub fn hasDefaultGitHubToken() bool {
+    const token = defaultGitHubToken() orelse return false;
+    return token.len > 0;
 }
 
 /// Controls which resolved address families are eligible for new connections.
@@ -1114,9 +1126,8 @@ pub const Request = struct {
             } else {
                 var host_buf: [HostName.max_len]u8 = undefined;
                 if (HostName.fromUri(uri, &host_buf)) |hn| {
-                    if (containsIgnoreCase(hn.bytes, "github.com")) {
-                        if (std.c.getenv("GITHUB_TOKEN")) |env_ptr| {
-                            const token = std.mem.span(env_ptr);
+                    if (isGitHubHost(hn.bytes)) {
+                        if (defaultGitHubToken()) |token| {
                             if (token.len > 0) {
                                 try w.writeAll("authorization: token ");
                                 try w.writeAll(token);
@@ -1130,7 +1141,7 @@ pub const Request = struct {
 
         if (try emitOverridableHeader("user-agent: ", r.headers.user_agent, w)) {
             var host_buf: [HostName.max_len]u8 = undefined;
-            const is_github = if (HostName.fromUri(uri, &host_buf)) |hn| containsIgnoreCase(hn.bytes, "github.com") else |_| false;
+            const is_github = if (HostName.fromUri(uri, &host_buf)) |hn| isGitHubHost(hn.bytes) else |_| false;
             if (is_github) {
                 try w.writeAll("user-agent: ShellyAppUpdater\r\n");
             } else {
@@ -1535,7 +1546,11 @@ test "ordinary client lazily owns proxies from the process environment" {
     try environment.put("http_proxy", "http://lower-proxy.example:8080/");
     try environment.put("HTTP_PROXY", "http://uppercase-proxy.example:8081/");
     try environment.put("ALL_PROXY", "http://fallback-proxy.example:3128/");
+    try environment.put("GITHUB_TOKEN", "test-token");
     setDefaultProxyEnvironment(&environment);
+
+    try testing.expectEqualStrings("test-token", defaultGitHubToken().?);
+    try testing.expect(hasDefaultGitHubToken());
 
     var client: Client = .{ .allocator = testing.allocator, .io = testing.io };
     defer client.deinit();
@@ -3797,18 +3812,19 @@ test "NO_PROXY honors domain boundaries, wildcards and IP networks" {
     try std.testing.expect(proxyBypassed("*", "anything"));
 }
 
-fn containsIgnoreCase(haystack: []const u8, needle: []const u8) bool {
-    if (haystack.len < needle.len) return false;
-    var i: usize = 0;
-    while (i + needle.len <= haystack.len) : (i += 1) {
-        var match = true;
-        for (needle, 0..) |c, j| {
-            if (std.ascii.toLower(haystack[i + j]) != std.ascii.toLower(c)) {
-                match = false;
-                break;
-            }
-        }
-        if (match) return true;
-    }
-    return false;
+fn isGitHubHost(host: []const u8) bool {
+    const domain = "github.com";
+    if (std.ascii.eqlIgnoreCase(host, domain)) return true;
+    if (host.len <= domain.len) return false;
+    const suffix_start = host.len - domain.len;
+    return host[suffix_start - 1] == '.' and
+        std.ascii.eqlIgnoreCase(host[suffix_start..], domain);
+}
+
+test "GitHub host matching does not include unrelated domains" {
+    try testing.expect(isGitHubHost("github.com"));
+    try testing.expect(isGitHubHost("api.github.com"));
+    try testing.expect(isGitHubHost("API.GITHUB.COM"));
+    try testing.expect(!isGitHubHost("notgithub.com"));
+    try testing.expect(!isGitHubHost("github.com.example.org"));
 }
