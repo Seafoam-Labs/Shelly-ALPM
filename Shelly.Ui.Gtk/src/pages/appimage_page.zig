@@ -783,12 +783,6 @@ pub const AppImagePage = extern struct {
     }
 
     fn upgrade_appimage(self: *Self) callconv(.c) void {
-        const p = self.priv();
-        if (p.updates.len == 0) {
-            p.toast.show(.info, translations._("No AppImages need to be upgraded"));
-            return;
-        }
-
         const argv = ShellyCommands.upgrade_appimages(std.heap.c_allocator) catch return;
         defer std.heap.c_allocator.free(argv);
 
