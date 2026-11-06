@@ -1111,13 +1111,33 @@ pub const Request = struct {
                 try w.writeAll("authorization: ");
                 try basic_authorization.write(uri, w);
                 try w.writeAll("\r\n");
+            } else {
+                var host_buf: [HostName.max_len]u8 = undefined;
+                if (HostName.fromUri(uri, &host_buf)) |hn| {
+                    if (containsIgnoreCase(hn.bytes, "github.com")) {
+                        if (std.c.getenv("GITHUB_TOKEN")) |env_ptr| {
+                            const token = std.mem.span(env_ptr);
+                            if (token.len > 0) {
+                                try w.writeAll("authorization: token ");
+                                try w.writeAll(token);
+                                try w.writeAll("\r\n");
+                            }
+                        }
+                    }
+                } else |_| {}
             }
         }
 
         if (try emitOverridableHeader("user-agent: ", r.headers.user_agent, w)) {
-            try w.writeAll("user-agent: zig/");
-            try w.writeAll(builtin.zig_version_string);
-            try w.writeAll(" (std.http)\r\n");
+            var host_buf: [HostName.max_len]u8 = undefined;
+            const is_github = if (HostName.fromUri(uri, &host_buf)) |hn| containsIgnoreCase(hn.bytes, "github.com") else |_| false;
+            if (is_github) {
+                try w.writeAll("user-agent: ShellyAppUpdater\r\n");
+            } else {
+                try w.writeAll("user-agent: zig/");
+                try w.writeAll(builtin.zig_version_string);
+                try w.writeAll(" (std.http)\r\n");
+            }
         }
 
         if (try emitOverridableHeader("connection: ", r.headers.connection, w)) {
@@ -3777,4 +3797,20 @@ test "NO_PROXY honors domain boundaries, wildcards and IP networks" {
     try std.testing.expect(!proxyBypassed("10.0.0.0/8", "11.2.3.4"));
     try std.testing.expect(proxyBypassed("::1/128", "::1"));
     try std.testing.expect(proxyBypassed("*", "anything"));
+}
+
+fn containsIgnoreCase(haystack: []const u8, needle: []const u8) bool {
+    if (haystack.len < needle.len) return false;
+    var i: usize = 0;
+    while (i + needle.len <= haystack.len) : (i += 1) {
+        var match = true;
+        for (needle, 0..) |c, j| {
+            if (std.ascii.toLower(haystack[i + j]) != std.ascii.toLower(c)) {
+                match = false;
+                break;
+            }
+        }
+        if (match) return true;
+    }
+    return false;
 }
