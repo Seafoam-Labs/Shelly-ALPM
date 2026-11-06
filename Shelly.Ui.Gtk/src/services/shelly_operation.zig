@@ -36,6 +36,7 @@ const ProxyEnvironmentFrame = struct {
     HTTPS_PROXY: ?[]const u8 = null,
     all_proxy: ?[]const u8 = null,
     ALL_PROXY: ?[]const u8 = null,
+    github_token: ?[]const u8 = null,
 };
 
 fn serializeProxyEnvironment(
@@ -49,10 +50,12 @@ fn serializeProxyEnvironment(
         .HTTPS_PROXY = environment.get("HTTPS_PROXY"),
         .all_proxy = environment.get("all_proxy"),
         .ALL_PROXY = environment.get("ALL_PROXY"),
+        .github_token = environment.get("GITHUB_TOKEN"),
     };
     if (frame.http_proxy == null and frame.HTTP_PROXY == null and
         frame.https_proxy == null and frame.HTTPS_PROXY == null and
-        frame.all_proxy == null and frame.ALL_PROXY == null)
+        frame.all_proxy == null and frame.ALL_PROXY == null and
+        frame.github_token == null)
     {
         return null;
     }
@@ -568,9 +571,15 @@ pub const ShellyOperation = struct {
             }
         }
 
-        // pkexec sanitizes the environment. Privileged starts restore only the
-        // proxy variables through the startup frame written below.
-        self.child = try std.process.spawn(self.io, .{ .argv = argv, .stdin = .pipe, .stdout = .pipe, .stderr = .ignore, .environ_map = runtime.environ_map });
+        // pkexec sanitizes the environment. Privileged starts restore the
+        // supported proxy variables and GitHub token through the startup frame.
+        self.child = try std.process.spawn(self.io, .{
+            .argv = argv,
+            .stdin = .pipe,
+            .stdout = .pipe,
+            .stderr = if (builtin.optimize == .debug) .inherit else .ignore,
+            .environ_map = runtime.environ_map,
+        });
         errdefer self.child.kill(self.io);
         if (startup_frame) |json| try self.writeAnswerFrame(json);
         self.reader = try std.Thread.spawn(.{}, reader_loop, .{self});
@@ -1058,6 +1067,7 @@ test "proxy environment serialization preserves standard variable names" {
     try environment.put("http_proxy", "http://user:p@ss@proxy.example:443/");
     try environment.put("HTTPS_PROXY", "http://secure-proxy.example:8080/");
     try environment.put("ALL_PROXY", "http://fallback.example:3128/");
+    try environment.put("GITHUB_TOKEN", "test-token");
     try environment.put("PATH", "/usr/bin");
 
     const json = (try serializeProxyEnvironment(std.testing.allocator, &environment)).?;
@@ -1069,6 +1079,7 @@ test "proxy environment serialization preserves standard variable names" {
     try std.testing.expectEqualStrings("http://user:p@ss@proxy.example:443/", parsed.value.http_proxy.?);
     try std.testing.expectEqualStrings("http://secure-proxy.example:8080/", parsed.value.HTTPS_PROXY.?);
     try std.testing.expectEqualStrings("http://fallback.example:3128/", parsed.value.ALL_PROXY.?);
+    try std.testing.expectEqualStrings("test-token", parsed.value.github_token.?);
 }
 
 test "proxy environment serialization is absent without proxy variables" {
@@ -1076,6 +1087,19 @@ test "proxy environment serialization is absent without proxy variables" {
     defer environment.deinit();
     try environment.put("PATH", "/usr/bin");
     try std.testing.expect(try serializeProxyEnvironment(std.testing.allocator, &environment) == null);
+}
+
+test "proxy environment serialization includes a GitHub token on its own" {
+    var environment = std.process.Environ.Map.init(std.testing.allocator);
+    defer environment.deinit();
+    try environment.put("GITHUB_TOKEN", "test-token");
+
+    const json = (try serializeProxyEnvironment(std.testing.allocator, &environment)).?;
+    defer std.testing.allocator.free(json);
+    var parsed = try std.json.parseFromSlice(ProxyEnvironmentFrame, std.testing.allocator, json, .{});
+    defer parsed.deinit();
+
+    try std.testing.expectEqualStrings("test-token", parsed.value.github_token.?);
 }
 
 test "clean cache argv includes the entire AUR cache regardless of repository retention" {

@@ -167,6 +167,15 @@ This also applies to combined-upgrade aliases, including bare `shelly` and
 `shelly upgrade appimage` and `shelly list-updates` checks remain available.
 The one-time `shelly upgrade all --no-appimage` flag also skips AppImages.
 
+### GitHub tokens in the desktop UI
+
+The GTK UI can store an optional GitHub API token in the desktop's Secret
+Service keyring. Open **Settings → GitHub API token** to save or remove it.
+Shelly does not write this token to its settings file. A `GITHUB_TOKEN`
+environment variable takes precedence over the keyring value. The desktop
+session must provide a Secret Service implementation with an unlocked default
+keyring to save or retrieve the stored token.
+
 ## Flatpak checks during combined upgrades
 
 To skip Flatpak update checks and upgrades during `shelly upgrade all`:

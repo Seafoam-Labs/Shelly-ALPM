@@ -291,11 +291,14 @@ pub fn runAsInvokingUser(
         wrapped.asConst(),
     );
     defer context.allocator.free(child_arguments);
+    var child_environment = try invokingUserEnvironment(context, home, identity.uid);
+    defer child_environment.deinit();
 
     // A missing setpriv must abort the handoff. Callers never retry
     // user-owned cache or Flatpak work as root after a failed drop.
     var child = std.process.spawn(context.io, .{
         .argv = child_arguments,
+        .environ_map = &child_environment,
         .stdin = .inherit,
         .stdout = .inherit,
         .stderr = .inherit,
@@ -333,6 +336,69 @@ fn userPathEnvironment(context: *const context_module.RuntimeContext, key: []con
     return std.fmt.allocPrint(context.allocator, "{s}={s}/{s}", .{ key, home, relative });
 }
 
+fn putEnvironmentAssignment(
+    environment: *std.process.Environ.Map,
+    assignment: []const u8,
+) !void {
+    const separator = std.mem.indexOfScalar(u8, assignment, '=') orelse return error.InvalidEnvironmentAssignment;
+    try environment.put(assignment[0..separator], assignment[separator + 1 ..]);
+}
+
+fn invokingUserEnvironment(
+    context: *const context_module.RuntimeContext,
+    home: []const u8,
+    uid: []const u8,
+) !std.process.Environ.Map {
+    var environment = std.process.Environ.Map.init(context.allocator);
+    errdefer environment.deinit();
+
+    try environment.put("PATH", PackageManager.process_runner.build_path.baseline);
+    const home_assignment = try std.fmt.allocPrint(context.allocator, "HOME={s}", .{home});
+    defer context.allocator.free(home_assignment);
+    try putEnvironmentAssignment(&environment, home_assignment);
+
+    const xdg_paths = [_]struct { key: []const u8, relative: []const u8 }{
+        .{ .key = "XDG_CONFIG_HOME", .relative = ".config" },
+        .{ .key = "XDG_DATA_HOME", .relative = ".local/share" },
+        .{ .key = "XDG_CACHE_HOME", .relative = ".cache" },
+        .{ .key = "XDG_BIN_HOME", .relative = ".local/bin" },
+        .{ .key = "XDG_STATE_HOME", .relative = ".local/state" },
+    };
+    for (xdg_paths) |entry| {
+        const assignment = try userPathEnvironment(context, entry.key, home, entry.relative);
+        defer context.allocator.free(assignment);
+        try putEnvironmentAssignment(&environment, assignment);
+    }
+
+    const runtime_assignment = try std.fmt.allocPrint(context.allocator, "XDG_RUNTIME_DIR=/run/user/{s}", .{uid});
+    defer context.allocator.free(runtime_assignment);
+    try putEnvironmentAssignment(&environment, runtime_assignment);
+    const bus_assignment = try std.fmt.allocPrint(context.allocator, "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/{s}/bus", .{uid});
+    defer context.allocator.free(bus_assignment);
+    try putEnvironmentAssignment(&environment, bus_assignment);
+
+    if (context.environment) |source| {
+        const forwarded_variables = [_][]const u8{
+            "http_proxy",
+            "HTTP_PROXY",
+            "https_proxy",
+            "HTTPS_PROXY",
+            "all_proxy",
+            "ALL_PROXY",
+            "no_proxy",
+            "NO_PROXY",
+            "GITHUB_TOKEN",
+            "LANG",
+            "LC_ALL",
+            "LANGUAGE",
+        };
+        for (forwarded_variables) |key| {
+            if (source.get(key)) |value| try environment.put(key, value);
+        }
+    }
+    return environment;
+}
+
 test "XDG caller environment preserves absolute overrides and proxy settings" {
     var tc: @import("../commands/test_support.zig").TestContext = undefined;
     tc.init();
@@ -353,6 +419,26 @@ test "XDG caller environment preserves absolute overrides and proxy settings" {
     const expected = [_][]const u8{ "XDG_STATE_HOME=/tmp/custom state", "https_proxy=http://proxy.invalid:8080", "/usr/bin/shelly", "backup", "--export", "--json" };
     try std.testing.expectEqual(expected.len, wrapped.argv.len);
     for (expected, wrapped.argv) |wanted, actual| try std.testing.expectEqualStrings(wanted, actual);
+}
+
+test "invoking user environment forwards GitHub token without unrelated variables" {
+    var tc: @import("../commands/test_support.zig").TestContext = undefined;
+    tc.init();
+    defer tc.deinit();
+    var source = std.process.Environ.Map.init(tc.context.allocator);
+    defer source.deinit();
+    try source.put("GITHUB_TOKEN", "test-token");
+    try source.put("HTTPS_PROXY", "http://proxy.invalid:8080");
+    try source.put("UNRELATED_SECRET", "must-not-forward");
+    tc.context.environment = &source;
+
+    var child = try invokingUserEnvironment(&tc.context, "/home/tester", "1000");
+    defer child.deinit();
+    try std.testing.expectEqualStrings("test-token", child.get("GITHUB_TOKEN").?);
+    try std.testing.expectEqualStrings("http://proxy.invalid:8080", child.get("HTTPS_PROXY").?);
+    try std.testing.expect(child.get("UNRELATED_SECRET") == null);
+    try std.testing.expectEqualStrings("/home/tester", child.get("HOME").?);
+    try std.testing.expectEqualStrings("unix:path=/run/user/1000/bus", child.get("DBUS_SESSION_BUS_ADDRESS").?);
 }
 
 /// Null means execution is already under the caller's identity, including
@@ -426,11 +512,14 @@ pub fn runAsInvokingUserCapture(
         wrapped.asConst(),
     );
     defer context.allocator.free(child_arguments);
+    var child_environment = try invokingUserEnvironment(context, home, identity.uid);
+    defer child_environment.deinit();
 
     // As in runAsInvokingUser: a failed credential drop is terminal and must
     // never degrade into root-owned cache or Flatpak work.
     var child = std.process.spawn(context.io, .{
         .argv = child_arguments,
+        .environ_map = &child_environment,
         .stdin = .inherit,
         .stdout = .pipe,
         .stderr = .inherit,
@@ -541,7 +630,7 @@ fn buildInvokingUserArguments(
     bus_environment: []const u8,
     arguments: []const []const u8,
 ) ![]const []const u8 {
-    const result = try allocator.alloc([]const u8, arguments.len + 16);
+    const result = try allocator.alloc([]const u8, arguments.len + 15);
     errdefer allocator.free(result);
     // setpriv drops to the caller's uid and gid and applies supplementary
     // groups through initgroups without opening a PAM session, so the child
@@ -558,17 +647,16 @@ fn buildInvokingUserArguments(
     result[3] = "--init-groups";
     result[4] = "--";
     result[5] = "/usr/bin/env";
-    result[6] = "-i";
-    result[7] = home_environment;
-    result[8] = config_environment;
-    result[9] = data_environment;
-    result[10] = cache_environment;
-    result[11] = bin_environment;
-    result[12] = runtime_environment;
-    result[13] = bus_environment;
-    result[14] = "PATH=" ++ PackageManager.process_runner.build_path.baseline;
-    result[15] = executable;
-    @memcpy(result[16..], arguments);
+    result[6] = home_environment;
+    result[7] = config_environment;
+    result[8] = data_environment;
+    result[9] = cache_environment;
+    result[10] = bin_environment;
+    result[11] = runtime_environment;
+    result[12] = bus_environment;
+    result[13] = "PATH=" ++ PackageManager.process_runner.build_path.baseline;
+    result[14] = executable;
+    @memcpy(result[15..], arguments);
     return result;
 }
 
@@ -831,7 +919,6 @@ test "calling-user arguments use setpriv with a clean invoking-user environment"
         "--init-groups",
         "--",
         "/usr/bin/env",
-        "-i",
         "HOME=/home/tester",
         "XDG_CONFIG_HOME=/home/tester/.config",
         "XDG_DATA_HOME=/home/tester/.local/share",
