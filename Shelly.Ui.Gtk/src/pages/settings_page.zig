@@ -30,6 +30,7 @@ const AurWarningDialog = @import("../dialog/page/aur_warning.zig").AurWarningDia
 const translations = @import("../helpers/translations.zig");
 const a11y = @import("../helpers/a11y.zig");
 const features = @import("../services/build_features.zig");
+const github_token_store = @import("../services/github_token_store.zig");
 
 pub const SettingsPage = ShellySettingsPage;
 
@@ -110,6 +111,11 @@ pub const ShellySettingsPage = extern struct {
         appimage_upgrade_all_recheck_switch: *gtk.Switch,
         appimage_install_path_box: *gtk.Box,
         appimage_install_path_button: *gtk.Button,
+        github_token_box: *gtk.Box,
+        github_token_entry: *gtk.Entry,
+        github_token_status: *gtk.Label,
+        github_token_save_button: *gtk.Button,
+        github_token_clear_button: *gtk.Button,
 
         // Bottom action bar
         save_button: *gtk.Button,
@@ -172,6 +178,8 @@ pub const ShellySettingsPage = extern struct {
         _ = gtk.Button.signals.clicked.connect(p.tray_updates_icon_clear_button, *Self, &onClearTrayUpdatesIcon, self, .{});
 
         _ = gtk.Button.signals.clicked.connect(p.appimage_install_path_button, *Self, &onPickAppImageInstallPath, self, .{});
+        _ = gtk.Button.signals.clicked.connect(p.github_token_save_button, *Self, &onSaveGitHubToken, self, .{});
+        _ = gtk.Button.signals.clicked.connect(p.github_token_clear_button, *Self, &onClearGitHubToken, self, .{});
 
         _ = gobject.Object.signals.notify.connect(
             p.daily_schedule.as(gobject.Object),
@@ -387,6 +395,7 @@ pub const ShellySettingsPage = extern struct {
 
         populatePageDropdown(p, cfg);
         applyConfig(p, cfg);
+        updateGitHubTokenStatus(p);
 
         applyScheduleVisibility(p);
         applyTrayVisibility(p);
@@ -408,6 +417,51 @@ pub const ShellySettingsPage = extern struct {
             return;
         };
         self.priv().toast.show(.success, translations._("Settings saved"));
+    }
+
+    fn onSaveGitHubToken(_: *gtk.Button, self: *Self) callconv(.c) void {
+        const p = self.priv();
+        const token = std.mem.span(gtk.Editable.getText(p.github_token_entry.as(gtk.Editable)));
+        if (token.len == 0) {
+            p.toast.show(.@"error", translations._("Enter a GitHub token before saving"));
+            return;
+        }
+
+        github_token_store.store(token) catch |err| {
+            std.log.err("Could not save the GitHub token to the system keyring. Technical details: {s}", .{@errorName(err)});
+            p.toast.show(.@"error", translations._("Could not save the GitHub token to the system keyring"));
+            return;
+        };
+        if (!runtime.github_token_from_environment) {
+            runtime.environ_map.put("GITHUB_TOKEN", token) catch |err| {
+                std.log.err("The GitHub token was saved, but could not be made available to this Shelly session. Technical details: {s}", .{@errorName(err)});
+                p.toast.show(.@"error", translations._("Token saved, but it will be available after restarting Shelly"));
+                return;
+            };
+            runtime.github_token_from_secret_store = true;
+        }
+        runtime.github_token_store_load_failed = false;
+
+        gtk.Editable.setText(p.github_token_entry.as(gtk.Editable), "");
+        updateGitHubTokenStatus(p);
+        p.toast.show(.success, translations._("GitHub token saved securely"));
+    }
+
+    fn onClearGitHubToken(_: *gtk.Button, self: *Self) callconv(.c) void {
+        const p = self.priv();
+        github_token_store.clear() catch |err| {
+            std.log.err("Could not remove the GitHub token from the system keyring. Technical details: {s}", .{@errorName(err)});
+            p.toast.show(.@"error", translations._("Could not remove the GitHub token from the system keyring"));
+            return;
+        };
+
+        if (!runtime.github_token_from_environment) {
+            _ = runtime.environ_map.swapRemove("GITHUB_TOKEN");
+            runtime.github_token_from_secret_store = false;
+        }
+        runtime.github_token_store_load_failed = false;
+        updateGitHubTokenStatus(p);
+        p.toast.show(.success, translations._("Saved GitHub token removed"));
     }
 
     fn applyIconsToggle(previous: bool, current: bool) void {
@@ -1260,6 +1314,11 @@ pub const ShellySettingsPage = extern struct {
         .{ "appimage_upgrade_all_recheck_switch", @offsetOf(Private, "appimage_upgrade_all_recheck_switch") },
         .{ "appimage_install_path_box", @offsetOf(Private, "appimage_install_path_box") },
         .{ "appimage_install_path_button", @offsetOf(Private, "appimage_install_path_button") },
+        .{ "github_token_box", @offsetOf(Private, "github_token_box") },
+        .{ "github_token_entry", @offsetOf(Private, "github_token_entry") },
+        .{ "github_token_status", @offsetOf(Private, "github_token_status") },
+        .{ "github_token_save_button", @offsetOf(Private, "github_token_save_button") },
+        .{ "github_token_clear_button", @offsetOf(Private, "github_token_clear_button") },
 
         // Bottom action bar
         .{ "save_button", @offsetOf(Private, "save_button") },
@@ -1540,6 +1599,7 @@ fn hideUnbuiltRows(p: *ShellySettingsPage.Private) void {
         hideSettingsRow(p.appimage_switch);
         gtk.Widget.setVisible(p.appimage_install_path_box.as(gtk.Widget), @intFromBool(false));
         hideSettingsRow(p.appimage_upgrade_all_recheck_switch);
+        gtk.Widget.setVisible(p.github_token_box.as(gtk.Widget), @intFromBool(false));
     }
     if (!features.builtWithShellySearch) hideSettingsRow(p.shelly_search_switch);
     if (!features.builtWithFwupd) hideSettingsRow(p.fwupd_switch);
@@ -1687,6 +1747,18 @@ fn applyAppImageInstallPath(p: *ShellySettingsPage.Private) void {
     defer if (path) |value| allocator.free(value);
 
     setButtonLabel(p.appimage_install_path_button, allocator, path orelse "", translations._("Select Directory"));
+}
+
+fn updateGitHubTokenStatus(p: *ShellySettingsPage.Private) void {
+    const message = if (runtime.github_token_from_environment)
+        translations._("Using GITHUB_TOKEN from the desktop environment")
+    else if (runtime.github_token_from_secret_store)
+        translations._("A GitHub token is saved in the system keyring")
+    else if (runtime.github_token_store_load_failed)
+        translations._("Could not read the system keyring")
+    else
+        translations._("No GitHub token is saved");
+    gtk.Label.setLabel(p.github_token_status, message);
 }
 
 fn setButtonLabel(b: *gtk.Button, allocator: std.mem.Allocator, value: []const u8, default: [:0]const u8) void {
