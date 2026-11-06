@@ -1039,6 +1039,12 @@ test "appimage install argv relies on the CLI config for the install path" {
     try std.testing.expectEqualSlices([]const u8, &.{ "install", "appimage", "/tmp/NiceApp.AppImage" }, argv);
 }
 
+test "appimage upgrade argv invokes the CLI update check" {
+    const argv = try ShellyCommands.upgrade_appimages(std.testing.allocator);
+    defer std.testing.allocator.free(argv);
+    try std.testing.expectEqualSlices([]const u8, &.{ "upgrade", "appimage" }, argv);
+}
+
 test "proxy environment serialization preserves standard variable names" {
     var environment = std.process.Environ.Map.init(std.testing.allocator);
     defer environment.deinit();
