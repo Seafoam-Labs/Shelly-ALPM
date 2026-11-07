@@ -318,6 +318,7 @@ pub fn selectedAur(self: *const Model) ?*const AurPackage {
 
 pub fn onAurPreviewClick(ptr: ?*anyopaque, ctx: *vxfw.EventContext) anyerror!void {
     const self: *Model = @ptrCast(@alignCast(ptr.?));
+    if (self.operation_state.install_job != null or operation_model.operationPrompt(self) != null or self.operation_state.review_prompt != null) return;
     if (selectedAur(self)) |pkg| try operation_model.openPkgbuild(self, ctx, pkg.Name);
     ctx.consumeAndRedraw();
 }
@@ -888,4 +889,109 @@ test "aur input preserves search editing and delegates global navigation" {
     // A reused event context must not make the handler report a global key handled.
     try std.testing.expect(!try handleKey(model, &ctx, commands.bindings.next_tab, true));
     try std.testing.expect(model.aur_state.aur_list_active);
+}
+
+const PreviewButtonTest = struct {
+    fn find(surface: vxfw.Surface, target: *anyopaque, row: i32, col: i32) ?vxfw.Point {
+        if (surface.widget.userdata == target) return .{ .row = @intCast(row), .col = @intCast(col) };
+        for (surface.children) |child| {
+            if (find(child.surface, target, row + child.origin.row, col + child.origin.col)) |point| return point;
+        }
+        return null;
+    }
+
+    fn click(model: *Model, arena: Allocator, ctx: *vxfw.EventContext) !void {
+        const surface = try model.widget().draw(.{ .arena = arena, .min = .{}, .max = .{ .width = 120, .height = 40 }, .cell_size = .{ .width = 10, .height = 20 } });
+        const button = &model.aur_state.aur_preview_button;
+        const point = find(surface, button, 0, 0) orelse return error.ButtonNotDrawn;
+        var hits: std.ArrayList(vxfw.HitResult) = .empty;
+        try surface.hitTest(arena, &hits, point);
+        const top = hits.items[hits.items.len - 1];
+        try std.testing.expect(top.widget.userdata == @as(*anyopaque, button));
+        for ([_]vaxis.Mouse.Type{ .press, .release }) |event_type| {
+            try top.widget.handleEvent(ctx, .{ .mouse = .{ .button = .left, .type = event_type, .col = @intCast(top.local.col), .row = @intCast(top.local.row), .mods = .{} } });
+        }
+    }
+
+    fn setup(model: *Model, packages: []const AurPackage) !void {
+        model.active = .aur;
+        model.aur_state.aur_packages = packages;
+        try rebuildAurFilter(model);
+        // a pending fetch keeps the test from starting a subprocess.
+        const pending = try std.testing.allocator.create(PkgbuildJob);
+        pending.* = .{ .name = try std.testing.allocator.dupe(u8, "demo") };
+        model.operation_state.pkgbuild_job = pending;
+    }
+};
+
+test "aur preview clicks preserve operation prompts and their next review" {
+    vxfw.DrawContext.init(.unicode);
+    const packages = [_]AurPackage{.{ .Name = "demo", .Description = "A description", .Version = "1" }};
+    for ([_]SudoPrompt.State{ .entering, .running }) |state| {
+        const model = try Model.init(std.testing.allocator);
+        defer model.deinit();
+        try PreviewButtonTest.setup(model, &packages);
+        const prompt = try std.testing.allocator.create(SudoPrompt);
+        prompt.* = .{ .name = try std.testing.allocator.dupe(u8, "demo"), .backend = .aur, .action = .upgrade, .state = state };
+        defer {
+            model.overlay = null;
+            model.operation_state.review_prompt = null;
+            prompt.deinit(std.testing.allocator);
+        }
+        model.overlay = .{ .sudo = prompt };
+        var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+        defer arena.deinit();
+        var ctx: vxfw.EventContext = .{ .io = std.testing.io, .alloc = std.testing.allocator, .cmds = .empty };
+        defer ctx.cmds.deinit(std.testing.allocator);
+        try PreviewButtonTest.click(model, arena.allocator(), &ctx);
+        try std.testing.expect(model.overlay.? == .sudo);
+        try std.testing.expect(model.overlay.?.sudo == prompt);
+        const question = try shelly_operation.decodeJson(std.testing.allocator,
+            \\{"$kind":"q.pkgbuilddiff","QuestionId":"1","PackageName":"demo","OldPkgbuild":"pkgver=1","NewPkgbuild":"pkgver=2","Warnings":[]}
+        );
+        operation_model.showOperationQuestion(model, question) catch |err| {
+            var owned = question;
+            owned.deinit();
+            return err;
+        };
+        const document = model.operation_state.pkgbuild_document.?.lines.ptr;
+        try onAurPreviewClick(model, &ctx);
+        try std.testing.expect(model.operation_state.review_prompt.? == prompt);
+        try std.testing.expect(model.operation_state.pkgbuild_document.?.lines.ptr == document);
+    }
+}
+
+test "aur preview clicks do not replace an active worker's overlay" {
+    const packages = [_]AurPackage{.{ .Name = "demo" }};
+    const model = try Model.init(std.testing.allocator);
+    defer model.deinit();
+    try PreviewButtonTest.setup(model, &packages);
+    var job: shelly_operation.Operation = .{ .arena = .init(std.testing.allocator), .request = undefined };
+    defer job.arena.deinit();
+    model.operation_state.install_job = &job;
+    defer model.operation_state.install_job = null;
+    model.overlay = .{ .aur = &packages[0] };
+    var ctx: vxfw.EventContext = .{ .io = std.testing.io, .alloc = std.testing.allocator, .cmds = .empty };
+    defer ctx.cmds.deinit(std.testing.allocator);
+    try onAurPreviewClick(model, &ctx);
+    try std.testing.expect(model.overlay.? == .aur);
+    try std.testing.expectEqualStrings("", model.operation_state.pkgbuild_name);
+}
+
+test "aur preview clicks still open previews without an operation" {
+    vxfw.DrawContext.init(.unicode);
+    const packages = [_]AurPackage{.{ .Name = "demo", .Description = "A description", .Version = "1" }};
+    for ([_]?coordinator.Overlay{ null, .{ .aur = &packages[0] } }) |overlay| {
+        const model = try Model.init(std.testing.allocator);
+        defer model.deinit();
+        try PreviewButtonTest.setup(model, &packages);
+        model.overlay = overlay;
+        var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+        defer arena.deinit();
+        var ctx: vxfw.EventContext = .{ .io = std.testing.io, .alloc = std.testing.allocator, .cmds = .empty };
+        defer ctx.cmds.deinit(std.testing.allocator);
+        try PreviewButtonTest.click(model, arena.allocator(), &ctx);
+        try std.testing.expect(model.overlay.? == .pkgbuild);
+        try std.testing.expectEqualStrings("demo", model.operation_state.pkgbuild_name);
+    }
 }
