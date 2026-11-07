@@ -482,6 +482,8 @@ fn operationArgv(alloc: std.mem.Allocator, request: OperationRequest) ![][]const
         if (target.branch.len > 0) try argv.appendSlice(alloc, &.{ "--branch", target.branch });
         if (target.kind == .runtime) try argv.append(alloc, "--runtime");
     }
+    if (isFlatpak(request) and request.action == .remove)
+        try argv.append(alloc, if (request.flatpak.?.scope == .user) "--user" else "--system");
     if (combined(request)) {
         try argv.append(alloc, "--no-appimage");
         if (!request.include_aur) try argv.append(alloc, "--no-aur");
@@ -1379,7 +1381,7 @@ test "operation questions reject stale duplicate and wrong-kind answers" {
     try std.testing.expectError(error.NoPendingQuestion, operation.sendAnswer(threaded.io(), "1", .{ .yes_no = true }));
 }
 
-test "operation Flatpak arguments preserve install scope and keep user and upgrade processes unprivileged" {
+test "operation Flatpak arguments preserve install and removal scope and keep user and upgrade processes unprivileged" {
     const allocator = std.testing.allocator;
     var env: std.process.Environ.Map = .init(allocator);
     defer env.deinit();
@@ -1405,9 +1407,15 @@ test "operation Flatpak arguments preserve install scope and keep user and upgra
     request.flatpak.?.scope = .user;
     const remove = try operationArgv(allocator, request);
     defer allocator.free(remove);
-    const expected_remove = [_][]const u8{ "shelly", "remove", "flatpak", "org.example.App", "--ui-mode" };
+    const expected_remove = [_][]const u8{ "shelly", "remove", "flatpak", "org.example.App", "--user", "--ui-mode" };
     try std.testing.expectEqual(expected_remove.len, remove.len);
     for (expected_remove, remove) |want, actual| try std.testing.expectEqualStrings(want, actual);
+    request.flatpak.?.scope = .system;
+    const system_remove = try operationArgv(allocator, request);
+    defer allocator.free(system_remove);
+    const expected_system_remove = [_][]const u8{ "sudo", "shelly", "remove", "flatpak", "org.example.App", "--system", "--ui-mode" };
+    try std.testing.expectEqual(expected_system_remove.len, system_remove.len);
+    for (expected_system_remove, system_remove) |want, actual| try std.testing.expectEqualStrings(want, actual);
     request.action = .upgrade;
     request.flatpak = null;
     const upgrade = try operationArgv(allocator, request);
