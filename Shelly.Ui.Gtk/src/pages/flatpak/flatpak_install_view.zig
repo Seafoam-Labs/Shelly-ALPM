@@ -445,7 +445,7 @@ pub const FlatpakInstallView = extern struct {
         const p = self.priv();
         const pkg = p.selected_app orelse return;
 
-        const argv = ShellyCommands.removeFlatpak(std.heap.c_allocator, pkg.getId(), remove_config) catch {
+        const argv = ShellyCommands.removeFlatpak(std.heap.c_allocator, pkg.getId(), null, remove_config) catch {
             return;
         };
         defer std.heap.c_allocator.free(argv);

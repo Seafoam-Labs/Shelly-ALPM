@@ -336,11 +336,13 @@ pub const ShellyCommands = struct {
         return argv.toOwnedSlice(alloc);
     }
 
-    pub fn removeFlatpak(alloc: std.mem.Allocator, names: []const u8, config_removal: bool) ![]const []const u8 {
+    pub fn removeFlatpak(alloc: std.mem.Allocator, names: []const u8, scope: ?Scope, config_removal: bool) ![]const []const u8 {
         var argv: std.ArrayListUnmanaged([]const u8) = .empty;
+        errdefer argv.deinit(alloc);
         try argv.append(alloc, "remove");
         try argv.append(alloc, "flatpak");
         if (names.len > 0) try argv.append(alloc, names);
+        if (scope) |level| try argv.append(alloc, if (level == .user) "--user" else "--system");
         if (config_removal) try argv.append(alloc, "--remove-config");
         try argv.append(alloc, "--remove-unused");
         return argv.toOwnedSlice(alloc);
@@ -1005,6 +1007,17 @@ test "progress percentages are clamped to the GTK protocol range" {
     try std.testing.expectEqual(@as(i64, 37), clampPercent(37));
     try std.testing.expectEqual(@as(i64, 100), clampPercent(100));
     try std.testing.expectEqual(@as(i64, 100), clampPercent(101));
+}
+
+test "flatpak removal argv preserves the selected installation" {
+    for ([_]Scope{ .user, .system }) |scope| {
+        const argv = try ShellyCommands.removeFlatpak(std.testing.allocator, "org.example.App", scope, false);
+        defer std.testing.allocator.free(argv);
+        try std.testing.expectEqualSlices([]const u8, &.{ "remove", "flatpak", "org.example.App", if (scope == .user) "--user" else "--system", "--remove-unused" }, argv);
+    }
+    const automatic = try ShellyCommands.removeFlatpak(std.testing.allocator, "org.example.App", null, true);
+    defer std.testing.allocator.free(automatic);
+    try std.testing.expectEqualSlices([]const u8, &.{ "remove", "flatpak", "org.example.App", "--remove-config", "--remove-unused" }, automatic);
 }
 
 test "flatpak install argv adds --user only for user scope" {
