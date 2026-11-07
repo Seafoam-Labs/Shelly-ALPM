@@ -16,7 +16,6 @@ pub fn build(b: *std.Build) void {
     // between Debug, ReleaseSafe, ReleaseFast, and ReleaseSmall. Here we do not
     // set a preferred release mode, allowing the user to decide how to optimize.
     const optimize = b.standardOptimizeOption(.{});
-    const enable_libalpm = b.option(bool, "libalpm", "Include libalpm alongside RLPM") orelse true;
     const diagnostics = b.dependency("shelly_diagnostics", .{ .target = target, .optimize = optimize }).module("diagnostics");
     // It's also possible to define more custom flags to toggle optional features
     // of this build script using `b.option()`. All defined flags (including
@@ -43,6 +42,14 @@ pub fn build(b: *std.Build) void {
         .target = target,
     });
     mod.addImport("diagnostics", diagnostics);
+    mod.link_libc = true;
+    const cli_options = b.addOptions();
+    cli_options.addOption([]const u8, "binary", b.option([]const u8, "shelly-bin", "Shelly CLI executable (defaults to the checkout CLI in Debug, PATH in release builds)") orelse
+        if (optimize == .debug)
+            b.root.joinString(b.allocator, "../Shelly.Cli.Zig/zig-out/bin/shelly") catch @panic("Could not resolve development Shelly CLI path")
+        else
+            "shelly");
+    mod.addOptions("cli_options", cli_options);
 
     // Here we define an executable. An executable needs to have a root module
     // which needs to expose a `main` function. While we could add a main function
@@ -62,6 +69,8 @@ pub fn build(b: *std.Build) void {
     // don't need and to put everything under a single module.
     const exe = b.addExecutable(.{
         .name = "Shelly_Tui",
+        .use_lld = true,
+        .use_llvm = true,
         .root_module = b.createModule(.{
             // b.createModule defines a new module just like b.addModule but,
             // unlike b.addModule, it does not expose the module to consumers of
@@ -93,17 +102,11 @@ pub fn build(b: *std.Build) void {
     });
     const vaxis_module = vaxis.module("vaxis");
 
+    const http = b.dependency("shelly_http", .{ .target = target, .optimize = optimize }).module("ShellyHttp");
+    mod.addImport("ShellyHttp", http);
+    exe.root_module.addImport("ShellyHttp", http);
     mod.addImport("vaxis", vaxis_module);
     exe.root_module.addImport("vaxis", vaxis_module);
-
-    const package_manager_dependency = b.dependency("package_manager", .{
-        .libalpm = enable_libalpm,
-        .target = target,
-        .optimize = optimize,
-    });
-    const package_manager = package_manager_dependency.module("PackageManager");
-    mod.addImport("PackageManager", package_manager);
-    exe.root_module.addImport("PackageManager", package_manager);
 
     // This declares intent for the executable to be installed into the
     // install prefix when running `zig build` (i.e. when executing the default
@@ -135,11 +138,23 @@ pub fn build(b: *std.Build) void {
     // command itself, like this: `zig build run -- arg1 arg2 etc`
     run_cmd.addPassthruArgs();
 
-    // Creates an executable that will run `test` blocks from the provided module.
-    // Here `mod` needs to define a target, which is why earlier we made sure to
-    // set the releative field.
+    // The library root explicitly registers all first-party test modules.
+    const auth_fixture = b.addExecutable(.{
+        .name = "auth-sudo-fixture",
+        .root_module = b.createModule(.{ .root_source_file = b.path("tests/auth_sudo_fixture.zig"), .target = target, .optimize = optimize }),
+    });
+    const auth_test_options = b.addOptions();
+    auth_test_options.addOptionPath("fixture", auth_fixture.getEmittedBin());
+    auth_test_options.addOptionPath("launcher", exe.getEmittedBin());
+    const test_module = b.createModule(.{ .root_source_file = b.path("src/root.zig"), .target = target, .optimize = optimize });
+    test_module.link_libc = true;
+    var test_imports = mod.import_table.iterator();
+    while (test_imports.next()) |entry| test_module.addImport(entry.key_ptr.*, entry.value_ptr.*);
+    test_module.addOptions("auth_test_options", auth_test_options);
     const mod_tests = b.addTest(.{
-        .root_module = mod,
+        .use_lld = true,
+        .use_llvm = true,
+        .root_module = test_module,
     });
 
     // A run step that will run the test executable.
@@ -149,6 +164,8 @@ pub fn build(b: *std.Build) void {
     // root module. Note that test executables only test one module at a time,
     // hence why we have to create two separate ones.
     const exe_tests = b.addTest(.{
+        .use_lld = true,
+        .use_llvm = true,
         .root_module = exe.root_module,
     });
 
@@ -158,7 +175,7 @@ pub fn build(b: *std.Build) void {
     // A top level step for running all tests. dependOn can be called multiple
     // times and since the two run steps do not depend on one another, this will
     // make the two of them run in parallel.
-    const test_step = b.step("test", "Run tests");
+    const test_step = b.step("test", "Run all first-party unit tests");
     test_step.dependOn(&run_mod_tests.step);
     test_step.dependOn(&run_exe_tests.step);
 

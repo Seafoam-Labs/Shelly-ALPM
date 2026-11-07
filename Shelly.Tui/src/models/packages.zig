@@ -26,6 +26,10 @@ pub const Package = struct {
 /// AUR package as emitted by `shelly search aur --ui-mode`. Field names
 /// mirror the CLI's PascalCase JSON keys, not the AUR RPC names.
 pub const AurPackage = struct {
+    /// Frontend-only source identity, populated from the CLI configuration.
+    AurBaseUrl: []const u8 = "https://aur.archlinux.org",
+    /// Local state populated from the installed-package query, not AUR search.
+    Installed: bool = false,
     Id: i64 = 0,
     Name: []const u8 = "",
     PackageBaseId: i64 = 0,
