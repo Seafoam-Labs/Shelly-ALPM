@@ -315,7 +315,7 @@ pub const View = struct {
         const width = size.width;
         const height = size.height;
         if (width < 12 or height < 5) {
-            var small: vxfw.Text = .{ .text = "Enlarge the pane to read PKGBUILD content." };
+            var small: vxfw.Text = .{ .text = "Enlarge the pane to view this content." };
             return small.draw(ctx);
         }
         const inner_width = width - 2;
