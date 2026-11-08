@@ -80,6 +80,7 @@ pub fn applySettings(self: *Model, saved: Settings) void {
         aur_model.clearAurSelection(self);
         self.aur_state.catalog_checked = false;
         self.aur_state.catalog_page = 1;
+        self.aur_state.catalog_failed_page = null;
         self.aur_state.catalog_total_pages = 0;
         self.operation_state.pkgbuild_generation +%= 1;
         if (self.overlay) |overlay| {

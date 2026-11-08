@@ -37,6 +37,7 @@ pub const State = struct {
     aur_failed: bool = false,
     catalog_checked: bool = false,
     catalog_page: u32 = 1,
+    catalog_failed_page: ?u32 = null,
     catalog_total_pages: u32 = 0,
     aur_installed_only: bool = false,
     aur_thread: ?std.Thread = null,
@@ -149,6 +150,10 @@ pub fn ensureAur(self: *Model, ctx: *vxfw.EventContext) !void {
         try startAurSearch(self, ctx, "");
 }
 
+fn catalogRefreshPage(self: *const Model) u32 {
+    return self.aur_state.catalog_failed_page orelse self.aur_state.catalog_page;
+}
+
 pub fn changeCatalogPage(self: *Model, ctx: *vxfw.EventContext, next: bool) !void {
     if (!catalogActive(self) or self.aur_state.aur_job != null or self.operation_state.install_job != null) return;
     const page = self.aur_state.catalog_page;
@@ -177,6 +182,7 @@ fn startAurRequest(self: *Model, ctx: *vxfw.EventContext, query: []const u8, pag
     self.aur_state.aur_job = job;
 
     self.aur_state.aur_thread = thread;
+    self.aur_state.catalog_failed_page = null;
     if (job.catalog_page > 0) self.aur_state.catalog_checked = true;
 }
 
@@ -265,6 +271,7 @@ pub fn pollAurSearch(self: *Model) !bool {
     self.aur_state.aur_parsed = null;
     self.aur_state.aur_packages = &.{};
     self.aur_state.aur_failed = failed;
+    self.aur_state.catalog_failed_page = if (failed and page > 0) page else null;
     if (parsed) |p| {
         if (page > 0) {
             self.aur_state.catalog_page = page;
@@ -466,7 +473,7 @@ pub fn handleKey(self: *Model, ctx: *vxfw.EventContext, input: vaxis.Key, global
         return true;
     }
     if ((self.aur_state.aur_installed_only or catalogActive(self)) and commands.refreshesList(key)) {
-        if (self.aur_state.aur_job == null) try startAurRequest(self, ctx, "", self.aur_state.catalog_page);
+        if (self.aur_state.aur_job == null) try startAurRequest(self, ctx, "", catalogRefreshPage(self));
         ctx.consumeAndRedraw();
         return true;
     }
@@ -1077,6 +1084,8 @@ test "Atoll catalog pages keep owned selections and expose bounded contextual pa
         model.aur_state.aur_thread = try std.Thread.spawn(.{}, Worker.finish, .{});
         try std.testing.expect(!try pollAurSearch(model));
         try std.testing.expectEqual(page, model.aur_state.catalog_page);
+        try std.testing.expect(model.aur_state.catalog_failed_page == null);
+        try std.testing.expectEqual(page, catalogRefreshPage(model));
         const context = model.commandContext();
         try std.testing.expect(context.catalog_available);
         try std.testing.expectEqual(page > 1, context.catalog_previous);
@@ -1115,6 +1124,8 @@ test "Atoll paging ignores out of range requests and repeated input during a fet
     try std.testing.expect(!try pollAurSearch(model));
     try std.testing.expect(model.aur_state.aur_failed);
     try std.testing.expectEqual(@as(u32, 1), model.aur_state.catalog_page);
+    try std.testing.expectEqual(@as(?u32, 2), model.aur_state.catalog_failed_page);
+    try std.testing.expectEqual(@as(u32, 2), catalogRefreshPage(model));
     model.settings_state.settings.atoll_aur_enabled = false;
     try changeCatalogPage(model, &ctx, true);
     try std.testing.expect(model.aur_state.aur_job == null);
