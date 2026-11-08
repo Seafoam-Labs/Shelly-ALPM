@@ -51,6 +51,7 @@ pub const InstalledApplication = struct {
     kind: RefKind,
     installed_size: u64,
     scope: Scope,
+    installation_id: ?[]u8 = null,
     eol: ?[]u8 = null,
     eol_rebase: ?[]u8 = null,
 
@@ -81,6 +82,7 @@ pub const InstalledApplication = struct {
         errdefer if (eol) |text| allocator.free(text);
         const eol_rebase = if (value.eol_rebase) |text| try allocator.dupe(u8, text) else null;
         errdefer if (eol_rebase) |text| allocator.free(text);
+        const installation_id = if (value.installation_id) |text| try allocator.dupe(u8, text) else null;
         return .{
             .id = id,
             .name = name,
@@ -93,6 +95,7 @@ pub const InstalledApplication = struct {
             .kind = .fromWire(value.kind),
             .installed_size = value.installed_size,
             .scope = .fromWire(value.scope),
+            .installation_id = installation_id,
             .eol = eol,
             .eol_rebase = eol_rebase,
         };
@@ -110,6 +113,7 @@ pub const InstalledApplication = struct {
         allocator.free(self.version);
         allocator.free(self.latest_commit);
         allocator.free(self.origin);
+        if (self.installation_id) |value| allocator.free(value);
         if (self.eol) |value| allocator.free(value);
         if (self.eol_rebase) |value| allocator.free(value);
         self.* = undefined;

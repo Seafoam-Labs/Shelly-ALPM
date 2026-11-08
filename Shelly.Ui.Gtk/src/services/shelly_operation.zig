@@ -337,12 +337,17 @@ pub const ShellyCommands = struct {
     }
 
     pub fn removeFlatpak(alloc: std.mem.Allocator, names: []const u8, scope: ?Scope, config_removal: bool) ![]const []const u8 {
+        return removeFlatpakFromInstallation(alloc, names, scope, "", config_removal);
+    }
+
+    pub fn removeFlatpakFromInstallation(alloc: std.mem.Allocator, names: []const u8, scope: ?Scope, installation_id: []const u8, config_removal: bool) ![]const []const u8 {
         var argv: std.ArrayListUnmanaged([]const u8) = .empty;
         errdefer argv.deinit(alloc);
         try argv.append(alloc, "remove");
         try argv.append(alloc, "flatpak");
         if (names.len > 0) try argv.append(alloc, names);
         if (scope) |level| try argv.append(alloc, if (level == .user) "--user" else "--system");
+        if (installation_id.len > 0) try argv.appendSlice(alloc, &.{ "--installation", installation_id });
         if (config_removal) try argv.append(alloc, "--remove-config");
         try argv.append(alloc, "--remove-unused");
         return argv.toOwnedSlice(alloc);
@@ -1007,6 +1012,12 @@ test "progress percentages are clamped to the GTK protocol range" {
     try std.testing.expectEqual(@as(i64, 37), clampPercent(37));
     try std.testing.expectEqual(@as(i64, 100), clampPercent(100));
     try std.testing.expectEqual(@as(i64, 100), clampPercent(101));
+}
+
+test "flatpak removal argv preserves the exact reference and named installation" {
+    const argv = try ShellyCommands.removeFlatpakFromInstallation(std.testing.allocator, "runtime/org.example.Platform/aarch64/24.08", .system, "extra", false);
+    defer std.testing.allocator.free(argv);
+    try std.testing.expectEqualSlices([]const u8, &.{ "remove", "flatpak", "runtime/org.example.Platform/aarch64/24.08", "--system", "--installation", "extra", "--remove-unused" }, argv);
 }
 
 test "flatpak removal argv preserves the selected installation" {

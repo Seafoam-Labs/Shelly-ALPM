@@ -16,7 +16,7 @@ pub const Row = union(enum) {
     pub fn matches(self: Row, query: []const u8) bool {
         return switch (self) {
             .catalog => |app| contains(app.Id, query) or contains(app.Name, query) or contains(app.Summary, query),
-            .installed => |app| contains(app.Id, query) or contains(app.Name, query) or contains(app.Summary, query) or contains(app.Remote, query),
+            .installed => |app| contains(app.Id, query) or contains(app.Name, query) or contains(app.Summary, query) or contains(app.Remote, query) or contains(app.InstallationId, query),
         };
     }
 
@@ -26,7 +26,7 @@ pub const Row = union(enum) {
             .installed => |app| other == .installed and app.InstallLevel == other.installed.InstallLevel and
                 app.Kind == other.installed.Kind and std.mem.eql(u8, app.Id, other.installed.Id) and
                 std.mem.eql(u8, app.Arch, other.installed.Arch) and std.mem.eql(u8, app.Branch, other.installed.Branch) and
-                std.mem.eql(u8, app.Remote, other.installed.Remote),
+                std.mem.eql(u8, app.Remote, other.installed.Remote) and std.mem.eql(u8, app.InstallationId, other.installed.InstallationId),
         };
     }
 
@@ -46,7 +46,7 @@ pub const Row = union(enum) {
 
     pub fn details(self: Row, arena: Allocator) Allocator.Error![]const u8 {
         return switch (self) {
-            .installed => |app| std.fmt.allocPrint(arena, "{f}\n\nName: {f}\nID: {f}\nVersion: {f}\nScope: {s}\nKind: {s}\nArchitecture: {f}\nBranch: {f}\nRemote: {f}\nRef: {f}\nFull ref: {f}\nInstalled size: {s}", .{ diagnostics.safe(app.Summary), diagnostics.safe(app.Name), diagnostics.safe(app.Id), diagnostics.safe(app.Version), @tagName(app.InstallLevel), @tagName(app.Kind), diagnostics.safe(app.Arch), diagnostics.safe(app.Branch), diagnostics.safe(app.Remote), diagnostics.safe(app.Ref), diagnostics.safe(app.FullRef), try formatSize(arena, app.InstalledSize) }),
+            .installed => |app| std.fmt.allocPrint(arena, "{f}\n\nName: {f}\nID: {f}\nVersion: {f}\nScope: {s}\nInstallation: {f}\nKind: {s}\nArchitecture: {f}\nBranch: {f}\nRemote: {f}\nRef: {f}\nFull ref: {f}\nInstalled size: {s}", .{ diagnostics.safe(app.Summary), diagnostics.safe(app.Name), diagnostics.safe(app.Id), diagnostics.safe(app.Version), @tagName(app.InstallLevel), diagnostics.safe(app.InstallationId), @tagName(app.Kind), diagnostics.safe(app.Arch), diagnostics.safe(app.Branch), diagnostics.safe(app.Remote), diagnostics.safe(app.Ref), diagnostics.safe(app.FullRef), try formatSize(arena, app.InstalledSize) }),
             .catalog => |app| blk: {
                 var remotes: std.ArrayList(u8) = .empty;
                 for (app.Remotes, 0..) |remote, i| {
@@ -236,6 +236,7 @@ pub fn drawDetails(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.
             .{ .label = "ID", .value = app.Id },
             .{ .label = "Version", .value = app.Version },
             .{ .label = "Scope", .value = @tagName(app.InstallLevel) },
+            .{ .label = "Installation", .value = app.InstallationId },
             .{ .label = "Kind", .value = @tagName(app.Kind) },
             .{ .label = "Architecture", .value = app.Arch },
             .{ .label = "Branch", .value = app.Branch },
@@ -344,4 +345,16 @@ test "reserved source panel keeps the chosen remote visible with many remotes" {
         try Collect.text(arena.allocator(), &output, surface);
         try std.testing.expect(std.mem.indexOf(u8, output.items, "> last-selected (system)") != null);
     }
+}
+
+test "installed Flatpak identity distinguishes named installations" {
+    const a: data.Flatpak = .{ .Id = "org.example.App", .InstallationId = "extra" };
+    var b = a;
+    b.InstallationId = "other";
+    const row: Row = .{ .installed = &a };
+    try std.testing.expect(!row.sameIdentity(.{ .installed = &b }));
+    try std.testing.expect(row.matches("extra"));
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    try std.testing.expect(std.mem.indexOf(u8, try row.details(arena.allocator()), "Installation: extra") != null);
 }

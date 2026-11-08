@@ -56,6 +56,8 @@ pub const Flatpak = struct {
     Kind: FlatpakKind = .app,
     InstalledSize: i64 = 0,
     InstallLevel: InstallLevel = .system,
+    Ref: []const u8 = "",
+    InstallationId: []const u8 = "",
 };
 
 pub const FlatpakSearchResponse = struct {

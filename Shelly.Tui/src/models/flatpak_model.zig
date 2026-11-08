@@ -723,7 +723,8 @@ pub fn handleDetailsKey(self: *Model, ctx: *vxfw.EventContext, input: vaxis.Key,
                 .arch = row.installed.Arch,
                 .branch = row.installed.Branch,
                 .kind = row.installed.Kind,
-                .reference = row.installed.FullRef,
+                .reference = if (row.installed.Ref.len > 0) row.installed.Ref else if (std.mem.indexOfScalar(u8, row.installed.FullRef, ':')) |separator| row.installed.FullRef[separator + 1 ..] else row.installed.FullRef,
+                .installation_id = row.installed.InstallationId,
             }),
             .preview => {},
         }
@@ -922,6 +923,26 @@ test "Flatpak install chooses remote scope and owns confirmation target" {
     try std.testing.expect(model.overlay.?.sudo.elevated);
 }
 
+test "Flatpak removal retains named installation identity after releasing row data" {
+    const allocator = std.testing.allocator;
+    const model = try Model.init(allocator);
+    defer model.deinit();
+    model.settings_state.settings.flatpak_enabled = true;
+    model.flatpak_state.flatpak_available = true;
+    var apps = try std.json.parseFromSlice([]flatpak.Flatpak, allocator,
+        \\[{"Id":"org.example.Platform","Remote":"flathub","InstallLevel":0,"Kind":1,"Arch":"aarch64","Branch":"24.08","Ref":"runtime/org.example.Platform/aarch64/24.08","FullRef":"flathub:runtime/org.example.Platform/aarch64/24.08","InstallationId":"extra"}]
+    , .{ .allocate = .alloc_always });
+    model.overlay = .{ .flatpak = .{ .installed = &apps.value[0] } };
+    var events: vxfw.EventContext = .{ .io = std.testing.io, .alloc = allocator, .cmds = .empty };
+    defer events.cmds.deinit(allocator);
+    try Model.typeErasedCaptureHandler(model, &events, .{ .key_press = .{ .codepoint = 'r' } });
+    apps.deinit();
+    const target = model.overlay.?.sudo.flatpak_target.?;
+    try std.testing.expectEqualStrings("extra", target.installation_id);
+    try std.testing.expectEqualStrings("runtime/org.example.Platform/aarch64/24.08", target.reference);
+    try std.testing.expect(model.overlay.?.sudo.elevated);
+}
+
 test "Flatpak removal copies exact identity and updates require backend availability" {
     const allocator = std.testing.allocator;
     const model = try Model.init(allocator);
@@ -929,7 +950,7 @@ test "Flatpak removal copies exact identity and updates require backend availabi
     model.settings_state.settings.flatpak_enabled = true;
     model.flatpak_state.flatpak_available = true;
     var apps = try std.json.parseFromSlice([]flatpak.Flatpak, allocator,
-        \\[{"Id":"org.example.App","Remote":"flathub","InstallLevel":1,"Kind":0,"Arch":"x86_64","Branch":"beta","FullRef":"app/org.example.App/x86_64/beta"}]
+        \\[{"Id":"org.example.App","Remote":"flathub","InstallLevel":1,"Kind":0,"Arch":"x86_64","Branch":"beta","FullRef":"flathub:app/org.example.App/x86_64/beta"}]
     , .{ .allocate = .alloc_always });
     model.overlay = .{ .flatpak = .{ .installed = &apps.value[0] } };
     var events: vxfw.EventContext = .{ .io = std.testing.io, .alloc = allocator, .cmds = .empty };

@@ -1,6 +1,6 @@
 const std = @import("std");
 
-pub const schema_version: u32 = 2;
+pub const schema_version: u32 = 3;
 pub const max_message_size: usize = 16 * 1024 * 1024;
 
 pub const Method = struct {
@@ -122,6 +122,7 @@ pub const UpdateInstalledArguments = struct {
 pub const UninstallInstalledArguments = struct {
     name_or_id: []const u8,
     scope: ?Scope = null,
+    installation_id: ?[]const u8 = null,
     remove_unused: bool = false,
 };
 
@@ -221,6 +222,7 @@ pub const InstalledApplication = struct {
     kind: RefKind,
     installed_size: u64,
     scope: Scope,
+    installation_id: ?[]const u8 = null,
     eol: ?[]const u8 = null,
     eol_rebase: ?[]const u8 = null,
 };

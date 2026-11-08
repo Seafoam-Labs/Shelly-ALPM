@@ -14,6 +14,8 @@ pub const FlatpakObject = extern struct {
         version: [:0]const u8,
         remotes: [:0]const u8,
         id: [:0]const u8,
+        reference: [:0]const u8,
+        installation_id: [:0]const u8,
         kind: flatpak.FlatpakKind,
 
         installed_size: i64,
@@ -39,6 +41,8 @@ pub const FlatpakObject = extern struct {
         p.version = "";
         p.remotes = "";
         p.id = "";
+        p.reference = "";
+        p.installation_id = "";
         p.installed_size = 0;
         p.installed_level = flatpak.InstallLevel.system;
         p.kind = flatpak.FlatpakKind.app;
@@ -56,6 +60,11 @@ pub const FlatpakObject = extern struct {
         p.installed_size = f.InstalledSize;
         p.remotes = arena.dupeSentinel(u8, f.Remote, 0) catch "";
         p.id = arena.dupeSentinel(u8, f.Id, 0) catch "";
+        p.reference = arena.dupeSentinel(u8, f.Ref, 0) catch "";
+        p.installation_id = arena.dupeSentinel(u8, f.InstallationId, 0) catch blk: {
+            p.reference = "";
+            break :blk "";
+        };
         p.kind = f.Kind;
 
         return self;
@@ -82,6 +91,14 @@ pub const FlatpakObject = extern struct {
 
     pub fn getId(self: *Self) [:0]const u8 {
         return self.priv().id;
+    }
+
+    pub fn getRef(self: *Self) [:0]const u8 {
+        return self.priv().reference;
+    }
+
+    pub fn getInstallationId(self: *Self) [:0]const u8 {
+        return self.priv().installation_id;
     }
 
     pub fn getKind(self: *Self) flatpak.FlatpakKind {

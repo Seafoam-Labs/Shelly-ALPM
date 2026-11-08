@@ -4,6 +4,7 @@ const booleanOptionWithDefault = types.booleanOptionWithDefault;
 const flag = types.flag;
 const repeatedArgument = types.repeatedArgument;
 const requiredArgument = types.requiredArgument;
+const stringOption = types.stringOption;
 
 pub const variants = [_]types.Variant{
     .{
@@ -69,14 +70,15 @@ pub const variants = [_]types.Variant{
         .type_code = 'f',
         .alias_type_codes = &.{'F'},
         .description = "Remove an installed Flatpak application or runtime, with optional unused dependency and configuration cleanup.",
-        .implementation = "PackageManager.FlatpakManager.find_installed_flatpak / uninstall_flatpak",
+        .implementation = "PackageManager.FlatpakManager.find_installed_flatpak / uninstall_flatpak_from_installation",
         .arguments = &.{requiredArgument(
             "package",
-            "Installed Flatpak application or runtime ID",
+            "Installed Flatpak ID or full kind/ID/architecture/branch reference",
         )},
         .options = &.{
             flag("--user", &.{}, "Remove from the invoking user's Flatpak installation"),
             flag("--system", &.{}, "Remove from the system Flatpak installation"),
+            stringOption("--installation", &.{}, "Remove from this named system Flatpak installation", false),
             flag("--remove-unused", &.{"-r"}, "Remove newly unused Flatpak dependencies"),
             flag("--remove-config", &.{}, "Remove configuration associated with the removed package"),
         },
