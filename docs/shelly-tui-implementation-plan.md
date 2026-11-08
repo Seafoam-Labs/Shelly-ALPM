@@ -81,15 +81,15 @@ The intended flow is browse → details → review/provider questions → execut
 
 ### Source references
 
-- [Startup](/home/vinnyqf/RiderProjects/Shelly-ALPM/Shelly.Tui/src/main.zig)
-- [Model, workers, views, and authentication](/home/vinnyqf/RiderProjects/Shelly-ALPM/Shelly.Tui/src/model.zig)
-- [CLI client](/home/vinnyqf/RiderProjects/Shelly-ALPM/Shelly.Tui/src/services/shelly_cli.zig)
-- [Operation protocol and install lifecycle](/home/vinnyqf/RiderProjects/Shelly-ALPM/Shelly.Tui/src/services/shelly_operation.zig)
-- [PKGBUILD preview and operation review](/home/vinnyqf/RiderProjects/Shelly-ALPM/Shelly.Tui/src/views/pkgbuild_view.zig)
-- [CLI catalog](/home/vinnyqf/RiderProjects/Shelly-ALPM/Shelly.Cli.Zig/src/cli/catalog.zig)
-- [CLI questions and outcomes](/home/vinnyqf/RiderProjects/Shelly-ALPM/Shelly.Cli.Zig/src/output/ui_operation.zig)
-- [CLI wire formats](/home/vinnyqf/RiderProjects/Shelly-ALPM/Shelly.Cli.Zig/src/output/config.zig)
-- [Native backend guide](/home/vinnyqf/RiderProjects/Shelly-ALPM/docs/native-package-backends.md)
+- [Startup](../Shelly.Tui/src/main.zig)
+- [Model, workers, views, and authentication](../Shelly.Tui/src/model.zig)
+- [CLI client](../Shelly.Tui/src/services/shelly_cli.zig)
+- [Operation protocol and install lifecycle](../Shelly.Tui/src/services/shelly_operation.zig)
+- [PKGBUILD preview and operation review](../Shelly.Tui/src/views/pkgbuild_view.zig)
+- [CLI catalog](../Shelly.Cli.Zig/src/cli/catalog.zig)
+- [CLI questions and outcomes](../Shelly.Cli.Zig/src/output/ui_operation.zig)
+- [CLI wire formats](../Shelly.Cli.Zig/src/output/config.zig)
+- [Native backend guide](../docs/native-package-backends.md)
 
 ## Known issues and follow-up
 
