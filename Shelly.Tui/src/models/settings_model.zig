@@ -77,6 +77,9 @@ pub fn applySettings(self: *Model, saved: Settings) void {
     const sources_changed = atoll_changed or self.settings_state.settings.aur_enabled != saved.aur_enabled or self.settings_state.settings.flatpak_enabled != saved.flatpak_enabled;
     if (atoll_changed or self.settings_state.settings.aur_enabled != saved.aur_enabled) {
         aur_model.clearAurSelection(self);
+        self.aur_state.catalog_checked = false;
+        self.aur_state.catalog_page = 1;
+        self.aur_state.catalog_total_pages = 0;
         self.operation_state.pkgbuild_generation +%= 1;
         if (self.overlay) |overlay| {
             if (overlay == .aur or overlay == .pkgbuild) operation_model.closeOverlay(self);

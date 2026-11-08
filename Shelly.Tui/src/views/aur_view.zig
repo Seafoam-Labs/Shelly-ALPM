@@ -22,6 +22,8 @@ pub const View = struct {
     aur_failed: bool,
     aur_query: []const u8,
     result_count: usize,
+    catalog_page: u32 = 0,
+    catalog_total_pages: u32 = 0,
     selected: ?*const AurPackage = null,
     details_scroll: *vxfw.ScrollView,
     details_active: bool = false,
@@ -53,7 +55,7 @@ pub const View = struct {
             });
             const message = try self.aurMessage(arena);
             var label: vxfw.Text = .{ .text = if (message) |item| item.text else "", .style = if (message != null and message.?.red) .{ .fg = .{ .index = 1 } } else styles.secondary };
-            const labels = [_]Border.BorderLabel{.{ .text = if (self.installed_only) "Installed AUR packages" else "AUR packages", .alignment = .top_left }};
+            const labels = [_]Border.BorderLabel{.{ .text = if (self.installed_only) "Installed AUR packages" else if (self.catalog_page > 0) try std.fmt.allocPrint(arena, "Atoll packages · Page {d}/{d}", .{ self.catalog_page, @max(1, self.catalog_total_pages) }) else "AUR packages", .alignment = .top_left }};
             const content = if (message != null) label.widget() else self.aur_list.widget();
             var border: Border = .{ .child = content, .labels = &labels, .focused = self.list_active and !self.details_active };
             if (list_height > 0) try children.append(arena, .{
@@ -87,6 +89,8 @@ pub const View = struct {
     fn aurMessage(self: View, arena: Allocator) Allocator.Error!?struct { text: []const u8, red: bool } {
         if (self.searching and self.installed_only) return .{ .text = "Loading installed AUR packages…", .red = false };
         if (self.aur_failed and self.installed_only) return .{ .text = "Could not load installed AUR packages.", .red = true };
+        if (self.catalog_page > 0 and self.searching) return .{ .text = "Loading Atoll packages…", .red = false };
+        if (self.catalog_page > 0 and self.aur_failed) return .{ .text = "Could not load Atoll packages. Refresh to retry.", .red = true };
         if (self.searching) {
             return .{
                 .text = try std.fmt.allocPrint(arena, "Searching AUR for '{s}'…", .{self.aur_query}),
@@ -97,6 +101,7 @@ pub const View = struct {
             return .{ .text = "Could not search the configured AUR service.", .red = true };
         }
         if (self.installed_only) return if (self.result_count == 0) .{ .text = "No installed AUR packages match the filter.", .red = false } else null;
+        if (self.catalog_page > 0) return if (self.result_count == 0) .{ .text = "No Atoll packages to display.", .red = false } else null;
         if (self.aur_query.len == 0) {
             return .{ .text = "Search the AUR to browse packages.", .red = false };
         }
@@ -108,6 +113,8 @@ pub const View = struct {
     pub fn statusText(self: View, arena: Allocator) Allocator.Error![]const u8 {
         if (self.searching and self.installed_only) return "Loading installed AUR packages…";
         if (self.aur_failed and self.installed_only) return "Installed AUR query failed";
+        if (self.catalog_page > 0 and self.searching) return .{ .text = "Loading Atoll packages…", .red = false };
+        if (self.catalog_page > 0 and self.aur_failed) return .{ .text = "Could not load Atoll packages. Refresh to retry.", .red = true };
         if (self.searching) {
             return try std.fmt.allocPrint(arena, "Searching AUR for '{s}'…", .{self.aur_query});
         }

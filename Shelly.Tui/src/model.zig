@@ -227,6 +227,7 @@ pub const Model = struct {
                                 }
                                 try self.focusActiveTab(ctx);
                                 try updates_model.ensureUpdates(self, ctx);
+                                try aur_model.ensureAur(self, ctx);
                                 try flatpak_model.ensureFlatpak(self, ctx);
                             }
                             return ctx.consumeAndRedraw();
@@ -253,6 +254,7 @@ pub const Model = struct {
                             self.switchTab(if (action == .next_tab) 1 else -1);
                             try self.focusActiveTab(ctx);
                             try updates_model.ensureUpdates(self, ctx);
+                            try aur_model.ensureAur(self, ctx);
                             try flatpak_model.ensureFlatpak(self, ctx);
                         },
                         .select_tab => |index| try self.setTab(self.visibleTabs()[index], ctx),
@@ -294,6 +296,7 @@ pub const Model = struct {
                 const installing = try operation_model.pollInstall(self);
                 updates_model.pollUpdates(self);
                 try updates_model.ensureUpdates(self, ctx);
+                try aur_model.ensureAur(self, ctx);
                 try flatpak_model.pollFlatpak(self);
                 try operation_model.pollPkgbuild(self, ctx);
                 try flatpak_model.syncScreenshots(self, ctx);
@@ -317,7 +320,7 @@ pub const Model = struct {
                     self.updates_state.refresh_updates_after_operation = false;
                 }
                 if (self.aur_state.refresh_aur_after_operation and self.aur_state.aur_job == null) {
-                    if (self.aur_state.aur_installed_only or self.aur_state.aur_query.len > 0) try aur_model.startAurSearch(self, ctx, self.aur_state.aur_query);
+                    if (aur_model.catalogActive(self) or self.aur_state.aur_installed_only or self.aur_state.aur_query.len > 0) try aur_model.startAurSearch(self, ctx, self.aur_state.aur_query);
                     self.aur_state.refresh_aur_after_operation = false;
                 }
                 if (loading or searching or installing or self.packages_state.loading or self.updates_state.updates_job != null or self.operation_state.pkgbuild_job != null or self.aur_state.aur_job != null or self.flatpak_state.flatpak_job != null or self.flatpak_state.flatpak_probe_job != null) {
@@ -391,6 +394,7 @@ pub const Model = struct {
         self.active = tab;
         try self.focusActiveTab(ctx);
         try updates_model.ensureUpdates(self, ctx);
+        try aur_model.ensureAur(self, ctx);
         try flatpak_model.ensureFlatpak(self, ctx);
     }
 
@@ -678,6 +682,9 @@ pub const Model = struct {
             },
             .aur => {
                 context.mode = .aur;
+                context.catalog_available = aur_model.catalogActive(self);
+                context.catalog_previous = context.catalog_available and self.aur_state.aur_job == null and self.aur_state.catalog_page > 1;
+                context.catalog_next = context.catalog_available and self.aur_state.aur_job == null and self.aur_state.catalog_page < self.aur_state.catalog_total_pages;
                 context.installed_only = self.aur_state.aur_installed_only;
                 context.browsing_list = self.aur_state.aur_list_active;
                 context.selected_count = self.aur_state.aur_selection.items.len;

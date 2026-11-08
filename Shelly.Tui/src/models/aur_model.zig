@@ -11,6 +11,7 @@ const vaxis = @import("vaxis");
 const vxfw = vaxis.vxfw;
 const shelly_cli = @import("../services/shelly_cli.zig");
 const ShellyCli = shelly_cli.ShellyCli;
+const catalog = @import("../services/atoll_catalog.zig");
 const Package = @import("packages.zig").Package;
 const AurPackage = @import("packages.zig").AurPackage;
 
@@ -34,6 +35,9 @@ pub const State = struct {
     /// Last executed AUR query; owned by `gpa` unless empty.
     aur_query: []const u8 = "",
     aur_failed: bool = false,
+    catalog_checked: bool = false,
+    catalog_page: u32 = 1,
+    catalog_total_pages: u32 = 0,
     aur_installed_only: bool = false,
     aur_thread: ?std.Thread = null,
     aur_filtered: std.ArrayList(*const AurPackage) = .empty,
@@ -49,6 +53,8 @@ pub const State = struct {
 pub const AurSearchJob = struct {
     installed_only: bool = false,
     atoll: bool = false,
+    catalog_page: u32 = 0,
+    catalog_total_pages: u32 = 0,
     result: ?std.json.Parsed([]AurPackage) = null,
     failed: bool = false,
     done: std.atomic.Value(bool) = .init(false),
@@ -110,6 +116,12 @@ pub fn onAurSubmit(maybe_ptr: ?*anyopaque, ctx: *vxfw.EventContext, str: []const
         self.aur_state.aur_list_active = true;
         return ctx.consumeAndRedraw();
     }
+    if (query.len == 0 and self.settings_state.settings.atoll_aur_enabled and
+        (self.aur_state.aur_query.len > 0 or !self.aur_state.catalog_checked))
+    {
+        try startAurSearch(self, ctx, "");
+        return ctx.consumeAndRedraw();
+    }
     // Enter with an unchanged query opens the selected result instead
     // of repeating the search
     if (self.aur_state.aur_filtered.items.len > 0 and
@@ -127,13 +139,35 @@ pub fn onAurSubmit(maybe_ptr: ?*anyopaque, ctx: *vxfw.EventContext, str: []const
     try startAurSearch(self, ctx, query);
 }
 
+pub fn catalogActive(self: *const Model) bool {
+    return self.settings_state.settings.atoll_aur_enabled and !self.aur_state.aur_installed_only and self.aur_state.aur_query.len == 0;
+}
+
+pub fn ensureAur(self: *Model, ctx: *vxfw.EventContext) !void {
+    if (self.active == .aur and self.settings_state.settings.aur_enabled and catalogActive(self) and
+        !self.aur_state.catalog_checked and self.aur_state.aur_job == null and self.operation_state.install_job == null)
+        try startAurSearch(self, ctx, "");
+}
+
+pub fn changeCatalogPage(self: *Model, ctx: *vxfw.EventContext, next: bool) !void {
+    if (!catalogActive(self) or self.aur_state.aur_job != null or self.operation_state.install_job != null) return;
+    const page = self.aur_state.catalog_page;
+    if ((next and page >= self.aur_state.catalog_total_pages) or (!next and page <= 1)) return;
+    try startAurRequest(self, ctx, "", if (next) page + 1 else page - 1);
+}
+
 pub fn startAurSearch(self: *Model, ctx: *vxfw.EventContext, query: []const u8) !void {
-    if (!self.settings_state.settings.aur_enabled) return;
+    return startAurRequest(self, ctx, query, 1);
+}
+
+fn startAurRequest(self: *Model, ctx: *vxfw.EventContext, query: []const u8, page: u32) !void {
+    if (!self.settings_state.settings.aur_enabled or self.aur_state.aur_job != null) return;
     try ctx.tick(100, self.widget());
     const job = try self.gpa.create(AurSearchJob);
     errdefer self.gpa.destroy(job);
     job.* = .{ .installed_only = self.aur_state.aur_installed_only, .atoll = self.settings_state.settings.atoll_aur_enabled };
 
+    if (job.atoll and !job.installed_only and query.len == 0) job.catalog_page = page;
     const duped = try self.gpa.dupe(u8, query);
     errdefer self.gpa.free(duped);
     const thread = try std.Thread.spawn(.{}, aurSearchThread, .{ job, duped });
@@ -143,6 +177,7 @@ pub fn startAurSearch(self: *Model, ctx: *vxfw.EventContext, query: []const u8) 
     self.aur_state.aur_job = job;
 
     self.aur_state.aur_thread = thread;
+    if (job.catalog_page > 0) self.aur_state.catalog_checked = true;
 }
 
 pub fn aurSearchThread(job: *AurSearchJob, query: []const u8) void {
@@ -158,7 +193,7 @@ pub fn aurSearchThread(job: *AurSearchJob, query: []const u8) void {
     };
     defer source.deinit();
     cli.aur_url = source.value.AurUrl;
-    const parsed = (if (job.installed_only) cli.list_aur_installed() else if (query.len == 0) std.json.parseFromSlice([]AurPackage, alloc, "[]", .{}) else cli.search_aur(query)) catch {
+    const parsed = (if (job.catalog_page > 0) fetchCatalog(job, alloc, threaded.io(), source.value.AurUrl) else if (job.installed_only) cli.list_aur_installed() else if (query.len == 0) std.json.parseFromSlice([]AurPackage, alloc, "[]", .{}) else cli.search_aur(query)) catch {
         job.failed = true;
         job.done.store(true, .release);
         return;
@@ -198,6 +233,13 @@ pub fn aurSearchThread(job: *AurSearchJob, query: []const u8) void {
     job.done.store(true, .release);
 }
 
+fn fetchCatalog(job: *AurSearchJob, allocator: Allocator, io: std.Io, url: []const u8) !std.json.Parsed([]AurPackage) {
+    if (!@import("settings.zig").isAtollUrl(url)) return error.AurSourceChanged;
+    const page = try catalog.fetch(allocator, io, job.catalog_page);
+    job.catalog_total_pages = page.total_pages;
+    return page.packages;
+}
+
 pub fn pollAurSearch(self: *Model) !bool {
     const job = self.aur_state.aur_job orelse return false;
     if (!job.done.load(.acquire)) return true;
@@ -206,6 +248,8 @@ pub fn pollAurSearch(self: *Model) !bool {
     self.aur_state.aur_thread = null;
     const parsed = job.result;
     const failed = job.failed;
+    const page = job.catalog_page;
+    const total_pages = job.catalog_total_pages;
     self.aur_state.aur_job = null;
     const stale = job.atoll != self.settings_state.settings.atoll_aur_enabled;
     self.gpa.destroy(job);
@@ -222,6 +266,10 @@ pub fn pollAurSearch(self: *Model) !bool {
     self.aur_state.aur_packages = &.{};
     self.aur_state.aur_failed = failed;
     if (parsed) |p| {
+        if (page > 0) {
+            self.aur_state.catalog_page = page;
+            self.aur_state.catalog_total_pages = total_pages;
+        }
         self.aur_state.aur_parsed = p;
         self.aur_state.aur_packages = p.value;
         for (self.aur_state.aur_selection.items) |*selected| for (p.value) |pkg| {
@@ -314,6 +362,8 @@ pub fn aurView(self: *Model) aur_view.View {
         .aur_failed = self.aur_state.aur_failed,
         .aur_query = self.aur_state.aur_query,
         .result_count = self.aur_state.aur_filtered.items.len,
+        .catalog_page = if (catalogActive(self)) self.aur_state.catalog_page else 0,
+        .catalog_total_pages = self.aur_state.catalog_total_pages,
         .installed_only = self.aur_state.aur_installed_only,
     };
 }
@@ -361,6 +411,11 @@ pub fn handleKey(self: *Model, ctx: *vxfw.EventContext, input: vaxis.Key, global
     }
     const key = if (self.aur_state.aur_list_active) commands.vimNavigationKey(input) orelse input else input;
     if (self.aur_state.aur_list_active) {
+        if (commands.matches(key, .previous_catalog_page) or commands.matches(key, .next_catalog_page)) {
+            try changeCatalogPage(self, ctx, commands.matches(key, .next_catalog_page));
+            ctx.consumeAndRedraw();
+            return true;
+        }
         if (commands.matches(key, .select) or commands.matches(key, .mark)) {
             try toggleAurSelection(self);
             ctx.consumeAndRedraw();
@@ -410,8 +465,8 @@ pub fn handleKey(self: *Model, ctx: *vxfw.EventContext, input: vaxis.Key, global
         ctx.consumeAndRedraw();
         return true;
     }
-    if (self.aur_state.aur_installed_only and commands.refreshesList(key)) {
-        if (self.aur_state.aur_job == null) try startAurSearch(self, ctx, "");
+    if ((self.aur_state.aur_installed_only or catalogActive(self)) and commands.refreshesList(key)) {
+        if (self.aur_state.aur_job == null) try startAurRequest(self, ctx, "", self.aur_state.catalog_page);
         ctx.consumeAndRedraw();
         return true;
     }
@@ -1001,4 +1056,66 @@ test "aur preview clicks still open previews without an operation" {
         try std.testing.expect(model.overlay.? == .pkgbuild);
         try std.testing.expectEqualStrings("demo", model.operation_state.pkgbuild_name);
     }
+}
+
+test "Atoll catalog pages keep owned selections and expose bounded contextual paging" {
+    const model = try Model.init(std.testing.allocator);
+    defer model.deinit();
+    model.active = .aur;
+    model.settings_state.settings = .{ .aur_enabled = true, .atoll_aur_enabled = true };
+    model.aur_state.aur_list_active = true;
+    model.aur_state.catalog_checked = true;
+    const Worker = struct {
+        fn finish() void {}
+    };
+    for ([_]u32{ 1, 2, 3 }) |page| {
+        const json = try std.fmt.allocPrint(model.gpa, "[{{\"Name\":\"page-{d}\",\"Installed\":true}}]", .{page});
+        defer model.gpa.free(json);
+        const job = try model.gpa.create(AurSearchJob);
+        job.* = .{ .atoll = true, .catalog_page = page, .catalog_total_pages = 3, .done = .init(true), .result = try std.json.parseFromSlice([]AurPackage, model.gpa, json, .{ .allocate = .alloc_always }) };
+        model.aur_state.aur_job = job;
+        model.aur_state.aur_thread = try std.Thread.spawn(.{}, Worker.finish, .{});
+        try std.testing.expect(!try pollAurSearch(model));
+        try std.testing.expectEqual(page, model.aur_state.catalog_page);
+        const context = model.commandContext();
+        try std.testing.expect(context.catalog_available);
+        try std.testing.expectEqual(page > 1, context.catalog_previous);
+        try std.testing.expectEqual(page < 3, context.catalog_next);
+        if (page == 1) try toggleAurSelection(model);
+    }
+    // The first page's parsed data has been released; its selection still owns its name.
+    try std.testing.expectEqualStrings("page-1", model.aur_state.aur_selection.items[0].name);
+    model.aur_state.aur_installed_only = true;
+    try std.testing.expect(!model.commandContext().catalog_available);
+    model.aur_state.aur_installed_only = false;
+    model.aur_state.aur_query = try model.gpa.dupe(u8, "search");
+    try std.testing.expect(!model.commandContext().catalog_available);
+}
+
+test "Atoll paging ignores out of range requests and repeated input during a fetch" {
+    const model = try Model.init(std.testing.allocator);
+    defer model.deinit();
+    model.settings_state.settings = .{ .aur_enabled = true, .atoll_aur_enabled = true };
+    model.aur_state.catalog_total_pages = 1;
+    var ctx: vxfw.EventContext = .{ .io = std.testing.io, .alloc = model.gpa, .cmds = .empty };
+    defer ctx.cmds.deinit(model.gpa);
+    try changeCatalogPage(model, &ctx, false);
+    try changeCatalogPage(model, &ctx, true);
+    try std.testing.expect(model.aur_state.aur_job == null);
+    const Worker = struct {
+        fn finish() void {}
+    };
+    const job = try model.gpa.create(AurSearchJob);
+    job.* = .{ .atoll = true, .catalog_page = 2, .done = .init(true), .failed = true };
+    model.aur_state.aur_job = job;
+    model.aur_state.aur_thread = try std.Thread.spawn(.{}, Worker.finish, .{});
+    model.aur_state.catalog_total_pages = 3;
+    for (0..20) |_| try changeCatalogPage(model, &ctx, true);
+    try std.testing.expect(model.aur_state.aur_job.? == job);
+    try std.testing.expect(!try pollAurSearch(model));
+    try std.testing.expect(model.aur_state.aur_failed);
+    try std.testing.expectEqual(@as(u32, 1), model.aur_state.catalog_page);
+    model.settings_state.settings.atoll_aur_enabled = false;
+    try changeCatalogPage(model, &ctx, true);
+    try std.testing.expect(model.aur_state.aur_job == null);
 }
