@@ -878,6 +878,63 @@ test "help preserves operation confirmation and follows operation stages" {
     try std.testing.expectEqual(SudoPrompt.State.succeeded, prompt.state);
 }
 
+test "incomplete reviews keep the worker input open until an explicit answer" {
+    runtime.io = std.testing.io;
+    defer runtime.io = undefined;
+    var env: std.process.Environ.Map = .init(std.testing.allocator);
+    defer env.deinit();
+    for ([_]bool{ false, true }) |approve| {
+        const model = try Model.init(std.testing.allocator);
+        defer model.deinit();
+        const prompt = try std.testing.allocator.create(SudoPrompt);
+        prompt.* = .{ .name = try std.testing.allocator.dupe(u8, "demo"), .backend = .aur, .state = .running };
+        model.overlay = .{ .sudo = prompt };
+        var temporary = std.testing.tmpDir(.{});
+        defer temporary.cleanup();
+        var job: shelly_operation.Operation = .{
+            .arena = .init(std.testing.allocator),
+            .request = .{ .shelly_bin = "unused", .environ_map = &env, .name = "demo", .backend = "aur" },
+            .input = try temporary.dir.createFile(std.testing.io, "answers", .{}),
+            .expected_answer = .pkgbuild,
+            .expected_id = @splat(0),
+            .expected_len = 1,
+        };
+        defer job.arena.deinit();
+        defer job.closeInput(std.testing.io);
+        job.expected_id[0] = '1';
+        var message = try shelly_operation.decodeJson(std.testing.allocator,
+            \\{"$kind":"q.pkgbuilddiff","QuestionId":"1","PackageName":"demo","OldPkgbuild":"","NewPkgbuild":"pkgname=demo","Warnings":[]}
+        );
+        const long = try message.arena.allocator().alloc(u8, 8193);
+        @memset(long, 'x');
+        message.value.question.pkgbuild.source_files = &.{.{ .name = "long.txt", .content = long }};
+        job.pending = message;
+        model.operation_state.install_job = &job;
+        defer model.operation_state.install_job = null;
+        try std.testing.expect(try pollInstall(model));
+        try std.testing.expect(!job.input_closing and job.input != null);
+        try std.testing.expect(job.expected_answer != null);
+        try std.testing.expect(model.overlay.? == .pkgbuild);
+        try std.testing.expect(model.operation_state.review_prompt.? == prompt);
+        try std.testing.expect(std.mem.startsWith(u8, model.operation_state.pkgbuild_document.?.lines[0], "Some content could not be displayed."));
+        const view = pkgbuildView(model);
+        try std.testing.expectEqual(pkgbuild_view.Action.approve, view.handleKey(commands.bindings.approve).?);
+        try std.testing.expectEqual(pkgbuild_view.Action.decline, view.handleKey(commands.bindings.decline).?);
+        var ctx: vxfw.EventContext = .{ .io = std.testing.io, .alloc = std.testing.allocator, .cmds = .empty };
+        defer ctx.cmds.deinit(std.testing.allocator);
+        model.operation_state.pkgbuild_scroll.last_height = 4;
+        model.operation_state.pkgbuild_scroll.scroll.top = 2;
+        try handleReviewKey(model, &ctx, commands.bindings.half_page_up);
+        try std.testing.expectEqual(@as(i17, -2), model.operation_state.pkgbuild_scroll.scroll.pending_lines);
+        try std.testing.expect(job.expected_answer != null);
+        try handleReviewKey(model, &ctx, if (approve) commands.bindings.approve else commands.bindings.decline);
+        try std.testing.expect(job.expected_answer == null);
+        try std.testing.expectEqual(!approve, job.user_declined);
+        try std.testing.expect(model.operation_state.operation_question == null);
+        try std.testing.expect(model.overlay.?.sudo == prompt);
+    }
+}
+
 test "dependency checkboxes navigate toggle and submit actual CLI indices" {
     vxfw.DrawContext.init(.unicode);
     const model = try Model.init(std.testing.allocator);
