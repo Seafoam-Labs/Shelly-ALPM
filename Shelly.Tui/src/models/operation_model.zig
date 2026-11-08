@@ -238,7 +238,7 @@ pub fn pollPkgbuild(self: *Model, ctx: *vxfw.EventContext) !void {
             self.operation_state.pkgbuild_failure = error.PackageNotFound;
             return;
         };
-        if (job.atoll and self.overlay != null and self.overlay.? == .pkgbuild) {
+        if (job.atoll and build.PkgBuild != null and self.overlay != null and self.overlay.? == .pkgbuild) {
             self.operation_state.pkgbuild_scan_status = "Scanning cached PKGBUILD…";
             startPkgbuildRequest(self, ctx, build.PkgBuild) catch {
                 self.operation_state.pkgbuild_scan_status = "Could not start the security scan. Close and reopen the preview to retry.";
@@ -255,7 +255,8 @@ fn scannedPkgbuild(job: *const PkgbuildJob) !PkgBuild {
     const result = job.result orelse return error.NoPkgbuildData;
     const build = matchingPkgbuild(result.value, job.name) orelse return error.PackageNotFound;
     const original = job.expected_content orelse return error.NoPkgbuildData;
-    if (!std.mem.eql(u8, build.PkgBuild, original)) return error.ReviewedPkgbuildChanged;
+    const content = build.PkgBuild orelse return error.NoPkgbuildData;
+    if (!std.mem.eql(u8, content, original)) return error.ReviewedPkgbuildChanged;
     if (build.Scan == null) return error.MissingScanResult;
     return build;
 }
@@ -1135,7 +1136,7 @@ test "Atoll preview stays loading until the scan finishes and retains source on 
     const Worker = struct {
         fn finish() void {}
     };
-    for (0..4) |scenario| {
+    for (0..5) |scenario| {
         const model = try Model.init(std.testing.allocator);
         defer model.deinit();
         model.settings_state.settings.atoll_aur_enabled = true;
@@ -1157,6 +1158,7 @@ test "Atoll preview stays loading until the scan finishes and retains source on 
             job.result = try std.json.parseFromSlice([]PkgBuild, model.gpa, switch (scenario) {
                 0 => "[{\"Name\":\"demo\",\"PkgBuild\":\"pkgname=demo\",\"Scan\":{\"findings\":[],\"related_files\":[{\"name\":\"demo.install\",\"content\":\"echo checked\"}]}}]",
                 1 => "[{\"Name\":\"demo\",\"PkgBuild\":\"changed\",\"Scan\":{\"findings\":[],\"related_files\":[]}}]",
+                4 => "[{\"Name\":\"demo\",\"PkgBuild\":null}]",
                 else => "[{\"Name\":\"demo\",\"PkgBuild\":\"pkgname=demo\"}]",
             }, .{ .allocate = .alloc_always });
         }
@@ -1205,4 +1207,30 @@ test "regular PKGBUILD preview never schedules an Atoll security scan" {
     try std.testing.expect(model.operation_state.pkgbuild_document != null);
     try std.testing.expect(model.operation_state.pkgbuild_job == null);
     try std.testing.expectEqualStrings("", model.operation_state.pkgbuild_scan_status);
+}
+
+test "missing Atoll preview source is displayed without scheduling another request" {
+    const model = try Model.init(std.testing.allocator);
+    defer model.deinit();
+    model.settings_state.settings.atoll_aur_enabled = true;
+    model.overlay = .pkgbuild;
+    model.operation_state.pkgbuild_name = try model.gpa.dupe(u8, "demo");
+    const job = try model.gpa.create(PkgbuildJob);
+    job.* = .{ .name = try model.gpa.dupe(u8, "demo"), .atoll = true, .done = .init(true), .result = try std.json.parseFromSlice([]PkgBuild, model.gpa,
+        \\[{"Name":"demo","PkgBuild":null}]
+    , .{ .allocate = .alloc_always }) };
+    const Worker = struct {
+        fn finish() void {}
+    };
+    model.operation_state.pkgbuild_job = job;
+    model.operation_state.pkgbuild_thread = try std.Thread.spawn(.{}, Worker.finish, .{});
+    var ctx: vxfw.EventContext = .{ .io = std.testing.io, .alloc = model.gpa, .cmds = .empty };
+    defer ctx.cmds.deinit(model.gpa);
+    try pollPkgbuild(model, &ctx);
+    try std.testing.expect(model.operation_state.pkgbuild_job == null);
+    try std.testing.expect(model.operation_state.pkgbuild_document != null);
+    try std.testing.expectEqualStrings("", model.operation_state.pkgbuild_scan_status);
+    const text = try std.mem.join(model.gpa, "\n", model.operation_state.pkgbuild_document.?.lines);
+    defer model.gpa.free(text);
+    try std.testing.expect(std.mem.indexOf(u8, text, "PKGBUILD unavailable for demo.") != null);
 }
