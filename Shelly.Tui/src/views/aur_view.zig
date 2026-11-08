@@ -142,7 +142,7 @@ fn drawRow(ptr: *anyopaque, ctx: vxfw.DrawContext, selected: bool) Allocator.Err
     var spans: std.ArrayList(vxfw.RichText.TextSpan) = .empty;
     try spans.append(arena, .{ .text = if (selected) "[x] " else "[ ] ", .style = .{ .bold = selected } });
     try spans.append(arena, .{ .text = if (pkg.Installed) "● " else "  ", .style = .{ .fg = .{ .index = 2 } } });
-    try spans.append(arena, .{ .text = pkg.Name, .style = .{ .bold = true } });
+    try spans.append(arena, .{ .text = try diagnostics.sanitizeAlloc(arena, pkg.Name), .style = .{ .bold = true } });
 
     const rich = try arena.create(vxfw.RichText);
     rich.* = .{
@@ -254,4 +254,21 @@ test "AUR package pages follow the configured source independently of upstream U
         atoll = atoll or std.mem.eql(u8, cell.link.uri, "https://atoll.seafoam-labs.org/package/name%2Bsuffix");
     }
     try std.testing.expect(upstream and atoll);
+}
+
+test "package row names escape terminal control bytes without changing identity" {
+    vxfw.DrawContext.init(.unicode);
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const name = "demo\x1b[31m\r\x7f";
+    var pkg: AurPackage = .{ .Name = name };
+    const ctx: vxfw.DrawContext = .{ .arena = arena.allocator(), .min = .{}, .max = .{ .width = 80, .height = 1 }, .cell_size = .{ .width = 10, .height = 20 } };
+    inline for (.{ drawAurRow, drawSelectedAurRow }) |draw| {
+        const surface = try draw(&pkg, ctx);
+        var text: std.ArrayList(u8) = .empty;
+        for (surface.buffer) |cell| try text.appendSlice(arena.allocator(), cell.char.grapheme);
+        try std.testing.expect(std.mem.indexOf(u8, text.items, "demo\\x1b[31m\\x0d\\x7f") != null);
+        try std.testing.expect(std.mem.indexOfAny(u8, text.items, "\x1b\r\x7f") == null);
+        try std.testing.expectEqualStrings(name, pkg.Name);
+    }
 }

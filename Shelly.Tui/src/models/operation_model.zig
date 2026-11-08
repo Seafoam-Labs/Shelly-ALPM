@@ -238,7 +238,7 @@ pub fn pollPkgbuild(self: *Model, ctx: *vxfw.EventContext) !void {
             self.operation_state.pkgbuild_failure = error.PackageNotFound;
             return;
         };
-        if (job.atoll and self.overlay != null and self.overlay.? == .pkgbuild) {
+        if (job.atoll and build.PkgBuild != null and self.overlay != null and self.overlay.? == .pkgbuild) {
             self.operation_state.pkgbuild_scan_status = "Scanning cached PKGBUILD…";
             startPkgbuildRequest(self, ctx, build.PkgBuild) catch {
                 self.operation_state.pkgbuild_scan_status = "Could not start the security scan. Close and reopen the preview to retry.";
@@ -255,7 +255,8 @@ fn scannedPkgbuild(job: *const PkgbuildJob) !PkgBuild {
     const result = job.result orelse return error.NoPkgbuildData;
     const build = matchingPkgbuild(result.value, job.name) orelse return error.PackageNotFound;
     const original = job.expected_content orelse return error.NoPkgbuildData;
-    if (!std.mem.eql(u8, build.PkgBuild, original)) return error.ReviewedPkgbuildChanged;
+    const content = build.PkgBuild orelse return error.NoPkgbuildData;
+    if (!std.mem.eql(u8, content, original)) return error.ReviewedPkgbuildChanged;
     if (build.Scan == null) return error.MissingScanResult;
     return build;
 }
@@ -878,6 +879,63 @@ test "help preserves operation confirmation and follows operation stages" {
     try std.testing.expectEqual(SudoPrompt.State.succeeded, prompt.state);
 }
 
+test "incomplete reviews keep the worker input open until an explicit answer" {
+    runtime.io = std.testing.io;
+    defer runtime.io = undefined;
+    var env: std.process.Environ.Map = .init(std.testing.allocator);
+    defer env.deinit();
+    for ([_]bool{ false, true }) |approve| {
+        const model = try Model.init(std.testing.allocator);
+        defer model.deinit();
+        const prompt = try std.testing.allocator.create(SudoPrompt);
+        prompt.* = .{ .name = try std.testing.allocator.dupe(u8, "demo"), .backend = .aur, .state = .running };
+        model.overlay = .{ .sudo = prompt };
+        var temporary = std.testing.tmpDir(.{});
+        defer temporary.cleanup();
+        var job: shelly_operation.Operation = .{
+            .arena = .init(std.testing.allocator),
+            .request = .{ .shelly_bin = "unused", .environ_map = &env, .name = "demo", .backend = "aur" },
+            .input = try temporary.dir.createFile(std.testing.io, "answers", .{}),
+            .expected_answer = .pkgbuild,
+            .expected_id = @splat(0),
+            .expected_len = 1,
+        };
+        defer job.arena.deinit();
+        defer job.closeInput(std.testing.io);
+        job.expected_id[0] = '1';
+        var message = try shelly_operation.decodeJson(std.testing.allocator,
+            \\{"$kind":"q.pkgbuilddiff","QuestionId":"1","PackageName":"demo","OldPkgbuild":"","NewPkgbuild":"pkgname=demo","Warnings":[]}
+        );
+        const long = try message.arena.allocator().alloc(u8, 8193);
+        @memset(long, 'x');
+        message.value.question.pkgbuild.source_files = &.{.{ .name = "long.txt", .content = long }};
+        job.pending = message;
+        model.operation_state.install_job = &job;
+        defer model.operation_state.install_job = null;
+        try std.testing.expect(try pollInstall(model));
+        try std.testing.expect(!job.input_closing and job.input != null);
+        try std.testing.expect(job.expected_answer != null);
+        try std.testing.expect(model.overlay.? == .pkgbuild);
+        try std.testing.expect(model.operation_state.review_prompt.? == prompt);
+        try std.testing.expect(std.mem.startsWith(u8, model.operation_state.pkgbuild_document.?.lines[0], "Some content could not be displayed."));
+        const view = pkgbuildView(model);
+        try std.testing.expectEqual(pkgbuild_view.Action.approve, view.handleKey(commands.bindings.approve).?);
+        try std.testing.expectEqual(pkgbuild_view.Action.decline, view.handleKey(commands.bindings.decline).?);
+        var ctx: vxfw.EventContext = .{ .io = std.testing.io, .alloc = std.testing.allocator, .cmds = .empty };
+        defer ctx.cmds.deinit(std.testing.allocator);
+        model.operation_state.pkgbuild_scroll.last_height = 4;
+        model.operation_state.pkgbuild_scroll.scroll.top = 2;
+        try handleReviewKey(model, &ctx, commands.bindings.half_page_up);
+        try std.testing.expectEqual(@as(i17, -2), model.operation_state.pkgbuild_scroll.scroll.pending_lines);
+        try std.testing.expect(job.expected_answer != null);
+        try handleReviewKey(model, &ctx, if (approve) commands.bindings.approve else commands.bindings.decline);
+        try std.testing.expect(job.expected_answer == null);
+        try std.testing.expectEqual(!approve, job.user_declined);
+        try std.testing.expect(model.operation_state.operation_question == null);
+        try std.testing.expect(model.overlay.?.sudo == prompt);
+    }
+}
+
 test "dependency checkboxes navigate toggle and submit actual CLI indices" {
     vxfw.DrawContext.init(.unicode);
     const model = try Model.init(std.testing.allocator);
@@ -1078,7 +1136,7 @@ test "Atoll preview stays loading until the scan finishes and retains source on 
     const Worker = struct {
         fn finish() void {}
     };
-    for (0..4) |scenario| {
+    for (0..5) |scenario| {
         const model = try Model.init(std.testing.allocator);
         defer model.deinit();
         model.settings_state.settings.atoll_aur_enabled = true;
@@ -1100,6 +1158,7 @@ test "Atoll preview stays loading until the scan finishes and retains source on 
             job.result = try std.json.parseFromSlice([]PkgBuild, model.gpa, switch (scenario) {
                 0 => "[{\"Name\":\"demo\",\"PkgBuild\":\"pkgname=demo\",\"Scan\":{\"findings\":[],\"related_files\":[{\"name\":\"demo.install\",\"content\":\"echo checked\"}]}}]",
                 1 => "[{\"Name\":\"demo\",\"PkgBuild\":\"changed\",\"Scan\":{\"findings\":[],\"related_files\":[]}}]",
+                4 => "[{\"Name\":\"demo\",\"PkgBuild\":null}]",
                 else => "[{\"Name\":\"demo\",\"PkgBuild\":\"pkgname=demo\"}]",
             }, .{ .allocate = .alloc_always });
         }
@@ -1148,4 +1207,30 @@ test "regular PKGBUILD preview never schedules an Atoll security scan" {
     try std.testing.expect(model.operation_state.pkgbuild_document != null);
     try std.testing.expect(model.operation_state.pkgbuild_job == null);
     try std.testing.expectEqualStrings("", model.operation_state.pkgbuild_scan_status);
+}
+
+test "missing Atoll preview source is displayed without scheduling another request" {
+    const model = try Model.init(std.testing.allocator);
+    defer model.deinit();
+    model.settings_state.settings.atoll_aur_enabled = true;
+    model.overlay = .pkgbuild;
+    model.operation_state.pkgbuild_name = try model.gpa.dupe(u8, "demo");
+    const job = try model.gpa.create(PkgbuildJob);
+    job.* = .{ .name = try model.gpa.dupe(u8, "demo"), .atoll = true, .done = .init(true), .result = try std.json.parseFromSlice([]PkgBuild, model.gpa,
+        \\[{"Name":"demo","PkgBuild":null}]
+    , .{ .allocate = .alloc_always }) };
+    const Worker = struct {
+        fn finish() void {}
+    };
+    model.operation_state.pkgbuild_job = job;
+    model.operation_state.pkgbuild_thread = try std.Thread.spawn(.{}, Worker.finish, .{});
+    var ctx: vxfw.EventContext = .{ .io = std.testing.io, .alloc = model.gpa, .cmds = .empty };
+    defer ctx.cmds.deinit(model.gpa);
+    try pollPkgbuild(model, &ctx);
+    try std.testing.expect(model.operation_state.pkgbuild_job == null);
+    try std.testing.expect(model.operation_state.pkgbuild_document != null);
+    try std.testing.expectEqualStrings("", model.operation_state.pkgbuild_scan_status);
+    const text = try std.mem.join(model.gpa, "\n", model.operation_state.pkgbuild_document.?.lines);
+    defer model.gpa.free(text);
+    try std.testing.expect(std.mem.indexOf(u8, text, "PKGBUILD unavailable for demo.") != null);
 }

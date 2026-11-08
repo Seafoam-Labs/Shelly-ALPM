@@ -65,7 +65,7 @@ pub const Bindings = struct {
     next_screenshot: vaxis.Key = .{ .codepoint = ']' },
     categories: vaxis.Key = .{ .codepoint = 'g', .mods = .{ .ctrl = true } },
     toggle_wrap: vaxis.Key = .{ .codepoint = 'w' },
-    clear_selection: vaxis.Key = .{ .codepoint = 'u', .mods = .{ .ctrl = true } },
+    clear_selection: vaxis.Key = .{ .codepoint = 'x', .mods = .{ .ctrl = true } },
     install: vaxis.Key = .{ .codepoint = 'i' },
     remove: vaxis.Key = .{ .codepoint = 'r' },
     preview: vaxis.Key = .{ .codepoint = 'p' },
@@ -93,6 +93,19 @@ pub const Bindings = struct {
 /// Live bindings shared by dispatch and help/footer rendering. Settings will
 /// be capable of replacing this later.
 pub var bindings: Bindings = .{};
+
+test "clearing selections does not shadow half-page scrolling" {
+    const up: vaxis.Key = .{ .codepoint = 'u', .mods = .{ .ctrl = true } };
+    const clear: vaxis.Key = .{ .codepoint = 'x', .mods = .{ .ctrl = true } };
+    try std.testing.expect(matches(up, .half_page_up));
+    try std.testing.expect(!matches(up, .clear_selection));
+    try std.testing.expect(matches(clear, .clear_selection));
+    try std.testing.expect(scrollKey(clear) == null);
+    try std.testing.expectEqual(@as(u21, 'u'), scrollKey(up).?.codepoint);
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    try std.testing.expectEqualStrings("Ctrl+X", try label(arena.allocator(), .clear_selection));
+}
 
 fn binding(id: Id) vaxis.Key {
     return switch (id) {

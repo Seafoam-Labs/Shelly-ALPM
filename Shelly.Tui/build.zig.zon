@@ -38,9 +38,6 @@
             .url = "https://codeload.github.com/rockorager/libvaxis/tar.gz/b24be454926b012316cb44d9f0e95da45d6bc3d9",
             .hash = "vaxis-0.6.0-BWNV_E4QDQChkJdI41RehZ8CS67EJbCTy43904zntvcY",
         },
-        .package_manager = .{
-            .path = "../Shelly.PackageManager",
-        },
     },
     .paths = .{
         "build.sh",

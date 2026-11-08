@@ -45,14 +45,23 @@ pub const Document = struct {
     const Builder = struct {
         lines: std.ArrayList([]const u8) = .empty,
         metadata: std.ArrayList(Metadata) = .empty,
+        incomplete: bool = false,
     };
     const Metadata = struct { kind: highlight.Kind, prefix: usize = 0, reset: bool = false, style: ?vaxis.Style = null };
     fn append(alloc: std.mem.Allocator, builder: *Builder, text: []const u8, metadata: Metadata) !void {
+        if (builder.lines.items.len >= 100_000) {
+            builder.incomplete = true;
+            return;
+        }
         try builder.lines.append(alloc, text);
         try builder.metadata.append(alloc, metadata);
     }
     fn finish(arena: *std.heap.ArenaAllocator, builder: *Builder) !Document {
         const alloc = arena.allocator();
+        if (builder.incomplete) {
+            try builder.lines.insert(alloc, 0, "Some content could not be displayed. Review the full source before approving.");
+            try builder.metadata.insert(alloc, 0, .{ .kind = .plain, .style = .{ .fg = .{ .index = 3 }, .bold = true } });
+        }
         const lines = try builder.lines.toOwnedSlice(alloc);
         const rows = try alloc.alloc(Row, lines.len);
         var state: highlight.State = .{};
@@ -88,7 +97,12 @@ pub const Document = struct {
                 };
                 try scanReview(alloc, &lines, warnings, true, &remaining);
             }
-            try sourceStyled(alloc, &lines, build.PkgBuild, &remaining, .shell);
+            if (build.PkgBuild) |content| {
+                try sourceStyled(alloc, &lines, content, &remaining, .shell);
+            } else {
+                const message = try std.fmt.allocPrint(alloc, "PKGBUILD unavailable for {s}.", .{build.Name});
+                try source(alloc, &lines, message, &remaining);
+            }
             if (build.Scan) |scan| {
                 for (scan.related_files) |file| {
                     try section(alloc, &lines, file.name, &remaining);
@@ -112,12 +126,20 @@ pub const Document = struct {
                 if (action == .upgrade and review.diff_lines.len > 0) {
                     var diff_size: usize = 0;
                     for (review.diff_lines) |line| {
-                        if (line.len +| 1 > remaining -| diff_size) return error.PreviewTooLarge;
+                        if (line.len +| 1 > remaining -| diff_size) {
+                            diff_size = remaining + 1;
+                            break;
+                        }
                         diff_size += line.len + 1;
                     }
-                    const diff = try alloc.alloc([]const u8, review.diff_lines.len);
-                    for (review.diff_lines, diff) |line, *plain| plain.* = diffText(line);
-                    try sourceStyled(alloc, &lines, try std.mem.join(alloc, "\n", diff), &remaining, .diff);
+                    if (diff_size > remaining) {
+                        lines.incomplete = true;
+                        try source(alloc, &lines, "[diff omitted: display limit]", &remaining);
+                    } else {
+                        const diff = try alloc.alloc([]const u8, review.diff_lines.len);
+                        for (review.diff_lines, diff) |line, *plain| plain.* = diffText(line);
+                        try sourceStyled(alloc, &lines, try std.mem.join(alloc, "\n", diff), &remaining, .diff);
+                    }
                 } else {
                     if (action == .upgrade and review.old_pkgbuild.len > 0)
                         try section(alloc, &lines, "No diff supplied; showing the proposed PKGBUILD.", &remaining);
@@ -149,7 +171,7 @@ pub const Document = struct {
                     };
                     try append(alloc, &lines, "", .{ .kind = .plain });
                     const heading = try std.fmt.allocPrint(alloc, "{s} ({d})", .{ roleLabel(first.role), count });
-                    try append(alloc, &lines, try displayText(alloc, heading, &remaining), .{ .kind = .heading });
+                    try append(alloc, &lines, try displayText(alloc, &lines, heading, &remaining), .{ .kind = .heading });
                     for (request.packages) |pkg| {
                         if (!std.mem.eql(u8, pkg.role, first.role)) continue;
                         const origin = if (std.mem.eql(u8, pkg.source, "aur")) "AUR" else pkg.repository orelse pkg.source;
@@ -194,7 +216,7 @@ pub const Document = struct {
 
     fn section(alloc: std.mem.Allocator, lines: *Builder, title: []const u8, remaining: *usize) !void {
         try append(alloc, lines, "", .{ .kind = .heading });
-        const safe = try displayText(alloc, title, remaining);
+        const safe = try displayText(alloc, lines, title, remaining);
         try append(alloc, lines, try std.fmt.allocPrint(alloc, "── {s} ──", .{safe}), .{ .kind = .heading });
     }
 
@@ -212,7 +234,7 @@ pub const Document = struct {
             if (critical > 0) try std.fmt.allocPrint(alloc, "Security scan: {d} finding{s}, {d} critical.", .{ warnings.len, if (warnings.len == 1) "" else "s", critical }) else try std.fmt.allocPrint(alloc, "Security scan: {d} finding{s}.", .{ warnings.len, if (warnings.len == 1) "" else "s" })
         else if (reported) "Security scan: no findings reported by the CLI." else "Security scan: results not supplied by the CLI.";
         const style: vaxis.Style = if (warnings.len > 0) findingStyle(if (critical > 0) "Critical" else if (has_warning) "Warning" else "Info") else if (reported) .{ .fg = .{ .index = 2 }, .bold = true } else styles.emphasis;
-        try append(alloc, lines, try displayText(alloc, summary, remaining), .{ .kind = .plain, .style = style });
+        try append(alloc, lines, try displayText(alloc, lines, summary, remaining), .{ .kind = .plain, .style = style });
         for (warnings) |finding| {
             try append(alloc, lines, "", .{ .kind = .plain });
             const title = try std.fmt.allocPrint(alloc, "[{s}] {s} — {s}", .{
@@ -220,7 +242,7 @@ pub const Document = struct {
                 if (finding.Tool.len > 0) finding.Tool else "Scanner",
                 if (finding.Hook.len > 0) finding.Hook else "PKGBUILD",
             });
-            try append(alloc, lines, try displayText(alloc, title, remaining), .{ .kind = .plain, .style = findingStyle(finding.Severity) });
+            try append(alloc, lines, try displayText(alloc, lines, title, remaining), .{ .kind = .plain, .style = findingStyle(finding.Severity) });
             if (finding.Message.len > 0) try prose(alloc, lines, finding.Message, remaining);
             if (finding.MatchedLine.len > 0) try prose(alloc, lines, try std.fmt.allocPrint(alloc, "Matched: {s}", .{finding.MatchedLine}), remaining);
         }
@@ -229,7 +251,13 @@ pub const Document = struct {
 
     fn prose(alloc: std.mem.Allocator, lines: *Builder, text: []const u8, remaining: *usize) !void {
         var iterator = std.mem.splitScalar(u8, text, '\n');
-        while (iterator.next()) |line| try append(alloc, lines, try displayText(alloc, line, remaining), .{ .kind = .plain });
+        while (iterator.next()) |line| {
+            if (lines.lines.items.len >= 100_000) {
+                lines.incomplete = true;
+                break;
+            }
+            try append(alloc, lines, try displayText(alloc, lines, line, remaining), .{ .kind = .plain });
+        }
     }
 
     fn source(alloc: std.mem.Allocator, lines: *Builder, text: []const u8, remaining: *usize) !void {
@@ -237,21 +265,33 @@ pub const Document = struct {
     }
 
     fn sourceStyled(alloc: std.mem.Allocator, lines: *Builder, text: []const u8, remaining: *usize, kind: highlight.Kind) !void {
-        if (text.len > remaining.*) return error.PreviewTooLarge;
+        if (text.len > remaining.*) {
+            lines.incomplete = true;
+            return append(alloc, lines, "[source omitted: display limit]", .{ .kind = .plain });
+        }
         var iterator = std.mem.splitScalar(u8, text, '\n');
         var number: usize = 1;
         while (iterator.next()) |line| : (number += 1) {
-            if (lines.lines.items.len >= 100_000) return error.PreviewTooLarge;
-            const safe = try displayText(alloc, line, remaining);
+            if (lines.lines.items.len >= 100_000) {
+                lines.incomplete = true;
+                break;
+            }
+            const safe = try displayText(alloc, lines, line, remaining);
             const prefix = try std.fmt.allocPrint(alloc, "{d: >5} │ ", .{number});
             try append(alloc, lines, try std.mem.concat(alloc, u8, &.{ prefix, safe }), .{ .kind = kind, .prefix = prefix.len, .reset = number == 1 });
         }
     }
 
-    fn displayText(alloc: std.mem.Allocator, text: []const u8, remaining: *usize) ![]const u8 {
-        if (text.len > remaining.*) return error.PreviewTooLarge;
+    fn displayText(alloc: std.mem.Allocator, lines: *Builder, text: []const u8, remaining: *usize) ![]const u8 {
+        if (text.len > remaining.*) {
+            lines.incomplete = true;
+            return "[text omitted: display limit]";
+        }
         remaining.* -= text.len;
-        if (!std.unicode.utf8ValidateSlice(text)) return error.InvalidSourceEncoding;
+        if (!std.unicode.utf8ValidateSlice(text)) {
+            lines.incomplete = true;
+            return "[line omitted: invalid UTF-8]";
+        }
         var out: std.ArrayList(u8) = .empty;
         for (text) |byte| {
             if (byte == '\t') {
@@ -260,7 +300,10 @@ pub const Document = struct {
                 const hex = "0123456789abcdef";
                 try out.appendSlice(alloc, &.{ '\\', 'x', hex[byte >> 4], hex[byte & 15] });
             } else try out.append(alloc, byte);
-            if (out.items.len > 8192) return error.SourceLineTooLong;
+            if (out.items.len > 8192) {
+                lines.incomplete = true;
+                return "[line omitted: display limit]";
+            }
         }
         return out.toOwnedSlice(alloc);
     }
@@ -516,17 +559,74 @@ test "PKGBUILD document owns source and preserves URLs and related files" {
     try std.testing.expect(std.mem.indexOfScalar(u8, text, 0x1b) == null);
 }
 
-test "PKGBUILD document rejects empty invalid and oversized source" {
+test "pkgbuild preview accepts null source and preserves other results" {
+    const parsed = try std.json.parseFromSlice([]PkgBuild, std.testing.allocator,
+        \\[{"Name":"missing","PkgBuild":null},{"Name":"available","PkgBuild":"pkgname=available"}]
+    , .{});
+    defer parsed.deinit();
+    try std.testing.expect(parsed.value[0].PkgBuild == null);
+    var document = try Document.init(std.testing.allocator, parsed.value);
+    defer document.deinit();
+    const text = try std.mem.join(std.testing.allocator, "\n", document.lines);
+    defer std.testing.allocator.free(text);
+    try std.testing.expect(std.mem.indexOf(u8, text, "PKGBUILD unavailable for missing.") != null);
+    try std.testing.expect(std.mem.indexOf(u8, text, "pkgname=available") != null);
+}
+
+test "PKGBUILD document marks unavailable lines and retains surrounding source" {
     try std.testing.expectError(error.NoPkgbuildData, Document.init(std.testing.allocator, &.{}));
-    try std.testing.expectError(error.InvalidSourceEncoding, Document.init(std.testing.allocator, &.{
-        .{ .Name = "test", .PkgBuild = "\xff" },
-    }));
     const long = try std.testing.allocator.alloc(u8, 8193);
     defer std.testing.allocator.free(long);
     @memset(long, 'x');
-    try std.testing.expectError(error.SourceLineTooLong, Document.init(std.testing.allocator, &.{
-        .{ .Name = "test", .PkgBuild = long },
-    }));
+    for ([_][]const u8{ "\xff", long }) |unavailable| {
+        const source = try std.mem.concat(std.testing.allocator, u8, &.{ "pkgname=test\n", unavailable, "\npkgver=2" });
+        defer std.testing.allocator.free(source);
+        var document = try Document.init(std.testing.allocator, &.{.{ .Name = "test", .PkgBuild = source }});
+        defer document.deinit();
+        try std.testing.expect(std.mem.startsWith(u8, document.lines[0], "Some content could not be displayed."));
+        try std.testing.expect(std.mem.endsWith(u8, document.lines[1], "pkgname=test"));
+        try std.testing.expect(std.mem.indexOf(u8, document.lines[2], "[line omitted:") != null);
+        try std.testing.expect(std.mem.endsWith(u8, document.lines[3], "pkgver=2"));
+        try std.testing.expect(document.rows[0].spans[0].style.bold);
+        for (document.lines) |line| try std.testing.expect(std.unicode.utf8ValidateSlice(line));
+    }
+}
+
+test "operation reviews bound large files diffs and line counts without failing" {
+    const allocator = std.testing.allocator;
+    const large = try allocator.alloc(u8, 2 * 1024 * 1024 + 1);
+    defer allocator.free(large);
+    @memset(large, 'x');
+    const many_lines = try allocator.alloc(u8, 100_001);
+    defer allocator.free(many_lines);
+    @memset(many_lines, '\n');
+    for ([_]operation.Question{
+        .{ .pkgbuild = .{ .question_id = "1", .package_name = "test", .old_pkgbuild = "", .new_pkgbuild = "pkgname=test", .source_files = &.{ .{ .name = "large.txt", .content = large }, .{ .name = "small.txt", .content = "still visible" } } } },
+        .{ .pkgbuild = .{ .question_id = "2", .package_name = "test", .old_pkgbuild = "", .new_pkgbuild = "", .diff_lines = &.{large} } },
+        .{ .pkgbuild = .{ .question_id = "3", .package_name = "test", .old_pkgbuild = "", .new_pkgbuild = many_lines } },
+    }, 0..) |question, index| {
+        var document = try Document.fromQuestionForAction(allocator, question, .upgrade);
+        defer document.deinit();
+        try std.testing.expect(std.mem.startsWith(u8, document.lines[0], "Some content could not be displayed."));
+        try std.testing.expect(document.lines.len <= 100_001);
+        if (index == 0) {
+            const text = try std.mem.join(allocator, "\n", document.lines);
+            defer allocator.free(text);
+            try std.testing.expect(std.mem.indexOf(u8, text, "pkgname=test") != null);
+            try std.testing.expect(std.mem.indexOf(u8, text, "[source omitted:") != null);
+            try std.testing.expect(std.mem.indexOf(u8, text, "still visible") != null);
+        }
+    }
+}
+
+test "incomplete documents release allocations when construction fails" {
+    const Case = struct {
+        fn run(allocator: Allocator) !void {
+            var document = try Document.init(allocator, &.{.{ .Name = "test", .PkgBuild = "pkgname=test\n\xff\npkgver=2" }});
+            defer document.deinit();
+        }
+    };
+    try std.testing.checkAllAllocationFailures(std.testing.allocator, Case.run, .{});
 }
 
 test "preview and operation review share highlighting without changing source or approval" {
