@@ -399,7 +399,7 @@ test "changing Atoll source rejects in flight AUR and update results" {
     model.aur_state.aur_job = aur_job;
     model.aur_state.aur_thread = try std.Thread.spawn(.{}, Worker.finish, .{});
     const updates_job = try model.gpa.create(UpdatesJob);
-    updates_job.* = .{ .aur_enabled = true, .done = .init(true), .result = try std.json.parseFromSlice(CheckUpdates, model.gpa, "{}", .{}) };
+    updates_job.* = .{ .aur_enabled = true, .done = .init(true), .result = @import("sync.zig").ParsedCheckUpdates.fromParsed(try std.json.parseFromSlice(CheckUpdates, model.gpa, "{}", .{})) };
     model.updates_state.updates_job = updates_job;
     model.updates_state.updates_thread = try std.Thread.spawn(.{}, Worker.finish, .{});
     applySettings(model, .{ .aur_enabled = true, .atoll_aur_enabled = true });
