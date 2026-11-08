@@ -227,6 +227,7 @@ pub const Model = struct {
                                 }
                                 try self.focusActiveTab(ctx);
                                 try updates_model.ensureUpdates(self, ctx);
+                                try aur_model.ensureAur(self, ctx);
                                 try flatpak_model.ensureFlatpak(self, ctx);
                             }
                             return ctx.consumeAndRedraw();
@@ -253,6 +254,7 @@ pub const Model = struct {
                             self.switchTab(if (action == .next_tab) 1 else -1);
                             try self.focusActiveTab(ctx);
                             try updates_model.ensureUpdates(self, ctx);
+                            try aur_model.ensureAur(self, ctx);
                             try flatpak_model.ensureFlatpak(self, ctx);
                         },
                         .select_tab => |index| try self.setTab(self.visibleTabs()[index], ctx),
@@ -290,10 +292,11 @@ pub const Model = struct {
             .tick => {
                 const loading = try packages_model.pollLoad(self);
                 try flatpak_model.pollFlatpakProbe(self, ctx);
-                const searching = try aur_model.pollAurSearch(self);
+                _ = try aur_model.pollAurSearch(self);
                 const installing = try operation_model.pollInstall(self);
                 updates_model.pollUpdates(self);
                 try updates_model.ensureUpdates(self, ctx);
+                try aur_model.ensureAur(self, ctx);
                 try flatpak_model.pollFlatpak(self);
                 try operation_model.pollPkgbuild(self, ctx);
                 try flatpak_model.syncScreenshots(self, ctx);
@@ -317,10 +320,10 @@ pub const Model = struct {
                     self.updates_state.refresh_updates_after_operation = false;
                 }
                 if (self.aur_state.refresh_aur_after_operation and self.aur_state.aur_job == null) {
-                    if (self.aur_state.aur_installed_only or self.aur_state.aur_query.len > 0) try aur_model.startAurSearch(self, ctx, self.aur_state.aur_query);
+                    if (aur_model.catalogActive(self) or self.aur_state.aur_installed_only or self.aur_state.aur_query.len > 0) try aur_model.startAurSearch(self, ctx, self.aur_state.aur_query);
                     self.aur_state.refresh_aur_after_operation = false;
                 }
-                if (loading or searching or installing or self.packages_state.loading or self.updates_state.updates_job != null or self.operation_state.pkgbuild_job != null or self.aur_state.aur_job != null or self.flatpak_state.flatpak_job != null or self.flatpak_state.flatpak_probe_job != null) {
+                if (loading or installing or self.packages_state.loading or self.updates_state.updates_job != null or self.operation_state.pkgbuild_job != null or self.flatpak_state.flatpak_job != null or self.flatpak_state.flatpak_probe_job != null) {
                     try ctx.tick(100, self.widget());
                 }
                 return ctx.consumeAndRedraw();
@@ -334,7 +337,7 @@ pub const Model = struct {
             },
             .mouse => {
                 if (self.overlay) |overlay| {
-                    if (overlay == .pkgbuild and self.operation_state.pkgbuild_document != null and self.operation_state.pkgbuild_job == null) {
+                    if (overlay == .pkgbuild and self.operation_state.pkgbuild_document != null and !operation_model.pkgbuildView(self).loading) {
                         return operation_model.handleReviewMouse(self, ctx, event);
                     }
                 }
@@ -345,7 +348,7 @@ pub const Model = struct {
         }
     }
 
-    /// Read the small preference file before the first frame, never CLI/catalog data.
+    /// Read frontend preferences and the shared CLI AUR source before the first frame.
     pub const loadSettings = settings_model.loadSettings;
 
     // -- tabs --------------------------------------------------------------
@@ -391,6 +394,7 @@ pub const Model = struct {
         self.active = tab;
         try self.focusActiveTab(ctx);
         try updates_model.ensureUpdates(self, ctx);
+        try aur_model.ensureAur(self, ctx);
         try flatpak_model.ensureFlatpak(self, ctx);
     }
 
@@ -649,7 +653,7 @@ pub const Model = struct {
                     if (question.value.question == .select_one or question.value.question == .select_many) .answers else .review
                 else
                     .preview_document;
-                context.scrollable = self.operation_state.pkgbuild_document != null;
+                context.scrollable = self.operation_state.pkgbuild_document != null and !operation_model.pkgbuildView(self).loading;
                 context.source_wrap = self.operation_state.pkgbuild_wrap;
                 context.multiple_choices = if (self.operation_state.operation_question) |q| q.value.question == .select_many else false;
                 return context;
@@ -678,6 +682,9 @@ pub const Model = struct {
             },
             .aur => {
                 context.mode = .aur;
+                context.catalog_available = aur_model.catalogActive(self);
+                context.catalog_previous = context.catalog_available and self.aur_state.aur_job == null and self.aur_state.catalog_page > 1;
+                context.catalog_next = context.catalog_available and self.aur_state.aur_job == null and self.aur_state.catalog_page < self.aur_state.catalog_total_pages;
                 context.installed_only = self.aur_state.aur_installed_only;
                 context.browsing_list = self.aur_state.aur_list_active;
                 context.selected_count = self.aur_state.aur_selection.items.len;

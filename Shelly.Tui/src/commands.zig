@@ -18,6 +18,8 @@ pub const Id = enum {
     clear_selection,
     toggle_wrap,
     categories,
+    previous_catalog_page,
+    next_catalog_page,
     previous_screenshot,
     next_screenshot,
     install,
@@ -57,6 +59,8 @@ pub const Bindings = struct {
     search: vaxis.Key = .{ .codepoint = '/' },
     select: vaxis.Key = .{ .codepoint = vaxis.Key.enter },
     mark: vaxis.Key = .{ .codepoint = vaxis.Key.space },
+    previous_catalog_page: vaxis.Key = .{ .codepoint = '[' },
+    next_catalog_page: vaxis.Key = .{ .codepoint = ']' },
     previous_screenshot: vaxis.Key = .{ .codepoint = '[' },
     next_screenshot: vaxis.Key = .{ .codepoint = ']' },
     categories: vaxis.Key = .{ .codepoint = 'g', .mods = .{ .ctrl = true } },
@@ -293,6 +297,9 @@ pub const Context = struct {
     installed_only: bool = false,
     browsing_list: bool = false,
     categories_available: bool = false,
+    catalog_available: bool = false,
+    catalog_previous: bool = false,
+    catalog_next: bool = false,
     screenshots_navigable: bool = false,
     screenshot_retry: bool = false,
     category_choice: bool = false,
@@ -378,10 +385,14 @@ pub fn entries(arena: std.mem.Allocator, context: Context) std.mem.Allocator.Err
                 if (context.installable) try add(arena, &list, .install, "Install", "Choose a remote and installation scope");
                 if (context.removable) try add(arena, &list, .remove, "Remove", "Remove the highlighted Flatpak");
             }
+            if (context.catalog_available and context.browsing_list) {
+                if (context.catalog_previous) try add(arena, &list, .previous_catalog_page, "Previous page", "Load the previous AUR catalog page");
+                if (context.catalog_next) try add(arena, &list, .next_catalog_page, "Next page", "Load the next AUR catalog page");
+            }
             try add(arena, &list, .previous, "Previous", "Previous result");
             try add(arena, &list, .next, "Next", "Next result");
             try add(arena, &list, .filter, if (context.installed_only) "All" else "Installed", "Toggle browsing / installed packages");
-            if (context.mode == .flatpak or context.installed_only) try add(arena, &list, .refresh_list, "Refresh", "Refresh the current package list");
+            if (context.mode == .flatpak or context.installed_only or context.catalog_available) try add(arena, &list, .refresh_list, "Refresh", "Refresh the current package list");
         },
         .updates => {
             if (context.upgrade_all) try add(arena, &list, .upgrade_all, "Update all", "Upgrade all enabled sources; AppImage updates are detected but not managed by the TUI");
@@ -452,4 +463,21 @@ pub fn entries(arena: std.mem.Allocator, context: Context) std.mem.Allocator.Err
         }
     }
     return list.toOwnedSlice(arena);
+}
+
+test "catalog shortcuts are limited to available Atoll pages in list focus" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    for ([_]Context{
+        .{ .mode = .aur, .browsing_list = true, .catalog_available = true, .catalog_next = true },
+        .{ .mode = .aur, .browsing_list = true },
+        .{ .mode = .aur, .catalog_available = true, .catalog_next = true },
+    }, 0..) |context, index| {
+        var found = false;
+        for (try entries(arena.allocator(), context)) |entry| {
+            if (entry.id == .next_catalog_page) found = true;
+            try std.testing.expect(entry.id != .previous_catalog_page);
+        }
+        try std.testing.expectEqual(index == 0, found);
+    }
 }
