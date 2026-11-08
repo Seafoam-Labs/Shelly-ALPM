@@ -248,6 +248,20 @@ test "settings determine source visibility before backend or native loading fini
     try std.testing.expectEqualSlices(Tab, Tab.always, model.visibleTabs());
 }
 
+// Keep settings tests independent of the checkout or installed Shelly CLI.
+fn createSettingsTestCli(directory: std.Io.Dir, io: std.Io) !void {
+    const fixture = try directory.createFile(io, "settings-cli", .{ .permissions = .executable_file });
+    defer fixture.close(io);
+    try fixture.writeStreamingAll(io,
+        \\#!/bin/sh
+        \\case "$1:$2:$3" in
+        \\  config:get:AurUrl)
+        \\    printf '%s\n' '[JSON]eyJBdXJVcmwiOiJodHRwczovL2F1ci5hcmNobGludXgub3JnIn0=[/JSON]' ;;
+        \\  *) exit 97 ;;
+        \\esac
+    );
+}
+
 test "settings drafts apply only after explicit save and survive failed saves" {
     const allocator = std.testing.allocator;
     const io = std.testing.io;
@@ -259,9 +273,14 @@ test "settings drafts apply only after explicit save and survive failed saves" {
     var env: std.process.Environ.Map = .init(allocator);
     defer env.deinit();
     try env.put("XDG_CONFIG_HOME", directory);
+    try createSettingsTestCli(temporary.dir, io);
+    const binary = try std.fs.path.join(allocator, &.{ directory, "settings-cli" });
+    defer allocator.free(binary);
     const model = try Model.init(allocator);
     defer model.deinit();
+    model.settings_state.cli_binary = binary;
     model.loadSettings(io, &env);
+    try std.testing.expect(model.settings_state.settings_failure == null);
     try std.testing.expect(model.settings_state.settings.eql(.{}));
     model.active = .settings;
     var ctx: vxfw.EventContext = .{ .io = io, .alloc = allocator, .cmds = .empty };
@@ -277,7 +296,9 @@ test "settings drafts apply only after explicit save and survive failed saves" {
     try std.testing.expect(!hasChanges(model));
     const restarted = try Model.init(allocator);
     defer restarted.deinit();
+    restarted.settings_state.cli_binary = binary;
     restarted.loadSettings(io, &env);
+    try std.testing.expect(restarted.settings_state.settings_failure == null);
     try std.testing.expect(restarted.settings_state.settings.aur_enabled);
     try std.testing.expect(restarted.tabEnabled(.aur));
     try std.testing.expect(restarted.flatpak_state.flatpak_probe_job == null);
@@ -328,9 +349,14 @@ test "settings keyboard edits survive tab changes and support Save Reload and Ct
     var env: std.process.Environ.Map = .init(allocator);
     defer env.deinit();
     try env.put("XDG_CONFIG_HOME", directory);
+    try createSettingsTestCli(temporary.dir, io);
+    const binary = try std.fs.path.join(allocator, &.{ directory, "settings-cli" });
+    defer allocator.free(binary);
     const model = try Model.init(allocator);
     defer model.deinit();
+    model.settings_state.cli_binary = binary;
     loadSettings(model, io, &env);
+    try std.testing.expect(model.settings_state.settings_failure == null);
     model.active = .settings;
     var ctx: vxfw.EventContext = .{ .io = io, .alloc = allocator, .cmds = .empty };
     defer ctx.cmds.deinit(allocator);
@@ -354,6 +380,7 @@ test "settings keyboard edits survive tab changes and support Save Reload and Ct
     try std.testing.expect(!model.settings_state.settings_draft.aur_enabled);
     try std.testing.expect(model.settings_state.settings.aur_enabled);
     try model.captureEvent(&ctx, .{ .key_press = commands.bindings.refresh });
+    try std.testing.expect(model.settings_state.settings_failure == null);
     try std.testing.expect(model.settings_state.settings_draft.aur_enabled);
     try std.testing.expect(!hasChanges(model));
 
