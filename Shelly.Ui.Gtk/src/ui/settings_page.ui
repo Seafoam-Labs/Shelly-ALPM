@@ -694,17 +694,34 @@
                                 <property name="orientation">horizontal</property>
                                 <property name="spacing">12</property>
                                 <child>
-                                  <object class="GtkLabel">
-                                    <property name="label" translatable="yes">Enable update checks on Upgrade All</property>
-                                    <property name="halign">start</property>
+                                  <object class="GtkBox">
+                                    <property name="orientation">vertical</property>
+                                    <property name="spacing">4</property>
                                     <property name="hexpand">true</property>
+                                    <child>
+                                      <object class="GtkLabel">
+                                        <property name="label" translatable="yes">Always Recheck AppImage Updates on Upgrade All</property>
+                                        <property name="halign">start</property>
+                                      </object>
+                                    </child>
+                                    <child>
+                                      <object class="GtkLabel">
+                                        <property name="label" translatable="yes">When off, Upgrade All uses the update results already loaded in the AppImage page.</property>
+                                        <property name="halign">start</property>
+                                        <property name="wrap">true</property>
+                                        <style>
+                                          <class name="dim-label"/>
+                                        </style>
+                                      </object>
+                                    </child>
                                   </object>
                                 </child>
                                 <child>
                                   <object class="GtkSwitch" id="appimage_upgrade_all_recheck_switch">
                                     <property name="halign">end</property>
+                                    <property name="valign">center</property>
                                     <accessibility>
-                                      <property name="label" translatable="yes">Enable update checks on Upgrade All</property>
+                                      <property name="label" translatable="yes">Always Recheck AppImage Updates on Upgrade All</property>
                                     </accessibility>
                                   </object>
                                 </child>

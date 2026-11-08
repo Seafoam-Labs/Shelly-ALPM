@@ -645,7 +645,10 @@ msgstr ""
 msgid "Enable Atoll Powered AUR"
 msgstr ""
 
-msgid "Enable update checks on Upgrade All"
+msgid "Always Recheck AppImage Updates on Upgrade All"
+msgstr ""
+
+msgid "When off, Upgrade All uses the update results already loaded in the AppImage page."
 msgstr ""
 
 msgid "AppImage Install Path"
