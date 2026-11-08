@@ -581,8 +581,9 @@ pub const Model = struct {
         const spans = try arena.alloc(vxfw.RichText.TextSpan, tabs.len);
         for (tabs, 0..) |tab, i| {
             const icon = tab.icon(self.settings_state.settings.header_icons);
+            const separator = if (self.settings_state.settings.header_icons == .nerd_font) "\u{2002}" else " ";
             spans[i] = .{
-                .text = if (icon.len > 0) try std.fmt.allocPrint(arena, " {s} {s} ", .{ icon, tab.title() }) else try std.fmt.allocPrint(arena, " {s} ", .{tab.title()}),
+                .text = if (icon.len > 0) try std.fmt.allocPrint(arena, " {s}{s}{s} ", .{ icon, separator, tab.title() }) else try std.fmt.allocPrint(arena, " {s} ", .{tab.title()}),
                 .style = if (tab == self.active)
                     styles.selected
                 else
@@ -1339,5 +1340,36 @@ test "mouse tab changes dismiss details but preserve operation modals" {
             try std.testing.expect(model.overlay != null);
             try std.testing.expectEqualStrings(@tagName(case.overlay), @tagName(model.overlay.?));
         }
+    }
+}
+
+test "Nerd Font icons have an explicit spacer on first draw and tab changes" {
+    vxfw.DrawContext.init(.unicode);
+    const model = try Model.init(std.testing.allocator);
+    defer model.deinit();
+    model.settings_state.settings = .{ .aur_enabled = true, .flatpak_enabled = true, .header_icons = .nerd_font };
+    for (Tab.all) |active| {
+        model.active = active;
+        var arena: std.heap.ArenaAllocator = .init(std.testing.allocator);
+        defer arena.deinit();
+        const widget = try model.drawTabBar(arena.allocator());
+        const surface = try widget.draw(.{ .arena = arena.allocator(), .min = .{}, .max = .{ .width = 120, .height = 3 }, .cell_size = .{ .width = 10, .height = 20 } });
+        var icons: usize = 0;
+        for (surface.buffer, 0..) |cell, index| {
+            for (Tab.all) |tab| {
+                if (!std.mem.eql(u8, cell.char.grapheme, tab.icon(.nerd_font))) continue;
+                icons += 1;
+                try std.testing.expectEqual(tab == active, cell.style.bold);
+                try std.testing.expectEqual(tab == active, cell.style.reverse);
+                const spacer = surface.buffer[index + cell.char.width];
+                try std.testing.expectEqualStrings("\u{2002}", spacer.char.grapheme);
+                try std.testing.expectEqual(@as(u8, 1), spacer.char.width);
+                try std.testing.expect(vaxis.Style.eql(cell.style, spacer.style));
+            }
+        }
+        try std.testing.expectEqual(Tab.all.len, icons);
+        const bar: *TabBar = @ptrCast(@alignCast(widget.userdata));
+        for (bar.rich.text, bar.tabs) |span, tab|
+            try std.testing.expectEqual(tab == active, span.style.bold);
     }
 }
