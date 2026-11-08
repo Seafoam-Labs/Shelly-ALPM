@@ -288,7 +288,7 @@ pub fn pkgbuildView(self: *Model) pkgbuild_view.View {
         .name = self.operation_state.pkgbuild_name,
         .wrap = self.operation_state.pkgbuild_wrap,
         .scroll = &self.operation_state.pkgbuild_scroll,
-        .loading = self.operation_state.pkgbuild_job != null and self.operation_state.pkgbuild_document == null,
+        .loading = self.operation_state.pkgbuild_job != null and self.operation_state.operation_question == null,
         .failure = self.operation_state.pkgbuild_failure,
         .review = self.operation_state.operation_question != null,
         .pkgbuild_review = if (self.operation_state.operation_question) |message| message.value.question == .pkgbuild else false,
@@ -735,7 +735,7 @@ pub fn handleReviewKey(self: *Model, ctx: *vxfw.EventContext, key: vaxis.Key) an
         self.operation_state.answer_error = "";
         return ctx.consumeAndRedraw();
     }
-    if (self.operation_state.pkgbuild_document != null)
+    if (self.operation_state.pkgbuild_document != null and !pkgbuildView(self).loading)
         try self.operation_state.pkgbuild_scroll.handleEvent(ctx, .{ .key_press = commands.scrollKey(key) orelse key });
     return ctx.consumeAndRedraw();
 }
@@ -1057,7 +1057,7 @@ test "AUR batch removal refresh failure and retry remain drawable and navigable"
     try std.testing.expectEqual(@as(usize, 0), model.aur_state.aur_selection.items.len);
 }
 
-test "Atoll scan preserves the displayed preview on failure or changed content" {
+test "Atoll preview stays loading until the scan finishes and retains source on failure" {
     const Worker = struct {
         fn finish() void {}
     };
@@ -1087,11 +1087,14 @@ test "Atoll scan preserves the displayed preview on failure or changed content" 
                 else => "[{\"Name\":\"demo\",\"PkgBuild\":\"pkgname=demo\"}]",
             }, .{ .allocate = .alloc_always });
         }
-        // A readable preview remains available while its scan is running.
-        try std.testing.expect(!pkgbuildView(model).loading);
+        // The fetched document is staged until the scan also finishes.
+        try std.testing.expect(pkgbuildView(model).loading);
+        try std.testing.expect(!model.commandContext().scrollable);
         var ctx: vxfw.EventContext = .{ .io = std.testing.io, .alloc = model.gpa, .cmds = .empty };
         defer ctx.cmds.deinit(model.gpa);
         try pollPkgbuild(model, &ctx);
+        try std.testing.expect(!pkgbuildView(model).loading);
+        try std.testing.expect(model.commandContext().scrollable);
         try std.testing.expect(model.operation_state.pkgbuild_failure == null);
         var source_found = false;
         for (model.operation_state.pkgbuild_document.?.lines) |line| {

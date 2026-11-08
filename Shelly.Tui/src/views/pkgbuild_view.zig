@@ -325,13 +325,15 @@ pub const View = struct {
         }
         const inner_width = width - 2;
         const inner_height = height - 2;
-        const note_text = if (self.answer_error.len > 0) self.answer_error else self.scan_status;
+        const note_text = if (self.loading) "" else if (self.answer_error.len > 0) self.answer_error else self.scan_status;
         const note_height: u16 = if (note_text.len > 0) 1 else 0;
         const body_height = inner_height -| note_height;
         var children: std.ArrayList(vxfw.SubSurface) = .empty;
         if (self.loading or self.failure != null) {
             var text: vxfw.Text = .{ .text = if (self.failure) |err|
                 try std.fmt.allocPrint(ctx.arena, "Could not load PKGBUILD preview ({s}).", .{@errorName(err)})
+            else if (self.scan_status.len > 0)
+                self.scan_status
             else
                 try std.fmt.allocPrint(ctx.arena, "Fetching PKGBUILD for {f}…", .{@import("diagnostics").safe(self.name)}) };
             try children.append(ctx.arena, .{

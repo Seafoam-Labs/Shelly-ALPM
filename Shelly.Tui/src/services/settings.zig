@@ -38,7 +38,7 @@ pub const Store = struct {
         defer document.deinit();
         _ = try decode(document.value);
         const alloc = document.arena.allocator();
-        // The CLI owns AurUrl. Discard the obsolete frontend-only preference.
+        // The CLI owns AurUrl.
         _ = document.value.object.swapRemove("AtollAurEnabled");
         try document.value.object.put(alloc, "AurEnabled", .{ .bool = settings.aur_enabled });
         try document.value.object.put(alloc, "FlatpakEnabled", .{ .bool = settings.flatpak_enabled });

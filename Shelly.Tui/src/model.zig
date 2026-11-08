@@ -334,7 +334,7 @@ pub const Model = struct {
             },
             .mouse => {
                 if (self.overlay) |overlay| {
-                    if (overlay == .pkgbuild and self.operation_state.pkgbuild_document != null) {
+                    if (overlay == .pkgbuild and self.operation_state.pkgbuild_document != null and !operation_model.pkgbuildView(self).loading) {
                         return operation_model.handleReviewMouse(self, ctx, event);
                     }
                 }
@@ -649,7 +649,7 @@ pub const Model = struct {
                     if (question.value.question == .select_one or question.value.question == .select_many) .answers else .review
                 else
                     .preview_document;
-                context.scrollable = self.operation_state.pkgbuild_document != null;
+                context.scrollable = self.operation_state.pkgbuild_document != null and !operation_model.pkgbuildView(self).loading;
                 context.source_wrap = self.operation_state.pkgbuild_wrap;
                 context.multiple_choices = if (self.operation_state.operation_question) |q| q.value.question == .select_many else false;
                 return context;
