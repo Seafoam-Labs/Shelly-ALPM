@@ -219,23 +219,16 @@ pub fn pollPkgbuild(self: *Model, ctx: *vxfw.EventContext) !void {
         return;
     }
     if (job.mode == .atoll_scan) {
-        self.operation_state.pkgbuild_scan_status = "Security scan failed.";
-        if (job.failure != null) return;
-        const result = job.result orelse return;
-        const build = matchingPkgbuild(result.value, job.name) orelse return;
-        if (!std.mem.eql(u8, build.PkgBuild, job.expected_content orelse return)) {
-            self.operation_state.pkgbuild_scan_status = "PKGBUILD changed.";
+        const build = scannedPkgbuild(job) catch |err| {
+            self.operation_state.pkgbuild_scan_status = if (err == error.ReviewedPkgbuildChanged) "PKGBUILD changed." else "Security scan failed.";
+            const original = job.expected_content orelse {
+                self.operation_state.pkgbuild_failure = error.NoPkgbuildData;
+                return;
+            };
+            publishPkgbuild(self, .{ .Name = job.name, .PkgBuild = original });
             return;
-        }
-        if (build.Scan == null) return;
-        const document = pkgbuild_view.Document.init(self.gpa, &.{build}) catch return;
-        if (self.operation_state.pkgbuild_document) |*old| old.deinit();
-        self.operation_state.pkgbuild_document = document;
-        self.operation_state.pkgbuild_scroll.item_count = @intCast(document.lines.len);
-        if (build.Scan.?.findings.len > 0) {
-            self.operation_state.pkgbuild_scroll.scroll = .{};
-            self.operation_state.pkgbuild_scroll.cursor = 0;
-        }
+        };
+        publishPkgbuild(self, build);
         self.operation_state.pkgbuild_scan_status = if (build.Scan.?.findings.len == 0) "Security scan: no findings reported by the CLI." else "Security scan completed.";
         return;
     }
@@ -245,20 +238,38 @@ pub fn pollPkgbuild(self: *Model, ctx: *vxfw.EventContext) !void {
             self.operation_state.pkgbuild_failure = error.PackageNotFound;
             return;
         };
-        const document = pkgbuild_view.Document.init(self.gpa, &.{build}) catch |err| {
-            self.operation_state.pkgbuild_failure = err;
-            return;
-        };
-        if (self.operation_state.pkgbuild_document) |*old| old.deinit();
-        self.operation_state.pkgbuild_document = document;
-        self.operation_state.pkgbuild_scroll.item_count = @intCast(document.lines.len);
         if (job.atoll and self.overlay != null and self.overlay.? == .pkgbuild) {
             self.operation_state.pkgbuild_scan_status = "Scanning cached PKGBUILD…";
             startPkgbuildRequest(self, ctx, build.PkgBuild) catch {
                 self.operation_state.pkgbuild_scan_status = "Could not start the security scan. Close and reopen the preview to retry.";
+                publishPkgbuild(self, build);
             };
+            return;
         }
+        publishPkgbuild(self, build);
     }
+}
+
+fn scannedPkgbuild(job: *const PkgbuildJob) !PkgBuild {
+    if (job.failure) |err| return err;
+    const result = job.result orelse return error.NoPkgbuildData;
+    const build = matchingPkgbuild(result.value, job.name) orelse return error.PackageNotFound;
+    const original = job.expected_content orelse return error.NoPkgbuildData;
+    if (!std.mem.eql(u8, build.PkgBuild, original)) return error.ReviewedPkgbuildChanged;
+    if (build.Scan == null) return error.MissingScanResult;
+    return build;
+}
+
+fn publishPkgbuild(self: *Model, build: PkgBuild) void {
+    const document = pkgbuild_view.Document.init(self.gpa, &.{build}) catch |err| {
+        self.operation_state.pkgbuild_failure = err;
+        return;
+    };
+    if (self.operation_state.pkgbuild_document) |*old| old.deinit();
+    self.operation_state.pkgbuild_document = document;
+    self.operation_state.pkgbuild_scroll.item_count = @intCast(document.lines.len);
+    self.operation_state.pkgbuild_scroll.scroll = .{};
+    self.operation_state.pkgbuild_scroll.cursor = 0;
 }
 
 fn matchingPkgbuild(builds: []const PkgBuild, name: []const u8) ?PkgBuild {
@@ -1067,7 +1078,6 @@ test "Atoll preview stays loading until the scan finishes and retains source on 
         model.settings_state.settings.atoll_aur_enabled = true;
         model.overlay = .pkgbuild;
         model.operation_state.pkgbuild_name = try model.gpa.dupe(u8, "demo");
-        model.operation_state.pkgbuild_document = try pkgbuild_view.Document.init(model.gpa, &.{.{ .Name = "demo", .PkgBuild = "pkgname=demo" }});
         const job = try model.gpa.create(PkgbuildJob);
         job.* = .{
             .name = try model.gpa.dupe(u8, "demo"),
@@ -1087,7 +1097,8 @@ test "Atoll preview stays loading until the scan finishes and retains source on 
                 else => "[{\"Name\":\"demo\",\"PkgBuild\":\"pkgname=demo\"}]",
             }, .{ .allocate = .alloc_always });
         }
-        // The fetched document is staged until the scan also finishes.
+        // Retain only the fetched source while scanning, without highlighting it.
+        try std.testing.expect(model.operation_state.pkgbuild_document == null);
         try std.testing.expect(pkgbuildView(model).loading);
         try std.testing.expect(!model.commandContext().scrollable);
         var ctx: vxfw.EventContext = .{ .io = std.testing.io, .alloc = model.gpa, .cmds = .empty };
