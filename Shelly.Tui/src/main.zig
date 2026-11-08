@@ -4,6 +4,13 @@ const vxfw = vaxis.vxfw;
 const Shelly_Tui = @import("Shelly_Tui");
 const Model = Shelly_Tui.model.Model;
 
+pub const panic = std.debug.FullPanic(panicWithTerminalRestore);
+
+fn panicWithTerminalRestore(message: []const u8, return_address: ?usize) noreturn {
+    vaxis.recover();
+    std.debug.defaultPanic(message, return_address);
+}
+
 pub fn main(init: std.process.Init) !void {
     const args = try init.minimal.args.toSlice(init.arena.allocator());
     const session = Shelly_Tui.sudo_session;
