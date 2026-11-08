@@ -48,6 +48,7 @@ pub const State = struct {
 
 pub const AurSearchJob = struct {
     installed_only: bool = false,
+    atoll: bool = false,
     result: ?std.json.Parsed([]AurPackage) = null,
     failed: bool = false,
     done: std.atomic.Value(bool) = .init(false),
@@ -131,7 +132,7 @@ pub fn startAurSearch(self: *Model, ctx: *vxfw.EventContext, query: []const u8) 
     try ctx.tick(100, self.widget());
     const job = try self.gpa.create(AurSearchJob);
     errdefer self.gpa.destroy(job);
-    job.* = .{ .installed_only = self.aur_state.aur_installed_only };
+    job.* = .{ .installed_only = self.aur_state.aur_installed_only, .atoll = self.settings_state.settings.atoll_aur_enabled };
 
     const duped = try self.gpa.dupe(u8, query);
     errdefer self.gpa.free(duped);
@@ -149,16 +150,21 @@ pub fn aurSearchThread(job: *AurSearchJob, query: []const u8) void {
     var threaded: std.Io.Threaded = .init(alloc, .{});
     defer threaded.deinit();
 
-    const cli: ShellyCli = .{ .allocator = alloc, .io = threaded.io() };
+    var cli: ShellyCli = .{ .allocator = alloc, .io = threaded.io() };
+    const source = cli.get_aur_source() catch {
+        job.failed = true;
+        job.done.store(true, .release);
+        return;
+    };
+    defer source.deinit();
+    cli.aur_url = source.value.AurUrl;
     const parsed = (if (job.installed_only) cli.list_aur_installed() else if (query.len == 0) std.json.parseFromSlice([]AurPackage, alloc, "[]", .{}) else cli.search_aur(query)) catch {
         job.failed = true;
         job.done.store(true, .release);
         return;
     };
 
-    const configured = cli.get_aur_source() catch null;
-    defer if (configured) |value| value.deinit();
-    const base = parsed.arena.allocator().dupe(u8, if (configured) |value| value.value.AurUrl else "https://aur.archlinux.org") catch {
+    const base = parsed.arena.allocator().dupe(u8, source.value.AurUrl) catch {
         parsed.deinit();
         job.failed = true;
         job.done.store(true, .release);
@@ -201,8 +207,9 @@ pub fn pollAurSearch(self: *Model) !bool {
     const parsed = job.result;
     const failed = job.failed;
     self.aur_state.aur_job = null;
+    const stale = job.atoll != self.settings_state.settings.atoll_aur_enabled;
     self.gpa.destroy(job);
-    if (!self.settings_state.settings.aur_enabled) {
+    if (stale or !self.settings_state.settings.aur_enabled) {
         if (parsed) |owner| owner.deinit();
         return false;
     }

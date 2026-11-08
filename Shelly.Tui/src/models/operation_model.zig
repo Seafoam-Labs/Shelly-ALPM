@@ -28,10 +28,12 @@ const AurSearchJob = aur_model.AurSearchJob;
 /// Page-owned state. Worker results are published to the UI loop before use.
 pub const State = struct {
     pkgbuild_name: []const u8 = "",
+    pkgbuild_generation: u64 = 0,
     pkgbuild_job: ?*PkgbuildJob = null,
     pkgbuild_thread: ?std.Thread = null,
     pkgbuild_document: ?pkgbuild_view.Document = null,
     pkgbuild_failure: ?anyerror = null,
+    pkgbuild_scan_status: []const u8 = "",
     pkgbuild_wrap: bool = true,
     pkgbuild_scroll: vxfw.ScrollView,
 
@@ -47,6 +49,10 @@ pub const State = struct {
 
 pub const PkgbuildJob = struct {
     name: []const u8,
+    atoll: bool = false,
+    generation: u64 = 0,
+    mode: ShellyCli.PkgbuildFetchMode = .preview,
+    expected_content: ?[]const u8 = null,
     result: ?std.json.Parsed([]PkgBuild) = null,
     failure: ?anyerror = null,
     done: std.atomic.Value(bool) = .init(false),
@@ -125,6 +131,7 @@ pub fn deinit(self: *Model) void {
     if (self.operation_state.pkgbuild_thread) |thread| thread.join();
     if (self.operation_state.pkgbuild_job) |job| {
         if (job.result) |*result| result.deinit();
+        if (job.expected_content) |content| gpa.free(content);
         gpa.free(job.name);
         gpa.destroy(job);
     }
@@ -145,9 +152,11 @@ pub fn openPkgbuild(self: *Model, ctx: *vxfw.EventContext, name: []const u8) !vo
     const owned = try self.gpa.dupe(u8, name);
     if (self.operation_state.pkgbuild_name.len > 0) self.gpa.free(self.operation_state.pkgbuild_name);
     self.operation_state.pkgbuild_name = owned;
+    self.operation_state.pkgbuild_generation +%= 1;
     if (self.operation_state.pkgbuild_document) |*document| document.deinit();
     self.operation_state.pkgbuild_document = null;
     self.operation_state.pkgbuild_failure = null;
+    self.operation_state.pkgbuild_scan_status = "";
     self.operation_state.pkgbuild_scroll.scroll = .{};
     self.operation_state.pkgbuild_scroll.cursor = 0;
     self.operation_state.pkgbuild_scroll.item_count = 0;
@@ -159,11 +168,18 @@ pub fn openPkgbuild(self: *Model, ctx: *vxfw.EventContext, name: []const u8) !vo
 }
 
 pub fn startPkgbuild(self: *Model, ctx: *vxfw.EventContext) !void {
+    return startPkgbuildRequest(self, ctx, null);
+}
+
+fn startPkgbuildRequest(self: *Model, ctx: *vxfw.EventContext, expected: ?[]const u8) !void {
     try ctx.tick(100, self.widget());
     const job = try self.gpa.create(PkgbuildJob);
     errdefer self.gpa.destroy(job);
-    job.* = .{ .name = try self.gpa.dupe(u8, self.operation_state.pkgbuild_name) };
+    job.* = .{ .name = try self.gpa.dupe(u8, self.operation_state.pkgbuild_name), .atoll = self.settings_state.settings.atoll_aur_enabled, .generation = self.operation_state.pkgbuild_generation };
     errdefer self.gpa.free(job.name);
+    job.mode = if (expected != null) .atoll_scan else if (job.atoll) .atoll_preview else .preview;
+    if (expected) |content| job.expected_content = try self.gpa.dupe(u8, content);
+    errdefer if (job.expected_content) |content| self.gpa.free(content);
     const thread = try std.Thread.spawn(.{}, fetchPkgbuildThread, .{job});
     self.operation_state.pkgbuild_thread = thread;
     self.operation_state.pkgbuild_job = job;
@@ -173,7 +189,7 @@ pub fn fetchPkgbuildThread(job: *PkgbuildJob) void {
     var threaded: std.Io.Threaded = .init(std.heap.page_allocator, .{});
     defer threaded.deinit();
     const cli: ShellyCli = .{ .allocator = std.heap.page_allocator, .io = threaded.io() };
-    job.result = cli.fetch_pkgbuild(job.name) catch |err| {
+    job.result = cli.fetchPkgbuild(job.name, job.mode) catch |err| {
         job.failure = err;
         job.done.store(true, .release);
         return;
@@ -189,11 +205,12 @@ pub fn pollPkgbuild(self: *Model, ctx: *vxfw.EventContext) !void {
     self.operation_state.pkgbuild_job = null;
     defer {
         if (job.result) |*result| result.deinit();
+        if (job.expected_content) |content| self.gpa.free(content);
         self.gpa.free(job.name);
         self.gpa.destroy(job);
     }
     if (self.operation_state.operation_question != null) return;
-    if (!std.mem.eql(u8, job.name, self.operation_state.pkgbuild_name)) {
+    if (job.generation != self.operation_state.pkgbuild_generation or job.atoll != self.settings_state.settings.atoll_aur_enabled or !std.mem.eql(u8, job.name, self.operation_state.pkgbuild_name)) {
         // The user selected a different package while this request was running.
         if (self.overlay != null and self.overlay.? == .pkgbuild)
             startPkgbuild(self, ctx) catch |err| {
@@ -201,14 +218,52 @@ pub fn pollPkgbuild(self: *Model, ctx: *vxfw.EventContext) !void {
             };
         return;
     }
+    if (job.mode == .atoll_scan) {
+        self.operation_state.pkgbuild_scan_status = "Security scan failed.";
+        if (job.failure != null) return;
+        const result = job.result orelse return;
+        const build = matchingPkgbuild(result.value, job.name) orelse return;
+        if (!std.mem.eql(u8, build.PkgBuild, job.expected_content orelse return)) {
+            self.operation_state.pkgbuild_scan_status = "PKGBUILD changed.";
+            return;
+        }
+        if (build.Scan == null) return;
+        const document = pkgbuild_view.Document.init(self.gpa, &.{build}) catch return;
+        if (self.operation_state.pkgbuild_document) |*old| old.deinit();
+        self.operation_state.pkgbuild_document = document;
+        self.operation_state.pkgbuild_scroll.item_count = @intCast(document.lines.len);
+        if (build.Scan.?.findings.len > 0) {
+            self.operation_state.pkgbuild_scroll.scroll = .{};
+            self.operation_state.pkgbuild_scroll.cursor = 0;
+        }
+        self.operation_state.pkgbuild_scan_status = if (build.Scan.?.findings.len == 0) "Security scan: no findings reported by the CLI." else "Security scan completed.";
+        return;
+    }
     self.operation_state.pkgbuild_failure = job.failure;
     if (job.result) |result| {
-        self.operation_state.pkgbuild_document = pkgbuild_view.Document.init(self.gpa, result.value) catch |err| {
+        const build = matchingPkgbuild(result.value, job.name) orelse {
+            self.operation_state.pkgbuild_failure = error.PackageNotFound;
+            return;
+        };
+        const document = pkgbuild_view.Document.init(self.gpa, &.{build}) catch |err| {
             self.operation_state.pkgbuild_failure = err;
             return;
         };
-        self.operation_state.pkgbuild_scroll.item_count = @intCast(self.operation_state.pkgbuild_document.?.lines.len);
+        if (self.operation_state.pkgbuild_document) |*old| old.deinit();
+        self.operation_state.pkgbuild_document = document;
+        self.operation_state.pkgbuild_scroll.item_count = @intCast(document.lines.len);
+        if (job.atoll and self.overlay != null and self.overlay.? == .pkgbuild) {
+            self.operation_state.pkgbuild_scan_status = "Scanning cached PKGBUILD…";
+            startPkgbuildRequest(self, ctx, build.PkgBuild) catch {
+                self.operation_state.pkgbuild_scan_status = "Could not start the security scan. Close and reopen the preview to retry.";
+            };
+        }
     }
+}
+
+fn matchingPkgbuild(builds: []const PkgBuild, name: []const u8) ?PkgBuild {
+    for (builds) |build| if (std.mem.eql(u8, std.mem.trimEnd(u8, build.Name, "\x00"), name)) return build;
+    return null;
 }
 
 pub fn closePkgbuild(self: *Model) void {
@@ -233,7 +288,7 @@ pub fn pkgbuildView(self: *Model) pkgbuild_view.View {
         .name = self.operation_state.pkgbuild_name,
         .wrap = self.operation_state.pkgbuild_wrap,
         .scroll = &self.operation_state.pkgbuild_scroll,
-        .loading = self.operation_state.pkgbuild_job != null,
+        .loading = self.operation_state.pkgbuild_job != null and self.operation_state.pkgbuild_document == null,
         .failure = self.operation_state.pkgbuild_failure,
         .review = self.operation_state.operation_question != null,
         .pkgbuild_review = if (self.operation_state.operation_question) |message| message.value.question == .pkgbuild else false,
@@ -251,6 +306,7 @@ pub fn pkgbuildView(self: *Model) pkgbuild_view.View {
             false,
         .answer_input = self.operation_state.answer_input.items,
         .answer_error = self.operation_state.answer_error,
+        .scan_status = if (self.operation_state.operation_question == null) self.operation_state.pkgbuild_scan_status else "",
     };
 }
 
@@ -405,6 +461,7 @@ pub fn showOperationQuestion(self: *Model, message: shelly_operation.OwnedMessag
     self.operation_state.pkgbuild_name = name;
     self.operation_state.pkgbuild_document = document;
     self.operation_state.pkgbuild_failure = null;
+    self.operation_state.pkgbuild_scan_status = "";
     self.operation_state.pkgbuild_scroll.scroll = .{};
     self.operation_state.pkgbuild_scroll.cursor = 0;
     self.operation_state.pkgbuild_scroll.item_count = @intCast(document.lines.len);
@@ -678,7 +735,7 @@ pub fn handleReviewKey(self: *Model, ctx: *vxfw.EventContext, key: vaxis.Key) an
         self.operation_state.answer_error = "";
         return ctx.consumeAndRedraw();
     }
-    if (self.operation_state.pkgbuild_document != null and self.operation_state.pkgbuild_job == null)
+    if (self.operation_state.pkgbuild_document != null)
         try self.operation_state.pkgbuild_scroll.handleEvent(ctx, .{ .key_press = commands.scrollKey(key) orelse key });
     return ctx.consumeAndRedraw();
 }
@@ -998,4 +1055,77 @@ test "AUR batch removal refresh failure and retry remain drawable and navigable"
     }
     try std.testing.expect(model.overlay == null);
     try std.testing.expectEqual(@as(usize, 0), model.aur_state.aur_selection.items.len);
+}
+
+test "Atoll scan preserves the displayed preview on failure or changed content" {
+    const Worker = struct {
+        fn finish() void {}
+    };
+    for (0..4) |scenario| {
+        const model = try Model.init(std.testing.allocator);
+        defer model.deinit();
+        model.settings_state.settings.atoll_aur_enabled = true;
+        model.overlay = .pkgbuild;
+        model.operation_state.pkgbuild_name = try model.gpa.dupe(u8, "demo");
+        model.operation_state.pkgbuild_document = try pkgbuild_view.Document.init(model.gpa, &.{.{ .Name = "demo", .PkgBuild = "pkgname=demo" }});
+        const job = try model.gpa.create(PkgbuildJob);
+        job.* = .{
+            .name = try model.gpa.dupe(u8, "demo"),
+            .expected_content = try model.gpa.dupe(u8, "pkgname=demo"),
+            .atoll = true,
+            .mode = .atoll_scan,
+            .done = .init(true),
+        };
+        model.operation_state.pkgbuild_job = job;
+        model.operation_state.pkgbuild_thread = try std.Thread.spawn(.{}, Worker.finish, .{});
+        if (scenario == 2) {
+            job.failure = error.CommandFailed;
+        } else {
+            job.result = try std.json.parseFromSlice([]PkgBuild, model.gpa, switch (scenario) {
+                0 => "[{\"Name\":\"demo\",\"PkgBuild\":\"pkgname=demo\",\"Scan\":{\"findings\":[],\"related_files\":[{\"name\":\"demo.install\",\"content\":\"echo checked\"}]}}]",
+                1 => "[{\"Name\":\"demo\",\"PkgBuild\":\"changed\",\"Scan\":{\"findings\":[],\"related_files\":[]}}]",
+                else => "[{\"Name\":\"demo\",\"PkgBuild\":\"pkgname=demo\"}]",
+            }, .{ .allocate = .alloc_always });
+        }
+        // A readable preview remains available while its scan is running.
+        try std.testing.expect(!pkgbuildView(model).loading);
+        var ctx: vxfw.EventContext = .{ .io = std.testing.io, .alloc = model.gpa, .cmds = .empty };
+        defer ctx.cmds.deinit(model.gpa);
+        try pollPkgbuild(model, &ctx);
+        try std.testing.expect(model.operation_state.pkgbuild_failure == null);
+        var source_found = false;
+        for (model.operation_state.pkgbuild_document.?.lines) |line| {
+            if (std.mem.endsWith(u8, line, "pkgname=demo")) source_found = true;
+        }
+        try std.testing.expect(source_found);
+        const status = model.operation_state.pkgbuild_scan_status;
+        try std.testing.expect(std.mem.indexOf(u8, status, if (scenario == 0) "no findings" else if (scenario == 1) "changed" else "failed") != null);
+        if (scenario == 0) {
+            var found = false;
+            for (model.operation_state.pkgbuild_document.?.lines) |line| {
+                if (std.mem.endsWith(u8, line, "echo checked")) found = true;
+            }
+            try std.testing.expect(found);
+        }
+    }
+}
+
+test "regular PKGBUILD preview never schedules an Atoll security scan" {
+    const model = try Model.init(std.testing.allocator);
+    defer model.deinit();
+    model.overlay = .pkgbuild;
+    model.operation_state.pkgbuild_name = try model.gpa.dupe(u8, "demo");
+    const job = try model.gpa.create(PkgbuildJob);
+    job.* = .{ .name = try model.gpa.dupe(u8, "demo"), .done = .init(true), .result = try std.json.parseFromSlice([]PkgBuild, model.gpa, "[{\"Name\":\"demo\",\"PkgBuild\":\"pkgname=demo\"}]", .{ .allocate = .alloc_always }) };
+    const Worker = struct {
+        fn finish() void {}
+    };
+    model.operation_state.pkgbuild_job = job;
+    model.operation_state.pkgbuild_thread = try std.Thread.spawn(.{}, Worker.finish, .{});
+    var ctx: vxfw.EventContext = .{ .io = std.testing.io, .alloc = model.gpa, .cmds = .empty };
+    defer ctx.cmds.deinit(model.gpa);
+    try pollPkgbuild(model, &ctx);
+    try std.testing.expect(model.operation_state.pkgbuild_document != null);
+    try std.testing.expect(model.operation_state.pkgbuild_job == null);
+    try std.testing.expectEqualStrings("", model.operation_state.pkgbuild_scan_status);
 }

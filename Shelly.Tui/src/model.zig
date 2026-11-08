@@ -334,7 +334,7 @@ pub const Model = struct {
             },
             .mouse => {
                 if (self.overlay) |overlay| {
-                    if (overlay == .pkgbuild and self.operation_state.pkgbuild_document != null and self.operation_state.pkgbuild_job == null) {
+                    if (overlay == .pkgbuild and self.operation_state.pkgbuild_document != null) {
                         return operation_model.handleReviewMouse(self, ctx, event);
                     }
                 }
@@ -345,7 +345,7 @@ pub const Model = struct {
         }
     }
 
-    /// Read the small preference file before the first frame, never CLI/catalog data.
+    /// Read frontend preferences and the shared CLI AUR source before the first frame.
     pub const loadSettings = settings_model.loadSettings;
 
     // -- tabs --------------------------------------------------------------

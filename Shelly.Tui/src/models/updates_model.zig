@@ -35,6 +35,7 @@ pub const State = struct {
 
 pub const UpdatesJob = struct {
     aur_enabled: bool = false,
+    atoll: bool = false,
     flatpak_enabled: bool = false,
     result: ?std.json.Parsed(CheckUpdates) = null,
     failed: bool = false,
@@ -71,7 +72,7 @@ pub fn startUpdates(self: *Model, ctx: *vxfw.EventContext) !void {
     try ctx.tick(100, self.widget());
     const job = try self.gpa.create(UpdatesJob);
     errdefer self.gpa.destroy(job);
-    job.* = .{ .aur_enabled = self.settings_state.settings.aur_enabled, .flatpak_enabled = self.settings_state.settings.flatpak_enabled and self.flatpak_state.flatpak_available };
+    job.* = .{ .atoll = self.settings_state.settings.atoll_aur_enabled, .aur_enabled = self.settings_state.settings.aur_enabled, .flatpak_enabled = self.settings_state.settings.flatpak_enabled and self.flatpak_state.flatpak_available };
     const thread = try std.Thread.spawn(.{}, checkUpdatesThread, .{job});
     self.updates_state.updates_thread = thread;
     self.updates_state.updates_job = job;
@@ -98,7 +99,7 @@ pub fn pollUpdates(self: *Model) void {
     self.updates_state.updates_thread = null;
     self.updates_state.updates_job = null;
     defer self.gpa.destroy(job);
-    if (job.aur_enabled != self.settings_state.settings.aur_enabled or job.flatpak_enabled != (self.settings_state.settings.flatpak_enabled and self.flatpak_state.flatpak_available)) {
+    if (job.atoll != self.settings_state.settings.atoll_aur_enabled or job.aur_enabled != self.settings_state.settings.aur_enabled or job.flatpak_enabled != (self.settings_state.settings.flatpak_enabled and self.flatpak_state.flatpak_available)) {
         if (job.result) |*parsed| parsed.deinit();
         self.updates_state.updates_checked = false;
         return;

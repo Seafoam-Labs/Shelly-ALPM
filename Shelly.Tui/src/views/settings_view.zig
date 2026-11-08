@@ -66,17 +66,19 @@ pub const View = struct {
             const enabled = switch (index) {
                 0 => self.settings.aur_enabled,
                 1 => self.settings.flatpak_enabled,
+                preferences.atoll_index => self.settings.atoll_aur_enabled,
                 else => self.settings.show_flatpak_screenshots,
             };
             const title = if (is_style)
                 try std.fmt.allocPrint(ctx.arena, "  ({s}) {s}", .{ if (self.settings.header_icons == preferences.header_styles[index - preferences.header_style_start]) "x" else " ", preferences.header_styles[index - preferences.header_style_start].title() })
             else
-                try std.fmt.allocPrint(ctx.arena, "[{s}] {s}", .{ if (enabled) "x" else " ", if (index == 0) "AUR" else if (index == 1) "Flatpak" else "Show Flatpak screenshots" });
+                try std.fmt.allocPrint(ctx.arena, "[{s}] {s}", .{ if (enabled) "x" else " ", if (index == 0) "AUR" else if (index == 1) "Flatpak" else if (index == preferences.atoll_index) "Enable Atoll-backed AUR" else "Show Flatpak screenshots" });
             try appendText(content_ctx, &children, &row, col, title, .{ .bold = true, .reverse = self.selected == index and !self.busy });
             if (detailed and (!is_style or index == 3)) {
                 try appendText(content_ctx, &children, &row, col, switch (index) {
                     0 => "Show AUR searches, installed packages, and updates.",
                     1 => "Show Flatpak applications, installed packages, and updates.",
+                    preferences.atoll_index => "Use the shared CLI AUR source and scan Atoll PKGBUILD previews.",
                     3 => "Nerd Font icons require a compatible terminal font.",
                     else => "Display images in Flatpak details when supported.",
                 }, styles.secondary);
@@ -88,7 +90,7 @@ pub const View = struct {
             .reverse = self.selected == preferences.save_index and !self.busy,
         });
         if (self.failure) |err| {
-            try appendText(content_ctx, &children, &row, col, try std.fmt.allocPrint(ctx.arena, "Settings error: {s}. The saved file was left intact.", .{@errorName(err)}), styles.emphasis);
+            try appendText(content_ctx, &children, &row, col, try std.fmt.allocPrint(ctx.arena, "Settings error: {s}. Review your changes and retry.", .{@errorName(err)}), styles.emphasis);
         }
         if (self.busy) try appendText(content_ctx, &children, &row, col, "Settings are locked while an operation is running.", styles.emphasis);
         if (self.settings.flatpak_enabled) {

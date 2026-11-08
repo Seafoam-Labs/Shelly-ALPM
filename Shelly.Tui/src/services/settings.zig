@@ -38,6 +38,8 @@ pub const Store = struct {
         defer document.deinit();
         _ = try decode(document.value);
         const alloc = document.arena.allocator();
+        // The CLI owns AurUrl. Discard the obsolete frontend-only preference.
+        _ = document.value.object.swapRemove("AtollAurEnabled");
         try document.value.object.put(alloc, "AurEnabled", .{ .bool = settings.aur_enabled });
         try document.value.object.put(alloc, "FlatpakEnabled", .{ .bool = settings.flatpak_enabled });
         try document.value.object.put(alloc, "HeaderIcons", .{ .string = @tagName(settings.header_icons) });
@@ -129,4 +131,14 @@ test "screenshot preference defaults on and requires a boolean" {
     const parsed = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, "{\"ShowFlatpakScreenshots\":\"false\"}", .{});
     defer parsed.deinit();
     try std.testing.expectError(error.InvalidSettings, decode(parsed.value));
+}
+
+test "TUI settings do not override the CLI AUR source" {
+    const allocator = std.testing.allocator;
+    const missing = try std.json.parseFromSlice(std.json.Value, allocator, "{}", .{});
+    defer missing.deinit();
+    try std.testing.expect(!(try decode(missing.value)).atoll_aur_enabled);
+    const invalid = try std.json.parseFromSlice(std.json.Value, allocator, "{\"AtollAurEnabled\":\"true\"}", .{});
+    defer invalid.deinit();
+    try std.testing.expect(!(try decode(invalid.value)).atoll_aur_enabled);
 }

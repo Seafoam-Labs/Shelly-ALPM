@@ -62,6 +62,7 @@ var preview_query_mutex: Io.Mutex = .init;
 
 pub const ShellyCli = struct {
     binary: ?[]const u8 = null,
+    aur_url: ?[]const u8 = null,
     environment: ?*const std.process.Environ.Map = null,
     allocator: std.mem.Allocator,
     io: Io,
@@ -69,10 +70,14 @@ pub const ShellyCli = struct {
     fn run(self: ShellyCli, args: []const []const u8) !RunResult {
         const shelly_bin = self.binary orelse runtime.shellyBin();
 
-        var argv = try self.allocator.alloc([]const u8, args.len + 2);
+        var argv = try self.allocator.alloc([]const u8, args.len + 2 + @as(usize, if (self.aur_url != null) 2 else 0));
         defer self.allocator.free(argv);
         argv[0] = shelly_bin;
         @memcpy(argv[1 .. 1 + args.len], args);
+        if (self.aur_url) |url| {
+            argv[1 + args.len] = "--aur-url";
+            argv[2 + args.len] = url;
+        }
         argv[argv.len - 1] = "--ui-mode";
 
         const result = try std.process.run(self.allocator, self.io, .{
@@ -135,8 +140,7 @@ pub const ShellyCli = struct {
         return decodeQuery([]AppstreamApp, self.allocator, result.stdout, false);
     }
 
-    /// Searches the AUR via the CLI. The caller owns the parsed result.
-    pub const AurSource = struct { AurUrl: []const u8 = "https://aur.archlinux.org" };
+    pub const AurSource = struct { AurUrl: []const u8 };
 
     pub fn get_aur_source(self: ShellyCli) !std.json.Parsed(AurSource) {
         const result = try self.run(&.{ "config", "get", "AurUrl" });
@@ -145,6 +149,18 @@ pub const ShellyCli = struct {
         return decodeQuery(AurSource, self.allocator, result.stdout, false);
     }
 
+    pub fn set_aur_url(self: ShellyCli, url: []const u8) !void {
+        const result = try self.run(&.{ "config", "set", "AurUrl", url });
+        defer self.allocator.free(result.stdout);
+        defer self.allocator.free(result.stderr);
+        const parsed = decodeQuery(std.json.Value, self.allocator, result.stdout, false) catch |err| switch (err) {
+            error.NoDataFrame => return,
+            else => return err,
+        };
+        parsed.deinit();
+    }
+
+    /// Searches the AUR via the CLI. The caller owns the parsed result.
     pub fn search_aur(self: ShellyCli, query: []const u8) !std.json.Parsed([]AurPackage) {
         const result = try self.run(&.{ "search", "aur", query });
         defer self.allocator.free(result.stdout);
@@ -159,10 +175,6 @@ pub const ShellyCli = struct {
         defer self.allocator.free(result.stderr);
 
         return decodeQuery([]AurPackage, self.allocator, result.stdout, false);
-    }
-
-    pub fn fetch_pkgbuild(self: ShellyCli, name: []const u8) !std.json.Parsed([]PkgBuild) {
-        return self.fetchPkgbuild(name, .preview);
     }
 
     pub const PkgbuildFetchMode = enum {
@@ -320,14 +332,6 @@ test "Flatpak probe decoding accepts empty remotes but rejects backend failure" 
     try std.testing.expectError(error.NoDataFrame, decodeQuery([]Remote, allocator, "", false));
 }
 
-test "AUR source configuration decodes the CLI single-value frame" {
-    const frame = try queryTestFrame(std.testing.allocator, "{\"AurUrl\":\"https://atoll.seafoam-labs.org\"}");
-    defer std.testing.allocator.free(frame);
-    const parsed = try decodeQuery(ShellyCli.AurSource, std.testing.allocator, frame, false);
-    defer parsed.deinit();
-    try std.testing.expectEqualStrings("https://atoll.seafoam-labs.org", parsed.value.AurUrl);
-}
-
 test "failed query captures child output and returns an error without terminal diagnostics" {
     var env: std.process.Environ.Map = .init(std.testing.allocator);
     defer env.deinit();
@@ -375,4 +379,19 @@ test "preview queries cannot overlap their child processes" {
     first.join();
     second.join();
     try std.testing.expectEqual(@as(usize, 0), failures.load(.acquire));
+}
+
+test "AUR queries override the source without changing shared CLI settings" {
+    var env: std.process.Environ.Map = .init(std.testing.allocator);
+    defer env.deinit();
+    for ([_]bool{ false, true }) |atoll| {
+        const url = @import("../models/settings.zig").aurUrl(atoll);
+        const cli: ShellyCli = .{ .allocator = std.testing.allocator, .io = std.testing.io, .binary = "/bin/sh", .environment = &env, .aur_url = url };
+        const result = try cli.run(&.{ "-c", "printf '%s\\n' \"$@\"", "fixture" });
+        defer std.testing.allocator.free(result.stdout);
+        defer std.testing.allocator.free(result.stderr);
+        const expected = try std.fmt.allocPrint(std.testing.allocator, "--aur-url\n{s}\n--ui-mode\n", .{url});
+        defer std.testing.allocator.free(expected);
+        try std.testing.expectEqualStrings(expected, result.stdout);
+    }
 }

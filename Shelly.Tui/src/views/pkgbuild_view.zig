@@ -77,15 +77,19 @@ pub const Document = struct {
         var lines: Builder = .{};
         var remaining: usize = 2 * 1024 * 1024;
         for (builds) |build| {
+            if (build.Scan) |scan| {
+                const warnings = try alloc.alloc(operation.Warning, scan.findings.len);
+                for (scan.findings, warnings) |finding, *warning| warning.* = .{
+                    .Tool = finding.tool,
+                    .Hook = finding.hook,
+                    .Severity = finding.severity,
+                    .Message = finding.message,
+                    .MatchedLine = finding.matched_line,
+                };
+                try scanReview(alloc, &lines, warnings, true, &remaining);
+            }
             try sourceStyled(alloc, &lines, build.PkgBuild, &remaining, .shell);
             if (build.Scan) |scan| {
-                if (scan.findings.len > 0) try section(alloc, &lines, "Scan findings", &remaining);
-                for (scan.findings) |finding| {
-                    const text = try std.fmt.allocPrint(alloc, "[{s}] {s} / {s}: {s}\n{s}", .{
-                        finding.severity, finding.tool, finding.hook, finding.message, finding.matched_line,
-                    });
-                    try source(alloc, &lines, text, &remaining);
-                }
                 for (scan.related_files) |file| {
                     try section(alloc, &lines, file.name, &remaining);
                     try sourceStyled(alloc, &lines, file.content, &remaining, highlight.fileKind(file.name));
@@ -279,6 +283,7 @@ pub const View = struct {
     optional_dependencies: bool = false,
     answer_input: []const u8 = "",
     answer_error: []const u8 = "",
+    scan_status: []const u8 = "",
 
     pub fn handleKey(self: View, key: vaxis.Key) ?Action {
         if (!self.choices and commands.matches(key, .toggle_wrap)) return .toggle_wrap;
@@ -320,7 +325,8 @@ pub const View = struct {
         }
         const inner_width = width - 2;
         const inner_height = height - 2;
-        const note_height: u16 = if (self.answer_error.len > 0) 1 else 0;
+        const note_text = if (self.answer_error.len > 0) self.answer_error else self.scan_status;
+        const note_height: u16 = if (note_text.len > 0) 1 else 0;
         const body_height = inner_height -| note_height;
         var children: std.ArrayList(vxfw.SubSurface) = .empty;
         if (self.loading or self.failure != null) {
@@ -347,7 +353,7 @@ pub const View = struct {
             });
         }
         if (note_height > 0) {
-            var note: vxfw.Text = .{ .text = self.answer_error, .softwrap = false };
+            var note: vxfw.Text = .{ .text = note_text, .softwrap = false };
             try children.append(ctx.arena, .{
                 .origin = .{ .row = @intCast(body_height), .col = 0 },
                 .surface = try note.draw(ctx.withConstraints(.{}, .{ .width = inner_width, .height = note_height })),
@@ -485,6 +491,25 @@ test "PKGBUILD document owns source and preserves URLs and related files" {
     try std.testing.expect(std.mem.indexOf(u8, text, "https://example.org/full/path?value=1") != null);
     try std.testing.expect(std.mem.indexOf(u8, text, "demo.install") != null);
     try std.testing.expect(std.mem.indexOf(u8, text, "[warning]") != null);
+    const finding_offset = std.mem.indexOf(u8, text, "[warning]").?;
+    const source_offset = std.mem.indexOf(u8, text, "source=(https://example.org").?;
+    const attachment_offset = std.mem.indexOf(u8, text, "demo.install").?;
+    try std.testing.expect(finding_offset < source_offset);
+    try std.testing.expect(source_offset < attachment_offset);
+    var matched_found = false;
+    var source_found = false;
+    for (document.lines, document.rows) |line, item| {
+        if (std.mem.startsWith(u8, line, "Matched: curl")) {
+            matched_found = true;
+            try std.testing.expectEqual(@as(usize, 0), item.prefix);
+        }
+        if (std.mem.indexOf(u8, line, "source=(https://example.org") != null) {
+            source_found = true;
+            try std.testing.expect(item.prefix > 0);
+            try std.testing.expect(std.mem.startsWith(u8, line, "    1 │ "));
+        }
+    }
+    try std.testing.expect(matched_found and source_found);
     try std.testing.expect(std.mem.indexOf(u8, text, "\\x1b[31m") != null);
     try std.testing.expect(std.mem.indexOfScalar(u8, text, 0x1b) == null);
 }
