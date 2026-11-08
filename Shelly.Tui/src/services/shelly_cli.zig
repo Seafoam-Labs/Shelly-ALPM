@@ -6,7 +6,7 @@ const PkgBuild = @import("../models/pkgbuild.zig").PkgBuild;
 const Remote = @import("../models/flatpak.zig").Remote;
 const Flatpak = @import("../models/flatpak.zig").Flatpak;
 const AppstreamApp = @import("../models/flatpak.zig").AppstreamApp;
-const CheckUpdates = @import("../models/sync.zig").CheckUpdates;
+const ParsedCheckUpdates = @import("../models/sync.zig").ParsedCheckUpdates;
 const JsonPackFrame = @import("ui_decode.zig").JsonPackFrame;
 const RunResult = std.process.RunResult;
 const runtime = @import("../runtime.zig");
@@ -196,20 +196,17 @@ pub const ShellyCli = struct {
     }
 
     /// Query only enabled sources, without changing shared CLI configuration.
-    pub fn check_updates_for_sources(self: ShellyCli, aur_enabled: bool, flatpak_enabled: bool) !std.json.Parsed(CheckUpdates) {
+    pub fn check_updates_for_sources(self: ShellyCli, aur_enabled: bool, flatpak_enabled: bool) !ParsedCheckUpdates {
         const sync = @import("../models/sync.zig");
         const native = try self.sourceUpdates(sync.CheckUpdatesPackage, "standard");
-        defer native.deinit();
+        errdefer native.deinit();
         var aur: ?std.json.Parsed([]sync.CheckUpdatesAur) = null;
-        defer if (aur) |*parsed| parsed.deinit();
+        errdefer if (aur) |*parsed| parsed.deinit();
         var flatpak: ?std.json.Parsed([]sync.CheckUpdatesFlatpak) = null;
-        defer if (flatpak) |*parsed| parsed.deinit();
+        errdefer if (flatpak) |*parsed| parsed.deinit();
         if (aur_enabled) aur = try self.sourceUpdates(sync.CheckUpdatesAur, "aur");
         if (flatpak_enabled) flatpak = try self.sourceUpdates(sync.CheckUpdatesFlatpak, "flatpak");
-        const combined: CheckUpdates = .{ .Packages = native.value, .Aur = if (aur) |parsed| parsed.value else &.{}, .Flatpak = if (flatpak) |parsed| parsed.value else &.{} };
-        const json = try std.json.Stringify.valueAlloc(self.allocator, combined, .{});
-        defer self.allocator.free(json);
-        return std.json.parseFromSlice(CheckUpdates, self.allocator, json, .{ .allocate = .alloc_always });
+        return ParsedCheckUpdates.fromSources(native, aur, flatpak);
     }
 };
 

@@ -13,6 +13,7 @@ const runtime = @import("../runtime.zig");
 
 const flatpak = @import("flatpak.zig");
 const CheckUpdates = @import("sync.zig").CheckUpdates;
+const ParsedCheckUpdates = @import("sync.zig").ParsedCheckUpdates;
 
 const coordinator = @import("../model.zig");
 const Model = coordinator.Model;
@@ -236,13 +237,13 @@ test "settings changes reject late update results and disabled source data" {
     defer model.deinit();
     model.settings_state.settings = .{ .aur_enabled = true, .flatpak_enabled = true };
     model.flatpak_state.flatpak_available = true;
-    model.updates_state.updates_parsed = try std.json.parseFromSlice(CheckUpdates, allocator, "{\"Packages\":[{\"Name\":\"native\"}],\"Aur\":[{\"Name\":\"aur\"}],\"Flatpak\":[{\"Id\":\"org.example.App\"}]}", .{ .allocate = .alloc_always });
+    model.updates_state.updates_parsed = ParsedCheckUpdates.fromParsed(try std.json.parseFromSlice(CheckUpdates, allocator, "{\"Packages\":[{\"Name\":\"native\"}],\"Aur\":[{\"Name\":\"aur\"}],\"Flatpak\":[{\"Id\":\"org.example.App\"}]}", .{ .allocate = .alloc_always }));
     applySettings(model, .{});
     try std.testing.expectEqual(@as(usize, 1), model.updates_state.updates_parsed.?.value.count());
     try std.testing.expect(!updates_model.updatesView(model).canUpgradeAur());
     try std.testing.expect(!updates_model.updatesView(model).canUpgradeFlatpak());
     const job = try allocator.create(UpdatesJob);
-    job.* = .{ .aur_enabled = true, .flatpak_enabled = true, .done = .init(true), .result = try std.json.parseFromSlice(CheckUpdates, allocator, "{\"Aur\":[{\"Name\":\"stale\"}]}", .{ .allocate = .alloc_always }) };
+    job.* = .{ .aur_enabled = true, .flatpak_enabled = true, .done = .init(true), .result = ParsedCheckUpdates.fromParsed(try std.json.parseFromSlice(CheckUpdates, allocator, "{\"Aur\":[{\"Name\":\"stale\"}]}", .{ .allocate = .alloc_always })) };
     const Worker = struct {
         fn finish(value: *UpdatesJob) void {
             value.done.store(true, .release);
