@@ -92,7 +92,7 @@ pub const Document = struct {
             if (build.Scan) |scan| {
                 for (scan.related_files) |file| {
                     try section(alloc, &lines, file.name, &remaining);
-                    try sourceStyled(alloc, &lines, file.content, &remaining, highlight.fileKind(file.name));
+                    try sourceStyled(alloc, &lines, file.content, &remaining, highlight.fileKind(file.name, file.content));
                 }
             }
         }
@@ -125,7 +125,7 @@ pub const Document = struct {
                 }
                 for (review.source_files) |file| {
                     try section(alloc, &lines, file.name, &remaining);
-                    try sourceStyled(alloc, &lines, file.content, &remaining, highlight.fileKind(file.name));
+                    try sourceStyled(alloc, &lines, file.content, &remaining, highlight.fileKind(file.name, file.content));
                 }
             },
             .yes_no => |request| {
