@@ -386,8 +386,8 @@ pub fn entries(arena: std.mem.Allocator, context: Context) std.mem.Allocator.Err
                 if (context.removable) try add(arena, &list, .remove, "Remove", "Remove the highlighted Flatpak");
             }
             if (context.catalog_available and context.browsing_list) {
-                if (context.catalog_previous) try add(arena, &list, .previous_catalog_page, "Previous page", "Load the previous Atoll catalog page");
-                if (context.catalog_next) try add(arena, &list, .next_catalog_page, "Next page", "Load the next Atoll catalog page");
+                if (context.catalog_previous) try add(arena, &list, .previous_catalog_page, "Previous page", "Load the previous AUR catalog page");
+                if (context.catalog_next) try add(arena, &list, .next_catalog_page, "Next page", "Load the next AUR catalog page");
             }
             try add(arena, &list, .previous, "Previous", "Previous result");
             try add(arena, &list, .next, "Next", "Next result");
