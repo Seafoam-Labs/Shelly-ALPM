@@ -690,6 +690,27 @@
                               </object>
                             </child>
                             <child>
+                              <object class="GtkBox">
+                                <property name="orientation">horizontal</property>
+                                <property name="spacing">12</property>
+                                <child>
+                                  <object class="GtkLabel">
+                                    <property name="label" translatable="yes">Enable update checks on Upgrade All</property>
+                                    <property name="halign">start</property>
+                                    <property name="hexpand">true</property>
+                                  </object>
+                                </child>
+                                <child>
+                                  <object class="GtkSwitch" id="appimage_upgrade_all_recheck_switch">
+                                    <property name="halign">end</property>
+                                    <accessibility>
+                                      <property name="label" translatable="yes">Enable update checks on Upgrade All</property>
+                                    </accessibility>
+                                  </object>
+                                </child>
+                              </object>
+                            </child>
+                            <child>
                               <object class="GtkBox" id="appimage_install_path_box">
                                 <property name="orientation">horizontal</property>
                                 <property name="spacing">12</property>

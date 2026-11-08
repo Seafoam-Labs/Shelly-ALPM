@@ -783,6 +783,22 @@ pub const AppImagePage = extern struct {
     }
 
     fn upgrade_appimage(self: *Self) callconv(.c) void {
+        const p = self.priv();
+        const config_service = runtime.config orelse {
+            std.log.err("Could not check the AppImage update setting because settings are not loaded.", .{});
+            p.toast.show(.@"error", translations._("Could not read the AppImage update setting."));
+            return;
+        };
+        const config = config_service.get() catch |err| {
+            std.log.err("Could not read the AppImage update setting. {0s}\n\nTechnical details: {1s}", .{ diagnostics.cause(err), @errorName(err) });
+            p.toast.show(.@"error", translations._("Could not read the AppImage update setting."));
+            return;
+        };
+        if (!shouldRunAppImageUpgrade(config.AppImageUpgradeAllRecheck, p.updates.len)) {
+            p.toast.show(.info, translations._("No AppImages need to be upgraded"));
+            return;
+        }
+
         const argv = ShellyCommands.upgrade_appimages(std.heap.c_allocator) catch return;
         defer std.heap.c_allocator.free(argv);
 
@@ -795,6 +811,10 @@ pub const AppImagePage = extern struct {
             .ctx = self,
             .privileged = false,
         });
+    }
+
+    fn shouldRunAppImageUpgrade(always_recheck: bool, cached_update_count: usize) bool {
+        return always_recheck or cached_update_count > 0;
     }
 
     fn sync_all_appimage(self: *Self) callconv(.c) void {
@@ -1081,6 +1101,12 @@ test "AppImagePage.versionEquals strips leading v" {
     try std.testing.expect(AppImagePage.versionEquals("v1.2.3", "1.2.3"));
     try std.testing.expect(AppImagePage.versionEquals("1.2.3", "1.2.3"));
     try std.testing.expect(!AppImagePage.versionEquals("v1.2.3", "1.2.4"));
+}
+
+test "AppImage Upgrade All rechecks only when enabled or cached updates exist" {
+    try std.testing.expect(!AppImagePage.shouldRunAppImageUpgrade(false, 0));
+    try std.testing.expect(AppImagePage.shouldRunAppImageUpgrade(false, 1));
+    try std.testing.expect(AppImagePage.shouldRunAppImageUpgrade(true, 0));
 }
 
 test "AppImagePage.contains_ignore_case matches substrings case-insensitively" {

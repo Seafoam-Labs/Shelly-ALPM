@@ -39,6 +39,13 @@ tests.
 - [ ] Verify `shelly upgrade appimage` and `shelly list-updates appimage` still check AppImages explicitly.
 - [ ] Restore `false` and verify combined upgrades include AppImages again; `--no-appimage` still skips them for one run.
 
+## AppImage Upgrade All setting
+
+- [ ] In Settings > Advanced, verify "Enable update checks on Upgrade All" appears below "Enable Atoll Powered AUR" and is off by default.
+- [ ] With the setting off, verify Upgrade All retains the existing behavior: it runs only when the AppImage page already has cached updates.
+- [ ] Turn the setting on, load the AppImage page with no cached updates, then click Upgrade All and verify it performs a fresh AppImage update check.
+- [ ] Restart Shelly and verify the setting remains enabled; turn it off and verify the cached-update behavior returns.
+
 ## Flatpak checks during combined upgrades
 
 - [ ] Verify `shelly config get DisableFlatpakUpdateCheck` returns `False` for a configuration without the new key.
