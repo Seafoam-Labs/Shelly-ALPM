@@ -17,6 +17,7 @@ const Package = @import("packages.zig").Package;
 
 const flatpak = @import("flatpak.zig");
 const CheckUpdates = @import("sync.zig").CheckUpdates;
+const ParsedCheckUpdates = @import("sync.zig").ParsedCheckUpdates;
 
 const Allocator = std.mem.Allocator;
 
@@ -924,7 +925,7 @@ test "Flatpak removal copies exact identity and updates require backend availabi
     try std.testing.expectEqualStrings("app/org.example.App/x86_64/beta", prompt.flatpak_target.?.reference);
     try std.testing.expect(!prompt.elevated);
     operation_model.closeOverlay(model);
-    model.updates_state.updates_parsed = try std.json.parseFromSlice(CheckUpdates, allocator, "{\"Flatpak\":[{\"Id\":\"org.example.App\"}]}", .{ .allocate = .alloc_always });
+    model.updates_state.updates_parsed = ParsedCheckUpdates.fromParsed(try std.json.parseFromSlice(CheckUpdates, allocator, "{\"Flatpak\":[{\"Id\":\"org.example.App\"}]}", .{ .allocate = .alloc_always }));
     try std.testing.expectEqual(commands.Updates.upgrade_flatpak, updates_model.updatesView(model).handleKey(.{ .codepoint = 'f' }).?);
     try updates_model.upgradeFromUpdates(model, .flatpak);
     try std.testing.expectEqual(shelly_operation.Action.upgrade, model.overlay.?.sudo.action);

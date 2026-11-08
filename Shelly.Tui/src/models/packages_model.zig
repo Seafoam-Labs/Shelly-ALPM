@@ -135,11 +135,12 @@ pub fn loadPackages(load: *LoadState) void {
         return;
     };
     defer installed.deinit();
-    for (installed.value) |pkg| {
-        for (parsed.value) |*p_pkg| {
-            if (std.ascii.eqlIgnoreCase(p_pkg.Name, pkg.Name)) p_pkg.Installed = true;
-        }
-    }
+    @import("packages.zig").markInstalled(alloc, parsed.value, installed.value) catch {
+        parsed.deinit();
+        load.failed = true;
+        load.done.store(true, .release);
+        return;
+    };
     load.result = parsed;
     load.done.store(true, .release);
 }
