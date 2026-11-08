@@ -292,7 +292,7 @@ pub const Model = struct {
             .tick => {
                 const loading = try packages_model.pollLoad(self);
                 try flatpak_model.pollFlatpakProbe(self, ctx);
-                const searching = try aur_model.pollAurSearch(self);
+                _ = try aur_model.pollAurSearch(self);
                 const installing = try operation_model.pollInstall(self);
                 updates_model.pollUpdates(self);
                 try updates_model.ensureUpdates(self, ctx);
@@ -323,7 +323,7 @@ pub const Model = struct {
                     if (aur_model.catalogActive(self) or self.aur_state.aur_installed_only or self.aur_state.aur_query.len > 0) try aur_model.startAurSearch(self, ctx, self.aur_state.aur_query);
                     self.aur_state.refresh_aur_after_operation = false;
                 }
-                if (loading or searching or installing or self.packages_state.loading or self.updates_state.updates_job != null or self.operation_state.pkgbuild_job != null or self.aur_state.aur_job != null or self.flatpak_state.flatpak_job != null or self.flatpak_state.flatpak_probe_job != null) {
+                if (loading or installing or self.packages_state.loading or self.updates_state.updates_job != null or self.operation_state.pkgbuild_job != null or self.flatpak_state.flatpak_job != null or self.flatpak_state.flatpak_probe_job != null) {
                     try ctx.tick(100, self.widget());
                 }
                 return ctx.consumeAndRedraw();

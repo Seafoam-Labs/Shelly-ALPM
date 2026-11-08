@@ -34,11 +34,13 @@ pub const State = struct {
     settings_store: ?settings_service.Store = null,
     settings_failure: ?anyerror = null,
     settings_selected: usize = 0,
+    aur_source_url: ?[]const u8 = null,
     cli_binary: ?[]const u8 = null,
     cli_environment: ?*const std.process.Environ.Map = null,
 };
 
 pub fn deinit(self: *Model) void {
+    if (self.settings_state.aur_source_url) |url| self.gpa.free(url);
     if (self.settings_state.settings_store) |store| store.deinit();
 }
 
@@ -49,7 +51,20 @@ fn settingsCli(self: *Model, io: std.Io) ShellyCli {
 fn loadSharedSource(self: *Model, io: std.Io) !bool {
     const source = try settingsCli(self, io).get_aur_source();
     defer source.deinit();
+    try rememberAurSource(self, source.value.AurUrl);
     return preferences.isAtollUrl(source.value.AurUrl);
+}
+
+fn rememberAurSource(self: *Model, url: []const u8) !void {
+    if (self.settings_state.aur_source_url) |old| {
+        if (std.mem.eql(u8, old, url)) return;
+    }
+    const owned = try self.gpa.dupe(u8, url);
+    if (self.settings_state.aur_source_url) |old| {
+        aur_model.invalidateInstalledCache(self);
+        self.gpa.free(old);
+    }
+    self.settings_state.aur_source_url = owned;
 }
 
 pub fn loadSettings(self: *Model, io: std.Io, env: *const std.process.Environ.Map) void {
@@ -77,6 +92,7 @@ pub fn applySettings(self: *Model, saved: Settings) void {
     const atoll_changed = self.settings_state.settings.atoll_aur_enabled != saved.atoll_aur_enabled;
     const sources_changed = atoll_changed or self.settings_state.settings.aur_enabled != saved.aur_enabled or self.settings_state.settings.flatpak_enabled != saved.flatpak_enabled;
     if (atoll_changed or self.settings_state.settings.aur_enabled != saved.aur_enabled) {
+        aur_model.invalidateInstalledCache(self);
         aur_model.clearAurSelection(self);
         self.aur_state.catalog_checked = false;
         self.aur_state.catalog_page = 1;
@@ -169,6 +185,7 @@ pub fn saveSettings(self: *Model, ctx: *vxfw.EventContext) !void {
             self.settings_state.settings_failure = err;
             return;
         };
+        try rememberAurSource(self, preferences.aurUrl(saved.atoll_aur_enabled));
     }
     applySettings(self, saved);
     if (saved.flatpak_enabled and !self.flatpak_state.flatpak_checked) try flatpak_model.startFlatpakProbe(self, ctx);

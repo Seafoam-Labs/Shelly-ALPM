@@ -661,6 +661,10 @@ pub fn pollInstall(self: *Model) !bool {
     self.quit_blocked_notice = false;
     const is_flatpak = std.mem.eql(u8, job.request.backend, "flatpak");
     const is_combined = std.mem.eql(u8, job.request.backend, "all");
+    if (!is_flatpak) {
+        aur_model.invalidateInstalledCache(self);
+        if (self.settings_state.settings.aur_enabled) self.aur_state.refresh_aur_after_operation = true;
+    }
     const package_batch = job.request.targets.len > 0;
     const package_change = (job.request.action == .install or job.request.action == .remove) and
         (std.mem.eql(u8, job.request.backend, "standard") or std.mem.eql(u8, job.request.backend, "aur"));
@@ -944,8 +948,10 @@ test "successful native and AUR installs and removals deselect both lists throug
                     .done = .init(true),
                     .request = .{ .shelly_bin = "unused", .environ_map = &env, .backend = backend, .action = action, .name = "target", .targets = if (batch) &.{"target"} else &.{} },
                 };
+                model.aur_state.installed_cache = try std.json.parseFromSlice([]AurPackage, model.gpa, "[]", .{});
                 model.operation_state.install_job = job;
                 try std.testing.expect(!try pollInstall(model));
+                try std.testing.expect(model.aur_state.installed_cache == null);
                 try std.testing.expectEqual(@as(usize, 0), model.packages_state.selected_packages.items.len);
                 try std.testing.expectEqual(@as(usize, 0), model.aur_state.aur_selection.items.len);
                 try std.testing.expectEqual(@as(u32, 0), model.packages_state.selected_list_view.item_count orelse unreachable);
@@ -957,7 +963,7 @@ test "successful native and AUR installs and removals deselect both lists throug
                 model.packages_state.load.done.store(true, .release);
                 try std.testing.expect(!try packages_model.pollLoad(model));
                 const aur_job = try std.testing.allocator.create(AurSearchJob);
-                aur_job.* = .{ .result = try std.json.parseFromSlice([]AurPackage, std.testing.allocator, "[{\"Name\":\"target\",\"Installed\":true},{\"Name\":\"other-aur\"}]", .{ .allocate = .alloc_always }) };
+                aur_job.* = .{ .cache_epoch = model.aur_state.cache_epoch, .result = try std.json.parseFromSlice([]AurPackage, std.testing.allocator, "[{\"Name\":\"target\",\"Installed\":true},{\"Name\":\"other-aur\"}]", .{ .allocate = .alloc_always }) };
                 aur_job.done.store(true, .release);
                 model.aur_state.aur_job = aur_job;
                 try std.testing.expect(!try aur_model.pollAurSearch(model));
@@ -1047,7 +1053,7 @@ test "AUR batch removal refresh failure and retry remain drawable and navigable"
     try std.testing.expect(!try pollInstall(model));
     for ([_]bool{ true, false }) |failed_refresh| {
         const refresh = try std.testing.allocator.create(aur_model.AurSearchJob);
-        refresh.* = .{ .installed_only = true, .failed = failed_refresh, .done = .init(true), .result = if (failed_refresh) null else try std.json.parseFromSlice([]AurPackage, std.testing.allocator, "[]", .{}) };
+        refresh.* = .{ .cache_epoch = model.aur_state.cache_epoch, .installed_only = true, .failed = failed_refresh, .done = .init(true), .result = if (failed_refresh) null else try std.json.parseFromSlice([]AurPackage, std.testing.allocator, "[]", .{}) };
         model.aur_state.aur_job = refresh;
         try std.testing.expect(!try aur_model.pollAurSearch(model));
         try std.testing.expectEqual(failed_refresh, model.aur_state.aur_failed);
