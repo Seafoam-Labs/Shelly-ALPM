@@ -12,6 +12,7 @@ const ShellyCli = shelly_cli.ShellyCli;
 
 const flatpak = @import("flatpak.zig");
 const CheckUpdates = @import("sync.zig").CheckUpdates;
+const ParsedCheckUpdates = @import("sync.zig").ParsedCheckUpdates;
 
 const Allocator = std.mem.Allocator;
 const OperationBackend = shelly_operation.Backend;
@@ -25,7 +26,7 @@ pub const State = struct {
     /// Result of the last finished operation; owned by `gpa` unless empty.
     updates_job: ?*UpdatesJob = null,
     updates_thread: ?std.Thread = null,
-    updates_parsed: ?std.json.Parsed(CheckUpdates) = null,
+    updates_parsed: ?ParsedCheckUpdates = null,
     refresh_after_upgrade: bool = false,
     refresh_updates_after_operation: bool = false,
     updates_checked: bool = false,
@@ -37,7 +38,7 @@ pub const UpdatesJob = struct {
     aur_enabled: bool = false,
     atoll: bool = false,
     flatpak_enabled: bool = false,
-    result: ?std.json.Parsed(CheckUpdates) = null,
+    result: ?ParsedCheckUpdates = null,
     failed: bool = false,
     done: std.atomic.Value(bool) = .init(false),
 };
@@ -203,9 +204,9 @@ test "updates view renders source rows and distinguishes query states" {
     defer model.deinit();
     model.active = .upgrade;
     model.updates_state.updates_checked = true;
-    model.updates_state.updates_parsed = try std.json.parseFromSlice(CheckUpdates, std.testing.allocator,
+    model.updates_state.updates_parsed = ParsedCheckUpdates.fromParsed(try std.json.parseFromSlice(CheckUpdates, std.testing.allocator,
         \\{"Packages":[{"Name":"native","CurrentVersion":"1","NewVersion":"2"}],"Aur":[{"Name":"aur","Version":"2","NewVersion":"3"}],"Flatpak":[{"Id":"org.test.App","NewVersion":"4","InstallLevel":1}],"AppImage":[{"Name":"image","Version":"5","IsUpdateAvailable":true}]}
-    , .{ .allocate = .alloc_always });
+    , .{ .allocate = .alloc_always }));
     model.updates_state.updates_list.item_count = 4;
     try std.testing.expectEqual(@as(usize, 4), model.updates_state.updates_parsed.?.value.count());
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
@@ -240,9 +241,9 @@ test "updates polling transfers results and cleans unconsumed results" {
         }
     };
     const job = try std.testing.allocator.create(UpdatesJob);
-    job.* = .{ .result = try std.json.parseFromSlice(CheckUpdates, std.testing.allocator,
+    job.* = .{ .result = ParsedCheckUpdates.fromParsed(try std.json.parseFromSlice(CheckUpdates, std.testing.allocator,
         \\{"Packages":[{"Name":"test","CurrentVersion":"1","NewVersion":"2"}]}
-    , .{ .allocate = .alloc_always }) };
+    , .{ .allocate = .alloc_always })) };
     model.updates_state.updates_job = job;
     model.updates_state.updates_thread = try std.Thread.spawn(.{}, Worker.complete, .{job});
     job.done.store(true, .release);
@@ -263,7 +264,7 @@ test "updates polling transfers results and cleans unconsumed results" {
 
     // deinit owns an unpolled worker and its result.
     const pending = try std.testing.allocator.create(UpdatesJob);
-    pending.* = .{ .result = try std.json.parseFromSlice(CheckUpdates, std.testing.allocator, "{}", .{}) };
+    pending.* = .{ .result = ParsedCheckUpdates.fromParsed(try std.json.parseFromSlice(CheckUpdates, std.testing.allocator, "{}", .{})) };
     model.updates_state.updates_job = pending;
     model.updates_state.updates_thread = try std.Thread.spawn(.{}, Worker.complete, .{pending});
 }
@@ -272,9 +273,9 @@ test "updates action opens a native-only upgrade prompt" {
     const model = try Model.init(std.testing.allocator);
     defer model.deinit();
     model.updates_state.updates_checked = true;
-    model.updates_state.updates_parsed = try std.json.parseFromSlice(CheckUpdates, std.testing.allocator,
+    model.updates_state.updates_parsed = ParsedCheckUpdates.fromParsed(try std.json.parseFromSlice(CheckUpdates, std.testing.allocator,
         \\{"Packages":[{"Name":"native","CurrentVersion":"1","NewVersion":"2"}],"Aur":[{"Name":"foreign"}]}
-    , .{ .allocate = .alloc_always });
+    , .{ .allocate = .alloc_always }));
     const action = updatesView(model).handleKey(.{ .codepoint = 'u' });
     try std.testing.expectEqual(commands.Updates.upgrade_system, action.?);
     try upgradeSystemFromUpdates(model);
@@ -292,9 +293,9 @@ test "AUR updates open a separate AUR upgrade prompt" {
     defer model.deinit();
     model.settings_state.settings.aur_enabled = true;
     model.updates_state.updates_checked = true;
-    model.updates_state.updates_parsed = try std.json.parseFromSlice(CheckUpdates, std.testing.allocator,
+    model.updates_state.updates_parsed = ParsedCheckUpdates.fromParsed(try std.json.parseFromSlice(CheckUpdates, std.testing.allocator,
         \\{"Packages":[],"Aur":[{"Name":"foreign","Version":"1","NewVersion":"2"}]}
-    , .{ .allocate = .alloc_always });
+    , .{ .allocate = .alloc_always }));
     try std.testing.expect(updatesView(model).handleKey(.{ .codepoint = 'u' }) == null);
     try std.testing.expectEqual(commands.Updates.upgrade_aur, updatesView(model).handleKey(.{ .codepoint = 'a' }).?);
     try upgradeFromUpdates(model, .aur);
@@ -306,7 +307,7 @@ test "combined update shortcut opens an authenticated prompt even for an empty c
     const allocator = std.testing.allocator;
     const model = try Model.init(allocator);
     defer model.deinit();
-    model.updates_state.updates_parsed = try std.json.parseFromSlice(CheckUpdates, allocator, "{}", .{});
+    model.updates_state.updates_parsed = ParsedCheckUpdates.fromParsed(try std.json.parseFromSlice(CheckUpdates, allocator, "{}", .{}));
     const key: vaxis.Key = .{ .codepoint = 'g' };
     try std.testing.expectEqual(commands.Updates.upgrade_all, updatesView(model).handleKey(key).?);
     try upgradeFromUpdates(model, .all);
@@ -368,7 +369,7 @@ test "updates scroll without selecting packages and reset after refresh" {
     const data: CheckUpdates = .{ .Packages = &packages };
     const json = try std.json.Stringify.valueAlloc(allocator, data, .{});
     defer allocator.free(json);
-    model.updates_state.updates_parsed = try std.json.parseFromSlice(CheckUpdates, allocator, json, .{ .allocate = .alloc_always });
+    model.updates_state.updates_parsed = ParsedCheckUpdates.fromParsed(try std.json.parseFromSlice(CheckUpdates, allocator, json, .{ .allocate = .alloc_always }));
     model.updates_state.updates_list.item_count = packages.len;
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
@@ -393,7 +394,7 @@ test "updates scroll without selecting packages and reset after refresh" {
     try std.testing.expect(model.overlay == null);
 
     const job = try allocator.create(UpdatesJob);
-    job.* = .{ .result = try std.json.parseFromSlice(CheckUpdates, allocator, "{}", .{}) };
+    job.* = .{ .result = ParsedCheckUpdates.fromParsed(try std.json.parseFromSlice(CheckUpdates, allocator, "{}", .{})) };
     const Worker = struct {
         fn complete(value: *UpdatesJob) void {
             value.done.store(true, .release);
@@ -424,9 +425,9 @@ test "update confirmations retain the list while PKGBUILD reviews use the full c
     defer model.deinit();
     model.active = .upgrade;
     model.updates_state.updates_checked = true;
-    model.updates_state.updates_parsed = try std.json.parseFromSlice(CheckUpdates, std.testing.allocator,
+    model.updates_state.updates_parsed = ParsedCheckUpdates.fromParsed(try std.json.parseFromSlice(CheckUpdates, std.testing.allocator,
         \\{"Packages":[{"Name":"visible-update","CurrentVersion":"1","NewVersion":"2"}]}
-    , .{});
+    , .{}));
     const prompt = try std.testing.allocator.create(SudoPrompt);
     prompt.* = .{ .name = try std.testing.allocator.dupe(u8, "all"), .backend = .all, .action = .upgrade, .state = .running };
     model.overlay = .{ .sudo = prompt };
