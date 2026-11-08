@@ -624,6 +624,28 @@ pub fn handleUnhandledKey(self: *Model, ctx: *vxfw.EventContext, key: vaxis.Key)
     try self.aur_state.aur_list.handleEvent(ctx, .{ .key_press = key });
 }
 
+test "Ctrl+U preserves AUR selections and Ctrl+X clears hidden selections" {
+    const model = try Model.init(std.testing.allocator);
+    defer model.deinit();
+    model.active = .aur;
+    model.settings_state.settings.aur_enabled = true;
+    model.aur_state.aur_list_active = true;
+    const items = [_]AurPackage{ .{ .Name = "visible" }, .{ .Name = "hidden" } };
+    model.aur_state.aur_packages = &items;
+    try rebuildAurFilter(model);
+    try toggleAurSelection(model);
+    model.aur_state.aur_list.jumpToItem(1);
+    try toggleAurSelection(model);
+    model.aur_state.aur_packages = items[0..1];
+    try rebuildAurFilter(model);
+    var ctx: vxfw.EventContext = .{ .io = std.testing.io, .alloc = std.testing.allocator, .cmds = .empty };
+    defer ctx.cmds.deinit(std.testing.allocator);
+    try Model.typeErasedCaptureHandler(model, &ctx, .{ .key_press = commands.bindings.half_page_up });
+    try std.testing.expectEqual(@as(usize, 2), model.aur_state.aur_selection.items.len);
+    try Model.typeErasedCaptureHandler(model, &ctx, .{ .key_press = .{ .codepoint = 'x', .mods = .{ .ctrl = true } } });
+    try std.testing.expectEqual(@as(usize, 0), model.aur_state.aur_selection.items.len);
+}
+
 test "PKGBUILD preview renders scrolls and returns to AUR details" {
     vxfw.DrawContext.init(.unicode);
     const model = try Model.init(std.testing.allocator);
