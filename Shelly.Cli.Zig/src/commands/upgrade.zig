@@ -27,6 +27,7 @@ const auto_confirm_cache_clean_option = "--auto-confirm-cache-clean";
 const disable_cache_clean_option = "--disable-cache-clean";
 const disable_appimage_update_check_option = "--disable-appimage-update-check";
 const disable_flatpak_update_check_option = "--disable-flatpak-update-check";
+const restart_services_option = "--restart-services";
 
 const UpgradeError = error{
     BackendFailed,
@@ -590,6 +591,7 @@ fn runStandard(
     defer manager.deinit();
     manager.setOperationContext(operation_context);
     defer manager.setOperationContext(null);
+    if (restartPolicyOverride(invocation)) |policy| manager.config.restart_policy = policy;
 
     try manager.sync(true);
     const updates = try manager.get_updates_available();
@@ -627,18 +629,7 @@ fn runStandard(
 
     var restart_report = try manager.sync_system_update(.{});
     defer restart_report.deinit();
-    if (invocation.globals.ui_mode and restart_report.needs_reboot)
-        emitStatus(operation_context, .standard, .warning, "[RESTART_REQUIRED]reboot");
-    for (restart_report.failures) |failure| {
-        try emitFormattedStatus(
-            context,
-            operation_context,
-            .standard,
-            .warning,
-            "[RESTART_FAILED]service:{s}|{s}",
-            .{ failure.service, failure.message },
-        );
-    }
+    try reportRestartOutcome(context, operation_context, &restart_report);
     var cleaner = PackageManager.CacheManager.init(context.allocator, context.io, .{ .cache_directory = manager.config.cache_directory, .manager = manager });
     try runCacheClean(context, operation_context, invocation, &cleaner);
 }
@@ -1103,6 +1094,73 @@ fn optionEnabled(invocation: *const parser.Invocation, name: []const u8) bool {
         return !std.ascii.eqlIgnoreCase(value, "false");
     }
     return false;
+}
+
+fn restartPolicyOverride(invocation: *const parser.Invocation) ?PackageManager.Manager.RestartPolicy {
+    for (invocation.options) |option| {
+        if (!std.mem.eql(u8, option.name, restart_services_option)) continue;
+        const enabled = option.value == null or !std.ascii.eqlIgnoreCase(option.value.?, "false");
+        return if (enabled) .automatic else .report;
+    }
+    return null;
+}
+
+fn reportRestartOutcome(
+    context: *runtime.RuntimeContext,
+    operation_context: *PackageManager.OperationContext,
+    report: *const PackageManager.Manager.RestartReport,
+) !void {
+    if (report.needs_reboot) {
+        emitStatus(operation_context, .standard, .warning, "[RESTART_REQUIRED]reboot");
+        return;
+    }
+    if (report.needs_session_restart)
+        emitStatus(operation_context, .standard, .warning, "[RESTART_REQUIRED]session");
+
+    if (report.policy == .report) {
+        for (report.affected_services) |service| {
+            try emitFormattedStatus(
+                context,
+                operation_context,
+                .standard,
+                .warning,
+                "[RESTART_REQUIRED]service:{s}",
+                .{service},
+            );
+        }
+    } else {
+        for (report.skipped_services) |skipped| {
+            try emitFormattedStatus(
+                context,
+                operation_context,
+                .standard,
+                .warning,
+                "[RESTART_REQUIRED]service:{s}|{s}",
+                .{ skipped.service, skipped.reason.label() },
+            );
+        }
+        for (report.restarted_services) |service| {
+            try emitFormattedStatus(
+                context,
+                operation_context,
+                .standard,
+                .information,
+                "[RESTARTED]service:{s}",
+                .{service},
+            );
+        }
+    }
+
+    for (report.failures) |failure| {
+        try emitFormattedStatus(
+            context,
+            operation_context,
+            .standard,
+            .warning,
+            "[RESTART_FAILED]service:{s}|{s}",
+            .{ failure.service, failure.message },
+        );
+    }
 }
 
 fn stringValue(configuration: *const config_model.Config, key: []const u8) ?[]const u8 {
