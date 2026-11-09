@@ -33,6 +33,7 @@ test "all source modules are included" {
     std.testing.refAllDecls(@import("services/ui_decode.zig"));
     std.testing.refAllDecls(sudo_terminal);
     std.testing.refAllDecls(sudo_session);
+    std.testing.refAllDecls(@import("views/app_view.zig"));
     std.testing.refAllDecls(@import("views/aur_view.zig"));
     std.testing.refAllDecls(@import("views/border.zig"));
     std.testing.refAllDecls(@import("views/detail_fields.zig"));
