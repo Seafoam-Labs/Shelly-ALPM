@@ -11,6 +11,7 @@ pub const runtime = @import("runtime.zig");
 // Register new source modules here; main.zig has its own executable suite.
 test "all source modules are included" {
     std.testing.refAllDecls(@import("commands.zig"));
+    std.testing.refAllDecls(@import("command_context.zig"));
     std.testing.refAllDecls(@import("model.zig"));
     std.testing.refAllDecls(@import("models/appimage.zig"));
     std.testing.refAllDecls(@import("models/aur_model.zig"));
