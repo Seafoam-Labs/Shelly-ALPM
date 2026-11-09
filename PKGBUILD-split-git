@@ -10,7 +10,7 @@ pkgname=(
   'shelly-notify-git'
   'shelly-notify-none-git'
 )
-pkgver=3.2.0
+pkgver=3.2.1
 pkgrel=1
 arch=('x86_64' 'aarch64')
 url='https://github.com/Seafoam-Labs/Shelly-ALPM'
