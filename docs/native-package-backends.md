@@ -146,9 +146,11 @@ system and administrator hook locations beneath the target root.
 (cd Shelly.Cli.Zig && zig build -Dlibalpm=false)
 ```
 
-`Shelly.PackageManager` and `Shelly.Tui` accept the same build option. The disabled
-variant omits libalpm imports, header translation, pkg-config discovery, linkage,
-and native binding tests. The GUI invokes the CLI and does not link either engine.
+`Shelly.PackageManager` accepts the same build option. The disabled variant
+omits libalpm imports, header translation, pkg-config discovery, linkage,
+and native binding tests. The GUI and TUI invoke the CLI and do not link either
+engine. Select the TUI's CLI with `-Dshelly-bin=/absolute/path/to/shelly`; select
+its native backend when building that CLI.
 
 Install `shelly`; download and RLPM action workers are reserved modes of that
 same executable. Child operations re-execute `/proc/self/exe`, so they also work

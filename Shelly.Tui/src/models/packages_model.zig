@@ -135,11 +135,12 @@ pub fn loadPackages(load: *LoadState) void {
         return;
     };
     defer installed.deinit();
-    for (installed.value) |pkg| {
-        for (parsed.value) |*p_pkg| {
-            if (std.ascii.eqlIgnoreCase(p_pkg.Name, pkg.Name)) p_pkg.Installed = true;
-        }
-    }
+    @import("packages.zig").markInstalled(alloc, parsed.value, installed.value) catch {
+        parsed.deinit();
+        load.failed = true;
+        load.done.store(true, .release);
+        return;
+    };
     load.result = parsed;
     load.done.store(true, .release);
 }
@@ -782,9 +783,9 @@ test "clear selection includes filtered packages and preserves search and cursor
     try setQuery(model, "visible");
     var ctx: vxfw.EventContext = .{ .io = std.testing.io, .alloc = std.testing.allocator, .cmds = .empty };
     defer ctx.cmds.deinit(std.testing.allocator);
-    const clear: vxfw.Event = .{ .key_press = .{ .codepoint = 'u', .mods = .{ .ctrl = true } } };
+    const clear: vxfw.Event = .{ .key_press = .{ .codepoint = 'x', .mods = .{ .ctrl = true } } };
     // The search field retains Ctrl+U for editing its text.
-    try Model.typeErasedCaptureHandler(model, &ctx, clear);
+    try Model.typeErasedCaptureHandler(model, &ctx, .{ .key_press = commands.bindings.half_page_up });
     try std.testing.expectEqual(@as(usize, 2), model.packages_state.selected_packages.items.len);
     model.packages_state.package_list_active = true;
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
@@ -796,6 +797,8 @@ test "clear selection includes filtered packages and preserves search and cursor
     };
     try std.testing.expect(advertised);
     const cursor = model.packages_state.list_view.cursor;
+    try Model.typeErasedCaptureHandler(model, &ctx, .{ .key_press = commands.bindings.half_page_up });
+    try std.testing.expectEqual(@as(usize, 2), model.packages_state.selected_packages.items.len);
     try Model.typeErasedCaptureHandler(model, &ctx, clear);
     try std.testing.expectEqual(@as(usize, 0), model.packages_state.selected_packages.items.len);
     try std.testing.expectEqualStrings("visible", model.packages_state.query);

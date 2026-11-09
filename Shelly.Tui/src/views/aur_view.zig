@@ -22,6 +22,8 @@ pub const View = struct {
     aur_failed: bool,
     aur_query: []const u8,
     result_count: usize,
+    catalog_page: u32 = 0,
+    catalog_total_pages: u32 = 0,
     selected: ?*const AurPackage = null,
     details_scroll: *vxfw.ScrollView,
     details_active: bool = false,
@@ -53,7 +55,7 @@ pub const View = struct {
             });
             const message = try self.aurMessage(arena);
             var label: vxfw.Text = .{ .text = if (message) |item| item.text else "", .style = if (message != null and message.?.red) .{ .fg = .{ .index = 1 } } else styles.secondary };
-            const labels = [_]Border.BorderLabel{.{ .text = if (self.installed_only) "Installed AUR packages" else "AUR packages", .alignment = .top_left }};
+            const labels = [_]Border.BorderLabel{.{ .text = if (self.installed_only) "Installed AUR packages" else if (self.catalog_page > 0) try std.fmt.allocPrint(arena, "AUR packages · Page {d}/{d}", .{ self.catalog_page, @max(1, self.catalog_total_pages) }) else "AUR packages", .alignment = .top_left }};
             const content = if (message != null) label.widget() else self.aur_list.widget();
             var border: Border = .{ .child = content, .labels = &labels, .focused = self.list_active and !self.details_active };
             if (list_height > 0) try children.append(arena, .{
@@ -87,6 +89,8 @@ pub const View = struct {
     fn aurMessage(self: View, arena: Allocator) Allocator.Error!?struct { text: []const u8, red: bool } {
         if (self.searching and self.installed_only) return .{ .text = "Loading installed AUR packages…", .red = false };
         if (self.aur_failed and self.installed_only) return .{ .text = "Could not load installed AUR packages.", .red = true };
+        if (self.catalog_page > 0 and self.searching) return .{ .text = "Loading AUR packages…", .red = false };
+        if (self.catalog_page > 0 and self.aur_failed) return .{ .text = "Could not load AUR packages. Refresh to retry.", .red = true };
         if (self.searching) {
             return .{
                 .text = try std.fmt.allocPrint(arena, "Searching AUR for '{s}'…", .{self.aur_query}),
@@ -97,6 +101,7 @@ pub const View = struct {
             return .{ .text = "Could not search the configured AUR service.", .red = true };
         }
         if (self.installed_only) return if (self.result_count == 0) .{ .text = "No installed AUR packages match the filter.", .red = false } else null;
+        if (self.catalog_page > 0) return if (self.result_count == 0) .{ .text = "No AUR packages to display.", .red = false } else null;
         if (self.aur_query.len == 0) {
             return .{ .text = "Search the AUR to browse packages.", .red = false };
         }
@@ -108,6 +113,8 @@ pub const View = struct {
     pub fn statusText(self: View, arena: Allocator) Allocator.Error![]const u8 {
         if (self.searching and self.installed_only) return "Loading installed AUR packages…";
         if (self.aur_failed and self.installed_only) return "Installed AUR query failed";
+        if (self.catalog_page > 0 and self.searching) return "Loading AUR packages…";
+        if (self.catalog_page > 0 and self.aur_failed) return "Could not load AUR packages. Refresh to retry.";
         if (self.searching) {
             return try std.fmt.allocPrint(arena, "Searching AUR for '{s}'…", .{self.aur_query});
         }
@@ -135,7 +142,7 @@ fn drawRow(ptr: *anyopaque, ctx: vxfw.DrawContext, selected: bool) Allocator.Err
     var spans: std.ArrayList(vxfw.RichText.TextSpan) = .empty;
     try spans.append(arena, .{ .text = if (selected) "[x] " else "[ ] ", .style = .{ .bold = selected } });
     try spans.append(arena, .{ .text = if (pkg.Installed) "● " else "  ", .style = .{ .fg = .{ .index = 2 } } });
-    try spans.append(arena, .{ .text = pkg.Name, .style = .{ .bold = true } });
+    try spans.append(arena, .{ .text = try diagnostics.sanitizeAlloc(arena, pkg.Name), .style = .{ .bold = true } });
 
     const rich = try arena.create(vxfw.RichText);
     rich.* = .{
@@ -247,4 +254,21 @@ test "AUR package pages follow the configured source independently of upstream U
         atoll = atoll or std.mem.eql(u8, cell.link.uri, "https://atoll.seafoam-labs.org/package/name%2Bsuffix");
     }
     try std.testing.expect(upstream and atoll);
+}
+
+test "package row names escape terminal control bytes without changing identity" {
+    vxfw.DrawContext.init(.unicode);
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const name = "demo\x1b[31m\r\x7f";
+    var pkg: AurPackage = .{ .Name = name };
+    const ctx: vxfw.DrawContext = .{ .arena = arena.allocator(), .min = .{}, .max = .{ .width = 80, .height = 1 }, .cell_size = .{ .width = 10, .height = 20 } };
+    inline for (.{ drawAurRow, drawSelectedAurRow }) |draw| {
+        const surface = try draw(&pkg, ctx);
+        var text: std.ArrayList(u8) = .empty;
+        for (surface.buffer) |cell| try text.appendSlice(arena.allocator(), cell.char.grapheme);
+        try std.testing.expect(std.mem.indexOf(u8, text.items, "demo\\x1b[31m\\x0d\\x7f") != null);
+        try std.testing.expect(std.mem.indexOfAny(u8, text.items, "\x1b\r\x7f") == null);
+        try std.testing.expectEqualStrings(name, pkg.Name);
+    }
 }

@@ -1,6 +1,6 @@
 pub const PkgBuild = struct {
     Name: []const u8,
-    PkgBuild: []const u8,
+    PkgBuild: ?[]const u8,
     Scan: ?ScanResult = null,
 
     pub const Finding = struct {

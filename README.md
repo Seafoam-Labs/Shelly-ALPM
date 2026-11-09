@@ -182,6 +182,8 @@ This also applies to combined-upgrade aliases, including bare `shelly` and
 The one-time `shelly upgrade all --no-flatpak` flag also skips Flatpak.
 This preference can be used together with `DisableAppImageUpdateCheck`.
 
+Flatpak removal accepts mutually exclusive `--user` and `--system` flags; omitting both keeps automatic installation lookup.
+
 ## Upgrade cache cleaning
 
 To skip the package-cache cleanup prompt and deletion during `shelly upgrade all`:
