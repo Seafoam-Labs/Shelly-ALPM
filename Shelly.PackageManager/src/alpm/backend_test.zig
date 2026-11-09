@@ -494,7 +494,7 @@ test "native backend RLPM sync reports repository causes through both event inte
 }
 
 test "native backend configuration maps extended options and rejects invalid parallelism" {
-    const text = "[options]\nArchitecture = auto x86_64_v3\nCacheDir = /cache/first /cache/second\nCacheDir = /cache/third\nAssumeInstalled = virtual=2\nParallelDownloads = 7\nDownloadUser = nobody\nDisableDownloadTimeout\nDisableSandboxFilesystem\nDisableSandboxSyscalls\nDisableSandboxNetwork\nNoUpgrade = etc/demo\nNoExtract = usr/share/skip/*\n[testing]\nUsage = Search Install\nCacheServer = https://cache.example/$repo/$arch\nServer = https://mirror.example/$repo/$arch\n";
+    const text = "[options]\nArchitecture = auto x86_64_v3\nCacheDir = /cache/first /cache/second\nCacheDir = /cache/third\nAssumeInstalled = virtual=2\nParallelDownloads = 7\nDownloadUser = nobody\nRestartPolicy = automatic\nDisableDownloadTimeout\nDisableSandboxFilesystem\nDisableSandboxSyscalls\nDisableSandboxNetwork\nNoUpgrade = etc/demo\nNoExtract = usr/share/skip/*\n[testing]\nUsage = Search Install\nCacheServer = https://cache.example/$repo/$arch\nServer = https://mirror.example/$repo/$arch\n";
     var config = try pm.Manager.configuration.Configuration.parse_string(t.allocator, t.io, text);
     defer config.deinitialize();
     try t.expectEqual(@as(usize, 3), config.cache_directories.items.len);
@@ -502,6 +502,7 @@ test "native backend configuration maps extended options and rejects invalid par
     try t.expectEqual(@as(?u8, 7), config.parallel_downloads);
     try t.expectEqualStrings("virtual=2", config.assume_installed.items[0]);
     try t.expectEqualStrings("nobody", config.sandbox_user.?);
+    try t.expectEqual(pm.Manager.RestartPolicy.automatic, config.restart_policy);
     try t.expect(config.disable_download_timeout and config.disable_sandbox_filesystem and config.disable_sandbox_syscalls and config.disable_sandbox_network);
     try t.expectEqualStrings("etc/demo", config.no_upgrade.items[0]);
     try t.expectEqualStrings("usr/share/skip/*", config.no_extract.items[0]);

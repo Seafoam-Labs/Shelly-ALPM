@@ -853,10 +853,23 @@ pub const Manager = struct {
         if (!self.databases_synced) try self.sync(true);
         const names = try self.namesSlice(targets);
         defer self.allocator.free(names);
+
+        // Capture mapped shared-object identities before the transaction so
+        // only libraries replaced by this operation trigger restarts.
+        const check_restarts = !flags.dbonly and !flags.downloadonly and
+            std.mem.eql(u8, self.config.root_directory, "/");
+        var library_state_snapshot: ?restart_checks.LibrarySnapshot = if (check_restarts)
+            restart_checks.LibrarySnapshot.capture(self.io(), self.allocator, "/proc") catch null
+        else
+            null;
+        defer if (library_state_snapshot) |*captured| captured.deinit();
+
         try self.execute(.upgrade, names, flags, .already_approved);
-        if (flags.dbonly or flags.downloadonly or !std.mem.eql(u8, self.config.root_directory, "/"))
-            return contract.RestartReport.empty(self.allocator);
-        return restart_checks.check(self, .{});
+        if (!check_restarts) return contract.RestartReport.empty(self.allocator);
+        return restart_checks.check(self, .{
+            .policy = if (library_state_snapshot != null) self.config.restart_policy else contract.RestartPolicy.report,
+            .library_snapshot = if (library_state_snapshot) |*captured| captured else null,
+        });
     }
     pub fn update_packages(self: *Manager, values: [][:0]const u8, flags: types.TransFlag) !void {
         try self.install_packages(values, flags);

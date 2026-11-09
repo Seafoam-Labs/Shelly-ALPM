@@ -1,5 +1,6 @@
 const std = @import("std");
 const paths = @import("paths");
+const restart_policy = @import("restart_policy.zig");
 const Io = std.Io;
 const Bindings = struct {
     pub const libalpm = @import("types.zig");
@@ -35,10 +36,10 @@ inline fn sig(level: SigLevel) u32 {
     return @bitCast(level.to_sig_level());
 }
 inline fn usageBit(flag: DatabaseUsage) u32 {
-    return @intFromEnum(flag);
+    return @backingInt(flag);
 }
 
-pub const ParseError = Allocator.Error || error{ ConfigReadFailed, InvalidHookDirMode, InvalidMigrationPolicy };
+pub const ParseError = Allocator.Error || error{ ConfigReadFailed, InvalidHookDirMode, InvalidMigrationPolicy, InvalidRestartPolicy };
 
 pub const Configuration = struct {
     pub const Repository = struct {
@@ -62,6 +63,8 @@ pub const Configuration = struct {
         disable_sandbox_network: bool = false,
         disable_download_timeout: bool = false,
         auto_migrate_unowned: bool = std.mem.eql(u8, paths.profile, "devario"),
+        /// Whether post-upgrade restarts are automatic or only reported.
+        restart_policy: restart_policy.RestartPolicy = .automatic,
 
         root_directory: [:0]const u8,
         database_path: [:0]const u8,
@@ -1013,6 +1016,8 @@ pub const Configuration = struct {
                 c.use_system_log = true;
             } else if (equalIgnoreCase(key, "automigrateunowned")) {
                 if (equalIgnoreCase(value, "true")) c.auto_migrate_unowned = true else if (equalIgnoreCase(value, "false")) c.auto_migrate_unowned = false else return error.InvalidMigrationPolicy;
+            } else if (equalIgnoreCase(key, "restartpolicy")) {
+                c.restart_policy = restart_policy.RestartPolicy.parse(value) catch return error.InvalidRestartPolicy;
             } else if (equalIgnoreCase(key, "checkspace")) {
                 c.check_space = true;
             } else if (equalIgnoreCase(key, "siglevel")) {
@@ -1875,4 +1880,19 @@ test "migration automatic policy follows profile and accepts explicit overrides"
         try std.testing.expectEqual(enabled, config.auto_migrate_unowned);
     }
     try std.testing.expectError(error.InvalidMigrationPolicy, Configuration.parse_string(std.testing.allocator, std.testing.io, "[options]\nAutoMigrateUnowned = yes\n"));
+}
+
+test "restart policy defaults to automatic and accepts report" {
+    var defaults = try Configuration.parse_string(std.testing.allocator, std.testing.io, "[options]\n");
+    defer defaults.deinitialize();
+    try std.testing.expectEqual(restart_policy.RestartPolicy.automatic, defaults.restart_policy);
+
+    var report = try Configuration.parse_string(std.testing.allocator, std.testing.io, "[options]\nRestartPolicy = report\n");
+    defer report.deinitialize();
+    try std.testing.expectEqual(restart_policy.RestartPolicy.report, report.restart_policy);
+
+    try std.testing.expectError(
+        error.InvalidRestartPolicy,
+        Configuration.parse_string(std.testing.allocator, std.testing.io, "[options]\nRestartPolicy = prompt\n"),
+    );
 }

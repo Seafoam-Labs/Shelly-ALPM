@@ -559,8 +559,18 @@ fn installRepositoryPackages(
     defer manager.deinit();
     manager.setOperationContext(operation_context);
     defer manager.setOperationContext(null);
+    if (restartPolicyOverride(invocation)) |policy| manager.config.restart_policy = policy;
 
     try installRepositoryPackagesWithManager(context.allocator, invocation, package_names, manager);
+}
+
+fn restartPolicyOverride(invocation: *const parser.Invocation) ?PackageManager.Manager.RestartPolicy {
+    for (invocation.options) |option| {
+        if (!std.mem.eql(u8, option.name, "--restart-services")) continue;
+        const enabled = option.value == null or !std.ascii.eqlIgnoreCase(option.value.?, "false");
+        return if (enabled) .automatic else .report;
+    }
+    return null;
 }
 
 fn installRepositoryPackagesWithManager(
