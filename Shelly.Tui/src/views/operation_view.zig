@@ -80,7 +80,8 @@ pub const View = struct {
         const status = std.mem.trim(u8, self.progress.text(), " \t\r\n");
         if (status.len > 0 and !std.mem.eql(u8, status, last))
             try lines.append(arena, try diagnostics.sanitizeAlloc(arena, status));
-        if (lines.items.len == 0 and self.state == .running) try lines.append(arena, "Waiting for progress…");
+        if (lines.items.len == 0 and self.state == .running)
+            try lines.append(arena, if (self.progress.authenticating) "Waiting for authentication…" else "Waiting for progress…");
         if (progress.len > 0) try lines.append(arena, progress);
         if (outcome.len > 0) try lines.append(arena, outcome);
         return std.mem.join(arena, "\n", lines.items);
