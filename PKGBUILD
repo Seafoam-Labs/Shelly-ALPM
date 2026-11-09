@@ -2,12 +2,12 @@
 # Maintainer: Caroline Snyder <hirpeng@gmail.com>
 pkgbase=shelly
 pkgname=('shelly' 'shelly-flatpak-backend')
-pkgver=3.2.0
+pkgver=3.2.1
 pkgrel=1
 arch=('x86_64' 'aarch64')
 url="https://github.com/Seafoam-Labs/Shelly-ALPM"
 license=('GPL-3.0-only')
-makedepends=('libarchive' 'curl' 'sqlite' 'gnupg' 'git' 'pkgconf' 'gtk4' 'zig=0.17.0' 'clang' 'gettext' 'flatpak' 'ripgrep' 'go-md2man')
+makedepends=('libarchive' 'curl' 'sqlite' 'gnupg' 'git' 'pkgconf' 'gtk4' 'zig=0.17.1' 'clang' 'gettext' 'flatpak' 'ripgrep' 'go-md2man')
 
 # Keep package metadata tied to the compiled native backend variant.
 _shelly_libalpm=${SHELLY_LIBALPM:-true}

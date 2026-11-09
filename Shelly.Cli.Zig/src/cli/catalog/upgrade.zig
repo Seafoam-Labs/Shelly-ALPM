@@ -9,11 +9,18 @@ pub const variants = [_]types.Variant{
         .type_code = 's',
         .description = "Synchronize ALPM repositories, show the available repository package upgrades, perform a full system upgrade, and report required restarts.",
         .implementation = "PackageManager.Manager.sync / get_updates_available / sync_system_update",
-        .options = &.{flag(
-            "--all",
-            &.{"-a"},
-            "Upgrade standard, AUR, Flatpak, and AppImage backends",
-        )},
+        .options = &.{
+            flag(
+                "--all",
+                &.{"-a"},
+                "Upgrade standard, AUR, Flatpak, and AppImage backends",
+            ),
+            flag(
+                "--restart-services",
+                &.{},
+                "Restart affected services automatically; session-critical units are only reported",
+            ),
+        },
     },
     .{
         .action = .upgrade,
@@ -22,7 +29,7 @@ pub const variants = [_]types.Variant{
         .bare_action_code = true,
         .description = "Build and confirm an invoking-user upgrade plan, then upgrade every enabled package backend in one coordinated action, continuing through independent backend failures and returning failure if any selected backend fails.",
         .implementation = "Combined Zig coordinator over PackageManager.Manager, AurManager, FlatpakManager, and appimage.UpdateManager",
-        .options = &.{ flag("--no-repo", &.{}, "Skip the standard ALPM backend"), flag("--no-aur", &.{}, "Skip the AUR backend"), flag("--no-flatpak", &.{}, "Skip the Flatpak backend"), flag("--no-appimage", &.{}, "Skip the AppImage backend"), flag("--no-devel", &.{}, "Skip -git aur") },
+        .options = &.{ flag("--no-repo", &.{}, "Skip the standard ALPM backend"), flag("--no-aur", &.{}, "Skip the AUR backend"), flag("--no-flatpak", &.{}, "Skip the Flatpak backend"), flag("--no-appimage", &.{}, "Skip the AppImage backend"), flag("--no-devel", &.{}, "Skip -git aur"), flag("--restart-services", &.{}, "Restart affected services automatically; session-critical units are only reported") },
     },
     .{
         .action = .upgrade,

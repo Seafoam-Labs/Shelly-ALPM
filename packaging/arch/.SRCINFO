@@ -16,7 +16,7 @@ pkgbase = shelly
 	makedepends = libarchive
 	makedepends = pkgconf
 	makedepends = sqlite
-	makedepends = zig>=0.17.0
+	makedepends = zig>=0.17.1
 	source = Shelly-ALPM::git+https://github.com/Seafoam-Labs/Shelly-ALPM.git#tag=v3.2.0
 	sha256sums = SKIP
 

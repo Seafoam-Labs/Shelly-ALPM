@@ -1,0 +1,1818 @@
+//! Frontend-neutral operation protocol baseline, adapted from the GTK client.
+const std = @import("std");
+const diagnostics = @import("diagnostics");
+const JsonPackFrame = @import("ui_decode.zig").JsonPackFrame;
+const flatpak_models = @import("../models/flatpak.zig");
+const sudo_terminal = @import("sudo_terminal.zig");
+const sudo_session = @import("sudo_session.zig");
+pub const Session = sudo_session.Session;
+const Scope = @import("../models/flatpak.zig").InstallLevel;
+
+pub const Backend = enum { standard, aur, flatpak, appimage, all };
+
+pub const Action = enum {
+    install,
+    remove,
+    upgrade,
+
+    pub fn verb(self: Action) []const u8 {
+        return switch (self) {
+            .install => "Install",
+            .remove => "Remove",
+            .upgrade => "Upgrade",
+        };
+    }
+
+    pub fn completed(self: Action) []const u8 {
+        return switch (self) {
+            .install => "Installed",
+            .remove => "Removed",
+            .upgrade => "Upgraded",
+        };
+    }
+};
+
+pub const FlatpakTarget = struct {
+    scope: Scope,
+    remote: []const u8 = "",
+    arch: []const u8 = "",
+    branch: []const u8 = "",
+    reference: []const u8 = "",
+    kind: flatpak_models.FlatpakKind = .app,
+
+    pub fn clone(self: FlatpakTarget, alloc: std.mem.Allocator) !FlatpakTarget {
+        var result = self;
+        result.remote = if (self.remote.len > 0) try alloc.dupe(u8, self.remote) else "";
+        errdefer if (result.remote.len > 0) alloc.free(result.remote);
+        result.arch = if (self.arch.len > 0) try alloc.dupe(u8, self.arch) else "";
+        errdefer if (result.arch.len > 0) alloc.free(result.arch);
+        result.branch = if (self.branch.len > 0) try alloc.dupe(u8, self.branch) else "";
+        errdefer if (result.branch.len > 0) alloc.free(result.branch);
+        result.reference = if (self.reference.len > 0) try alloc.dupe(u8, self.reference) else "";
+        return result;
+    }
+
+    pub fn deinit(self: FlatpakTarget, alloc: std.mem.Allocator) void {
+        inline for (.{ "remote", "arch", "branch", "reference" }) |field| {
+            if (@field(self, field).len > 0) alloc.free(@field(self, field));
+        }
+    }
+};
+
+pub fn flatpakNeedsElevation(action: Action, target: ?FlatpakTarget) bool {
+    return action != .upgrade and target != null and target.?.scope == .system;
+}
+
+pub const OperationRequest = struct {
+    action: Action = .install,
+    sudo_bin: []const u8 = "sudo",
+    shelly_bin: []const u8,
+    environ_map: *const std.process.Environ.Map,
+    name: []const u8,
+    targets: []const []const u8 = &.{},
+    backend: []const u8,
+    launcher_bin: ?[]const u8 = null,
+    session: ?*Session = null,
+    flatpak: ?FlatpakTarget = null,
+    include_flatpak: bool = true,
+    include_aur: bool = true,
+};
+
+/// Fixed-size, owned display data; safe to copy between the worker and UI.
+pub const Progress = struct {
+    authenticating: bool = false,
+    authentication: [4096]u8 = @splat(0),
+    authentication_len: usize = 0,
+    status: [512]u8 = @splat(0),
+    status_len: usize = 0,
+    percent: ?i64 = null,
+    messages: [64][512]u8 = @splat(@splat(0)),
+    lengths: [64]usize = @splat(0),
+
+    pub fn text(self: *const Progress) []const u8 {
+        return self.status[0..self.status_len];
+    }
+
+    fn update(self: *Progress, text_value: []const u8, percent: ?i64) void {
+        self.percent = percent;
+        self.status_len = @min(text_value.len, self.status.len);
+        @memcpy(self.status[0..self.status_len], text_value[0..self.status_len]);
+    }
+
+    fn log(self: *Progress, value: []const u8) void {
+        if (value.len == 0) return;
+        for (0..self.messages.len - 1) |i| {
+            self.messages[i] = self.messages[i + 1];
+            self.lengths[i] = self.lengths[i + 1];
+        }
+        const last = self.messages.len - 1;
+        self.lengths[last] = @min(value.len, self.messages[last].len);
+        @memcpy(self.messages[last][0..self.lengths[last]], value[0..self.lengths[last]]);
+    }
+};
+
+const ProgressStream = struct {
+    const max_frame_bytes = 8 * 1024 * 1024;
+    payload: std.ArrayList(u8) = .empty,
+    len: usize = 0,
+    matched: usize = 0,
+    in_frame: bool = false,
+    failed: bool = false,
+    error_text: [512]u8 = @splat(0),
+    error_len: usize = 0,
+    transaction_done: bool = false,
+    transaction_depth: usize = 0,
+    transaction_cancelled: bool = false,
+
+    fn deinit(self: *ProgressStream) void {
+        self.payload.deinit(std.heap.page_allocator);
+    }
+
+    fn feed(self: *ProgressStream, bytes: []const u8, operation: ?*Operation, io: std.Io) void {
+        for (bytes) |byte| {
+            if (!self.in_frame) {
+                const marker = "[JSON]";
+                if (byte == marker[self.matched]) {
+                    self.matched += 1;
+                    if (self.matched == marker.len) {
+                        self.in_frame = true;
+                        self.matched = 0;
+                        self.len = 0;
+                        self.payload.clearRetainingCapacity();
+                    }
+                } else self.matched = if (byte == '[') 1 else 0;
+                continue;
+            }
+            if (self.len == max_frame_bytes) {
+                self.failed = true;
+                if (operation) |op| op.closeInput(io);
+                self.in_frame = false;
+                self.len = 0;
+                continue;
+            }
+            self.payload.append(std.heap.page_allocator, byte) catch {
+                self.failed = true;
+                if (operation) |op| op.closeInput(io);
+                return;
+            };
+            self.len += 1;
+            if (!std.mem.endsWith(u8, self.payload.items, "[/JSON]")) continue;
+            self.in_frame = false;
+            var message = decodePayload(std.heap.page_allocator, self.payload.items[0 .. self.len - 7]) catch {
+                self.failed = true;
+                if (operation) |op| op.closeInput(io);
+                continue;
+            };
+            var transferred = false;
+            defer if (!transferred) message.deinit();
+            switch (message.value) {
+                .question => {
+                    if (operation) |op| {
+                        op.queueQuestion(io, message) catch {
+                            self.failed = true;
+                            op.closeInput(io);
+                            continue;
+                        };
+                        transferred = true;
+                    } else self.failed = true;
+                },
+                .event => |event| {
+                    if (event == .info) {
+                        if (std.mem.eql(u8, event.info.event_type, "TransactionStart")) {
+                            if (self.transaction_depth == 0) self.transaction_done = false;
+                            self.transaction_depth += 1;
+                        }
+                        if (std.mem.eql(u8, event.info.event_type, "TransactionDone")) {
+                            self.transaction_depth -|= 1;
+                            if (self.transaction_depth == 0) self.transaction_done = true;
+                        }
+                        if (std.mem.eql(u8, event.info.event_type, "TransactionFailed")) {
+                            self.failed = true;
+                            self.transaction_depth -|= 1;
+                            if (self.error_len == 0) {
+                                self.error_len = @min(event.info.message.len, self.error_text.len);
+                                @memcpy(self.error_text[0..self.error_len], event.info.message[0..self.error_len]);
+                            }
+                        }
+                        if (std.mem.eql(u8, event.info.event_type, "TransactionCancelled")) {
+                            self.transaction_cancelled = true;
+                            self.transaction_depth -|= 1;
+                        }
+                    }
+                    if (event == .err) {
+                        self.failed = true;
+                        self.error_len = @min(event.err.message.len, self.error_text.len);
+                        @memcpy(self.error_text[0..self.error_len], event.err.message[0..self.error_len]);
+                    }
+                    if (operation) |op| op.record(io, event);
+                },
+            }
+        }
+    }
+};
+
+pub const Operation = struct {
+    arena: std.heap.ArenaAllocator,
+    request: OperationRequest,
+    thread: ?std.Thread = null,
+    done: std.atomic.Value(bool) = .init(false),
+    result: OperationResult = .{},
+    progress_mutex: std.Io.Mutex = .init,
+    progress: Progress = .{},
+    input: ?std.Io.File = null,
+    input_closing: bool = false,
+    pending: ?OwnedMessage = null,
+    expected_id: [20]u8 = undefined,
+    expected_len: usize = 0,
+    expected_answer: ?enum { yes_no, transaction, optional_dependencies, pkgbuild, provider } = null,
+    user_declined: bool = false,
+    terminal: ?sudo_terminal.Terminal = null,
+    terminal_stop: std.atomic.Value(bool) = .init(false),
+    cancel_requested: std.atomic.Value(bool) = .init(false),
+    process_group: ?std.c.pid_t = null,
+
+    pub fn cancel(self: *Operation, io: std.Io) void {
+        self.cancel_requested.store(true, .release);
+        self.progress_mutex.lockUncancelable(io);
+        if (self.process_group) |pid| _ = std.c.kill(-pid, .KILL);
+        self.progress_mutex.unlock(io);
+        self.closeInput(io);
+    }
+
+    fn registerProcess(self: *Operation, io: std.Io, pid: std.c.pid_t) void {
+        self.progress_mutex.lockUncancelable(io);
+        defer self.progress_mutex.unlock(io);
+        self.process_group = pid;
+        // Cancellation may precede process creation or PID publication.
+        if (self.cancel_requested.load(.acquire)) _ = std.c.kill(-pid, .KILL);
+    }
+
+    pub fn sendAuthentication(self: *Operation, io: std.Io, bytes: []const u8) !void {
+        self.progress_mutex.lockUncancelable(io);
+        defer self.progress_mutex.unlock(io);
+        if (!self.progress.authenticating) return;
+        const terminal = self.terminal orelse return;
+        try terminal.write(bytes);
+    }
+
+    fn authenticationOutput(self: *Operation, io: std.Io, bytes: []const u8) void {
+        self.progress_mutex.lockUncancelable(io);
+        defer self.progress_mutex.unlock(io);
+        if (!self.progress.authenticating) return;
+        const take = @min(bytes.len, self.progress.authentication.len);
+        const keep = @min(self.progress.authentication_len, self.progress.authentication.len - take);
+        std.mem.copyForwards(u8, self.progress.authentication[0..keep], self.progress.authentication[self.progress.authentication_len - keep .. self.progress.authentication_len]);
+        @memcpy(self.progress.authentication[keep .. keep + take], bytes[bytes.len - take ..]);
+        self.progress.authentication_len = keep + take;
+    }
+
+    fn readTerminal(self: *Operation, terminal: sudo_terminal.Terminal, io: std.Io) void {
+        var buffer: [512]u8 = undefined;
+        defer std.crypto.secureZero(u8, &buffer);
+        while (!self.terminal_stop.load(.acquire)) {
+            const len = terminal.read(&buffer);
+            if (len > 0) self.authenticationOutput(io, buffer[0..len]);
+        }
+    }
+
+    fn queueQuestion(self: *Operation, io: std.Io, message: OwnedMessage) !void {
+        const question = message.value.question;
+        const id = questionId(question);
+        self.progress_mutex.lockUncancelable(io);
+        defer self.progress_mutex.unlock(io);
+        if (!interactive(self.request) or self.input == null or self.input_closing) return error.InputClosed;
+        if (self.expected_answer != null or self.pending != null) return error.QuestionAlreadyPending;
+        if (id.len > self.expected_id.len) return error.InvalidQuestionId;
+        @memcpy(self.expected_id[0..id.len], id);
+        self.expected_len = id.len;
+        self.progress.authenticating = false;
+        self.expected_answer = switch (question) {
+            .yes_no => .yes_no,
+            .transaction => .transaction,
+            .pkgbuild => .pkgbuild,
+            .select_one => .provider,
+            .select_many => .optional_dependencies,
+        };
+        self.pending = message;
+    }
+
+    /// Transfers ownership to the UI. Answers remain tied to this question ID.
+    pub fn takeQuestion(self: *Operation, io: std.Io) ?OwnedMessage {
+        self.progress_mutex.lockUncancelable(io);
+        defer self.progress_mutex.unlock(io);
+        const message = self.pending;
+        self.pending = null;
+        return message;
+    }
+
+    pub fn sendAnswer(self: *Operation, io: std.Io, id: []const u8, answer: Answer) !void {
+        const encoded = try encodeAnswer(std.heap.page_allocator, id, answer);
+        defer std.heap.page_allocator.free(encoded);
+        self.progress_mutex.lockUncancelable(io);
+        defer self.progress_mutex.unlock(io);
+        const expected = self.expected_answer orelse return error.NoPendingQuestion;
+        if (!std.mem.eql(u8, id, self.expected_id[0..self.expected_len])) return error.StaleQuestion;
+        if (!std.mem.eql(u8, @tagName(answer), @tagName(expected))) return error.WrongAnswerKind;
+        if (self.pending != null) return error.QuestionNotDelivered;
+        const input = self.input orelse return error.InputClosed;
+        var buffer: [4096]u8 = undefined;
+        var writer = input.writer(io, &buffer);
+        try writer.interface.writeAll(encoded);
+        try writer.interface.flush();
+        switch (answer) {
+            .yes_no, .transaction, .pkgbuild => |accepted| {
+                if (!accepted) self.user_declined = true;
+            },
+            else => {},
+        }
+        self.expected_answer = null;
+        self.expected_len = 0;
+    }
+
+    pub fn closeInput(self: *Operation, io: std.Io) void {
+        self.progress_mutex.lockUncancelable(io);
+        defer self.progress_mutex.unlock(io);
+        self.input_closing = true;
+        if (self.input) |input| input.close(io);
+        self.input = null;
+    }
+
+    fn registerInput(self: *Operation, io: std.Io, input: std.Io.File) void {
+        self.progress_mutex.lockUncancelable(io);
+        defer self.progress_mutex.unlock(io);
+        if (self.input_closing) input.close(io) else self.input = input;
+    }
+
+    pub fn snapshot(self: *Operation, io: std.Io) Progress {
+        self.progress_mutex.lockUncancelable(io);
+        defer self.progress_mutex.unlock(io);
+        return self.progress;
+    }
+
+    fn record(self: *Operation, io: std.Io, event: Event) void {
+        self.progress_mutex.lockUncancelable(io);
+        defer self.progress_mutex.unlock(io);
+        self.progress.authenticating = false;
+        var buffer: [512]u8 = undefined;
+        switch (event) {
+            .info => |info| {
+                self.progress.update(info.message, null);
+                self.progress.log(info.message);
+            },
+            .err => |err| {
+                self.progress.update(err.message, null);
+                self.progress.log(err.message);
+            },
+            .alpm_progress => |progress| {
+                const text_value = std.fmt.bufPrint(&buffer, "{s}: {s}", .{
+                    progress.stage orelse progress.progress_type,
+                    if (progress.package_name.len > 0) progress.package_name else progress.message orelse "",
+                }) catch buffer[0..];
+                self.progress.update(text_value, progress.percent);
+            },
+            inline .flatpak_progress, .appimage_progress => |progress| {
+                self.progress.update(progress.status orelse "Installing…", progress.percentage);
+            },
+            .unknown => {},
+        }
+    }
+
+    pub fn start(request: OperationRequest) !*Operation {
+        const self = try std.heap.page_allocator.create(Operation);
+        errdefer std.heap.page_allocator.destroy(self);
+        self.* = .{
+            .arena = .init(std.heap.page_allocator),
+            .request = request,
+        };
+        errdefer self.arena.deinit();
+        const alloc = self.arena.allocator();
+        self.request.sudo_bin = try alloc.dupe(u8, request.sudo_bin);
+        self.request.shelly_bin = try alloc.dupe(u8, request.shelly_bin);
+        self.request.name = try alloc.dupe(u8, request.name);
+        const targets = try alloc.alloc([]const u8, request.targets.len);
+        for (request.targets, targets) |source, *target| target.* = try alloc.dupe(u8, source);
+        self.request.targets = targets;
+        self.request.backend = try alloc.dupe(u8, request.backend);
+        if (request.flatpak) |target| self.request.flatpak = try target.clone(alloc);
+        if (request.launcher_bin) |path| self.request.launcher_bin = try alloc.dupe(u8, path);
+        self.thread = try std.Thread.spawn(.{}, run, .{self});
+        return self;
+    }
+
+    fn run(self: *Operation) void {
+        {
+            var threaded: std.Io.Threaded = .init(std.heap.page_allocator, .{});
+            defer threaded.deinit();
+            self.result = runInstall(threaded.io(), std.heap.page_allocator, self.request, self);
+        }
+        self.done.store(true, .release);
+    }
+
+    pub fn poll(self: *Operation) ?*const OperationResult {
+        if (!self.done.load(.acquire)) return null;
+        return &self.result;
+    }
+
+    pub fn deinit(self: *Operation) void {
+        if (!self.done.load(.acquire)) {
+            var threaded: std.Io.Threaded = .init(std.heap.page_allocator, .{});
+            defer threaded.deinit();
+            self.cancel(threaded.io());
+        }
+        if (self.thread) |thread| thread.join();
+        if (self.pending) |*pending| pending.deinit();
+        self.result.deinit(std.heap.page_allocator);
+        self.arena.deinit();
+        std.heap.page_allocator.destroy(self);
+    }
+};
+
+pub const OperationResult = struct {
+    failed: bool = false,
+    declined: bool = false,
+    error_detail: []const u8 = "",
+
+    pub fn deinit(self: *OperationResult, allocator: std.mem.Allocator) void {
+        if (self.error_detail.len > 0) allocator.free(self.error_detail);
+        self.* = undefined;
+    }
+};
+
+fn interactive(request: OperationRequest) bool {
+    return (std.mem.eql(u8, request.backend, "aur") and request.action != .remove) or isFlatpak(request) or combined(request);
+}
+
+fn combined(request: OperationRequest) bool {
+    return request.action == .upgrade and std.mem.eql(u8, request.backend, "all");
+}
+
+fn isFlatpak(request: OperationRequest) bool {
+    return std.mem.eql(u8, request.backend, "flatpak");
+}
+
+fn elevated(request: OperationRequest) bool {
+    return !isFlatpak(request) or flatpakNeedsElevation(request.action, request.flatpak);
+}
+
+fn operationArgv(alloc: std.mem.Allocator, request: OperationRequest) ![][]const u8 {
+    const package_backend = std.mem.eql(u8, request.backend, "standard") or std.mem.eql(u8, request.backend, "aur");
+    if (request.targets.len > 0 and (!package_backend or request.action == .upgrade))
+        return error.UnsupportedBatchAction;
+    if (std.mem.eql(u8, request.backend, "all") and request.action != .upgrade) return error.UnsupportedCombinedAction;
+    const keep_dependencies = request.action == .remove and std.mem.eql(u8, request.backend, "standard");
+    if (request.action == .upgrade and !std.mem.eql(u8, request.backend, "standard") and !std.mem.eql(u8, request.backend, "aur") and !isFlatpak(request) and !combined(request))
+        return error.UnsupportedUpgradeSource;
+    if (isFlatpak(request) and request.action != .upgrade) {
+        const target = request.flatpak orelse return error.MissingFlatpakTarget;
+        if (request.action == .install and (target.remote.len == 0 or target.arch.len > 0)) return error.UnsupportedFlatpakInstallTarget;
+    }
+    var argv: std.ArrayList([]const u8) = .empty;
+    errdefer argv.deinit(alloc);
+    if (elevated(request)) {
+        try argv.append(alloc, request.sudo_bin);
+    }
+    try argv.appendSlice(alloc, &.{ request.shelly_bin, @tagName(request.action), request.backend });
+    if (request.action != .upgrade) {
+        if (request.targets.len > 0) try argv.appendSlice(alloc, request.targets) else try argv.append(alloc, request.name);
+    }
+    if (isFlatpak(request) and request.action == .install) {
+        const target = request.flatpak.?;
+        if (target.scope == .user) try argv.append(alloc, "--user");
+        try argv.appendSlice(alloc, &.{ "--remote", target.remote });
+        if (target.branch.len > 0) try argv.appendSlice(alloc, &.{ "--branch", target.branch });
+        if (target.kind == .runtime) try argv.append(alloc, "--runtime");
+    }
+    if (isFlatpak(request) and request.action == .remove)
+        try argv.append(alloc, if (request.flatpak.?.scope == .user) "--user" else "--system");
+    if (combined(request)) {
+        try argv.append(alloc, "--no-appimage");
+        if (!request.include_aur) try argv.append(alloc, "--no-aur");
+        if (!request.include_flatpak) try argv.append(alloc, "--no-flatpak");
+    }
+    if (!interactive(request)) try argv.append(alloc, "--no-confirm");
+    try argv.append(alloc, "--ui-mode");
+    if (keep_dependencies) try argv.append(alloc, "--no-cascade");
+    return argv.toOwnedSlice(alloc);
+}
+
+fn runInstall(io: std.Io, alloc: std.mem.Allocator, request: OperationRequest, operation: ?*Operation) OperationResult {
+    var result: OperationResult = .{};
+    if (request.action == .remove and !std.mem.eql(u8, request.backend, "standard") and !std.mem.eql(u8, request.backend, "aur") and !isFlatpak(request)) {
+        result.failed = true;
+        result.error_detail = alloc.dupe(u8, "Removal currently supports system, AUR and Flatpak packages only.") catch "";
+        return result;
+    }
+    if (operation == null) {
+        result.failed = true;
+        result.error_detail = alloc.dupe(u8, "Operations require an operation handle.") catch "";
+        return result;
+    }
+    const active = operation.?;
+    if (active.cancel_requested.load(.acquire)) {
+        result.failed = true;
+        result.error_detail = alloc.dupe(u8, "The operation was cancelled before startup.") catch "";
+        return result;
+    }
+    var auth_environment = request.environ_map.clone(alloc) catch {
+        result.failed = true;
+        result.error_detail = alloc.dupe(u8, "Could not prepare the authorization environment.") catch "";
+        return result;
+    };
+    defer auth_environment.deinit();
+    // Never carry an external or obsolete helper into an operation's environment.
+    _ = auth_environment.swapRemove("SUDO_ASKPASS");
+    _ = auth_environment.swapRemove("SHELLY_TUI_ASKPASS_SOCKET");
+    const argv = operationArgv(alloc, request) catch {
+        result.failed = true;
+        result.error_detail = alloc.dupe(u8, "Could not prepare the requested package operation.") catch "";
+        return result;
+    };
+    defer alloc.free(argv);
+
+    var owned_session: Session = .{};
+    defer owned_session.deinit(io);
+    const session = request.session orelse &owned_session;
+    if (elevated(request)) session.acquire() catch {
+        result.failed = true;
+        result.error_detail = alloc.dupe(u8, "Another operation is using the authorization session.") catch "";
+        return result;
+    };
+    defer if (elevated(request)) session.release();
+    var terminal: ?sudo_terminal.Terminal = null;
+    var owned_launcher: ?[:0]u8 = null;
+    defer if (owned_launcher) |path| alloc.free(path);
+    if (elevated(request)) {
+        if (request.launcher_bin == null) {
+            owned_launcher = std.process.executablePathAlloc(io, alloc) catch {
+                result.failed = true;
+                result.error_detail = alloc.dupe(u8, "Could not locate the authorization launcher.") catch "";
+                return result;
+            };
+        }
+        const executable = request.launcher_bin orelse owned_launcher.?;
+        session.ensure(io, executable, &auth_environment, &active.cancel_requested) catch {
+            result.failed = true;
+            result.error_detail = alloc.dupe(u8, "Could not start the isolated authorization session.") catch "";
+            return result;
+        };
+        terminal = session.terminal;
+    }
+    if (active.cancel_requested.load(.acquire)) {
+        result.failed = true;
+        result.error_detail = alloc.dupe(u8, "The operation was cancelled before startup.") catch "";
+        return result;
+    }
+    var child = (if (elevated(request)) session.spawn(io, alloc, argv, &auth_environment, &active.cancel_requested) else sudo_session.Process.spawn(io, .{
+        .argv = argv,
+        .environ_map = &auth_environment,
+        .stdin = .pipe,
+        .stdout = .pipe,
+        .stderr = .pipe,
+        .pgid = 0,
+    })) catch {
+        result.error_detail = alloc.dupe(u8, "Could not start the requested package operation.") catch "";
+        result.failed = true;
+        return result;
+    };
+    defer child.kill(io);
+    active.registerProcess(io, child.id.?);
+
+    var terminal_thread: ?std.Thread = null;
+    defer {
+        if (operation) |op| {
+            op.terminal_stop.store(true, .release);
+            if (terminal_thread) |thread| thread.join();
+            op.progress_mutex.lockUncancelable(io);
+            op.terminal = null;
+            op.process_group = null;
+            op.progress.authenticating = false;
+            op.progress_mutex.unlock(io);
+        }
+    }
+    if (terminal) |value| if (operation) |op| {
+        op.progress_mutex.lockUncancelable(io);
+        op.terminal = value;
+        op.progress.authenticating = !op.cancel_requested.load(.acquire);
+        op.progress_mutex.unlock(io);
+        terminal_thread = std.Thread.spawn(.{}, Operation.readTerminal, .{ op, value, io }) catch {
+            result.failed = true;
+            return result;
+        };
+    };
+
+    operation.?.registerInput(io, child.stdin.?);
+    child.stdin = null;
+
+    defer if (operation) |op| op.closeInput(io);
+
+    // Drain both streams concurrently, mirroring std.process.run
+    var multi_reader_buffer: std.Io.File.MultiReader.Buffer(2) = undefined;
+    var multi_reader: std.Io.File.MultiReader = undefined;
+    multi_reader.init(alloc, io, multi_reader_buffer.toStreams(), &.{ child.stdout.?, child.stderr.? });
+    defer multi_reader.deinit();
+
+    var stream: ProgressStream = .{};
+    defer stream.deinit();
+    var stderr_tail: [4096]u8 = undefined;
+    var stderr_len: usize = 0;
+    var read_failed = false;
+    while (true) {
+        var eof = false;
+        multi_reader.fill(4096, .none) catch |err| {
+            if (err != error.EndOfStream) read_failed = true;
+            eof = true;
+        };
+        const stdout_reader = multi_reader.reader(0);
+        stream.feed(stdout_reader.buffered(), operation, io);
+        stdout_reader.seek = stdout_reader.end;
+        const stderr_reader = multi_reader.reader(1);
+        const bytes = stderr_reader.buffered();
+        if (bytes.len > 0) {
+            if (operation) |op| op.authenticationOutput(io, bytes);
+            const take = @min(bytes.len, stderr_tail.len);
+            const keep = @min(stderr_len, stderr_tail.len - take);
+            std.mem.copyForwards(u8, stderr_tail[0..keep], stderr_tail[stderr_len - keep .. stderr_len]);
+            @memcpy(stderr_tail[keep .. keep + take], bytes[bytes.len - take ..]);
+            stderr_len = keep + take;
+        }
+        stderr_reader.seek = stderr_reader.end;
+        if (eof) break;
+    }
+    multi_reader.checkAnyError() catch {
+        read_failed = true;
+    };
+    if (stream.in_frame) stream.failed = true;
+
+    if (operation) |op| op.closeInput(io);
+    const term = child.wait(io) catch {
+        result.error_detail = alloc.dupe(u8, "Could not collect the operation result for the requested package. Its final status could not be confirmed.") catch "";
+        result.failed = true;
+        return result;
+    };
+
+    if (operation) |op| {
+        op.progress_mutex.lockUncancelable(io);
+        defer op.progress_mutex.unlock(io);
+        result.declined = op.user_declined;
+        if (op.expected_answer != null) stream.failed = true;
+    }
+    const missing_completion = (request.action == .upgrade or interactive(request)) and (!stream.transaction_done or stream.transaction_depth != 0);
+    if (term != .exited or term.exited != 0 or read_failed or stream.failed or stream.transaction_cancelled or missing_completion or result.declined) {
+        const detail = if (stream.transaction_cancelled)
+            "The operation was cancelled. Refresh package state before retrying."
+        else if (stream.error_len > 0)
+            stream.error_text[0..stream.error_len]
+        else if (read_failed)
+            "Could not read operation output; the final status could not be confirmed."
+        else if (stream.failed)
+            "Operation output contained an invalid, incomplete, or unsupported message. Check package state before retrying."
+        else if (missing_completion and term == .exited and term.exited == 0)
+            "The command exited without confirming completion. Check package state before retrying."
+        else if (stderr_len > 0)
+            std.mem.trim(u8, stderr_tail[0..stderr_len], " \t\r\n")
+        else
+            "The requested package operation failed. Shelly returned no error details.";
+        result.error_detail = diagnostics.sanitizeAlloc(alloc, detail) catch "";
+        result.failed = true;
+    }
+    return result;
+}
+
+pub const Event = union(enum) {
+    info: struct {
+        event_type: []const u8,
+        message: []const u8,
+        package_name: ?[]const u8,
+        current: ?i64,
+        total: ?i64,
+    },
+    err: struct {
+        message: []const u8,
+    },
+    alpm_progress: struct {
+        package_name: []const u8,
+        current_download: i64,
+        total_download: i64,
+        progress_type: []const u8,
+        percent: i64,
+        stage: ?[]const u8,
+        message: ?[]const u8,
+    },
+    flatpak_progress: struct {
+        status: ?[]const u8,
+        percentage: i64,
+    },
+    appimage_progress: struct {
+        status: ?[]const u8,
+        percentage: i64,
+    },
+    unknown: []const u8,
+};
+
+const AlpmInfo = struct {
+    @"$kind": []const u8 = "",
+    EventType: []const u8 = "",
+    Message: []const u8 = "",
+    PackageName: ?[]const u8 = null,
+    CurrentIndex: ?i64 = null,
+    TotalCount: ?i64 = null,
+};
+
+const AlpmError = struct {
+    @"$kind": []const u8 = "",
+    ErrorMessage: []const u8 = "",
+    Level: []const u8 = "Error",
+    Recoverable: bool = false,
+};
+
+const AlpmProgress = struct {
+    @"$kind": []const u8 = "",
+    PackageName: []const u8 = "",
+    CurrentDownload: i64 = 0,
+    TotalDownload: i64 = 0,
+    ProgressType: []const u8 = "",
+    Percent: i64 = 0,
+    Stage: ?[]const u8 = null,
+    Message: ?[]const u8 = null,
+};
+
+const SimpleProgress = struct {
+    @"$kind": []const u8 = "",
+    Status: ?[]const u8 = null,
+    Percentage: i64 = 0,
+};
+
+pub const Question = union(enum) {
+    yes_no: struct {
+        question_id: []const u8,
+        question_kind: []const u8,
+        question_text: []const u8,
+        arguments: []const []const u8,
+    },
+    select_many: struct {
+        question_id: []const u8,
+        prompt: []const u8,
+        options: []Option,
+    },
+    select_one: struct {
+        question_id: []const u8,
+        prompt: []const u8,
+        options: []Option,
+    },
+    pkgbuild: struct {
+        question_id: []const u8,
+        package_name: []const u8,
+        old_pkgbuild: []const u8,
+        new_pkgbuild: []const u8,
+        warnings: []const Warning = &.{},
+        scan_reported: bool = false,
+        diff_lines: []const []const u8 = &.{},
+        source_files: []const SourceFile = &.{},
+    },
+    transaction: TransactionQuestion,
+};
+
+pub const TransactionMigration = struct {
+    path: []const u8,
+    destination: []const u8,
+    source: ?[]const u8 = null,
+    origin: []const u8,
+};
+
+pub const TransactionQuestion = struct {
+    migrations: []const TransactionMigration = &.{},
+    question_id: []const u8,
+    question_text: []const u8,
+    action: []const u8,
+    packages: []TransactionPackage,
+    total_download_size: ?u64,
+    total_installed_size: ?u64,
+    net_installed_size: ?i64,
+};
+
+pub const TransactionPackage = struct {
+    name: []const u8,
+    version: ?[]const u8,
+    repository: ?[]const u8,
+    package_base: ?[]const u8,
+    revision: ?[]const u8,
+    source: []const u8,
+    role: []const u8,
+    download_size: ?u64,
+    installed_size: ?u64,
+};
+
+pub const Option = struct {
+    index: usize,
+    name: []const u8,
+    description: []const u8,
+    is_installed: bool,
+    is_selected: bool,
+};
+
+const SelectionRequest = struct {
+    @"$kind": []const u8 = "",
+    QuestionId: []const u8,
+    DependencyName: []const u8 = "",
+    QuestionText: []const u8 = "",
+    Options: []OptionWire = &.{},
+};
+
+pub const SourceFile = struct {
+    name: []const u8,
+    content: []const u8,
+};
+
+pub const PkgbuildDiff = struct {
+    @"$kind": []const u8 = "",
+    QuestionId: []const u8,
+    PackageName: []const u8,
+    OldPkgbuild: []const u8,
+    NewPkgbuild: []const u8,
+    Warnings: ?[]const Warning = null,
+    DiffLines: []const []const u8 = &.{},
+    SourceFiles: ?std.json.ArrayHashMap([]const u8) = null,
+};
+
+pub const Warning = struct {
+    Tool: []const u8 = "",
+    Severity: []const u8 = "",
+    Hook: []const u8 = "",
+    MatchedLine: []const u8 = "",
+    Message: []const u8 = "",
+};
+
+const OptionWire = struct {
+    Index: usize = 0,
+    Name: []const u8 = "",
+    Description: []const u8 = "",
+    IsInstalled: bool = false,
+    IsSelected: bool = false,
+};
+
+const YesNoRequest = struct {
+    @"$kind": []const u8 = "",
+    QuestionId: []const u8,
+    QuestionKind: []const u8 = "",
+    QuestionText: []const u8 = "",
+    Arguments: []const []const u8 = &.{},
+};
+
+pub const TransactionRequest = struct {
+    @"$kind": []const u8 = "",
+    QuestionId: []const u8,
+    QuestionText: []const u8 = "",
+    Action: []const u8 = "",
+    Packages: []TransactionPackageWire = &.{},
+    Migrations: []TransactionMigration = &.{},
+    TotalDownloadSize: ?u64 = null,
+    TotalInstalledSize: ?u64 = null,
+    NetInstalledSize: ?i64 = null,
+};
+
+const TransactionPackageWire = struct {
+    Name: []const u8 = "",
+    Version: ?[]const u8 = null,
+    Repository: ?[]const u8 = null,
+    PackageBase: ?[]const u8 = null,
+    Revision: ?[]const u8 = null,
+    Source: []const u8 = "",
+    Role: []const u8 = "",
+    DownloadSize: ?u64 = null,
+    InstalledSize: ?u64 = null,
+};
+
+pub const Message = union(enum) {
+    event: Event,
+    question: Question,
+};
+
+pub const OwnedMessage = struct {
+    arena: std.heap.ArenaAllocator,
+    value: Message,
+
+    pub fn deinit(self: *OwnedMessage) void {
+        self.arena.deinit();
+        self.* = undefined;
+    }
+};
+
+fn parseWire(comptime T: type, allocator: std.mem.Allocator, json: []const u8) !T {
+    return std.json.parseFromSliceLeaky(T, allocator, json, .{
+        .ignore_unknown_fields = true,
+        .allocate = .alloc_always,
+    });
+}
+
+pub fn questionId(question: Question) []const u8 {
+    return switch (question) {
+        inline else => |q| q.question_id,
+    };
+}
+
+pub fn decodePayload(allocator: std.mem.Allocator, payload: []const u8) !OwnedMessage {
+    const json = try JsonPackFrame.decodeBase64(allocator, payload);
+    defer allocator.free(json);
+    return decodeJson(allocator, json);
+}
+
+pub fn decodeJson(allocator: std.mem.Allocator, json: []const u8) !OwnedMessage {
+    var arena = std.heap.ArenaAllocator.init(allocator);
+    errdefer arena.deinit();
+    const alloc = arena.allocator();
+    const envelope = try parseWire(struct { @"$kind": []const u8 }, alloc, json);
+    const kind = envelope.@"$kind";
+    const value: Message = if (std.mem.startsWith(u8, kind, "q.")) blk: {
+        const question = try decodeQuestion(alloc, json, kind);
+        const id = questionId(question);
+        // The CLI parses question IDs as decimal u64 strings.
+        if (id.len == 0) return error.InvalidQuestionId;
+        for (id) |byte| if (!std.ascii.isDigit(byte)) return error.InvalidQuestionId;
+        _ = std.fmt.parseInt(u64, id, 10) catch return error.InvalidQuestionId;
+        break :blk .{ .question = question };
+    } else .{ .event = try decodeEvent(alloc, json, kind) };
+    return .{ .arena = arena, .value = value };
+}
+
+fn decodeQuestion(alloc: std.mem.Allocator, json: []const u8, kind: []const u8) !Question {
+    if (std.mem.eql(u8, kind, "q.yesno")) {
+        const q = try parseWire(YesNoRequest, alloc, json);
+        return .{ .yes_no = .{
+            .question_id = q.QuestionId,
+            .question_kind = q.QuestionKind,
+            .question_text = q.QuestionText,
+            .arguments = q.Arguments,
+        } };
+    }
+    if (std.mem.eql(u8, kind, "q.transaction")) {
+        const q = try parseWire(TransactionRequest, alloc, json);
+        const packages = try alloc.alloc(TransactionPackage, q.Packages.len);
+        for (q.Packages, packages) |package, *target| target.* = .{
+            .name = package.Name,
+            .version = package.Version,
+            .repository = package.Repository,
+            .package_base = package.PackageBase,
+            .revision = package.Revision,
+            .source = package.Source,
+            .role = package.Role,
+            .download_size = package.DownloadSize,
+            .installed_size = package.InstalledSize,
+        };
+        return .{ .transaction = .{
+            .question_id = q.QuestionId,
+            .question_text = q.QuestionText,
+            .action = q.Action,
+            .packages = packages,
+            .migrations = q.Migrations,
+            .total_download_size = q.TotalDownloadSize,
+            .total_installed_size = q.TotalInstalledSize,
+            .net_installed_size = q.NetInstalledSize,
+        } };
+    }
+    if (std.mem.eql(u8, kind, "q.provider") or std.mem.eql(u8, kind, "q.optdeps")) {
+        const q = try parseWire(SelectionRequest, alloc, json);
+        const options = try alloc.alloc(Option, q.Options.len);
+        for (q.Options, options) |option, *target| target.* = .{
+            .index = option.Index,
+            .name = option.Name,
+            .description = option.Description,
+            .is_installed = option.IsInstalled,
+            .is_selected = option.IsSelected,
+        };
+        if (std.mem.eql(u8, kind, "q.provider")) return .{ .select_one = .{
+            .question_id = q.QuestionId,
+            .prompt = q.DependencyName,
+            .options = options,
+        } };
+        return .{ .select_many = .{
+            .question_id = q.QuestionId,
+            .prompt = q.QuestionText,
+            .options = options,
+        } };
+    }
+    if (std.mem.eql(u8, kind, "q.pkgbuilddiff")) {
+        const q = try parseWire(PkgbuildDiff, alloc, json);
+        const count = if (q.SourceFiles) |files| files.map.count() else 0;
+        const files = try alloc.alloc(SourceFile, count);
+        if (q.SourceFiles) |source| {
+            var iterator = source.map.iterator();
+            var index: usize = 0;
+            while (iterator.next()) |entry| : (index += 1) {
+                files[index] = .{ .name = entry.key_ptr.*, .content = entry.value_ptr.* };
+            }
+        }
+        return .{ .pkgbuild = .{
+            .question_id = q.QuestionId,
+            .package_name = q.PackageName,
+            .old_pkgbuild = q.OldPkgbuild,
+            .new_pkgbuild = q.NewPkgbuild,
+            .warnings = q.Warnings orelse &.{},
+            .scan_reported = q.Warnings != null,
+            .diff_lines = q.DiffLines,
+            .source_files = files,
+        } };
+    }
+    return error.UnsupportedQuestion;
+}
+
+fn decodeEvent(alloc: std.mem.Allocator, json: []const u8, kind: []const u8) !Event {
+    if (std.mem.eql(u8, kind, "alpm.info")) {
+        const e = try parseWire(AlpmInfo, alloc, json);
+        return .{ .info = .{
+            .event_type = e.EventType,
+            .message = e.Message,
+            .package_name = e.PackageName,
+            .current = e.CurrentIndex,
+            .total = e.TotalCount,
+        } };
+    }
+    if (std.mem.eql(u8, kind, "alpm.error")) {
+        const e = try parseWire(AlpmError, alloc, json);
+        if (e.Recoverable or !std.mem.eql(u8, e.Level, "Error")) return .{ .info = .{
+            .event_type = "Warning",
+            .message = e.ErrorMessage,
+            .package_name = null,
+            .current = null,
+            .total = null,
+        } };
+        return .{ .err = .{ .message = e.ErrorMessage } };
+    }
+    if (std.mem.eql(u8, kind, "alpm.progress")) {
+        const e = try parseWire(AlpmProgress, alloc, json);
+        return .{ .alpm_progress = .{
+            .package_name = e.PackageName,
+            .current_download = e.CurrentDownload,
+            .total_download = e.TotalDownload,
+            .progress_type = e.ProgressType,
+            .percent = std.math.clamp(e.Percent, 0, 100),
+            .stage = e.Stage,
+            .message = e.Message,
+        } };
+    }
+    if (std.mem.eql(u8, kind, "flatpak.progress") or std.mem.eql(u8, kind, "appimage.progress")) {
+        const e = try parseWire(SimpleProgress, alloc, json);
+        if (std.mem.eql(u8, kind, "flatpak.progress")) return .{ .flatpak_progress = .{
+            .status = e.Status,
+            .percentage = std.math.clamp(e.Percentage, 0, 100),
+        } };
+        return .{ .appimage_progress = .{
+            .status = e.Status,
+            .percentage = std.math.clamp(e.Percentage, 0, 100),
+        } };
+    }
+    return .{ .unknown = kind };
+}
+
+pub const Answer = union(enum) {
+    yes_no: bool,
+    transaction: bool,
+    optional_dependencies: []const usize,
+    pkgbuild: bool,
+    provider: usize,
+};
+
+pub fn encodeAnswer(allocator: std.mem.Allocator, question_id: []const u8, answer: Answer) ![]u8 {
+    if (question_id.len == 0) return error.InvalidQuestionId;
+    for (question_id) |byte| if (!std.ascii.isDigit(byte)) return error.InvalidQuestionId;
+    _ = std.fmt.parseInt(u64, question_id, 10) catch return error.InvalidQuestionId;
+    const json = switch (answer) {
+        .yes_no => |accept| try std.json.Stringify.valueAlloc(allocator, .{ .@"$kind" = "a.yesno", .QuestionId = question_id, .Accept = accept }, .{}),
+        .transaction => |accept| try std.json.Stringify.valueAlloc(allocator, .{ .@"$kind" = "a.transaction", .QuestionId = question_id, .Accept = accept }, .{}),
+        .optional_dependencies => |selected| try std.json.Stringify.valueAlloc(allocator, .{ .@"$kind" = "a.optdeps", .QuestionId = question_id, .SelectedIndices = selected }, .{}),
+        .pkgbuild => |accept| try std.json.Stringify.valueAlloc(allocator, .{ .@"$kind" = "a.pkgbuilddiff", .QuestionId = question_id, .ProceedWithUpdate = accept }, .{}),
+        .provider => |selected| try std.json.Stringify.valueAlloc(allocator, .{ .@"$kind" = "a.provider", .QuestionId = question_id, .SelectedIndex = selected }, .{}),
+    };
+    defer allocator.free(json);
+    const encoded = try allocator.alloc(u8, std.base64.standard.Encoder.calcSize(json.len));
+    defer allocator.free(encoded);
+    _ = std.base64.standard.Encoder.encode(encoded, json);
+    return std.fmt.allocPrint(allocator, "[JSON]{s}[/JSON]\n", .{encoded});
+}
+
+test "operation questions own their data after input is released" {
+    const allocator = std.testing.allocator;
+    const fixtures = [_][]const u8{
+        \\{"$kind":"q.yesno","QuestionId":"1","QuestionKind":"PackageConflict","QuestionText":"Continue?","Arguments":["editor"]}
+        ,
+        \\{"$kind":"q.transaction","QuestionId":"2","Action":"install","Packages":[{"Name":"editor","Repository":"extra","Source":"standard","Role":"requested"}],"Migrations":[{"path":"old","destination":"new","origin":"test"}]}
+        ,
+        \\{"$kind":"q.provider","QuestionId":"3","DependencyName":"java-runtime","Options":[{"Index":0,"Name":"jdk","IsInstalled":true}]}
+        ,
+        \\{"$kind":"q.optdeps","QuestionId":"4","QuestionText":"Optional dependencies","Options":[{"Index":1,"Name":"plugin","IsSelected":true}]}
+        ,
+        \\{"$kind":"q.pkgbuilddiff","QuestionId":"5","PackageName":"editor","OldPkgbuild":"old","NewPkgbuild":"new","Warnings":[{"Message":"Review this"}],"SourceFiles":{"editor.install":"post_install() {}"}}
+        ,
+    };
+    for (fixtures, 1..) |fixture, id| {
+        const input = try allocator.dupe(u8, fixture);
+        var message = decodeJson(allocator, input) catch |err| {
+            allocator.free(input);
+            return err;
+        };
+        allocator.free(input);
+        defer message.deinit();
+        var buffer: [20]u8 = undefined;
+        const expected = try std.fmt.bufPrint(&buffer, "{d}", .{id});
+        try std.testing.expectEqualStrings(expected, questionId(message.value.question));
+        switch (message.value.question) {
+            .yes_no => |q| try std.testing.expectEqualStrings("editor", q.arguments[0]),
+            .transaction => |q| {
+                try std.testing.expectEqualStrings("extra", q.packages[0].repository.?);
+                try std.testing.expectEqualStrings("new", q.migrations[0].destination);
+            },
+            .select_one => |q| try std.testing.expect(q.options[0].is_installed),
+            .select_many => |q| try std.testing.expect(q.options[0].is_selected),
+            .pkgbuild => |q| {
+                try std.testing.expectEqualStrings("Review this", q.warnings[0].Message);
+                try std.testing.expectEqualStrings("post_install() {}", q.source_files[0].content);
+            },
+        }
+    }
+}
+
+test "operation events preserve outcomes and distinguish warnings from errors" {
+    const allocator = std.testing.allocator;
+    var cancelled = try decodeJson(allocator, "{\"$kind\":\"alpm.info\",\"EventType\":\"TransactionCancelled\",\"Message\":\"Cancelled\"}");
+    defer cancelled.deinit();
+    try std.testing.expectEqualStrings("TransactionCancelled", cancelled.value.event.info.event_type);
+    var warning = try decodeJson(allocator, "{\"$kind\":\"alpm.error\",\"ErrorMessage\":\"Warning\",\"Recoverable\":true}");
+    defer warning.deinit();
+    try std.testing.expectEqualStrings("Warning", warning.value.event.info.message);
+    var failure = try decodeJson(allocator, "{\"$kind\":\"alpm.error\",\"ErrorMessage\":\"Failed\"}");
+    defer failure.deinit();
+    try std.testing.expectEqualStrings("Failed", failure.value.event.err.message);
+    var progress = try decodeJson(allocator, "{\"$kind\":\"alpm.progress\",\"Percent\":120,\"Stage\":\"download\"}");
+    defer progress.deinit();
+    try std.testing.expectEqual(@as(i64, 100), progress.value.event.alpm_progress.percent);
+    var flatpak = try decodeJson(allocator, "{\"$kind\":\"flatpak.progress\",\"Percentage\":50}");
+    defer flatpak.deinit();
+    try std.testing.expectEqual(@as(i64, 50), flatpak.value.event.flatpak_progress.percentage);
+    var appimage = try decodeJson(allocator, "{\"$kind\":\"appimage.progress\",\"Percentage\":-1}");
+    defer appimage.deinit();
+    try std.testing.expectEqual(@as(i64, 0), appimage.value.event.appimage_progress.percentage);
+    var unknown = try decodeJson(allocator, "{\"$kind\":\"future.event\"}");
+    defer unknown.deinit();
+    try std.testing.expectEqualStrings("future.event", unknown.value.event.unknown);
+    try std.testing.expectError(error.UnsupportedQuestion, decodeJson(allocator, "{\"$kind\":\"q.future\",\"QuestionId\":\"1\"}"));
+    try std.testing.expectError(error.InvalidQuestionId, decodeJson(allocator, "{\"$kind\":\"q.yesno\",\"QuestionId\":\"bad\"}"));
+    try std.testing.expectError(error.MissingField, decodeJson(allocator, "{\"$kind\":\"q.yesno\"}"));
+    try std.testing.expectError(error.UnexpectedEndOfInput, decodeJson(allocator, "{"));
+}
+
+test "operation answers match CLI framing and answer fields" {
+    const allocator = std.testing.allocator;
+    const answers = [_]Answer{ .{ .yes_no = true }, .{ .transaction = false }, .{ .optional_dependencies = &.{ 0, 2 } }, .{ .pkgbuild = true }, .{ .provider = 1 } };
+    const kinds = [_][]const u8{ "a.yesno", "a.transaction", "a.optdeps", "a.pkgbuilddiff", "a.provider" };
+    const fields = [_][]const u8{ "Accept", "Accept", "SelectedIndices", "ProceedWithUpdate", "SelectedIndex" };
+    for (answers, kinds, fields) |answer, kind, field| {
+        const frame = try encodeAnswer(allocator, "42", answer);
+        defer allocator.free(frame);
+        try std.testing.expect(std.mem.endsWith(u8, frame, "[/JSON]\n"));
+        var frames = JsonPackFrame.frames(frame);
+        const payload = frames.next().?;
+        const json = try JsonPackFrame.decodeBase64(allocator, payload);
+        defer allocator.free(json);
+        const parsed = try std.json.parseFromSlice(std.json.Value, allocator, json, .{});
+        defer parsed.deinit();
+        const object = parsed.value.object;
+        try std.testing.expectEqualStrings(kind, object.get("$kind").?.string);
+        try std.testing.expectEqualStrings("42", object.get("QuestionId").?.string);
+        const value = object.get(field).?;
+        switch (answer) {
+            .yes_no, .transaction, .pkgbuild => |accept| try std.testing.expectEqual(accept, value.bool),
+            .provider => |index| try std.testing.expectEqual(@as(i64, @intCast(index)), value.integer),
+            .optional_dependencies => |indices| {
+                try std.testing.expectEqual(indices.len, value.array.items.len);
+                for (indices, value.array.items) |index, item| try std.testing.expectEqual(@as(i64, @intCast(index)), item.integer);
+            },
+        }
+    }
+    try std.testing.expectError(error.InvalidQuestionId, encodeAnswer(allocator, "1\"", .{ .yes_no = true }));
+}
+
+test "operation payload decoding accepts framed transaction events" {
+    const allocator = std.testing.allocator;
+    const json = "{\"$kind\":\"alpm.info\",\"EventType\":\"TransactionDone\"}";
+    const payload = try allocator.alloc(u8, std.base64.standard.Encoder.calcSize(json.len));
+    defer allocator.free(payload);
+    _ = std.base64.standard.Encoder.encode(payload, json);
+    var message = try decodePayload(allocator, payload);
+    defer message.deinit();
+    try std.testing.expectEqualStrings("TransactionDone", message.value.event.info.event_type);
+}
+
+test "operation worker owns inputs and joins on launch failure" {
+    var env: std.process.Environ.Map = .init(std.testing.allocator);
+    defer env.deinit();
+    // No real sudo or package operation can be launched by this test.
+    try env.put("PATH", "/nonexistent-shelly-operation-test");
+    var first_target = [_]u8{ 'o', 'n', 'e' };
+    var second_target = [_]u8{ 't', 'w', 'o' };
+    var name = [_]u8{ 't', 'e', 's', 't' };
+    const operation = try Operation.start(.{
+        .launcher_bin = @import("auth_test_options").launcher,
+        .sudo_bin = "/nonexistent-shelly-sudo",
+        .shelly_bin = "/nonexistent-shelly",
+        .environ_map = &env,
+        .name = &name,
+        .targets = &.{ &first_target, &second_target },
+        .backend = "standard",
+    });
+    defer operation.deinit();
+    @memset(&name, 'x');
+    @memset(&first_target, 'x');
+    @memset(&second_target, 'x');
+    try std.testing.expectEqualStrings("one", operation.request.targets[0]);
+    try std.testing.expectEqualStrings("two", operation.request.targets[1]);
+    try std.testing.expectEqualStrings("test", operation.request.name);
+    operation.thread.?.join();
+    operation.thread = null;
+    const result = operation.poll() orelse return error.ExpectedCompletion;
+    try std.testing.expect(result.failed);
+    try std.testing.expect(result.error_detail.len > 0);
+
+    // Cleanup must also join a worker whose result has never been polled.
+    const unpolled = try Operation.start(operation.request);
+    unpolled.deinit();
+}
+
+test "operation progress stream handles fragmented frames and owns display data" {
+    var threaded: std.Io.Threaded = .init(std.testing.allocator, .{});
+    defer threaded.deinit();
+    var operation: Operation = .{
+        .arena = .init(std.testing.allocator),
+        .request = undefined,
+    };
+    defer operation.arena.deinit();
+    const json = "{\"$kind\":\"alpm.progress\",\"PackageName\":\"dependency\",\"ProgressType\":\"PackageDownload\",\"Percent\":37,\"Stage\":\"Downloading\"}";
+    var encoded: [std.base64.standard.Encoder.calcSize(json.len)]u8 = undefined;
+    _ = std.base64.standard.Encoder.encode(&encoded, json);
+    var stream: ProgressStream = .{};
+    defer stream.deinit();
+    stream.feed("noise[JS", &operation, threaded.io());
+    stream.feed("ON]", &operation, threaded.io());
+    for (encoded) |byte| stream.feed(&.{byte}, &operation, threaded.io());
+    stream.feed("[/JSON]", &operation, threaded.io());
+    @memset(&encoded, 0);
+    const progress = operation.snapshot(threaded.io());
+    try std.testing.expectEqualStrings("Downloading: dependency", progress.text());
+    try std.testing.expectEqual(@as(?i64, 37), progress.percent);
+    try std.testing.expect(!stream.failed);
+    stream.feed("[JSON]invalid[/JSON]", &operation, threaded.io());
+    try std.testing.expect(stream.failed);
+}
+
+test "operation progress retains only bounded recent messages" {
+    var progress: Progress = .{};
+    for ([_][]const u8{ "one", "two", "three", "four", "five" }) |line| progress.log(line);
+    try std.testing.expectEqualStrings("one", progress.messages[59][0..progress.lengths[59]]);
+    try std.testing.expectEqualStrings("five", progress.messages[63][0..progress.lengths[63]]);
+    var buffer: [64]u8 = undefined;
+    for (0..70) |index| progress.log(try std.fmt.bufPrint(&buffer, "entry-{d}", .{index}));
+    try std.testing.expectEqualStrings("entry-6", progress.messages[0][0..progress.lengths[0]]);
+    try std.testing.expectEqualStrings("entry-69", progress.messages[63][0..progress.lengths[63]]);
+    var stream: ProgressStream = .{};
+    defer stream.deinit();
+    stream.feed("[JSON]", null, undefined);
+    for (0..ProgressStream.max_frame_bytes + 1) |_| stream.feed("a", null, undefined);
+    try std.testing.expect(stream.failed);
+}
+
+test "operation rejects removal from unsupported sources before launching" {
+    var env: std.process.Environ.Map = .init(std.testing.allocator);
+    defer env.deinit();
+    var result = runInstall(undefined, std.testing.allocator, .{
+        .action = .remove,
+        .shelly_bin = "unused",
+        .environ_map = &env,
+        .name = "test",
+        .backend = "appimage",
+    }, null);
+    defer result.deinit(std.testing.allocator);
+    try std.testing.expect(result.failed);
+    try std.testing.expectEqualStrings("Removal currently supports system, AUR and Flatpak packages only.", result.error_detail);
+}
+
+test "operation native upgrade has no package operand or other sources" {
+    var env: std.process.Environ.Map = .init(std.testing.allocator);
+    defer env.deinit();
+    var request: OperationRequest = .{
+        .action = .upgrade,
+        .shelly_bin = "shelly",
+        .environ_map = &env,
+        .name = "system packages",
+        .backend = "standard",
+    };
+    const args = try operationArgv(std.testing.allocator, request);
+    defer std.testing.allocator.free(args);
+    const expected = [_][]const u8{ "sudo", "shelly", "upgrade", "standard", "--no-confirm", "--ui-mode" };
+    try std.testing.expectEqual(expected.len, args.len);
+    for (expected, args) |want, actual| try std.testing.expectEqualStrings(want, actual);
+    request.backend = "appimage";
+    try std.testing.expectError(error.UnsupportedUpgradeSource, operationArgv(std.testing.allocator, request));
+}
+
+test "operation stream distinguishes transaction done failure and cancellation" {
+    for ([_][]const u8{ "TransactionDone", "TransactionFailed", "TransactionCancelled" }) |event_type| {
+        const json = try std.fmt.allocPrint(std.testing.allocator, "{{\"$kind\":\"alpm.info\",\"EventType\":\"{s}\"}}", .{event_type});
+        defer std.testing.allocator.free(json);
+        const encoded = try std.testing.allocator.alloc(u8, std.base64.standard.Encoder.calcSize(json.len));
+        defer std.testing.allocator.free(encoded);
+        _ = std.base64.standard.Encoder.encode(encoded, json);
+        var stream: ProgressStream = .{};
+        defer stream.deinit();
+        stream.feed("[JSON]", null, undefined);
+        stream.feed(encoded, null, undefined);
+        stream.feed("[/JSON]", null, undefined);
+        try std.testing.expectEqual(std.mem.eql(u8, event_type, "TransactionDone"), stream.transaction_done);
+        try std.testing.expectEqual(std.mem.eql(u8, event_type, "TransactionFailed"), stream.failed);
+        try std.testing.expectEqual(std.mem.eql(u8, event_type, "TransactionCancelled"), stream.transaction_cancelled);
+    }
+}
+
+test "operation AUR installs and upgrades require interactive review" {
+    var env: std.process.Environ.Map = .init(std.testing.allocator);
+    defer env.deinit();
+    var request: OperationRequest = .{
+        .action = .install,
+        .shelly_bin = "shelly",
+        .environ_map = &env,
+        .name = "demo",
+        .backend = "aur",
+    };
+    const install = try operationArgv(std.testing.allocator, request);
+    defer std.testing.allocator.free(install);
+    const expected_install = [_][]const u8{ "sudo", "shelly", "install", "aur", "demo", "--ui-mode" };
+    try std.testing.expectEqual(expected_install.len, install.len);
+    for (expected_install, install) |expected, actual| try std.testing.expectEqualStrings(expected, actual);
+    request.action = .upgrade;
+    const upgrade = try operationArgv(std.testing.allocator, request);
+    defer std.testing.allocator.free(upgrade);
+    const expected_upgrade = [_][]const u8{ "sudo", "shelly", "upgrade", "aur", "--ui-mode" };
+    try std.testing.expectEqual(expected_upgrade.len, upgrade.len);
+    for (expected_upgrade, upgrade) |expected, actual| try std.testing.expectEqualStrings(expected, actual);
+}
+
+test "operation questions reject stale duplicate and wrong-kind answers" {
+    var threaded: std.Io.Threaded = .init(std.testing.allocator, .{});
+    defer threaded.deinit();
+    var env: std.process.Environ.Map = .init(std.testing.allocator);
+    defer env.deinit();
+    var operation: Operation = .{
+        .arena = .init(std.testing.allocator),
+        .request = .{ .shelly_bin = "unused", .environ_map = &env, .name = "demo", .backend = "aur" },
+        // Validation failures must occur before this sentinel descriptor is used.
+        .input = .{ .handle = -1, .flags = .{ .nonblocking = false } },
+    };
+    defer operation.arena.deinit();
+    const json =
+        \\{"$kind":"q.yesno","QuestionId":"1","QuestionText":"Continue?"}
+    ;
+    const first = try decodeJson(std.testing.allocator, json);
+    try operation.queueQuestion(threaded.io(), first);
+    var question = operation.takeQuestion(threaded.io()).?;
+    defer question.deinit();
+    var duplicate = try decodeJson(std.testing.allocator, json);
+    defer duplicate.deinit();
+    try std.testing.expectError(error.QuestionAlreadyPending, operation.queueQuestion(threaded.io(), duplicate));
+    try std.testing.expectError(error.StaleQuestion, operation.sendAnswer(threaded.io(), "2", .{ .yes_no = true }));
+    try std.testing.expectError(error.WrongAnswerKind, operation.sendAnswer(threaded.io(), "1", .{ .pkgbuild = true }));
+    operation.expected_answer = null;
+    try std.testing.expectError(error.NoPendingQuestion, operation.sendAnswer(threaded.io(), "1", .{ .yes_no = true }));
+}
+
+test "operation Flatpak arguments preserve install and removal scope and keep user and upgrade processes unprivileged" {
+    const allocator = std.testing.allocator;
+    var env: std.process.Environ.Map = .init(allocator);
+    defer env.deinit();
+    var request: OperationRequest = .{
+        .shelly_bin = "shelly",
+        .environ_map = &env,
+        .name = "org.example.App",
+        .backend = "flatpak",
+        .flatpak = .{ .scope = .user, .remote = "chosen remote", .branch = "beta", .kind = .runtime },
+    };
+    const user = try operationArgv(allocator, request);
+    defer allocator.free(user);
+    const expected = [_][]const u8{ "shelly", "install", "flatpak", "org.example.App", "--user", "--remote", "chosen remote", "--branch", "beta", "--runtime", "--ui-mode" };
+    try std.testing.expectEqual(expected.len, user.len);
+    for (expected, user) |want, actual| try std.testing.expectEqualStrings(want, actual);
+    request.flatpak.?.scope = .system;
+    const system = try operationArgv(allocator, request);
+    defer allocator.free(system);
+    try std.testing.expectEqualStrings("sudo", system[0]);
+    try std.testing.expectEqualStrings("shelly", system[1]);
+    for (system) |arg| try std.testing.expect(!std.mem.eql(u8, arg, "--user") and !std.mem.eql(u8, arg, "--no-confirm"));
+    request.action = .remove;
+    request.flatpak.?.scope = .user;
+    const remove = try operationArgv(allocator, request);
+    defer allocator.free(remove);
+    const expected_remove = [_][]const u8{ "shelly", "remove", "flatpak", "org.example.App", "--user", "--ui-mode" };
+    try std.testing.expectEqual(expected_remove.len, remove.len);
+    for (expected_remove, remove) |want, actual| try std.testing.expectEqualStrings(want, actual);
+    request.flatpak.?.scope = .system;
+    const system_remove = try operationArgv(allocator, request);
+    defer allocator.free(system_remove);
+    const expected_system_remove = [_][]const u8{ "sudo", "shelly", "remove", "flatpak", "org.example.App", "--system", "--ui-mode" };
+    try std.testing.expectEqual(expected_system_remove.len, system_remove.len);
+    for (expected_system_remove, system_remove) |want, actual| try std.testing.expectEqualStrings(want, actual);
+    request.action = .upgrade;
+    request.flatpak = null;
+    const upgrade = try operationArgv(allocator, request);
+    defer allocator.free(upgrade);
+    const expected_upgrade = [_][]const u8{ "shelly", "upgrade", "flatpak", "--ui-mode" };
+    try std.testing.expectEqual(expected_upgrade.len, upgrade.len);
+    for (expected_upgrade, upgrade) |want, actual| try std.testing.expectEqualStrings(want, actual);
+    request.action = .install;
+    try std.testing.expectError(error.MissingFlatpakTarget, operationArgv(allocator, request));
+}
+
+test "operation Flatpak target owns its reference fields" {
+    const allocator = std.testing.allocator;
+    var remote = [_]u8{ 't', 'e', 's', 't' };
+    const copy = try (FlatpakTarget{ .scope = .user, .remote = &remote, .arch = "x86_64", .branch = "beta", .reference = "app/org.example.App/x86_64/beta" }).clone(allocator);
+    defer copy.deinit(allocator);
+    remote[0] = 'X';
+    try std.testing.expectEqualStrings("test", copy.remote);
+    try std.testing.expectEqualStrings("app/org.example.App/x86_64/beta", copy.reference);
+}
+
+test "operation combined upgrade is interactive and always excludes AppImages" {
+    const allocator = std.testing.allocator;
+    var env: std.process.Environ.Map = .init(allocator);
+    defer env.deinit();
+    var request: OperationRequest = .{ .action = .upgrade, .shelly_bin = "shelly", .environ_map = &env, .name = "all supported packages", .backend = "all" };
+    const included = try operationArgv(allocator, request);
+    defer allocator.free(included);
+    const expected = [_][]const u8{ "sudo", "shelly", "upgrade", "all", "--no-appimage", "--ui-mode" };
+    try std.testing.expectEqual(expected.len, included.len);
+    for (expected, included) |want, actual| try std.testing.expectEqualStrings(want, actual);
+    request.include_flatpak = false;
+    const excluded = try operationArgv(allocator, request);
+    defer allocator.free(excluded);
+    const expected_excluded = [_][]const u8{ "sudo", "shelly", "upgrade", "all", "--no-appimage", "--no-flatpak", "--ui-mode" };
+    try std.testing.expectEqual(expected_excluded.len, excluded.len);
+    for (expected_excluded, excluded) |want, actual| try std.testing.expectEqualStrings(want, actual);
+    request.action = .install;
+    try std.testing.expectError(error.UnsupportedCombinedAction, operationArgv(allocator, request));
+}
+
+test "operation combined stream waits for the outer transaction and retains partial failure" {
+    const Fixture = struct {
+        fn event(stream: *ProgressStream, event_type: []const u8) !void {
+            const allocator = std.testing.allocator;
+            const json = try std.fmt.allocPrint(allocator, "{{\"$kind\":\"alpm.info\",\"EventType\":\"{s}\"}}", .{event_type});
+            defer allocator.free(json);
+            const encoded = try allocator.alloc(u8, std.base64.standard.Encoder.calcSize(json.len));
+            defer allocator.free(encoded);
+            _ = std.base64.standard.Encoder.encode(encoded, json);
+            const frame = try std.fmt.allocPrint(allocator, "[JSON]{s}[/JSON]", .{encoded});
+            defer allocator.free(frame);
+            stream.feed(frame, null, undefined);
+        }
+    };
+    var stream: ProgressStream = .{};
+    defer stream.deinit();
+    try Fixture.event(&stream, "TransactionStart");
+    try Fixture.event(&stream, "TransactionStart");
+    try Fixture.event(&stream, "TransactionDone");
+    try std.testing.expect(!stream.transaction_done);
+    try std.testing.expectEqual(@as(usize, 1), stream.transaction_depth);
+    try Fixture.event(&stream, "TransactionStart");
+    try Fixture.event(&stream, "TransactionFailed");
+    try Fixture.event(&stream, "TransactionDone");
+    try std.testing.expect(stream.failed);
+    try std.testing.expect(stream.transaction_done);
+    try std.testing.expectEqual(@as(usize, 0), stream.transaction_depth);
+}
+
+test "settings disable AUR and Flatpak in combined upgrade arguments" {
+    const allocator = std.testing.allocator;
+    var env: std.process.Environ.Map = .init(allocator);
+    defer env.deinit();
+    const argv = try operationArgv(allocator, .{ .action = .upgrade, .shelly_bin = "shelly", .environ_map = &env, .name = "enabled sources", .backend = "all", .include_aur = false, .include_flatpak = false });
+    defer allocator.free(argv);
+    var aur = false;
+    var flatpak = false;
+    var appimage = false;
+    for (argv) |arg| {
+        aur = aur or std.mem.eql(u8, arg, "--no-aur");
+        flatpak = flatpak or std.mem.eql(u8, arg, "--no-flatpak");
+        appimage = appimage or std.mem.eql(u8, arg, "--no-appimage");
+        try std.testing.expect(!std.mem.eql(u8, arg, "--no-repo"));
+    }
+    try std.testing.expect(aur and flatpak and appimage);
+}
+
+test "native batch operands stay separate in a single install or removal command" {
+    var env: std.process.Environ.Map = .init(std.testing.allocator);
+    defer env.deinit();
+    for ([_]Action{ .install, .remove }) |action| {
+        const argv = try operationArgv(std.testing.allocator, .{
+            .action = action,
+            .shelly_bin = "shelly",
+            .environ_map = &env,
+            .name = "2 packages",
+            .targets = &.{ "editor", "package with spaces" },
+            .backend = "standard",
+        });
+        defer std.testing.allocator.free(argv);
+        try std.testing.expectEqualStrings(@tagName(action), argv[2]);
+        try std.testing.expectEqualStrings("standard", argv[3]);
+        try std.testing.expectEqualStrings("editor", argv[4]);
+        try std.testing.expectEqualStrings("package with spaces", argv[5]);
+        try std.testing.expectEqualStrings("--no-confirm", argv[6]);
+        if (action == .remove) try std.testing.expectEqualStrings("--no-cascade", argv[argv.len - 1]);
+    }
+}
+
+test "AUR batch install retains separate operands and interactive review" {
+    var env: std.process.Environ.Map = .init(std.testing.allocator);
+    defer env.deinit();
+    const request: OperationRequest = .{ .shelly_bin = "shelly", .environ_map = &env, .name = "2 packages", .targets = &.{ "first", "second" }, .backend = "aur" };
+    const argv = try operationArgv(std.testing.allocator, request);
+    defer std.testing.allocator.free(argv);
+    try std.testing.expectEqualStrings("install", argv[2]);
+    try std.testing.expectEqualStrings("aur", argv[3]);
+    try std.testing.expectEqualStrings("first", argv[4]);
+    try std.testing.expectEqualStrings("second", argv[5]);
+    try std.testing.expectEqualStrings("--ui-mode", argv[6]);
+    for (argv) |arg| try std.testing.expect(!std.mem.eql(u8, arg, "--no-confirm"));
+}
+
+test "PKGBUILD scan reporting distinguishes empty findings from absent results" {
+    const cases = [_]struct { json: []const u8, reported: bool }{
+        .{ .json = "{\"$kind\":\"q.pkgbuilddiff\",\"QuestionId\":\"1\",\"PackageName\":\"demo\",\"OldPkgbuild\":\"\",\"NewPkgbuild\":\"pkgname=demo\",\"Warnings\":[]}", .reported = true },
+        .{ .json = "{\"$kind\":\"q.pkgbuilddiff\",\"QuestionId\":\"2\",\"PackageName\":\"demo\",\"OldPkgbuild\":\"\",\"NewPkgbuild\":\"pkgname=demo\"}", .reported = false },
+        .{ .json = "{\"$kind\":\"q.pkgbuilddiff\",\"QuestionId\":\"3\",\"PackageName\":\"demo\",\"OldPkgbuild\":\"\",\"NewPkgbuild\":\"pkgname=demo\",\"Warnings\":null}", .reported = false },
+    };
+    for (cases) |case| {
+        var message = try decodeJson(std.testing.allocator, case.json);
+        defer message.deinit();
+        try std.testing.expectEqual(case.reported, message.value.question.pkgbuild.scan_reported);
+        try std.testing.expectEqual(@as(usize, 0), message.value.question.pkgbuild.warnings.len);
+    }
+}
+
+test "AUR single and batch removal retain CLI dependency defaults" {
+    var env: std.process.Environ.Map = .init(std.testing.allocator);
+    defer env.deinit();
+    for ([_][]const []const u8{ &.{}, &.{ "first-git", "second-git" } }) |targets| {
+        const argv = try operationArgv(std.testing.allocator, .{
+            .shelly_bin = "shelly",
+            .environ_map = &env,
+            .name = "first-git",
+            .targets = targets,
+            .backend = "aur",
+            .action = .remove,
+        });
+        defer std.testing.allocator.free(argv);
+        try std.testing.expectEqualStrings("remove", argv[2]);
+        try std.testing.expectEqualStrings("aur", argv[3]);
+        try std.testing.expectEqualStrings("first-git", argv[4]);
+        if (targets.len > 0) try std.testing.expectEqualStrings("second-git", argv[5]);
+        try std.testing.expectEqualStrings("--no-confirm", argv[argv.len - 2]);
+        try std.testing.expectEqualStrings("--ui-mode", argv[argv.len - 1]);
+        for (argv) |arg| {
+            try std.testing.expect(!std.mem.eql(u8, arg, "--no-cascade"));
+            try std.testing.expect(!std.mem.eql(u8, arg, "--cascade"));
+        }
+    }
+}
+
+test "private sudo terminal captures fingerprint prompts and keeps credentials out of reviews" {
+    const fixture = @import("auth_test_options");
+    for ([_][]const u8{ "terminal", "fingerprint", "cached", "wrong" }) |mode| {
+        var env: std.process.Environ.Map = .init(std.testing.allocator);
+        defer env.deinit();
+        try env.put("SHELLY_FIXTURE_AUTH", mode);
+        try env.put("SUDO_ASKPASS", "/nonexistent-forbidden-authentication-helper");
+        try env.put("SHELLY_TUI_ASKPASS_SOCKET", "/nonexistent-obsolete-socket");
+        const op = try Operation.start(.{
+            .sudo_bin = fixture.fixture,
+            .launcher_bin = fixture.launcher,
+            .shelly_bin = "fixture-cli",
+            .environ_map = &env,
+            .name = "fixture",
+            .backend = "aur",
+        });
+        defer op.deinit();
+        var attempts: usize = 0;
+        var questions: usize = 0;
+        var saw_prompt = false;
+        for (0..5000) |_| {
+            const progress = op.snapshot(std.testing.io);
+            const authentication = progress.authentication[0..progress.authentication_len];
+            try std.testing.expect(std.mem.indexOf(u8, authentication, "fixture-secret") == null);
+            if (std.mem.indexOf(u8, authentication, "Fingerprint:") != null) saw_prompt = true;
+            if (std.mem.eql(u8, mode, "terminal") or std.mem.eql(u8, mode, "wrong")) {
+                if (attempts == 0 and std.mem.indexOf(u8, authentication, "Password:") != null) {
+                    try op.sendAuthentication(std.testing.io, "wrong\n");
+                    attempts = 1;
+                } else if (attempts == 1 and std.mem.indexOf(u8, authentication, "Try again.") != null) {
+                    try op.sendAuthentication(std.testing.io, if (std.mem.eql(u8, mode, "wrong")) "wrong\n" else "fixture-secret\n");
+                    attempts = 2;
+                }
+            }
+            if (op.takeQuestion(std.testing.io)) |value| {
+                var message = value;
+                defer message.deinit();
+                questions += 1;
+                try std.testing.expect(!op.snapshot(std.testing.io).authenticating);
+                const answer: Answer = if (message.value.question == .pkgbuild) .{ .pkgbuild = true } else .{ .yes_no = true };
+                try op.sendAnswer(std.testing.io, questionId(message.value.question), answer);
+            }
+            if (op.poll() != null) break;
+            try std.testing.io.sleep(.fromMilliseconds(1), .awake);
+        }
+        const result = op.poll() orelse return error.TerminalFixtureTimedOut;
+        const wrong = std.mem.eql(u8, mode, "wrong");
+        try std.testing.expectEqual(wrong, result.failed);
+        try std.testing.expectEqual(@as(usize, if (wrong) 0 else 2), questions);
+        try std.testing.expect(std.mem.indexOf(u8, result.error_detail, "fixture-secret") == null);
+        try std.testing.expectEqualStrings("/nonexistent-forbidden-authentication-helper", env.get("SUDO_ASKPASS").?);
+        // Password mode waits for input, making observation deterministic.
+        if (std.mem.eql(u8, mode, "terminal")) {
+            try std.testing.expect(saw_prompt);
+            try std.testing.expectEqual(@as(usize, 2), attempts);
+            const progress = op.snapshot(std.testing.io);
+            try std.testing.expect(std.mem.indexOf(u8, progress.authentication[0..progress.authentication_len], "PAM message on stderr") != null);
+        }
+    }
+}
+
+test "missing private-terminal launcher fails without trying another authentication path" {
+    const fixture = @import("auth_test_options");
+    var env: std.process.Environ.Map = .init(std.testing.allocator);
+    defer env.deinit();
+    try env.put("SHELLY_FIXTURE_AUTH", "cached");
+    const op = try Operation.start(.{
+        .sudo_bin = fixture.fixture,
+        .launcher_bin = "/nonexistent-shelly-terminal-launcher",
+        .shelly_bin = "fixture-cli",
+        .environ_map = &env,
+        .name = "fixture",
+        .backend = "aur",
+    });
+    defer op.deinit();
+    for (0..5000) |_| {
+        if (op.poll() != null) break;
+        try std.testing.io.sleep(.fromMilliseconds(1), .awake);
+    }
+    const result = op.poll() orelse return error.TerminalFixtureTimedOut;
+    try std.testing.expect(result.failed);
+    try std.testing.expectEqualStrings("Could not start the isolated authorization session.", result.error_detail);
+    try std.testing.expect(op.takeQuestion(std.testing.io) == null);
+}
+
+test "cancellation before worker startup is remembered without launching sudo" {
+    var env: std.process.Environ.Map = .init(std.testing.allocator);
+    defer env.deinit();
+    var session: Session = .{};
+    defer session.deinit(std.testing.io);
+    var operation: Operation = .{
+        .arena = .init(std.testing.allocator),
+        .request = .{ .shelly_bin = "unused", .environ_map = &env, .name = "fixture", .backend = "aur", .session = &session },
+    };
+    defer operation.arena.deinit();
+    defer operation.result.deinit(std.heap.page_allocator);
+    operation.cancel(std.testing.io);
+    operation.run();
+    try std.testing.expect(operation.done.load(.acquire));
+    try std.testing.expect(operation.result.failed);
+    try std.testing.expect(session.child == null and session.terminal == null);
+    try std.testing.expect(operation.process_group == null);
+}
+
+test "cancellation between spawn and PID publication terminates the exact pending process" {
+    const fixture = @import("auth_test_options");
+    var env: std.process.Environ.Map = .init(std.testing.allocator);
+    defer env.deinit();
+    try env.put("SHELLY_FIXTURE_AUTH", "terminal");
+    var session: Session = .{};
+    defer session.deinit(std.testing.io);
+    var not_cancelled: std.atomic.Value(bool) = .init(false);
+    try session.ensure(std.testing.io, fixture.launcher, &env, &not_cancelled);
+    var child = try session.spawn(std.testing.io, std.testing.allocator, &.{ fixture.fixture, "fixture-cli" }, &env, &not_cancelled);
+    defer child.kill(std.testing.io);
+    var operation: Operation = .{ .arena = .init(std.testing.allocator), .request = undefined };
+    defer operation.arena.deinit();
+    operation.cancel(std.testing.io);
+    try std.testing.expect(operation.process_group == null);
+    operation.registerProcess(std.testing.io, child.id.?);
+    const term = try child.wait(std.testing.io);
+    try std.testing.expect(!term.success());
+}
+
+test "immediate operation shutdown does not wait for a future password prompt" {
+    const fixture = @import("auth_test_options");
+    var env: std.process.Environ.Map = .init(std.testing.allocator);
+    defer env.deinit();
+    try env.put("SHELLY_FIXTURE_AUTH", "terminal");
+    var session: Session = .{};
+    defer session.deinit(std.testing.io);
+    for (0..16) |_| {
+        const operation = try Operation.start(.{
+            .sudo_bin = fixture.fixture,
+            .launcher_bin = fixture.launcher,
+            .shelly_bin = "fixture-cli",
+            .environ_map = &env,
+            .name = "fixture",
+            .backend = "aur",
+            .session = &session,
+        });
+        operation.deinit();
+        try std.testing.expect(!session.busy.load(.acquire));
+    }
+}
+
+test "successive operations retain the real terminal session used by sudo timestamps" {
+    const fixture = @import("auth_test_options");
+    var env: std.process.Environ.Map = .init(std.testing.allocator);
+    defer env.deinit();
+    var session: Session = .{};
+    defer session.deinit(std.testing.io);
+    var session_pid: ?std.c.pid_t = null;
+    var terminal_name: ?[]u8 = null;
+    defer if (terminal_name) |name| std.testing.allocator.free(name);
+    var sid_buffer: [32]u8 = undefined;
+    for (0..4) |index| {
+        const interrupt = index == 2;
+        try env.put("SHELLY_FIXTURE_AUTH", if (index == 0 or interrupt) "terminal" else "cached");
+        if (session_pid) |pid| try env.put("SHELLY_FIXTURE_EXPECT_SESSION", try std.fmt.bufPrint(&sid_buffer, "{d}", .{pid}));
+        const operation = try Operation.start(.{
+            .sudo_bin = fixture.fixture,
+            .launcher_bin = fixture.launcher,
+            .shelly_bin = "fixture-cli",
+            .environ_map = &env,
+            .name = "fixture",
+            .backend = "aur",
+            .session = &session,
+        });
+        defer operation.deinit();
+        var submitted = false;
+        var interrupted = false;
+        var questions: usize = 0;
+        for (0..5000) |_| {
+            const progress = operation.snapshot(std.testing.io);
+            if (std.mem.indexOf(u8, progress.authentication[0..progress.authentication_len], "Password:") != null) {
+                if (interrupt and !interrupted) {
+                    operation.cancel(std.testing.io);
+                    interrupted = true;
+                } else if (!interrupt and index == 0 and !submitted) {
+                    try operation.sendAuthentication(std.testing.io, "fixture-secret\n");
+                    submitted = true;
+                }
+            }
+            if (operation.takeQuestion(std.testing.io)) |value| {
+                var message = value;
+                defer message.deinit();
+                questions += 1;
+                try operation.sendAnswer(std.testing.io, questionId(message.value.question), if (message.value.question == .pkgbuild) .{ .pkgbuild = true } else .{ .yes_no = true });
+            }
+            if (operation.poll() != null) break;
+            try std.testing.io.sleep(.fromMilliseconds(1), .awake);
+        }
+        const result = operation.poll() orelse return error.TerminalFixtureTimedOut;
+        try std.testing.expectEqual(interrupt, result.failed);
+        try std.testing.expectEqual(@as(usize, if (interrupt) 0 else 2), questions);
+        try std.testing.expectEqual(index == 0, submitted);
+        try std.testing.expectEqual(interrupt, interrupted);
+        if (session_pid) |pid| {
+            try std.testing.expectEqual(pid, session.child.?.id.?);
+            try std.testing.expectEqualStrings(terminal_name.?, session.terminal.?.name());
+        } else {
+            session_pid = session.child.?.id.?;
+            terminal_name = try std.testing.allocator.dupe(u8, session.terminal.?.name());
+        }
+    }
+}
+
+test "private terminal authentication can be interrupted without protocol input" {
+    const fixture = @import("auth_test_options");
+    var env: std.process.Environ.Map = .init(std.testing.allocator);
+    defer env.deinit();
+    try env.put("SHELLY_FIXTURE_AUTH", "terminal");
+    const op = try Operation.start(.{
+        .sudo_bin = fixture.fixture,
+        .launcher_bin = fixture.launcher,
+        .shelly_bin = "fixture-cli",
+        .environ_map = &env,
+        .name = "fixture",
+        .backend = "aur",
+    });
+    defer op.deinit();
+    var interrupted = false;
+    for (0..5000) |_| {
+        const progress = op.snapshot(std.testing.io);
+        if (!interrupted and std.mem.indexOf(u8, progress.authentication[0..progress.authentication_len], "Password:") != null) {
+            try op.sendAuthentication(std.testing.io, "\x03");
+            interrupted = true;
+        }
+        if (op.poll() != null) break;
+        try std.testing.io.sleep(.fromMilliseconds(1), .awake);
+    }
+    const result = op.poll() orelse return error.TerminalFixtureTimedOut;
+    try std.testing.expect(interrupted and result.failed);
+    try std.testing.expect(!op.snapshot(std.testing.io).authenticating);
+}

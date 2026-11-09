@@ -69,6 +69,9 @@ pub fn dispatch(
     if (!isRemovePath(invocation.command.path)) return null;
     if (invocation.positionals.len == 0)
         return try reportValidationFailure(context, invocation, "Specify at least one package name. See the command help for usage.");
+    if (std.mem.eql(u8, invocation.command.path, flatpak_command_path) and
+        optionEnabled(invocation, "--user") and optionEnabled(invocation, "--system"))
+        return try reportValidationFailure(context, invocation, "Cannot combine --user and --system.");
 
     if (!invocation.globals.ui_mode and needsElevation(invocation)) {
         const carries_aur = std.mem.eql(u8, invocation.command.path, aur_command_path);
@@ -268,16 +271,29 @@ fn runFlatpak(
     defer manager.deinit();
     try manager.setOperationContext(operation_context);
     defer manager.setOperationContext(null) catch {};
-    var application = (try manager.find_installed_flatpak(invocation.positionals[0])) orelse
-        return RemoveError.FlatpakNotFound;
-    defer application.deinit(context.allocator);
+    try removeFlatpak(context, invocation, manager);
+}
+
+fn removeFlatpak(context: *runtime.RuntimeContext, invocation: *const parser.Invocation, manager: anytype) !void {
+    var application: ?PackageManager.flatpak.InstalledApplication = null;
+    defer if (application) |*app| app.deinit(context.allocator);
+    const scope: PackageManager.flatpak.Scope = if (optionEnabled(invocation, "--user"))
+        .user
+    else if (optionEnabled(invocation, "--system"))
+        .system
+    else blk: {
+        application = (try manager.find_installed_flatpak(invocation.positionals[0])) orelse
+            return RemoveError.FlatpakNotFound;
+        break :blk application.?.scope;
+    };
+    const id = if (application) |app| app.id else invocation.positionals[0];
     if (!try manager.uninstall_flatpak(
-        application.id,
-        application.scope,
+        id,
+        scope,
         optionEnabled(invocation, "--remove-unused"),
     )) return RemoveError.BackendFailed;
     if (optionEnabled(invocation, "--remove-config"))
-        cleanupFlatpakConfig(context, application.id);
+        cleanupFlatpakConfig(context, id);
 }
 
 fn partitionTargets(
@@ -1123,6 +1139,79 @@ test "AppImage removal prefers exact files and deduplicates directory aliases" {
     const linked = try resolveAppImage(allocator, io, "Linked", &.{bin}, &.{});
     defer linked.deinit(allocator);
     try std.testing.expect(std.mem.endsWith(u8, linked.path, "/bin/Linked.AppImage"));
+}
+
+test "flatpak removal honors explicit scope without falling back to another installation" {
+    const spec = @import("../cli/spec.zig");
+    var tc: test_support.TestContext = .{};
+    tc.init();
+    defer tc.deinit();
+    const manifest = try spec.Manifest.load(tc.arena.allocator());
+    const Manager = struct {
+        allocator: std.mem.Allocator,
+        lookups: usize = 0,
+        removals: usize = 0,
+        scope: ?PackageManager.flatpak.Scope = null,
+        user_installed: bool = true,
+
+        pub fn find_installed_flatpak(self: *@This(), _: []const u8) !?PackageManager.flatpak.InstalledApplication {
+            self.lookups += 1;
+            return try PackageManager.flatpak.InstalledApplication.fromWire(self.allocator, .{
+                .id = "org.example.App",
+                .name = "Example",
+                .arch = "x86_64",
+                .branch = "stable",
+                .summary = "",
+                .version = "1",
+                .latest_commit = "",
+                .origin = "flathub",
+                .kind = .app,
+                .installed_size = 0,
+                .scope = .system,
+            });
+        }
+
+        pub fn uninstall_flatpak(self: *@This(), id: []const u8, scope: PackageManager.flatpak.Scope, remove_unused: bool) !bool {
+            try std.testing.expectEqualStrings("org.example.App", id);
+            try std.testing.expect(remove_unused);
+            self.removals += 1;
+            self.scope = scope;
+            return scope != .user or self.user_installed;
+        }
+    };
+    var manager: Manager = .{ .allocator = tc.arena.allocator() };
+    for ([_][]const u8{ "--user", "--system" }) |flag_name| {
+        var outcome = try parser.parse(tc.arena.allocator(), &manifest, &.{ "remove", "flatpak", "org.example.App", flag_name, "--remove-unused" });
+        try std.testing.expect(outcome == .dispatch);
+        try removeFlatpak(&tc.context, &outcome.dispatch, &manager);
+        try std.testing.expectEqual(if (std.mem.eql(u8, flag_name, "--user")) PackageManager.flatpak.Scope.user else .system, manager.scope.?);
+    }
+    try std.testing.expectEqual(@as(usize, 0), manager.lookups);
+    try std.testing.expectEqual(@as(usize, 2), manager.removals);
+
+    manager.user_installed = false;
+    var user = try parser.parse(tc.arena.allocator(), &manifest, &.{ "remove", "flatpak", "--user", "--remove-unused", "org.example.App" });
+    try std.testing.expectError(RemoveError.BackendFailed, removeFlatpak(&tc.context, &user.dispatch, &manager));
+    try std.testing.expectEqual(@as(usize, 0), manager.lookups);
+    try std.testing.expectEqual(PackageManager.flatpak.Scope.user, manager.scope.?);
+    try std.testing.expectEqual(@as(usize, 3), manager.removals);
+
+    var automatic = try parser.parse(tc.arena.allocator(), &manifest, &.{ "remove", "flatpak", "--remove-unused", "Example" });
+    try removeFlatpak(&tc.context, &automatic.dispatch, &manager);
+    try std.testing.expectEqual(@as(usize, 1), manager.lookups);
+    try std.testing.expectEqual(PackageManager.flatpak.Scope.system, manager.scope.?);
+}
+
+test "flatpak removal rejects conflicting scopes before backend execution" {
+    const spec = @import("../cli/spec.zig");
+    var tc: test_support.TestContext = .{};
+    tc.init();
+    defer tc.deinit();
+    const manifest = try spec.Manifest.load(tc.arena.allocator());
+    var outcome = try parser.parse(tc.arena.allocator(), &manifest, &.{ "remove", "flatpak", "--user", "--system", "org.example.App" });
+    try std.testing.expect(outcome == .dispatch);
+    try std.testing.expectEqual(@as(?u8, 1), try dispatch(&tc.context, &outcome.dispatch));
+    try std.testing.expect(std.mem.indexOf(u8, tc.stdout.writer.buffered(), "Cannot combine --user and --system.") != null);
 }
 
 test "flatpak config cleanup uses the canonical application id" {
