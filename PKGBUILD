@@ -61,6 +61,14 @@ build() {
     -Dcpu=baseline \
     -Doptimize=small)
 
+  # Release builds look up the CLI on PATH; pin it to the packaged binary.
+  (cd Shelly.Tui && ZIG_GLOBAL_CACHE_DIR="${srcdir}/zig-global-cache" zig build --verbose \
+    --prefix "${srcdir}/${_source_dir}/out-tui" \
+    --cache-dir "${srcdir}/zig-cache" \
+    -Dshelly-bin=/usr/bin/shelly \
+    -Dcpu=baseline \
+    -Doptimize=safe)
+
    (cd Shelly.Notifications.Zig && ZIG_GLOBAL_CACHE_DIR="${srcdir}/zig-global-cache" zig build --verbose \
      --prefix "${srcdir}/${_source_dir}/out-notifications" \
      --cache-dir "${srcdir}/zig-cache" \
@@ -97,12 +105,14 @@ check() {
     --cache-dir "${srcdir}/zig-cache")
   (cd Shelly.Cli.Zig && ZIG_GLOBAL_CACHE_DIR="${srcdir}/zig-global-cache" zig build -Dlibalpm="${_shelly_libalpm}" test \
     --cache-dir "${srcdir}/zig-cache")
+  (cd Shelly.Tui && ZIG_GLOBAL_CACHE_DIR="${srcdir}/zig-global-cache" zig build -Dshelly-bin=/usr/bin/shelly test \
+    --cache-dir "${srcdir}/zig-cache")
 }
 
 package_shelly() {
   pkgdesc="Shelly: A Modern Arch Package Manager"
-  provides=('shelly')
-  conflicts=('shelly-git' 'shelly-bin')
+  provides=('shelly' "shelly-tui=${pkgver}")
+  conflicts=('shelly-git' 'shelly-bin' 'shelly-tui' 'shelly-tui-git')
   backup=('etc/shellybuild.conf')
   depends=(
       "${_shelly_native_depends[@]}"
@@ -149,6 +159,7 @@ package_shelly() {
     return 1
   fi
   install -Dm755 out-key/bin/shelly-key "$pkgdir/usr/bin/shelly-key"
+  install -Dm755 out-tui/bin/Shelly_Tui "$pkgdir/usr/bin/shelly-tui"
   install -Dm644 "$srcdir/shellybuild.conf" "$pkgdir/etc/shellybuild.conf"
 
   # Install desktop entries
