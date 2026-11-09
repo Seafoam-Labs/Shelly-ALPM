@@ -14,7 +14,7 @@ makedepends=(
   'gnupg'
   'git'
   'pkgconf'
-  'zig=0.17.0'
+  'zig=0.17.1'
   'flatpak'
   'ripgrep'
   'go-md2man'

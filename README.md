@@ -240,11 +240,11 @@ Upcoming features and development targets:
 ## Prerequisites
 
 - **Devario**, or Arch Linux for the libalpm-enabled variant
-- **zig 0.17.0** (for building)
+- **zig 0.17.1** (for building)
 - **vala** (for building)
 - **libalpm** (provided by `pacman`; omitted from the CLI build with `-Dlibalpm=false`)
 
-CI installs the official Zig **0.17.0** Linux archive, verifies its SHA-256,
+CI installs the official Zig **0.17.1** Linux archive, verifies its SHA-256,
 and checks the compiler version. The shared setup action selects the matching
 runner architecture. Builds retain Zig's normal backend defaults.
 
@@ -270,7 +270,7 @@ makepkg -si
 
 ### Manual Build
 
-Use Zig 0.17.0. Third-party libraries are pinned by URL and content hash in each
+Use Zig 0.17.1. Third-party libraries are pinned by URL and content hash in each
 component's `build.zig.zon`; Zig downloads them into its package cache on the
 first build. Dependencies use unchanged upstream sources, including transitive
 dependencies. No vendored copies or dependency source patches are maintained.

@@ -46,7 +46,7 @@ makedepends=(
   'libarchive'
   'pkgconf'
   'sqlite'
-  'zig>=0.17.0'
+  'zig>=0.17.1'
   "${_shelly_native_depends[@]}"
 )
 checkdepends=('ripgrep')

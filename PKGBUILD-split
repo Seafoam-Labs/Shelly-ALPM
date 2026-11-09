@@ -23,7 +23,7 @@ makedepends=(
   'gtk4'
   'pkgconf'
   'sqlite'
-  'zig>=0.17.0'
+  'zig>=0.17.1'
 )
 checkdepends=('ripgrep')
 source=("${pkgbase}-${pkgver}.tar.gz::${url}/archive/v${pkgver}.tar.gz")
