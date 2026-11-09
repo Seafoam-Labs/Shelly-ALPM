@@ -48,6 +48,7 @@ test "all source modules are included" {
     std.testing.refAllDecls(@import("views/source_highlight.zig"));
     std.testing.refAllDecls(@import("views/split_layout.zig"));
     std.testing.refAllDecls(@import("views/styles.zig"));
+    std.testing.refAllDecls(@import("views/tab_bar.zig"));
     std.testing.refAllDecls(@import("views/updates_view.zig"));
     std.testing.refAllDecls(@import("xdg_paths.zig"));
 }
