@@ -17,10 +17,29 @@ const variable_style: vaxis.Style = .{ .fg = .{ .index = 6 } };
 const keyword_style: vaxis.Style = .{ .fg = .{ .index = 5 }, .bold = true };
 const comment_style: vaxis.Style = .{ .fg = .{ .index = 8 } };
 
-pub fn fileKind(name: []const u8) Kind {
-    if (std.mem.endsWith(u8, name, "PKGBUILD") or std.mem.endsWith(u8, name, ".sh") or std.mem.endsWith(u8, name, ".install")) return .shell;
-    if (std.mem.endsWith(u8, name, ".patch") or std.mem.endsWith(u8, name, ".diff")) return .diff;
-    return .plain;
+pub fn fileKind(name: []const u8, content: []const u8) Kind {
+    const underlying = if (std.mem.endsWith(u8, name, ".in")) name[0 .. name.len - 3] else name;
+    if (std.mem.eql(u8, std.fs.path.basename(underlying), "PKGBUILD") or std.mem.endsWith(u8, underlying, ".sh") or std.mem.endsWith(u8, underlying, ".install")) return .shell;
+    if (std.mem.endsWith(u8, underlying, ".patch") or std.mem.endsWith(u8, underlying, ".diff")) return .diff;
+    return if (shellShebang(content)) .shell else .plain;
+}
+
+fn shellShebang(content: []const u8) bool {
+    if (!std.mem.startsWith(u8, content, "#!")) return false;
+    const end = std.mem.indexOfScalar(u8, content, '\n') orelse content.len;
+    const line = std.mem.trimEnd(u8, content[2..end], "\r");
+    var tokens = std.mem.tokenizeAny(u8, line, " \t");
+    const interpreter = tokens.next() orelse return false;
+    for ([_][]const u8{ "/bin/sh", "/usr/bin/sh", "/bin/bash", "/usr/bin/bash", "/bin/dash", "/usr/bin/dash" }) |path| {
+        if (std.mem.eql(u8, interpreter, path)) return true;
+    }
+    if (!std.mem.eql(u8, interpreter, "/usr/bin/env") and !std.mem.eql(u8, interpreter, "/bin/env")) return false;
+    const command = tokens.next() orelse return false;
+    if (tokens.next() != null) return false;
+    for ([_][]const u8{ "sh", "bash", "dash" }) |shell_name| {
+        if (std.mem.eql(u8, command, shell_name)) return true;
+    }
+    return false;
 }
 
 fn emit(alloc: Allocator, spans: *std.ArrayList(Span), text: []const u8, style: vaxis.Style) !void {
@@ -203,4 +222,47 @@ test "diff highlighting keeps markers and treats file and hunk headers separatel
     try std.testing.expectEqual(@as(u8, 6), hunk[0].style.fg.index);
     try std.testing.expectEqualStrings("+pkgver=2", added[0].text);
     try std.testing.expectEqualStrings("-pkgver=1", removed[0].text);
+}
+
+test "template filenames preserve known languages and leave generic templates plain" {
+    const Case = struct { name: []const u8, kind: Kind };
+    for ([_]Case{
+        .{ .name = "PKGBUILD", .kind = .shell },
+        .{ .name = "source/PKGBUILD.in", .kind = .shell },
+        .{ .name = "script.sh.in", .kind = .shell },
+        .{ .name = "demo.install.in", .kind = .shell },
+        .{ .name = "fix.patch.in", .kind = .diff },
+        .{ .name = "config.in", .kind = .plain },
+        .{ .name = "notPKGBUILD", .kind = .plain },
+    }) |case| try std.testing.expectEqual(case.kind, fileKind(case.name, ""));
+    // A patch keeps its own syntax even when its text begins with a shebang.
+    try std.testing.expectEqual(Kind.diff, fileKind("fix.patch", "#!/bin/bash\n"));
+}
+
+test "shell shebang detection uses exact interpreters on the first line only" {
+    for ([_][]const u8{
+        "#!/bin/bash\necho ok",
+        "#!/usr/bin/bash -eu\necho ok",
+        "#! /bin/sh\necho ok",
+        "#!/usr/bin/dash\necho ok",
+        "#!/usr/bin/env bash\necho ok",
+        "#!/bin/env sh\necho ok",
+        "#!/usr/bin/env\tbash\r\necho ok",
+    }) |content| try std.testing.expectEqual(Kind.shell, fileKind("script.in", content));
+    for ([_][]const u8{
+        "# mentions /bin/bash",
+        "\n#!/bin/bash",
+        " #!/bin/bash",
+        "#!/usr/bin/python\nprint('bash')",
+        "#!/bin/bash-helper",
+        "#!/tmp/bash",
+        "#!/bin/fish",
+        "#!/usr/bin/env",
+        "#!/usr/bin/env bash-helper",
+        "#!/usr/bin/env -S bash -e",
+        "#!/usr/bin/env FOO=bar bash",
+        "#!/usr/bin/env bash -e",
+        "#!/usr/bin/env 'bash'",
+        "#!/usr/bin/env python\n#!/bin/bash",
+    }) |content| try std.testing.expectEqual(Kind.plain, fileKind("script.in", content));
 }

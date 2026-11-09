@@ -155,7 +155,7 @@ fn drawRow(ptr: *anyopaque, ctx: vxfw.DrawContext, selected: bool) Allocator.Err
     } else {
         try spans.append(arena, .{ .text = "  " });
     }
-    try spans.append(arena, .{ .text = pkg.Name, .style = .{ .bold = true } });
+    try spans.append(arena, .{ .text = try diagnostics.sanitizeAlloc(arena, pkg.Name), .style = .{ .bold = true } });
 
     const rich = try arena.create(vxfw.RichText);
     rich.* = .{
@@ -177,7 +177,7 @@ pub fn drawSelectedRow(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!v
     const name = name_ptr.*;
     const arena = ctx.arena;
     var spans: std.ArrayList(vxfw.RichText.TextSpan) = .empty;
-    try spans.append(arena, .{ .text = name });
+    try spans.append(arena, .{ .text = try diagnostics.sanitizeAlloc(arena, name) });
     const rich = try arena.create(vxfw.RichText);
     rich.* = .{ .text = spans.items, .softwrap = false, .overflow = .ellipsis };
     return rich.draw(ctx);
@@ -342,4 +342,34 @@ test "selection checkbox is independent of the installed indicator" {
     try std.testing.expectEqualStrings(" ", unmarked.buffer[1].char.grapheme);
     try std.testing.expectEqualStrings("●", marked.buffer[4].char.grapheme);
     try std.testing.expectEqualStrings("●", unmarked.buffer[4].char.grapheme);
+}
+
+test "package row names escape terminal control bytes without changing identity" {
+    vxfw.DrawContext.init(.unicode);
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const name = "demo\x1b[31m\r\x7f";
+    var pkg: Package = .{ .Name = name };
+    const ctx: vxfw.DrawContext = .{ .arena = arena.allocator(), .min = .{}, .max = .{ .width = 80, .height = 1 }, .cell_size = .{ .width = 10, .height = 20 } };
+    inline for (.{ drawPackageRow, drawMarkedPackageRow }) |draw| {
+        const surface = try draw(&pkg, ctx);
+        var text: std.ArrayList(u8) = .empty;
+        for (surface.buffer) |cell| try text.appendSlice(arena.allocator(), cell.char.grapheme);
+        try std.testing.expect(std.mem.indexOf(u8, text.items, "demo\\x1b[31m\\x0d\\x7f") != null);
+        try std.testing.expect(std.mem.indexOfAny(u8, text.items, "\x1b\r\x7f") == null);
+        try std.testing.expectEqualStrings(name, pkg.Name);
+    }
+}
+
+test "selected package names escape terminal control bytes" {
+    vxfw.DrawContext.init(.unicode);
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var name: []const u8 = "demo\x1b[31m\r\x7f";
+    const surface = try drawSelectedRow(@ptrCast(&name), .{ .arena = arena.allocator(), .min = .{}, .max = .{ .width = 80, .height = 1 }, .cell_size = .{ .width = 10, .height = 20 } });
+    var text: std.ArrayList(u8) = .empty;
+    for (surface.buffer) |cell| try text.appendSlice(arena.allocator(), cell.char.grapheme);
+    try std.testing.expect(std.mem.indexOf(u8, text.items, "demo\\x1b[31m\\x0d\\x7f") != null);
+    try std.testing.expect(std.mem.indexOfAny(u8, text.items, "\x1b\r\x7f") == null);
+    try std.testing.expectEqualStrings("demo\x1b[31m\r\x7f", name);
 }
