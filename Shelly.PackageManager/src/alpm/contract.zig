@@ -1,8 +1,11 @@
 const std = @import("std");
 const backend_selection = @import("backend.zig");
 const configuration = @import("configuration.zig");
+const mapped_libraries = @import("mapped_libraries.zig");
 const operation_api = @import("operation_context");
 const libalpm = @import("types.zig");
+
+pub const RestartPolicy = @import("restart_policy.zig").RestartPolicy;
 pub const ConfigError = error{
     InitFailed,
     RegisterDbFailed,
@@ -79,6 +82,34 @@ pub const AffectedProcess = struct {
     }
 };
 
+/// Why an affected service was not restarted automatically.
+pub const RestartSkipReason = enum {
+    /// Restarting the unit would terminate the invoking session or the system
+    /// bus, so the caller must decide when to restart it.
+    session_critical,
+    /// The unit was not active, so restarting it would start a stopped or
+    /// oneshot unit instead of refreshing a running process.
+    inactive,
+
+    pub fn label(self: RestartSkipReason) []const u8 {
+        return switch (self) {
+            .session_critical => "session-critical",
+            .inactive => "inactive",
+        };
+    }
+};
+
+/// An affected service left untouched by automatic restarts.
+pub const SkippedService = struct {
+    service: []u8,
+    reason: RestartSkipReason,
+
+    pub fn deinit(self: *SkippedService, allocator: std.mem.Allocator) void {
+        allocator.free(self.service);
+        self.* = undefined;
+    }
+};
+
 /// A structured failure returned when `systemctl restart` could not restart a
 /// service. `exit_code` is populated only when systemctl exited normally.
 pub const ServiceRestartFailure = struct {
@@ -103,11 +134,16 @@ pub const RestartReport = struct {
     /// Null when the running kernel or module directory could not be inspected.
     running_kernel_modules_present: ?bool,
     needs_reboot: bool,
+    /// A user-session manager or user bus is stale. Logging out restarts it;
+    /// the system itself does not need to reboot.
+    needs_session_restart: bool,
+    policy: RestartPolicy,
     process_scan_complete: bool,
     skipped_processes: usize,
     affected_processes: []AffectedProcess,
     affected_services: [][]u8,
     restarted_services: [][]u8,
+    skipped_services: []SkippedService,
     failures: []ServiceRestartFailure,
 
     pub fn empty(allocator: std.mem.Allocator) RestartReport {
@@ -116,11 +152,14 @@ pub const RestartReport = struct {
             .running_kernel = null,
             .running_kernel_modules_present = null,
             .needs_reboot = false,
+            .needs_session_restart = false,
+            .policy = .automatic,
             .process_scan_complete = false,
             .skipped_processes = 0,
             .affected_processes = &.{},
             .affected_services = &.{},
             .restarted_services = &.{},
+            .skipped_services = &.{},
             .failures = &.{},
         };
     }
@@ -133,6 +172,8 @@ pub const RestartReport = struct {
         if (self.affected_services.len != 0) self.allocator.free(self.affected_services);
         for (self.restarted_services) |service| self.allocator.free(service);
         if (self.restarted_services.len != 0) self.allocator.free(self.restarted_services);
+        for (self.skipped_services) |*service| service.deinit(self.allocator);
+        if (self.skipped_services.len != 0) self.allocator.free(self.skipped_services);
         for (self.failures) |*failure| failure.deinit(self.allocator);
         if (self.failures.len != 0) self.allocator.free(self.failures);
         self.* = undefined;
@@ -143,7 +184,11 @@ pub const RestartCheckOptions = struct {
     proc_root: []const u8 = "/proc",
     modules_root: []const u8 = "/usr/lib/modules",
     systemctl_path: []const u8 = "systemctl",
-    restart_services: bool = true,
+    policy: RestartPolicy = .automatic,
+    /// Libraries mapped before the transaction. When present, only libraries
+    /// whose on-disk inode changed since capture are considered stale, so old
+    /// deleted mappings do not cause restarts on unrelated transactions.
+    library_snapshot: ?*const mapped_libraries.LibrarySnapshot = null,
 };
 
 pub const InitOptions = struct {

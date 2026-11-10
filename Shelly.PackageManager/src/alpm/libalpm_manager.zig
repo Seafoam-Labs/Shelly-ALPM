@@ -1118,11 +1118,24 @@ pub const Manager = struct {
 
         self.package_download = true;
 
+        const check_restarts = !flags.dbonly and !flags.downloadonly and
+            std.mem.eql(u8, self.config.root_directory, "/");
+        // Capture the on-disk identity of every shared object currently mapped
+        // by a process before the transaction replaces files. The restart
+        // check only treats libraries whose identity changed as stale.
+        var library_state_snapshot: ?restart_checks.LibrarySnapshot = if (check_restarts)
+            restart_checks.LibrarySnapshot.capture(self.io(), self.allocator, "/proc") catch null
+        else
+            null;
+        defer if (library_state_snapshot) |*captured| captured.deinit();
+
         // repositoryTransaction releases the database lock before restart checks.
         try self.repositoryTransaction(targets, flags, null, true);
-        if (flags.dbonly or flags.downloadonly or !std.mem.eql(u8, self.config.root_directory, "/"))
-            return RestartReport.empty(self.allocator);
-        return self.checkForRequiredRestarts(.{}) catch TransactionError.OutOfMemory;
+        if (!check_restarts) return RestartReport.empty(self.allocator);
+        return self.checkForRequiredRestarts(.{
+            .policy = if (library_state_snapshot != null) self.config.restart_policy else contract.RestartPolicy.report,
+            .library_snapshot = if (library_state_snapshot) |*captured| captured else null,
+        }) catch TransactionError.OutOfMemory;
     }
 
     /// Detects stale runtime state and restarts mapped systemd services. File
@@ -3981,11 +3994,11 @@ test "is_cachyos exposes the detected manager state" {
 
 test "restart parsing identifies deleted shared libraries and system services" {
     try testing.expect(restart_checks.hasDeletedSharedLibrary(
-        "7f00-7f01 r-xp /usr/lib/libdemo.so.1 (deleted)\n",
+        "7f00-7f01 r-xp 00000000 00:00 42 /usr/lib/libdemo.so.1 (deleted)\n",
     ));
     try testing.expect(!restart_checks.hasDeletedSharedLibrary(
-        "7f00-7f01 r-xp /usr/lib/libdemo.so.1\n" ++
-            "7f02-7f03 r-xp /usr/bin/demo (deleted)\n",
+        "7f00-7f01 r-xp 00000000 00:00 42 /usr/lib/libdemo.so.1\n" ++
+            "7f02-7f03 r-xp 00000000 00:00 43 /usr/bin/demo (deleted)\n",
     ));
     try testing.expectEqualStrings(
         "demo.service",
@@ -4046,6 +4059,7 @@ test "restart report detects kernels and records structured service results" {
         .proc_root = proc_root,
         .modules_root = modules_root,
         .systemctl_path = "/bin/false",
+        .policy = .automatic,
     });
     defer reboot_report.deinit();
     try testing.expectEqualStrings("6.12.1-test", reboot_report.running_kernel.?);
@@ -4065,6 +4079,7 @@ test "restart report detects kernels and records structured service results" {
         .proc_root = proc_root,
         .modules_root = modules_root,
         .systemctl_path = "/bin/false",
+        .policy = .automatic,
     });
     defer failure_report.deinit();
     try testing.expect(!failure_report.needs_reboot);
@@ -4079,6 +4094,7 @@ test "restart report detects kernels and records structured service results" {
         .proc_root = proc_root,
         .modules_root = modules_root,
         .systemctl_path = "/definitely/missing/systemctl",
+        .policy = .automatic,
     });
     defer spawn_failure_report.deinit();
     try testing.expectEqual(@as(usize, 1), spawn_failure_report.failures.len);
@@ -4089,6 +4105,7 @@ test "restart report detects kernels and records structured service results" {
         .proc_root = proc_root,
         .modules_root = modules_root,
         .systemctl_path = "/bin/true",
+        .policy = .automatic,
     });
     defer success_report.deinit();
     try testing.expect(!success_report.needs_reboot);

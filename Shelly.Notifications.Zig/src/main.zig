@@ -77,6 +77,7 @@ const Updates = struct {
     pending_notif: ?NotifText = null,
     needs_config_change: bool = false,
     last_check: i64 = 0,
+    last_notified_count: ?usize = null,
 
     fn init(allocator: std.mem.Allocator, io: std.Io, runner: *AppRunner, config: *ShellyConfig) Updates {
         return .{ .allocator = allocator, .io = io, .runner = runner, .config = config };
@@ -152,6 +153,19 @@ const Updates = struct {
             self.allocator.free(old.body);
         }
         self.pending_notif = .{ .summary = s, .body = b };
+    }
+
+    fn shouldNotify(self: *Updates, notif_count: usize) bool {
+        self.mutex.lockUncancelable(self.io);
+        defer self.mutex.unlock(self.io);
+        if (notif_count == 0) {
+            self.last_notified_count = null;
+            return false;
+        }
+        const prior = self.last_notified_count orelse 0;
+        if (notif_count <= prior) return false;
+        self.last_notified_count = notif_count;
+        return true;
     }
 
     fn takeRefresh(self: *Updates) bool {
@@ -307,7 +321,7 @@ const Worker = struct {
         self.updates.last_check = @intCast(seconds);
 
         self.updates.signalRefresh();
-        if (count > 0) {
+        if (count > 0 and self.updates.shouldNotify(count)) {
             var buf: [128]u8 = undefined;
             const body = std.fmt.bufPrintSentinel(&buf, "{d} {s}", .{ count, trans("updates available") }, 0) catch "0 updates";
             self.updates.queueNotif(trans("Updates available"), body);

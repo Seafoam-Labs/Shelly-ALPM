@@ -7,6 +7,7 @@ pub fn cause(err: anyerror) ?[]const u8 {
         error.ConfigReadFailed => "The package configuration file could not be read. Check its path and permissions.",
         error.InvalidHookDirMode => "HookDirMode must be Append or Replace. Correct the value in the package configuration.",
         error.InvalidMigrationPolicy => "The file migration policy is invalid. Check the migration options in the package configuration.",
+        error.InvalidRestartPolicy => "RestartPolicy must be report or automatic. Correct the value in the package configuration.",
         error.ReadOnlyDatabase => "The package database is read-only for this operation. Use a writable installation database for package changes.",
         error.DatabaseLockFailed => "RLPM could not acquire or validate the package database lock. Check the database directory and filesystem state.",
         error.LockPermissionDenied => "RLPM does not have permission to lock the package database. Check the database directory permissions and authorization.",

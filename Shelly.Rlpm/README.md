@@ -70,7 +70,7 @@ acceptance boundaries.
 
 ## Build and tests
 
-Use Linux with `openat2`, `/proc` and memfd sealing, Zig 0.17.0, libc, libarchive, SQLite and libcurl development headers/libraries
+Use Linux with `openat2`, `/proc` and memfd sealing, Zig 0.17.1, libc, libarchive, SQLite and libcurl development headers/libraries
 (SQLite must support `sqlite3_deserialize`). `Shelly.Key` is a local
 module dependency. From this directory:
 

@@ -11,6 +11,7 @@ pub const runtime = @import("runtime.zig");
 // Register new source modules here; main.zig has its own executable suite.
 test "all source modules are included" {
     std.testing.refAllDecls(@import("commands.zig"));
+    std.testing.refAllDecls(@import("command_context.zig"));
     std.testing.refAllDecls(@import("model.zig"));
     std.testing.refAllDecls(@import("models/appimage.zig"));
     std.testing.refAllDecls(@import("models/aur_model.zig"));
@@ -33,6 +34,7 @@ test "all source modules are included" {
     std.testing.refAllDecls(@import("services/ui_decode.zig"));
     std.testing.refAllDecls(sudo_terminal);
     std.testing.refAllDecls(sudo_session);
+    std.testing.refAllDecls(@import("views/app_view.zig"));
     std.testing.refAllDecls(@import("views/aur_view.zig"));
     std.testing.refAllDecls(@import("views/border.zig"));
     std.testing.refAllDecls(@import("views/detail_fields.zig"));
@@ -48,6 +50,7 @@ test "all source modules are included" {
     std.testing.refAllDecls(@import("views/source_highlight.zig"));
     std.testing.refAllDecls(@import("views/split_layout.zig"));
     std.testing.refAllDecls(@import("views/styles.zig"));
+    std.testing.refAllDecls(@import("views/tab_bar.zig"));
     std.testing.refAllDecls(@import("views/updates_view.zig"));
     std.testing.refAllDecls(@import("xdg_paths.zig"));
 }
