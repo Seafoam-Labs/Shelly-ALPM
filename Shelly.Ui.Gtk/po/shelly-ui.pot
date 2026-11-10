@@ -648,7 +648,7 @@ msgstr ""
 msgid "Always Recheck AppImage Updates on Upgrade All"
 msgstr ""
 
-msgid "When off, Upgrade All uses the update results already loaded in the AppImage page."
+msgid "When off, Upgrade All runs only when the AppImage page shows updates."
 msgstr ""
 
 msgid "AppImage Install Path"
