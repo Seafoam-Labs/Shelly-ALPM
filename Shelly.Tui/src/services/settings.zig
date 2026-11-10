@@ -45,17 +45,34 @@ pub const Store = struct {
         try document.value.object.put(alloc, "FlatpakEnabled", .{ .bool = settings.flatpak_enabled });
         try document.value.object.put(alloc, "HeaderIcons", .{ .string = @tagName(settings.header_icons) });
         try document.value.object.put(alloc, "ShowFlatpakScreenshots", .{ .bool = settings.show_flatpak_screenshots });
-        const overrides = try keybindings.encode(alloc, settings.keybindings);
-        if (overrides.object.count() > 0) {
-            try document.value.object.put(alloc, "Keybindings", overrides);
-        } else {
-            _ = document.value.object.swapRemove("Keybindings");
+        try document.value.object.put(alloc, "Keybindings", try keybindings.encode(alloc, settings.keybindings));
+        try self.write(io, document.value);
+    }
+
+    pub fn ensureKeybindings(self: Store, io: std.Io) !void {
+        var document = try self.read(io);
+        defer document.deinit();
+        const saved = try decode(document.value);
+        if (document.value.object.get("Keybindings")) |bindings| {
+            if (bindings.object.count() == keybindings.editable.len) return;
         }
+        const alloc = document.arena.allocator();
+        try document.value.object.put(alloc, "Keybindings", try keybindings.encode(alloc, saved.keybindings));
+        try self.write(io, document.value);
+    }
+
+    pub fn fingerprint(self: Store, io: std.Io) !u64 {
+        const bytes = try std.Io.Dir.cwd().readFileAlloc(io, self.path, self.allocator, .limited(1024 * 1024));
+        defer self.allocator.free(bytes);
+        return std.hash.Wyhash.hash(0, bytes);
+    }
+
+    fn write(self: Store, io: std.Io, value: std.json.Value) !void {
         var staged = try std.Io.Dir.cwd().createFileAtomic(io, self.path, .{ .make_path = true, .replace = true });
         defer staged.deinit(io);
         var buffer: [4096]u8 = undefined;
         var writer = staged.file.writer(io, &buffer);
-        try writer.interface.print("{f}\n", .{std.json.fmt(document.value, .{ .whitespace = .indent_2 })});
+        try writer.interface.print("{f}\n", .{std.json.fmt(value, .{ .whitespace = .indent_2 })});
         try writer.flush();
         try staged.file.sync(io);
         try staged.replace(io);
@@ -170,7 +187,7 @@ test "keybinding overrides persist atomically without changing unrelated setting
     try std.testing.expect((try store.load(io)).eql(saved));
     var document = try store.read(io);
     try std.testing.expectEqual(@as(i64, 42), document.value.object.get("Other").?.integer);
-    try std.testing.expectEqual(@as(usize, 1), document.value.object.get("Keybindings").?.object.count());
+    try std.testing.expectEqual(keybindings.editable.len, document.value.object.get("Keybindings").?.object.count());
     document.deinit();
     const before = try temporary.dir.readFileAlloc(io, "tui-settings.json", allocator, .limited(4096));
     defer allocator.free(before);
@@ -183,7 +200,7 @@ test "keybinding overrides persist atomically without changing unrelated setting
     try store.save(io, saved);
     document = try store.read(io);
     defer document.deinit();
-    try std.testing.expect(document.value.object.get("Keybindings") == null);
+    try std.testing.expectEqual(keybindings.editable.len, document.value.object.get("Keybindings").?.object.count());
     try std.testing.expect((try store.load(io)).keybindings.eql(.{}));
 }
 
@@ -205,4 +222,37 @@ test "invalid keybinding files are reported and never overwritten by save" {
     const after = try temporary.dir.readFileAlloc(io, "tui-settings.json", allocator, .limited(4096));
     defer allocator.free(after);
     try std.testing.expectEqualStrings(json, after);
+}
+
+test "initializing bindings fills missing files and preserves existing preferences" {
+    const allocator = std.testing.allocator;
+    const io = std.testing.io;
+    var temporary = std.testing.tmpDir(.{});
+    defer temporary.cleanup();
+    const directory = try temporary.dir.realPathFileAlloc(io, ".", allocator);
+    defer allocator.free(directory);
+    const store: Store = .{ .allocator = allocator, .path = try std.fs.path.join(allocator, &.{ directory, "settings.json" }) };
+    defer store.deinit();
+    try store.ensureKeybindings(io);
+    try std.testing.expect((try store.load(io)).keybindings.eql(.{}));
+    const first = try store.fingerprint(io);
+    try store.ensureKeybindings(io);
+    try std.testing.expectEqual(first, try store.fingerprint(io));
+    var file = try temporary.dir.createFile(io, "settings.json", .{ .truncate = true });
+    try file.writeStreamingAll(io, "{\"AurEnabled\":true,\"Other\":42,\"Keybindings\":{\"help\":\"F2\"}}");
+    file.close(io);
+    try store.ensureKeybindings(io);
+    const saved = try store.load(io);
+    try std.testing.expect(saved.aur_enabled);
+    try std.testing.expectEqual(@import("vaxis").Key.f2, saved.keybindings.get(.help).codepoint);
+    const document = try store.read(io);
+    defer document.deinit();
+    try std.testing.expectEqual(@as(i64, 42), document.value.object.get("Other").?.integer);
+    try std.testing.expectEqual(keybindings.editable.len, document.value.object.get("Keybindings").?.object.count());
+    file = try temporary.dir.createFile(io, "settings.json", .{ .truncate = true });
+    try file.writeStreamingAll(io, "{\"Keybindings\":{\"confirm\":\"F2\"}}");
+    file.close(io);
+    const invalid = try store.fingerprint(io);
+    try std.testing.expectError(error.FixedCommand, store.ensureKeybindings(io));
+    try std.testing.expectEqual(invalid, try store.fingerprint(io));
 }

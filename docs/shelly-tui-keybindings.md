@@ -3,9 +3,10 @@
 The configuration service stores shortcut overrides in `Keybindings` inside
 `$XDG_CONFIG_HOME/shelly/tui-settings.json` (normally
 `~/.config/shelly/tui-settings.json`). Validated overrides are applied at startup.
-After editing the file, use Reload in Settings to apply changes; removing overrides restores the defaults. Invalid
-configuration preserves the active bindings. An interactive editor is not yet
-available.
+External edits are detected within about one second, including atomic editor
+saves. Reload in Settings also applies changes immediately. Invalid edits leave
+the last working settings active and show a warning; fixing the file applies the
+corrected values. An interactive editor is not yet available.
 
 ```json
 {
@@ -16,9 +17,14 @@ available.
 }
 ```
 
-Missing entries use the defaults in `commands.Bindings`. Saving omits overrides
-that equal a default; restoring every default removes the `Keybindings` object.
+All editable bindings, including defaults, are written into `Keybindings` on
+startup and Save. Older or partial configurations are filled automatically.
+Removing an entry restores its default, which is written back into the file.
 Other TUI preferences and unrelated top-level JSON keys are preserved.
+
+External changes wait until a running package operation finishes. Unsaved TUI
+Settings edits are retained: Reload uses the external file, while Save keeps
+your pending edits. Unchanged files cause no redraw or CLI query.
 
 Supported key names are printable ASCII characters, `Plus`, `F1` through `F35`,
 and named keys such as `Tab`, `PageUp`, and `PageDown`. `Ctrl+`, `Alt+`, and

@@ -14,6 +14,7 @@ const footer_view = @import("../views/footer_view.zig");
 const vaxis = @import("vaxis");
 const vxfw = vaxis.vxfw;
 const runtime = @import("../runtime.zig");
+const Allocator = std.mem.Allocator;
 
 const flatpak = @import("flatpak.zig");
 const Package = @import("packages.zig").Package;
@@ -36,6 +37,11 @@ pub const State = struct {
     settings_store: ?settings_service.Store = null,
     settings_failure: ?anyerror = null,
     settings_selected: usize = 0,
+    watch_pending: bool = false,
+    watch_fingerprint: ?u64 = null,
+    watch_error: ?anyerror = null,
+    watch_read_failed: bool = false,
+    watch_deferred: bool = false,
     aur_source_url: ?[]const u8 = null,
     cli_binary: ?[]const u8 = null,
     cli_environment: ?*const std.process.Environ.Map = null,
@@ -85,9 +91,11 @@ pub fn loadSettings(self: *Model, io: std.Io, env: *const std.process.Environ.Ma
         applySettings(self, saved);
         self.settings_state.settings_failure = err;
         self.setNotice("Could not read the shared AUR source. Reload Settings to retry.") catch {};
+        syncSettingsFile(self, io);
         return;
     };
     applySettings(self, saved);
+    syncSettingsFile(self, io);
 }
 
 pub fn applySettings(self: *Model, saved: Settings) void {
@@ -186,11 +194,13 @@ pub fn saveSettings(self: *Model, ctx: *vxfw.EventContext) !void {
             applySettings(self, saved);
             self.settings_state.settings_draft = pending;
             self.settings_state.settings_failure = err;
+            syncSettingsFile(self, runtime.io);
             return;
         };
         try rememberAurSource(self, preferences.aurUrl(saved.atoll_aur_enabled));
     }
     applySettings(self, saved);
+    syncSettingsFile(self, runtime.io);
     if (saved.flatpak_enabled and !self.flatpak_state.flatpak_checked) try flatpak_model.startFlatpakProbe(self, ctx);
     try self.focusActiveTab(ctx);
 }
@@ -207,11 +217,107 @@ pub fn reloadSettings(self: *Model, ctx: *vxfw.EventContext) !void {
         self.settings_state.settings.keybindings = saved.keybindings;
         self.settings_state.settings_draft.keybindings = saved.keybindings;
         self.settings_state.settings_failure = err;
+        syncSettingsFile(self, runtime.io);
         return;
     };
     applySettings(self, saved);
+    syncSettingsFile(self, runtime.io);
     if (saved.flatpak_enabled and !self.flatpak_state.flatpak_checked) try flatpak_model.startFlatpakProbe(self, ctx);
     try self.focusActiveTab(ctx);
+}
+
+const invalid_file_notice = "Settings file changes could not be applied. Previous settings remain active; check Settings for details.";
+const deferred_file_notice = "Settings file changed. Changes will apply after the operation; for pending Settings edits, Reload uses the file and Save keeps your edits.";
+
+fn syncSettingsFile(self: *Model, io: std.Io) void {
+    const store = self.settings_state.settings_store orelse return;
+    store.ensureKeybindings(io) catch |err| {
+        self.settings_state.settings_failure = err;
+        self.setNotice("Could not write all keybindings to the settings file. Check Settings for details.") catch {};
+        return;
+    };
+    self.settings_state.watch_fingerprint = store.fingerprint(io) catch null;
+    self.settings_state.watch_error = null;
+    self.settings_state.watch_read_failed = false;
+    self.settings_state.watch_deferred = false;
+    if (std.mem.eql(u8, self.notice, invalid_file_notice) or std.mem.eql(u8, self.notice, deferred_file_notice)) self.setNotice("") catch {};
+}
+
+fn watchWidget(self: *Model) vxfw.Widget {
+    return .{ .userdata = self, .eventHandler = onWatchTick, .drawFn = drawWatch };
+}
+
+fn drawWatch(ptr: *anyopaque, _: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
+    const self: *Model = @ptrCast(@alignCast(ptr));
+    return .{ .size = .{ .width = 0, .height = 0 }, .widget = watchWidget(self), .buffer = &.{}, .children = &.{} };
+}
+
+pub fn startWatching(self: *Model, ctx: *vxfw.EventContext) !void {
+    if (self.settings_state.settings_store == null or self.settings_state.watch_pending) return;
+    try ctx.tick(1000, watchWidget(self));
+    self.settings_state.watch_pending = true;
+}
+
+fn onWatchTick(ptr: *anyopaque, ctx: *vxfw.EventContext, event: vxfw.Event) anyerror!void {
+    if (event != .tick) return;
+    const self: *Model = @ptrCast(@alignCast(ptr));
+    self.settings_state.watch_pending = false;
+    try pollSettingsFile(self, ctx);
+    try startWatching(self, ctx);
+}
+
+fn fileWarning(self: *Model, ctx: *vxfw.EventContext, err: anyerror) !void {
+    self.settings_state.settings_failure = err;
+    self.settings_state.watch_error = err;
+    try self.setNotice(invalid_file_notice);
+    ctx.redraw = true;
+}
+
+/// External file edits never interrupt a transaction or replace a pending draft.
+/// Unchanged files cause no redraw, backend query, or repeat warning.
+fn pollSettingsFile(self: *Model, ctx: *vxfw.EventContext) !void {
+    const store = self.settings_state.settings_store orelse return;
+    const fingerprint = store.fingerprint(ctx.io) catch |err| {
+        if (self.settings_state.watch_error == null or self.settings_state.watch_error.? != err) try fileWarning(self, ctx, err);
+        self.settings_state.watch_read_failed = true;
+        return;
+    };
+    if (self.settings_state.watch_fingerprint == fingerprint and !self.settings_state.watch_read_failed) {
+        if (self.settings_state.watch_deferred) {
+            self.settings_state.watch_deferred = false;
+            if (std.mem.eql(u8, self.notice, deferred_file_notice)) {
+                try self.setNotice("");
+                ctx.redraw = true;
+            }
+        }
+        return;
+    }
+    self.settings_state.watch_read_failed = false;
+    if (self.operation_state.install_job != null or hasChanges(self)) {
+        if (!self.settings_state.watch_deferred) {
+            self.settings_state.watch_deferred = true;
+            try self.setNotice(deferred_file_notice);
+            ctx.redraw = true;
+        }
+        return;
+    }
+    self.settings_state.watch_fingerprint = fingerprint;
+    var saved = store.load(ctx.io) catch |err| {
+        try fileWarning(self, ctx, err);
+        return;
+    };
+    // AurUrl belongs to the CLI, not this frontend file. Keep the known source
+    // and avoid invoking the CLI on the periodic watcher path.
+    saved.atoll_aur_enabled = self.settings_state.settings.atoll_aur_enabled;
+    const active = self.active;
+    applySettings(self, saved);
+    self.settings_state.watch_error = null;
+    self.settings_state.watch_deferred = false;
+    if (std.mem.eql(u8, self.notice, invalid_file_notice) or std.mem.eql(u8, self.notice, deferred_file_notice)) try self.setNotice("");
+    syncSettingsFile(self, ctx.io);
+    if (saved.flatpak_enabled and !self.flatpak_state.flatpak_checked) try flatpak_model.startFlatpakProbe(self, ctx);
+    if (active != self.active) try self.focusActiveTab(ctx);
+    ctx.redraw = true;
 }
 
 pub fn settingsView(self: *Model) settings_view.View {
@@ -601,7 +707,7 @@ const KeybindingTest = struct {
     }
 };
 
-test "startup applies overrides without rewriting settings or inheriting live bindings" {
+test "startup applies overrides and fills all default bindings without inheriting live bindings" {
     const json = "{\"Keybindings\":{\"help\":\"F2\",\"install\":\"F3\"}}";
     const fixture = try KeybindingTest.init(json);
     defer fixture.deinit();
@@ -612,7 +718,9 @@ test "startup applies overrides without rewriting settings or inheriting live bi
     try fixture.expectLabel(.install, "F3");
     try fixture.expectLabel(.remove, "R");
     const contents = try fixture.temporary.dir.readFileAlloc(std.testing.io, "shelly/tui-settings.json", fixture.arena.allocator(), .limited(4096));
-    try std.testing.expectEqualStrings(json, contents);
+    const document = try std.json.parseFromSlice(std.json.Value, fixture.arena.allocator(), contents, .{});
+    try std.testing.expectEqual(@import("../services/keybindings.zig").editable.len, document.value.object.get("Keybindings").?.object.count());
+    try std.testing.expectEqualStrings("F2", document.value.object.get("Keybindings").?.object.get("help").?.string);
 }
 
 test "reload applies changed overrides and removing overrides restores defaults" {
@@ -783,4 +891,121 @@ test "loaded bindings route actions on all pages without executing operations" {
     try model.captureEvent(ctx, .{ .key_press = .{ .codepoint = vaxis.Key.f6 } });
     try std.testing.expect(model.settings_state.settings_draft.aur_enabled);
     try std.testing.expect(model.operation_state.install_job == null);
+}
+
+test "watcher applies external replacements without querying the CLI or resetting focus" {
+    const fixture = try KeybindingTest.init("{}");
+    defer fixture.deinit();
+    fixture.load();
+    const model = fixture.model.?;
+    model.packages_state.package_list_active = true;
+    model.settings_state.cli_binary = "/must-not-run-shelly";
+    try fixture.write("{\"Keybindings\":{\"help\":\"F3\"}}");
+    try pollSettingsFile(model, &fixture.events);
+    try fixture.expectLabel(.help, "F3");
+    try std.testing.expect(model.settings_state.settings_failure == null);
+    try std.testing.expect(model.packages_state.package_list_active);
+    try std.testing.expect(fixture.events.redraw);
+    fixture.events.redraw = false;
+    try pollSettingsFile(model, &fixture.events);
+    try std.testing.expect(!fixture.events.redraw);
+    try fixture.write("{}");
+    try pollSettingsFile(model, &fixture.events);
+    try fixture.expectLabel(.help, "F1");
+}
+
+test "watcher rejects bad edits once preserves the file and recovers after correction" {
+    const fixture = try KeybindingTest.init("{\"Keybindings\":{\"help\":\"F2\"}}");
+    defer fixture.deinit();
+    fixture.load();
+    const model = fixture.model.?;
+    const previous = commands.bindings;
+    for ([_][]const u8{
+        "{\"Keybindings\":", // Saving an incomplete editor buffer.
+        "{\"Keybindings\":{\"install\":\"r\"}}", // Conflicting action.
+        "{\"Keybindings\":{\"help\":42}}", // Wrong value type.
+    }) |json| {
+        try fixture.write(json);
+        try pollSettingsFile(model, &fixture.events);
+        try std.testing.expect(model.settings_state.settings_failure != null);
+        try std.testing.expectEqualDeep(previous, commands.bindings);
+        try std.testing.expectEqualStrings(invalid_file_notice, model.notice);
+        const untouched = try fixture.temporary.dir.readFileAlloc(std.testing.io, "shelly/tui-settings.json", fixture.arena.allocator(), .limited(4096));
+        try std.testing.expectEqualStrings(json, untouched);
+        fixture.events.redraw = false;
+        try pollSettingsFile(model, &fixture.events);
+        try std.testing.expect(!fixture.events.redraw);
+    }
+    try fixture.write("{\"Keybindings\":{\"help\":\"F3\"}}");
+    try pollSettingsFile(model, &fixture.events);
+    try fixture.expectLabel(.help, "F3");
+    try std.testing.expect(model.settings_state.settings_failure == null);
+    try std.testing.expectEqualStrings("", model.notice);
+}
+
+test "watcher defers external changes during operations and unsaved settings edits" {
+    const fixture = try KeybindingTest.init("{}");
+    defer fixture.deinit();
+    fixture.load();
+    const model = fixture.model.?;
+    var job: @import("../services/shelly_operation.zig").Operation = .{ .arena = .init(std.testing.allocator), .request = undefined };
+    defer job.arena.deinit();
+    model.operation_state.install_job = &job;
+    defer model.operation_state.install_job = null;
+    try fixture.write("{\"Keybindings\":{\"help\":\"F2\"}}");
+    try pollSettingsFile(model, &fixture.events);
+    try fixture.expectLabel(.help, "F1");
+    try std.testing.expect(model.settings_state.watch_deferred);
+    model.operation_state.install_job = null;
+    model.settings_state.settings_draft.aur_enabled = true;
+    try pollSettingsFile(model, &fixture.events);
+    try std.testing.expect(model.settings_state.settings_draft.aur_enabled);
+    try fixture.expectLabel(.help, "F1");
+    model.settings_state.settings_draft = model.settings_state.settings;
+    try pollSettingsFile(model, &fixture.events);
+    try fixture.expectLabel(.help, "F2");
+    try std.testing.expect(!model.settings_state.watch_deferred);
+}
+
+test "settings watching keeps a single independent timer and unchanged ticks do not redraw" {
+    const fixture = try KeybindingTest.init("{}");
+    defer fixture.deinit();
+    fixture.load();
+    const model = fixture.model.?;
+    for (0..100) |_| try startWatching(model, &fixture.events);
+    try std.testing.expectEqual(@as(usize, 1), fixture.events.cmds.items.len);
+    try std.testing.expect(fixture.events.cmds.items[0].tick.widget.eql(watchWidget(model)));
+    try std.testing.expect(!fixture.events.cmds.items[0].tick.widget.eql(model.widget()));
+    fixture.events.cmds.clearRetainingCapacity();
+    fixture.events.redraw = false;
+    try onWatchTick(model, &fixture.events, .tick);
+    try std.testing.expectEqual(@as(usize, 1), fixture.events.cmds.items.len);
+    try std.testing.expect(model.settings_state.watch_pending);
+    try std.testing.expect(!fixture.events.redraw);
+}
+
+test "watcher recovers when the original file is restored or a deferred edit is reverted" {
+    const fixture = try KeybindingTest.init("{\"Keybindings\":{\"help\":\"F2\"}}");
+    defer fixture.deinit();
+    fixture.load();
+    const model = fixture.model.?;
+    const original = try fixture.temporary.dir.readFileAlloc(std.testing.io, "shelly/tui-settings.json", fixture.arena.allocator(), .limited(4096));
+    try fixture.temporary.dir.deleteFile(std.testing.io, "shelly/tui-settings.json");
+    try pollSettingsFile(model, &fixture.events);
+    try std.testing.expectEqual(error.FileNotFound, model.settings_state.settings_failure.?);
+    try fixture.expectLabel(.help, "F2");
+    try fixture.write(original);
+    try pollSettingsFile(model, &fixture.events);
+    try std.testing.expect(model.settings_state.settings_failure == null);
+    try std.testing.expectEqualStrings("", model.notice);
+    model.settings_state.settings_draft.aur_enabled = true;
+    try fixture.write("{\"Keybindings\":{\"help\":\"F3\"}}");
+    try pollSettingsFile(model, &fixture.events);
+    try std.testing.expect(model.settings_state.watch_deferred);
+    try fixture.write(original);
+    try pollSettingsFile(model, &fixture.events);
+    try std.testing.expect(!model.settings_state.watch_deferred);
+    try std.testing.expect(model.settings_state.settings_draft.aur_enabled);
+    try fixture.expectLabel(.help, "F2");
+    try std.testing.expectEqualStrings("", model.notice);
 }

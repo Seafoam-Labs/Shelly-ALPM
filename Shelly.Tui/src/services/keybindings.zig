@@ -215,7 +215,7 @@ pub fn encode(allocator: Allocator, config: Config) !std.json.Value {
     var object: std.json.ObjectMap = .empty;
     for (editable) |id| {
         const key = config.get(id);
-        if (!same(key, defaultKey(id))) try object.put(allocator, @tagName(id), .{ .string = try format(allocator, key) });
+        try object.put(allocator, @tagName(id), .{ .string = try format(allocator, key) });
     }
     return .{ .object = object };
 }
@@ -267,7 +267,7 @@ test "validation rejects conflicts and protects fixed keys without rejecting sha
     try std.testing.expect((try changed.withBinding(.install, defaultKey(.install))).eql(config));
 }
 
-test "JSON decoding validates the complete configuration and stores overrides only" {
+test "JSON decoding validates complete configurations and writes every editable binding" {
     var arena: std.heap.ArenaAllocator = .init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -276,10 +276,10 @@ test "JSON decoding validates the complete configuration and stores overrides on
     , .{});
     const config = try decode(document.value);
     const encoded = try encode(allocator, config);
-    try std.testing.expectEqual(@as(usize, 2), encoded.object.count());
-    try std.testing.expect(encoded.object.get("remove") == null);
+    try std.testing.expectEqual(editable.len, encoded.object.count());
+    try std.testing.expectEqualStrings("r", encoded.object.get("remove").?.string);
     try std.testing.expect(config.eql(try decode(encoded)));
-    try std.testing.expectEqual(@as(usize, 0), (try encode(allocator, .{})).object.count());
+    try std.testing.expectEqual(editable.len, (try encode(allocator, .{})).object.count());
     const invalid = [_]struct { json: []const u8, err: anyerror }{
         .{ .json = "[]", .err = error.InvalidKeybindings },
         .{ .json = "{\"help\":false}", .err = error.InvalidKeybindings },

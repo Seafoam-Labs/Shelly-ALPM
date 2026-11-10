@@ -239,6 +239,7 @@ pub const Model = struct {
         const self: *Model = @ptrCast(@alignCast(ptr));
         switch (event) {
             .init => {
+                try settings_model.startWatching(self, ctx);
                 self.flatpak_state.screenshots_supported = runtime.supportsImages();
                 try packages_model.startLoad(self, ctx);
                 if (self.settings_state.settings.flatpak_enabled) try flatpak_model.startFlatpakProbe(self, ctx);
