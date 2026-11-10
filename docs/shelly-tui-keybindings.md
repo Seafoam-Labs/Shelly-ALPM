@@ -6,7 +6,22 @@ The configuration service stores shortcut overrides in `Keybindings` inside
 External edits are detected within about one second, including atomic editor
 saves. Reload in Settings also applies changes immediately. Invalid edits leave
 the last working settings active and show a warning; fixing the file applies the
-corrected values. An interactive editor is not yet available.
+corrected values.
+
+## Editing in the TUI
+
+Open Settings, select **Keybindings**, and press Enter or Space. Use Up/Down to
+select a command, then Enter or Space to capture its replacement. Escape cancels
+capture. Quit, Help, and tab shortcuts are intercepted during capture; unsupported,
+reserved, or conflicting keys show feedback and leave the binding unchanged.
+
+Delete restores the selected command's default. **Restore all defaults** resets
+all configurable bindings in the draft. **Save changes** (or Ctrl+S) applies and
+persists edits; **Reload** discards pending changes. **Back to preferences** keeps
+the draft. The list scrolls to keep the selected action visible on small terminals.
+Fixed navigation, confirmation, review decisions, and sudo input are not editable.
+
+## Editing the file
 
 ```json
 {

@@ -4,7 +4,8 @@ pub const header_styles = [_]HeaderIcons{ .none, .nerd_font, .ascii };
 pub const header_style_start: usize = 2;
 pub const screenshots_index: usize = header_style_start + header_styles.len;
 pub const atoll_index: usize = screenshots_index + 1;
-pub const save_index: usize = atoll_index + 1;
+pub const keybindings_index: usize = atoll_index + 1;
+pub const save_index: usize = keybindings_index + 1;
 
 pub fn aurUrl(atoll: bool) []const u8 {
     return if (atoll) "https://atoll.seafoam-labs.org" else "https://aur.archlinux.org";

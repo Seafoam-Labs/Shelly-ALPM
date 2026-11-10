@@ -10,6 +10,8 @@ const ShellyCli = @import("../services/shelly_cli.zig").ShellyCli;
 const preferences = @import("settings.zig");
 const settings_service = @import("../services/settings.zig");
 const settings_view = @import("../views/settings_view.zig");
+const keybindings = @import("../services/keybindings.zig");
+const keybindings_view = @import("../views/keybindings_view.zig");
 const footer_view = @import("../views/footer_view.zig");
 const vaxis = @import("vaxis");
 const vxfw = vaxis.vxfw;
@@ -37,6 +39,10 @@ pub const State = struct {
     settings_store: ?settings_service.Store = null,
     settings_failure: ?anyerror = null,
     settings_selected: usize = 0,
+    keybindings_open: bool = false,
+    keybinding_selected: usize = 0,
+    keybinding_capture: bool = false,
+    keybinding_error: ?anyerror = null,
     watch_pending: bool = false,
     watch_fingerprint: ?u64 = null,
     watch_error: ?anyerror = null,
@@ -138,6 +144,8 @@ pub fn applySettings(self: *Model, saved: Settings) void {
         self.flatpak_state.flatpak_probe_error = null;
     }
     if (!saved.show_flatpak_screenshots and self.settings_state.settings.show_flatpak_screenshots) flatpak_model.closeScreenshots(self);
+    self.settings_state.keybinding_capture = false;
+    self.settings_state.keybinding_error = null;
     self.settings_state.settings = saved;
     self.settings_state.settings_draft = saved;
     self.settings_state.settings_failure = null;
@@ -165,6 +173,11 @@ pub fn hasChanges(self: *const Model) bool {
 pub fn toggleSetting(self: *Model, ctx: *vxfw.EventContext) !void {
     if (self.operation_state.install_job != null) return;
     if (self.settings_state.settings_selected == save_index) return saveSettings(self, ctx);
+    if (self.settings_state.settings_selected == preferences.keybindings_index) {
+        self.settings_state.keybindings_open = true;
+        self.settings_state.keybinding_error = null;
+        return;
+    }
     const draft = &self.settings_state.settings_draft;
     switch (self.settings_state.settings_selected) {
         0 => draft.aur_enabled = !draft.aur_enabled,
@@ -293,7 +306,7 @@ fn pollSettingsFile(self: *Model, ctx: *vxfw.EventContext) !void {
         return;
     }
     self.settings_state.watch_read_failed = false;
-    if (self.operation_state.install_job != null or hasChanges(self)) {
+    if (self.operation_state.install_job != null or hasChanges(self) or self.settings_state.keybinding_capture) {
         if (!self.settings_state.watch_deferred) {
             self.settings_state.watch_deferred = true;
             try self.setNotice(deferred_file_notice);
@@ -321,11 +334,88 @@ fn pollSettingsFile(self: *Model, ctx: *vxfw.EventContext) !void {
 }
 
 pub fn settingsView(self: *Model) settings_view.View {
-    return .{ .settings = self.settings_state.settings_draft, .dirty = hasChanges(self), .selected = self.settings_state.settings_selected, .path = if (self.settings_state.settings_store) |store| store.path else "Settings could not be initialized", .failure = self.settings_state.settings_failure, .flatpak_checked = self.flatpak_state.flatpak_checked, .flatpak_available = self.flatpak_state.flatpak_available, .checking = self.flatpak_state.flatpak_probe_job != null, .busy = self.operation_state.install_job != null };
+    return .{ .keybindings_open = self.settings_state.keybindings_open, .binding_selected = self.settings_state.keybinding_selected, .capturing = self.settings_state.keybinding_capture, .binding_error = self.settings_state.keybinding_error, .settings = self.settings_state.settings_draft, .dirty = hasChanges(self), .selected = self.settings_state.settings_selected, .path = if (self.settings_state.settings_store) |store| store.path else "Settings could not be initialized", .failure = self.settings_state.settings_failure, .flatpak_checked = self.flatpak_state.flatpak_checked, .flatpak_available = self.flatpak_state.flatpak_available, .checking = self.flatpak_state.flatpak_probe_job != null, .busy = self.operation_state.install_job != null };
+}
+
+/// Root capture must run this before Quit, Help, or tab navigation.
+pub fn captureBinding(self: *Model, ctx: *vxfw.EventContext, input: vaxis.Key) !bool {
+    const state = &self.settings_state;
+    if (self.active != .settings or self.help_open or !state.keybindings_open or !state.keybinding_capture) return false;
+    if (self.operation_state.install_job != null) {
+        state.keybinding_capture = false;
+        return false;
+    }
+    if (commands.matches(input, .cancel_capture)) {
+        state.keybinding_capture = false;
+        state.keybinding_error = null;
+    } else {
+        var key: vaxis.Key = .{ .codepoint = input.codepoint, .mods = input.mods };
+        key.mods.caps_lock = false;
+        key.mods.num_lock = false;
+        if (input.shifted_codepoint) |shifted| {
+            if (key.mods.shift and shifted >= 33 and shifted <= 126 and !std.ascii.isAlphanumeric(@intCast(shifted))) {
+                key.codepoint = shifted;
+                key.mods.shift = false;
+            }
+        }
+        if (key.codepoint < 128) key.codepoint = std.ascii.toLower(@intCast(key.codepoint));
+        const id = keybindings.editable[state.keybinding_selected];
+        const candidate = state.settings_draft.keybindings.withBinding(id, key) catch |err| {
+            state.keybinding_error = err;
+            ctx.consumeAndRedraw();
+            return true;
+        };
+        state.settings_draft.keybindings = candidate;
+        state.keybinding_error = null;
+        state.keybinding_capture = false;
+    }
+    ctx.consumeAndRedraw();
+    return true;
+}
+
+fn handleBindingEditor(self: *Model, ctx: *vxfw.EventContext, key: vaxis.Key) !bool {
+    const state = &self.settings_state;
+    if (commands.matches(key, .close) or commands.matches(key, .cancel_capture)) {
+        state.keybindings_open = false;
+        state.keybinding_error = null;
+    } else if (commands.matches(key, .reset_binding)) {
+        if (self.operation_state.install_job == null and state.keybinding_selected < keybindings.editable.len) {
+            const id = keybindings.editable[state.keybinding_selected];
+            const defaults: keybindings.Config = .{};
+            state.settings_draft.keybindings = state.settings_draft.keybindings.withBinding(id, defaults.get(id)) catch |err| {
+                state.keybinding_error = err;
+                ctx.consumeAndRedraw();
+                return true;
+            };
+            state.keybinding_error = null;
+        }
+    } else if (commands.settings(key)) |action| {
+        switch (action) {
+            .previous => state.keybinding_selected = (state.keybinding_selected + keybindings_view.row_count - 1) % keybindings_view.row_count,
+            .next => state.keybinding_selected = (state.keybinding_selected + 1) % keybindings_view.row_count,
+            .save => try saveSettings(self, ctx),
+            .reload => try reloadSettings(self, ctx),
+            .toggle => if (self.operation_state.install_job == null) {
+                state.keybinding_error = null;
+                if (state.keybinding_selected < keybindings.editable.len) {
+                    state.keybinding_capture = true;
+                } else switch (state.keybinding_selected) {
+                    keybindings_view.restore_index => state.settings_draft.keybindings = .{},
+                    keybindings_view.save_index => try saveSettings(self, ctx),
+                    keybindings_view.back_index => state.keybindings_open = false,
+                    else => unreachable,
+                }
+            },
+        }
+        if (action == .previous or action == .next) state.keybinding_error = null;
+    } else return false;
+    ctx.consumeAndRedraw();
+    return true;
 }
 
 /// Returns whether page input was consumed. Globals remain with the coordinator.
 pub fn handleKey(self: *Model, ctx: *vxfw.EventContext, key: vaxis.Key) anyerror!bool {
+    if (self.settings_state.keybindings_open) return handleBindingEditor(self, ctx, key);
     if (commands.settings(key)) |action| {
         switch (action) {
             .previous => self.settings_state.settings_selected = (self.settings_state.settings_selected + control_count - 1) % control_count,
@@ -1008,4 +1098,148 @@ test "watcher recovers when the original file is restored or a deferred edit is 
     try std.testing.expect(model.settings_state.settings_draft.aur_enabled);
     try fixture.expectLabel(.help, "F2");
     try std.testing.expectEqualStrings("", model.notice);
+}
+
+fn openTestBindingEditor(fixture: *KeybindingTest) !void {
+    const model = fixture.model.?;
+    model.active = .settings;
+    model.settings_state.settings_selected = preferences.keybindings_index;
+    try model.captureEvent(&fixture.events, .{ .key_press = commands.bindings.confirm });
+    try std.testing.expect(model.settings_state.keybindings_open);
+}
+
+test "key capture precedes Quit Help and tab shortcuts and Escape cancels" {
+    const fixture = try KeybindingTest.init("{}");
+    defer fixture.deinit();
+    fixture.load();
+    try openTestBindingEditor(fixture);
+    const model = fixture.model.?;
+    for ([_]struct { index: usize, key: vaxis.Key }{
+        .{ .index = 0, .key = commands.bindings.quit },
+        .{ .index = 1, .key = commands.bindings.help },
+        .{ .index = 2, .key = commands.bindings.next_tab },
+    }) |case| {
+        model.settings_state.keybinding_selected = case.index;
+        try model.captureEvent(&fixture.events, .{ .key_press = commands.bindings.confirm });
+        try std.testing.expect(model.settings_state.keybinding_capture);
+        try model.captureEvent(&fixture.events, .{ .key_press = case.key });
+        try std.testing.expect(!fixture.events.quit);
+        try std.testing.expect(!model.help_open);
+        try std.testing.expectEqual(Tab.settings, model.active);
+        try std.testing.expect(!model.settings_state.keybinding_capture);
+        try std.testing.expect(!hasChanges(model));
+    }
+    try model.captureEvent(&fixture.events, .{ .key_press = commands.bindings.confirm });
+    // Mouse input cannot switch pages or activate another control during capture.
+    fixture.events.consume_event = false;
+    try model.captureEvent(&fixture.events, .{ .mouse = .{ .button = .left, .type = .press, .col = 0, .row = 0, .mods = .{} } });
+    try std.testing.expect(fixture.events.consume_event);
+    try model.captureEvent(&fixture.events, .{ .key_press = commands.bindings.cancel_capture });
+    try std.testing.expect(!model.settings_state.keybinding_capture);
+    try std.testing.expect(model.settings_state.keybindings_open);
+    try std.testing.expect(!hasChanges(model));
+}
+
+test "binding edits stay drafted until Save and Reload discards pending edits" {
+    const fixture = try KeybindingTest.init("{}");
+    defer fixture.deinit();
+    fixture.load();
+    try openTestBindingEditor(fixture);
+    const model = fixture.model.?;
+    model.settings_state.keybinding_selected = 1; // Help.
+    try model.captureEvent(&fixture.events, .{ .key_press = commands.bindings.confirm });
+    try model.captureEvent(&fixture.events, .{ .key_press = .{ .codepoint = vaxis.Key.f2, .text = "transient", .mods = .{ .caps_lock = true, .num_lock = true } } });
+    try std.testing.expect(hasChanges(model));
+    try fixture.expectLabel(.help, "F1");
+    const key = model.settings_state.settings_draft.keybindings.get(.help);
+    try std.testing.expectEqual(vaxis.Key.f2, key.codepoint);
+    try std.testing.expect(key.text == null);
+    try std.testing.expect(!key.mods.caps_lock and !key.mods.num_lock);
+    try std.testing.expectEqual(vaxis.Key.f1, (try model.settings_state.settings_store.?.load(std.testing.io)).keybindings.get(.help).codepoint);
+    try model.captureEvent(&fixture.events, .{ .key_press = commands.bindings.save_settings });
+    try fixture.expectLabel(.help, "F2");
+    try std.testing.expect(!hasChanges(model));
+    try std.testing.expectEqual(vaxis.Key.f2, (try model.settings_state.settings_store.?.load(std.testing.io)).keybindings.get(.help).codepoint);
+    try model.captureEvent(&fixture.events, .{ .key_press = commands.bindings.confirm });
+    try model.captureEvent(&fixture.events, .{ .key_press = .{ .codepoint = vaxis.Key.f3 } });
+    try std.testing.expectEqual(vaxis.Key.f3, model.settings_state.settings_draft.keybindings.get(.help).codepoint);
+    try model.captureEvent(&fixture.events, .{ .key_press = commands.bindings.refresh });
+    try std.testing.expect(!hasChanges(model));
+    try std.testing.expectEqual(vaxis.Key.f2, model.settings_state.settings_draft.keybindings.get(.help).codepoint);
+}
+
+test "invalid captured keys show feedback without changing drafts or running actions" {
+    const fixture = try KeybindingTest.init("{}");
+    defer fixture.deinit();
+    fixture.load();
+    try openTestBindingEditor(fixture);
+    const model = fixture.model.?;
+    model.settings_state.keybinding_selected = 1;
+    try model.captureEvent(&fixture.events, .{ .key_press = commands.bindings.confirm });
+    for ([_]vaxis.Key{
+        commands.bindings.quit, // Conflicts with a global action.
+        commands.bindings.confirm, // Fixed confirmation key.
+        .{ .codepoint = 'h' }, // Would intercept text and navigation.
+        .{ .codepoint = 'a', .mods = .{ .shift = true } }, // Unsupported encoding.
+    }) |key| {
+        try model.captureEvent(&fixture.events, .{ .key_press = key });
+        try std.testing.expect(model.settings_state.keybinding_error != null);
+        try std.testing.expect(model.settings_state.keybinding_capture);
+        try std.testing.expect(!fixture.events.quit and !model.help_open);
+        try std.testing.expect(!hasChanges(model));
+    }
+    try model.captureEvent(&fixture.events, .{ .key_press = commands.bindings.cancel_capture });
+    try std.testing.expect(model.settings_state.keybinding_error == null);
+    try std.testing.expect(!model.settings_state.keybinding_capture);
+}
+
+test "restoring one or all bindings is reversible and requires Save" {
+    const fixture = try KeybindingTest.init("{\"Keybindings\":{\"help\":\"F2\"}}");
+    defer fixture.deinit();
+    fixture.load();
+    try openTestBindingEditor(fixture);
+    const model = fixture.model.?;
+    model.settings_state.keybinding_selected = 1;
+    try model.captureEvent(&fixture.events, .{ .key_press = commands.bindings.reset_binding });
+    try std.testing.expectEqual(vaxis.Key.f1, model.settings_state.settings_draft.keybindings.get(.help).codepoint);
+    try fixture.expectLabel(.help, "F2");
+    try model.captureEvent(&fixture.events, .{ .key_press = commands.bindings.refresh });
+    try std.testing.expect(!hasChanges(model));
+    model.settings_state.keybinding_selected = keybindings_view.restore_index;
+    try model.captureEvent(&fixture.events, .{ .key_press = commands.bindings.confirm });
+    try std.testing.expect(model.settings_state.settings_draft.keybindings.eql(.{}));
+    try fixture.expectLabel(.help, "F2");
+    try model.captureEvent(&fixture.events, .{ .key_press = commands.bindings.close });
+    try std.testing.expect(!model.settings_state.keybindings_open);
+    try std.testing.expect(hasChanges(model));
+    try openTestBindingEditor(fixture);
+    model.settings_state.keybinding_selected = keybindings_view.save_index;
+    try model.captureEvent(&fixture.events, .{ .key_press = commands.bindings.confirm });
+    try fixture.expectLabel(.help, "F1");
+    try std.testing.expect(!hasChanges(model));
+}
+
+test "binding editor locks during operations and file watching waits for key capture" {
+    const fixture = try KeybindingTest.init("{}");
+    defer fixture.deinit();
+    fixture.load();
+    try openTestBindingEditor(fixture);
+    const model = fixture.model.?;
+    model.settings_state.keybinding_selected = 1;
+    var job: @import("../services/shelly_operation.zig").Operation = .{ .arena = .init(std.testing.allocator), .request = undefined };
+    defer job.arena.deinit();
+    model.operation_state.install_job = &job;
+    defer model.operation_state.install_job = null;
+    try model.captureEvent(&fixture.events, .{ .key_press = commands.bindings.confirm });
+    try std.testing.expect(!model.settings_state.keybinding_capture);
+    try std.testing.expect(!hasChanges(model));
+    model.operation_state.install_job = null;
+    try model.captureEvent(&fixture.events, .{ .key_press = commands.bindings.confirm });
+    try fixture.write("{\"Keybindings\":{\"help\":\"F3\"}}");
+    try pollSettingsFile(model, &fixture.events);
+    try fixture.expectLabel(.help, "F1");
+    try std.testing.expect(model.settings_state.keybinding_capture);
+    try model.captureEvent(&fixture.events, .{ .key_press = commands.bindings.cancel_capture });
+    try pollSettingsFile(model, &fixture.events);
+    try fixture.expectLabel(.help, "F3");
 }

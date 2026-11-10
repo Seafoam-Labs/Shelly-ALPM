@@ -127,6 +127,7 @@ pub const Model = struct {
     pub fn captureEvent(self: *Model, ctx: *vxfw.EventContext, event: vxfw.Event) anyerror!void {
         switch (event) {
             .key_press => |key| {
+                if (try settings_model.captureBinding(self, ctx, key)) return;
                 const command = commands.global(key, self.visibleTabs().len);
                 if (command) |action| {
                     if (action == .quit) {
@@ -222,6 +223,7 @@ pub const Model = struct {
                 }
             },
             .mouse => {
+                if (self.settings_state.keybinding_capture) return ctx.consumeEvent();
                 if (self.help_open) {
                     try self.help_panel.scroll.handleEvent(ctx, event);
                     return ctx.consumeAndRedraw();

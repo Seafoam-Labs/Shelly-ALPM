@@ -1,3 +1,4 @@
+const keybindings_view = @import("keybindings_view.zig");
 const styles = @import("styles.zig");
 const std = @import("std");
 const vaxis = @import("vaxis");
@@ -10,6 +11,10 @@ const Allocator = std.mem.Allocator;
 
 pub const View = struct {
     settings: Settings,
+    keybindings_open: bool = false,
+    binding_selected: usize = 0,
+    capturing: bool = false,
+    binding_error: ?anyerror = null,
     dirty: bool = false,
     selected: usize,
     path: []const u8,
@@ -42,6 +47,7 @@ pub const View = struct {
 
     fn drawBody(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
         const self: *const View = @ptrCast(@alignCast(ptr));
+        if (self.keybindings_open) return keybindings_view.draw(.{ .config = self.settings.keybindings, .selected = self.binding_selected, .capturing = self.capturing, .failure = self.binding_error orelse self.failure, .busy = self.busy }, ctx);
         const size = ctx.max.size();
         const widget: vxfw.Widget = .{ .userdata = ptr, .drawFn = drawBody };
         if (size.width == 0 or size.height == 0) return .{ .size = size, .widget = widget, .buffer = &.{}, .children = &.{} };
@@ -52,7 +58,7 @@ pub const View = struct {
         const content_ctx = ctx.withConstraints(.{}, .{ .width = width, .height = form_height });
         var children: std.ArrayList(vxfw.SubSurface) = .empty;
         var row: u16 = 0;
-        const detailed = form_height >= 17;
+        const detailed = form_height >= 21;
         if (detailed) {
             row += 1;
             try appendText(content_ctx, &children, &row, col, "Preferences", styles.emphasis);
@@ -62,6 +68,10 @@ pub const View = struct {
             // Retain the active control in compact layouts, including Save.
             if (form_height < preferences.save_index + 1 and index != self.selected) continue;
             if (index == preferences.header_style_start and form_height >= preferences.save_index + 2) try appendText(content_ctx, &children, &row, col, "Header icons", styles.secondary);
+            if (index == preferences.keybindings_index) {
+                try appendText(content_ctx, &children, &row, col, "[ Keybindings ]", .{ .bold = true, .reverse = self.selected == index and !self.busy });
+                continue;
+            }
             const is_style = index >= preferences.header_style_start and index < preferences.screenshots_index;
             const enabled = switch (index) {
                 0 => self.settings.aur_enabled,
