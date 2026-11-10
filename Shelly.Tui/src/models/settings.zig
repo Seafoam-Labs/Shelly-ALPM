@@ -1,3 +1,5 @@
+const keybindings = @import("../services/keybindings.zig");
+
 pub const header_styles = [_]HeaderIcons{ .none, .nerd_font, .ascii };
 pub const header_style_start: usize = 2;
 pub const screenshots_index: usize = header_style_start + header_styles.len;
@@ -29,6 +31,7 @@ pub fn isAtollUrl(url: []const u8) bool {
 
 /// Frontend preferences and the current shared CLI AUR source.
 pub const Settings = struct {
+    keybindings: keybindings.Config = .{},
     aur_enabled: bool = false,
     atoll_aur_enabled: bool = false,
     flatpak_enabled: bool = false,
@@ -36,7 +39,7 @@ pub const Settings = struct {
     show_flatpak_screenshots: bool = true,
 
     pub fn eql(self: Settings, other: Settings) bool {
-        return self.atoll_aur_enabled == other.atoll_aur_enabled and self.aur_enabled == other.aur_enabled and self.flatpak_enabled == other.flatpak_enabled and self.header_icons == other.header_icons and self.show_flatpak_screenshots == other.show_flatpak_screenshots;
+        return self.keybindings.eql(other.keybindings) and self.atoll_aur_enabled == other.atoll_aur_enabled and self.aur_enabled == other.aur_enabled and self.flatpak_enabled == other.flatpak_enabled and self.header_icons == other.header_icons and self.show_flatpak_screenshots == other.show_flatpak_screenshots;
     }
 };
 
