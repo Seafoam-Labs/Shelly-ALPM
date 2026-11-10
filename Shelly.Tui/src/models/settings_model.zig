@@ -10,11 +10,13 @@ const ShellyCli = @import("../services/shelly_cli.zig").ShellyCli;
 const preferences = @import("settings.zig");
 const settings_service = @import("../services/settings.zig");
 const settings_view = @import("../views/settings_view.zig");
+const footer_view = @import("../views/footer_view.zig");
 const vaxis = @import("vaxis");
 const vxfw = vaxis.vxfw;
 const runtime = @import("../runtime.zig");
 
 const flatpak = @import("flatpak.zig");
+const Package = @import("packages.zig").Package;
 const CheckUpdates = @import("sync.zig").CheckUpdates;
 const ParsedCheckUpdates = @import("sync.zig").ParsedCheckUpdates;
 
@@ -131,6 +133,7 @@ pub fn applySettings(self: *Model, saved: Settings) void {
     self.settings_state.settings = saved;
     self.settings_state.settings_draft = saved;
     self.settings_state.settings_failure = null;
+    commands.apply(saved.keybindings.resolve());
     if (sources_changed) {
         self.updates_state.updates_checked = false;
         if (self.updates_state.updates_parsed) |*parsed| {
@@ -200,6 +203,9 @@ pub fn reloadSettings(self: *Model, ctx: *vxfw.EventContext) !void {
         return;
     };
     saved.atoll_aur_enabled = loadSharedSource(self, runtime.io) catch |err| {
+        commands.apply(saved.keybindings.resolve());
+        self.settings_state.settings.keybindings = saved.keybindings;
+        self.settings_state.settings_draft.keybindings = saved.keybindings;
         self.settings_state.settings_failure = err;
         return;
     };
@@ -534,4 +540,247 @@ test "Atoll setting reads and updates the shared CLI source instead of a fronten
     try std.testing.expect(model.settings_state.settings.atoll_aur_enabled);
     try std.testing.expect(!model.settings_state.settings_draft.atoll_aur_enabled);
     try std.testing.expect(hasChanges(model));
+}
+
+const KeybindingTest = struct {
+    temporary: std.testing.TmpDir,
+    arena: std.heap.ArenaAllocator,
+    env: std.process.Environ.Map,
+    model: ?*Model = null,
+    original_bindings: commands.Bindings,
+    events: vxfw.EventContext,
+
+    fn init(json: []const u8) !*KeybindingTest {
+        const allocator = std.testing.allocator;
+        const self = try allocator.create(KeybindingTest);
+        self.* = .{
+            .temporary = std.testing.tmpDir(.{}),
+            .arena = .init(allocator),
+            .env = .init(allocator),
+            .original_bindings = commands.bindings,
+            .events = .{ .io = std.testing.io, .alloc = allocator, .cmds = .empty },
+        };
+        errdefer self.deinit();
+        runtime.io = std.testing.io;
+        const directory = try self.temporary.dir.realPathFileAlloc(std.testing.io, ".", self.arena.allocator());
+        try self.env.put("XDG_CONFIG_HOME", directory);
+        try createSettingsTestCli(self.temporary.dir, std.testing.io);
+        try self.write(json);
+        self.model = try Model.init(allocator);
+        self.model.?.settings_state.cli_binary = try std.fs.path.join(self.arena.allocator(), &.{ directory, "settings-cli" });
+        return self;
+    }
+
+    fn deinit(self: *KeybindingTest) void {
+        if (self.model) |model| model.deinit();
+        commands.bindings = self.original_bindings;
+        self.events.cmds.deinit(std.testing.allocator);
+        self.env.deinit();
+        self.arena.deinit();
+        self.temporary.cleanup();
+        std.testing.allocator.destroy(self);
+    }
+
+    fn write(self: *KeybindingTest, json: []const u8) !void {
+        var staged = try self.temporary.dir.createFileAtomic(std.testing.io, "shelly/tui-settings.json", .{ .make_path = true, .replace = true });
+        defer staged.deinit(std.testing.io);
+        try staged.file.writeStreamingAll(std.testing.io, json);
+        try staged.replace(std.testing.io);
+    }
+
+    fn load(self: *KeybindingTest) void {
+        loadSettings(self.model.?, std.testing.io, &self.env);
+    }
+
+    fn reload(self: *KeybindingTest) !void {
+        try reloadSettings(self.model.?, &self.events);
+    }
+
+    fn expectLabel(self: *KeybindingTest, id: commands.Id, expected: []const u8) !void {
+        try std.testing.expectEqualStrings(expected, try commands.label(self.arena.allocator(), id));
+    }
+};
+
+test "startup applies overrides without rewriting settings or inheriting live bindings" {
+    const json = "{\"Keybindings\":{\"help\":\"F2\",\"install\":\"F3\"}}";
+    const fixture = try KeybindingTest.init(json);
+    defer fixture.deinit();
+    commands.bindings.remove = .{ .codepoint = vaxis.Key.f8 };
+    fixture.load();
+    try std.testing.expect(fixture.model.?.settings_state.settings_failure == null);
+    try fixture.expectLabel(.help, "F2");
+    try fixture.expectLabel(.install, "F3");
+    try fixture.expectLabel(.remove, "R");
+    const contents = try fixture.temporary.dir.readFileAlloc(std.testing.io, "shelly/tui-settings.json", fixture.arena.allocator(), .limited(4096));
+    try std.testing.expectEqualStrings(json, contents);
+}
+
+test "reload applies changed overrides and removing overrides restores defaults" {
+    const fixture = try KeybindingTest.init("{\"Keybindings\":{\"help\":\"F2\"}}");
+    defer fixture.deinit();
+    fixture.load();
+    try fixture.expectLabel(.help, "F2");
+    try fixture.write("{\"Keybindings\":{\"help\":\"F3\",\"install\":\"F4\"}}");
+    try fixture.reload();
+    try std.testing.expect(fixture.model.?.settings_state.settings_failure == null);
+    try fixture.expectLabel(.help, "F3");
+    try fixture.expectLabel(.install, "F4");
+    try fixture.write("{}");
+    try fixture.reload();
+    try fixture.expectLabel(.help, "F1");
+    try fixture.expectLabel(.install, "I");
+}
+
+test "invalid overrides preserve all active bindings and pending settings" {
+    const fixture = try KeybindingTest.init("{\"Keybindings\":{\"help\":\"F2\"}}");
+    defer fixture.deinit();
+    fixture.load();
+    fixture.model.?.settings_state.settings_draft.aur_enabled = true;
+    const previous = commands.bindings;
+    try fixture.write("{\"Keybindings\":{\"help\":\"F3\",\"confirm\":\"F4\"}}");
+    try fixture.reload();
+    try std.testing.expectEqual(error.FixedCommand, fixture.model.?.settings_state.settings_failure.?);
+    try std.testing.expectEqualDeep(previous, commands.bindings);
+    try std.testing.expect(fixture.model.?.settings_state.settings_draft.aur_enabled);
+}
+
+test "valid keybindings apply on startup and reload despite an AUR source failure" {
+    const fixture = try KeybindingTest.init("{\"Keybindings\":{\"help\":\"F2\"}}");
+    defer fixture.deinit();
+    const io = std.testing.io;
+    const binary = fixture.model.?.settings_state.cli_binary.?;
+    // Close the executable before invoking it; otherwise Linux may reject it
+    // with TextFileBusy instead of exercising the intended CLI failure.
+    const file = try std.Io.Dir.cwd().createFile(io, binary, .{ .truncate = true, .permissions = .executable_file });
+    try file.writeStreamingAll(io, "#!/bin/sh\nexit 1\n");
+    file.close(io);
+    fixture.load();
+    try std.testing.expectEqual(error.CommandFailed, fixture.model.?.settings_state.settings_failure.?);
+    try fixture.expectLabel(.help, "F2");
+    try fixture.write("{\"Keybindings\":{\"help\":\"F3\"}}");
+    try fixture.reload();
+    try std.testing.expectEqual(error.CommandFailed, fixture.model.?.settings_state.settings_failure.?);
+    try fixture.expectLabel(.help, "F3");
+}
+
+test "remapped Quit and Help dispatch through the coordinator and retain operation protection" {
+    const fixture = try KeybindingTest.init("{\"Keybindings\":{\"quit\":\"Ctrl+Z\",\"help\":\"F2\"}}");
+    defer fixture.deinit();
+    fixture.load();
+    const model = fixture.model.?;
+    const ctx = &fixture.events;
+    try std.testing.expectEqualDeep(commands.bindings.quit, commands.bindings.interrupt);
+    try std.testing.expect(!commands.matches(.{ .codepoint = 'c', .mods = .{ .ctrl = true } }, .quit));
+    try model.captureEvent(ctx, .{ .key_press = .{ .codepoint = 'c', .mods = .{ .ctrl = true } } });
+    try std.testing.expect(!ctx.quit);
+    try model.captureEvent(ctx, .{ .key_press = .{ .codepoint = 'z', .mods = .{ .ctrl = true } } });
+    try std.testing.expect(ctx.quit);
+    ctx.quit = false;
+    try model.captureEvent(ctx, .{ .key_press = .{ .codepoint = vaxis.Key.f1 } });
+    try std.testing.expect(!model.help_open);
+    try model.captureEvent(ctx, .{ .key_press = .{ .codepoint = vaxis.Key.f2 } });
+    try std.testing.expect(model.help_open);
+    model.help_open = false;
+    var job: @import("../services/shelly_operation.zig").Operation = .{ .arena = .init(std.testing.allocator), .request = undefined };
+    defer job.arena.deinit();
+    model.operation_state.install_job = &job;
+    defer model.operation_state.install_job = null;
+    for ([_]Tab{ .packages, .aur, .flatpak, .upgrade, .settings }) |tab| {
+        model.active = tab;
+        ctx.consume_event = false;
+        ctx.redraw = false;
+        try model.captureEvent(ctx, .{ .key_press = .{ .codepoint = 'z', .mods = .{ .ctrl = true } } });
+        try std.testing.expect(!ctx.quit);
+        try std.testing.expect(ctx.consume_event and ctx.redraw);
+        try std.testing.expect(model.commandContext().quit_blocked);
+    }
+}
+
+test "Help and footer show loaded editable bindings" {
+    const fixture = try KeybindingTest.init("{\"Keybindings\":{\"help\":\"F2\",\"install\":\"F3\"}}");
+    defer fixture.deinit();
+    fixture.load();
+    vxfw.DrawContext.init(.unicode);
+    const model = fixture.model.?;
+    model.packages_state.package_list_active = true;
+    model.packages_state.loading = false;
+    var packages = [_]Package{.{ .Name = "example" }};
+    model.packages_state.packages = &packages;
+    try @import("packages_model.zig").rebuildFilter(model);
+    model.help_panel.context = model.commandContext();
+    const allocator = fixture.arena.allocator();
+    const help_text = try model.help_panel.text(allocator);
+    try std.testing.expect(std.mem.indexOf(u8, help_text, "F2: Open/close help") != null);
+    try std.testing.expect(std.mem.indexOf(u8, help_text, "F3: Install/reinstall") != null);
+    const footer = try footer_view.draw(.{ .arena = allocator, .min = .{}, .max = .{ .width = 160, .height = 1 }, .cell_size = .{ .width = 10, .height = 20 } }, model.commandContext(), null);
+    var text: std.ArrayList(u8) = .empty;
+    for (footer.children) |child| for (child.surface.buffer) |cell| try text.appendSlice(allocator, cell.char.grapheme);
+    try std.testing.expect(std.mem.indexOf(u8, text.items, "F2 Help") != null);
+    try std.testing.expect(std.mem.indexOf(u8, text.items, "F3 Install") != null);
+}
+
+test "loaded bindings route actions on all pages without executing operations" {
+    const fixture = try KeybindingTest.init(
+        \\{"AurEnabled":true,"FlatpakEnabled":true,"Keybindings":{"install":"F3","remove":"F4","upgrade_system":"F5","refresh":"F6"}}
+    );
+    defer fixture.deinit();
+    fixture.load();
+    const model = fixture.model.?;
+    const ctx = &fixture.events;
+    try std.testing.expect(model.settings_state.settings_failure == null);
+
+    var native = [_]Package{.{ .Name = "editor" }};
+    model.packages_state.packages = &native;
+    model.packages_state.loading = false;
+    model.packages_state.package_list_active = true;
+    try @import("packages_model.zig").rebuildFilter(model);
+    try model.captureEvent(ctx, .{ .key_press = .{ .codepoint = 'i' } });
+    try std.testing.expect(model.overlay == null);
+    try model.captureEvent(ctx, .{ .key_press = .{ .codepoint = vaxis.Key.f3 } });
+    try std.testing.expectEqualStrings("editor", model.overlay.?.sudo.name);
+    try std.testing.expectEqual(.standard, model.overlay.?.sudo.backend);
+    operation_model.closeOverlay(model);
+
+    model.active = .aur;
+    var aur = [_]@import("packages.zig").AurPackage{.{ .Name = "editor-git" }};
+    model.aur_state.aur_packages = &aur;
+    model.aur_state.aur_list_active = true;
+    try @import("aur_model.zig").rebuildAurFilter(model);
+    try model.captureEvent(ctx, .{ .key_press = .{ .codepoint = 'i' } });
+    try std.testing.expect(model.overlay == null);
+    try model.captureEvent(ctx, .{ .key_press = .{ .codepoint = vaxis.Key.f3 } });
+    try std.testing.expectEqualStrings("editor-git", model.overlay.?.sudo.name);
+    try std.testing.expectEqual(.aur, model.overlay.?.sudo.backend);
+    operation_model.closeOverlay(model);
+
+    model.active = .flatpak;
+    model.flatpak_state.flatpak_available = true;
+    const app: flatpak.Flatpak = .{ .Id = "org.example.Editor", .Ref = "app/org.example.Editor/x86_64/stable", .InstallLevel = .user };
+    model.overlay = .{ .flatpak = .{ .installed = &app } };
+    try model.captureEvent(ctx, .{ .key_press = .{ .codepoint = 'r' } });
+    try std.testing.expect(model.overlay.? == .flatpak);
+    try model.captureEvent(ctx, .{ .key_press = .{ .codepoint = vaxis.Key.f4 } });
+    try std.testing.expectEqual(.flatpak, model.overlay.?.sudo.backend);
+    try std.testing.expectEqual(.remove, model.overlay.?.sudo.action);
+    try std.testing.expectEqualStrings(app.Id, model.overlay.?.sudo.name);
+    operation_model.closeOverlay(model);
+
+    model.active = .upgrade;
+    model.updates_state.updates_parsed = ParsedCheckUpdates.fromParsed(try std.json.parseFromSlice(CheckUpdates, std.testing.allocator, "{\"Packages\":[{\"Name\":\"editor\"}]}", .{ .allocate = .alloc_always }));
+    try model.captureEvent(ctx, .{ .key_press = .{ .codepoint = 'u' } });
+    try std.testing.expect(model.overlay == null);
+    try model.captureEvent(ctx, .{ .key_press = .{ .codepoint = vaxis.Key.f5 } });
+    try std.testing.expectEqual(.upgrade, model.overlay.?.sudo.action);
+    try std.testing.expectEqual(.standard, model.overlay.?.sudo.backend);
+    operation_model.closeOverlay(model);
+
+    model.active = .settings;
+    model.settings_state.settings_draft.aur_enabled = false;
+    try model.captureEvent(ctx, .{ .key_press = .{ .codepoint = 'r' } });
+    try std.testing.expect(!model.settings_state.settings_draft.aur_enabled);
+    // Avoid starting a backend probe when reloading; no subprocess work is needed.
+    model.flatpak_state.flatpak_checked = true;
+    try model.captureEvent(ctx, .{ .key_press = .{ .codepoint = vaxis.Key.f6 } });
+    try std.testing.expect(model.settings_state.settings_draft.aur_enabled);
+    try std.testing.expect(model.operation_state.install_job == null);
 }

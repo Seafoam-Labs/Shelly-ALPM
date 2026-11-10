@@ -94,6 +94,11 @@ pub const Bindings = struct {
 /// be capable of replacing this later.
 pub var bindings: Bindings = .{};
 
+/// Replace the live bindings table with a complete validated set.
+pub fn apply(new_bindings: Bindings) void {
+    bindings = new_bindings;
+}
+
 test "clearing selections does not shadow half-page scrolling" {
     const up: vaxis.Key = .{ .codepoint = 'u', .mods = .{ .ctrl = true } };
     const clear: vaxis.Key = .{ .codepoint = 'x', .mods = .{ .ctrl = true } };

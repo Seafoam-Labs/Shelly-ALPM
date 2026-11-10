@@ -2,9 +2,10 @@
 
 The configuration service stores shortcut overrides in `Keybindings` inside
 `$XDG_CONFIG_HOME/shelly/tui-settings.json` (normally
-`~/.config/shelly/tui-settings.json`). This first implementation provides parsing,
-validation, and persistence only. Runtime application and the Settings editor
-are subsequent steps; editing this object does not change active shortcuts yet.
+`~/.config/shelly/tui-settings.json`). Validated overrides are applied at startup.
+After editing the file, use Reload in Settings to apply changes; removing overrides restores the defaults. Invalid
+configuration preserves the active bindings. An interactive editor is not yet
+available.
 
 ```json
 {
