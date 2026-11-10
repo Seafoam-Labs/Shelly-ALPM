@@ -64,7 +64,13 @@ pub const Panel = struct {
                     "j / k: Next / previous package, or scroll details down / up",
                     "l: Open details from the package list",
                     "h: Return from details to the package list",
-                    "/: Return to search",
+                });
+                try lines.append(arena, try std.fmt.allocPrint(
+                    arena,
+                    "{s}: Return to search",
+                    .{try commands.label(arena, .search)},
+                ));
+                try lines.appendSlice(arena, &.{
                     "While editing search, h/j/k/l remain ordinary text.",
                     "",
                 });
@@ -121,4 +127,16 @@ test "browsing help explicitly lists Vim aliases and search escape" {
             try std.testing.expect(std.mem.indexOf(u8, body, expected) != null);
         }
     }
+}
+
+test "search shortcut label is dynamic" {
+    const original = commands.bindings.search;
+    defer commands.bindings.search = original;
+    commands.bindings.search = .{ .codepoint = 's', .mods = .{ .alt = true } };
+
+    var arena: std.heap.ArenaAllocator = .init(std.testing.allocator);
+    defer arena.deinit();
+    const body = try (Panel{ .context = .{ .mode = .search } }).text(arena.allocator());
+    try std.testing.expect(std.mem.indexOf(u8, body, "Alt+S: Return to search") != null);
+    try std.testing.expect(std.mem.indexOf(u8, body, "/: Return to search") == null);
 }
