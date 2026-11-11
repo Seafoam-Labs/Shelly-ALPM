@@ -1,11 +1,12 @@
 const keybindings = @import("../services/keybindings.zig");
 
 pub const header_styles = [_]HeaderIcons{ .none, .nerd_font, .ascii };
-pub const header_style_start: usize = 2;
-pub const screenshots_index: usize = header_style_start + header_styles.len;
-pub const atoll_index: usize = screenshots_index + 1;
-pub const keybindings_index: usize = atoll_index + 1;
-pub const save_index: usize = keybindings_index + 1;
+pub const atoll_index: usize = 2;
+pub const header_index: usize = 3;
+pub const screenshots_index: usize = 4;
+pub const keybindings_index: usize = 5;
+pub const save_index: usize = 6;
+pub const discard_index: usize = 7;
 
 pub fn aurUrl(atoll: bool) []const u8 {
     return if (atoll) "https://atoll.seafoam-labs.org" else "https://aur.archlinux.org";

@@ -31,7 +31,7 @@ const UpdatesJob = updates_model.UpdatesJob;
 /// Page-owned state. Worker results are published to the UI loop before use.
 pub const screenshots_index = @import("settings.zig").screenshots_index;
 pub const save_index = @import("settings.zig").save_index;
-pub const control_count: usize = save_index + 1;
+pub const control_count: usize = preferences.discard_index + 1;
 
 pub const State = struct {
     settings: Settings = .{},
@@ -39,6 +39,8 @@ pub const State = struct {
     settings_store: ?settings_service.Store = null,
     settings_failure: ?anyerror = null,
     settings_selected: usize = 0,
+    header_open: bool = false,
+    header_selected: usize = 0,
     keybindings_open: bool = false,
     keybinding_selected: usize = 0,
     keybinding_capture: bool = false,
@@ -144,6 +146,7 @@ pub fn applySettings(self: *Model, saved: Settings) void {
         self.flatpak_state.flatpak_probe_error = null;
     }
     if (!saved.show_flatpak_screenshots and self.settings_state.settings.show_flatpak_screenshots) flatpak_model.closeScreenshots(self);
+    self.settings_state.header_open = false;
     self.settings_state.keybinding_capture = false;
     self.settings_state.keybinding_error = null;
     self.settings_state.settings = saved;
@@ -173,6 +176,18 @@ pub fn hasChanges(self: *const Model) bool {
 pub fn toggleSetting(self: *Model, ctx: *vxfw.EventContext) !void {
     if (self.operation_state.install_job != null) return;
     if (self.settings_state.settings_selected == save_index) return saveSettings(self, ctx);
+    if (self.settings_state.settings_selected == preferences.discard_index) {
+        self.settings_state.settings_draft = self.settings_state.settings;
+        self.settings_state.header_open = false;
+        self.settings_state.keybinding_capture = false;
+        self.settings_state.keybinding_error = null;
+        return;
+    }
+    if (self.settings_state.settings_selected == preferences.header_index) {
+        self.settings_state.header_selected = @intCast(@backingInt(self.settings_state.settings_draft.header_icons));
+        self.settings_state.header_open = !self.settings_state.header_open;
+        return;
+    }
     if (self.settings_state.settings_selected == preferences.keybindings_index) {
         self.settings_state.keybindings_open = true;
         self.settings_state.keybinding_error = null;
@@ -182,7 +197,6 @@ pub fn toggleSetting(self: *Model, ctx: *vxfw.EventContext) !void {
     switch (self.settings_state.settings_selected) {
         0 => draft.aur_enabled = !draft.aur_enabled,
         1 => draft.flatpak_enabled = !draft.flatpak_enabled,
-        2...4 => draft.header_icons = @import("settings.zig").header_styles[self.settings_state.settings_selected - 2],
         @import("settings.zig").atoll_index => draft.atoll_aur_enabled = !draft.atoll_aur_enabled,
         screenshots_index => draft.show_flatpak_screenshots = !draft.show_flatpak_screenshots,
         else => unreachable,
@@ -305,7 +319,7 @@ fn pollSettingsFile(self: *Model, ctx: *vxfw.EventContext) !void {
         }
         return;
     }
-    if (self.operation_state.install_job != null or hasChanges(self) or self.settings_state.keybinding_capture) {
+    if (self.operation_state.install_job != null or hasChanges(self) or self.settings_state.keybinding_capture or self.settings_state.header_open) {
         if (!self.settings_state.watch_deferred) {
             self.settings_state.watch_deferred = true;
             try self.setNotice(deferred_file_notice);
@@ -337,7 +351,47 @@ fn pollSettingsFile(self: *Model, ctx: *vxfw.EventContext) !void {
 }
 
 pub fn settingsView(self: *Model) settings_view.View {
-    return .{ .keybindings_open = self.settings_state.keybindings_open, .binding_selected = self.settings_state.keybinding_selected, .capturing = self.settings_state.keybinding_capture, .binding_error = self.settings_state.keybinding_error, .settings = self.settings_state.settings_draft, .dirty = hasChanges(self), .selected = self.settings_state.settings_selected, .path = if (self.settings_state.settings_store) |store| store.path else "Settings could not be initialized", .failure = self.settings_state.settings_failure, .flatpak_checked = self.flatpak_state.flatpak_checked, .flatpak_available = self.flatpak_state.flatpak_available, .checking = self.flatpak_state.flatpak_probe_job != null, .busy = self.operation_state.install_job != null };
+    return .{ .userdata = self, .on_action = onSettingsAction, .header_open = self.settings_state.header_open, .header_selected = self.settings_state.header_selected, .keybindings_open = self.settings_state.keybindings_open, .binding_selected = self.settings_state.keybinding_selected, .capturing = self.settings_state.keybinding_capture, .binding_error = self.settings_state.keybinding_error, .settings = self.settings_state.settings_draft, .dirty = hasChanges(self), .selected = self.settings_state.settings_selected, .path = if (self.settings_state.settings_store) |store| store.path else "Settings could not be initialized", .failure = self.settings_state.settings_failure, .flatpak_checked = self.flatpak_state.flatpak_checked, .flatpak_available = self.flatpak_state.flatpak_available, .checking = self.flatpak_state.flatpak_probe_job != null, .busy = self.operation_state.install_job != null };
+}
+
+fn onSettingsAction(ptr: *anyopaque, ctx: *vxfw.EventContext, action: settings_view.Action) anyerror!void {
+    const self: *Model = @ptrCast(@alignCast(ptr));
+    if (self.operation_state.install_job != null) return;
+    switch (action) {
+        .control => |index| {
+            if (index >= control_count) return;
+            if (index != preferences.header_index) self.settings_state.header_open = false;
+            if (index < preferences.save_index and index != preferences.keybindings_index) self.settings_state.keybindings_open = false;
+            const keep_editor = self.settings_state.keybindings_open and index >= preferences.save_index;
+            const previous = self.settings_state.settings_selected;
+            self.settings_state.settings_selected = index;
+            try toggleSetting(self, ctx);
+            if (keep_editor) self.settings_state.settings_selected = previous;
+        },
+        .header => |index| {
+            if (!self.settings_state.header_open or index >= preferences.header_styles.len) return;
+            self.settings_state.settings_draft.header_icons = preferences.header_styles[index];
+            self.settings_state.header_open = false;
+        },
+    }
+    ctx.consumeAndRedraw();
+}
+
+fn handleHeaderKey(self: *Model, ctx: *vxfw.EventContext, key: vaxis.Key) void {
+    const state = &self.settings_state;
+    if (commands.matches(key, .cancel_capture) or commands.matches(key, .close) or commands.matches(key, .back)) {
+        state.header_open = false;
+    } else if (self.operation_state.install_job == null) {
+        if (commands.matches(key, .previous)) {
+            state.header_selected = (state.header_selected + preferences.header_styles.len - 1) % preferences.header_styles.len;
+        } else if (commands.matches(key, .next)) {
+            state.header_selected = (state.header_selected + 1) % preferences.header_styles.len;
+        } else if (commands.matches(key, .confirm) or commands.matches(key, .mark)) {
+            state.settings_draft.header_icons = preferences.header_styles[state.header_selected];
+            state.header_open = false;
+        }
+    }
+    ctx.consumeAndRedraw();
 }
 
 /// Root capture must run this before Quit, Help, or tab navigation.
@@ -384,7 +438,7 @@ pub fn captureBinding(self: *Model, ctx: *vxfw.EventContext, input: vaxis.Key) !
 
 fn handleBindingEditor(self: *Model, ctx: *vxfw.EventContext, key: vaxis.Key) !bool {
     const state = &self.settings_state;
-    if (commands.matches(key, .close) or commands.matches(key, .cancel_capture)) {
+    if (commands.matches(key, .close) or commands.matches(key, .cancel_capture) or commands.matches(key, .back)) {
         state.keybindings_open = false;
         state.keybinding_error = null;
     } else if (commands.matches(key, .reset_binding)) {
@@ -425,6 +479,15 @@ fn handleBindingEditor(self: *Model, ctx: *vxfw.EventContext, key: vaxis.Key) !b
 /// Returns whether page input was consumed. Globals remain with the coordinator.
 pub fn handleKey(self: *Model, ctx: *vxfw.EventContext, key: vaxis.Key) anyerror!bool {
     if (self.settings_state.keybindings_open) return handleBindingEditor(self, ctx, key);
+    if (self.settings_state.header_open) {
+        handleHeaderKey(self, ctx, key);
+        return true;
+    }
+    if (commands.matches(key, .details) and (self.settings_state.settings_selected == preferences.header_index or self.settings_state.settings_selected == preferences.keybindings_index)) {
+        try toggleSetting(self, ctx);
+        ctx.consumeAndRedraw();
+        return true;
+    }
     if (commands.settings(key)) |action| {
         switch (action) {
             .previous => self.settings_state.settings_selected = (self.settings_state.settings_selected + control_count - 1) % control_count,
@@ -600,13 +663,15 @@ test "settings keyboard edits survive tab changes and support Save Reload and Ct
     try std.testing.expect(!model.tabEnabled(.aur));
     try std.testing.expect(!hasChanges(model));
     try std.testing.expect(!(try model.settings_state.settings_store.?.load(io)).aur_enabled);
-    model.settings_state.settings_selected = 2;
+    model.settings_state.settings_selected = preferences.header_index;
     model.updates_state.updates_checked = true;
     for ([_]@import("settings.zig").HeaderIcons{ .nerd_font, .ascii, .none }) |style| {
-        model.settings_state.settings_selected = 2 + @as(usize, @backingInt(style));
+        model.settings_state.settings_selected = preferences.header_index;
         const applied = model.settings_state.settings.header_icons;
         try model.captureEvent(&ctx, .{ .key_press = commands.bindings.confirm });
-        try std.testing.expectEqual(style, model.settings_state.settings_draft.header_icons);
+        try std.testing.expect(model.settings_state.header_open);
+        while (model.settings_state.header_selected != @as(usize, @backingInt(style)))
+            try model.captureEvent(&ctx, .{ .key_press = commands.bindings.next });
         try model.captureEvent(&ctx, .{ .key_press = commands.bindings.mark });
         try std.testing.expectEqual(style, model.settings_state.settings_draft.header_icons);
         try std.testing.expectEqual(applied, model.settings_state.settings.header_icons);
@@ -1367,4 +1432,154 @@ test "restored file recovery stays pending until operations or draft edits are f
         try pollSettingsFile(model, &fixture.events);
         try std.testing.expect(!fixture.events.redraw);
     }
+}
+
+test "header dropdown navigates choices and Escape cancels before changing pages" {
+    const fixture = try KeybindingTest.init("{}");
+    defer fixture.deinit();
+    fixture.load();
+    const model = fixture.model.?;
+    model.active = .settings;
+    model.settings_state.settings_selected = preferences.header_index;
+    try model.captureEvent(&fixture.events, .{ .key_press = commands.bindings.confirm });
+    try std.testing.expect(model.settings_state.header_open);
+    try model.captureEvent(&fixture.events, .{ .key_press = commands.bindings.next });
+    try std.testing.expectEqual(@as(usize, 1), model.settings_state.header_selected);
+    try model.captureEvent(&fixture.events, .{ .key_press = commands.bindings.next_tab });
+    try std.testing.expectEqual(Tab.settings, model.active);
+    try model.captureEvent(&fixture.events, .{ .key_press = commands.bindings.cancel_capture });
+    try std.testing.expect(!model.settings_state.header_open);
+    try std.testing.expectEqual(preferences.HeaderIcons.none, model.settings_state.settings_draft.header_icons);
+    try std.testing.expect(!hasChanges(model));
+    try model.captureEvent(&fixture.events, .{ .key_press = commands.bindings.mark });
+    try model.captureEvent(&fixture.events, .{ .key_press = commands.bindings.next });
+    try model.captureEvent(&fixture.events, .{ .key_press = commands.bindings.confirm });
+    try std.testing.expect(!model.settings_state.header_open);
+    try std.testing.expectEqual(preferences.HeaderIcons.nerd_font, model.settings_state.settings_draft.header_icons);
+    try std.testing.expectEqual(preferences.HeaderIcons.none, model.settings_state.settings.header_icons);
+}
+
+const SettingsMouseTest = struct {
+    fn find(surface: vxfw.Surface, needle: []const u8, arena: Allocator) !?vxfw.Widget {
+        var text: std.ArrayList(u8) = .empty;
+        for (surface.buffer) |cell| try text.appendSlice(arena, cell.char.grapheme);
+        if (std.mem.indexOf(u8, text.items, needle) != null and surface.widget.eventHandler != null) return surface.widget;
+        for (surface.children) |child| if (try find(child.surface, needle, arena)) |widget| return widget;
+        return null;
+    }
+    fn click(fixture: *KeybindingTest, needle: []const u8) !void {
+        const arena = fixture.arena.allocator();
+        var children: std.ArrayList(vxfw.SubSurface) = .empty;
+        try settingsView(fixture.model.?).appendContent(.{ .arena = arena, .min = .{}, .max = .{ .width = 100, .height = 30 }, .cell_size = .{ .width = 10, .height = 20 } }, &children);
+        const widget = (try find(children.items[0].surface, needle, arena)) orelse return error.SettingNotVisible;
+        try widget.handleEvent(&fixture.events, .{ .mouse = .{ .button = .left, .type = .press, .col = 0, .row = 0, .mods = .{} } });
+    }
+};
+
+test "mouse controls edit drafts select dropdown entries and Save or Discard explicitly" {
+    vxfw.DrawContext.init(.unicode);
+    const fixture = try KeybindingTest.init("{}");
+    defer fixture.deinit();
+    fixture.load();
+    const model = fixture.model.?;
+    model.active = .settings;
+    const fingerprint = try model.settings_state.settings_store.?.fingerprint(std.testing.io);
+    try SettingsMouseTest.click(fixture, "[ ] Enable AUR");
+    try std.testing.expect(model.settings_state.settings_draft.aur_enabled);
+    try std.testing.expect(!model.settings_state.settings.aur_enabled);
+    try SettingsMouseTest.click(fixture, "Header icons");
+    try std.testing.expect(model.settings_state.header_open);
+    try SettingsMouseTest.click(fixture, "( ) Nerd Font");
+    try std.testing.expect(!model.settings_state.header_open);
+    try std.testing.expectEqual(preferences.HeaderIcons.nerd_font, model.settings_state.settings_draft.header_icons);
+    try SettingsMouseTest.click(fixture, "[ Discard changes ]");
+    try std.testing.expect(!hasChanges(model));
+    try std.testing.expectEqual(fingerprint, try model.settings_state.settings_store.?.fingerprint(std.testing.io));
+    try SettingsMouseTest.click(fixture, "[ ] Enable AUR");
+    try SettingsMouseTest.click(fixture, "[ Save changes ]");
+    try std.testing.expect(model.settings_state.settings.aur_enabled);
+    try std.testing.expect((try model.settings_state.settings_store.?.load(std.testing.io)).aur_enabled);
+    try std.testing.expect(!hasChanges(model));
+    try SettingsMouseTest.click(fixture, "[ Configure keybindings");
+    try std.testing.expect(model.settings_state.keybindings_open);
+}
+
+test "mouse settings controls remain locked during package operations" {
+    vxfw.DrawContext.init(.unicode);
+    const fixture = try KeybindingTest.init("{}");
+    defer fixture.deinit();
+    fixture.load();
+    const model = fixture.model.?;
+    model.active = .settings;
+    var job: @import("../services/shelly_operation.zig").Operation = .{ .arena = .init(std.testing.allocator), .request = undefined };
+    defer job.arena.deinit();
+    model.operation_state.install_job = &job;
+    defer model.operation_state.install_job = null;
+    for ([_][]const u8{ "[ ] Enable AUR", "Header icons", "[ Configure keybindings", "[ Save changes ]", "[ Discard changes ]" }) |label|
+        try SettingsMouseTest.click(fixture, label);
+    try std.testing.expect(!hasChanges(model));
+    try std.testing.expect(!model.settings_state.header_open);
+    try std.testing.expect(!model.settings_state.keybindings_open);
+}
+
+test "external file edits wait for the header dropdown to close" {
+    const fixture = try KeybindingTest.init("{}");
+    defer fixture.deinit();
+    fixture.load();
+    const model = fixture.model.?;
+    model.active = .settings;
+    model.settings_state.settings_selected = preferences.header_index;
+    try model.captureEvent(&fixture.events, .{ .key_press = commands.bindings.confirm });
+    try fixture.write("{\"Keybindings\":{\"help\":\"F2\"}}");
+    try pollSettingsFile(model, &fixture.events);
+    try std.testing.expect(model.settings_state.header_open);
+    try fixture.expectLabel(.help, "F1");
+    try model.captureEvent(&fixture.events, .{ .key_press = commands.bindings.cancel_capture });
+    try pollSettingsFile(model, &fixture.events);
+    try fixture.expectLabel(.help, "F2");
+}
+
+test "expanded settings return with Left and sidebar clicks switch out of the editor" {
+    vxfw.DrawContext.init(.unicode);
+    const fixture = try KeybindingTest.init("{}");
+    defer fixture.deinit();
+    fixture.load();
+    const model = fixture.model.?;
+    model.active = .settings;
+    model.settings_state.settings_selected = preferences.keybindings_index;
+    try model.captureEvent(&fixture.events, .{ .key_press = commands.bindings.details });
+    try std.testing.expect(model.settings_state.keybindings_open);
+    try model.captureEvent(&fixture.events, .{ .key_press = commands.bindings.back });
+    try std.testing.expect(!model.settings_state.keybindings_open);
+    try model.captureEvent(&fixture.events, .{ .key_press = commands.bindings.details });
+    try SettingsMouseTest.click(fixture, "[ ] Enable AUR");
+    try std.testing.expect(!model.settings_state.keybindings_open);
+    try std.testing.expect(model.settings_state.settings_draft.aur_enabled);
+    try SettingsMouseTest.click(fixture, "Header icons");
+    try std.testing.expect(model.settings_state.header_open);
+    try model.captureEvent(&fixture.events, .{ .key_press = commands.bindings.back });
+    try std.testing.expect(!model.settings_state.header_open);
+    try std.testing.expect(hasChanges(model));
+}
+
+test "shared settings actions save and discard binding drafts without closing the right editor" {
+    vxfw.DrawContext.init(.unicode);
+    const fixture = try KeybindingTest.init("{}");
+    defer fixture.deinit();
+    fixture.load();
+    try openTestBindingEditor(fixture);
+    const model = fixture.model.?;
+    model.settings_state.keybinding_selected = keybindings_view.back_index;
+    model.settings_state.settings_draft.keybindings = try model.settings_state.settings_draft.keybindings.withBinding(.help, .{ .codepoint = vaxis.Key.f2 });
+    try SettingsMouseTest.click(fixture, "[ Save changes ]");
+    try fixture.expectLabel(.help, "F2");
+    try std.testing.expect(model.settings_state.keybindings_open);
+    try std.testing.expectEqual(preferences.keybindings_index, model.settings_state.settings_selected);
+    model.settings_state.settings_draft.keybindings = try model.settings_state.settings_draft.keybindings.withBinding(.help, .{ .codepoint = vaxis.Key.f3 });
+    model.settings_state.keybinding_error = error.ConflictingBinding;
+    try SettingsMouseTest.click(fixture, "[ Discard changes ]");
+    try std.testing.expect(!hasChanges(model));
+    try std.testing.expect(model.settings_state.keybinding_error == null);
+    try std.testing.expect(model.settings_state.keybindings_open);
+    try std.testing.expectEqual(vaxis.Key.f2, model.settings_state.settings_draft.keybindings.get(.help).codepoint);
 }

@@ -128,7 +128,9 @@ pub fn resolve(self: *Model) commands.Context {
             context.settings_restore_selected = context.settings_keybindings and self.settings_state.keybinding_selected == keybindings_view.restore_index;
             context.settings_back_selected = context.settings_keybindings and self.settings_state.keybinding_selected == keybindings_view.back_index;
             context.settings_save_selected = if (context.settings_keybindings) self.settings_state.keybinding_selected == keybindings_view.save_index else self.settings_state.settings_selected == settings_model.save_index;
-            context.settings_cycle_selected = self.settings_state.settings_selected >= 2 and self.settings_state.settings_selected < settings_model.screenshots_index;
+            context.settings_header_open = self.settings_state.header_open;
+            context.settings_discard_selected = !context.settings_keybindings and self.settings_state.settings_selected == @import("models/settings.zig").discard_index;
+            context.settings_cycle_selected = self.settings_state.settings_selected == @import("models/settings.zig").header_index;
         },
     }
     return context;

@@ -353,6 +353,7 @@ pub const Model = struct {
         };
         flatpak_model.closeScreenshots(self);
         self.flatpak_state.flatpak_category_open = false;
+        self.settings_state.header_open = false;
         self.active = tab;
         try self.focusActiveTab(ctx);
         try updates_model.ensureUpdates(self, ctx);

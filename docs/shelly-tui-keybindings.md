@@ -10,7 +10,13 @@ corrected values.
 
 ## Editing in the TUI
 
-Open Settings, select **Keybindings**, and press Enter or Space. Use Up/Down to
+Wide terminals show Settings controls on the left and the focused setting or
+expanded editor on the right. Header styles and keybindings open in that pane;
+Enter or Right opens them, and Left returns to the controls. Save and Discard
+stay below both panes. Narrow terminals use the single-pane layout.
+
+Open Settings, select **Configure keybindings** under Keyboard, and press Enter
+or Space. Use Up/Down to
 select a command, then Enter or Space to capture its replacement. Escape cancels
 capture. Quit, Help, and tab shortcuts are intercepted during capture; unsupported,
 reserved, or conflicting keys show feedback and leave the binding unchanged.
