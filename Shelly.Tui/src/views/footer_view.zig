@@ -23,7 +23,7 @@ pub fn draw(ctx: vxfw.DrawContext, context: commands.Context, status: ?[]const u
         if (entry.id == .narrow_view or entry.id == .widen_view) continue;
         if ((entry.id == .mark and context.mode != .answers) or (context.mode == .search and (entry.id == .install or entry.id == .remove))) continue;
         if (entry.id == .next) continue;
-        if (entry.id == .save_settings and context.mode == .settings and context.settings_save_selected) continue;
+        if (context.mode == .settings and (entry.id == .save_settings or entry.id == .refresh)) continue;
         // Keep alternative bindings in help instead of repeating actions.
         if (entry.id == .close and (context.mode == .review or context.mode == .result or context.mode == .confirmation)) continue;
         const key = if (entry.id == .previous)

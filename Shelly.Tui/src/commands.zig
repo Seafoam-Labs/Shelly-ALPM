@@ -321,8 +321,6 @@ pub const Context = struct {
     settings_keybindings: bool = false,
     settings_keybindings_button: bool = false,
     settings_binding_selected: bool = false,
-    settings_restore_selected: bool = false,
-    settings_back_selected: bool = false,
     settings_capture: bool = false,
     multiple_choices: bool = false,
     preview_button: bool = false,
@@ -449,8 +447,11 @@ pub fn entries(arena: std.mem.Allocator, context: Context) std.mem.Allocator.Err
             } else {
                 try add(arena, &list, .previous, "Previous", "Previous setting or command");
                 try add(arena, &list, .next, "Next", "Next setting or command");
-                const action = if (context.settings_save_selected) "Save" else if (context.settings_discard_selected) "Discard" else if (context.settings_restore_selected) "Defaults" else if (context.settings_back_selected) "Back" else if (context.settings_keybindings or context.settings_keybindings_button or context.settings_cycle_selected) "Select" else "Toggle";
-                try add(arena, &list, .confirm, action, if (context.settings_keybindings) "Capture a replacement key, restore defaults, save, or return to preferences" else "Activate the selected preference or action");
+                if (!context.settings_keybindings and (context.settings_keybindings_button or context.settings_cycle_selected)) {
+                    try add(arena, &list, .details, "Edit", "Focus the expanded editor (also l); Left or h returns to settings");
+                }
+                const action = if (context.settings_save_selected) "Save" else if (context.settings_discard_selected) "Discard" else if (context.settings_keybindings or context.settings_keybindings_button or context.settings_cycle_selected) "Select" else "Toggle";
+                try add(arena, &list, .confirm, action, if (context.settings_keybindings) "Capture a replacement key" else "Activate the selected preference or action");
                 try add(arena, &list, .mark, action, "Activate the selected setting or action (alternative)");
                 if (context.settings_binding_selected) try add(arena, &list, .reset_binding, "Default", "Restore the selected command's default binding without saving");
                 if (context.settings_keybindings) try add(arena, &list, .close, "Back", "Return to preferences, keeping pending edits");

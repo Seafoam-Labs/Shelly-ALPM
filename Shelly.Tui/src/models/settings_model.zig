@@ -362,14 +362,15 @@ fn onSettingsAction(ptr: *anyopaque, ctx: *vxfw.EventContext, action: settings_v
             if (index >= control_count) return;
             if (index != preferences.header_index) self.settings_state.header_open = false;
             if (index < preferences.save_index and index != preferences.keybindings_index) self.settings_state.keybindings_open = false;
-            const keep_editor = self.settings_state.keybindings_open and index >= preferences.save_index;
-            const previous = self.settings_state.settings_selected;
+            if (index >= preferences.save_index) {
+                self.settings_state.keybindings_open = false;
+                self.settings_state.header_open = false;
+            }
             self.settings_state.settings_selected = index;
             try toggleSetting(self, ctx);
-            if (keep_editor) self.settings_state.settings_selected = previous;
         },
         .header => |index| {
-            if (!self.settings_state.header_open or index >= preferences.header_styles.len) return;
+            if (index >= preferences.header_styles.len or self.settings_state.settings_selected != preferences.header_index) return;
             self.settings_state.settings_draft.header_icons = preferences.header_styles[index];
             self.settings_state.header_open = false;
         },
@@ -454,20 +455,18 @@ fn handleBindingEditor(self: *Model, ctx: *vxfw.EventContext, key: vaxis.Key) !b
         }
     } else if (commands.settings(key)) |action| {
         switch (action) {
-            .previous => state.keybinding_selected = (state.keybinding_selected + keybindings_view.row_count - 1) % keybindings_view.row_count,
-            .next => state.keybinding_selected = (state.keybinding_selected + 1) % keybindings_view.row_count,
+            .previous => state.keybinding_selected = keybindings_view.adjacent(state.keybinding_selected, false).?,
+            .next => if (keybindings_view.adjacent(state.keybinding_selected, true) == null) {
+                state.keybindings_open = false;
+                state.settings_selected = preferences.save_index;
+            } else {
+                state.keybinding_selected = keybindings_view.adjacent(state.keybinding_selected, true).?;
+            },
             .save => try saveSettings(self, ctx),
             .reload => try reloadSettings(self, ctx),
             .toggle => if (self.operation_state.install_job == null) {
                 state.keybinding_error = null;
-                if (state.keybinding_selected < keybindings.editable.len) {
-                    state.keybinding_capture = true;
-                } else switch (state.keybinding_selected) {
-                    keybindings_view.restore_index => state.settings_draft.keybindings = .{},
-                    keybindings_view.save_index => try saveSettings(self, ctx),
-                    keybindings_view.back_index => state.keybindings_open = false,
-                    else => unreachable,
-                }
+                state.keybinding_capture = true;
             },
         }
         if (action == .previous or action == .next) state.keybinding_error = null;
@@ -477,7 +476,9 @@ fn handleBindingEditor(self: *Model, ctx: *vxfw.EventContext, key: vaxis.Key) !b
 }
 
 /// Returns whether page input was consumed. Globals remain with the coordinator.
-pub fn handleKey(self: *Model, ctx: *vxfw.EventContext, key: vaxis.Key) anyerror!bool {
+pub fn handleKey(self: *Model, ctx: *vxfw.EventContext, input: vaxis.Key) anyerror!bool {
+    const key = commands.vimNavigationKey(input) orelse input;
+    const state = &self.settings_state;
     if (self.settings_state.keybindings_open) return handleBindingEditor(self, ctx, key);
     if (self.settings_state.header_open) {
         handleHeaderKey(self, ctx, key);
@@ -490,8 +491,8 @@ pub fn handleKey(self: *Model, ctx: *vxfw.EventContext, key: vaxis.Key) anyerror
     }
     if (commands.settings(key)) |action| {
         switch (action) {
-            .previous => self.settings_state.settings_selected = (self.settings_state.settings_selected + control_count - 1) % control_count,
-            .next => self.settings_state.settings_selected = (self.settings_state.settings_selected + 1) % control_count,
+            .previous => state.settings_selected = (state.settings_selected + control_count - 1) % control_count,
+            .next => state.settings_selected = (state.settings_selected + 1) % control_count,
             .toggle => if (self.operation_state.install_job == null) try toggleSetting(self, ctx),
             .save => if (self.operation_state.install_job == null) try saveSettings(self, ctx),
             .reload => if (self.operation_state.install_job == null) try reloadSettings(self, ctx),
@@ -1267,7 +1268,7 @@ test "invalid captured keys show feedback without changing drafts or running act
     try std.testing.expect(!model.settings_state.keybinding_capture);
 }
 
-test "restoring one or all bindings is reversible and requires Save" {
+test "restoring a binding is reversible and requires Save" {
     const fixture = try KeybindingTest.init("{\"Keybindings\":{\"help\":\"F2\"}}");
     defer fixture.deinit();
     fixture.load();
@@ -1279,16 +1280,15 @@ test "restoring one or all bindings is reversible and requires Save" {
     try fixture.expectLabel(.help, "F2");
     try model.captureEvent(&fixture.events, .{ .key_press = commands.bindings.refresh });
     try std.testing.expect(!hasChanges(model));
-    model.settings_state.keybinding_selected = keybindings_view.restore_index;
-    try model.captureEvent(&fixture.events, .{ .key_press = commands.bindings.confirm });
+    model.settings_state.keybinding_selected = 1;
+    try model.captureEvent(&fixture.events, .{ .key_press = commands.bindings.reset_binding });
     try std.testing.expect(model.settings_state.settings_draft.keybindings.eql(.{}));
     try fixture.expectLabel(.help, "F2");
     try model.captureEvent(&fixture.events, .{ .key_press = commands.bindings.close });
     try std.testing.expect(!model.settings_state.keybindings_open);
     try std.testing.expect(hasChanges(model));
     try openTestBindingEditor(fixture);
-    model.settings_state.keybinding_selected = keybindings_view.save_index;
-    try model.captureEvent(&fixture.events, .{ .key_press = commands.bindings.confirm });
+    try model.captureEvent(&fixture.events, .{ .key_press = commands.bindings.save_settings });
     try fixture.expectLabel(.help, "F1");
     try std.testing.expect(!hasChanges(model));
 }
@@ -1562,24 +1562,84 @@ test "expanded settings return with Left and sidebar clicks switch out of the ed
     try std.testing.expect(hasChanges(model));
 }
 
-test "shared settings actions save and discard binding drafts without closing the right editor" {
+test "shared settings actions save and discard binding drafts focus their own details" {
     vxfw.DrawContext.init(.unicode);
     const fixture = try KeybindingTest.init("{}");
     defer fixture.deinit();
     fixture.load();
     try openTestBindingEditor(fixture);
     const model = fixture.model.?;
-    model.settings_state.keybinding_selected = keybindings_view.back_index;
+    model.settings_state.keybinding_selected = keybindings_view.row_count - 1;
     model.settings_state.settings_draft.keybindings = try model.settings_state.settings_draft.keybindings.withBinding(.help, .{ .codepoint = vaxis.Key.f2 });
     try SettingsMouseTest.click(fixture, "[ Save changes ]");
     try fixture.expectLabel(.help, "F2");
-    try std.testing.expect(model.settings_state.keybindings_open);
-    try std.testing.expectEqual(preferences.keybindings_index, model.settings_state.settings_selected);
+    try std.testing.expect(!model.settings_state.keybindings_open);
+    try std.testing.expectEqual(preferences.save_index, model.settings_state.settings_selected);
     model.settings_state.settings_draft.keybindings = try model.settings_state.settings_draft.keybindings.withBinding(.help, .{ .codepoint = vaxis.Key.f3 });
     model.settings_state.keybinding_error = error.ConflictingBinding;
     try SettingsMouseTest.click(fixture, "[ Discard changes ]");
     try std.testing.expect(!hasChanges(model));
     try std.testing.expect(model.settings_state.keybinding_error == null);
-    try std.testing.expect(model.settings_state.keybindings_open);
+    try std.testing.expect(!model.settings_state.keybindings_open);
     try std.testing.expectEqual(vaxis.Key.f2, model.settings_state.settings_draft.keybindings.get(.help).codepoint);
+}
+
+test "Vim navigation focuses previewed editors without activating them on selection" {
+    const fixture = try KeybindingTest.init("{}");
+    defer fixture.deinit();
+    fixture.load();
+    const model = fixture.model.?;
+    model.active = .settings;
+    model.settings_state.settings_selected = preferences.header_index;
+    try std.testing.expect(!model.settings_state.header_open);
+    try model.captureEvent(&fixture.events, .{ .key_press = .{ .codepoint = 'l' } });
+    try std.testing.expect(model.settings_state.header_open);
+    try model.captureEvent(&fixture.events, .{ .key_press = .{ .codepoint = 'j' } });
+    try std.testing.expectEqual(@as(usize, 1), model.settings_state.header_selected);
+    try model.captureEvent(&fixture.events, .{ .key_press = .{ .codepoint = 'h' } });
+    try std.testing.expect(!model.settings_state.header_open);
+    model.settings_state.settings_selected = preferences.keybindings_index;
+    try model.captureEvent(&fixture.events, .{ .key_press = .{ .codepoint = 'l' } });
+    try std.testing.expect(model.settings_state.keybindings_open);
+    const selected = model.settings_state.keybinding_selected;
+    try model.captureEvent(&fixture.events, .{ .key_press = .{ .codepoint = 'j' } });
+    try std.testing.expectEqual(selected + 1, model.settings_state.keybinding_selected);
+    try model.captureEvent(&fixture.events, .{ .key_press = .{ .codepoint = 'h' } });
+    try std.testing.expect(!model.settings_state.keybindings_open);
+    try std.testing.expect(!hasChanges(model));
+}
+
+test "Save and Discard follow Keyboard in vertical navigation" {
+    const fixture = try KeybindingTest.init("{}");
+    defer fixture.deinit();
+    fixture.load();
+    const model = fixture.model.?;
+    model.active = .settings;
+    model.settings_state.settings_selected = preferences.keybindings_index;
+    for ([_]usize{ preferences.save_index, preferences.discard_index, 0 }) |expected| {
+        try model.captureEvent(&fixture.events, .{ .key_press = commands.bindings.next });
+        try std.testing.expectEqual(expected, model.settings_state.settings_selected);
+        try std.testing.expect(!model.settings_state.keybindings_open);
+    }
+    for ([_]usize{ preferences.discard_index, preferences.save_index, preferences.keybindings_index }) |expected| {
+        try model.captureEvent(&fixture.events, .{ .key_press = commands.bindings.previous });
+        try std.testing.expectEqual(expected, model.settings_state.settings_selected);
+    }
+    try std.testing.expect(!hasChanges(model));
+}
+
+test "Down from the last binding reaches Save and Discard" {
+    const fixture = try KeybindingTest.init("{}");
+    defer fixture.deinit();
+    fixture.load();
+    try openTestBindingEditor(fixture);
+    const model = fixture.model.?;
+    model.settings_state.keybinding_selected = std.mem.indexOfScalar(commands.Id, &keybindings.editable, .toggle_wrap).?;
+    try model.captureEvent(&fixture.events, .{ .key_press = commands.bindings.next });
+    try std.testing.expect(!model.settings_state.keybindings_open);
+    try std.testing.expectEqual(preferences.save_index, model.settings_state.settings_selected);
+    try model.captureEvent(&fixture.events, .{ .key_press = commands.bindings.next });
+    try std.testing.expectEqual(preferences.discard_index, model.settings_state.settings_selected);
+    try model.captureEvent(&fixture.events, .{ .key_press = commands.bindings.previous });
+    try std.testing.expectEqual(preferences.save_index, model.settings_state.settings_selected);
 }

@@ -36,7 +36,7 @@ pub const View = struct {
         const body = try ctx.arena.create(View);
         body.* = self;
         const content: vxfw.Widget = .{ .userdata = body, .drawFn = drawBody };
-        const labels = [_]Border.BorderLabel{.{ .text = if (self.dirty) "Settings · Unsaved changes" else "Settings", .alignment = .top_left }};
+        const labels = [_]Border.BorderLabel{.{ .text = if (self.keybindings_open) try self.bindingHeader(ctx.arena) else if (self.dirty) "Settings · Unsaved changes" else "Settings", .alignment = .top_left }};
         var border: Border = .{ .child = content, .labels = &labels, .style = styles.emphasis };
         const height = size.height -| 2;
         try children.append(ctx.arena, .{
@@ -69,9 +69,7 @@ pub const View = struct {
         const path_height: u16 = if (self.pane == .full and size.height >= 14) 1 else 0;
         const description_height: u16 = if (self.pane == .controls) 0 else if (size.height >= 10) 2 else if (size.height >= 6) 1 else 0;
         const error_height: u16 = if (self.pane == .full and size.height >= 4 and (self.failure != null or self.busy)) 1 else 0;
-        const action_height: u16 = if (self.pane == .controls) 0 else if (size.height >= 2) (if (width >= 38 or size.height < 4) 1 else 2) else if (self.selected >= preferences.save_index) 1 else 0;
-        const actions_row = size.height - path_height - action_height;
-        const description_row = actions_row - error_height - description_height;
+        const description_row = size.height - path_height - error_height - description_height;
         const form_height = description_row;
 
         var rows: std.ArrayList(Row) = .empty;
@@ -87,7 +85,7 @@ pub const View = struct {
                 continue;
             }
             const index = item.control.?;
-            const selected = self.selected == index and (!self.header_open or self.pane == .controls);
+            const selected = self.selected == index and !self.header_open and !self.keybindings_open;
             if (selected) selected_line = rows.items.len;
             try rows.append(ctx.arena, .{ .text = try self.controlText(ctx.arena, index), .action = .{ .control = index }, .selected = selected });
             if (index == preferences.header_index and self.header_open and self.pane == .full) {
@@ -101,7 +99,11 @@ pub const View = struct {
                 }
             }
         }
-        if (self.selected >= preferences.save_index) selected_line = rows.items.len - 1;
+        try rows.append(ctx.arena, .{ .text = "" });
+        for ([_]usize{ preferences.save_index, preferences.discard_index }) |index| {
+            if (self.selected == index) selected_line = rows.items.len;
+            try rows.append(ctx.arena, self.actionRow(index));
+        }
         const visible = @min(rows.items.len, form_height);
         const first = @min(selected_line -| (visible / 2), rows.items.len - visible);
         for (rows.items[first .. first + visible], 0..) |item, offset|
@@ -111,60 +113,63 @@ pub const View = struct {
             var detail_text: vxfw.Text = .{ .text = try self.description(ctx.arena), .softwrap = true, .overflow = .ellipsis, .width_basis = .parent, .style = styles.secondary };
             try children.append(ctx.arena, .{ .origin = .{ .row = @intCast(description_row), .col = @intCast(col) }, .surface = try detail_text.draw(ctx.withConstraints(.{}, .{ .width = width, .height = description_height })) });
         }
-        if (error_height > 0) try self.appendRow(line_ctx, &children, actions_row - 1, col, .{ .text = if (self.busy) "Settings are locked while an operation is running." else try std.fmt.allocPrint(ctx.arena, "Settings error: {s}", .{@errorName(self.failure.?)}), .emphasis = true });
-        if (action_height > 0) {
-            if (width >= 38) {
-                try self.appendRow(line_ctx.withConstraints(.{}, .{ .width = 16, .height = 1 }), &children, actions_row, col, self.actionRow(preferences.save_index));
-                try self.appendRow(line_ctx.withConstraints(.{}, .{ .width = 19, .height = 1 }), &children, actions_row, col + 19, self.actionRow(preferences.discard_index));
-            } else if (action_height == 2) {
-                try self.appendRow(line_ctx, &children, actions_row, col, self.actionRow(preferences.save_index));
-                try self.appendRow(line_ctx, &children, actions_row + 1, col, self.actionRow(preferences.discard_index));
-            } else try self.appendRow(line_ctx, &children, actions_row, col, self.actionRow(if (self.selected == preferences.discard_index) preferences.discard_index else preferences.save_index));
-        }
-        if (path_height > 0) try self.appendRow(line_ctx, &children, size.height - 1, col, .{ .text = try std.fmt.allocPrint(ctx.arena, "File: {f}", .{diagnostics.safe(self.path)}) });
+        if (error_height > 0) try self.appendRow(line_ctx, &children, size.height - path_height - 1, col, .{ .text = if (self.busy) "Settings are locked while an operation is running." else try std.fmt.allocPrint(ctx.arena, "Settings error: {s}", .{@errorName(self.failure.?)}), .emphasis = true });
+        if (path_height > 0) try self.appendPath(ctx, &children, size.height - 1);
         return .{ .size = size, .widget = widget, .buffer = &.{}, .children = children.items };
     }
 
     fn drawSplit(self: *const View, ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
         const size = ctx.max.size();
         const path_height: u16 = if (size.height >= 14) 1 else 0;
-        const actions_row = size.height - path_height - 1;
+        const pane_height = size.height - path_height;
         const left_width = @min(@as(u16, 48), @import("split_layout.zig").listWidth(size.width, 40));
         var children: std.ArrayList(vxfw.SubSurface) = .empty;
         for ([_]bool{ false, true }) |right| {
             const pane = try ctx.arena.create(View);
             pane.* = self.*;
             pane.pane = if (right) .details else .controls;
-            const labels = [_]Border.BorderLabel{.{ .text = if (!right) (if (self.dirty) "Settings · Unsaved changes" else "Settings") else if (self.keybindings_open) "Keybindings" else if (self.header_open) "Header icons" else "Setting details", .alignment = .top_left }};
+            const labels = [_]Border.BorderLabel{.{ .text = if (!right) (if (self.dirty) "Settings · Unsaved changes" else "Settings") else if (self.keybindings_open or self.previewSelection() == preferences.keybindings_index) try self.bindingHeader(ctx.arena) else if (self.header_open or self.previewSelection() == preferences.header_index) "Header icons" else "Details", .alignment = .top_left }};
             var border: Border = .{ .child = .{ .userdata = pane, .drawFn = drawBody }, .labels = &labels, .style = styles.emphasis };
             const width = if (right) size.width - left_width else left_width;
-            try children.append(ctx.arena, .{ .origin = .{ .row = 0, .col = if (right) @intCast(left_width) else 0 }, .surface = try border.draw(ctx.withConstraints(.{ .width = width, .height = actions_row }, .{ .width = width, .height = actions_row })) });
+            try children.append(ctx.arena, .{ .origin = .{ .row = 0, .col = if (right) @intCast(left_width) else 0 }, .surface = try border.draw(ctx.withConstraints(.{ .width = width, .height = pane_height }, .{ .width = width, .height = pane_height })) });
         }
-        const line_ctx = ctx.withConstraints(.{}, .{ .width = 16, .height = 1 });
-        try self.appendRow(line_ctx, &children, actions_row, 1, self.actionRow(preferences.save_index));
-        try self.appendRow(line_ctx.withConstraints(.{}, .{ .width = 19, .height = 1 }), &children, actions_row, 20, self.actionRow(preferences.discard_index));
-        if (path_height > 0) try self.appendRow(ctx.withConstraints(.{}, .{ .width = size.width - 2, .height = 1 }), &children, size.height - 1, 1, .{ .text = try std.fmt.allocPrint(ctx.arena, "File: {f}", .{diagnostics.safe(self.path)}) });
+        if (path_height > 0) try self.appendPath(ctx, &children, size.height - 1);
         return .{ .size = size, .widget = .{ .userdata = ptr, .drawFn = drawBody }, .buffer = &.{}, .children = children.items };
     }
 
+    fn appendPath(self: *const View, ctx: vxfw.DrawContext, children: *std.ArrayList(vxfw.SubSurface), row: u16) Allocator.Error!void {
+        const text = try std.fmt.allocPrint(ctx.arena, "File: {f}", .{diagnostics.safe(self.path)});
+        const width: u16 = @intCast(@min(ctx.max.size().width, ctx.stringWidth(text)));
+        try self.appendRow(ctx.withConstraints(.{}, .{ .width = width, .height = 1 }), children, row, (ctx.max.size().width - width) / 2, .{ .text = text });
+    }
+
     fn drawDetails(self: *const View, ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
-        if (self.keybindings_open) return keybindings_view.draw(.{ .config = self.settings.keybindings, .selected = self.binding_selected, .capturing = self.capturing, .failure = self.binding_error orelse self.failure, .busy = self.busy }, ctx);
+        if (self.keybindings_open or self.previewSelection() == preferences.keybindings_index) return keybindings_view.draw(.{ .config = self.settings.keybindings, .selected = self.binding_selected, .capturing = self.capturing, .failure = self.binding_error orelse self.failure, .busy = self.busy, .focused = self.keybindings_open }, ctx);
         const size = ctx.max.size();
         const error_height: u16 = if (size.height > 0 and (self.failure != null or self.busy)) 1 else 0;
         const available = size.height - error_height;
         var children: std.ArrayList(vxfw.SubSurface) = .empty;
-        const text_height: u16 = if (self.header_open) @min(available -| 3, 2) else available;
+        const show_headers = self.header_open or self.previewSelection() == preferences.header_index;
+        const text_height: u16 = if (show_headers) @min(available -| 3, 2) else available;
         if (text_height > 0) {
             var text: vxfw.Text = .{ .text = try self.description(ctx.arena), .softwrap = true, .overflow = .ellipsis, .width_basis = .parent, .style = styles.secondary };
             try children.append(ctx.arena, .{ .origin = .{ .row = 0, .col = 0 }, .surface = try text.draw(ctx.withConstraints(.{}, .{ .width = size.width, .height = text_height })) });
         }
-        if (self.header_open) for (preferences.header_styles, 0..) |style, index| {
+        if (show_headers) for (preferences.header_styles, 0..) |style, index| {
             const row: u16 = @intCast(text_height + index);
             if (row >= available) break;
-            try self.appendRow(ctx.withConstraints(.{}, .{ .width = size.width, .height = 1 }), &children, row, 0, .{ .text = try std.fmt.allocPrint(ctx.arena, "({s}) {s}", .{ if (style == self.settings.header_icons) "x" else " ", style.title() }), .action = .{ .header = index }, .selected = index == self.header_selected });
+            try self.appendRow(ctx.withConstraints(.{}, .{ .width = size.width, .height = 1 }), &children, row, 0, .{ .text = try std.fmt.allocPrint(ctx.arena, "({s}) {s}", .{ if (style == self.settings.header_icons) "x" else " ", style.title() }), .action = .{ .header = index }, .selected = self.header_open and index == self.header_selected });
         };
         if (error_height > 0) try self.appendRow(ctx.withConstraints(.{}, .{ .width = size.width, .height = 1 }), &children, size.height - 1, 0, .{ .text = if (self.busy) "Settings are locked while an operation is running." else try std.fmt.allocPrint(ctx.arena, "Settings error: {s}", .{@errorName(self.failure.?)}), .emphasis = true });
         return .{ .size = size, .widget = .{ .userdata = ptr, .drawFn = drawBody }, .buffer = &.{}, .children = children.items };
+    }
+
+    fn bindingHeader(self: *const View, arena: Allocator) Allocator.Error![]const u8 {
+        return std.fmt.allocPrint(arena, "Keybindings · {d}/{d}{s}", .{ keybindings_view.displayPosition(self.binding_selected) + 1, keybindings_view.row_count, if (self.capturing) " · Press a replacement key" else if (self.dirty) " · Unsaved changes" else "" });
+    }
+
+    fn previewSelection(self: *const View) usize {
+        return self.selected;
     }
 
     fn actionRow(self: *const View, index: usize) Row {
@@ -195,7 +200,7 @@ pub const View = struct {
             .nerd_font => "Nerd Font icons require a compatible font in your terminal.",
             .ascii => "Use ASCII symbols alongside page names.",
         };
-        return switch (self.selected) {
+        return switch (self.previewSelection()) {
             0 => "Show AUR searches, installed packages, and updates.",
             1 => try std.fmt.allocPrint(arena, "Show Flatpak applications and updates. Backend: {s}.", .{self.backendStatus()}),
             preferences.atoll_index => "Use Shelly's shared AUR mirror and scan Atoll PKGBUILD previews.",
@@ -275,33 +280,13 @@ test "grouped form keeps focused controls and actions within small layouts" {
     };
 }
 
-test "Save and Discard stay at the same position as form focus scrolls" {
-    vxfw.DrawContext.init(.unicode);
-    var arena: std.heap.ArenaAllocator = .init(std.testing.allocator);
-    defer arena.deinit();
-    for (0..preferences.save_index) |selected| {
-        var view: View = .{ .settings = .{}, .selected = selected, .path = "settings.json", .failure = null, .flatpak_checked = false, .flatpak_available = false, .checking = false, .busy = false };
-        const surface = try View.drawBody(&view, .{ .arena = arena.allocator(), .min = .{}, .max = .{ .width = 80, .height = 10 }, .cell_size = .{ .width = 10, .height = 20 } });
-        var found: usize = 0;
-        for (surface.children) |child| {
-            var text: std.ArrayList(u8) = .empty;
-            for (child.surface.buffer) |cell| try text.appendSlice(arena.allocator(), cell.char.grapheme);
-            if (std.mem.indexOf(u8, text.items, "[ Save changes ]") != null or std.mem.indexOf(u8, text.items, "[ Discard changes ]") != null) {
-                try std.testing.expectEqual(@as(i17, 9), child.origin.row);
-                found += 1;
-            }
-        }
-        try std.testing.expectEqual(@as(usize, 2), found);
-    }
-}
-
 test "wide settings keep controls left and expand editors only on the right" {
     vxfw.DrawContext.init(.unicode);
-    const Mode = enum { details, header, bindings };
-    for ([_]Mode{ .details, .header, .bindings }) |mode| {
+    const Mode = enum { details, header, bindings, binding_preview };
+    for ([_]Mode{ .details, .header, .bindings, .binding_preview }) |mode| {
         var arena: std.heap.ArenaAllocator = .init(std.testing.allocator);
         defer arena.deinit();
-        var view: View = .{ .settings = .{}, .selected = if (mode == .bindings) preferences.keybindings_index else preferences.header_index, .header_open = mode == .header, .header_selected = 1, .keybindings_open = mode == .bindings, .path = "settings.json", .failure = null, .flatpak_checked = false, .flatpak_available = false, .checking = false, .busy = false };
+        var view: View = .{ .settings = .{}, .selected = if (mode == .bindings or mode == .binding_preview) preferences.keybindings_index else preferences.header_index, .header_open = mode == .header, .header_selected = 1, .keybindings_open = mode == .bindings, .path = "settings.json", .failure = null, .flatpak_checked = false, .flatpak_available = false, .checking = false, .busy = false };
         const surface = try View.drawBody(&view, .{ .arena = arena.allocator(), .min = .{}, .max = .{ .width = 120, .height = 24 }, .cell_size = .{ .width = 10, .height = 20 } });
         _ = try LayoutTest.check(surface);
         const left = surface.children[0];
@@ -315,25 +300,82 @@ test "wide settings keep controls left and expand editors only on the right" {
             try std.testing.expect(try LayoutTest.contains(right.surface, "Nerd Font", arena.allocator()));
             try std.testing.expect(try LayoutTest.contains(right.surface, "ASCII", arena.allocator()));
             try std.testing.expect(!try LayoutTest.contains(left.surface, "( ) Nerd Font", arena.allocator()));
-        } else if (mode == .bindings) {
+        } else if (mode == .bindings or mode == .binding_preview) {
             try std.testing.expect(try LayoutTest.contains(right.surface, "Quit", arena.allocator()));
             try std.testing.expect(try LayoutTest.contains(right.surface, "Ctrl+C", arena.allocator()));
-        } else try std.testing.expect(try LayoutTest.contains(right.surface, "Choose text-only", arena.allocator()));
-        try std.testing.expect(try LayoutTest.contains(surface.children[2].surface, "Save changes", arena.allocator()));
-        try std.testing.expect(try LayoutTest.contains(surface.children[3].surface, "Discard changes", arena.allocator()));
+        } else {
+            try std.testing.expect(try LayoutTest.contains(right.surface, "Choose text-only", arena.allocator()));
+            try std.testing.expect(try LayoutTest.contains(right.surface, "Nerd Font", arena.allocator()));
+        }
+        if (mode == .binding_preview or mode == .details) try std.testing.expect(!try LayoutTest.check(right.surface));
+        try std.testing.expect(try LayoutTest.contains(left.surface, "Save changes", arena.allocator()));
+        try std.testing.expect(try LayoutTest.contains(left.surface, "Discard changes", arena.allocator()));
     }
 }
 
 test "expanded settings survive repeated wide and narrow draws" {
     vxfw.DrawContext.init(.unicode);
-    var view: View = .{ .settings = .{}, .selected = preferences.keybindings_index, .keybindings_open = true, .binding_selected = keybindings_view.back_index, .path = "settings.json", .failure = null, .flatpak_checked = false, .flatpak_available = false, .checking = false, .busy = false };
+    var view: View = .{ .settings = .{}, .selected = preferences.keybindings_index, .keybindings_open = true, .binding_selected = keybindings_view.row_count - 1, .path = "settings.json", .failure = null, .flatpak_checked = false, .flatpak_available = false, .checking = false, .busy = false };
     for ([_]u16{ 120, 40, 80, 1, 120 }) |width| {
         var arena: std.heap.ArenaAllocator = .init(std.testing.allocator);
         defer arena.deinit();
         const surface = try View.drawBody(&view, .{ .arena = arena.allocator(), .min = .{}, .max = .{ .width = width, .height = 20 }, .cell_size = .{ .width = 10, .height = 20 } });
         try std.testing.expect(try LayoutTest.check(surface));
-        try std.testing.expectEqual(keybindings_view.back_index, view.binding_selected);
+        try std.testing.expectEqual(keybindings_view.row_count - 1, view.binding_selected);
         try std.testing.expect(view.keybindings_open);
         if (width >= 80) try std.testing.expect(try LayoutTest.contains(surface.children[0].surface, "Enable AUR", arena.allocator()));
+    }
+}
+
+test "binding header carries position and capture status" {
+    var arena: std.heap.ArenaAllocator = .init(std.testing.allocator);
+    defer arena.deinit();
+    var view: View = .{ .settings = .{}, .selected = preferences.keybindings_index, .keybindings_open = true, .path = "settings.json", .failure = null, .flatpak_checked = false, .flatpak_available = false, .checking = false, .busy = false };
+    try std.testing.expectEqualStrings(try std.fmt.allocPrint(arena.allocator(), "Keybindings · 1/{d}", .{keybindings_view.row_count}), try view.bindingHeader(arena.allocator()));
+    view.dirty = true;
+    try std.testing.expect(std.mem.endsWith(u8, try view.bindingHeader(arena.allocator()), "Unsaved changes"));
+    view.capturing = true;
+    try std.testing.expect(std.mem.endsWith(u8, try view.bindingHeader(arena.allocator()), "Press a replacement key"));
+}
+
+test "settings actions stay inside the left panel below Keyboard and the path is centered" {
+    vxfw.DrawContext.init(.unicode);
+    var arena: std.heap.ArenaAllocator = .init(std.testing.allocator);
+    defer arena.deinit();
+    var view: View = .{ .settings = .{}, .selected = preferences.save_index, .path = "settings.json", .failure = null, .flatpak_checked = false, .flatpak_available = false, .checking = false, .busy = false };
+    const surface = try View.drawBody(&view, .{ .arena = arena.allocator(), .min = .{}, .max = .{ .width = 120, .height = 24 }, .cell_size = .{ .width = 10, .height = 20 } });
+    _ = try LayoutTest.check(surface);
+    const left = surface.children[0].surface;
+    try std.testing.expect(try LayoutTest.contains(left, "Keyboard", arena.allocator()));
+    try std.testing.expect(try LayoutTest.contains(left, "[ Save changes ]", arena.allocator()));
+    try std.testing.expect(try LayoutTest.contains(left, "[ Discard changes ]", arena.allocator()));
+    try std.testing.expect(!try LayoutTest.contains(surface.children[1].surface, "[ Save changes ]", arena.allocator()));
+    const path = surface.children[2];
+    try std.testing.expect(try LayoutTest.contains(path.surface, "File: settings.json", arena.allocator()));
+    try std.testing.expectEqual(@as(i17, 23), path.origin.row);
+    try std.testing.expectEqual(@as(i17, @intCast((120 - path.surface.size.width) / 2)), path.origin.col);
+}
+
+test "Save and Discard use separate rows and display their own details" {
+    vxfw.DrawContext.init(.unicode);
+    var arena: std.heap.ArenaAllocator = .init(std.testing.allocator);
+    defer arena.deinit();
+    for ([_]usize{ preferences.save_index, preferences.discard_index }) |selected| {
+        var view: View = .{ .settings = .{}, .selected = selected, .path = "settings.json", .failure = null, .flatpak_checked = false, .flatpak_available = false, .checking = false, .busy = false };
+        const ctx: vxfw.DrawContext = .{ .arena = arena.allocator(), .min = .{}, .max = .{ .width = 120, .height = 24 }, .cell_size = .{ .width = 10, .height = 20 } };
+        const split = try View.drawBody(&view, ctx);
+        const detail = split.children[1].surface;
+        try std.testing.expect(try LayoutTest.contains(detail, if (selected == preferences.save_index) "Save and apply" else "Discard pending edits", arena.allocator()));
+        try std.testing.expect(!try LayoutTest.contains(detail, "Keybindings", arena.allocator()));
+        view.pane = .controls;
+        const controls = try View.drawBody(&view, ctx);
+        var save_row: ?i17 = null;
+        var discard_row: ?i17 = null;
+        for (controls.children) |child| {
+            if (try LayoutTest.contains(child.surface, "[ Save changes ]", arena.allocator())) save_row = child.origin.row;
+            if (try LayoutTest.contains(child.surface, "[ Discard changes ]", arena.allocator())) discard_row = child.origin.row;
+        }
+        try std.testing.expect(save_row != null and discard_row != null);
+        try std.testing.expectEqual(save_row.? + 1, discard_row.?);
     }
 }

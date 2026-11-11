@@ -7,10 +7,46 @@ const keybindings = @import("../services/keybindings.zig");
 const styles = @import("styles.zig");
 const Allocator = std.mem.Allocator;
 
-pub const restore_index = keybindings.editable.len;
-pub const save_index = restore_index + 1;
-pub const back_index = save_index + 1;
-pub const row_count = back_index + 1;
+pub const row_count = keybindings.editable.len;
+
+const Section = struct { name: []const u8, ids: []const commands.Id };
+const sections = [_]Section{
+    .{ .name = "General", .ids = &.{ .quit, .help, .next_tab, .previous_tab, .refresh } },
+    .{ .name = "Packages", .ids = &.{ .install, .remove, .refresh_list, .filter, .clear_selection, .narrow_view, .widen_view } },
+    .{ .name = "Updates", .ids = &.{ .upgrade_all, .upgrade_system, .upgrade_aur, .upgrade_flatpak } },
+    .{ .name = "AUR catalog", .ids = &.{ .previous_catalog_page, .next_catalog_page } },
+    .{ .name = "Flatpak details", .ids = &.{ .categories, .previous_screenshot, .next_screenshot } },
+    .{ .name = "PKGBUILD", .ids = &.{ .preview, .toggle_wrap } },
+};
+
+fn commandIndex(id: commands.Id) usize {
+    for (keybindings.editable, 0..) |candidate, index| if (candidate == id) return index;
+    unreachable;
+}
+
+pub fn displayPosition(selected: usize) usize {
+    var offset: usize = 0;
+    for (sections) |section| for (section.ids) |id| {
+        if (commandIndex(id) == selected) return offset;
+        offset += 1;
+    };
+    unreachable;
+}
+
+/// Keep navigation in the same order as the grouped display.
+pub fn adjacent(selected: usize, forward: bool) ?usize {
+    var order: [row_count]usize = undefined;
+    var count: usize = 0;
+    for (sections) |section| for (section.ids) |id| {
+        order[count] = commandIndex(id);
+        count += 1;
+    };
+    for (order, 0..) |index, position| if (index == selected) {
+        if (forward) return if (position + 1 < order.len) order[position + 1] else null;
+        return order[(position + order.len - 1) % order.len];
+    };
+    unreachable;
+}
 
 pub const View = struct {
     config: keybindings.Config,
@@ -18,6 +54,7 @@ pub const View = struct {
     capturing: bool,
     failure: ?anyerror,
     busy: bool,
+    focused: bool = true,
 };
 
 pub fn draw(view: View, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
@@ -31,8 +68,8 @@ fn drawBody(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface
     const size = ctx.max.size();
     const widget: vxfw.Widget = .{ .userdata = ptr, .drawFn = drawBody };
     if (size.width == 0 or size.height == 0) return .{ .size = size, .widget = widget, .buffer = &.{}, .children = &.{} };
-    const width = @min(size.width, 80);
-    const col = (size.width - width) / 2;
+    const width = size.width;
+    const col: u16 = 0;
     const line_ctx = ctx.withConstraints(.{}, .{ .width = width, .height = 1 });
     var children: std.ArrayList(vxfw.SubSurface) = .empty;
     var labels: [keybindings.editable.len][]const u8 = undefined;
@@ -44,39 +81,44 @@ fn drawBody(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface
     const gap: u16 = 1;
     // Stack rows when columns would leave fewer than 12 cells for names.
     const stacked = width < key_width + gap + 12;
-    const header: u16 = if (size.height >= @as(u16, if (stacked) 6 else 4)) 2 else 0;
     const status: u16 = if (size.height >= 3 and (view.failure != null or view.busy)) 1 else 0;
-    if (header > 0) {
-        try line(line_ctx, &children, 0, col, try std.fmt.allocPrint(ctx.arena, "Keybindings · {d}/{d}", .{ view.selected + 1, row_count }), styles.emphasis);
-        try line(line_ctx, &children, 1, col, if (view.capturing) "Press a replacement key." else "Changes take effect when saved.", styles.secondary);
-    }
-    const available = size.height - header - status;
+    const available = size.height - status;
     const row_height: usize = if (stacked and available >= 2) 2 else 1;
-    const visible = @min(row_count, available / row_height);
-    var first = view.selected -| (visible / 2);
-    first = @min(first, row_count - visible);
-    for (first..first + visible) |index| {
-        const row: u16 = @intCast(header + (index - first) * row_height);
-        const style = if (index == view.selected and !view.busy) styles.selected else styles.secondary;
-        if (index < keybindings.editable.len) {
-            const label = if (view.capturing and index == view.selected) "…" else labels[index];
-            const name = title(keybindings.editable[index]);
-            if (stacked) {
-                if (row_height == 2) try line(line_ctx, &children, row, col, name, style);
-                try line(line_ctx, &children, row + @as(u16, if (row_height == 2) 1 else 0), col, label, style);
-            } else {
-                const name_width = @min(24, width - key_width - gap);
-                try line(line_ctx.withConstraints(.{}, .{ .width = name_width, .height = 1 }), &children, row, col, name, style);
-                try line(line_ctx.withConstraints(.{}, .{ .width = key_width, .height = 1 }), &children, row, col + name_width + gap, label, style);
-            }
+    const DisplayRow = struct { section: usize, command: ?usize = null, continuation: bool = false };
+    var rows: std.ArrayList(DisplayRow) = .empty;
+    var selected_row: usize = 0;
+    for (sections, 0..) |section, section_index| {
+        try rows.append(ctx.arena, .{ .section = section_index });
+        for (section.ids) |id| {
+            const index = commandIndex(id);
+            if (index == view.selected) selected_row = rows.items.len;
+            try rows.append(ctx.arena, .{ .section = section_index, .command = index });
+            if (row_height == 2) try rows.append(ctx.arena, .{ .section = section_index, .command = index, .continuation = true });
+        }
+    }
+    var first = (selected_row + row_height) -| available;
+    var sticky: usize = if (rows.items[first].command != null and available > row_height) 1 else 0;
+    if (sticky > 0) first = (selected_row + row_height) -| (available - sticky);
+    if (rows.items[first].command == null) sticky = 0;
+    if (sticky > 0) try line(line_ctx, &children, 0, col, sections[rows.items[first].section].name, styles.emphasis);
+    const visible = @min(rows.items.len - first, available - sticky);
+    for (rows.items[first .. first + visible], 0..) |item, offset| {
+        const row: u16 = @intCast(sticky + offset);
+        const index = item.command orelse {
+            try line(line_ctx, &children, row, col, sections[item.section].name, styles.emphasis);
+            continue;
+        };
+        const selected = index == view.selected and view.focused and !view.busy;
+        const style = if (selected) styles.selected else styles.secondary;
+        const label = if (view.capturing and index == view.selected) "…" else labels[index];
+        const name = title(keybindings.editable[index]);
+        const binding_style = if (selected) styles.selected else styles.emphasis;
+        if (stacked) {
+            try line(line_ctx, &children, row, col, if (item.continuation or row_height == 1) label else name, if (item.continuation or row_height == 1) binding_style else style);
         } else {
-            const text: []const u8 = switch (index) {
-                restore_index => "[ Restore all defaults ]",
-                save_index => "[ Save changes ]",
-                back_index => "[ Back to preferences ]",
-                else => unreachable,
-            };
-            try line(line_ctx, &children, row, col, text, style);
+            const name_width = @min(24, width - key_width - gap);
+            try line(line_ctx.withConstraints(.{}, .{ .width = name_width, .height = 1 }), &children, row, col, name, style);
+            try line(line_ctx.withConstraints(.{}, .{ .width = key_width, .height = 1 }), &children, row, col + name_width + gap, label, binding_style);
         }
     }
     if (status > 0) try line(line_ctx, &children, size.height - 1, col, if (view.failure) |err| errorText(err) else "Settings are locked while an operation is running.", styles.emphasis);
@@ -129,7 +171,7 @@ fn title(id: commands.Id) []const u8 {
 
 test "editor keeps selected rows visible within tiny and scrolling layouts" {
     vxfw.DrawContext.init(.unicode);
-    for ([_]u16{ 0, 1, 20, 80 }) |width| for ([_]u16{ 0, 1, 3, 8, 24 }) |height| for ([_]usize{ 0, 12, back_index }) |selected| {
+    for ([_]u16{ 0, 1, 20, 80 }) |width| for ([_]u16{ 0, 1, 3, 8, 24 }) |height| for ([_]usize{ 0, 12, row_count - 1 }) |selected| {
         var arena: std.heap.ArenaAllocator = .init(std.testing.allocator);
         defer arena.deinit();
         const surface = try draw(.{ .config = .{}, .selected = selected, .capturing = false, .failure = error.ConflictingBinding, .busy = false }, .{ .arena = arena.allocator(), .min = .{}, .max = .{ .width = width, .height = height }, .cell_size = .{ .width = 10, .height = 20 } });
@@ -172,4 +214,46 @@ test "narrow editors show complete bindings and keep command names alongside the
             try std.testing.expect(binding_row.? > name_row.?);
         } else try std.testing.expectEqual(name_row, binding_row);
     }
+}
+
+test "grouped binding rows stay left aligned and scroll to the selected command" {
+    vxfw.DrawContext.init(.unicode);
+    for ([_]usize{ 0, 12, row_count - 1 }) |selected| {
+        var arena: std.heap.ArenaAllocator = .init(std.testing.allocator);
+        defer arena.deinit();
+        const surface = try draw(.{ .config = .{}, .selected = selected, .capturing = false, .failure = null, .busy = false }, .{ .arena = arena.allocator(), .min = .{}, .max = .{ .width = 120, .height = 12 }, .cell_size = .{ .width = 10, .height = 20 } });
+        var title_row: ?i17 = null;
+        for (surface.children) |child| {
+            if (child.origin.col != 0) continue;
+            var text: std.ArrayList(u8) = .empty;
+            for (child.surface.buffer) |cell| try text.appendSlice(arena.allocator(), cell.char.grapheme);
+            const wanted = title(keybindings.editable[selected]);
+            if (std.mem.indexOf(u8, text.items, wanted) != null) {
+                title_row = child.origin.row;
+                try std.testing.expect(child.surface.buffer[0].style.reverse);
+            }
+        }
+        try std.testing.expect(title_row != null);
+    }
+}
+
+test "sections separate contextual shortcuts and navigation visits each command once" {
+    var visited: [row_count]bool = @splat(false);
+    var current: ?usize = commandIndex(.quit);
+    var count: usize = 0;
+    while (current) |index| {
+        try std.testing.expect(!visited[index]);
+        visited[index] = true;
+        try std.testing.expectEqual(count, displayPosition(index));
+        count += 1;
+        current = adjacent(index, true);
+    }
+    try std.testing.expectEqual(row_count, count);
+    vxfw.DrawContext.init(.unicode);
+    var arena: std.heap.ArenaAllocator = .init(std.testing.allocator);
+    defer arena.deinit();
+    const surface = try draw(.{ .config = .{}, .selected = 0, .capturing = false, .failure = null, .busy = false }, .{ .arena = arena.allocator(), .min = .{}, .max = .{ .width = 100, .height = 40 }, .cell_size = .{ .width = 10, .height = 20 } });
+    var text: std.ArrayList(u8) = .empty;
+    for (surface.children) |child| for (child.surface.buffer) |cell| try text.appendSlice(arena.allocator(), cell.char.grapheme);
+    for (sections) |section| try std.testing.expect(std.mem.indexOf(u8, text.items, section.name) != null);
 }

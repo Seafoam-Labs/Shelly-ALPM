@@ -1,6 +1,5 @@
 const std = @import("std");
 const commands = @import("commands.zig");
-const keybindings_view = @import("views/keybindings_view.zig");
 const Model = @import("model.zig").Model;
 const packages_model = @import("models/packages_model.zig");
 const aur_model = @import("models/aur_model.zig");
@@ -124,10 +123,8 @@ pub fn resolve(self: *Model) commands.Context {
             context.settings_keybindings = self.settings_state.keybindings_open;
             context.settings_keybindings_button = self.settings_state.settings_selected == @import("models/settings.zig").keybindings_index;
             context.settings_capture = self.settings_state.keybinding_capture;
-            context.settings_binding_selected = context.settings_keybindings and self.settings_state.keybinding_selected < keybindings_view.restore_index;
-            context.settings_restore_selected = context.settings_keybindings and self.settings_state.keybinding_selected == keybindings_view.restore_index;
-            context.settings_back_selected = context.settings_keybindings and self.settings_state.keybinding_selected == keybindings_view.back_index;
-            context.settings_save_selected = if (context.settings_keybindings) self.settings_state.keybinding_selected == keybindings_view.save_index else self.settings_state.settings_selected == settings_model.save_index;
+            context.settings_binding_selected = context.settings_keybindings;
+            context.settings_save_selected = !context.settings_keybindings and self.settings_state.settings_selected == settings_model.save_index;
             context.settings_header_open = self.settings_state.header_open;
             context.settings_discard_selected = !context.settings_keybindings and self.settings_state.settings_selected == @import("models/settings.zig").discard_index;
             context.settings_cycle_selected = self.settings_state.settings_selected == @import("models/settings.zig").header_index;
