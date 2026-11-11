@@ -35,27 +35,49 @@ fn drawBody(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface
     const col = (size.width - width) / 2;
     const line_ctx = ctx.withConstraints(.{}, .{ .width = width, .height = 1 });
     var children: std.ArrayList(vxfw.SubSurface) = .empty;
-    const header: u16 = if (size.height >= 4) 2 else 0;
+    var labels: [keybindings.editable.len][]const u8 = undefined;
+    var key_width: u16 = 0;
+    for (keybindings.editable, 0..) |id, index| {
+        labels[index] = try commands.keyLabel(ctx.arena, view.config.get(id));
+        key_width = @max(key_width, @as(u16, @intCast(ctx.stringWidth(labels[index]))));
+    }
+    const gap: u16 = 1;
+    // Stack rows when columns would leave fewer than 12 cells for names.
+    const stacked = width < key_width + gap + 12;
+    const header: u16 = if (size.height >= @as(u16, if (stacked) 6 else 4)) 2 else 0;
     const status: u16 = if (size.height >= 3 and (view.failure != null or view.busy)) 1 else 0;
     if (header > 0) {
         try line(line_ctx, &children, 0, col, try std.fmt.allocPrint(ctx.arena, "Keybindings · {d}/{d}", .{ view.selected + 1, row_count }), styles.emphasis);
         try line(line_ctx, &children, 1, col, if (view.capturing) "Press a replacement key." else "Changes take effect when saved.", styles.secondary);
     }
-    const visible = @min(row_count, size.height - header - status);
+    const available = size.height - header - status;
+    const row_height: usize = if (stacked and available >= 2) 2 else 1;
+    const visible = @min(row_count, available / row_height);
     var first = view.selected -| (visible / 2);
     first = @min(first, row_count - visible);
     for (first..first + visible) |index| {
-        const text = if (index < keybindings.editable.len) blk: {
-            const id = keybindings.editable[index];
-            const label = if (view.capturing and index == view.selected) "…" else try commands.keyLabel(ctx.arena, view.config.get(id));
-            break :blk try std.fmt.allocPrint(ctx.arena, "{s:<24} {s}", .{ title(id), label });
-        } else switch (index) {
-            restore_index => "[ Restore all defaults ]",
-            save_index => "[ Save changes ]",
-            back_index => "[ Back to preferences ]",
-            else => unreachable,
-        };
-        try line(line_ctx, &children, @intCast(header + index - first), col, text, if (index == view.selected and !view.busy) styles.selected else styles.secondary);
+        const row: u16 = @intCast(header + (index - first) * row_height);
+        const style = if (index == view.selected and !view.busy) styles.selected else styles.secondary;
+        if (index < keybindings.editable.len) {
+            const label = if (view.capturing and index == view.selected) "…" else labels[index];
+            const name = title(keybindings.editable[index]);
+            if (stacked) {
+                if (row_height == 2) try line(line_ctx, &children, row, col, name, style);
+                try line(line_ctx, &children, row + @as(u16, if (row_height == 2) 1 else 0), col, label, style);
+            } else {
+                const name_width = @min(24, width - key_width - gap);
+                try line(line_ctx.withConstraints(.{}, .{ .width = name_width, .height = 1 }), &children, row, col, name, style);
+                try line(line_ctx.withConstraints(.{}, .{ .width = key_width, .height = 1 }), &children, row, col + name_width + gap, label, style);
+            }
+        } else {
+            const text: []const u8 = switch (index) {
+                restore_index => "[ Restore all defaults ]",
+                save_index => "[ Save changes ]",
+                back_index => "[ Back to preferences ]",
+                else => unreachable,
+            };
+            try line(line_ctx, &children, row, col, text, style);
+        }
     }
     if (status > 0) try line(line_ctx, &children, size.height - 1, col, if (view.failure) |err| errorText(err) else "Settings are locked while an operation is running.", styles.emphasis);
     return .{ .size = size, .widget = widget, .buffer = &.{}, .children = children.items };
@@ -123,4 +145,31 @@ test "editor keeps selected rows visible within tiny and scrolling layouts" {
         }
         if (width > 0 and height > 0) try std.testing.expect(highlighted);
     };
+}
+
+test "narrow editors show complete bindings and keep command names alongside them" {
+    vxfw.DrawContext.init(.unicode);
+    const config = try (keybindings.Config{}).withBinding(.help, .{ .codepoint = vaxis.Key.f35, .mods = .{ .ctrl = true, .alt = true, .shift = true } });
+    for ([_]u16{ 20, 30, 40, 80 }) |width| {
+        var arena: std.heap.ArenaAllocator = .init(std.testing.allocator);
+        defer arena.deinit();
+        const surface = try draw(.{ .config = config, .selected = 1, .capturing = false, .failure = null, .busy = false }, .{ .arena = arena.allocator(), .min = .{}, .max = .{ .width = width, .height = 12 }, .cell_size = .{ .width = 10, .height = 20 } });
+        var name_row: ?i17 = null;
+        var binding_row: ?i17 = null;
+        for (surface.children) |child| {
+            var text: std.ArrayList(u8) = .empty;
+            var selected = false;
+            for (child.surface.buffer) |cell| {
+                try text.appendSlice(arena.allocator(), cell.char.grapheme);
+                selected = selected or cell.style.reverse;
+            }
+            if (!selected) continue;
+            if (std.mem.indexOf(u8, text.items, "Help") != null) name_row = child.origin.row;
+            if (std.mem.indexOf(u8, text.items, "Ctrl+Alt+Shift+F35") != null) binding_row = child.origin.row;
+        }
+        try std.testing.expect(name_row != null and binding_row != null);
+        if (width <= 30) {
+            try std.testing.expect(binding_row.? > name_row.?);
+        } else try std.testing.expectEqual(name_row, binding_row);
+    }
 }

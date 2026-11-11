@@ -19,6 +19,7 @@ Delete restores the selected command's default. **Restore all defaults** resets
 all configurable bindings in the draft. **Save changes** (or Ctrl+S) applies and
 persists edits; **Reload** discards pending changes. **Back to preferences** keeps
 the draft. The list scrolls to keep the selected action visible on small terminals.
+Command names and bindings stack vertically when columns would be too narrow.
 Fixed navigation, confirmation, review decisions, and sudo input are not editable.
 
 ## Editing the file
