@@ -546,6 +546,7 @@ fn runSession(init: std.process.Init) !void {
                 .icon = "shelly",
                 .summary = n.summary,
                 .body = n.body,
+                .desktop_entry = "com.shellyorg.shelly",
                 .on_activate = &openShelly,
                 .ctx = &runner,
             }) catch |e| log_loop.err("Could not display the update notification. {0s}\n\nTechnical details: {1s}", .{ diagnostics.cause(e), @errorName(e) });
