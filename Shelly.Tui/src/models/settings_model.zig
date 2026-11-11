@@ -359,6 +359,12 @@ pub fn captureBinding(self: *Model, ctx: *vxfw.EventContext, input: vaxis.Key) !
             }
         }
         if (key.codepoint < 128) key.codepoint = std.ascii.toLower(@intCast(key.codepoint));
+        // Normalization must preserve the keypress's meaning under dispatch.
+        if (!input.matches(key.codepoint, key.mods)) {
+            state.keybinding_error = error.InvalidKey;
+            ctx.consumeAndRedraw();
+            return true;
+        }
         const id = keybindings.editable[state.keybinding_selected];
         const candidate = state.settings_draft.keybindings.withBinding(id, key) catch |err| {
             state.keybinding_error = err;
@@ -1242,4 +1248,35 @@ test "binding editor locks during operations and file watching waits for key cap
     try model.captureEvent(&fixture.events, .{ .key_press = commands.bindings.cancel_capture });
     try pollSettingsFile(model, &fixture.events);
     try fixture.expectLabel(.help, "F3");
+}
+
+test "capture rejects legacy uppercase input and accepts only matching normalized bindings" {
+    const fixture = try KeybindingTest.init("{\"Keybindings\":{\"install\":\"F3\"}}");
+    defer fixture.deinit();
+    fixture.load();
+    try openTestBindingEditor(fixture);
+    const model = fixture.model.?;
+    model.settings_state.keybinding_selected = 4; // Install.
+    const previous = model.settings_state.settings_draft.keybindings;
+    try model.captureEvent(&fixture.events, .{ .key_press = commands.bindings.confirm });
+    try model.captureEvent(&fixture.events, .{ .key_press = .{ .codepoint = 'I', .text = "I" } });
+    try std.testing.expectEqual(error.InvalidKey, model.settings_state.keybinding_error.?);
+    try std.testing.expect(model.settings_state.keybinding_capture);
+    try std.testing.expect(previous.eql(model.settings_state.settings_draft.keybindings));
+    try fixture.expectLabel(.install, "F3");
+    try std.testing.expect(!fixture.events.quit);
+
+    const inputs = [_]vaxis.Key{
+        .{ .codepoint = 'x', .text = "X", .mods = .{ .caps_lock = true, .num_lock = true } },
+        .{ .codepoint = '[', .shifted_codepoint = '{', .text = "{", .mods = .{ .shift = true } },
+    };
+    for (inputs, 0..) |input, index| {
+        if (index > 0) try model.captureEvent(&fixture.events, .{ .key_press = commands.bindings.confirm });
+        try model.captureEvent(&fixture.events, .{ .key_press = input });
+        try std.testing.expect(!model.settings_state.keybinding_capture);
+        try std.testing.expect(model.settings_state.keybinding_error == null);
+        const recorded = model.settings_state.settings_draft.keybindings.get(.install);
+        try std.testing.expect(input.matches(recorded.codepoint, recorded.mods));
+        try std.testing.expect(recorded.text == null and recorded.shifted_codepoint == null);
+    }
 }
