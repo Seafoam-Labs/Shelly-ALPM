@@ -329,6 +329,9 @@ fn pollSettingsFile(self: *Model, ctx: *vxfw.EventContext) !void {
     if (std.mem.eql(u8, self.notice, invalid_file_notice) or std.mem.eql(u8, self.notice, deferred_file_notice)) try self.setNotice("");
     syncSettingsFile(self, ctx.io);
     if (saved.flatpak_enabled and !self.flatpak_state.flatpak_checked) try flatpak_model.startFlatpakProbe(self, ctx);
+    // Recheck updates after external source changes.
+    if (self.active == .upgrade and !self.updates_state.updates_checked and self.updates_state.updates_job == null)
+        try ctx.tick(0, self.widget());
     if (active != self.active) try self.focusActiveTab(ctx);
     ctx.redraw = true;
 }
@@ -1279,4 +1282,51 @@ test "capture rejects legacy uppercase input and accepts only matching normalize
         try std.testing.expect(input.matches(recorded.codepoint, recorded.mods));
         try std.testing.expect(recorded.text == null and recorded.shifted_codepoint == null);
     }
+}
+
+test "external source edits wake idle Updates while binding-only edits do not" {
+    const fixture = try KeybindingTest.init("{}");
+    defer fixture.deinit();
+    fixture.load();
+    const model = fixture.model.?;
+    model.active = .upgrade;
+    model.updates_state.updates_checked = true;
+    model.updates_state.updates_parsed = ParsedCheckUpdates.fromParsed(try std.json.parseFromSlice(CheckUpdates, std.testing.allocator, "{}", .{}));
+    try fixture.write("{\"Keybindings\":{\"help\":\"F3\"}}");
+    try pollSettingsFile(model, &fixture.events);
+    try fixture.expectLabel(.help, "F3");
+    try std.testing.expect(model.updates_state.updates_checked);
+    try std.testing.expectEqual(@as(usize, 0), fixture.events.cmds.items.len);
+
+    try fixture.write("{\"AurEnabled\":true,\"Keybindings\":{\"help\":\"F3\"}}");
+    try pollSettingsFile(model, &fixture.events);
+    try std.testing.expect(model.settings_state.settings.aur_enabled);
+    try std.testing.expect(!model.updates_state.updates_checked);
+    try std.testing.expectEqual(@as(usize, 1), fixture.events.cmds.items.len);
+    try std.testing.expect(fixture.events.cmds.items[0].tick.widget.eql(model.widget()));
+    try std.testing.expect(fixture.events.cmds.items[0].tick.deadline.nanoseconds <= std.Io.Timestamp.now(std.testing.io, .awake).nanoseconds);
+    fixture.events.cmds.clearRetainingCapacity();
+    try pollSettingsFile(model, &fixture.events);
+    try std.testing.expectEqual(@as(usize, 0), fixture.events.cmds.items.len);
+}
+
+test "external source edits do not schedule duplicate checks or query inactive Updates" {
+    const fixture = try KeybindingTest.init("{}");
+    defer fixture.deinit();
+    fixture.load();
+    const model = fixture.model.?;
+    try fixture.write("{\"AurEnabled\":true}");
+    try pollSettingsFile(model, &fixture.events);
+    try std.testing.expectEqual(@as(usize, 0), fixture.events.cmds.items.len);
+
+    model.active = .upgrade;
+    model.updates_state.updates_checked = true;
+    var pending: UpdatesJob = .{ .aur_enabled = true };
+    model.updates_state.updates_job = &pending;
+    defer model.updates_state.updates_job = null;
+    try fixture.write("{\"AurEnabled\":false}");
+    try pollSettingsFile(model, &fixture.events);
+    try std.testing.expect(!model.settings_state.settings.aur_enabled);
+    try std.testing.expect(model.updates_state.updates_job == &pending);
+    try std.testing.expectEqual(@as(usize, 0), fixture.events.cmds.items.len);
 }
