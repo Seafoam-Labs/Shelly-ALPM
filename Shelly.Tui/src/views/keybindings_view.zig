@@ -11,8 +11,8 @@ pub const row_count = keybindings.editable.len;
 
 const Section = struct { name: []const u8, ids: []const commands.Id };
 const sections = [_]Section{
-    .{ .name = "General", .ids = &.{ .quit, .help, .next_tab, .previous_tab, .refresh } },
-    .{ .name = "Packages", .ids = &.{ .install, .remove, .refresh_list, .filter, .clear_selection, .narrow_view, .widen_view } },
+    .{ .name = "General", .ids = &.{ .quit, .help, .next_tab, .previous_tab, .refresh, .narrow_view, .widen_view } },
+    .{ .name = "Packages", .ids = &.{ .install, .remove, .refresh_list, .filter, .clear_selection } },
     .{ .name = "Updates", .ids = &.{ .upgrade_all, .upgrade_system, .upgrade_aur, .upgrade_flatpak } },
     .{ .name = "AUR catalog", .ids = &.{ .previous_catalog_page, .next_catalog_page } },
     .{ .name = "Flatpak details", .ids = &.{ .categories, .previous_screenshot, .next_screenshot } },
@@ -163,8 +163,8 @@ fn title(id: commands.Id) []const u8 {
         .next_screenshot => "Next screenshot",
         .clear_selection => "Clear selections",
         .toggle_wrap => "Toggle source wrapping",
-        .narrow_view => "Narrow package list",
-        .widen_view => "Widen package list",
+        .narrow_view => "Narrow left panel",
+        .widen_view => "Widen left panel",
         else => unreachable,
     };
 }

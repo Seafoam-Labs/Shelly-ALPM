@@ -13,6 +13,8 @@ pub const Action = union(enum) { control: usize, header: usize };
 
 pub const View = struct {
     settings: Settings,
+    list_percent: u8 = 40,
+    help: ?*@import("help_view.zig").Panel = null,
     userdata: ?*anyopaque = null,
     on_action: ?*const fn (*anyopaque, *vxfw.EventContext, Action) anyerror!void = null,
     header_open: bool = false,
@@ -59,6 +61,7 @@ pub const View = struct {
         const size = ctx.max.size();
         if (self.pane == .full and size.width >= 80 and size.height >= 10) return self.drawSplit(ptr, ctx);
         if (self.pane == .details) return self.drawDetails(ptr, ctx);
+        if (self.help) |help| if (self.pane != .controls) return help.draw(ctx);
         if (self.keybindings_open and self.pane != .controls) return keybindings_view.draw(.{ .config = self.settings.keybindings, .selected = self.binding_selected, .capturing = self.capturing, .failure = self.binding_error orelse self.failure, .busy = self.busy }, ctx);
         const widget: vxfw.Widget = .{ .userdata = ptr, .drawFn = drawBody };
         if (size.width == 0 or size.height == 0) return .{ .size = size, .widget = widget, .buffer = &.{}, .children = &.{} };
@@ -92,7 +95,7 @@ pub const View = struct {
                 for (preferences.header_styles, 0..) |style, option| {
                     if (option == self.header_selected) selected_line = rows.items.len;
                     try rows.append(ctx.arena, .{
-                        .text = try std.fmt.allocPrint(ctx.arena, "    ({s}) {s}", .{ if (style == self.settings.header_icons) "x" else " ", style.title() }),
+                        .text = try std.fmt.allocPrint(ctx.arena, "    [{s}] {s}", .{ if (style == self.settings.header_icons) "x" else " ", style.title() }),
                         .action = .{ .header = option },
                         .selected = option == self.header_selected,
                     });
@@ -122,12 +125,17 @@ pub const View = struct {
         const size = ctx.max.size();
         const path_height: u16 = if (size.height >= 14) 1 else 0;
         const pane_height = size.height - path_height;
-        const left_width = @min(@as(u16, 48), @import("split_layout.zig").listWidth(size.width, 40));
+        const left_width = @import("split_layout.zig").listWidth(size.width, self.list_percent);
         var children: std.ArrayList(vxfw.SubSurface) = .empty;
         for ([_]bool{ false, true }) |right| {
             const pane = try ctx.arena.create(View);
             pane.* = self.*;
             pane.pane = if (right) .details else .controls;
+            if (right) if (self.help) |help| {
+                const width = size.width - left_width;
+                try children.append(ctx.arena, .{ .origin = .{ .row = 0, .col = @intCast(left_width) }, .surface = try help.draw(ctx.withConstraints(.{}, .{ .width = width, .height = pane_height })) });
+                continue;
+            };
             const labels = [_]Border.BorderLabel{.{ .text = if (!right) (if (self.dirty) "Settings · Unsaved changes" else "Settings") else if (self.keybindings_open or self.previewSelection() == preferences.keybindings_index) try self.bindingHeader(ctx.arena) else if (self.header_open or self.previewSelection() == preferences.header_index) "Header icons" else "Details", .alignment = .top_left }};
             var border: Border = .{ .child = .{ .userdata = pane, .drawFn = drawBody }, .labels = &labels, .style = styles.emphasis };
             const width = if (right) size.width - left_width else left_width;
@@ -158,7 +166,7 @@ pub const View = struct {
         if (show_headers) for (preferences.header_styles, 0..) |style, index| {
             const row: u16 = @intCast(text_height + index);
             if (row >= available) break;
-            try self.appendRow(ctx.withConstraints(.{}, .{ .width = size.width, .height = 1 }), &children, row, 0, .{ .text = try std.fmt.allocPrint(ctx.arena, "({s}) {s}", .{ if (style == self.settings.header_icons) "x" else " ", style.title() }), .action = .{ .header = index }, .selected = self.header_open and index == self.header_selected });
+            try self.appendRow(ctx.withConstraints(.{}, .{ .width = size.width, .height = 1 }), &children, row, 0, .{ .text = try std.fmt.allocPrint(ctx.arena, "[{s}] {s}", .{ if (style == self.settings.header_icons) "x" else " ", style.title() }), .action = .{ .header = index }, .selected = self.header_open and index == self.header_selected });
         };
         if (error_height > 0) try self.appendRow(ctx.withConstraints(.{}, .{ .width = size.width, .height = 1 }), &children, size.height - 1, 0, .{ .text = if (self.busy) "Settings are locked while an operation is running." else try std.fmt.allocPrint(ctx.arena, "Settings error: {s}", .{@errorName(self.failure.?)}), .emphasis = true });
         return .{ .size = size, .widget = .{ .userdata = ptr, .drawFn = drawBody }, .buffer = &.{}, .children = children.items };
@@ -299,7 +307,7 @@ test "wide settings keep controls left and expand editors only on the right" {
         if (mode == .header) {
             try std.testing.expect(try LayoutTest.contains(right.surface, "Nerd Font", arena.allocator()));
             try std.testing.expect(try LayoutTest.contains(right.surface, "ASCII", arena.allocator()));
-            try std.testing.expect(!try LayoutTest.contains(left.surface, "( ) Nerd Font", arena.allocator()));
+            try std.testing.expect(!try LayoutTest.contains(left.surface, "[ ] Nerd Font", arena.allocator()));
         } else if (mode == .bindings or mode == .binding_preview) {
             try std.testing.expect(try LayoutTest.contains(right.surface, "Quit", arena.allocator()));
             try std.testing.expect(try LayoutTest.contains(right.surface, "Ctrl+C", arena.allocator()));
@@ -378,4 +386,30 @@ test "Save and Discard use separate rows and display their own details" {
         try std.testing.expect(save_row != null and discard_row != null);
         try std.testing.expectEqual(save_row.? + 1, discard_row.?);
     }
+}
+
+test "settings split resizes both panes and help replaces only the right pane" {
+    vxfw.DrawContext.init(.unicode);
+    for ([_]u8{ 20, 40, 80 }) |percent| for ([_]bool{ false, true }) |show_help| {
+        var arena: std.heap.ArenaAllocator = .init(std.testing.allocator);
+        defer arena.deinit();
+        var help: @import("help_view.zig").Panel = .{ .context = .{ .mode = .settings } };
+        var view: View = .{ .settings = .{}, .selected = preferences.save_index, .list_percent = percent, .help = if (show_help) &help else null, .path = "settings.json", .failure = null, .flatpak_checked = false, .flatpak_available = false, .checking = false, .busy = false };
+        const surface = try View.drawBody(&view, .{ .arena = arena.allocator(), .min = .{}, .max = .{ .width = 120, .height = 24 }, .cell_size = .{ .width = 10, .height = 20 } });
+        for (surface.children) |child| {
+            try std.testing.expect(child.origin.row + child.surface.size.height <= surface.size.height);
+            try std.testing.expect(child.origin.col + child.surface.size.width <= surface.size.width);
+        }
+        // ScrollView intentionally retains content larger than its viewport.
+        _ = try LayoutTest.check(surface.children[0].surface);
+        const left = surface.children[0];
+        const right = surface.children[1];
+        try std.testing.expectEqual(@import("split_layout.zig").listWidth(120, percent), left.surface.size.width);
+        try std.testing.expectEqual(@as(i17, left.surface.size.width), right.origin.col);
+        try std.testing.expectEqual(@as(u16, 120), left.surface.size.width + right.surface.size.width);
+        try std.testing.expect(try LayoutTest.contains(left.surface, "Save changes", arena.allocator()));
+        try std.testing.expectEqual(show_help, try LayoutTest.contains(right.surface, "Help", arena.allocator()));
+        if (!show_help) try std.testing.expect(try LayoutTest.contains(right.surface, "Save and apply", arena.allocator()));
+        try std.testing.expectEqual(show_help, help.initialized);
+    };
 }

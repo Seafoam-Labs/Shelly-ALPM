@@ -151,7 +151,7 @@ pub const Model = struct {
                     self.help_open = !self.help_open;
                     return ctx.consumeAndRedraw();
                 }
-                if (!self.help_open and operation_model.operationPrompt(self) == null and self.operation_state.review_prompt == null and (self.active == .packages or self.active == .aur or self.active == .flatpak) and (self.overlay == null or self.overlay.? == .package or self.overlay.? == .aur or self.overlay.? == .flatpak)) {
+                if (!self.help_open and operation_model.operationPrompt(self) == null and self.operation_state.review_prompt == null and (self.active == .packages or self.active == .aur or self.active == .flatpak or self.active == .settings) and (self.overlay == null or self.overlay.? == .package or self.overlay.? == .aur or self.overlay.? == .flatpak)) {
                     if (commands.matches(key, .narrow_view) or commands.matches(key, .widen_view)) {
                         const next_percent = @import("views/split_layout.zig").resize(self.viewport_width, self.list_percent, commands.matches(key, .widen_view)) orelse return ctx.consumeEvent();
                         self.list_percent = next_percent;
@@ -615,7 +615,7 @@ test "help and footer update live bindings without reopening help" {
     try std.testing.expectEqualStrings("F2 Help", help.items);
 }
 
-test "list resizing is shared bounded and does not change settings navigation" {
+test "panel resizing is shared bounded and preserves settings navigation" {
     const model = try Model.init(std.testing.allocator);
     defer model.deinit();
     var events: vxfw.EventContext = .{ .io = std.testing.io, .alloc = std.testing.allocator, .cmds = .empty };
@@ -633,8 +633,10 @@ test "list resizing is shared bounded and does not change settings navigation" {
     for (0..100) |_| try model.captureEvent(&events, .{ .key_press = commands.bindings.narrow_view });
     try std.testing.expectEqual(@as(u8, 20), model.list_percent);
     model.active = .settings;
+    const selected = model.settings_state.settings_selected;
     try model.captureEvent(&events, .{ .key_press = commands.bindings.widen_view });
-    try std.testing.expectEqual(@as(u8, 20), model.list_percent);
+    try std.testing.expectEqual(@as(u8, 25), model.list_percent);
+    try std.testing.expectEqual(selected, model.settings_state.settings_selected);
 }
 
 test "quit is blocked across pages and help until the operation is collected" {
@@ -724,4 +726,22 @@ test "mouse tab changes dismiss details but preserve operation modals" {
             try std.testing.expectEqualStrings(@tagName(case.overlay), @tagName(model.overlay.?));
         }
     }
+}
+
+test "settings help keeps editor state and restores it on dismissal" {
+    const model = try Model.init(std.testing.allocator);
+    defer model.deinit();
+    model.active = .settings;
+    model.settings_state.settings_selected = @import("models/settings.zig").keybindings_index;
+    model.settings_state.keybindings_open = true;
+    model.settings_state.keybinding_selected = 4;
+    var events: vxfw.EventContext = .{ .io = std.testing.io, .alloc = std.testing.allocator, .cmds = .empty };
+    defer events.cmds.deinit(std.testing.allocator);
+    try model.captureEvent(&events, .{ .key_press = commands.bindings.help });
+    try std.testing.expect(model.help_open);
+    try std.testing.expect(settings_model.settingsView(model).help == &model.help_panel);
+    try model.captureEvent(&events, .{ .key_press = commands.bindings.help });
+    try std.testing.expect(!model.help_open);
+    try std.testing.expect(model.settings_state.keybindings_open);
+    try std.testing.expectEqual(@as(usize, 4), model.settings_state.keybinding_selected);
 }

@@ -357,9 +357,9 @@ fn add(arena: std.mem.Allocator, list: *std.ArrayList(Entry), id: Id, short: []c
 /// operation completes in the background.
 pub fn entries(arena: std.mem.Allocator, context: Context) std.mem.Allocator.Error![]const Entry {
     var list: std.ArrayList(Entry) = .empty;
-    if (context.mode == .search or context.mode == .packages or context.mode == .aur or context.mode == .flatpak or (context.mode == .details and context.split_details)) {
-        try add(arena, &list, .narrow_view, "Narrow list", "Reduce package list width");
-        try add(arena, &list, .widen_view, "Widen list", "Increase package list width");
+    if (context.mode == .search or context.mode == .packages or context.mode == .aur or context.mode == .flatpak or context.mode == .settings or (context.mode == .details and context.split_details)) {
+        try add(arena, &list, .narrow_view, "Narrow panel", "Reduce left panel width (package pages and Settings)");
+        try add(arena, &list, .widen_view, "Widen panel", "Increase left panel width (package pages and Settings)");
     }
     if (context.categories_available) try add(arena, &list, .categories, "Categories", "Choose a Flatpak category; All categories clears the filter");
     if (context.screenshots_navigable) {
