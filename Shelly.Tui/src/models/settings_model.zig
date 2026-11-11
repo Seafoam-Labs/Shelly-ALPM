@@ -305,7 +305,6 @@ fn pollSettingsFile(self: *Model, ctx: *vxfw.EventContext) !void {
         }
         return;
     }
-    self.settings_state.watch_read_failed = false;
     if (self.operation_state.install_job != null or hasChanges(self) or self.settings_state.keybinding_capture) {
         if (!self.settings_state.watch_deferred) {
             self.settings_state.watch_deferred = true;
@@ -314,6 +313,7 @@ fn pollSettingsFile(self: *Model, ctx: *vxfw.EventContext) !void {
         }
         return;
     }
+    self.settings_state.watch_read_failed = false;
     self.settings_state.watch_fingerprint = fingerprint;
     var saved = store.load(ctx.io) catch |err| {
         try fileWarning(self, ctx, err);
@@ -1329,4 +1329,42 @@ test "external source edits do not schedule duplicate checks or query inactive U
     try std.testing.expect(!model.settings_state.settings.aur_enabled);
     try std.testing.expect(model.updates_state.updates_job == &pending);
     try std.testing.expectEqual(@as(usize, 0), fixture.events.cmds.items.len);
+}
+
+test "restored file recovery stays pending until operations or draft edits are finished" {
+    for ([_]bool{ false, true }) |operation_running| {
+        const fixture = try KeybindingTest.init("{\"Keybindings\":{\"help\":\"F2\"}}");
+        defer fixture.deinit();
+        fixture.load();
+        const model = fixture.model.?;
+        const original = try fixture.temporary.dir.readFileAlloc(std.testing.io, "shelly/tui-settings.json", fixture.arena.allocator(), .limited(4096));
+        try fixture.temporary.dir.deleteFile(std.testing.io, "shelly/tui-settings.json");
+        try pollSettingsFile(model, &fixture.events);
+        try std.testing.expectEqual(error.FileNotFound, model.settings_state.settings_failure.?);
+
+        var job: @import("../services/shelly_operation.zig").Operation = .{ .arena = .init(std.testing.allocator), .request = undefined };
+        defer job.arena.deinit();
+        defer model.operation_state.install_job = null;
+        if (operation_running) model.operation_state.install_job = &job else model.settings_state.settings_draft.aur_enabled = true;
+        try fixture.write(original);
+        for (0..2) |_| {
+            try pollSettingsFile(model, &fixture.events);
+            try std.testing.expect(model.settings_state.watch_read_failed);
+            try std.testing.expect(model.settings_state.watch_deferred);
+            try std.testing.expectEqual(error.FileNotFound, model.settings_state.settings_failure.?);
+            try fixture.expectLabel(.help, "F2");
+        }
+
+        model.operation_state.install_job = null;
+        model.settings_state.settings_draft = model.settings_state.settings;
+        try pollSettingsFile(model, &fixture.events);
+        try std.testing.expect(model.settings_state.settings_failure == null);
+        try std.testing.expect(model.settings_state.watch_error == null);
+        try std.testing.expect(!model.settings_state.watch_read_failed);
+        try std.testing.expect(!model.settings_state.watch_deferred);
+        try std.testing.expectEqualStrings("", model.notice);
+        fixture.events.redraw = false;
+        try pollSettingsFile(model, &fixture.events);
+        try std.testing.expect(!fixture.events.redraw);
+    }
 }
