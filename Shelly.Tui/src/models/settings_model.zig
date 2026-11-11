@@ -1609,37 +1609,38 @@ test "Vim navigation focuses previewed editors without activating them on select
     try std.testing.expect(!hasChanges(model));
 }
 
-test "Save and Discard follow Keyboard in vertical navigation" {
-    const fixture = try KeybindingTest.init("{}");
-    defer fixture.deinit();
-    fixture.load();
-    const model = fixture.model.?;
-    model.active = .settings;
-    model.settings_state.settings_selected = preferences.keybindings_index;
-    for ([_]usize{ preferences.save_index, preferences.discard_index, 0 }) |expected| {
+test "settings actions remain reachable from the list and binding editor" {
+    {
+        const fixture = try KeybindingTest.init("{}");
+        defer fixture.deinit();
+        fixture.load();
+        const model = fixture.model.?;
+        model.active = .settings;
+        model.settings_state.settings_selected = preferences.keybindings_index;
+        for ([_]usize{ preferences.save_index, preferences.discard_index, 0 }) |expected| {
+            try model.captureEvent(&fixture.events, .{ .key_press = commands.bindings.next });
+            try std.testing.expectEqual(expected, model.settings_state.settings_selected);
+            try std.testing.expect(!model.settings_state.keybindings_open);
+        }
+        for ([_]usize{ preferences.discard_index, preferences.save_index, preferences.keybindings_index }) |expected| {
+            try model.captureEvent(&fixture.events, .{ .key_press = commands.bindings.previous });
+            try std.testing.expectEqual(expected, model.settings_state.settings_selected);
+        }
+        try std.testing.expect(!hasChanges(model));
+    }
+    {
+        const fixture = try KeybindingTest.init("{}");
+        defer fixture.deinit();
+        fixture.load();
+        try openTestBindingEditor(fixture);
+        const model = fixture.model.?;
+        model.settings_state.keybinding_selected = std.mem.indexOfScalar(commands.Id, &keybindings.editable, .toggle_wrap).?;
         try model.captureEvent(&fixture.events, .{ .key_press = commands.bindings.next });
-        try std.testing.expectEqual(expected, model.settings_state.settings_selected);
         try std.testing.expect(!model.settings_state.keybindings_open);
-    }
-    for ([_]usize{ preferences.discard_index, preferences.save_index, preferences.keybindings_index }) |expected| {
+        try std.testing.expectEqual(preferences.save_index, model.settings_state.settings_selected);
+        try model.captureEvent(&fixture.events, .{ .key_press = commands.bindings.next });
+        try std.testing.expectEqual(preferences.discard_index, model.settings_state.settings_selected);
         try model.captureEvent(&fixture.events, .{ .key_press = commands.bindings.previous });
-        try std.testing.expectEqual(expected, model.settings_state.settings_selected);
+        try std.testing.expectEqual(preferences.save_index, model.settings_state.settings_selected);
     }
-    try std.testing.expect(!hasChanges(model));
-}
-
-test "Down from the last binding reaches Save and Discard" {
-    const fixture = try KeybindingTest.init("{}");
-    defer fixture.deinit();
-    fixture.load();
-    try openTestBindingEditor(fixture);
-    const model = fixture.model.?;
-    model.settings_state.keybinding_selected = std.mem.indexOfScalar(commands.Id, &keybindings.editable, .toggle_wrap).?;
-    try model.captureEvent(&fixture.events, .{ .key_press = commands.bindings.next });
-    try std.testing.expect(!model.settings_state.keybindings_open);
-    try std.testing.expectEqual(preferences.save_index, model.settings_state.settings_selected);
-    try model.captureEvent(&fixture.events, .{ .key_press = commands.bindings.next });
-    try std.testing.expectEqual(preferences.discard_index, model.settings_state.settings_selected);
-    try model.captureEvent(&fixture.events, .{ .key_press = commands.bindings.previous });
-    try std.testing.expectEqual(preferences.save_index, model.settings_state.settings_selected);
 }

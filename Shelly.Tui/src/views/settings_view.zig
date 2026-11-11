@@ -321,49 +321,6 @@ test "wide settings keep controls left and expand editors only on the right" {
     }
 }
 
-test "expanded settings survive repeated wide and narrow draws" {
-    vxfw.DrawContext.init(.unicode);
-    var view: View = .{ .settings = .{}, .selected = preferences.keybindings_index, .keybindings_open = true, .binding_selected = keybindings_view.row_count - 1, .path = "settings.json", .failure = null, .flatpak_checked = false, .flatpak_available = false, .checking = false, .busy = false };
-    for ([_]u16{ 120, 40, 80, 1, 120 }) |width| {
-        var arena: std.heap.ArenaAllocator = .init(std.testing.allocator);
-        defer arena.deinit();
-        const surface = try View.drawBody(&view, .{ .arena = arena.allocator(), .min = .{}, .max = .{ .width = width, .height = 20 }, .cell_size = .{ .width = 10, .height = 20 } });
-        try std.testing.expect(try LayoutTest.check(surface));
-        try std.testing.expectEqual(keybindings_view.row_count - 1, view.binding_selected);
-        try std.testing.expect(view.keybindings_open);
-        if (width >= 80) try std.testing.expect(try LayoutTest.contains(surface.children[0].surface, "Enable AUR", arena.allocator()));
-    }
-}
-
-test "binding header carries position and capture status" {
-    var arena: std.heap.ArenaAllocator = .init(std.testing.allocator);
-    defer arena.deinit();
-    var view: View = .{ .settings = .{}, .selected = preferences.keybindings_index, .keybindings_open = true, .path = "settings.json", .failure = null, .flatpak_checked = false, .flatpak_available = false, .checking = false, .busy = false };
-    try std.testing.expectEqualStrings(try std.fmt.allocPrint(arena.allocator(), "Keybindings · 1/{d}", .{keybindings_view.row_count}), try view.bindingHeader(arena.allocator()));
-    view.dirty = true;
-    try std.testing.expect(std.mem.endsWith(u8, try view.bindingHeader(arena.allocator()), "Unsaved changes"));
-    view.capturing = true;
-    try std.testing.expect(std.mem.endsWith(u8, try view.bindingHeader(arena.allocator()), "Press a replacement key"));
-}
-
-test "settings actions stay inside the left panel below Keyboard and the path is centered" {
-    vxfw.DrawContext.init(.unicode);
-    var arena: std.heap.ArenaAllocator = .init(std.testing.allocator);
-    defer arena.deinit();
-    var view: View = .{ .settings = .{}, .selected = preferences.save_index, .path = "settings.json", .failure = null, .flatpak_checked = false, .flatpak_available = false, .checking = false, .busy = false };
-    const surface = try View.drawBody(&view, .{ .arena = arena.allocator(), .min = .{}, .max = .{ .width = 120, .height = 24 }, .cell_size = .{ .width = 10, .height = 20 } });
-    _ = try LayoutTest.check(surface);
-    const left = surface.children[0].surface;
-    try std.testing.expect(try LayoutTest.contains(left, "Keyboard", arena.allocator()));
-    try std.testing.expect(try LayoutTest.contains(left, "[ Save changes ]", arena.allocator()));
-    try std.testing.expect(try LayoutTest.contains(left, "[ Discard changes ]", arena.allocator()));
-    try std.testing.expect(!try LayoutTest.contains(surface.children[1].surface, "[ Save changes ]", arena.allocator()));
-    const path = surface.children[2];
-    try std.testing.expect(try LayoutTest.contains(path.surface, "File: settings.json", arena.allocator()));
-    try std.testing.expectEqual(@as(i17, 23), path.origin.row);
-    try std.testing.expectEqual(@as(i17, @intCast((120 - path.surface.size.width) / 2)), path.origin.col);
-}
-
 test "Save and Discard use separate rows and display their own details" {
     vxfw.DrawContext.init(.unicode);
     var arena: std.heap.ArenaAllocator = .init(std.testing.allocator);

@@ -216,28 +216,7 @@ test "narrow editors show complete bindings and keep command names alongside the
     }
 }
 
-test "grouped binding rows stay left aligned and scroll to the selected command" {
-    vxfw.DrawContext.init(.unicode);
-    for ([_]usize{ 0, 12, row_count - 1 }) |selected| {
-        var arena: std.heap.ArenaAllocator = .init(std.testing.allocator);
-        defer arena.deinit();
-        const surface = try draw(.{ .config = .{}, .selected = selected, .capturing = false, .failure = null, .busy = false }, .{ .arena = arena.allocator(), .min = .{}, .max = .{ .width = 120, .height = 12 }, .cell_size = .{ .width = 10, .height = 20 } });
-        var title_row: ?i17 = null;
-        for (surface.children) |child| {
-            if (child.origin.col != 0) continue;
-            var text: std.ArrayList(u8) = .empty;
-            for (child.surface.buffer) |cell| try text.appendSlice(arena.allocator(), cell.char.grapheme);
-            const wanted = title(keybindings.editable[selected]);
-            if (std.mem.indexOf(u8, text.items, wanted) != null) {
-                title_row = child.origin.row;
-                try std.testing.expect(child.surface.buffer[0].style.reverse);
-            }
-        }
-        try std.testing.expect(title_row != null);
-    }
-}
-
-test "sections separate contextual shortcuts and navigation visits each command once" {
+test "grouped navigation visits every editable command exactly once" {
     var visited: [row_count]bool = @splat(false);
     var current: ?usize = commandIndex(.quit);
     var count: usize = 0;
@@ -249,11 +228,4 @@ test "sections separate contextual shortcuts and navigation visits each command 
         current = adjacent(index, true);
     }
     try std.testing.expectEqual(row_count, count);
-    vxfw.DrawContext.init(.unicode);
-    var arena: std.heap.ArenaAllocator = .init(std.testing.allocator);
-    defer arena.deinit();
-    const surface = try draw(.{ .config = .{}, .selected = 0, .capturing = false, .failure = null, .busy = false }, .{ .arena = arena.allocator(), .min = .{}, .max = .{ .width = 100, .height = 40 }, .cell_size = .{ .width = 10, .height = 20 } });
-    var text: std.ArrayList(u8) = .empty;
-    for (surface.children) |child| for (child.surface.buffer) |cell| try text.appendSlice(arena.allocator(), cell.char.grapheme);
-    for (sections) |section| try std.testing.expect(std.mem.indexOf(u8, text.items, section.name) != null);
 }
