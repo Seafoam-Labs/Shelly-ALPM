@@ -10,8 +10,8 @@ pkgname=(
   'shelly-notify'
   'shelly-notify-none'
 )
-pkgver=3.2.0
-pkgrel=1
+pkgver=3.2.1
+pkgrel=2
 arch=('x86_64' 'aarch64')
 url='https://github.com/Seafoam-Labs/Shelly-ALPM'
 license=('GPL-3.0-only')
@@ -23,24 +23,51 @@ _shelly_path_profile=devario
 _shelly_native_depends=()
 _shelly_native_optdepends=()
 
+# Vendored libarchive, shipped as a private ICU-free shared library. The
+# system libarchive reaches ICU through libxml2, so an ICU soname bump could
+# otherwise leave the package manager linked against mismatched libraries in
+# the middle of a partial upgrade. Vendoring keeps Shelly's runtime closure
+# independent of that chain (aqueous-style self-provided dependency).
+_libarchive_ver=3.8.11
+_libarchive_so=libarchive-shelly.so.13
+
 makedepends=(
+  'acl'
   'binutils'
+  'bzip2'
+  'cmake'
   'curl'
+  'expat'
   'flatpak'
   'gettext'
   'git'
   'go-md2man'
   'gtk4'
-  'libarchive'
+  'libb2'
+  'lz4'
+  'openssl'
+  'patch'
+  'pax-utils'
   'pkgconf'
   'sqlite'
-  'zig>=0.17.0'
+  'xz'
+  'zig>=0.17.1'
+  'zlib'
+  'zstd'
   "${_shelly_native_depends[@]}"
 )
 checkdepends=('ripgrep')
 _srcdir=Shelly-ALPM
-source=("${_srcdir}::git+${url}.git#tag=v${pkgver}")
-sha256sums=('SKIP')
+source=(
+  "${_srcdir}::git+${url}.git#tag=v${pkgver}"
+  "https://github.com/libarchive/libarchive/releases/download/v${_libarchive_ver}/libarchive-${_libarchive_ver}.tar.xz"
+  'libarchive-shelly-cmake.patch'
+)
+sha256sums=(
+  'SKIP'
+  'a3dc0872b1b39da34dc18ef1b944f0f11ffd37425d70ae04be679279f1cf43d2'
+  'd11923427f3b3ad6ecdc61f13c3b789af8799ed3013c2b9266a91ab3aee1439b'
+)
 
 # Components with their own build.zig, in build order.
 _components=(
@@ -72,7 +99,92 @@ _check_arch_news_disabled() {
   fi
 }
 
+# Keep the libarchive build inside CMake so dependency tracking, shared
+# linker flags, and all backend link dependencies follow upstream's target.
+# Restrict the supported codecs explicitly; fail instead of silently
+# producing a package manager unable to read a usual archive format.
+_build_vendored_libarchive() {
+  local vendor="${srcdir}/libarchive-vendor"
+  local build="${srcdir}/libarchive-build"
+
+  cmake -S "${srcdir}/libarchive-${_libarchive_ver}" -B "${build}" \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DBUILD_SHARED_LIBS=ON \
+    -DENABLE_INSTALL=ON \
+    -DENABLE_OPENSSL=ON \
+    -DENABLE_MBEDTLS=OFF \
+    -DENABLE_NETTLE=OFF \
+    -DENABLE_MD=OFF \
+    -DENABLE_LIBB2=ON \
+    -DENABLE_LZ4=ON \
+    -DENABLE_LZMA=ON \
+    -DENABLE_ZSTD=ON \
+    -DENABLE_ZLIB=ON \
+    -DENABLE_BZip2=ON \
+    -DENABLE_EXPAT=ON \
+    -DENABLE_LIBXML2=OFF \
+    -DENABLE_BSDXML=OFF \
+    -DENABLE_LZO=OFF \
+    -DENABLE_PCREPOSIX=OFF \
+    -DENABLE_PCRE2POSIX=OFF \
+    -DENABLE_TAR=OFF \
+    -DENABLE_CPIO=OFF \
+    -DENABLE_CAT=OFF \
+    -DENABLE_UNZIP=OFF \
+    -DENABLE_TEST=OFF \
+    -DCMAKE_INSTALL_LIBDIR=lib \
+    -DCMAKE_INSTALL_PREFIX="${vendor}"
+
+  # CMake's ENABLE_* switches often mean "use if found", not "require".
+  # Enforce the features that the CLI must have in every release build.
+  # ENABLE_MD=OFF removes the libmd fallback, so OpenSSL is the only
+  # digest backend left and must be present as well. Requiring libb2
+  # keeps the bundled BLAKE2 sources (Apache-2.0 OR CC0-1.0 OR OpenSSL)
+  # out of the private DSO, so the declared licenses and the libb2
+  # runtime dependency stay accurate.
+  local feature
+  for feature in \
+    HAVE_LIBZ HAVE_LIBBZ2 HAVE_LIBLZMA HAVE_LIBLZ4 \
+    HAVE_LIBZSTD HAVE_LIBEXPAT HAVE_LIBCRYPTO HAVE_LIBB2; do
+    if ! grep -Eq "^#define ${feature}[[:space:]]+1([[:space:]]|$)" \
+        "${build}/config.h"; then
+      printf 'Vendored libarchive is missing required feature %s\n' "${feature}" >&2
+      return 1
+    fi
+  done
+
+  cmake --build "${build}" --parallel
+  cmake --install "${build}"
+
+  # Zig's linkSystemLibrary("archive") probes archive.pc. The shared
+  # object already records its own dependencies; do not import the
+  # static-only Libs.private field into Shelly's link line.
+  cat > "${vendor}/lib/pkgconfig/archive.pc" <<EOF
+prefix=${vendor}
+exec_prefix=\${prefix}
+libdir=\${exec_prefix}/lib
+includedir=\${prefix}/include
+
+Name: libarchive
+Description: Vendored ICU-free libarchive
+Version: ${_libarchive_ver}
+Cflags: -I\${includedir}
+Libs: -L\${libdir} -larchive-shelly
+EOF
+}
+
+_use_vendored_libarchive() {
+  local vendor="${srcdir}/libarchive-vendor"
+  export PKG_CONFIG_PATH="${vendor}/lib/pkgconfig${PKG_CONFIG_PATH:+:${PKG_CONFIG_PATH}}"
+  export CPATH="${vendor}/include${CPATH:+:${CPATH}}"
+  export LD_LIBRARY_PATH="${vendor}/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
+}
+
 prepare() {
+  (
+    cd "${srcdir}/libarchive-${_libarchive_ver}"
+    patch -Np1 -i "${srcdir}/libarchive-shelly-cmake.patch"
+  )
   cd "${_srcdir}"
 
   # Fetch Zig dependencies up front so build() and check() work offline.
@@ -84,6 +196,9 @@ prepare() {
 
 build() {
   cd "${_srcdir}"
+
+  _build_vendored_libarchive
+  _use_vendored_libarchive
 
   (cd Shelly.Flatpak.Backend && _zig_build \
     --prefix "${srcdir}/out-flatpak-backend" \
@@ -145,6 +260,9 @@ build() {
 check() {
   cd "${_srcdir}"
 
+  # Test against the same vendored libarchive the shipped CLI will link.
+  _use_vendored_libarchive
+
   # Test the same native backend and path profile as the shipped CLI.
   (cd Shelly.Flatpak.Backend && _zig_build test abi-test integration-test)
   (cd Shelly.PackageManager && _zig_build -Dlibalpm="${_shelly_libalpm}" \
@@ -196,16 +314,26 @@ package_shelly() {
 
 package_shelly-cli() {
   pkgdesc='Native Shelly package-manager CLI (Devario release build)'
+  # The vendored libarchive is BSD-2-Clause, with BSD-3-Clause parts.
+  license=('GPL-3.0-only' 'BSD-2-Clause' 'BSD-3-Clause')
   depends=(
+    'acl'
+    'bzip2'
     'curl'
     'diffutils'
+    'expat'
     'git'
     'glibc'
     'gnupg'
-    'libarchive'
+    'libb2'
+    'lz4'
+    'openssl'
     'sqlite'
     'sudo'
     'tar'
+    'xz'
+    'zlib'
+    'zstd'
     "${_shelly_native_depends[@]}"
   )
   optdepends=(
@@ -230,6 +358,12 @@ package_shelly-cli() {
 
   install -Dm755 "${srcdir}/out-cli/bin/shelly" -t "${pkgdir}/usr/bin"
 
+  # The vendored ICU-free libarchive that the CLI links against.
+  install -Dm755 "${srcdir}/libarchive-vendor/lib/${_libarchive_so}" \
+    "${pkgdir}/usr/lib/${_libarchive_so}"
+  install -Dm644 "${srcdir}/libarchive-${_libarchive_ver}/COPYING" \
+    "${pkgdir}/usr/share/licenses/shelly-cli/libarchive-COPYING"
+
   # The package metadata must match the compiled native backend variant.
   local dynamic
   dynamic=$(LC_ALL=C readelf -d "${pkgdir}/usr/bin/shelly") || return 1
@@ -237,9 +371,57 @@ package_shelly-cli() {
     printf 'Shelly CLI must directly depend on libsqlite3.so.0 (#2059)\n' >&2
     return 1
   fi
+  if [[ $dynamic != *"Shared library: [${_libarchive_so}]"* ]]; then
+    printf 'Shelly CLI must link the vendored libarchive (%s)\n' "${_libarchive_so}" >&2
+    return 1
+  fi
+  if [[ $dynamic == *'Shared library: [libarchive.so'* ||
+        $dynamic == *'Shared library: [libxml2'* ||
+        $dynamic == *'Shared library: [libicu'* ]]; then
+    printf 'Shelly CLI must not depend on the system libarchive or its ICU chain\n' >&2
+    return 1
+  fi
   if [[ ${_shelly_libalpm} == true && ${dynamic} != *libalpm.so* ]] ||
      [[ ${_shelly_libalpm} == false && ${dynamic} == *libalpm.so* ]]; then
     printf 'shelly does not match SHELLY_LIBALPM=%s\n' "${_shelly_libalpm}" >&2
+    return 1
+  fi
+
+  # Check the private DSO separately: a clean CLI DT_NEEDED list does
+  # not prove that the library it loads is independent of libxml2/ICU.
+  local private
+  private=$(LC_ALL=C readelf -d "${pkgdir}/usr/lib/${_libarchive_so}") || return 1
+  if [[ $private != *"(SONAME)"*"[${_libarchive_so}]"* ]]; then
+    printf 'Vendored libarchive has the wrong SONAME\n' >&2
+    return 1
+  fi
+  if [[ $private == *'Shared library: [libarchive.so'* ||
+        $private == *'Shared library: [libxml2.so'* ||
+        $private == *'Shared library: [libicu'* ]]; then
+    printf 'Vendored libarchive must not depend on system libarchive/libxml2/ICU\n' >&2
+    return 1
+  fi
+
+  # Resolve every DT_NEEDED edge with the staged private library first.
+  # lddtree reads ELF metadata; it does not execute the packaged binary.
+  local closure
+  closure=$(LD_LIBRARY_PATH="${pkgdir}/usr/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}" \
+    lddtree -l "${pkgdir}/usr/bin/shelly") || return 1
+  # In list mode lddtree prints resolved entries as absolute paths and an
+  # unresolved DT_NEEDED entry as a bare soname, still exiting with 0.
+  if grep -qv '^/' <<< "${closure}"; then
+    printf 'Shelly ELF dependency closure has unresolved entries:\n%s\n' \
+      "${closure}" >&2
+    return 1
+  fi
+  if [[ $closure != *"${pkgdir}/usr/lib/${_libarchive_so}"* ]]; then
+    printf 'Shelly dependency closure does not resolve the staged private libarchive\n' >&2
+    return 1
+  fi
+  if grep -Eq '(^|/)(libarchive\.so|libxml2\.so|libicu[^/[:space:]]*\.so)' \
+      <<< "${closure}"; then
+    printf 'Shelly ELF dependency closure still contains libarchive/libxml2/ICU:\n%s\n' \
+      "${closure}" >&2
     return 1
   fi
 

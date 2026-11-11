@@ -86,7 +86,10 @@ pub fn configurationDigest(allocator: std.mem.Allocator, config: *const Configur
     var json: std.json.Stringify = .{ .writer = &output.writer };
     try json.beginObject();
     inline for (@typeInfo(Configuration.Config).@"struct".field_names, @typeInfo(Configuration.Config).@"struct".field_types) |field_name, field_type| {
-        if (comptime !std.mem.eql(u8, field_name, "arena")) {
+        // Restart policy is a post-upgrade preference and does not affect builds.
+        if (comptime !std.mem.eql(u8, field_name, "arena") and
+            !std.mem.eql(u8, field_name, "restart_policy"))
+        {
             try json.objectField(field_name);
             const value = @field(config, field_name);
             if (comptime std.mem.eql(u8, field_name, "repositories")) {

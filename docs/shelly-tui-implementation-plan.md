@@ -12,7 +12,7 @@ The target is the latest `development`. CLI/package-manager changes affecting th
 
 ## Build toolchain
 
-- Zig 0.17.0 or newer; from `Shelly.Tui`: `zig build run`.
+- Zig 0.17.1 or newer; from `Shelly.Tui`: `zig build run`.
 - Vaxis is pinned to `b24be454926b012316cb44d9f0e95da45d6bc3d9`, the latest upstream main commit checked on 2026-10-28. Pins are updated deliberately.
 - LLVM/LLD is used for linking. The TUI communicates through the CLI and does not link the package-manager backend.
 - Zig 0.16 support and compiler-specific package directories have been dropped.

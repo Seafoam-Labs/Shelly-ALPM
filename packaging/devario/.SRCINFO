@@ -1,29 +1,44 @@
 pkgbase = shelly
-	pkgver = 3.2.0
-	pkgrel = 1
+	pkgver = 3.2.1
+	pkgrel = 2
 	url = https://github.com/Seafoam-Labs/Shelly-ALPM
 	arch = x86_64
 	arch = aarch64
 	license = GPL-3.0-only
 	checkdepends = ripgrep
+	makedepends = acl
 	makedepends = binutils
+	makedepends = bzip2
+	makedepends = cmake
 	makedepends = curl
+	makedepends = expat
 	makedepends = flatpak
 	makedepends = gettext
 	makedepends = git
 	makedepends = go-md2man
 	makedepends = gtk4
-	makedepends = libarchive
+	makedepends = libb2
+	makedepends = lz4
+	makedepends = openssl
+	makedepends = patch
+	makedepends = pax-utils
 	makedepends = pkgconf
 	makedepends = sqlite
-	makedepends = zig>=0.17.0
-	source = Shelly-ALPM::git+https://github.com/Seafoam-Labs/Shelly-ALPM.git#tag=v3.2.0
+	makedepends = xz
+	makedepends = zig>=0.17.1
+	makedepends = zlib
+	makedepends = zstd
+	source = Shelly-ALPM::git+https://github.com/Seafoam-Labs/Shelly-ALPM.git#tag=v3.2.1
+	source = https://github.com/libarchive/libarchive/releases/download/v3.8.11/libarchive-3.8.11.tar.xz
+	source = libarchive-shelly-cmake.patch
 	sha256sums = SKIP
+	sha256sums = a3dc0872b1b39da34dc18ef1b944f0f11ffd37425d70ae04be679279f1cf43d2
+	sha256sums = d11923427f3b3ad6ecdc61f13c3b789af8799ed3013c2b9266a91ab3aee1439b
 
 pkgname = shelly
 	pkgdesc = Shelly: A Modern Arch Package Manager (Devario release build)
-	depends = shelly-cli=3.2.0-1
-	depends = shelly-flatpak-backend=3.2.0-1
+	depends = shelly-cli=3.2.1-2
+	depends = shelly-flatpak-backend=3.2.1-2
 	depends = shelly-notify
 	depends = glib2
 	depends = glibc
@@ -36,15 +51,26 @@ pkgname = shelly
 
 pkgname = shelly-cli
 	pkgdesc = Native Shelly package-manager CLI (Devario release build)
+	license = GPL-3.0-only
+	license = BSD-2-Clause
+	license = BSD-3-Clause
+	depends = acl
+	depends = bzip2
 	depends = curl
 	depends = diffutils
+	depends = expat
 	depends = git
 	depends = glibc
 	depends = gnupg
-	depends = libarchive
+	depends = libb2
+	depends = lz4
+	depends = openssl
 	depends = sqlite
 	depends = sudo
 	depends = tar
+	depends = xz
+	depends = zlib
+	depends = zstd
 	optdepends = devario-devel: build AUR packages and run native isolated builds
 	optdepends = desktop-file-utils: update AppImage desktop entries
 	optdepends = fuse2: run AppImages that require FUSE 2
@@ -63,7 +89,7 @@ pkgname = shelly-cli
 
 pkgname = shelly-flatpak-backend
 	pkgdesc = Optional native Flatpak backend for Shelly (Devario release build)
-	depends = shelly-cli=3.2.0-1
+	depends = shelly-cli=3.2.1-2
 	depends = flatpak
 	depends = glib2
 	depends = glibc
@@ -74,7 +100,7 @@ pkgname = shelly-flatpak-backend
 
 pkgname = shelly-notify
 	pkgdesc = Notification tray for Shelly (Devario release build)
-	depends = shelly=3.2.0-1
+	depends = shelly=3.2.1-2
 	depends = glibc
 	conflicts = shelly-notify-git
 

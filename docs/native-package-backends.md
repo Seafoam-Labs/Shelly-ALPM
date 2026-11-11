@@ -137,6 +137,34 @@ ordered directories. With `root_hooks_only`, explicitly supplied directories
 are interpreted beneath the target root; otherwise that mode uses the profile's
 system and administrator hook locations beneath the target root.
 
+### Post-upgrade restart policy
+
+After a full system upgrade, Shelly restarts services that still run against
+libraries replaced by the transaction. The default policy restarts affected
+services that are safe to restart:
+
+```ini
+[options]
+RestartPolicy = automatic
+```
+
+Only libraries whose on-disk identity changed during the current transaction are
+considered, so stale mappings left by an older upgrade do not trigger restarts
+on every later transaction. Automatic restarts use `systemctl try-restart`,
+which never starts a stopped or oneshot unit, and skip inactive units.
+Session-critical units, including the system bus, `systemd-logind`, journald,
+udevd, account/policy services, display managers, greeters, `getty@*`, `user@*`,
+and the Devario GPU helpers, are always reported instead of restarted;
+restarting them can end the invoking session or leave the system without a bus.
+
+`RestartPolicy = report` lists affected services without restarting anything.
+
+`upgrade standard`, `upgrade all`, and `install standard --upgrade` accept
+`--restart-services` to select the automatic policy for one invocation;
+`--restart-services=false` forces report mode. A running kernel without modules
+or a stale system manager still reports a reboot requirement, and a stale user
+manager or user bus reports a session restart rather than a reboot.
+
 ## Build and package
 
 ```sh

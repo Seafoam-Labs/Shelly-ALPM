@@ -631,3 +631,25 @@ Document any known issues that are being tracked:
   page and the action bar shows `0 Selected`.
 - [ ] Cancel the authorization prompt for a batch install and verify the selection is preserved
   for a retry; verify a failed batch keeps unfinished packages selected.
+
+## Post-upgrade service restarts
+
+- [ ] With `RestartPolicy` unset, upgrade a package whose library is mapped by a
+  running service (for example `systemd-libs`). Confirm safe active units are
+  restarted with `systemctl try-restart`, stopped and oneshot units are not
+  started, session-critical units are reported instead of restarted, and the
+  update prints `[RESTARTED]service:<unit>` or
+  `[RESTART_REQUIRED]service:<unit>|<reason>` accordingly.
+- [ ] Repeat with `[options] RestartPolicy = report` or
+  `shelly upgrade standard --restart-services=false`. Confirm every affected
+  unit is reported and no unit is restarted.
+- [ ] From a graphical session, upgrade `systemd-libs` and confirm
+  `dbus-broker.service`, `systemd-logind.service`, and the display manager are
+  not restarted and the session survives.
+- [ ] Confirm a stale user manager or user bus reports
+  `[RESTART_REQUIRED]session` rather than a reboot, and that a missing running
+  kernel module directory or stale system manager still reports
+  `[RESTART_REQUIRED]reboot`.
+- [ ] Upgrade unrelated packages after a previous upgrade left a service stale;
+  confirm the stale service is not restarted again because its libraries did not
+  change in the current transaction.

@@ -1,8 +1,8 @@
 .{
     .name = .shelly_download,
     .fingerprint = 0xa1b313fa120592f5,
-    .version = "3.2.0",
-    .minimum_zig_version = "0.17.0",
+    .version = "3.2.1",
+    .minimum_zig_version = "0.17.1",
     .dependencies = .{
         .shelly_http = .{ .path = "../Shelly.Http" },
         .shelly_diagnostics = .{ .path = "../Shelly.Diagnostics" },

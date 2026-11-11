@@ -1375,6 +1375,7 @@ pub const Request = struct {
             // Populated when `http.Reader.bodyReader` is called.
             .interface = undefined,
             .max_head_len = r.client.read_buffer_size,
+            .side = .response,
         };
         r.redirect_behavior.subtractOne();
     }
@@ -2982,6 +2983,7 @@ pub fn request(
             // Populated when `http.Reader.bodyReader` is called.
             .interface = undefined,
             .max_head_len = client.read_buffer_size,
+            .side = .response,
         },
         .keep_alive = options.keep_alive,
         .method = method,
