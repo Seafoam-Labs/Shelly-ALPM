@@ -44,6 +44,8 @@ pub const Id = enum {
     half_page_down,
     narrow_view,
     widen_view,
+    reset_binding,
+    cancel_capture,
 };
 
 pub const Bindings = struct {
@@ -88,11 +90,18 @@ pub const Bindings = struct {
     half_page_down: vaxis.Key = .{ .codepoint = 'd', .mods = .{ .ctrl = true } },
     narrow_view: vaxis.Key = .{ .codepoint = vaxis.Key.left, .mods = .{ .ctrl = true } },
     widen_view: vaxis.Key = .{ .codepoint = vaxis.Key.right, .mods = .{ .ctrl = true } },
+    reset_binding: vaxis.Key = .{ .codepoint = vaxis.Key.delete },
+    cancel_capture: vaxis.Key = .{ .codepoint = vaxis.Key.escape },
 };
 
 /// Live bindings shared by dispatch and help/footer rendering. Settings will
 /// be capable of replacing this later.
 pub var bindings: Bindings = .{};
+
+/// Replace the live bindings table with a complete validated set.
+pub fn apply(new_bindings: Bindings) void {
+    bindings = new_bindings;
+}
 
 test "clearing selections does not shadow half-page scrolling" {
     const up: vaxis.Key = .{ .codepoint = 'u', .mods = .{ .ctrl = true } };
@@ -119,7 +128,10 @@ pub fn matches(key: vaxis.Key, id: Id) bool {
 }
 
 pub fn label(arena: std.mem.Allocator, id: Id) std.mem.Allocator.Error![]const u8 {
-    const key = binding(id);
+    return keyLabel(arena, binding(id));
+}
+
+pub fn keyLabel(arena: std.mem.Allocator, key: vaxis.Key) std.mem.Allocator.Error![]const u8 {
     const name = if (key.codepoint >= vaxis.Key.f1 and key.codepoint <= vaxis.Key.f35)
         try std.fmt.allocPrint(arena, "F{d}", .{key.codepoint - vaxis.Key.f1 + 1})
     else switch (key.codepoint) {
@@ -304,6 +316,12 @@ pub const Context = struct {
     source_wrap: bool = true,
     settings_save_selected: bool = false,
     settings_cycle_selected: bool = false,
+    settings_header_open: bool = false,
+    settings_discard_selected: bool = false,
+    settings_keybindings: bool = false,
+    settings_keybindings_button: bool = false,
+    settings_binding_selected: bool = false,
+    settings_capture: bool = false,
     multiple_choices: bool = false,
     preview_button: bool = false,
     mode: Mode = .search,
@@ -339,9 +357,9 @@ fn add(arena: std.mem.Allocator, list: *std.ArrayList(Entry), id: Id, short: []c
 /// operation completes in the background.
 pub fn entries(arena: std.mem.Allocator, context: Context) std.mem.Allocator.Error![]const Entry {
     var list: std.ArrayList(Entry) = .empty;
-    if (context.mode == .search or context.mode == .packages or context.mode == .aur or context.mode == .flatpak or (context.mode == .details and context.split_details)) {
-        try add(arena, &list, .narrow_view, "Narrow list", "Reduce package list width");
-        try add(arena, &list, .widen_view, "Widen list", "Increase package list width");
+    if (context.mode == .search or context.mode == .packages or context.mode == .aur or context.mode == .flatpak or context.mode == .settings or (context.mode == .details and context.split_details)) {
+        try add(arena, &list, .narrow_view, "Narrow panel", "Reduce left panel width (package pages and Settings)");
+        try add(arena, &list, .widen_view, "Widen panel", "Increase left panel width (package pages and Settings)");
     }
     if (context.categories_available) try add(arena, &list, .categories, "Categories", "Choose a Flatpak category; All categories clears the filter");
     if (context.screenshots_navigable) {
@@ -419,12 +437,27 @@ pub fn entries(arena: std.mem.Allocator, context: Context) std.mem.Allocator.Err
             try add(arena, &list, .page_down, "Page down", "Scroll updates down half a page");
         },
         .settings => {
-            try add(arena, &list, .previous, "Previous", "Previous preference");
-            try add(arena, &list, .next, "Next", "Next preference");
-            try add(arena, &list, .confirm, if (context.settings_save_selected) "Save" else if (context.settings_cycle_selected) "Select" else "Toggle", if (context.settings_save_selected) "Save and apply pending settings" else if (context.settings_cycle_selected) "Select this header style" else "Edit the selected preference without saving");
-            try add(arena, &list, .mark, if (context.settings_save_selected) "Save" else "Toggle", "Activate the selected setting or Save action (alternative)");
-            try add(arena, &list, .save_settings, "Save", "Save and apply pending settings");
-            try add(arena, &list, .refresh, "Reload", "Discard pending edits and reload saved preferences");
+            if (context.settings_capture) {
+                try add(arena, &list, .cancel_capture, "Cancel", "Cancel key capture without changing the binding");
+            } else if (context.settings_header_open) {
+                try add(arena, &list, .previous, "Previous", "Previous header style");
+                try add(arena, &list, .next, "Next", "Next header style");
+                try add(arena, &list, .confirm, "Select", "Use this header style in the pending settings");
+                try add(arena, &list, .cancel_capture, "Back", "Close the dropdown without changing the style");
+            } else {
+                try add(arena, &list, .previous, "Previous", "Previous setting or command");
+                try add(arena, &list, .next, "Next", "Next setting or command");
+                if (!context.settings_keybindings and (context.settings_keybindings_button or context.settings_cycle_selected)) {
+                    try add(arena, &list, .details, "Edit", "Focus the expanded editor (also l); Left or h returns to settings");
+                }
+                const action = if (context.settings_save_selected) "Save" else if (context.settings_discard_selected) "Discard" else if (context.settings_keybindings or context.settings_keybindings_button or context.settings_cycle_selected) "Select" else "Toggle";
+                try add(arena, &list, .confirm, action, if (context.settings_keybindings) "Capture a replacement key" else "Activate the selected preference or action");
+                try add(arena, &list, .mark, action, "Activate the selected setting or action (alternative)");
+                if (context.settings_binding_selected) try add(arena, &list, .reset_binding, "Default", "Restore the selected command's default binding without saving");
+                if (context.settings_keybindings) try add(arena, &list, .close, "Back", "Return to preferences, keeping pending edits");
+                try add(arena, &list, .save_settings, "Save", "Save and apply pending settings");
+                try add(arena, &list, .refresh, "Reload", "Discard pending edits and reload saved preferences");
+            }
         },
         .authentication, .confirmation => {
             try add(arena, &list, .confirm, "Run", "Confirm and run the operation");
