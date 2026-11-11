@@ -116,7 +116,7 @@ fn scope(id: commands.Id) u16 {
         .previous_screenshot, .next_screenshot => flatpak_details,
         .clear_selection => package_lists | aur_list,
         .toggle_wrap => preview | review,
-        .narrow_view, .widen_view => lists | details | searches,
+        .narrow_view, .widen_view => lists | details | searches | settings,
         else => unreachable,
     };
 }
@@ -291,4 +291,13 @@ test "JSON decoding validates complete configurations and writes every editable 
         const parsed = try std.json.parseFromSlice(std.json.Value, allocator, item.json, .{});
         try std.testing.expectError(item.err, decode(parsed.value));
     }
+}
+
+test "settings reload and panel resizing cannot share a binding" {
+    const config: Config = .{};
+    try std.testing.expectError(error.ConflictingBinding, config.withBinding(.refresh, config.get(.widen_view)));
+    try std.testing.expectError(error.ConflictingBinding, config.withBinding(.refresh, config.get(.narrow_view)));
+    const changed = try config.withBinding(.refresh, try parse("F3"));
+    try std.testing.expectError(error.ConflictingBinding, changed.withBinding(.widen_view, try parse("F3")));
+    try std.testing.expectError(error.ConflictingBinding, changed.withBinding(.narrow_view, try parse("F3")));
 }

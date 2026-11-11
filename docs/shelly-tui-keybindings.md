@@ -10,23 +10,31 @@ corrected values.
 
 ## Editing in the TUI
 
-Wide terminals show Settings controls on the left and the focused setting or
-expanded editor on the right. Header styles and keybindings open in that pane;
-Enter or Right opens them, and Left returns to the controls. Save and Discard
-stay below both panes. Narrow terminals use the single-pane layout.
+Wide terminals show Settings controls on the left and details on the right.
+Selecting Header icons or Configure keybindings immediately previews its choices.
+Right or Vim `l` focuses the editor; Left or `h` returns to the settings list.
+Enter or Space also opens the editor. Save and Discard are stacked below Keyboard
+inside the left pane and use Up/Down navigation. Selecting either shows its own
+description on the right. Narrow terminals use the single-pane layout.
 
-Open Settings, select **Configure keybindings** under Keyboard, and press Enter
-or Space. Use Up/Down to
-select a command, then Enter or Space to capture its replacement. Escape cancels
-capture. Quit, Help, and tab shortcuts are intercepted during capture; unsupported,
-reserved, or conflicting keys show feedback and leave the binding unchanged.
+Ctrl+Left/Ctrl+Right resize the panels within their minimum widths. These bindings
+appear under General and also apply to package pages. F1 help replaces the right
+pane on wide terminals, preserving the current selection and pending edits;
+narrow terminals show full-page help. These shortcuts follow configured bindings.
 
-Delete restores the selected command's default. **Restore all defaults** resets
-all configurable bindings in the draft. **Save changes** (or Ctrl+S) applies and
-persists edits; **Reload** discards pending changes. **Back to preferences** keeps
-the draft. The list scrolls to keep the selected action visible on small terminals.
-Command names and bindings stack vertically when columns would be too narrow.
-Fixed navigation, confirmation, review decisions, and sudo input are not editable.
+Bindings are grouped under General, Packages, Updates, AUR catalog, Flatpak
+details, and PKGBUILD. Up/Down selects a command; Enter or Space captures its
+replacement. Escape cancels capture. Quit, Help, and tab shortcuts are intercepted
+during capture; unsupported, reserved, or conflicting keys show feedback and
+leave the binding unchanged.
+
+Delete restores the selected command's default in the draft. Save changes
+(or Ctrl+S) applies and persists edits; Reload discards pending changes. Returning
+with Left or `h` keeps the draft. Down from the last binding reaches Save changes.
+The list scrolls to keep the selected command visible, with section headings
+providing context. Command names and bindings stack vertically when columns would
+be too narrow. Fixed navigation, confirmation, review decisions, and sudo input
+are not editable.
 
 ## Editing the file
 
