@@ -14,6 +14,7 @@ test "all source modules are included" {
     std.testing.refAllDecls(@import("command_context.zig"));
     std.testing.refAllDecls(@import("model.zig"));
     std.testing.refAllDecls(@import("models/appimage.zig"));
+    std.testing.refAllDecls(@import("models/appimage_model.zig"));
     std.testing.refAllDecls(@import("models/aur_model.zig"));
     std.testing.refAllDecls(@import("models/flatpak.zig"));
     std.testing.refAllDecls(@import("models/flatpak_model.zig"));
