@@ -29,6 +29,7 @@ test "all source modules are included" {
     std.testing.refAllDecls(@import("runtime.zig"));
     std.testing.refAllDecls(@import("services/atoll_catalog.zig"));
     std.testing.refAllDecls(@import("services/flatpak_images.zig"));
+    std.testing.refAllDecls(@import("services/appimage_paths.zig"));
     std.testing.refAllDecls(@import("services/settings.zig"));
     std.testing.refAllDecls(@import("services/keybindings.zig"));
     std.testing.refAllDecls(@import("services/shelly_cli.zig"));
