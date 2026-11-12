@@ -7,6 +7,8 @@ const Remote = @import("../models/flatpak.zig").Remote;
 const Flatpak = @import("../models/flatpak.zig").Flatpak;
 const AppstreamApp = @import("../models/flatpak.zig").AppstreamApp;
 const ParsedCheckUpdates = @import("../models/sync.zig").ParsedCheckUpdates;
+const AppImage = @import("../models/appimage.zig").AppImage;
+const UpdateType = @import("../models/appimage.zig").UpdateType;
 const JsonPackFrame = @import("ui_decode.zig").JsonPackFrame;
 const RunResult = std.process.RunResult;
 const runtime = @import("../runtime.zig");
@@ -130,6 +132,14 @@ pub const ShellyCli = struct {
         defer self.allocator.free(result.stdout);
         defer self.allocator.free(result.stderr);
         return decodeQuery([]Flatpak, self.allocator, result.stdout, false);
+    }
+
+    pub fn get_installed_appimages(self: ShellyCli) !std.json.Parsed([]AppImage) {
+        const result = try self.run(&.{ "list", "appimage" });
+        defer self.allocator.free(result.stdout);
+        defer self.allocator.free(result.stderr);
+
+        return decodeQuery([]AppImage, self.allocator, result.stdout, false);
     }
 
     pub fn get_remote_appstream_apps(self: ShellyCli) !std.json.Parsed([]AppstreamApp) {
@@ -339,6 +349,37 @@ test "failed query captures child output and returns an error without terminal d
     defer std.testing.allocator.free(recovered.stderr);
     try std.testing.expectEqualStrings("recovered", recovered.stdout);
     try std.testing.expectEqualStrings("", recovered.stderr);
+}
+
+test "appimage listing decodes representative metadata" {
+    const allocator = std.testing.allocator;
+    const info = try queryTestFrame(allocator, "{\"$kind\":\"alpm.info\",\"Message\":\"Listing AppImages\"}");
+    defer allocator.free(info);
+    const data = try queryTestFrame(allocator,
+        \\[{"Name":"Blender","DesktopName":"Blender","Version":"4.2.0","IconName":"blender","Description":"3D modeling","SizeOnDisk":268435456,"UpdateURl":"seafoam-labs/blender","RawUpdateInfo":"","RepoOwner":"seafoam-labs","RepoName":"blender","UpdateType":2,"AllowPrerelease":false,"EnvironmentVariables":[],"CommandLineArgs":null,"Path":"/home/user/.local/bin/blender.AppImage"},{"Name":"Nightly Editor","Version":"3.1","SizeOnDisk":188743680,"UpdateType":6,"UpdateURl":"zsync|https://nightly.example.dev/latest/Editor.AppImage.zsync","Path":"/home/user/.local/bin/Editor.AppImage"}]
+    );
+    defer allocator.free(data);
+    const output = try std.mem.concat(allocator, u8, &.{ info, data });
+
+    const parsed = decodeQuery([]AppImage, allocator, output, false) catch |err| {
+        allocator.free(output);
+        return err;
+    };
+    defer parsed.deinit();
+
+    allocator.free(output);
+
+    try std.testing.expectEqual(@as(usize, 2), parsed.value.len);
+    try std.testing.expectEqualStrings("Blender", parsed.value[0].Name);
+    try std.testing.expectEqual(@as(i64, 268435456), parsed.value[0].SizeOnDisk);
+    try std.testing.expectEqual(UpdateType.GitHub, parsed.value[0].UpdateType);
+    try std.testing.expectEqualStrings("seafoam-labs", parsed.value[0].RepoOwner.?);
+    try std.testing.expect(parsed.value[0].CommandLineArgs == null);
+
+    try std.testing.expectEqualStrings("Nightly Editor", parsed.value[1].Name);
+    try std.testing.expectEqual(UpdateType.Zsync, parsed.value[1].UpdateType);
+    try std.testing.expectEqualStrings("Zsync", parsed.value[1].UpdateType.toCliString());
+    try std.testing.expectEqualStrings("zsync|https://nightly.example.dev/latest/Editor.AppImage.zsync", parsed.value[1].UpdateURl);
 }
 
 test "preview queries cannot overlap their child processes" {
