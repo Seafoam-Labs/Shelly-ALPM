@@ -309,7 +309,7 @@ pub fn scrollsOperation(key: vaxis.Key) bool {
     return scrollKey(key) != null;
 }
 
-pub const Mode = enum { search, packages, details, aur, flatpak, updates, settings, authentication, confirmation, running, result, review, preview_document, answers, choice, help };
+pub const Mode = enum { appimage, search, packages, details, aur, flatpak, updates, settings, authentication, confirmation, running, result, review, preview_document, answers, choice, help };
 pub const Context = struct {
     authenticating: bool = false,
     quit_blocked: bool = false,
@@ -357,7 +357,7 @@ fn add(arena: std.mem.Allocator, list: *std.ArrayList(Entry), id: Id, short: []c
 /// operation completes in the background.
 pub fn entries(arena: std.mem.Allocator, context: Context) std.mem.Allocator.Error![]const Entry {
     var list: std.ArrayList(Entry) = .empty;
-    if (context.mode == .search or context.mode == .packages or context.mode == .aur or context.mode == .flatpak or context.mode == .settings or (context.mode == .details and context.split_details)) {
+    if (context.mode == .search or context.mode == .packages or context.mode == .aur or context.mode == .flatpak or context.mode == .appimage or context.mode == .settings or (context.mode == .details and context.split_details)) {
         try add(arena, &list, .narrow_view, "Narrow panel", "Reduce left panel width (package pages and Settings)");
         try add(arena, &list, .widen_view, "Widen panel", "Increase left panel width (package pages and Settings)");
     }
@@ -435,6 +435,12 @@ pub fn entries(arena: std.mem.Allocator, context: Context) std.mem.Allocator.Err
             try add(arena, &list, .next, "Down", "Scroll updates down");
             try add(arena, &list, .page_up, "Page up", "Scroll updates up half a page");
             try add(arena, &list, .page_down, "Page down", "Scroll updates down half a page");
+        },
+        .appimage => {
+            try add(arena, &list, .previous, "Up", "Previous AppImage or scroll up");
+            try add(arena, &list, .next, "Down", "Next AppImage or scroll down");
+            try add(arena, &list, if (context.split_details) .back else .details, if (context.split_details) "Back" else "Details", "Move between the list and details");
+            try add(arena, &list, .refresh_list, "Refresh", "Reload installed AppImages");
         },
         .settings => {
             if (context.settings_capture) {

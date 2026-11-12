@@ -118,6 +118,10 @@ pub fn resolve(self: *Model) commands.Context {
             context.upgrade_aur = view.canUpgradeAur();
             context.upgrade_flatpak = view.canUpgradeFlatpak();
         },
+        .appimage => {
+            context.mode = .appimage;
+            context.split_details = self.appimage_state.details_active;
+        },
         .settings => {
             context.mode = .settings;
             context.settings_keybindings = self.settings_state.keybindings_open;

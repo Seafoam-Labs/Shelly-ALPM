@@ -77,9 +77,9 @@ pub const View = struct {
 
         var rows: std.ArrayList(Row) = .empty;
         const form = [_]struct { heading: ?[]const u8 = null, control: ?usize = null }{
-            .{ .heading = "Package sources" }, .{ .control = 0 },                              .{ .control = 1 },                             .{ .control = preferences.atoll_index },
-            .{ .heading = "" },                .{ .heading = "Appearance and accessibility" }, .{ .control = preferences.header_index },      .{ .control = preferences.screenshots_index },
-            .{ .heading = "" },                .{ .heading = "Keyboard" },                     .{ .control = preferences.keybindings_index },
+            .{ .heading = "Package sources" }, .{ .control = 0 },                              .{ .control = 1 },                        .{ .control = preferences.appimage_index },    .{ .control = preferences.atoll_index },
+            .{ .heading = "" },                .{ .heading = "Appearance and accessibility" }, .{ .control = preferences.header_index }, .{ .control = preferences.screenshots_index }, .{ .heading = "" },
+            .{ .heading = "Keyboard" },        .{ .control = preferences.keybindings_index },
         };
         var selected_line: usize = 0;
         for (form) |item| {
@@ -190,12 +190,14 @@ pub const View = struct {
         const enabled = switch (index) {
             0 => self.settings.aur_enabled,
             1 => self.settings.flatpak_enabled,
+            preferences.appimage_index => self.settings.appimage_enabled,
             preferences.atoll_index => self.settings.atoll_aur_enabled,
             else => self.settings.show_flatpak_screenshots,
         };
         const title = switch (index) {
             0 => "Enable AUR",
             1 => "Enable Flatpak",
+            preferences.appimage_index => "Enable AppImage",
             preferences.atoll_index => "Use Atoll-backed AUR",
             else => "Show Flatpak screenshots",
         };
@@ -211,6 +213,7 @@ pub const View = struct {
         return switch (self.previewSelection()) {
             0 => "Show AUR searches, installed packages, and updates.",
             1 => try std.fmt.allocPrint(arena, "Show Flatpak applications and updates. Backend: {s}.", .{self.backendStatus()}),
+            preferences.appimage_index => "Show installed AppImages and their metadata.",
             preferences.atoll_index => "Use Shelly's shared AUR mirror and scan Atoll PKGBUILD previews.",
             preferences.header_index => "Choose text-only, Nerd Font, or ASCII page headers.",
             preferences.screenshots_index => "Show images in Flatpak details when the terminal supports them.",

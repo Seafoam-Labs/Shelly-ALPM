@@ -197,6 +197,7 @@ pub fn toggleSetting(self: *Model, ctx: *vxfw.EventContext) !void {
     switch (self.settings_state.settings_selected) {
         0 => draft.aur_enabled = !draft.aur_enabled,
         1 => draft.flatpak_enabled = !draft.flatpak_enabled,
+        @import("settings.zig").appimage_index => draft.appimage_enabled = !draft.appimage_enabled,
         @import("settings.zig").atoll_index => draft.atoll_aur_enabled = !draft.atoll_aur_enabled,
         screenshots_index => draft.show_flatpak_screenshots = !draft.show_flatpak_screenshots,
         else => unreachable,
@@ -511,7 +512,7 @@ test "settings determine source visibility before backend or native loading fini
     defer events.cmds.deinit(std.testing.allocator);
     try model.setTab(.aur, &events);
     try std.testing.expectEqual(Tab.packages, model.active);
-    applySettings(model, .{ .aur_enabled = true, .flatpak_enabled = true });
+    applySettings(model, .{ .aur_enabled = true, .flatpak_enabled = true, .appimage_enabled = true });
     try std.testing.expect(!model.flatpak_state.flatpak_available);
     try std.testing.expect(model.packages_state.loading);
     try std.testing.expectEqualSlices(Tab, Tab.all, model.visibleTabs());
