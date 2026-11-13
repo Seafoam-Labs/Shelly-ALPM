@@ -14,6 +14,7 @@ test "all source modules are included" {
     std.testing.refAllDecls(@import("command_context.zig"));
     std.testing.refAllDecls(@import("model.zig"));
     std.testing.refAllDecls(@import("models/appimage.zig"));
+    std.testing.refAllDecls(@import("models/appimage_model.zig"));
     std.testing.refAllDecls(@import("models/aur_model.zig"));
     std.testing.refAllDecls(@import("models/flatpak.zig"));
     std.testing.refAllDecls(@import("models/flatpak_model.zig"));
@@ -28,6 +29,7 @@ test "all source modules are included" {
     std.testing.refAllDecls(@import("runtime.zig"));
     std.testing.refAllDecls(@import("services/atoll_catalog.zig"));
     std.testing.refAllDecls(@import("services/flatpak_images.zig"));
+    std.testing.refAllDecls(@import("services/appimage_paths.zig"));
     std.testing.refAllDecls(@import("services/settings.zig"));
     std.testing.refAllDecls(@import("services/keybindings.zig"));
     std.testing.refAllDecls(@import("services/shelly_cli.zig"));
@@ -36,6 +38,7 @@ test "all source modules are included" {
     std.testing.refAllDecls(sudo_terminal);
     std.testing.refAllDecls(sudo_session);
     std.testing.refAllDecls(@import("views/app_view.zig"));
+    std.testing.refAllDecls(@import("views/appimage_view.zig"));
     std.testing.refAllDecls(@import("views/aur_view.zig"));
     std.testing.refAllDecls(@import("views/border.zig"));
     std.testing.refAllDecls(@import("views/detail_fields.zig"));

@@ -42,6 +42,7 @@ pub const Store = struct {
         // The CLI owns AurUrl.
         _ = document.value.object.swapRemove("AtollAurEnabled");
         try document.value.object.put(alloc, "AurEnabled", .{ .bool = settings.aur_enabled });
+        try document.value.object.put(alloc, "AppImageEnabled", .{ .bool = settings.appimage_enabled });
         try document.value.object.put(alloc, "FlatpakEnabled", .{ .bool = settings.flatpak_enabled });
         try document.value.object.put(alloc, "HeaderIcons", .{ .string = @tagName(settings.header_icons) });
         try document.value.object.put(alloc, "ShowFlatpakScreenshots", .{ .bool = settings.show_flatpak_screenshots });
@@ -86,6 +87,10 @@ fn decode(value: std.json.Value) !Settings {
         if (enabled != .bool) return error.InvalidSettings;
         result.aur_enabled = enabled.bool;
     }
+    if (value.object.get("AppImageEnabled")) |enabled| {
+        if (enabled != .bool) return error.InvalidSettings;
+        result.appimage_enabled = enabled.bool;
+    }
     if (value.object.get("FlatpakEnabled")) |enabled| {
         if (enabled != .bool) return error.InvalidSettings;
         result.flatpak_enabled = enabled.bool;
@@ -115,8 +120,8 @@ test "settings round trip preserves unknown keys and rejects invalid files" {
     var file = try temporary.dir.createFile(io, "tui-settings.json", .{});
     try file.writeStreamingAll(io, "{\"Other\":{\"value\":42},\"AurEnabled\":true}");
     file.close(io);
-    try store.save(io, .{ .flatpak_enabled = true, .show_flatpak_screenshots = false });
-    try std.testing.expect((try store.load(io)).eql(.{ .flatpak_enabled = true, .show_flatpak_screenshots = false }));
+    try store.save(io, .{ .flatpak_enabled = true, .appimage_enabled = true, .show_flatpak_screenshots = false });
+    try std.testing.expect((try store.load(io)).eql(.{ .flatpak_enabled = true, .appimage_enabled = true, .show_flatpak_screenshots = false }));
     const document = try store.read(io);
     defer document.deinit();
     try std.testing.expectEqual(@as(i64, 42), document.value.object.get("Other").?.object.get("value").?.integer);

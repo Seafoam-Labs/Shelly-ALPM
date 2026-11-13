@@ -5,12 +5,13 @@ const commands = @import("../commands.zig");
 const Allocator = std.mem.Allocator;
 
 pub const editable = [_]commands.Id{
-    .quit,              .help,                .next_tab,        .previous_tab,
-    .install,           .remove,              .preview,         .refresh,
-    .refresh_list,      .filter,              .upgrade_all,     .upgrade_system,
-    .upgrade_aur,       .upgrade_flatpak,     .categories,      .previous_catalog_page,
-    .next_catalog_page, .previous_screenshot, .next_screenshot, .clear_selection,
-    .toggle_wrap,       .narrow_view,         .widen_view,
+    .quit,                  .help,              .next_tab,            .previous_tab,
+    .install,               .remove,            .preview,             .refresh,
+    .refresh_list,          .filter,            .upgrade_all,         .upgrade_system,
+    .upgrade_appimage,      .upgrade_aur,       .upgrade_flatpak,     .categories,
+    .previous_catalog_page, .next_catalog_page, .previous_screenshot, .next_screenshot,
+    .clear_selection,       .configure_updates, .toggle_wrap,         .narrow_view,
+    .widen_view,            .toggle_hidden,
 };
 
 fn indexOf(id: commands.Id) ?usize {
@@ -97,6 +98,7 @@ const updates: u16 = 128;
 const settings: u16 = 256;
 const preview: u16 = 512;
 const review: u16 = 1024;
+const appimages: u16 = 4096;
 const lists = package_lists | aur_list | flatpak_list;
 const details = package_details | aur_details | flatpak_details;
 
@@ -105,18 +107,20 @@ const details = package_details | aur_details | flatpak_details;
 fn scope(id: commands.Id) u16 {
     return switch (id) {
         .quit, .help, .next_tab, .previous_tab => all,
-        .install, .remove => lists | details,
+        .configure_updates => appimages,
+        .install, .remove => lists | details | appimages,
         .preview => aur_list | aur_details,
         .refresh => updates | settings | preview,
-        .refresh_list => aur_list | flatpak_list | searches | flatpak_details,
+        .refresh_list => aur_list | flatpak_list | searches | flatpak_details | appimages,
         .filter => lists | searches,
-        .upgrade_all, .upgrade_system, .upgrade_aur, .upgrade_flatpak => updates,
+        .upgrade_all, .upgrade_system, .upgrade_aur, .upgrade_flatpak, .upgrade_appimage => updates,
         .categories => flatpak_list | flatpak_details | searches,
         .previous_catalog_page, .next_catalog_page => aur_list,
         .previous_screenshot, .next_screenshot => flatpak_details,
         .clear_selection => package_lists | aur_list,
         .toggle_wrap => preview | review,
-        .narrow_view, .widen_view => lists | details | searches | settings,
+        .toggle_hidden => 2048, // File browser, outside path editing.
+        .narrow_view, .widen_view => lists | details | searches | settings | appimages,
         else => unreachable,
     };
 }

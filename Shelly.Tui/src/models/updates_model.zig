@@ -38,6 +38,8 @@ pub const UpdatesJob = struct {
     aur_enabled: bool = false,
     atoll: bool = false,
     flatpak_enabled: bool = false,
+    appimage_enabled: bool = false,
+    invalidated: bool = false,
     result: ?ParsedCheckUpdates = null,
     failed: bool = false,
     done: std.atomic.Value(bool) = .init(false),
@@ -63,6 +65,11 @@ pub fn deinit(self: *Model) void {
     if (self.updates_state.updates_parsed) |*parsed| parsed.deinit();
 }
 
+pub fn invalidate(self: *Model) void {
+    self.updates_state.updates_checked = false;
+    if (self.updates_state.updates_job) |job| job.invalidated = true;
+}
+
 pub fn ensureUpdates(self: *Model, ctx: *vxfw.EventContext) !void {
     if (self.active == .upgrade and !self.updates_state.updates_checked and self.updates_state.updates_job == null)
         try startUpdates(self, ctx);
@@ -73,7 +80,7 @@ pub fn startUpdates(self: *Model, ctx: *vxfw.EventContext) !void {
     try ctx.tick(100, self.widget());
     const job = try self.gpa.create(UpdatesJob);
     errdefer self.gpa.destroy(job);
-    job.* = .{ .atoll = self.settings_state.settings.atoll_aur_enabled, .aur_enabled = self.settings_state.settings.aur_enabled, .flatpak_enabled = self.settings_state.settings.flatpak_enabled and self.flatpak_state.flatpak_available };
+    job.* = .{ .appimage_enabled = self.settings_state.settings.appimage_enabled, .atoll = self.settings_state.settings.atoll_aur_enabled, .aur_enabled = self.settings_state.settings.aur_enabled, .flatpak_enabled = self.settings_state.settings.flatpak_enabled and self.flatpak_state.flatpak_available };
     const thread = try std.Thread.spawn(.{}, checkUpdatesThread, .{job});
     self.updates_state.updates_thread = thread;
     self.updates_state.updates_job = job;
@@ -85,7 +92,7 @@ pub fn checkUpdatesThread(job: *UpdatesJob) void {
     var threaded: std.Io.Threaded = .init(std.heap.page_allocator, .{});
     defer threaded.deinit();
     const cli: ShellyCli = .{ .allocator = std.heap.page_allocator, .io = threaded.io() };
-    job.result = cli.check_updates_for_sources(job.aur_enabled, job.flatpak_enabled) catch {
+    job.result = cli.check_updates_for_sources(job.aur_enabled, job.flatpak_enabled, job.appimage_enabled) catch {
         job.failed = true;
         job.done.store(true, .release);
         return;
@@ -100,7 +107,7 @@ pub fn pollUpdates(self: *Model) void {
     self.updates_state.updates_thread = null;
     self.updates_state.updates_job = null;
     defer self.gpa.destroy(job);
-    if (job.atoll != self.settings_state.settings.atoll_aur_enabled or job.aur_enabled != self.settings_state.settings.aur_enabled or job.flatpak_enabled != (self.settings_state.settings.flatpak_enabled and self.flatpak_state.flatpak_available)) {
+    if (job.invalidated or job.appimage_enabled != self.settings_state.settings.appimage_enabled or job.atoll != self.settings_state.settings.atoll_aur_enabled or job.aur_enabled != self.settings_state.settings.aur_enabled or job.flatpak_enabled != (self.settings_state.settings.flatpak_enabled and self.flatpak_state.flatpak_available)) {
         if (job.result) |*parsed| parsed.deinit();
         self.updates_state.updates_checked = false;
         return;
@@ -122,6 +129,7 @@ pub fn updatesView(self: *Model) updates_view.View {
         .loading = self.updates_state.updates_job != null,
         .failed = self.updates_state.updates_failed,
         .checked = self.updates_state.updates_checked,
+        .appimage_enabled = self.settings_state.settings.appimage_enabled,
         .aur_enabled = self.settings_state.settings.aur_enabled,
         .flatpak_enabled = self.settings_state.settings.flatpak_enabled,
         .flatpak_available = self.settings_state.settings.flatpak_enabled and self.flatpak_state.flatpak_available,
@@ -161,6 +169,7 @@ pub fn upgradeFromUpdates(self: *Model, backend: OperationBackend) !void {
     if (backend == .all and !updatesView(self).canUpgradeAll()) return;
     if (backend == .standard and !updatesView(self).canUpgrade()) return;
     if (backend == .aur and !updatesView(self).canUpgradeAur()) return;
+    if (backend == .appimage and !updatesView(self).canUpgradeAppImage()) return;
     if (backend == .flatpak) {
         if (updatesView(self).canUpgradeFlatpak()) try flatpak_model.openFlatpakPrompt(self, .upgrade, "Flatpak applications and runtimes (system + user)", null);
         return;
@@ -168,9 +177,11 @@ pub fn upgradeFromUpdates(self: *Model, backend: OperationBackend) !void {
     const prompt = try self.gpa.create(SudoPrompt);
     errdefer self.gpa.destroy(prompt);
     prompt.* = .{
-        .name = try self.gpa.dupe(u8, if (backend == .all) "all enabled package sources" else if (backend == .aur) "AUR packages" else "system packages"),
+        .name = try self.gpa.dupe(u8, if (backend == .all) "all enabled package sources" else if (backend == .appimage) "AppImages" else if (backend == .aur) "AUR packages" else "system packages"),
         .backend = backend,
         .action = .upgrade,
+        .elevated = backend != .appimage,
+        .include_appimage = self.settings_state.settings.appimage_enabled,
         .include_flatpak = self.settings_state.settings.flatpak_enabled and self.flatpak_state.flatpak_available,
         .include_aur = self.settings_state.settings.aur_enabled,
     };
@@ -191,6 +202,7 @@ pub fn handleKey(self: *Model, ctx: *vxfw.EventContext, key: vaxis.Key) anyerror
             .upgrade_system => try upgradeSystemFromUpdates(self),
             .upgrade_aur => try upgradeFromUpdates(self, .aur),
             .upgrade_flatpak => try upgradeFromUpdates(self, .flatpak),
+            .upgrade_appimage => try upgradeFromUpdates(self, .appimage),
         }
         ctx.consumeAndRedraw();
         return true;
@@ -318,8 +330,10 @@ test "combined update shortcut opens an authenticated prompt even for an empty c
     try std.testing.expectEqualStrings("all enabled package sources", prompt.name);
     operation_model.closeOverlay(model);
     model.settings_state.settings.flatpak_enabled = true;
+    model.settings_state.settings.appimage_enabled = true;
     model.flatpak_state.flatpak_available = true;
     try upgradeFromUpdates(model, .all);
+    try std.testing.expect(model.overlay.?.sudo.include_appimage);
     try std.testing.expect(model.overlay.?.sudo.include_flatpak);
     vxfw.DrawContext.init(.unicode);
     var arena = std.heap.ArenaAllocator.init(allocator);
@@ -344,7 +358,7 @@ test "combined operation completion refreshes every included source after partia
             .arena = .init(std.heap.page_allocator),
             .done = .init(true),
             .result = .{ .failed = true },
-            .request = .{ .action = .upgrade, .shelly_bin = "unused", .environ_map = &env, .backend = "all", .name = "combined upgrade", .include_flatpak = include_flatpak, .include_aur = true },
+            .request = .{ .action = .upgrade, .shelly_bin = "unused", .environ_map = &env, .backend = "all", .name = "combined upgrade", .include_flatpak = include_flatpak, .include_aur = true, .include_appimage = include_flatpak },
         };
         model.operation_state.install_job = job;
         try std.testing.expect(!try operation_model.pollInstall(model));
@@ -352,6 +366,7 @@ test "combined operation completion refreshes every included source after partia
         try std.testing.expect(model.aur_state.refresh_aur_after_operation);
         try std.testing.expect(model.updates_state.refresh_updates_after_operation);
         try std.testing.expectEqual(include_flatpak, model.flatpak_state.refresh_flatpak_after_operation);
+        try std.testing.expectEqual(include_flatpak, model.appimage_state.refresh_after_operation);
     }
 }
 
@@ -460,5 +475,40 @@ test "update confirmations retain the list while PKGBUILD reviews use the full c
             try std.testing.expect(!try contains(review.surface, "visible-update", std.testing.allocator));
         }
         try std.testing.expectEqual(@as(usize, 0), model.updates_state.updates_list.cursor);
+    }
+}
+
+test "AppImage upgrades require available updates and use user-scoped confirmation" {
+    const allocator = std.testing.allocator;
+    const model = try Model.init(allocator);
+    defer model.deinit();
+    model.active = .upgrade;
+    model.settings_state.settings.appimage_enabled = true;
+    model.updates_state.updates_parsed = ParsedCheckUpdates.fromParsed(try std.json.parseFromSlice(CheckUpdates, allocator, "{\"AppImage\":[{\"Name\":\"Editor\",\"Version\":\"2\",\"IsUpdateAvailable\":true}]}", .{}));
+    try std.testing.expectEqual(commands.Updates.upgrade_appimage, updatesView(model).handleKey(commands.bindings.upgrade_appimage).?);
+    try upgradeFromUpdates(model, .appimage);
+    const prompt = model.overlay.?.sudo;
+    try std.testing.expectEqual(OperationBackend.appimage, prompt.backend);
+    try std.testing.expectEqual(shelly_operation.Action.upgrade, prompt.action);
+    try std.testing.expect(!prompt.elevated);
+    try std.testing.expectEqual(commands.Mode.confirmation, model.commandContext().mode);
+    operation_model.closeOverlay(model);
+    model.settings_state.settings.appimage_enabled = false;
+    try upgradeFromUpdates(model, .appimage);
+    try std.testing.expect(model.overlay == null);
+    model.settings_state.settings.appimage_enabled = true;
+    model.updates_state.updates_failed = true;
+    try std.testing.expect(updatesView(model).handleKey(commands.bindings.upgrade_appimage) == null);
+    var env: std.process.Environ.Map = .init(allocator);
+    defer env.deinit();
+    for ([_]bool{ false, true }) |failed| {
+        const job = try std.heap.page_allocator.create(shelly_operation.Operation);
+        job.* = .{ .arena = .init(std.heap.page_allocator), .done = .init(true), .result = .{ .failed = failed }, .request = .{ .action = .upgrade, .shelly_bin = "unused", .environ_map = &env, .backend = "appimage", .name = "AppImages" } };
+        model.operation_state.install_job = job;
+        try std.testing.expect(!try operation_model.pollInstall(model));
+        try std.testing.expect(model.appimage_state.refresh_after_operation);
+        try std.testing.expect(model.updates_state.refresh_updates_after_operation);
+        try std.testing.expect(!model.updates_state.refresh_after_upgrade);
+        try std.testing.expect(!model.aur_state.refresh_aur_after_operation);
     }
 }

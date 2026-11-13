@@ -5,6 +5,7 @@ const std = @import("std");
 pub const Id = enum {
     quit,
     interrupt,
+    configure_updates,
     help,
     next_tab,
     previous_tab,
@@ -36,6 +37,7 @@ pub const Id = enum {
     upgrade_system,
     upgrade_aur,
     upgrade_flatpak,
+    upgrade_appimage,
     approve,
     decline,
     page_up,
@@ -44,11 +46,13 @@ pub const Id = enum {
     half_page_down,
     narrow_view,
     widen_view,
+    toggle_hidden,
     reset_binding,
     cancel_capture,
 };
 
 pub const Bindings = struct {
+    configure_updates: vaxis.Key = .{ .codepoint = 'e' },
     quit: vaxis.Key = .{ .codepoint = 'c', .mods = .{ .ctrl = true } },
     interrupt: vaxis.Key = .{ .codepoint = 'c', .mods = .{ .ctrl = true } },
     help: vaxis.Key = .{ .codepoint = vaxis.Key.f1 },
@@ -82,6 +86,7 @@ pub const Bindings = struct {
     upgrade_system: vaxis.Key = .{ .codepoint = 'u' },
     upgrade_aur: vaxis.Key = .{ .codepoint = 'a' },
     upgrade_flatpak: vaxis.Key = .{ .codepoint = 'f' },
+    upgrade_appimage: vaxis.Key = .{ .codepoint = 'i' },
     approve: vaxis.Key = .{ .codepoint = 'y' },
     decline: vaxis.Key = .{ .codepoint = 'n' },
     page_up: vaxis.Key = .{ .codepoint = vaxis.Key.page_up },
@@ -89,6 +94,7 @@ pub const Bindings = struct {
     half_page_up: vaxis.Key = .{ .codepoint = 'u', .mods = .{ .ctrl = true } },
     half_page_down: vaxis.Key = .{ .codepoint = 'd', .mods = .{ .ctrl = true } },
     narrow_view: vaxis.Key = .{ .codepoint = vaxis.Key.left, .mods = .{ .ctrl = true } },
+    toggle_hidden: vaxis.Key = .{ .codepoint = '.' },
     widen_view: vaxis.Key = .{ .codepoint = vaxis.Key.right, .mods = .{ .ctrl = true } },
     reset_binding: vaxis.Key = .{ .codepoint = vaxis.Key.delete },
     cancel_capture: vaxis.Key = .{ .codepoint = vaxis.Key.escape },
@@ -256,13 +262,14 @@ pub fn refreshes(key: vaxis.Key) bool {
     return matches(key, .refresh);
 }
 
-pub const Updates = enum { refresh, upgrade_all, upgrade_system, upgrade_aur, upgrade_flatpak };
+pub const Updates = enum { refresh, upgrade_all, upgrade_system, upgrade_aur, upgrade_flatpak, upgrade_appimage };
 pub fn updates(key: vaxis.Key) ?Updates {
     if (refreshes(key)) return .refresh;
     if (matches(key, .upgrade_all)) return .upgrade_all;
     if (matches(key, .upgrade_system)) return .upgrade_system;
     if (matches(key, .upgrade_aur)) return .upgrade_aur;
     if (matches(key, .upgrade_flatpak)) return .upgrade_flatpak;
+    if (matches(key, .upgrade_appimage)) return .upgrade_appimage;
     return null;
 }
 
@@ -309,8 +316,13 @@ pub fn scrollsOperation(key: vaxis.Key) bool {
     return scrollKey(key) != null;
 }
 
-pub const Mode = enum { search, packages, details, aur, flatpak, updates, settings, authentication, confirmation, running, result, review, preview_document, answers, choice, help };
+pub const Mode = enum { appimage, search, packages, details, aur, flatpak, updates, settings, authentication, confirmation, running, result, review, preview_document, answers, choice, help };
 pub const Context = struct {
+    appimage_source: bool = false,
+    appimage_configure_selected: bool = false,
+    appimage_path: bool = false,
+    appimage_path_editing: bool = false,
+    hidden_files: bool = false,
     authenticating: bool = false,
     quit_blocked: bool = false,
     source_wrap: bool = true,
@@ -342,6 +354,7 @@ pub const Context = struct {
     upgrade_system: bool = false,
     upgrade_aur: bool = false,
     upgrade_flatpak: bool = false,
+    upgrade_appimage: bool = false,
     upgrade_all: bool = false,
     selected_count: usize = 0,
     selected_installed: usize = 0,
@@ -357,7 +370,20 @@ fn add(arena: std.mem.Allocator, list: *std.ArrayList(Entry), id: Id, short: []c
 /// operation completes in the background.
 pub fn entries(arena: std.mem.Allocator, context: Context) std.mem.Allocator.Error![]const Entry {
     var list: std.ArrayList(Entry) = .empty;
-    if (context.mode == .search or context.mode == .packages or context.mode == .aur or context.mode == .flatpak or context.mode == .settings or (context.mode == .details and context.split_details)) {
+    if (context.appimage_source) {
+        try add(arena, &list, .previous, "Previous", "Previous update-source control");
+        try add(arena, &list, .next, "Next", "Next update-source control");
+        try add(arena, &list, .confirm, "Select", "Change the selected update-source control");
+        try add(arena, &list, .cancel_capture, "Cancel", "Discard the update-source draft");
+        return list.toOwnedSlice(arena);
+    }
+    if (context.appimage_path) {
+        if (!context.appimage_path_editing) try add(arena, &list, .toggle_hidden, if (context.hidden_files) "Hide hidden" else "Show hidden", "Toggle hidden files and folders in the AppImage browser");
+        try add(arena, &list, .confirm, "Open/Install", "Open a folder or review AppImage installation");
+        try add(arena, &list, .cancel_capture, "Cancel", "Return to installed AppImages");
+        return list.toOwnedSlice(arena);
+    }
+    if (context.mode == .search or context.mode == .packages or context.mode == .aur or context.mode == .flatpak or context.mode == .appimage or context.mode == .settings or (context.mode == .details and context.split_details)) {
         try add(arena, &list, .narrow_view, "Narrow panel", "Reduce left panel width (package pages and Settings)");
         try add(arena, &list, .widen_view, "Widen panel", "Increase left panel width (package pages and Settings)");
     }
@@ -426,15 +452,26 @@ pub fn entries(arena: std.mem.Allocator, context: Context) std.mem.Allocator.Err
             if (context.mode == .flatpak or context.installed_only or context.catalog_available) try add(arena, &list, .refresh_list, "Refresh", "Refresh the current package list");
         },
         .updates => {
-            if (context.upgrade_all) try add(arena, &list, .upgrade_all, "Update all", "Upgrade all enabled sources; AppImage updates are detected but not managed by the TUI");
+            if (context.upgrade_all) try add(arena, &list, .upgrade_all, "Update all", "Upgrade all enabled package sources");
             if (context.upgrade_system) try add(arena, &list, .upgrade_system, "System", "Upgrade native system packages");
             if (context.upgrade_aur) try add(arena, &list, .upgrade_aur, "AUR", "Upgrade AUR packages with PKGBUILD review");
             if (context.upgrade_flatpak) try add(arena, &list, .upgrade_flatpak, "Flatpak", "Upgrade system and user Flatpaks");
+            if (context.upgrade_appimage) try add(arena, &list, .upgrade_appimage, "AppImages", "Upgrade all configured AppImages with available updates");
             try add(arena, &list, .refresh, "Refresh", "Check for updates again");
             try add(arena, &list, .previous, "Up", "Scroll updates up");
             try add(arena, &list, .next, "Down", "Scroll updates down");
             try add(arena, &list, .page_up, "Page up", "Scroll updates up half a page");
             try add(arena, &list, .page_down, "Page down", "Scroll updates down half a page");
+        },
+        .appimage => {
+            if (context.appimage_configure_selected) try add(arena, &list, .confirm, "Configure", "Configure the selected AppImage update source");
+            if (context.removable) try add(arena, &list, .configure_updates, "Configure updates", "Edit the selected AppImage update source");
+            try add(arena, &list, .install, "Install", "Install an AppImage from a local path");
+            if (context.removable) try add(arena, &list, .remove, "Remove", "Remove the selected AppImage");
+            try add(arena, &list, .previous, "Up", "Previous AppImage or scroll up");
+            try add(arena, &list, .next, "Down", "Next AppImage or scroll down");
+            try add(arena, &list, if (context.split_details) .back else .details, if (context.split_details) "Back" else "Details", "Move between the list and details");
+            try add(arena, &list, .refresh_list, "Refresh", "Reload installed AppImages");
         },
         .settings => {
             if (context.settings_capture) {

@@ -108,7 +108,7 @@ pub fn loadSettings(self: *Model, io: std.Io, env: *const std.process.Environ.Ma
 
 pub fn applySettings(self: *Model, saved: Settings) void {
     const atoll_changed = self.settings_state.settings.atoll_aur_enabled != saved.atoll_aur_enabled;
-    const sources_changed = atoll_changed or self.settings_state.settings.aur_enabled != saved.aur_enabled or self.settings_state.settings.flatpak_enabled != saved.flatpak_enabled;
+    const sources_changed = self.settings_state.settings.appimage_enabled != saved.appimage_enabled or atoll_changed or self.settings_state.settings.aur_enabled != saved.aur_enabled or self.settings_state.settings.flatpak_enabled != saved.flatpak_enabled;
     if (atoll_changed or self.settings_state.settings.aur_enabled != saved.aur_enabled) {
         aur_model.invalidateInstalledCache(self);
         aur_model.clearAurSelection(self);
@@ -154,10 +154,11 @@ pub fn applySettings(self: *Model, saved: Settings) void {
     self.settings_state.settings_failure = null;
     commands.apply(saved.keybindings.resolve());
     if (sources_changed) {
-        self.updates_state.updates_checked = false;
+        @import("updates_model.zig").invalidate(self);
         if (self.updates_state.updates_parsed) |*parsed| {
             if (atoll_changed or !saved.aur_enabled) parsed.value.Aur = &.{};
             if (!saved.flatpak_enabled) parsed.value.Flatpak = &.{};
+            if (!saved.appimage_enabled) parsed.value.AppImage = &.{};
             self.updates_state.updates_list.item_count = @intCast(parsed.value.count());
             self.updates_state.updates_list.scroll = .{};
             self.updates_state.updates_list.cursor = 0;
@@ -197,6 +198,7 @@ pub fn toggleSetting(self: *Model, ctx: *vxfw.EventContext) !void {
     switch (self.settings_state.settings_selected) {
         0 => draft.aur_enabled = !draft.aur_enabled,
         1 => draft.flatpak_enabled = !draft.flatpak_enabled,
+        @import("settings.zig").appimage_index => draft.appimage_enabled = !draft.appimage_enabled,
         @import("settings.zig").atoll_index => draft.atoll_aur_enabled = !draft.atoll_aur_enabled,
         screenshots_index => draft.show_flatpak_screenshots = !draft.show_flatpak_screenshots,
         else => unreachable,
@@ -319,7 +321,7 @@ fn pollSettingsFile(self: *Model, ctx: *vxfw.EventContext) !void {
         }
         return;
     }
-    if (self.operation_state.install_job != null or hasChanges(self) or self.settings_state.keybinding_capture or self.settings_state.header_open) {
+    if (self.operation_state.install_job != null or self.appimage_state.install_form != null or self.appimage_state.source_open or hasChanges(self) or self.settings_state.keybinding_capture or self.settings_state.header_open) {
         if (!self.settings_state.watch_deferred) {
             self.settings_state.watch_deferred = true;
             try self.setNotice(deferred_file_notice);
@@ -511,7 +513,7 @@ test "settings determine source visibility before backend or native loading fini
     defer events.cmds.deinit(std.testing.allocator);
     try model.setTab(.aur, &events);
     try std.testing.expectEqual(Tab.packages, model.active);
-    applySettings(model, .{ .aur_enabled = true, .flatpak_enabled = true });
+    applySettings(model, .{ .aur_enabled = true, .flatpak_enabled = true, .appimage_enabled = true });
     try std.testing.expect(!model.flatpak_state.flatpak_available);
     try std.testing.expect(model.packages_state.loading);
     try std.testing.expectEqualSlices(Tab, Tab.all, model.visibleTabs());
@@ -1487,7 +1489,7 @@ test "mouse controls edit drafts select dropdown entries and Save or Discard exp
     try SettingsMouseTest.click(fixture, "[ ] Enable AUR");
     try std.testing.expect(model.settings_state.settings_draft.aur_enabled);
     try std.testing.expect(!model.settings_state.settings.aur_enabled);
-    try SettingsMouseTest.click(fixture, "Header icons");
+    try SettingsMouseTest.click(fixture, "Icons");
     try std.testing.expect(model.settings_state.header_open);
     try SettingsMouseTest.click(fixture, "[ ] Nerd Font");
     try std.testing.expect(!model.settings_state.header_open);
@@ -1515,7 +1517,7 @@ test "mouse settings controls remain locked during package operations" {
     defer job.arena.deinit();
     model.operation_state.install_job = &job;
     defer model.operation_state.install_job = null;
-    for ([_][]const u8{ "[ ] Enable AUR", "Header icons", "[ Configure keybindings", "[ Save changes ]", "[ Discard changes ]" }) |label|
+    for ([_][]const u8{ "[ ] Enable AUR", "Icons", "[ Configure keybindings", "[ Save changes ]", "[ Discard changes ]" }) |label|
         try SettingsMouseTest.click(fixture, label);
     try std.testing.expect(!hasChanges(model));
     try std.testing.expect(!model.settings_state.header_open);
@@ -1555,7 +1557,7 @@ test "expanded settings return with Left and sidebar clicks switch out of the ed
     try SettingsMouseTest.click(fixture, "[ ] Enable AUR");
     try std.testing.expect(!model.settings_state.keybindings_open);
     try std.testing.expect(model.settings_state.settings_draft.aur_enabled);
-    try SettingsMouseTest.click(fixture, "Header icons");
+    try SettingsMouseTest.click(fixture, "Icons");
     try std.testing.expect(model.settings_state.header_open);
     try model.captureEvent(&fixture.events, .{ .key_press = commands.bindings.back });
     try std.testing.expect(!model.settings_state.header_open);
@@ -1634,7 +1636,7 @@ test "settings actions remain reachable from the list and binding editor" {
         fixture.load();
         try openTestBindingEditor(fixture);
         const model = fixture.model.?;
-        model.settings_state.keybinding_selected = std.mem.indexOfScalar(commands.Id, &keybindings.editable, .toggle_wrap).?;
+        model.settings_state.keybinding_selected = std.mem.indexOfScalar(commands.Id, &keybindings.editable, .toggle_hidden).?;
         try model.captureEvent(&fixture.events, .{ .key_press = commands.bindings.next });
         try std.testing.expect(!model.settings_state.keybindings_open);
         try std.testing.expectEqual(preferences.save_index, model.settings_state.settings_selected);
@@ -1643,4 +1645,19 @@ test "settings actions remain reachable from the list and binding editor" {
         try model.captureEvent(&fixture.events, .{ .key_press = commands.bindings.previous });
         try std.testing.expectEqual(preferences.save_index, model.settings_state.settings_selected);
     }
+}
+
+test "external edits wait for the AppImage source editor" {
+    const fixture = try KeybindingTest.init("{}");
+    defer fixture.deinit();
+    fixture.load();
+    const model = fixture.model.?;
+    model.appimage_state.source_open = true;
+    try fixture.write("{\"Keybindings\":{\"help\":\"F2\"}}");
+    try pollSettingsFile(model, &fixture.events);
+    try std.testing.expect(model.settings_state.watch_deferred);
+    try fixture.expectLabel(.help, "F1");
+    model.appimage_state.source_open = false;
+    try pollSettingsFile(model, &fixture.events);
+    try fixture.expectLabel(.help, "F2");
 }
