@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Shelly-ALPM / Shelly: GTK\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-11-04 12:08-0500\n"
+"POT-Creation-Date: 2026-11-07 16:46-0700\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -645,6 +645,12 @@ msgstr ""
 msgid "Enable Atoll Powered AUR"
 msgstr ""
 
+msgid "Always Recheck AppImage Updates on Upgrade All"
+msgstr ""
+
+msgid "When off, Upgrade All runs only when the AppImage page shows updates."
+msgstr ""
+
 msgid "AppImage Install Path"
 msgstr ""
 
@@ -1005,6 +1011,9 @@ msgid "Only.AppImage files can be installed"
 msgstr ""
 
 msgid "Installing AppImage"
+msgstr ""
+
+msgid "Could not read the AppImage update setting."
 msgstr ""
 
 msgid "No AppImages need to be upgraded"

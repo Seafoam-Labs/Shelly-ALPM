@@ -102,6 +102,7 @@ pub const ShellySettingsPage = extern struct {
         no_confirm_switch: *gtk.Switch,
         shelly_search_switch: *gtk.Switch,
         atoll_aur_switch: *gtk.Switch,
+        appimage_upgrade_all_recheck_switch: *gtk.Switch,
         appimage_install_path_box: *gtk.Box,
         appimage_install_path_button: *gtk.Button,
 
@@ -253,6 +254,7 @@ pub const ShellySettingsPage = extern struct {
             p.no_confirm_switch,
             p.shelly_search_switch,
             p.atoll_aur_switch,
+            p.appimage_upgrade_all_recheck_switch,
             p.remove_cache_switch,
         };
         inline for (autosave_switches) |s| {
@@ -1173,6 +1175,7 @@ pub const ShellySettingsPage = extern struct {
         .{ "no_confirm_switch", @offsetOf(Private, "no_confirm_switch") },
         .{ "shelly_search_switch", @offsetOf(Private, "shelly_search_switch") },
         .{ "atoll_aur_switch", @offsetOf(Private, "atoll_aur_switch") },
+        .{ "appimage_upgrade_all_recheck_switch", @offsetOf(Private, "appimage_upgrade_all_recheck_switch") },
         .{ "appimage_install_path_box", @offsetOf(Private, "appimage_install_path_box") },
         .{ "appimage_install_path_button", @offsetOf(Private, "appimage_install_path_button") },
 
@@ -1407,6 +1410,7 @@ fn hideUnbuiltRows(p: *ShellySettingsPage.Private) void {
     if (!features.builtWithAppImage) {
         hideSettingsRow(p.appimage_switch);
         gtk.Widget.setVisible(p.appimage_install_path_box.as(gtk.Widget), @intFromBool(false));
+        hideSettingsRow(p.appimage_upgrade_all_recheck_switch);
     }
     if (!features.builtWithShellySearch) hideSettingsRow(p.shelly_search_switch);
 }
@@ -1526,6 +1530,7 @@ fn applyConfig(p: *ShellySettingsPage.Private, cfg: *ShellyConfig) void {
     setSwitch(p.no_confirm_switch, cfg.NoConfirm);
     setSwitch(p.shelly_search_switch, cfg.ShellySearchEnabled);
     setSwitch(p.atoll_aur_switch, cfg.AtollAurEnabled or features.builtWithAtollOnly);
+    setSwitch(p.appimage_upgrade_all_recheck_switch, cfg.AppImageUpgradeAllRecheck);
     setSwitch(p.remove_cache_switch, cfg.PackageManagementRemoveConfigs);
 
     applyAppImageInstallPath(p);
@@ -1607,6 +1612,7 @@ fn collectIntoConfig(p: *ShellySettingsPage.Private, allocator: std.mem.Allocato
     cfg.NoConfirm = getSwitch(p.no_confirm_switch);
     cfg.ShellySearchEnabled = getSwitch(p.shelly_search_switch);
     cfg.AtollAurEnabled = getSwitch(p.atoll_aur_switch);
+    cfg.AppImageUpgradeAllRecheck = getSwitch(p.appimage_upgrade_all_recheck_switch);
     cfg.PackageManagementRemoveConfigs = getSwitch(p.remove_cache_switch);
 }
 

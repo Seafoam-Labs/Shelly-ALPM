@@ -374,6 +374,7 @@ test "load creates a default file when none exists" {
     const cfg = try svc.get();
     try testing.expectEqual(defaults.NewInstall, cfg.NewInstall);
     try testing.expectEqual(defaults.AurEnabled, cfg.AurEnabled);
+    try testing.expectEqual(false, cfg.AppImageUpgradeAllRecheck);
     try testing.expectEqual(defaults.DefaultPageDropDown, cfg.DefaultPageDropDown);
 
     // The file should now exist on disk.
@@ -444,6 +445,7 @@ test "save persists modifications and survives reload" {
 
         const cfg = try svc.get();
         cfg.AurEnabled = true;
+        cfg.AppImageUpgradeAllRecheck = true;
         cfg.TrayCheckIntervalHours = 48;
 
         try svc.save();
@@ -456,6 +458,7 @@ test "save persists modifications and survives reload" {
 
     const cfg = try svc.get();
     try testing.expectEqual(true, cfg.AurEnabled);
+    try testing.expectEqual(true, cfg.AppImageUpgradeAllRecheck);
     try testing.expectEqual(@as(i32, 48), cfg.TrayCheckIntervalHours);
 }
 
