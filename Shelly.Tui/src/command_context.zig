@@ -117,6 +117,7 @@ pub fn resolve(self: *Model) commands.Context {
             context.upgrade_system = view.canUpgrade();
             context.upgrade_aur = view.canUpgradeAur();
             context.upgrade_flatpak = view.canUpgradeFlatpak();
+            context.upgrade_appimage = view.canUpgradeAppImage();
         },
         .appimage => {
             context.mode = .appimage;

@@ -93,7 +93,8 @@ These groups match the Settings editor:
 - **General:** `quit`, `help`, `next_tab`, `previous_tab`, `refresh`,
   `narrow_view`, `widen_view`.
 - **Packages:** `install`, `remove`, `refresh_list`, `filter`, `clear_selection`.
-- **Updates:** `upgrade_all`, `upgrade_system`, `upgrade_aur`, `upgrade_flatpak`.
+- **Updates:** `upgrade_all`, `upgrade_system`, `upgrade_aur`, `upgrade_flatpak`,
+  `upgrade_appimage` (default: `i`).
 - **AUR catalog:** `previous_catalog_page`, `next_catalog_page`.
 - **Flatpak details:** `categories`, `previous_screenshot`, `next_screenshot`.
 - **PKGBUILD:** `preview`, `toggle_wrap`.

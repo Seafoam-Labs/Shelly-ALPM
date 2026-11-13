@@ -5,13 +5,13 @@ const commands = @import("../commands.zig");
 const Allocator = std.mem.Allocator;
 
 pub const editable = [_]commands.Id{
-    .quit,              .help,                .next_tab,        .previous_tab,
-    .install,           .remove,              .preview,         .refresh,
-    .refresh_list,      .filter,              .upgrade_all,     .upgrade_system,
-    .upgrade_aur,       .upgrade_flatpak,     .categories,      .previous_catalog_page,
-    .next_catalog_page, .previous_screenshot, .next_screenshot, .clear_selection,
-    .configure_updates, .toggle_wrap,         .narrow_view,     .widen_view,
-    .toggle_hidden,
+    .quit,                  .help,              .next_tab,            .previous_tab,
+    .install,               .remove,            .preview,             .refresh,
+    .refresh_list,          .filter,            .upgrade_all,         .upgrade_system,
+    .upgrade_appimage,      .upgrade_aur,       .upgrade_flatpak,     .categories,
+    .previous_catalog_page, .next_catalog_page, .previous_screenshot, .next_screenshot,
+    .clear_selection,       .configure_updates, .toggle_wrap,         .narrow_view,
+    .widen_view,            .toggle_hidden,
 };
 
 fn indexOf(id: commands.Id) ?usize {
@@ -113,7 +113,7 @@ fn scope(id: commands.Id) u16 {
         .refresh => updates | settings | preview,
         .refresh_list => aur_list | flatpak_list | searches | flatpak_details | appimages,
         .filter => lists | searches,
-        .upgrade_all, .upgrade_system, .upgrade_aur, .upgrade_flatpak => updates,
+        .upgrade_all, .upgrade_system, .upgrade_aur, .upgrade_flatpak, .upgrade_appimage => updates,
         .categories => flatpak_list | flatpak_details | searches,
         .previous_catalog_page, .next_catalog_page => aur_list,
         .previous_screenshot, .next_screenshot => flatpak_details,

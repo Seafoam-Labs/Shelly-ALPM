@@ -37,6 +37,7 @@ pub const Id = enum {
     upgrade_system,
     upgrade_aur,
     upgrade_flatpak,
+    upgrade_appimage,
     approve,
     decline,
     page_up,
@@ -85,6 +86,7 @@ pub const Bindings = struct {
     upgrade_system: vaxis.Key = .{ .codepoint = 'u' },
     upgrade_aur: vaxis.Key = .{ .codepoint = 'a' },
     upgrade_flatpak: vaxis.Key = .{ .codepoint = 'f' },
+    upgrade_appimage: vaxis.Key = .{ .codepoint = 'i' },
     approve: vaxis.Key = .{ .codepoint = 'y' },
     decline: vaxis.Key = .{ .codepoint = 'n' },
     page_up: vaxis.Key = .{ .codepoint = vaxis.Key.page_up },
@@ -260,13 +262,14 @@ pub fn refreshes(key: vaxis.Key) bool {
     return matches(key, .refresh);
 }
 
-pub const Updates = enum { refresh, upgrade_all, upgrade_system, upgrade_aur, upgrade_flatpak };
+pub const Updates = enum { refresh, upgrade_all, upgrade_system, upgrade_aur, upgrade_flatpak, upgrade_appimage };
 pub fn updates(key: vaxis.Key) ?Updates {
     if (refreshes(key)) return .refresh;
     if (matches(key, .upgrade_all)) return .upgrade_all;
     if (matches(key, .upgrade_system)) return .upgrade_system;
     if (matches(key, .upgrade_aur)) return .upgrade_aur;
     if (matches(key, .upgrade_flatpak)) return .upgrade_flatpak;
+    if (matches(key, .upgrade_appimage)) return .upgrade_appimage;
     return null;
 }
 
@@ -351,6 +354,7 @@ pub const Context = struct {
     upgrade_system: bool = false,
     upgrade_aur: bool = false,
     upgrade_flatpak: bool = false,
+    upgrade_appimage: bool = false,
     upgrade_all: bool = false,
     selected_count: usize = 0,
     selected_installed: usize = 0,
@@ -448,10 +452,11 @@ pub fn entries(arena: std.mem.Allocator, context: Context) std.mem.Allocator.Err
             if (context.mode == .flatpak or context.installed_only or context.catalog_available) try add(arena, &list, .refresh_list, "Refresh", "Refresh the current package list");
         },
         .updates => {
-            if (context.upgrade_all) try add(arena, &list, .upgrade_all, "Update all", "Upgrade all enabled sources; AppImage updates are detected but not managed by the TUI");
+            if (context.upgrade_all) try add(arena, &list, .upgrade_all, "Update all", "Upgrade all enabled package sources");
             if (context.upgrade_system) try add(arena, &list, .upgrade_system, "System", "Upgrade native system packages");
             if (context.upgrade_aur) try add(arena, &list, .upgrade_aur, "AUR", "Upgrade AUR packages with PKGBUILD review");
             if (context.upgrade_flatpak) try add(arena, &list, .upgrade_flatpak, "Flatpak", "Upgrade system and user Flatpaks");
+            if (context.upgrade_appimage) try add(arena, &list, .upgrade_appimage, "AppImages", "Upgrade all configured AppImages with available updates");
             try add(arena, &list, .refresh, "Refresh", "Check for updates again");
             try add(arena, &list, .previous, "Up", "Scroll updates up");
             try add(arena, &list, .next, "Down", "Scroll updates down");

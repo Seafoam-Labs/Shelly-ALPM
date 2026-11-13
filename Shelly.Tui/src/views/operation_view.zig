@@ -15,6 +15,7 @@ pub const View = struct {
     combined: bool = false,
     include_aur: bool = true,
     include_flatpak: bool = true,
+    include_appimage: bool = false,
     target: ?operation.FlatpakTarget = null,
     action: operation.Action = .install,
     state: enum { entering, running, succeeded, failed, declined },
@@ -34,14 +35,17 @@ pub const View = struct {
             "";
         const note: []const u8 = if (self.combined)
             if (self.include_aur)
-                if (self.include_flatpak) "System packages, AUR, and system/user Flatpaks. PKGBUILDs require review. AppImage updates are detected but not managed by the TUI." else "System packages and AUR. Flatpak disabled or unavailable. PKGBUILDs require review. AppImage updates are detected but not managed by the TUI."
-            else if (self.include_flatpak) "System packages and system/user Flatpaks. AUR excluded. AppImage updates are detected but not managed by the TUI." else "Full system upgrade. AUR and Flatpak excluded. AppImage updates are detected but not managed by the TUI."
+                if (self.include_flatpak) "System packages, AUR, and system/user Flatpaks. PKGBUILDs require review." else "System packages and AUR. Flatpak disabled or unavailable. PKGBUILDs require review."
+            else if (self.include_flatpak) "System packages and system/user Flatpaks. AUR excluded." else "Full system upgrade. AUR and Flatpak excluded."
+        else if (self.backend == .appimage and self.action == .upgrade)
+            "Updates all configured AppImages with available updates as your user. Application configuration is kept."
         else if (self.backend == .flatpak)
             if (self.action == .upgrade) "Updates system and user Flatpaks as the invoking user. System changes may require a Flatpak authorization agent." else if (self.action == .remove) "Configuration and unused dependencies will be kept." else "Uses the selected remote and scope. Shelly handles dependencies and review."
         else if (self.action == .remove) "Unused dependencies and configuration will be kept." else if (self.action == .upgrade)
-            if (self.backend == .aur) "Upgrade AUR packages and required dependencies. PKGBUILDs require review." else "Full system upgrade. AUR and Flatpak excluded. AppImage updates are detected but not managed by the TUI."
+            if (self.backend == .aur) "Upgrade AUR packages and required dependencies. PKGBUILDs require review." else "Full system upgrade. AUR and Flatpak excluded."
         else if (self.backend == .aur) "PKGBUILDs require review before installation." else "";
-        return std.fmt.allocPrint(arena, "{s} {f}?{s}\n\n{s}", .{ self.action.verb(), diagnostics.safe(self.name), target, note });
+        const appimage = if (self.combined) (if (self.include_appimage) " AppImages included." else " AppImages excluded.") else "";
+        return std.fmt.allocPrint(arena, "{s} {f}?{s}\n\n{s}{s}", .{ self.action.verb(), diagnostics.safe(self.name), target, note, appimage });
     }
 
     fn body(self: View, arena: Allocator, width: u16) Allocator.Error![]const u8 {

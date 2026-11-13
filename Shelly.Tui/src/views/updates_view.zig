@@ -37,19 +37,24 @@ pub const View = struct {
         return self.flatpak_available and !self.loading and !self.failed and self.data != null and self.data.?.Flatpak.len > 0;
     }
 
+    pub fn canUpgradeAppImage(self: View) bool {
+        return self.appimage_enabled and !self.loading and !self.failed and self.data != null and self.data.?.AppImage.len > 0;
+    }
+
     pub fn handleKey(self: View, key: vaxis.Key) ?commands.Updates {
         const action = commands.updates(key) orelse return null;
         if (action == .upgrade_all and !self.canUpgradeAll()) return null;
         if (action == .upgrade_system and !self.canUpgrade()) return null;
         if (action == .upgrade_aur and !self.canUpgradeAur()) return null;
         if (action == .upgrade_flatpak and !self.canUpgradeFlatpak()) return null;
+        if (action == .upgrade_appimage and !self.canUpgradeAppImage()) return null;
         return action;
     }
 
     pub fn statusText(self: View, arena: Allocator) Allocator.Error![]const u8 {
         if (self.loading) return "Checking for updates…";
         if (self.failed) return "Update check failed";
-        if (self.data) |data| return std.fmt.allocPrint(arena, "{d} updates — System: {d}, AUR: {d}, Flatpak: {d}", .{ data.count(), data.Packages.len, data.Aur.len, data.Flatpak.len });
+        if (self.data) |data| return std.fmt.allocPrint(arena, "{d} updates — System: {d}, AUR: {d}, Flatpak: {d}, AppImage: {d}", .{ data.count(), data.Packages.len, data.Aur.len, data.Flatpak.len, data.AppImage.len });
         return "Updates have not been checked.";
     }
 
