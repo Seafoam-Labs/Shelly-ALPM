@@ -97,6 +97,7 @@ const updates: u16 = 128;
 const settings: u16 = 256;
 const preview: u16 = 512;
 const review: u16 = 1024;
+const appimages: u16 = 4096;
 const lists = package_lists | aur_list | flatpak_list;
 const details = package_details | aur_details | flatpak_details;
 
@@ -105,10 +106,10 @@ const details = package_details | aur_details | flatpak_details;
 fn scope(id: commands.Id) u16 {
     return switch (id) {
         .quit, .help, .next_tab, .previous_tab => all,
-        .install, .remove => lists | details,
+        .install, .remove => lists | details | appimages,
         .preview => aur_list | aur_details,
         .refresh => updates | settings | preview,
-        .refresh_list => aur_list | flatpak_list | searches | flatpak_details,
+        .refresh_list => aur_list | flatpak_list | searches | flatpak_details | appimages,
         .filter => lists | searches,
         .upgrade_all, .upgrade_system, .upgrade_aur, .upgrade_flatpak => updates,
         .categories => flatpak_list | flatpak_details | searches,
@@ -117,7 +118,7 @@ fn scope(id: commands.Id) u16 {
         .clear_selection => package_lists | aur_list,
         .toggle_wrap => preview | review,
         .toggle_hidden => 2048, // File browser, outside path editing.
-        .narrow_view, .widen_view => lists | details | searches | settings,
+        .narrow_view, .widen_view => lists | details | searches | settings | appimages,
         else => unreachable,
     };
 }

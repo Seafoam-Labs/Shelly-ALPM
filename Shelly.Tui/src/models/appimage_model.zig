@@ -16,7 +16,7 @@ const LoadState = struct {
 pub const State = struct {
     install_form: ?*Form = null,
     install_closing: ?*Form = null,
-    refresh_after_install: bool = false,
+    refresh_after_operation: bool = false,
     details_scroll: @import("vaxis").vxfw.ScrollView = .{ .children = .{ .slice = &.{} } },
     list_view: @import("vaxis").vxfw.ListView = .{ .children = .{ .slice = &.{} } },
     widgets_initialized: bool = false,
@@ -197,8 +197,8 @@ pub fn ensureLoaded(self: *Model, ctx: *vxfw.EventContext) !void {
     if (self.appimage_state.install_form) |form| {
         if (!form.editing_path) try ctx.requestFocus(self.widget());
     }
-    if (self.appimage_state.refresh_after_install) {
-        self.appimage_state.refresh_after_install = false;
+    if (self.appimage_state.refresh_after_operation) {
+        self.appimage_state.refresh_after_operation = false;
         try self.appimage_state.refresh(self.gpa);
         try ctx.tick(100, self.widget());
     }
@@ -215,6 +215,10 @@ pub fn handleKey(self: *Model, ctx: *vxfw.EventContext, input: vaxis.Key) !bool 
         return true;
     }
     syncSelection(state);
+    if (commands.matches(input, .remove)) {
+        try openRemoval(self, ctx);
+        return true;
+    }
     const key = commands.vimNavigationKey(input) orelse input;
     if (commands.matches(key, .refresh_list)) {
         try state.refresh(self.gpa);
@@ -236,6 +240,23 @@ pub fn handleKey(self: *Model, ctx: *vxfw.EventContext, input: vaxis.Key) !bool 
     } else return false;
     ctx.consumeAndRedraw();
     return true;
+}
+
+fn openRemoval(self: *Model, ctx: *vxfw.EventContext) !void {
+    if (self.operation_state.install_job != null or self.overlay != null or self.appimage_state.install_form != null) return;
+    const app = self.appimage_state.selected() orelse return;
+    const target = if (app.Path) |path| (if (path.len > 0) path else app.Name) else app.Name;
+    if (app.Name.len == 0) return;
+    const prompt = try self.gpa.create(operation_model.SudoPrompt);
+    errdefer self.gpa.destroy(prompt);
+    const name = try self.gpa.dupe(u8, app.Name);
+    errdefer self.gpa.free(name);
+    const review = try std.fmt.allocPrint(self.gpa, "Remove AppImage: {f}\n\nInstallation: {f}\n\nThe installed AppImage and its desktop integration will be removed. Application configuration files will be kept.", .{ @import("diagnostics").safe(app.Name), @import("diagnostics").safe(target) });
+    errdefer self.gpa.free(review);
+    try ctx.requestFocus(self.widget());
+    prompt.* = .{ .name = name, .action = .remove, .backend = .appimage, .elevated = false, .review_text = review };
+    self.overlay = .{ .sudo = prompt };
+    ctx.consumeAndRedraw();
 }
 
 fn buildRow(ptr: *const anyopaque, index: usize, _: usize) ?vxfw.Widget {
@@ -1041,4 +1062,27 @@ test "rapid browser requests retain only the latest destination despite selectio
     try pollInstallForm(model);
     try std.testing.expect(std.mem.endsWith(u8, form.directory.?, "/C"));
     try std.testing.expect(form.job == null);
+}
+
+test "AppImage removal confirms the selected name without elevation" {
+    const allocator = std.testing.allocator;
+    const model = try Model.init(allocator);
+    defer model.deinit();
+    model.active = .appimage;
+    model.appimage_state.checked = true;
+    model.appimage_state.parsed = try std.json.parseFromSlice([]AppImage, allocator, "[{\"Name\":\"Editor\",\"Path\":\"/tmp/first.AppImage\"},{\"Name\":\"Second Editor\",\"Path\":\"/tmp/second.AppImage\"}]", .{ .allocate = .alloc_always });
+    initializeWidgets(model);
+    model.appimage_state.list_view.cursor = 1;
+    var events: vxfw.EventContext = .{ .io = std.testing.io, .alloc = allocator, .cmds = .empty };
+    defer events.cmds.deinit(allocator);
+    try std.testing.expect(model.commandContext().removable);
+    try std.testing.expect(try handleKey(model, &events, commands.bindings.remove));
+    const prompt = model.overlay.?.sudo;
+    try std.testing.expectEqualStrings("Second Editor", prompt.name);
+    try std.testing.expect(std.mem.indexOf(u8, prompt.review_text, "/tmp/second.AppImage") != null);
+    try std.testing.expectEqual(.remove, prompt.action);
+    try std.testing.expectEqual(.appimage, prompt.backend);
+    try std.testing.expect(!prompt.elevated);
+    try std.testing.expect(model.operation_state.install_job == null);
+    try std.testing.expectEqual(commands.Mode.confirmation, model.commandContext().mode);
 }

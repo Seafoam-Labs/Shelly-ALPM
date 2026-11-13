@@ -139,6 +139,9 @@ fn packageEventType(code: ?[]const u8) ?[]const u8 {
         .{ "alpm.package_downgraded", "PackageDowngraded" },
         .{ "alpm.package_reinstalled", "PackageReinstalled" },
         .{ "alpm.package_removed", "PackageRemoved" },
+        .{ "appimage.status", "AppImageStatus" },
+        .{ "appimage.success", "AppImageSuccess" },
+        .{ "appimage.warning", "Warning" },
     };
     inline for (mappings) |mapping| {
         if (std.mem.eql(u8, value, mapping[0])) return mapping[1];
@@ -541,6 +544,9 @@ test "UI operation reporter forwards package completion identity and action" {
         .{ "alpm.package_downgraded", "PackageDowngraded" },
         .{ "alpm.package_reinstalled", "PackageReinstalled" },
         .{ "alpm.package_removed", "PackageRemoved" },
+        .{ "appimage.status", "AppImageStatus" },
+        .{ "appimage.success", "AppImageSuccess" },
+        .{ "appimage.warning", "Warning" },
     };
     inline for (cases) |case|
         operation.packageStatus(.information, "Package operation completed.", case[0], 12, "demo");

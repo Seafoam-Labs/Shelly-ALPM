@@ -661,7 +661,7 @@ pub fn pollInstall(self: *Model) !bool {
     self.operation_state.install_job = null;
     self.quit_blocked_notice = false;
     const is_appimage = std.mem.eql(u8, job.request.backend, "appimage");
-    if (is_appimage) self.appimage_state.refresh_after_install = true;
+    if (is_appimage) self.appimage_state.refresh_after_operation = true;
     const is_flatpak = std.mem.eql(u8, job.request.backend, "flatpak");
     const is_combined = std.mem.eql(u8, job.request.backend, "all");
     if (!is_flatpak and !is_appimage) {
@@ -687,7 +687,7 @@ pub fn pollInstall(self: *Model) !bool {
     if ((is_combined and job.request.include_aur) or std.mem.eql(u8, job.request.backend, "aur")) self.aur_state.refresh_aur_after_operation = true;
 
     // Native and AUR operations change the same installed package database.
-    if (!package_batch and !is_flatpak and !failed and !completed.declined and job.request.action != .upgrade) {
+    if (!package_batch and package_change and !failed and !completed.declined and job.request.action != .upgrade) {
         for (self.packages_state.packages) |*pkg| {
             if (std.mem.eql(u8, pkg.Name, job.request.name)) {
                 pkg.Installed = job.request.action == .install;
@@ -695,7 +695,7 @@ pub fn pollInstall(self: *Model) !bool {
             }
         }
     }
-    if (!package_batch and !is_flatpak and !failed and !completed.declined and job.request.action != .upgrade) {
+    if (!package_batch and package_change and !failed and !completed.declined and job.request.action != .upgrade) {
         if (self.aur_state.aur_parsed) |parsed| {
             for (parsed.value) |*pkg| {
                 if (std.mem.eql(u8, pkg.Name, job.request.name))

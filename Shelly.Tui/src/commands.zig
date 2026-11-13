@@ -449,6 +449,7 @@ pub fn entries(arena: std.mem.Allocator, context: Context) std.mem.Allocator.Err
         },
         .appimage => {
             try add(arena, &list, .install, "Install", "Install an AppImage from a local path");
+            if (context.removable) try add(arena, &list, .remove, "Remove", "Remove the selected AppImage");
             try add(arena, &list, .previous, "Up", "Previous AppImage or scroll up");
             try add(arena, &list, .next, "Down", "Next AppImage or scroll down");
             try add(arena, &list, if (context.split_details) .back else .details, if (context.split_details) "Back" else "Details", "Move between the list and details");

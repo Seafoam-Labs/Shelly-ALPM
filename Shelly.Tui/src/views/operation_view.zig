@@ -70,15 +70,16 @@ pub const View = struct {
             if (self.progress.authentication_len > 0)
                 try lines.append(arena, try authenticationText(arena, self.progress.authentication[0..self.progress.authentication_len]));
         }
+        const failure_detail = if (self.state == .failed) std.mem.trim(u8, self.detail, " \t\r\n") else "";
         var last: []const u8 = "";
         for (&self.progress.messages, self.progress.lengths) |*message, len| {
             const text = std.mem.trim(u8, message[0..len], " \t\r\n");
-            if (text.len == 0) continue;
+            if (text.len == 0 or std.mem.eql(u8, text, failure_detail)) continue;
             try lines.append(arena, try diagnostics.sanitizeAlloc(arena, text));
             last = text;
         }
         const status = std.mem.trim(u8, self.progress.text(), " \t\r\n");
-        if (status.len > 0 and !std.mem.eql(u8, status, last))
+        if (status.len > 0 and !std.mem.eql(u8, status, last) and !std.mem.eql(u8, status, failure_detail))
             try lines.append(arena, try diagnostics.sanitizeAlloc(arena, status));
         if (lines.items.len == 0 and self.state == .running)
             try lines.append(arena, if (self.progress.authenticating) "Waiting for authentication…" else "Waiting for progress…");
@@ -279,6 +280,12 @@ test "operation panel wraps long results and scrolls output independently" {
     defer events.cmds.deinit(std.testing.allocator);
     _ = try panel.handleKey(view, &events, .{ .codepoint = vaxis.Key.up });
     try std.testing.expect(panel.scroll.scroll.pending_lines < 0);
+    @memcpy(view.progress.messages[0][0..view.detail.len], view.detail);
+    view.progress.lengths[0] = view.detail.len;
+    @memcpy(view.progress.status[0..view.detail.len], view.detail);
+    view.progress.status_len = view.detail.len;
+    const failed_body = try view.body(arena.allocator(), 38);
+    try std.testing.expectEqual(@as(usize, 1), std.mem.count(u8, failed_body, "First error"));
     view.state = .running;
     view.progress.percent = 150;
     _ = try panel.draw(view, ctx);

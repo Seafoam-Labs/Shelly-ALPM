@@ -356,6 +356,11 @@ pub const Operation = struct {
         var buffer: [512]u8 = undefined;
         switch (event) {
             .info => |info| {
+                if (std.mem.eql(u8, self.request.backend, "appimage") and
+                    (self.request.action == .install or self.request.action == .remove) and
+                    (std.mem.eql(u8, info.event_type, "AppImageStatus") or
+                        std.mem.eql(u8, info.event_type, "AppImageSuccess") or
+                        std.mem.eql(u8, info.event_type, "TransactionDone"))) return;
                 self.progress.update(info.message, null);
                 self.progress.log(info.message);
             },
@@ -497,9 +502,9 @@ fn operationArgv(alloc: std.mem.Allocator, request: OperationRequest) ![][]const
 
 fn runInstall(io: std.Io, alloc: std.mem.Allocator, request: OperationRequest, operation: ?*Operation) OperationResult {
     var result: OperationResult = .{};
-    if (request.action == .remove and !std.mem.eql(u8, request.backend, "standard") and !std.mem.eql(u8, request.backend, "aur") and !isFlatpak(request)) {
+    if (request.action == .remove and !std.mem.eql(u8, request.backend, "standard") and !std.mem.eql(u8, request.backend, "aur") and !isFlatpak(request) and !std.mem.eql(u8, request.backend, "appimage")) {
         result.failed = true;
-        result.error_detail = alloc.dupe(u8, "Removal currently supports system, AUR and Flatpak packages only.") catch "";
+        result.error_detail = alloc.dupe(u8, "Removal currently supports system, AUR, Flatpak and AppImage packages only.") catch "";
         return result;
     }
     if (operation == null) {
@@ -1286,11 +1291,11 @@ test "operation rejects removal from unsupported sources before launching" {
         .shelly_bin = "unused",
         .environ_map = &env,
         .name = "test",
-        .backend = "appimage",
+        .backend = "unsupported",
     }, null);
     defer result.deinit(std.testing.allocator);
     try std.testing.expect(result.failed);
-    try std.testing.expectEqualStrings("Removal currently supports system, AUR and Flatpak packages only.", result.error_detail);
+    try std.testing.expectEqualStrings("Removal currently supports system, AUR, Flatpak and AppImage packages only.", result.error_detail);
 }
 
 test "operation native upgrade has no package operand or other sources" {
@@ -1817,14 +1822,35 @@ test "private terminal authentication can be interrupted without protocol input"
     try std.testing.expect(!op.snapshot(std.testing.io).authenticating);
 }
 
-test "local AppImage installation uses a literal path without sudo" {
+test "AppImage installation and removal pass literal targets without sudo" {
     var env: std.process.Environ.Map = .init(std.testing.allocator);
     defer env.deinit();
-    const request: OperationRequest = .{ .shelly_bin = "shelly", .environ_map = &env, .name = "/tmp/My App;literal.AppImage", .backend = "appimage" };
-    try std.testing.expect(!elevated(request));
-    const argv = try operationArgv(std.testing.allocator, request);
-    defer std.testing.allocator.free(argv);
-    const expected = [_][]const u8{ "shelly", "install", "appimage", request.name, "--no-confirm", "--ui-mode" };
-    try std.testing.expectEqual(expected.len, argv.len);
-    for (expected, argv) |a, b| try std.testing.expectEqualStrings(a, b);
+    for ([_]Action{ .install, .remove }) |action| {
+        const request: OperationRequest = .{ .action = action, .shelly_bin = "shelly", .environ_map = &env, .name = if (action == .install) "/tmp/My App;literal.AppImage" else "My App;literal", .backend = "appimage" };
+        try std.testing.expect(!elevated(request));
+        const argv = try operationArgv(std.testing.allocator, request);
+        defer std.testing.allocator.free(argv);
+        const expected = [_][]const u8{ "shelly", @tagName(action), "appimage", request.name, "--no-confirm", "--ui-mode" };
+        try std.testing.expectEqual(expected.len, argv.len);
+        for (expected, argv) |a, b| try std.testing.expectEqualStrings(a, b);
+    }
+}
+
+test "AppImage lifecycle messages retain the start and warnings" {
+    var env: std.process.Environ.Map = .init(std.testing.allocator);
+    defer env.deinit();
+    for ([_]Action{ .install, .remove }) |action| {
+        var op: Operation = .{ .arena = .init(std.testing.allocator), .request = .{ .action = action, .shelly_bin = "unused", .environ_map = &env, .name = "Editor", .backend = "appimage" } };
+        defer op.arena.deinit();
+        for ([_][]const u8{ "TransactionStart", "AppImageStatus", "Warning", "AppImageSuccess", "TransactionDone" }) |kind| {
+            op.record(std.testing.io, .{ .info = .{ .event_type = kind, .message = kind, .package_name = null, .current = null, .total = null } });
+        }
+        const progress = op.snapshot(std.testing.io);
+        var count: usize = 0;
+        for (progress.lengths) |len| if (len > 0) {
+            count += 1;
+        };
+        try std.testing.expectEqual(@as(usize, 2), count);
+        try std.testing.expectEqualStrings("Warning", progress.text());
+    }
 }

@@ -120,6 +120,7 @@ pub fn resolve(self: *Model) commands.Context {
         },
         .appimage => {
             context.mode = .appimage;
+            context.removable = self.appimage_state.selected() != null and self.operation_state.install_job == null;
             context.appimage_path = self.appimage_state.install_form != null;
             if (self.appimage_state.install_form) |form| {
                 context.appimage_path_editing = form.editing_path;
