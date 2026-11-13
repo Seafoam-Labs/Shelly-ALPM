@@ -38,6 +38,8 @@ pub const UpdatesJob = struct {
     aur_enabled: bool = false,
     atoll: bool = false,
     flatpak_enabled: bool = false,
+    appimage_enabled: bool = false,
+    invalidated: bool = false,
     result: ?ParsedCheckUpdates = null,
     failed: bool = false,
     done: std.atomic.Value(bool) = .init(false),
@@ -63,6 +65,11 @@ pub fn deinit(self: *Model) void {
     if (self.updates_state.updates_parsed) |*parsed| parsed.deinit();
 }
 
+pub fn invalidate(self: *Model) void {
+    self.updates_state.updates_checked = false;
+    if (self.updates_state.updates_job) |job| job.invalidated = true;
+}
+
 pub fn ensureUpdates(self: *Model, ctx: *vxfw.EventContext) !void {
     if (self.active == .upgrade and !self.updates_state.updates_checked and self.updates_state.updates_job == null)
         try startUpdates(self, ctx);
@@ -73,7 +80,7 @@ pub fn startUpdates(self: *Model, ctx: *vxfw.EventContext) !void {
     try ctx.tick(100, self.widget());
     const job = try self.gpa.create(UpdatesJob);
     errdefer self.gpa.destroy(job);
-    job.* = .{ .atoll = self.settings_state.settings.atoll_aur_enabled, .aur_enabled = self.settings_state.settings.aur_enabled, .flatpak_enabled = self.settings_state.settings.flatpak_enabled and self.flatpak_state.flatpak_available };
+    job.* = .{ .appimage_enabled = self.settings_state.settings.appimage_enabled, .atoll = self.settings_state.settings.atoll_aur_enabled, .aur_enabled = self.settings_state.settings.aur_enabled, .flatpak_enabled = self.settings_state.settings.flatpak_enabled and self.flatpak_state.flatpak_available };
     const thread = try std.Thread.spawn(.{}, checkUpdatesThread, .{job});
     self.updates_state.updates_thread = thread;
     self.updates_state.updates_job = job;
@@ -85,7 +92,7 @@ pub fn checkUpdatesThread(job: *UpdatesJob) void {
     var threaded: std.Io.Threaded = .init(std.heap.page_allocator, .{});
     defer threaded.deinit();
     const cli: ShellyCli = .{ .allocator = std.heap.page_allocator, .io = threaded.io() };
-    job.result = cli.check_updates_for_sources(job.aur_enabled, job.flatpak_enabled) catch {
+    job.result = cli.check_updates_for_sources(job.aur_enabled, job.flatpak_enabled, job.appimage_enabled) catch {
         job.failed = true;
         job.done.store(true, .release);
         return;
@@ -100,7 +107,7 @@ pub fn pollUpdates(self: *Model) void {
     self.updates_state.updates_thread = null;
     self.updates_state.updates_job = null;
     defer self.gpa.destroy(job);
-    if (job.atoll != self.settings_state.settings.atoll_aur_enabled or job.aur_enabled != self.settings_state.settings.aur_enabled or job.flatpak_enabled != (self.settings_state.settings.flatpak_enabled and self.flatpak_state.flatpak_available)) {
+    if (job.invalidated or job.appimage_enabled != self.settings_state.settings.appimage_enabled or job.atoll != self.settings_state.settings.atoll_aur_enabled or job.aur_enabled != self.settings_state.settings.aur_enabled or job.flatpak_enabled != (self.settings_state.settings.flatpak_enabled and self.flatpak_state.flatpak_available)) {
         if (job.result) |*parsed| parsed.deinit();
         self.updates_state.updates_checked = false;
         return;
@@ -122,6 +129,7 @@ pub fn updatesView(self: *Model) updates_view.View {
         .loading = self.updates_state.updates_job != null,
         .failed = self.updates_state.updates_failed,
         .checked = self.updates_state.updates_checked,
+        .appimage_enabled = self.settings_state.settings.appimage_enabled,
         .aur_enabled = self.settings_state.settings.aur_enabled,
         .flatpak_enabled = self.settings_state.settings.flatpak_enabled,
         .flatpak_available = self.settings_state.settings.flatpak_enabled and self.flatpak_state.flatpak_available,

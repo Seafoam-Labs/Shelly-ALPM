@@ -1278,6 +1278,7 @@ test "update source form owns its draft, validates input and preserves failed sa
     try std.testing.expect(sourceValidationError("https://example.org/owner/repo/releases", .Forgejo) == null);
     try std.testing.expect(sourceValidationError("ftp://example.org/app", .StaticUrl) != null);
     try std.testing.expect(sourceValidationError("", .None) == null);
+    model.updates_state.updates_checked = true;
     for ([_]bool{ true, false }) |failed| {
         const job = try std.heap.page_allocator.create(SourceSaveJob);
         job.* = .{ .name = saving.name, .source = try std.heap.page_allocator.dupe(u8, "owner/repo"), .update_type = .GitHub, .prerelease = false, .failure = if (failed) error.CommandFailed else null, .done = .init(true) };
@@ -1292,6 +1293,7 @@ test "update source form owns its draft, validates input and preserves failed sa
     try std.testing.expect(!model.appimage_state.source_open);
     try std.testing.expect(model.appimage_state.source_draft == null);
     try std.testing.expect(model.appimage_state.refresh_after_operation);
+    try std.testing.expect(!model.updates_state.updates_checked);
 }
 
 fn onConfigureClick(ptr: ?*anyopaque, ctx: *vxfw.EventContext) !void {
@@ -1388,5 +1390,6 @@ fn pollSourceSave(self: *Model) !void {
     self.appimage_state.source_draft = null;
     self.appimage_state.source_open = false;
     draft.deinit(self.gpa);
+    @import("updates_model.zig").invalidate(self);
     self.appimage_state.refresh_after_operation = true;
 }

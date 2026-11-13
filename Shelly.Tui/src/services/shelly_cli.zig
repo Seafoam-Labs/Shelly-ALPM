@@ -8,6 +8,7 @@ const Flatpak = @import("../models/flatpak.zig").Flatpak;
 const AppstreamApp = @import("../models/flatpak.zig").AppstreamApp;
 const ParsedCheckUpdates = @import("../models/sync.zig").ParsedCheckUpdates;
 const AppImage = @import("../models/appimage.zig").AppImage;
+const AppImageUpdate = @import("../models/appimage.zig").AppImageUpdate;
 const UpdateType = @import("../models/appimage.zig").UpdateType;
 const JsonPackFrame = @import("ui_decode.zig").JsonPackFrame;
 const RunResult = std.process.RunResult;
@@ -226,42 +227,26 @@ pub const ShellyCli = struct {
     }
 
     /// Query only enabled sources, without changing shared CLI configuration.
-    pub fn check_updates_for_sources(self: ShellyCli, aur_enabled: bool, flatpak_enabled: bool) !ParsedCheckUpdates {
+    pub fn check_updates_for_sources(self: ShellyCli, aur_enabled: bool, flatpak_enabled: bool, appimage_enabled: bool) !ParsedCheckUpdates {
         const sync = @import("../models/sync.zig");
-        const FlatpakQuery = struct {
-            cli: ShellyCli,
-            result: ?std.json.Parsed([]sync.CheckUpdatesFlatpak) = null,
-            failure: ?anyerror = null,
-
-            fn run(job: *@This()) void {
-                var threaded: Io.Threaded = .init(std.heap.page_allocator, .{});
-                defer threaded.deinit();
-                var cli = job.cli;
-                cli.allocator = std.heap.page_allocator;
-                cli.io = threaded.io();
-                job.result = cli.sourceUpdates(sync.CheckUpdatesFlatpak, "flatpak") catch |err| {
-                    job.failure = err;
-                    return;
-                };
-            }
-        };
-        var flatpak: FlatpakQuery = .{ .cli = self };
-        const thread = if (flatpak_enabled) try std.Thread.spawn(.{}, FlatpakQuery.run, .{&flatpak}) else null;
-        var joined = false;
-        defer {
-            if (!joined) if (thread) |worker| worker.join();
-            if (flatpak.result) |parsed| parsed.deinit();
-        }
+        var flatpak: UpdateQuery(sync.CheckUpdatesFlatpak, "flatpak") = .{ .cli = self };
+        defer flatpak.deinit();
+        var appimage: UpdateQuery(AppImageUpdate, "appimage") = .{ .cli = self };
+        defer appimage.deinit();
+        if (flatpak_enabled) try flatpak.start();
+        if (appimage_enabled) try appimage.start();
         const native = try self.sourceUpdates(sync.CheckUpdatesPackage, "standard");
         errdefer native.deinit();
         var aur: ?std.json.Parsed([]sync.CheckUpdatesAur) = null;
         errdefer if (aur) |*parsed| parsed.deinit();
         if (aur_enabled) aur = try self.sourceUpdates(sync.CheckUpdatesAur, "aur");
-        if (thread) |worker| worker.join();
-        joined = true;
+        flatpak.join();
+        appimage.join();
         if (flatpak.failure) |err| return err;
-        const result = ParsedCheckUpdates.fromSources(native, aur, flatpak.result);
+        if (appimage.failure) |err| return err;
+        const result = ParsedCheckUpdates.fromSources(native, aur, flatpak.result, appimage.result);
         flatpak.result = null;
+        appimage.result = null;
         return result;
     }
 };
@@ -502,23 +487,27 @@ test "AppImage configuration requires confirmed completion and rejects reported 
     try std.testing.expectError(error.MissingCompletion, checkConfigurationResult(allocator, ""));
 }
 
-test "Flatpak update checks overlap native checks and are joined on failure" {
+test "independent update checks overlap native checks and respect source selection" {
     const allocator = std.testing.allocator;
     const frame = try queryTestFrame(allocator, "[]");
     defer allocator.free(frame);
-    for ([_]bool{ false, true }) |fail_native| {
+    const app_frame = try queryTestFrame(allocator, "[{\"Name\":\"Editor\",\"Version\":\"2\",\"DownloadUrl\":\"https://example.org/app.AppImage\",\"IsUpdateAvailable\":true}]");
+    defer allocator.free(app_frame);
+    const Case = struct { appimage: bool, fail_native: bool = false, fail_appimage: bool = false };
+    for ([_]Case{ .{ .appimage = false }, .{ .appimage = true }, .{ .appimage = true, .fail_native = true }, .{ .appimage = true, .fail_appimage = true } }) |case| {
         var tmp = std.testing.tmpDir(.{});
         defer tmp.cleanup();
         try tmp.dir.writeFile(std.testing.io, .{ .sub_path = "fixture", .flags = .{ .permissions = .executable_file }, .data =
             \\#!/bin/sh
             \\cd "$FIXTURE_DIR" || exit 1
             \\case "$2" in
+            \\  appimage) [ "$EXPECT_APPIMAGE" = 1 ] || exit 1; : > appimage; [ "$FAIL_APPIMAGE" = 1 ] && exit 1; printf '%s' "$APP_FRAME"; exit 0 ;;
             \\  flatpak) : > flatpak; other=native ;;
             \\  standard) : > native; other=flatpak ;;
             \\  *) exit 1 ;;
             \\esac
             \\attempt=0
-            \\while [ ! -f "$other" ]; do
+            \\while [ ! -f "$other" ] || { [ "$EXPECT_APPIMAGE" = 1 ] && [ ! -f appimage ]; }; do
             \\  attempt=$((attempt + 1))
             \\  [ "$attempt" -lt 200 ] || exit 1
             \\  /bin/sleep 0.01
@@ -533,15 +522,54 @@ test "Flatpak update checks overlap native checks and are joined on failure" {
         var env: std.process.Environ.Map = .init(allocator);
         defer env.deinit();
         try env.put("FIXTURE_DIR", directory);
-        try env.put("FAIL_NATIVE", if (fail_native) "1" else "0");
+        try env.put("FAIL_NATIVE", if (case.fail_native) "1" else "0");
         try env.put("FRAME", frame);
+        try env.put("APP_FRAME", app_frame);
+        try env.put("EXPECT_APPIMAGE", if (case.appimage) "1" else "0");
+        try env.put("FAIL_APPIMAGE", if (case.fail_appimage) "1" else "0");
         const cli: ShellyCli = .{ .allocator = allocator, .io = std.testing.io, .binary = binary, .environment = &env };
-        if (fail_native) {
-            try std.testing.expectError(error.CommandFailed, cli.check_updates_for_sources(false, true));
+        if (case.fail_native or case.fail_appimage) {
+            try std.testing.expectError(error.CommandFailed, cli.check_updates_for_sources(false, true, case.appimage));
         } else {
-            const parsed = try cli.check_updates_for_sources(false, true);
+            const parsed = try cli.check_updates_for_sources(false, true, case.appimage);
             defer parsed.deinit();
-            try std.testing.expectEqual(@as(usize, 0), parsed.value.count());
+            try std.testing.expectEqual(@as(usize, @intFromBool(case.appimage)), parsed.value.count());
+            if (case.appimage) try std.testing.expectEqualStrings("Editor", parsed.value.AppImage[0].Name);
         }
     }
+}
+
+fn UpdateQuery(comptime T: type, comptime source: []const u8) type {
+    return struct {
+        cli: ShellyCli,
+        result: ?std.json.Parsed([]T) = null,
+        failure: ?anyerror = null,
+        thread: ?std.Thread = null,
+
+        fn start(self: *@This()) !void {
+            self.thread = try std.Thread.spawn(.{}, run, .{self});
+        }
+
+        fn run(self: *@This()) void {
+            var threaded: Io.Threaded = .init(std.heap.page_allocator, .{});
+            defer threaded.deinit();
+            var cli = self.cli;
+            cli.allocator = std.heap.page_allocator;
+            cli.io = threaded.io();
+            self.result = cli.sourceUpdates(T, source) catch |err| {
+                self.failure = err;
+                return;
+            };
+        }
+
+        fn join(self: *@This()) void {
+            if (self.thread) |thread| thread.join();
+            self.thread = null;
+        }
+
+        fn deinit(self: *@This()) void {
+            self.join();
+            if (self.result) |parsed| parsed.deinit();
+        }
+    };
 }

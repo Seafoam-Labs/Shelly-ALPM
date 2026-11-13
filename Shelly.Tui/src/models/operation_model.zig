@@ -661,7 +661,10 @@ pub fn pollInstall(self: *Model) !bool {
     self.operation_state.install_job = null;
     self.quit_blocked_notice = false;
     const is_appimage = std.mem.eql(u8, job.request.backend, "appimage");
-    if (is_appimage) self.appimage_state.refresh_after_operation = true;
+    if (is_appimage) {
+        self.appimage_state.refresh_after_operation = true;
+        @import("updates_model.zig").invalidate(self);
+    }
     const is_flatpak = std.mem.eql(u8, job.request.backend, "flatpak");
     const is_combined = std.mem.eql(u8, job.request.backend, "all");
     if (!is_flatpak and !is_appimage) {

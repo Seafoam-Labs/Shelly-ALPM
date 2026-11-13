@@ -108,7 +108,7 @@ pub fn loadSettings(self: *Model, io: std.Io, env: *const std.process.Environ.Ma
 
 pub fn applySettings(self: *Model, saved: Settings) void {
     const atoll_changed = self.settings_state.settings.atoll_aur_enabled != saved.atoll_aur_enabled;
-    const sources_changed = atoll_changed or self.settings_state.settings.aur_enabled != saved.aur_enabled or self.settings_state.settings.flatpak_enabled != saved.flatpak_enabled;
+    const sources_changed = self.settings_state.settings.appimage_enabled != saved.appimage_enabled or atoll_changed or self.settings_state.settings.aur_enabled != saved.aur_enabled or self.settings_state.settings.flatpak_enabled != saved.flatpak_enabled;
     if (atoll_changed or self.settings_state.settings.aur_enabled != saved.aur_enabled) {
         aur_model.invalidateInstalledCache(self);
         aur_model.clearAurSelection(self);
@@ -154,10 +154,11 @@ pub fn applySettings(self: *Model, saved: Settings) void {
     self.settings_state.settings_failure = null;
     commands.apply(saved.keybindings.resolve());
     if (sources_changed) {
-        self.updates_state.updates_checked = false;
+        @import("updates_model.zig").invalidate(self);
         if (self.updates_state.updates_parsed) |*parsed| {
             if (atoll_changed or !saved.aur_enabled) parsed.value.Aur = &.{};
             if (!saved.flatpak_enabled) parsed.value.Flatpak = &.{};
+            if (!saved.appimage_enabled) parsed.value.AppImage = &.{};
             self.updates_state.updates_list.item_count = @intCast(parsed.value.count());
             self.updates_state.updates_list.scroll = .{};
             self.updates_state.updates_list.cursor = 0;

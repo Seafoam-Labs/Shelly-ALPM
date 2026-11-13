@@ -18,6 +18,7 @@ pub const View = struct {
     flatpak_available: bool = false,
     flatpak_enabled: bool = true,
     aur_enabled: bool = true,
+    appimage_enabled: bool = true,
 
     /// A full upgrade synchronizes sources again, even when the cached check is empty.
     pub fn canUpgradeAll(self: View) bool {
@@ -120,7 +121,8 @@ pub const View = struct {
         const data = self.data orelse return "";
         const aur = if (self.aur_enabled) try std.fmt.allocPrint(arena, " · AUR {d}", .{data.Aur.len}) else "";
         const flatpak = if (!self.flatpak_enabled) "" else if (self.flatpak_available) try std.fmt.allocPrint(arena, " · Flatpak {d}", .{data.Flatpak.len}) else " · Flatpak unavailable";
-        return std.fmt.allocPrint(arena, "System {d}{s}{s} · AppImage {d}", .{ data.Packages.len, aur, flatpak, data.AppImage.len });
+        const appimage = if (self.appimage_enabled) try std.fmt.allocPrint(arena, " · AppImage {d}", .{data.AppImage.len}) else "";
+        return std.fmt.allocPrint(arena, "System {d}{s}{s}{s}", .{ data.Packages.len, aur, flatpak, appimage });
     }
 };
 
@@ -335,6 +337,8 @@ test "update source summary respects settings and backend availability" {
     try std.testing.expectEqualStrings("System 0 · AUR 0 · Flatpak unavailable · AppImage 0", try view.sourceSummary(arena.allocator()));
     view.flatpak_available = true;
     try std.testing.expectEqualStrings("System 0 · AUR 0 · Flatpak 0 · AppImage 0", try view.sourceSummary(arena.allocator()));
+    view.appimage_enabled = false;
+    try std.testing.expectEqualStrings("System 0 · AUR 0 · Flatpak 0", try view.sourceSummary(arena.allocator()));
 }
 
 test "updates panel centers its table below counts and retains empty source status" {
