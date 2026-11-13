@@ -60,9 +60,13 @@ pub const AppImagePaths = struct {
                 break;
             }
             if (!self.show_hidden and std.mem.startsWith(u8, entry.name, ".")) continue;
-            if (entry.kind == .file and !hasAppImageExtension(entry.name)) continue;
-            if (entry.kind != .directory and entry.kind != .file) continue;
             if (!std.mem.startsWith(u8, entry.name, prefix)) continue;
+            const kind = switch (entry.kind) {
+                .sym_link, .unknown => (dir.statFile(io, entry.name, .{}) catch continue).kind,
+                else => entry.kind,
+            };
+            if (kind == .file and !hasAppImageExtension(entry.name)) continue;
+            if (kind != .directory and kind != .file) continue;
             if (candidates.items.len >= self.max_suggestions) {
                 truncated = true;
                 break;
@@ -70,7 +74,7 @@ pub const AppImagePaths = struct {
 
             const base = try std.fs.path.join(self.allocator, &.{ parent, entry.name });
             defer self.allocator.free(base);
-            const is_directory = entry.kind == .directory;
+            const is_directory = kind == .directory;
             const path = if (is_directory) try self.appendSeparator(base) else try self.allocator.dupe(u8, base);
             errdefer self.allocator.free(path);
             try candidates.append(self.allocator, .{ .path = path, .is_directory = is_directory });
@@ -378,4 +382,38 @@ fn completionAllocationCheck(allocator: Allocator, directory: []const u8) !void 
     defer allocator.free(input);
     const completion = try service.complete(std.testing.io, input, directory, directory);
     defer service.freeCompletion(completion);
+}
+
+test "completion follows usable symlinks and skips broken loops and unrelated files" {
+    const allocator = std.testing.allocator;
+    const io = std.testing.io;
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    const directory = try tmp.dir.realPathFileAlloc(io, ".", allocator);
+    defer allocator.free(directory);
+    try tmp.dir.createDir(io, "target", .default_dir);
+    (try tmp.dir.createFile(io, "target/Editor.AppImage", .{})).close(io);
+    (try tmp.dir.createFile(io, "notes.txt", .{})).close(io);
+    try tmp.dir.symLink(io, "target", "LinkedFolder", .{});
+    try tmp.dir.symLink(io, "target/Editor.AppImage", "Linked.APPIMAGE", .{});
+    try tmp.dir.symLink(io, "Linked.APPIMAGE", "Chain.AppImage", .{});
+    try tmp.dir.symLink(io, "notes.txt", "LinkedNotes.txt", .{});
+    try tmp.dir.symLink(io, "missing", "Broken.AppImage", .{});
+    try tmp.dir.symLink(io, "Loop.AppImage", "Loop.AppImage", .{});
+    const paths: AppImagePaths = .{ .allocator = allocator };
+    const input = try std.mem.concat(allocator, u8, &.{ directory, "/" });
+    defer allocator.free(input);
+    const completion = try paths.complete(io, input, directory, directory);
+    defer paths.freeCompletion(completion);
+    try std.testing.expectEqual(@as(usize, 4), completion.candidates.len);
+    try std.testing.expect(completion.candidates[0].is_directory);
+    try std.testing.expect(std.mem.endsWith(u8, completion.candidates[0].path, "/LinkedFolder/"));
+    try std.testing.expect(std.mem.endsWith(u8, completion.candidates[2].path, "/Chain.AppImage"));
+    const linked = try paths.validate(io, completion.candidates[3].path, directory, directory);
+    defer allocator.free(linked);
+    try std.testing.expect(std.mem.endsWith(u8, linked, "/Linked.APPIMAGE"));
+    const children = try paths.complete(io, completion.candidates[0].path, directory, directory);
+    defer paths.freeCompletion(children);
+    try std.testing.expectEqual(@as(usize, 1), children.candidates.len);
+    try std.testing.expect(std.mem.endsWith(u8, children.candidates[0].path, "/LinkedFolder/Editor.AppImage"));
 }
