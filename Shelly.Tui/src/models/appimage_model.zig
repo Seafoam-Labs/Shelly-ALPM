@@ -420,6 +420,7 @@ pub const Form = struct {
     generation: usize = 0,
     failure: ?anyerror = null,
     job: ?*PathJob = null,
+    pending_job: ?*PathJob = null,
     thread: ?std.Thread = null,
     completion: ?Paths.Completion = null,
     completion_index: usize = 0,
@@ -432,6 +433,7 @@ pub const Form = struct {
     pub fn deinit(self: *Form, allocator: std.mem.Allocator) void {
         if (self.thread) |thread| thread.join();
         if (self.job) |job| destroyPathJob(job);
+        if (self.pending_job) |job| destroyPathJob(job);
         for (self.positions.items) |position| {
             allocator.free(position.directory);
             allocator.free(position.selected);
@@ -516,7 +518,6 @@ fn resolvePathThread(job: *PathJob) void {
 
 fn startPathJob(self: *Model, ctx: *vxfw.EventContext, validate: bool) !void {
     const form = self.appimage_state.install_form.?;
-    if (form.job != null) return;
     try rememberBrowserPosition(form);
     const input = try form.field.buf.dupe();
     defer self.gpa.free(input);
@@ -528,6 +529,14 @@ fn startPathJob(self: *Model, ctx: *vxfw.EventContext, validate: bool) !void {
     job.cwd = try job.arena.allocator().dupe(u8, form.cwd);
     job.home = try job.arena.allocator().dupe(u8, form.home);
     try ctx.tick(100, self.widget());
+    form.generation += 1;
+    job.generation = form.generation;
+    if (form.job != null) {
+        if (form.pending_job) |pending| destroyPathJob(pending);
+        form.pending_job = job;
+        form.failure = null;
+        return;
+    }
     form.thread = try std.Thread.spawn(.{}, resolvePathThread, .{job});
     form.job = job;
     form.failure = null;
@@ -540,7 +549,8 @@ fn choosePath(form: *Form) !void {
     form.field.clearRetainingCapacity();
     try form.field.insertSliceAtCursor(path);
     form.completion_index = form.completion_index % completion.candidates.len + 1;
-    form.generation += 1;
+    const validating = if (form.pending_job) |pending| pending.validate else if (form.job) |active| active.validate else false;
+    if (validating) form.generation += 1;
 }
 
 pub fn selectInstallPath(form: *Form, index: usize) !void {
@@ -624,8 +634,6 @@ pub fn captureInstall(self: *Model, ctx: *vxfw.EventContext, event: vxfw.Event) 
                 if (form.completion) |completion| {
                     if (completion.candidates.len == 1 and completion.candidates[0].is_directory) {
                         try rememberBrowserPosition(form);
-                        (Paths{ .allocator = self.gpa }).freeCompletion(completion);
-                        form.completion = null;
                         try startPathJob(self, ctx, false);
                     } else try choosePath(form);
                 } else try startPathJob(self, ctx, false);
@@ -635,8 +643,6 @@ pub fn captureInstall(self: *Model, ctx: *vxfw.EventContext, event: vxfw.Event) 
                 if (form.completion) |completion| {
                     if (completion.candidates.len > 0 and form.completion_index > 0 and completion.candidates[(form.completion_index - 1) % completion.candidates.len].is_directory) {
                         validate = false;
-                        (Paths{ .allocator = self.gpa }).freeCompletion(completion);
-                        form.completion = null;
                     }
                 }
                 try startPathJob(self, ctx, validate);
@@ -725,6 +731,20 @@ pub fn pollInstallForm(self: *Model) !void {
     form.thread = null;
     form.job = null;
     defer destroyPathJob(job);
+    if (form.pending_job) |pending| {
+        form.pending_job = null;
+        if (pending.generation != form.generation) {
+            destroyPathJob(pending);
+            return;
+        }
+        form.thread = std.Thread.spawn(.{}, resolvePathThread, .{pending}) catch |err| {
+            destroyPathJob(pending);
+            form.failure = err;
+            return;
+        };
+        form.job = pending;
+        return;
+    }
     if (job.generation != form.generation) return;
     form.failure = job.failure;
     if (job.failure != null) return;
@@ -968,4 +988,44 @@ test "directory browsing reaches entries beyond autocomplete scan and result lim
     defer paths.freeCompletion(bounded);
     try std.testing.expect(bounded.truncated);
     try std.testing.expectEqual(@import("../services/appimage_paths.zig").max_suggestions, bounded.candidates.len);
+}
+
+test "rapid browser requests retain only the latest destination despite selection changes" {
+    vxfw.DrawContext.init(.unicode);
+    const allocator = std.testing.allocator;
+    const io = std.testing.io;
+    const model = try Model.init(allocator);
+    defer model.deinit();
+    var temporary = std.testing.tmpDir(.{});
+    defer temporary.cleanup();
+    for ([_][]const u8{ "A", "B", "C" }) |directory| try temporary.dir.createDir(io, directory, .default_dir);
+    const cwd = try temporary.dir.realPathFileAlloc(io, ".", allocator);
+    const form = try allocator.create(Form);
+    form.* = .{ .field = vxfw.TextField.init(allocator), .cwd = cwd, .home = try allocator.dupe(u8, cwd) };
+    model.appimage_state.install_form = form;
+    var events: vxfw.EventContext = .{ .io = io, .alloc = allocator, .cmds = .empty };
+    defer events.cmds.deinit(allocator);
+    for ([_][]const u8{ "A/", "B/", "C/" }) |path| {
+        form.field.clearRetainingCapacity();
+        try form.field.insertSliceAtCursor(path);
+        try startPathJob(model, &events, false);
+    }
+    try std.testing.expectEqualStrings("C/", form.pending_job.?.input);
+    const candidates = try allocator.alloc(Paths.Candidate, 1);
+    candidates[0] = .{ .path = try std.fs.path.join(allocator, &.{ cwd, "A/" }), .is_directory = true };
+    form.completion = .{ .candidates = candidates, .truncated = false };
+    const generation = form.generation;
+    try selectInstallPath(form, 0);
+    try std.testing.expectEqual(generation, form.generation);
+    form.thread.?.join();
+    form.thread = null;
+    try pollInstallForm(model);
+    try std.testing.expect(form.directory == null);
+    try std.testing.expect(form.pending_job == null);
+    try std.testing.expectEqualStrings("C/", form.job.?.input);
+    form.thread.?.join();
+    form.thread = null;
+    try pollInstallForm(model);
+    try std.testing.expect(std.mem.endsWith(u8, form.directory.?, "/C"));
+    try std.testing.expect(form.job == null);
 }
