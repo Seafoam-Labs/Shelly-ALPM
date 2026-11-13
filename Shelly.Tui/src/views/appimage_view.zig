@@ -336,25 +336,52 @@ const BrowserBody = struct {
 
 const SourceEditor = struct {
     draft: ?*@import("../models/appimage_model.zig").SourceDraft,
+    controls: [8]?usize = @splat(null),
 
     fn widget(self: *SourceEditor) vxfw.Widget {
-        return .{ .userdata = self, .drawFn = draw };
+        return .{ .userdata = self, .drawFn = draw, .eventHandler = event };
+    }
+
+    fn event(ptr: *anyopaque, ctx: *vxfw.EventContext, input: vxfw.Event) !void {
+        const self: *SourceEditor = @ptrCast(@alignCast(ptr));
+        if (input != .mouse or input.mouse.button != .left or input.mouse.type != .press or input.mouse.row < 0) return;
+        const draft = self.draft.?;
+        if (draft.save_job != null) return;
+        const row: usize = @intCast(input.mouse.row);
+        if (row >= self.controls.len) return;
+        const control = self.controls[row] orelse return;
+        if (control == 1 and draft.update_type == .None) return;
+        draft.selected = control;
+        if (control != 1) {
+            _ = try @import("../models/appimage_model.zig").captureSource(draft.owner, ctx, .{ .key_press = @import("../commands.zig").bindings.confirm });
+        } else {
+            try ctx.requestFocus(draft.owner.widget());
+            ctx.consumeAndRedraw();
+        }
     }
 
     fn draw(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
         const self: *SourceEditor = @ptrCast(@alignCast(ptr));
         const draft = self.draft.?;
         const size = ctx.max.size();
+        self.controls = @splat(null);
         var children: std.ArrayList(vxfw.SubSurface) = .empty;
-        const selected_index: usize = draft.selected + 1;
+        const selected_index: usize = draft.selected + 1 + @as(usize, if (draft.selected >= 2) 1 else 0);
         const texts = [_][]const u8{
             try std.fmt.allocPrint(ctx.arena, "{f}", .{diagnostics.safe(draft.name)}),
             try std.fmt.allocPrint(ctx.arena, "Type: < {s} >", .{draft.update_type.toCliString()}),
             if (draft.update_type == .None) "Source: disabled" else "Source:",
+            switch (draft.update_type) {
+                .None => "",
+                .GitHub, .GitLab, .Codeberg => "Example: owner/repo (not a full URL)",
+                .StaticUrl => "Example: https://example.org/Application.AppImage (direct download)",
+                .Forgejo => "Example: https://forge.example.org/owner/repo",
+                .Zsync => "Example: https://example.org/Application.AppImage.zsync",
+            },
             if (draft.hosted()) (if (draft.prerelease) "[x] Allow prereleases" else "[ ] Allow prereleases") else "",
-            "[ Save ]",
+            if (draft.save_job != null) "Saving…" else "[ Save ]",
             "[ Cancel ]",
-            draft.error_text orelse "Preview only — not saved.",
+            draft.error_text orelse "",
         };
         var visible: [texts.len]usize = undefined;
         var count: usize = 0;
@@ -370,6 +397,14 @@ const SourceEditor = struct {
             if (position < first or position - first >= size.height) continue;
             const text = texts[index];
             const row: i16 = @intCast(position - first);
+            self.controls[position - first] = switch (index) {
+                1 => 0,
+                2 => 1,
+                4 => 2,
+                5 => 3,
+                6 => 4,
+                else => null,
+            };
             const style = if (index == selected_index) styles.selected else styles.secondary;
             var label: vxfw.Text = .{ .text = text, .style = style, .softwrap = false, .overflow = .ellipsis, .width_basis = .parent };
             try children.append(ctx.arena, .{ .origin = .{ .row = row, .col = 0 }, .surface = try label.draw(ctx.withConstraints(.{}, .{ .width = size.width, .height = 1 })) });

@@ -295,7 +295,7 @@ pub const Model = struct {
                     if (aur_model.catalogActive(self) or self.aur_state.aur_installed_only or self.aur_state.aur_query.len > 0) try aur_model.startAurSearch(self, ctx, self.aur_state.aur_query);
                     self.aur_state.refresh_aur_after_operation = false;
                 }
-                if (self.appimage_state.install_closing != null or (self.appimage_state.install_form != null and self.appimage_state.install_form.?.job != null) or self.appimage_state.load != null or loading or installing or self.packages_state.loading or self.updates_state.updates_job != null or self.operation_state.pkgbuild_job != null or self.flatpak_state.flatpak_job != null or self.flatpak_state.flatpak_probe_job != null) {
+                if ((self.appimage_state.source_draft != null and self.appimage_state.source_draft.?.save_job != null) or self.appimage_state.install_closing != null or (self.appimage_state.install_form != null and self.appimage_state.install_form.?.job != null) or self.appimage_state.load != null or loading or installing or self.packages_state.loading or self.updates_state.updates_job != null or self.operation_state.pkgbuild_job != null or self.flatpak_state.flatpak_job != null or self.flatpak_state.flatpak_probe_job != null) {
                     try ctx.tick(100, self.widget());
                 }
                 return ctx.consumeAndRedraw();

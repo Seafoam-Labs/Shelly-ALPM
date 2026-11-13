@@ -198,6 +198,7 @@ const commands = @import("../commands.zig");
 const AppImageView = @import("../views/appimage_view.zig");
 
 pub fn ensureLoaded(self: *Model, ctx: *vxfw.EventContext) !void {
+    try pollSourceSave(self);
     const had_form = self.appimage_state.install_form != null;
     try pollInstallForm(self);
     if (had_form and self.appimage_state.install_form == null) try ctx.requestFocus(self.widget());
@@ -1123,12 +1124,15 @@ test "AppImage removal confirms the selected name without elevation" {
 
 /// Owns its target and input independently of list refreshes.
 pub const SourceDraft = struct {
+    owner: *Model,
     name: []const u8,
     field: vxfw.TextField,
     update_type: UpdateType,
     prerelease: bool,
     selected: usize = 0,
     error_text: ?[]const u8 = null,
+    save_job: ?*SourceSaveJob = null,
+    save_thread: ?std.Thread = null,
 
     pub fn hosted(self: *const SourceDraft) bool {
         return switch (self.update_type) {
@@ -1138,6 +1142,8 @@ pub const SourceDraft = struct {
     }
 
     fn deinit(self: *SourceDraft, allocator: Allocator) void {
+        if (self.save_thread) |thread| thread.join();
+        if (self.save_job) |job| job.deinit();
         self.field.deinit();
         allocator.free(self.name);
         allocator.destroy(self);
@@ -1160,7 +1166,7 @@ fn openSource(self: *Model, ctx: *vxfw.EventContext) !void {
     };
     defer self.gpa.free(source);
     try field.insertSliceAtCursor(source);
-    draft.* = .{ .name = name, .field = field, .update_type = app.UpdateType, .prerelease = app.AllowPrerelease };
+    draft.* = .{ .owner = self, .name = name, .field = field, .update_type = app.UpdateType, .prerelease = app.AllowPrerelease };
     try ctx.requestFocus(self.widget());
     if (self.appimage_state.source_draft) |old| old.deinit(self.gpa);
     self.appimage_state.source_draft = draft;
@@ -1176,6 +1182,10 @@ pub fn captureSource(self: *Model, ctx: *vxfw.EventContext, event: vxfw.Event) !
     switch (event) {
         .key_press => |key| {
             if (commands.matches(key, .help) or commands.matches(key, .quit)) return false;
+            if (draft.save_job != null) {
+                ctx.consumeAndRedraw();
+                return true;
+            }
             if (commands.matches(key, .cancel_capture)) {
                 self.appimage_state.source_open = false;
                 self.appimage_state.source_draft = null;
@@ -1197,7 +1207,7 @@ pub fn captureSource(self: *Model, ctx: *vxfw.EventContext, event: vxfw.Event) !
                 switch (draft.selected) {
                     2 => draft.prerelease = !draft.prerelease,
                     3 => {
-                        draft.error_text = "Preview only — changes are not saved.";
+                        try startSourceSave(self, ctx);
                     },
                     4 => {
                         self.appimage_state.source_open = false;
@@ -1208,11 +1218,11 @@ pub fn captureSource(self: *Model, ctx: *vxfw.EventContext, event: vxfw.Event) !
                 }
             }
         },
-        .paste => |text| if (draft.selected == 1) {
+        .paste => |text| if (draft.selected == 1 and draft.save_job == null) {
             try draft.field.insertSliceAtCursor(text);
             draft.error_text = null;
         },
-        .mouse => {},
+        .mouse => return false,
         else => return false,
     }
     try ctx.requestFocus(self.widget());
@@ -1220,7 +1230,7 @@ pub fn captureSource(self: *Model, ctx: *vxfw.EventContext, event: vxfw.Event) !
     return true;
 }
 
-test "update source form prefills an owned draft and cancels without changing metadata" {
+test "update source form owns its draft, validates input and preserves failed saves" {
     vxfw.DrawContext.init(.unicode);
     const allocator = std.testing.allocator;
     const model = try Model.init(allocator);
@@ -1256,9 +1266,127 @@ test "update source form prefills an owned draft and cancels without changing me
     try std.testing.expect(!model.appimage_state.source_open);
     try std.testing.expect(model.appimage_state.source_draft == null);
     try std.testing.expectEqualStrings("repo", model.appimage_state.selected().?.RepoName.?);
+    try openSource(model, &events);
+    const saving = model.appimage_state.source_draft.?;
+    saving.field.clearRetainingCapacity();
+    try saving.field.insertSliceAtCursor("not-a-repository");
+    try startSourceSave(model, &events);
+    try std.testing.expect(saving.error_text != null and saving.save_job == null);
+    try std.testing.expect(sourceValidationError("owner/repo", .GitHub) == null);
+    try std.testing.expect(sourceValidationError("https://example.org/app.AppImage", .StaticUrl) == null);
+    try std.testing.expect(sourceValidationError("zsync|https://example.org/app.zsync", .Zsync) == null);
+    try std.testing.expect(sourceValidationError("https://example.org/owner/repo/releases", .Forgejo) == null);
+    try std.testing.expect(sourceValidationError("ftp://example.org/app", .StaticUrl) != null);
+    try std.testing.expect(sourceValidationError("", .None) == null);
+    for ([_]bool{ true, false }) |failed| {
+        const job = try std.heap.page_allocator.create(SourceSaveJob);
+        job.* = .{ .name = saving.name, .source = try std.heap.page_allocator.dupe(u8, "owner/repo"), .update_type = .GitHub, .prerelease = false, .failure = if (failed) error.CommandFailed else null, .done = .init(true) };
+        saving.save_job = job;
+        try pollSourceSave(model);
+        if (failed) {
+            try std.testing.expect(model.appimage_state.source_open);
+            try std.testing.expect(saving.error_text != null);
+            try std.testing.expect(!model.appimage_state.refresh_after_operation);
+        }
+    }
+    try std.testing.expect(!model.appimage_state.source_open);
+    try std.testing.expect(model.appimage_state.source_draft == null);
+    try std.testing.expect(model.appimage_state.refresh_after_operation);
 }
 
 fn onConfigureClick(ptr: ?*anyopaque, ctx: *vxfw.EventContext) !void {
     const self: *Model = @ptrCast(@alignCast(ptr orelse return));
     try openSource(self, ctx);
+}
+
+const SourceSaveJob = struct {
+    name: []const u8,
+    source: []const u8,
+    update_type: UpdateType,
+    prerelease: bool,
+    failure: ?anyerror = null,
+    done: std.atomic.Value(bool) = .init(false),
+
+    fn deinit(self: *SourceSaveJob) void {
+        std.heap.page_allocator.free(self.source);
+        std.heap.page_allocator.destroy(self);
+    }
+};
+
+fn sourceValidationError(source: []const u8, update_type: UpdateType) ?[]const u8 {
+    if (update_type == .None) return null;
+    const trimmed = std.mem.trim(u8, source, &std.ascii.whitespace);
+    for (trimmed) |byte| if (byte <= 0x20 or byte == 0x7f) return "The source cannot contain spaces or control characters.";
+    switch (update_type) {
+        .None => unreachable,
+        .GitHub, .GitLab, .Codeberg => {
+            if (trimmed.len == 0 or trimmed[0] == '/' or trimmed[trimmed.len - 1] == '/' or std.mem.count(u8, trimmed, "/") != 1)
+                return "Enter the repository as owner/repo.";
+        },
+        .StaticUrl, .Forgejo, .Zsync => {
+            const url = if (update_type == .Zsync and std.ascii.startsWithIgnoreCase(trimmed, "zsync|")) trimmed[6..] else trimmed;
+            const uri = std.Uri.parse(url) catch return "Enter an HTTP or HTTPS source URL.";
+            if ((!std.ascii.eqlIgnoreCase(uri.scheme, "https") and !std.ascii.eqlIgnoreCase(uri.scheme, "http")) or uri.host == null or uri.host.?.isEmpty())
+                return "Enter an HTTP or HTTPS source URL.";
+            if (update_type == .Forgejo) {
+                var path = switch (uri.path) {
+                    .raw => |value| value,
+                    .percent_encoded => |value| value,
+                };
+                path = std.mem.trimEnd(u8, path, "/");
+                if (std.mem.endsWith(u8, path, "/releases")) path = path[0 .. path.len - 9];
+                if (uri.user != null or uri.password != null or uri.query != null or uri.fragment != null or path.len == 0 or path[0] != '/' or std.mem.count(u8, path, "/") != 2 or std.mem.indexOf(u8, path, "//") != null)
+                    return "Enter a Forgejo repository URL: https://host/owner/repo.";
+            }
+        },
+    }
+    return null;
+}
+
+fn startSourceSave(self: *Model, ctx: *vxfw.EventContext) !void {
+    const draft = self.appimage_state.source_draft.?;
+    if (draft.save_job != null) return;
+    const input = try draft.field.buf.dupe();
+    defer self.gpa.free(input);
+    draft.error_text = sourceValidationError(input, draft.update_type);
+    if (draft.error_text != null) return;
+    const job = try std.heap.page_allocator.create(SourceSaveJob);
+    errdefer std.heap.page_allocator.destroy(job);
+    const source = try std.heap.page_allocator.dupe(u8, if (draft.update_type == .None) "" else std.mem.trim(u8, input, &std.ascii.whitespace));
+    errdefer std.heap.page_allocator.free(source);
+    job.* = .{ .name = draft.name, .source = source, .update_type = draft.update_type, .prerelease = draft.hosted() and draft.prerelease };
+    try ctx.tick(100, self.widget());
+    draft.save_thread = try std.Thread.spawn(.{}, saveSourceWorker, .{job});
+    draft.save_job = job;
+}
+
+fn saveSourceWorker(job: *SourceSaveJob) void {
+    defer job.done.store(true, .release);
+    var threaded: std.Io.Threaded = .init(std.heap.page_allocator, .{});
+    defer threaded.deinit();
+    const cli: ShellyCli = .{ .allocator = std.heap.page_allocator, .io = threaded.io() };
+    cli.configure_appimage_updates(job.name, job.source, job.update_type, job.prerelease) catch |err| {
+        job.failure = err;
+    };
+}
+
+fn pollSourceSave(self: *Model) !void {
+    const draft = self.appimage_state.source_draft orelse return;
+    const job = draft.save_job orelse return;
+    if (!job.done.load(.acquire)) return;
+    if (draft.save_thread) |thread| thread.join();
+    draft.save_thread = null;
+    draft.save_job = null;
+    defer job.deinit();
+    if (job.failure) |err| {
+        draft.error_text = switch (err) {
+            error.MissingCompletion => "Shelly did not confirm the save. Refresh before retrying.",
+            else => "Could not save the update source. Check the source and try again.",
+        };
+        return;
+    }
+    self.appimage_state.source_draft = null;
+    self.appimage_state.source_open = false;
+    draft.deinit(self.gpa);
+    self.appimage_state.refresh_after_operation = true;
 }
