@@ -27,7 +27,7 @@ pub fn drawDetails(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.
         .{ .label = "Name", .value = app.Name },
         .{ .label = "Version", .value = app.Version, .gap = true },
         .{ .label = "Description", .value = if (app.Description.len > 0) app.Description else "No description." },
-        .{ .label = "Update source", .value = app.UpdateType.toCliString() },
+        .{ .label = "Update type", .value = app.UpdateType.toCliString() },
     });
 
     const hosted = switch (app.UpdateType) {
@@ -47,10 +47,10 @@ pub fn drawDetails(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.
     }
 
     if (hosted or app.UpdateType == .Forgejo)
-        try fields.append(arena, .{ .label = "Prerelease updates", .value = if (app.AllowPrerelease) "Yes" else "No" });
+        try fields.append(arena, .{ .label = "Prereleases", .value = if (app.AllowPrerelease) "Yes" else "No" });
 
     if (app.Path) |path| if (path.len > 0)
-        try fields.append(arena, .{ .label = "Installation path", .value = path });
+        try fields.append(arena, .{ .label = "Install path", .value = path });
 
     try fields.appendSlice(arena, &.{
         .{ .label = "Size on disk", .value = try formatSize(arena, app.SizeOnDisk), .gap = true },
