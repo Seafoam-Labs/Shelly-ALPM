@@ -117,6 +117,19 @@ pub fn resolve(self: *Model) commands.Context {
             context.upgrade_system = view.canUpgrade();
             context.upgrade_aur = view.canUpgradeAur();
             context.upgrade_flatpak = view.canUpgradeFlatpak();
+            context.upgrade_appimage = view.canUpgradeAppImage();
+        },
+        .appimage => {
+            context.mode = .appimage;
+            context.appimage_source = self.appimage_state.source_open;
+            context.appimage_configure_selected = self.appimage_state.details_active and self.appimage_state.source_button.focused;
+            context.removable = self.appimage_state.selected() != null and self.operation_state.install_job == null;
+            context.appimage_path = self.appimage_state.install_form != null;
+            if (self.appimage_state.install_form) |form| {
+                context.appimage_path_editing = form.editing_path;
+                context.hidden_files = form.show_hidden;
+            }
+            context.split_details = self.appimage_state.details_active;
         },
         .settings => {
             context.mode = .settings;

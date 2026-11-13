@@ -1,3 +1,4 @@
+const appimage_model = @import("../models/appimage_model.zig");
 const std = @import("std");
 const vaxis = @import("vaxis");
 const vxfw = vaxis.vxfw;
@@ -81,7 +82,7 @@ pub fn draw(self: *Model, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
     const pane_width = if (max.width >= 64) max.width - split_layout.listWidth(max.width, self.list_percent) else max.width;
     self.flatpak_state.screenshot_layout_available = split_layout.imagesFit(pane_width -| 2, content_size.height -| 4);
     self.help_panel.context = self.commandContext();
-    if (show_browsing and self.help_open and self.active != .packages and self.active != .aur and self.active != .flatpak and self.active != .settings) {
+    if (show_browsing and self.help_open and self.active != .packages and self.active != .aur and self.active != .flatpak and self.active != .appimage and self.active != .settings) {
         try children.append(arena, .{
             .origin = .{ .row = 1, .col = 0 },
             .surface = try self.help_panel.draw(content_ctx.withConstraints(.{}, .{ .width = max.width, .height = content_ctx.max.size().height -| 2 })),
@@ -96,6 +97,7 @@ pub fn draw(self: *Model, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
         .aur => try aur_model.aurView(self).appendContent(content_ctx, &children),
         .upgrade => try updates_model.updatesView(self).appendContent(content_ctx, &children),
         .flatpak => try flatpak_model.flatpakView(self).appendContent(content_ctx, &children),
+        .appimage => try appimage_model.appendContent(self, content_ctx, &children),
         .settings => try settings_model.settingsView(self).appendContent(content_ctx, &children),
     };
 
@@ -173,7 +175,7 @@ test "tab views preserve input widgets and render without background work" {
             const input = switch (tab) {
                 .packages => model.packages_state.text_field.widget(),
                 .aur => model.aur_state.aur_field.widget(),
-                .upgrade, .settings => model.widget(),
+                .upgrade, .settings, .appimage => model.widget(),
                 .flatpak => model.flatpak_state.flatpak_field.widget(),
             };
             var found = surface.widget.eql(input);

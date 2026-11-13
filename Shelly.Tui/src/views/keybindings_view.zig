@@ -13,10 +13,12 @@ const Section = struct { name: []const u8, ids: []const commands.Id };
 const sections = [_]Section{
     .{ .name = "General", .ids = &.{ .quit, .help, .next_tab, .previous_tab, .refresh, .narrow_view, .widen_view } },
     .{ .name = "Packages", .ids = &.{ .install, .remove, .refresh_list, .filter, .clear_selection } },
-    .{ .name = "Updates", .ids = &.{ .upgrade_all, .upgrade_system, .upgrade_aur, .upgrade_flatpak } },
+    .{ .name = "Updates", .ids = &.{ .upgrade_all, .upgrade_system, .upgrade_aur, .upgrade_flatpak, .upgrade_appimage } },
     .{ .name = "AUR catalog", .ids = &.{ .previous_catalog_page, .next_catalog_page } },
     .{ .name = "Flatpak details", .ids = &.{ .categories, .previous_screenshot, .next_screenshot } },
     .{ .name = "PKGBUILD", .ids = &.{ .preview, .toggle_wrap } },
+    .{ .name = "AppImages", .ids = &.{.configure_updates} },
+    .{ .name = "File picker", .ids = &.{.toggle_hidden} },
 };
 
 fn commandIndex(id: commands.Id) usize {
@@ -146,6 +148,7 @@ fn title(id: commands.Id) []const u8 {
         .help => "Help",
         .next_tab => "Next tab",
         .previous_tab => "Previous tab",
+        .configure_updates => "Configure update source",
         .install => "Install",
         .remove => "Remove",
         .preview => "PKGBUILD preview",
@@ -156,6 +159,7 @@ fn title(id: commands.Id) []const u8 {
         .upgrade_system => "Update system",
         .upgrade_aur => "Update AUR",
         .upgrade_flatpak => "Update Flatpak",
+        .upgrade_appimage => "Update AppImages",
         .categories => "Flatpak categories",
         .previous_catalog_page => "Previous AUR page",
         .next_catalog_page => "Next AUR page",
@@ -165,6 +169,7 @@ fn title(id: commands.Id) []const u8 {
         .toggle_wrap => "Toggle source wrapping",
         .narrow_view => "Narrow left panel",
         .widen_view => "Widen left panel",
+        .toggle_hidden => "Show hidden files",
         else => unreachable,
     };
 }
