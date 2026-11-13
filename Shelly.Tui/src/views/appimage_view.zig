@@ -221,20 +221,56 @@ pub const View = struct {
     }
 };
 
+const PathRow = struct {
+    form: *@import("../models/appimage_model.zig").Form,
+    index: usize,
+
+    fn widget(self: *PathRow) vxfw.Widget {
+        return .{ .userdata = self, .drawFn = draw, .eventHandler = event };
+    }
+    fn draw(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
+        const self: *PathRow = @ptrCast(@alignCast(ptr));
+        const candidate = self.form.completion.?.candidates[self.index];
+        const selected = self.form.completion_index == self.index + 1;
+        var text: vxfw.Text = .{ .text = try std.fmt.allocPrint(ctx.arena, "{s}{f}", .{ if (candidate.is_directory) "[Directory] " else "", diagnostics.safe(if (self.form.has_parent and self.index == 0) ".." else std.fs.path.basename(std.mem.trimEnd(u8, candidate.path, "/"))) }), .style = if (selected) styles.selected else styles.secondary, .softwrap = false, .overflow = .ellipsis, .width_basis = .parent };
+        var surface = try text.draw(ctx);
+        surface.widget = self.widget();
+        return surface;
+    }
+    fn event(ptr: *anyopaque, ctx: *vxfw.EventContext, input: vxfw.Event) !void {
+        const self: *PathRow = @ptrCast(@alignCast(ptr));
+        if (input == .mouse and input.mouse.button == .left and input.mouse.type == .press) {
+            self.form.editing_path = false;
+            try @import("../models/appimage_model.zig").selectInstallPath(self.form, self.index);
+            ctx.consumeAndRedraw();
+        }
+    }
+};
+
 pub fn drawInstall(form: *@import("../models/appimage_model.zig").Form, ctx: vxfw.DrawContext, children: *std.ArrayList(vxfw.SubSurface)) !void {
     const size = ctx.max.size();
     if (size.width < 2 or size.height < 4) return;
-    var border: Border = .{ .child = form.field.widget(), .labels = &.{.{ .text = "Install AppImage · Local path", .alignment = .top_left }}, .focused = true };
+    var border: Border = .{ .child = form.field.widget(), .labels = &.{.{ .text = "Install AppImage · File browser", .alignment = .top_left }}, .focused = form.editing_path };
     try children.append(ctx.arena, .{ .origin = .{ .row = 1, .col = 0 }, .surface = try border.draw(ctx.withConstraints(.{}, .{ .width = size.width, .height = 3 })) });
-    var lines: std.ArrayList(u8) = .empty;
-    try lines.appendSlice(ctx.arena, "Enter: review installation · Tab: complete/cycle paths · Esc: cancel\n");
-    if (form.job != null) try lines.appendSlice(ctx.arena, "Checking path…\n");
-    if (form.failure) |err| try lines.appendSlice(ctx.arena, try std.fmt.allocPrint(ctx.arena, "Could not use this path: {s}\n", .{@errorName(err)}));
+    if (size.height <= 4) return;
+    const status = if (form.failure) |err| try std.fmt.allocPrint(ctx.arena, "Could not use this path: {s}", .{@errorName(err)}) else if (form.job != null) "Checking path…" else if (form.editing_path) "Edit path · Tab: complete · Enter: open/review · Esc: browse" else "↑/↓ j/k: select · ←/h: parent · →/l: open · Enter: install/open · /: path · Esc: cancel";
+    var hint: vxfw.Text = .{ .text = status, .softwrap = false, .overflow = .ellipsis };
+    try children.append(ctx.arena, .{ .origin = .{ .row = 4, .col = 0 }, .surface = try hint.draw(ctx.withConstraints(.{}, .{ .width = size.width, .height = 1 })) });
     if (form.completion) |completion| {
-        if (completion.candidates.len == 0) try lines.appendSlice(ctx.arena, "No matching directories or AppImages.\n");
-        if (completion.truncated) try lines.appendSlice(ctx.arena, "Suggestions limited; type a longer path to narrow matches.\n");
-        for (completion.candidates[0..@min(completion.candidates.len, size.height -| 7)]) |candidate| try lines.appendSlice(ctx.arena, try std.fmt.allocPrint(ctx.arena, "{s}{f}\n", .{ if (candidate.is_directory) "Folder (navigation): " else "AppImage: ", diagnostics.safe(candidate.path) }));
+        const visible = @min(completion.candidates.len, size.height -| 6);
+        const selected = form.completion_index -| 1;
+        if (selected < form.first_visible) form.first_visible = selected;
+        if (visible > 0 and selected >= form.first_visible + visible) form.first_visible = selected - visible + 1;
+        form.first_visible = @min(form.first_visible, completion.candidates.len - visible);
+        const first = form.first_visible;
+        for (first..first + visible) |index| {
+            const row = try ctx.arena.create(PathRow);
+            row.* = .{ .form = form, .index = index };
+            try children.append(ctx.arena, .{ .origin = .{ .row = @intCast(5 + index - first), .col = 0 }, .surface = try row.widget().draw(ctx.withConstraints(.{}, .{ .width = size.width, .height = 1 })) });
+        }
+        if (size.height > 5) {
+            var note: vxfw.Text = .{ .text = if (completion.candidates.len == 0) "No matching AppImages or folders." else if (completion.truncated) "Suggestions limited; type a longer path." else try std.fmt.allocPrint(ctx.arena, "{d} suggestions", .{completion.candidates.len}), .softwrap = false };
+            try children.append(ctx.arena, .{ .origin = .{ .row = @intCast(size.height - 1), .col = 0 }, .surface = try note.draw(ctx.withConstraints(.{}, .{ .width = size.width, .height = 1 })) });
+        }
     }
-    var text: vxfw.Text = .{ .text = lines.items, .softwrap = true };
-    if (size.height > 4) try children.append(ctx.arena, .{ .origin = .{ .row = 4, .col = 0 }, .surface = try text.draw(ctx.withConstraints(.{}, .{ .width = size.width, .height = size.height - 4 })) });
 }

@@ -356,6 +356,7 @@ pub const Model = struct {
     }
 
     pub fn setTab(self: *Model, tab: Tab, ctx: *vxfw.EventContext) !void {
+        if (self.appimage_state.install_form != null) return;
         if (!self.tabEnabled(tab)) return;
         if (tab == self.active) return;
         if (self.overlay) |overlay| switch (overlay) {
@@ -374,7 +375,7 @@ pub const Model = struct {
     }
 
     pub fn focusActiveTab(self: *Model, ctx: *vxfw.EventContext) !void {
-        if (self.active == .appimage) if (self.appimage_state.install_form) |form| return ctx.requestFocus(form.field.widget());
+        if (self.active == .appimage) if (self.appimage_state.install_form) |form| return ctx.requestFocus(if (form.editing_path) form.field.widget() else self.widget());
         if (self.help_open or operation_model.operationPrompt(self) != null or operation_model.aurPaneFocused(self) or self.flatpak_state.flatpak_category_open) return ctx.requestFocus(self.widget());
         self.packages_state.package_list_active = false;
         self.aur_state.aur_list_active = false;

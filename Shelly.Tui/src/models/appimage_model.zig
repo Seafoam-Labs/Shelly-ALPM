@@ -191,7 +191,12 @@ const commands = @import("../commands.zig");
 const AppImageView = @import("../views/appimage_view.zig");
 
 pub fn ensureLoaded(self: *Model, ctx: *vxfw.EventContext) !void {
+    const had_form = self.appimage_state.install_form != null;
     try pollInstallForm(self);
+    if (had_form and self.appimage_state.install_form == null) try ctx.requestFocus(self.widget());
+    if (self.appimage_state.install_form) |form| {
+        if (!form.editing_path) try ctx.requestFocus(self.widget());
+    }
     if (self.appimage_state.refresh_after_install) {
         self.appimage_state.refresh_after_install = false;
         try self.appimage_state.refresh(self.gpa);
@@ -397,6 +402,8 @@ const PathJob = struct {
     validate: bool,
     generation: usize,
     completion: ?Paths.Completion = null,
+    directory: ?[]const u8 = null,
+    browsing_directory: bool = false,
     path: ?[]const u8 = null,
     failure: ?anyerror = null,
     done: std.atomic.Value(bool) = .init(false),
@@ -412,12 +419,17 @@ pub const Form = struct {
     thread: ?std.Thread = null,
     completion: ?Paths.Completion = null,
     completion_index: usize = 0,
+    editing_path: bool = false,
+    first_visible: usize = 0,
+    directory: ?[]const u8 = null,
+    has_parent: bool = false,
 
     pub fn deinit(self: *Form, allocator: std.mem.Allocator) void {
         if (self.thread) |thread| thread.join();
         if (self.job) |job| destroyPathJob(job);
         self.field.deinit();
         if (self.completion) |completion| (Paths{ .allocator = allocator }).freeCompletion(completion);
+        if (self.directory) |directory| allocator.free(directory);
         allocator.free(self.cwd);
         allocator.free(self.home);
         allocator.destroy(self);
@@ -433,12 +445,20 @@ pub fn openInstall(self: *Model, ctx: *vxfw.EventContext) !void {
     if (self.operation_state.install_job != null or self.overlay != null or self.appimage_state.install_form != null or self.appimage_state.install_closing != null) return;
     const form = try self.gpa.create(Form);
     errdefer self.gpa.destroy(form);
-    const cwd = try std.Io.Dir.cwd().realPathFileAlloc(ctx.io, ".", self.gpa);
+    const home = try browserHome(self.gpa, ctx.io, runtime.environ_map.get("HOME"));
+    errdefer self.gpa.free(home);
+    const cwd = try self.gpa.dupeSentinel(u8, home, 0);
     errdefer self.gpa.free(cwd);
-    const home = try self.gpa.dupe(u8, runtime.environ_map.get("HOME") orelse cwd);
     form.* = .{ .field = vxfw.TextField.init(self.gpa), .cwd = cwd, .home = home };
     self.appimage_state.install_form = form;
-    try ctx.requestFocus(form.field.widget());
+    errdefer {
+        self.appimage_state.install_form = null;
+        form.field.deinit();
+    }
+    try form.field.insertSliceAtCursor(home);
+    if (!std.mem.endsWith(u8, home, "/")) try form.field.insertSliceAtCursor("/");
+    try ctx.requestFocus(self.widget());
+    try startPathJob(self, ctx, false);
     ctx.consumeAndRedraw();
 }
 
@@ -448,12 +468,29 @@ fn resolvePathThread(job: *PathJob) void {
     var threaded: std.Io.Threaded = .init(allocator, .{});
     defer threaded.deinit();
     const paths: Paths = .{ .allocator = allocator };
-    if (job.validate) {
+    const resolved = paths.resolve(job.input, job.cwd, job.home) catch |err| {
+        job.failure = err;
+        return;
+    };
+    const stat = std.Io.Dir.cwd().statFile(threaded.io(), resolved, .{}) catch null;
+    if (stat != null and stat.?.kind == .directory) {
+        job.directory = resolved;
+        job.browsing_directory = true;
+        const input = std.fmt.allocPrint(allocator, "{s}/", .{resolved}) catch |err| {
+            job.failure = err;
+            return;
+        };
+        job.completion = paths.complete(threaded.io(), input, job.cwd, job.home) catch |err| {
+            job.failure = err;
+            return;
+        };
+    } else if (job.validate) {
         job.path = paths.validate(threaded.io(), job.input, job.cwd, job.home) catch |err| {
             job.failure = err;
             return;
         };
     } else {
+        job.directory = std.fs.path.dirname(resolved) orelse "/";
         job.completion = paths.complete(threaded.io(), job.input, job.cwd, job.home) catch |err| {
             job.failure = err;
             return;
@@ -485,23 +522,73 @@ fn choosePath(form: *Form) !void {
     const path = completion.candidates[form.completion_index % completion.candidates.len].path;
     form.field.clearRetainingCapacity();
     try form.field.insertSliceAtCursor(path);
-    form.completion_index += 1;
+    form.completion_index = form.completion_index % completion.candidates.len + 1;
     form.generation += 1;
+}
+
+pub fn selectInstallPath(form: *Form, index: usize) !void {
+    const completion = form.completion orelse return;
+    if (index >= completion.candidates.len) return;
+    form.completion_index = index;
+    try choosePath(form);
+}
+
+fn moveInstallSelection(form: *Form, down: bool) !void {
+    const completion = form.completion orelse return;
+    const count = completion.candidates.len;
+    if (count == 0) return;
+    const current = form.completion_index -| 1;
+    const index = if (form.completion_index == 0) @as(usize, 0) else if (down) @min(current + 1, count - 1) else current -| 1;
+    try selectInstallPath(form, index);
 }
 
 pub fn captureInstall(self: *Model, ctx: *vxfw.EventContext, event: vxfw.Event) !bool {
     const form = self.appimage_state.install_form orelse return false;
     switch (event) {
-        .key_press => |key| {
+        .key_press => |input| {
+            const key = if (!form.editing_path) commands.vimNavigationKey(input) orelse input else input;
+            if (!form.editing_path and (key.matches('/', .{}) or key.matches(vaxis.Key.tab, .{}))) {
+                form.editing_path = true;
+                try ctx.requestFocus(form.field.widget());
+                ctx.consumeAndRedraw();
+                return true;
+            }
+            if (form.editing_path and key.matches(vaxis.Key.escape, .{})) {
+                form.editing_path = false;
+                try ctx.requestFocus(self.widget());
+                ctx.consumeAndRedraw();
+                return true;
+            }
+            if (!form.editing_path and key.matches(vaxis.Key.left, .{})) {
+                if (form.has_parent) {
+                    try selectInstallPath(form, 0);
+                    try startPathJob(self, ctx, false);
+                }
+                ctx.consumeAndRedraw();
+                return true;
+            }
+            if (!form.editing_path and key.matches(vaxis.Key.right, .{})) {
+                if (form.completion) |completion| {
+                    if (form.completion_index > 0 and completion.candidates[form.completion_index - 1].is_directory)
+                        return captureInstall(self, ctx, .{ .key_press = .{ .codepoint = vaxis.Key.enter } });
+                }
+                ctx.consumeAndRedraw();
+                return true;
+            }
             if (key.matches(vaxis.Key.escape, .{})) {
                 form.generation += 1;
                 self.appimage_state.install_form = null;
+                try ctx.requestFocus(self.widget());
                 if (form.job == null) {
                     form.deinit(self.gpa);
                 } else {
                     self.appimage_state.install_closing = form;
                     try ctx.tick(100, self.widget());
                 }
+            } else if (key.matches(vaxis.Key.up, .{}) or key.matches(vaxis.Key.down, .{})) {
+                form.editing_path = false;
+                try ctx.requestFocus(self.widget());
+                try moveInstallSelection(form, key.matches(vaxis.Key.down, .{}));
             } else if (key.matches(vaxis.Key.tab, .{})) {
                 if (form.completion) |completion| {
                     if (completion.candidates.len == 1 and completion.candidates[0].is_directory) {
@@ -520,7 +607,7 @@ pub fn captureInstall(self: *Model, ctx: *vxfw.EventContext, event: vxfw.Event) 
                     }
                 }
                 try startPathJob(self, ctx, validate);
-            } else {
+            } else if (form.editing_path) {
                 try form.field.handleEvent(ctx, event);
                 form.generation += 1;
                 form.failure = null;
@@ -529,16 +616,39 @@ pub fn captureInstall(self: *Model, ctx: *vxfw.EventContext, event: vxfw.Event) 
             }
         },
         .paste => |text| {
+            form.editing_path = true;
+            try ctx.requestFocus(form.field.widget());
             try form.field.insertSliceAtCursor(text);
             form.generation += 1;
             if (form.completion) |completion| (Paths{ .allocator = self.gpa }).freeCompletion(completion);
             form.completion = null;
         },
-        .mouse => {},
+        .mouse => |mouse| {
+            if (mouse.button == .wheel_up or mouse.button == .wheel_down) {
+                try moveInstallSelection(form, mouse.button == .wheel_down);
+            } else return false;
+        },
         else => return false,
     }
     ctx.consumeAndRedraw();
     return true;
+}
+
+fn returningDirectoryIndex(
+    previous: ?[]const u8,
+    directory: []const u8,
+    candidates: []const Paths.Candidate,
+) usize {
+    const child = previous orelse return 0;
+    const parent = std.fs.path.dirname(child) orelse return 0;
+    if (!std.mem.eql(u8, parent, directory)) return 0;
+
+    for (candidates, 0..) |candidate, index| {
+        if (candidate.is_directory and
+            std.mem.eql(u8, std.mem.trimEnd(u8, candidate.path, "/"), child))
+            return index;
+    }
+    return 0;
 }
 
 pub fn pollInstallForm(self: *Model) !void {
@@ -569,25 +679,45 @@ pub fn pollInstallForm(self: *Model) !void {
         self.appimage_state.install_form = null;
         form.deinit(self.gpa);
     } else if (job.completion) |completion| {
-        var file_count: usize = 0;
-        for (completion.candidates) |candidate| if (!candidate.is_directory) {
-            file_count += 1;
-        };
-        const candidates = try self.gpa.alloc(Paths.Candidate, if (file_count > 0) file_count else completion.candidates.len);
+        const directory = try self.gpa.dupe(u8, job.directory.?);
+        errdefer self.gpa.free(directory);
+        const has_parent = !std.mem.eql(u8, directory, "/");
+        const candidates = try self.gpa.alloc(Paths.Candidate, completion.candidates.len + @intFromBool(has_parent));
         var count: usize = 0;
         errdefer {
             for (candidates[0..count]) |candidate| self.gpa.free(candidate.path);
             self.gpa.free(candidates);
         }
+        if (has_parent) {
+            candidates[0] = .{ .path = try std.fmt.allocPrint(self.gpa, "{s}/", .{std.fs.path.dirname(directory) orelse "/"}), .is_directory = true };
+            count = 1;
+        }
         for (completion.candidates) |source| {
-            if (file_count > 0 and source.is_directory) continue;
             candidates[count] = .{ .path = try self.gpa.dupe(u8, source.path), .is_directory = source.is_directory };
             count += 1;
         }
+        var selected_index: usize = 0;
+        selected_index = returningDirectoryIndex(form.directory, directory, candidates);
+        const cwd = try self.gpa.dupeSentinel(u8, directory, 0);
+        errdefer self.gpa.free(cwd);
+        if (job.browsing_directory) {
+            form.field.clearRetainingCapacity();
+            try form.field.insertSliceAtCursor(directory);
+            if (!std.mem.endsWith(u8, directory, "/")) try form.field.insertSliceAtCursor("/");
+        }
+        self.gpa.free(form.cwd);
+        form.cwd = cwd;
         if (form.completion) |old| (Paths{ .allocator = self.gpa }).freeCompletion(old);
+        if (form.directory) |old| self.gpa.free(old);
+        form.directory = directory;
+        form.has_parent = has_parent;
         form.completion = .{ .candidates = candidates, .truncated = completion.truncated };
         form.completion_index = 0;
-        if (candidates.len == 1) try choosePath(form);
+        form.first_visible = 0;
+        if (job.browsing_directory) {
+            form.editing_path = false;
+            if (candidates.len > 0) try selectInstallPath(form, selected_index);
+        }
     }
 }
 
@@ -602,6 +732,9 @@ test "path validation opens a user-scoped confirmation and stale results are ign
     (try tmp.dir.createFile(std.testing.io, "notes.txt", .{})).close(std.testing.io);
     try tmp.dir.createDir(std.testing.io, "Documents", .default_dir);
     const cwd = try tmp.dir.realPathFileAlloc(std.testing.io, ".", allocator);
+    const home = try browserHome(allocator, std.testing.io, cwd);
+    defer allocator.free(home);
+    try std.testing.expectEqualStrings(cwd, home);
     const form = try allocator.create(Form);
     form.* = .{ .field = vxfw.TextField.init(allocator), .cwd = cwd, .home = try allocator.dupe(u8, cwd) };
     model.appimage_state.install_form = form;
@@ -614,9 +747,25 @@ test "path validation opens a user-scoped confirmation and stale results are ign
     form.thread.?.join();
     form.thread = null;
     try pollInstallForm(model);
+    try std.testing.expectEqual(@as(usize, 3), form.completion.?.candidates.len);
+    try std.testing.expect(form.has_parent);
+    try std.testing.expect(form.completion.?.candidates[1].is_directory);
+    try std.testing.expect(std.mem.endsWith(u8, form.completion.?.candidates[2].path, "Editor.AppImage"));
+    try selectInstallPath(form, 1);
+    try std.testing.expect(try captureInstall(model, &events, .{ .key_press = .{ .codepoint = vaxis.Key.enter } }));
+    form.thread.?.join();
+    form.thread = null;
+    try pollInstallForm(model);
+    try std.testing.expect(std.mem.endsWith(u8, form.cwd, "/Documents"));
     try std.testing.expectEqual(@as(usize, 1), form.completion.?.candidates.len);
-    try std.testing.expect(!form.completion.?.candidates[0].is_directory);
-    try std.testing.expect(std.mem.endsWith(u8, form.completion.?.candidates[0].path, "Editor.AppImage"));
+    try selectInstallPath(form, 0);
+    try std.testing.expect(try captureInstall(model, &events, .{ .key_press = .{ .codepoint = vaxis.Key.enter } }));
+    form.thread.?.join();
+    form.thread = null;
+    try pollInstallForm(model);
+    try std.testing.expectEqualStrings(home, form.cwd);
+    try std.testing.expectEqual(@as(usize, 2), form.completion_index);
+    try std.testing.expect(std.mem.endsWith(u8, form.completion.?.candidates[form.completion_index - 1].path, "/Documents/"));
     form.field.clearRetainingCapacity();
     try std.testing.expect(try captureInstall(model, &events, .{ .paste = "Editor.AppImage" }));
     const pasted = try form.field.buf.dupe();
@@ -639,4 +788,63 @@ test "path validation opens a user-scoped confirmation and stale results are ign
     try std.testing.expectEqual(@import("../services/shelly_operation.zig").Backend.appimage, prompt.backend);
     try std.testing.expect(std.mem.endsWith(u8, prompt.name, "/Editor.AppImage"));
     try std.testing.expect(model.operation_state.install_job == null);
+}
+
+test "path suggestions navigate in both directions and stop at the ends" {
+    vxfw.DrawContext.init(.unicode);
+    const allocator = std.testing.allocator;
+    const model = try Model.init(allocator);
+    defer model.deinit();
+    const form = try allocator.create(Form);
+    form.* = .{ .field = vxfw.TextField.init(allocator), .cwd = try allocator.dupeSentinel(u8, "/tmp", 0), .home = try allocator.dupe(u8, "/tmp") };
+    model.appimage_state.install_form = form;
+    const candidates = try allocator.alloc(Paths.Candidate, 2);
+    candidates[0] = .{ .path = try allocator.dupe(u8, "/tmp/A.AppImage"), .is_directory = false };
+    candidates[1] = .{ .path = try allocator.dupe(u8, "/tmp/B.AppImage"), .is_directory = false };
+    form.completion = .{ .candidates = candidates, .truncated = false };
+    var events: vxfw.EventContext = .{ .io = std.testing.io, .alloc = allocator, .cmds = .empty };
+    defer events.cmds.deinit(allocator);
+    for ([_]usize{ 1, 2, 2 }) |expected| {
+        try std.testing.expect(try captureInstall(model, &events, .{ .key_press = .{ .codepoint = vaxis.Key.down } }));
+        try std.testing.expectEqual(expected, form.completion_index);
+    }
+    try std.testing.expect(try captureInstall(model, &events, .{ .key_press = .{ .codepoint = vaxis.Key.up } }));
+    try std.testing.expectEqual(@as(usize, 1), form.completion_index);
+    const path = try form.field.buf.dupe();
+    defer allocator.free(path);
+    try std.testing.expectEqualStrings("/tmp/A.AppImage", path);
+    try selectInstallPath(form, 0);
+    try std.testing.expectEqual(@as(usize, 1), form.completion_index);
+    try std.testing.expect(try captureInstall(model, &events, .{ .key_press = .{ .codepoint = 'j', .text = "j" } }));
+    try std.testing.expectEqual(@as(usize, 2), form.completion_index);
+    try std.testing.expect(try captureInstall(model, &events, .{ .key_press = .{ .codepoint = '/', .text = "/" } }));
+    try std.testing.expect(form.editing_path);
+    form.field.clearRetainingCapacity();
+    try std.testing.expect(try captureInstall(model, &events, .{ .key_press = .{ .codepoint = 'j', .text = "j" } }));
+    const typed = try form.field.buf.dupe();
+    defer allocator.free(typed);
+    try std.testing.expectEqualStrings("j", typed);
+    try std.testing.expect(try captureInstall(model, &events, .{ .key_press = .{ .codepoint = vaxis.Key.escape } }));
+    try std.testing.expect(!form.editing_path);
+    try std.testing.expect(model.appimage_state.install_form != null);
+}
+
+fn browserHome(allocator: Allocator, io: std.Io, configured: ?[]const u8) ![]u8 {
+    if (configured) |home| {
+        if (std.fs.path.isAbsolute(home)) {
+            if (std.Io.Dir.openDirAbsolute(io, home, .{ .iterate = true })) |dir| {
+                dir.close(io);
+                return allocator.dupe(u8, home);
+            } else |_| {}
+        }
+    }
+    var buffer: [65536]u8 = undefined;
+    var record: std.c.passwd = undefined;
+    var result: ?*std.c.passwd = null;
+    if (std.c.getpwuid_r(std.c.getuid(), &record, &buffer, buffer.len, &result) != 0 or result == null) return error.HomeDirectoryUnavailable;
+    const home = std.mem.span(record.dir orelse return error.HomeDirectoryUnavailable);
+    if (!std.fs.path.isAbsolute(home)) return error.HomeDirectoryUnavailable;
+    const directory = try std.Io.Dir.openDirAbsolute(io, home, .{ .iterate = true });
+    directory.close(io);
+    return allocator.dupe(u8, home);
 }
