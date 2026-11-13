@@ -253,6 +253,22 @@ const PathRow = struct {
     }
 };
 
+fn pathErrorMessage(err: anyerror) []const u8 {
+    return switch (err) {
+        error.AccessDenied, error.PermissionDenied => "Permission denied. Choose a readable file or folder.",
+        error.FileNotFound => "This location no longer exists. Check the path and try again.",
+        error.NotDir => "Part of this path is not a folder. Check the path.",
+        error.NotAFile, error.IsDir => "Choose an AppImage file to install.",
+        error.WrongExtension => "Choose a file ending in .AppImage.",
+        error.EmptyPath => "Enter a path or select an AppImage.",
+        error.InvalidPath, error.BadPathName => "This path contains invalid characters. Correct it and try again.",
+        error.NameTooLong => "This path is too long. Try a shorter path.",
+        error.SymLinkLoop => "This path contains a link loop. Choose another path.",
+        error.OutOfMemory, error.SystemResources, error.ProcessFdQuotaExceeded, error.SystemFdQuotaExceeded => "Not enough resources to open this location. Try again later.",
+        else => "Could not read this location. Check the path and try again.",
+    };
+}
+
 pub fn drawInstall(form: *@import("../models/appimage_model.zig").Form, icons: HeaderIcons, ctx: vxfw.DrawContext, children: *std.ArrayList(vxfw.SubSurface)) !void {
     const size = ctx.max.size();
     if (size.width < 2 or size.height < 4) return;
@@ -263,7 +279,7 @@ pub fn drawInstall(form: *@import("../models/appimage_model.zig").Form, icons: H
     var border: Border = .{ .child = form.field.widget(), .labels = &.{.{ .text = "Install AppImage", .alignment = .top_left }}, .focused = form.editing_path };
     try children.append(ctx.arena, .{ .origin = .{ .row = 1, .col = 0 }, .surface = try border.draw(ctx.withConstraints(.{}, .{ .width = size.width, .height = 3 })) });
     if (size.height <= 5) return;
-    const status: ?[]const u8 = if (form.failure) |err| try std.fmt.allocPrint(ctx.arena, "Could not use this path: {s}", .{@errorName(err)}) else if (form.job != null) "Loading…" else null;
+    const status: ?[]const u8 = if (form.failure) |err| pathErrorMessage(err) else if (form.job != null) "Loading…" else null;
     const content_row: u16 = if (status != null) 5 else 4;
     if (status) |message| {
         var hint: vxfw.Text = .{ .text = message, .softwrap = false, .overflow = .ellipsis };

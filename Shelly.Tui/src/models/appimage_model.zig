@@ -655,6 +655,7 @@ pub fn captureInstall(self: *Model, ctx: *vxfw.EventContext, event: vxfw.Event) 
             }
         },
         .paste => |text| {
+            form.failure = null;
             form.editing_path = true;
             try ctx.requestFocus(form.field.widget());
             try form.field.insertSliceAtCursor(text);
@@ -874,6 +875,18 @@ test "path validation opens a user-scoped confirmation and stale results are ign
     try std.testing.expectEqual(@as(usize, 1), form.first_visible);
     try std.testing.expectEqual(@as(usize, 2), form.completion_index);
     try std.testing.expect(std.mem.endsWith(u8, form.completion.?.candidates[form.completion_index - 1].path, "/Documents/"));
+    form.field.clearRetainingCapacity();
+    try form.field.insertSliceAtCursor("Missing.AppImage");
+    const previous_candidates = form.completion.?.candidates.ptr;
+    try startPathJob(model, &events, true);
+    form.thread.?.join();
+    form.thread = null;
+    try pollInstallForm(model);
+    try std.testing.expectEqual(error.FileNotFound, form.failure.?);
+    try std.testing.expect(form.completion.?.candidates.ptr == previous_candidates);
+    const failed_input = try form.field.buf.dupe();
+    defer allocator.free(failed_input);
+    try std.testing.expectEqualStrings("Missing.AppImage", failed_input);
     form.field.clearRetainingCapacity();
     try std.testing.expect(try captureInstall(model, &events, .{ .paste = "Editor.AppImage" }));
     const pasted = try form.field.buf.dupe();
