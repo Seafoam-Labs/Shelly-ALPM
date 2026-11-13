@@ -1488,7 +1488,7 @@ test "mouse controls edit drafts select dropdown entries and Save or Discard exp
     try SettingsMouseTest.click(fixture, "[ ] Enable AUR");
     try std.testing.expect(model.settings_state.settings_draft.aur_enabled);
     try std.testing.expect(!model.settings_state.settings.aur_enabled);
-    try SettingsMouseTest.click(fixture, "Header icons");
+    try SettingsMouseTest.click(fixture, "Icons");
     try std.testing.expect(model.settings_state.header_open);
     try SettingsMouseTest.click(fixture, "[ ] Nerd Font");
     try std.testing.expect(!model.settings_state.header_open);
@@ -1516,7 +1516,7 @@ test "mouse settings controls remain locked during package operations" {
     defer job.arena.deinit();
     model.operation_state.install_job = &job;
     defer model.operation_state.install_job = null;
-    for ([_][]const u8{ "[ ] Enable AUR", "Header icons", "[ Configure keybindings", "[ Save changes ]", "[ Discard changes ]" }) |label|
+    for ([_][]const u8{ "[ ] Enable AUR", "Icons", "[ Configure keybindings", "[ Save changes ]", "[ Discard changes ]" }) |label|
         try SettingsMouseTest.click(fixture, label);
     try std.testing.expect(!hasChanges(model));
     try std.testing.expect(!model.settings_state.header_open);
@@ -1556,7 +1556,7 @@ test "expanded settings return with Left and sidebar clicks switch out of the ed
     try SettingsMouseTest.click(fixture, "[ ] Enable AUR");
     try std.testing.expect(!model.settings_state.keybindings_open);
     try std.testing.expect(model.settings_state.settings_draft.aur_enabled);
-    try SettingsMouseTest.click(fixture, "Header icons");
+    try SettingsMouseTest.click(fixture, "Icons");
     try std.testing.expect(model.settings_state.header_open);
     try model.captureEvent(&fixture.events, .{ .key_press = commands.bindings.back });
     try std.testing.expect(!model.settings_state.header_open);

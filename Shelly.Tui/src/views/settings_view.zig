@@ -136,7 +136,7 @@ pub const View = struct {
                 try children.append(ctx.arena, .{ .origin = .{ .row = 0, .col = @intCast(left_width) }, .surface = try help.draw(ctx.withConstraints(.{}, .{ .width = width, .height = pane_height })) });
                 continue;
             };
-            const labels = [_]Border.BorderLabel{.{ .text = if (!right) (if (self.dirty) "Settings · Unsaved changes" else "Settings") else if (self.keybindings_open or self.previewSelection() == preferences.keybindings_index) try self.bindingHeader(ctx.arena) else if (self.header_open or self.previewSelection() == preferences.header_index) "Header icons" else "Details", .alignment = .top_left }};
+            const labels = [_]Border.BorderLabel{.{ .text = if (!right) (if (self.dirty) "Settings · Unsaved changes" else "Settings") else if (self.keybindings_open or self.previewSelection() == preferences.keybindings_index) try self.bindingHeader(ctx.arena) else if (self.header_open or self.previewSelection() == preferences.header_index) "Icons" else "Details", .alignment = .top_left }};
             var border: Border = .{ .child = .{ .userdata = pane, .drawFn = drawBody }, .labels = &labels, .style = styles.emphasis };
             const width = if (right) size.width - left_width else left_width;
             try children.append(ctx.arena, .{ .origin = .{ .row = 0, .col = if (right) @intCast(left_width) else 0 }, .surface = try border.draw(ctx.withConstraints(.{ .width = width, .height = pane_height }, .{ .width = width, .height = pane_height })) });
@@ -185,7 +185,7 @@ pub const View = struct {
     }
 
     fn controlText(self: *const View, arena: Allocator, index: usize) Allocator.Error![]const u8 {
-        if (index == preferences.header_index) return std.fmt.allocPrint(arena, "Header icons       {s} {s}", .{ self.settings.header_icons.title(), if (self.header_open) "▴" else "▾" });
+        if (index == preferences.header_index) return std.fmt.allocPrint(arena, "Icons       {s} {s}", .{ self.settings.header_icons.title(), if (self.header_open) "▴" else "▾" });
         if (index == preferences.keybindings_index) return "[ Configure keybindings… ]";
         const enabled = switch (index) {
             0 => self.settings.aur_enabled,
@@ -206,16 +206,16 @@ pub const View = struct {
 
     fn description(self: *const View, arena: Allocator) Allocator.Error![]const u8 {
         if (self.header_open) return switch (preferences.header_styles[self.header_selected]) {
-            .none => "Show page names without icons.",
+            .none => "Show page and file names without icons.",
             .nerd_font => "Nerd Font icons require a compatible font in your terminal.",
-            .ascii => "Use ASCII symbols alongside page names.",
+            .ascii => "Use ASCII symbols in page headers and the AppImage browser.",
         };
         return switch (self.previewSelection()) {
             0 => "Show AUR searches, installed packages, and updates.",
             1 => try std.fmt.allocPrint(arena, "Show Flatpak applications and updates. Backend: {s}.", .{self.backendStatus()}),
             preferences.appimage_index => "Show installed AppImages and their metadata.",
             preferences.atoll_index => "Use Shelly's shared AUR mirror and scan Atoll PKGBUILD previews.",
-            preferences.header_index => "Choose text-only, Nerd Font, or ASCII page headers.",
+            preferences.header_index => "Choose text-only, Nerd Font, or ASCII icons for page headers and the AppImage browser.",
             preferences.screenshots_index => "Show images in Flatpak details when the terminal supports them.",
             preferences.keybindings_index => "Configure shortcuts without changing navigation or authentication input.",
             preferences.save_index => "Save and apply all pending preferences and keybinding edits.",

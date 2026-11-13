@@ -9,7 +9,7 @@ stored under `$XDG_CONFIG_HOME/shelly/` instead.
 ## Using Settings
 
 Wide terminals show settings on the left and details or an editor on the right.
-Selecting Header icons or Configure keybindings previews the available choices.
+Selecting Icons or Configure keybindings previews the available choices.
 Narrow terminals use a single pane.
 
 - **Right / `l`**, **Enter**, or **Space**: focus the selected editor.

@@ -289,7 +289,7 @@ fn initializeWidgets(self: *Model) void {
 }
 
 pub fn appendContent(self: *Model, ctx: vxfw.DrawContext, children: *std.ArrayList(vxfw.SubSurface)) Allocator.Error!void {
-    if (self.appimage_state.install_form != null) return AppImageView.drawInstall(self.appimage_state.install_form.?, ctx, children);
+    if (self.appimage_state.install_form != null) return AppImageView.drawInstall(self.appimage_state.install_form.?, self.settings_state.settings.header_icons, ctx, children);
     initializeWidgets(self);
     try appImageView(self).appendContent(ctx, children);
 }

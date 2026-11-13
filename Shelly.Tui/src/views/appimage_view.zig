@@ -5,6 +5,7 @@ const diagnostics = @import("diagnostics");
 const vxfw = @import("vaxis").vxfw;
 const Allocator = std.mem.Allocator;
 const AppImage = @import("../models/appimage.zig").AppImage;
+const HeaderIcons = @import("../models/settings.zig").HeaderIcons;
 const detail_fields = @import("detail_fields.zig");
 const formatSize = @import("detail_format.zig").formatSize;
 
@@ -224,6 +225,7 @@ pub const View = struct {
 const PathRow = struct {
     form: *@import("../models/appimage_model.zig").Form,
     index: usize,
+    icons: HeaderIcons,
 
     fn widget(self: *PathRow) vxfw.Widget {
         return .{ .userdata = self, .drawFn = draw, .eventHandler = event };
@@ -232,7 +234,11 @@ const PathRow = struct {
         const self: *PathRow = @ptrCast(@alignCast(ptr));
         const candidate = self.form.completion.?.candidates[self.index];
         const selected = self.form.completion_index == self.index + 1;
-        var text: vxfw.Text = .{ .text = try std.fmt.allocPrint(ctx.arena, "{s}{f}", .{ if (candidate.is_directory) "[Directory] " else "", diagnostics.safe(if (self.form.has_parent and self.index == 0) ".." else std.fs.path.basename(std.mem.trimEnd(u8, candidate.path, "/"))) }), .style = if (selected) styles.selected else styles.secondary, .softwrap = false, .overflow = .ellipsis, .width_basis = .parent };
+        var text: vxfw.Text = .{ .text = try std.fmt.allocPrint(ctx.arena, "{s}{f}{s}", .{ switch (self.icons) {
+            .none => "",
+            .ascii => if (candidate.is_directory) "[D] " else "[A] ",
+            .nerd_font => if (candidate.is_directory) "\u{f07b}\u{2002}" else "\u{f487}\u{2002}",
+        }, diagnostics.safe(if (self.form.has_parent and self.index == 0) ".." else std.fs.path.basename(std.mem.trimEnd(u8, candidate.path, "/"))), if (candidate.is_directory) "/" else "" }), .style = if (selected) styles.selected else styles.secondary, .softwrap = false, .overflow = .ellipsis, .width_basis = .parent };
         var surface = try text.draw(ctx);
         surface.widget = self.widget();
         return surface;
@@ -247,7 +253,7 @@ const PathRow = struct {
     }
 };
 
-pub fn drawInstall(form: *@import("../models/appimage_model.zig").Form, ctx: vxfw.DrawContext, children: *std.ArrayList(vxfw.SubSurface)) !void {
+pub fn drawInstall(form: *@import("../models/appimage_model.zig").Form, icons: HeaderIcons, ctx: vxfw.DrawContext, children: *std.ArrayList(vxfw.SubSurface)) !void {
     const size = ctx.max.size();
     if (size.width < 2 or size.height < 4) return;
     var border: Border = .{ .child = form.field.widget(), .labels = &.{.{ .text = "Install AppImage · File browser", .alignment = .top_left }}, .focused = form.editing_path };
@@ -265,7 +271,7 @@ pub fn drawInstall(form: *@import("../models/appimage_model.zig").Form, ctx: vxf
         const first = form.first_visible;
         for (first..first + visible) |index| {
             const row = try ctx.arena.create(PathRow);
-            row.* = .{ .form = form, .index = index };
+            row.* = .{ .form = form, .index = index, .icons = icons };
             try children.append(ctx.arena, .{ .origin = .{ .row = @intCast(5 + index - first), .col = 0 }, .surface = try row.widget().draw(ctx.withConstraints(.{}, .{ .width = size.width, .height = 1 })) });
         }
         if (size.height > 5) {
