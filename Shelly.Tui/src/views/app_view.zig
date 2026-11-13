@@ -81,7 +81,7 @@ pub fn draw(self: *Model, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
     const pane_width = if (max.width >= 64) max.width - split_layout.listWidth(max.width, self.list_percent) else max.width;
     self.flatpak_state.screenshot_layout_available = split_layout.imagesFit(pane_width -| 2, content_size.height -| 4);
     self.help_panel.context = self.commandContext();
-    if (show_browsing and self.help_open and self.active != .packages and self.active != .aur and self.active != .flatpak) {
+    if (show_browsing and self.help_open and self.active != .packages and self.active != .aur and self.active != .flatpak and self.active != .settings) {
         try children.append(arena, .{
             .origin = .{ .row = 1, .col = 0 },
             .surface = try self.help_panel.draw(content_ctx.withConstraints(.{}, .{ .width = max.width, .height = content_ctx.max.size().height -| 2 })),

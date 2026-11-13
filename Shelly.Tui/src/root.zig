@@ -29,6 +29,7 @@ test "all source modules are included" {
     std.testing.refAllDecls(@import("services/atoll_catalog.zig"));
     std.testing.refAllDecls(@import("services/flatpak_images.zig"));
     std.testing.refAllDecls(@import("services/settings.zig"));
+    std.testing.refAllDecls(@import("services/keybindings.zig"));
     std.testing.refAllDecls(@import("services/shelly_cli.zig"));
     std.testing.refAllDecls(@import("services/shelly_operation.zig"));
     std.testing.refAllDecls(@import("services/ui_decode.zig"));
@@ -47,6 +48,7 @@ test "all source modules are included" {
     std.testing.refAllDecls(@import("views/packages_view.zig"));
     std.testing.refAllDecls(@import("views/pkgbuild_view.zig"));
     std.testing.refAllDecls(@import("views/settings_view.zig"));
+    std.testing.refAllDecls(@import("views/keybindings_view.zig"));
     std.testing.refAllDecls(@import("views/source_highlight.zig"));
     std.testing.refAllDecls(@import("views/split_layout.zig"));
     std.testing.refAllDecls(@import("views/styles.zig"));
