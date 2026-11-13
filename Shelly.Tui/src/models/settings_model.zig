@@ -321,7 +321,7 @@ fn pollSettingsFile(self: *Model, ctx: *vxfw.EventContext) !void {
         }
         return;
     }
-    if (self.operation_state.install_job != null or hasChanges(self) or self.settings_state.keybinding_capture or self.settings_state.header_open) {
+    if (self.operation_state.install_job != null or self.appimage_state.install_form != null or self.appimage_state.source_open or hasChanges(self) or self.settings_state.keybinding_capture or self.settings_state.header_open) {
         if (!self.settings_state.watch_deferred) {
             self.settings_state.watch_deferred = true;
             try self.setNotice(deferred_file_notice);
@@ -1645,4 +1645,19 @@ test "settings actions remain reachable from the list and binding editor" {
         try model.captureEvent(&fixture.events, .{ .key_press = commands.bindings.previous });
         try std.testing.expectEqual(preferences.save_index, model.settings_state.settings_selected);
     }
+}
+
+test "external edits wait for the AppImage source editor" {
+    const fixture = try KeybindingTest.init("{}");
+    defer fixture.deinit();
+    fixture.load();
+    const model = fixture.model.?;
+    model.appimage_state.source_open = true;
+    try fixture.write("{\"Keybindings\":{\"help\":\"F2\"}}");
+    try pollSettingsFile(model, &fixture.events);
+    try std.testing.expect(model.settings_state.watch_deferred);
+    try fixture.expectLabel(.help, "F1");
+    model.appimage_state.source_open = false;
+    try pollSettingsFile(model, &fixture.events);
+    try fixture.expectLabel(.help, "F2");
 }

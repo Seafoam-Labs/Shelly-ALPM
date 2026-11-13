@@ -651,6 +651,9 @@ pub fn captureInstall(self: *Model, ctx: *vxfw.EventContext, event: vxfw.Event) 
                 return true;
             }
             if (form.editing_path and key.matches(vaxis.Key.escape, .{})) {
+                form.field.clearRetainingCapacity();
+                try form.field.insertSliceAtCursor(form.directory orelse form.cwd);
+                try startPathJob(self, ctx, false);
                 form.editing_path = false;
                 try ctx.requestFocus(self.widget());
                 ctx.consumeAndRedraw();
@@ -818,7 +821,7 @@ pub fn pollInstallForm(self: *Model) !void {
     } else if (job.completion) |completion| {
         const directory = try self.gpa.dupe(u8, job.directory.?);
         errdefer self.gpa.free(directory);
-        const has_parent = !std.mem.eql(u8, directory, "/");
+        const has_parent = job.browsing_directory and !std.mem.eql(u8, directory, "/");
         const candidates = try self.gpa.alloc(Paths.Candidate, completion.candidates.len + @intFromBool(has_parent));
         var count: usize = 0;
         errdefer {
@@ -1003,6 +1006,7 @@ test "path suggestions navigate in both directions and stop at the ends" {
     try std.testing.expectEqualStrings("j", typed);
     try std.testing.expect(try captureInstall(model, &events, .{ .key_press = .{ .codepoint = vaxis.Key.escape } }));
     try std.testing.expect(!form.editing_path);
+    try std.testing.expect(form.job != null);
     try std.testing.expect(model.appimage_state.install_form != null);
 }
 
@@ -1392,4 +1396,30 @@ fn pollSourceSave(self: *Model) !void {
     draft.deinit(self.gpa);
     @import("updates_model.zig").invalidate(self);
     self.appimage_state.refresh_after_operation = true;
+}
+
+test "prefix completion excludes parent navigation" {
+    const allocator = std.testing.allocator;
+    const model = try Model.init(allocator);
+    defer model.deinit();
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    (try tmp.dir.createFile(std.testing.io, "Editor.AppImage", .{})).close(std.testing.io);
+    const cwd = try tmp.dir.realPathFileAlloc(std.testing.io, ".", allocator);
+    const form = try allocator.create(Form);
+    form.* = .{ .field = vxfw.TextField.init(allocator), .cwd = cwd, .home = try allocator.dupe(u8, cwd), .editing_path = true };
+    model.appimage_state.install_form = form;
+    try form.field.insertSliceAtCursor("Ed");
+    var events: vxfw.EventContext = .{ .io = std.testing.io, .alloc = allocator, .cmds = .empty };
+    defer events.cmds.deinit(allocator);
+    try startPathJob(model, &events, false);
+    form.thread.?.join();
+    form.thread = null;
+    try pollInstallForm(model);
+    try std.testing.expect(!form.has_parent);
+    try std.testing.expectEqual(@as(usize, 1), form.completion.?.candidates.len);
+    try choosePath(form);
+    const text = try form.field.buf.dupe();
+    defer allocator.free(text);
+    try std.testing.expect(std.mem.endsWith(u8, text, "/Editor.AppImage"));
 }

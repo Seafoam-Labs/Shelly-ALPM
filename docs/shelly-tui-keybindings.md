@@ -98,6 +98,7 @@ These groups match the Settings editor:
 - **AUR catalog:** `previous_catalog_page`, `next_catalog_page`.
 - **Flatpak details:** `categories`, `previous_screenshot`, `next_screenshot`.
 - **PKGBUILD:** `preview`, `toggle_wrap`.
+- **AppImages:** `configure_updates` (default: `e`).
 - **File picker:** `toggle_hidden` (default: `.`). Hidden files and folders are
   excluded until toggled; this shortcut applies while browsing, not editing a path.
 
