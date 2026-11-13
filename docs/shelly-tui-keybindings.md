@@ -9,7 +9,7 @@ stored under `$XDG_CONFIG_HOME/shelly/` instead.
 ## Using Settings
 
 Wide terminals show settings on the left and details or an editor on the right.
-Selecting Header icons or Configure keybindings previews the available choices.
+Selecting Icons or Configure keybindings previews the available choices.
 Narrow terminals use a single pane.
 
 - **Right / `l`**, **Enter**, or **Space**: focus the selected editor.
@@ -93,10 +93,14 @@ These groups match the Settings editor:
 - **General:** `quit`, `help`, `next_tab`, `previous_tab`, `refresh`,
   `narrow_view`, `widen_view`.
 - **Packages:** `install`, `remove`, `refresh_list`, `filter`, `clear_selection`.
-- **Updates:** `upgrade_all`, `upgrade_system`, `upgrade_aur`, `upgrade_flatpak`.
+- **Updates:** `upgrade_all`, `upgrade_system`, `upgrade_aur`, `upgrade_flatpak`,
+  `upgrade_appimage` (default: `i`).
 - **AUR catalog:** `previous_catalog_page`, `next_catalog_page`.
 - **Flatpak details:** `categories`, `previous_screenshot`, `next_screenshot`.
 - **PKGBUILD:** `preview`, `toggle_wrap`.
+- **AppImages:** `configure_updates` (default: `e`).
+- **File picker:** `toggle_hidden` (default: `.`). Hidden files and folders are
+  excluded until toggled; this shortcut applies while browsing, not editing a path.
 
 ## Conflicts and reserved keys
 

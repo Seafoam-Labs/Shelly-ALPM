@@ -1,3 +1,4 @@
+const appimage_model = @import("models/appimage_model.zig");
 const command_context = @import("command_context.zig");
 const app_view = @import("views/app_view.zig");
 const tab_bar_view = @import("views/tab_bar.zig");
@@ -43,7 +44,7 @@ pub const Model = struct {
     viewport_width: ?u16 = null,
 
     active: Tab = .packages,
-    visible_tabs: [5]Tab = undefined,
+    visible_tabs: [Tab.all.len]Tab = undefined,
 
     /// Modal package details.
     overlay: ?Overlay = null,
@@ -54,6 +55,7 @@ pub const Model = struct {
     help_panel: help_view.Panel = .{},
 
     packages_state: packages_model.State,
+    appimage_state: appimage_model.State = .{},
     aur_state: aur_model.State,
     flatpak_state: flatpak_model.State,
     updates_state: updates_model.State,
@@ -78,6 +80,7 @@ pub const Model = struct {
     pub fn deinit(self: *Model) void {
         // Stop the operation before releasing page data it may reference.
         operation_model.deinit(self);
+        self.appimage_state.deinit(self.gpa);
         flatpak_model.deinit(self);
         updates_model.deinit(self);
         aur_model.deinit(self);
@@ -125,6 +128,8 @@ pub const Model = struct {
     }
 
     pub fn captureEvent(self: *Model, ctx: *vxfw.EventContext, event: vxfw.Event) anyerror!void {
+        if (try appimage_model.captureSource(self, ctx, event)) return;
+        if (try appimage_model.captureInstall(self, ctx, event)) return;
         switch (event) {
             .key_press => |key| {
                 if (try settings_model.captureBinding(self, ctx, key)) return;
@@ -151,7 +156,7 @@ pub const Model = struct {
                     self.help_open = !self.help_open;
                     return ctx.consumeAndRedraw();
                 }
-                if (!self.help_open and operation_model.operationPrompt(self) == null and self.operation_state.review_prompt == null and (self.active == .packages or self.active == .aur or self.active == .flatpak or self.active == .settings) and (self.overlay == null or self.overlay.? == .package or self.overlay.? == .aur or self.overlay.? == .flatpak)) {
+                if (!self.help_open and operation_model.operationPrompt(self) == null and self.operation_state.review_prompt == null and (self.active == .packages or self.active == .aur or self.active == .flatpak or self.active == .appimage or self.active == .settings) and (self.overlay == null or self.overlay.? == .package or self.overlay.? == .aur or self.overlay.? == .flatpak)) {
                     if (commands.matches(key, .narrow_view) or commands.matches(key, .widen_view)) {
                         const next_percent = @import("views/split_layout.zig").resize(self.viewport_width, self.list_percent, commands.matches(key, .widen_view)) orelse return ctx.consumeEvent();
                         self.list_percent = next_percent;
@@ -187,6 +192,7 @@ pub const Model = struct {
                                 }
                                 try self.focusActiveTab(ctx);
                                 try updates_model.ensureUpdates(self, ctx);
+                                try appimage_model.ensureLoaded(self, ctx);
                                 try aur_model.ensureAur(self, ctx);
                                 try flatpak_model.ensureFlatpak(self, ctx);
                             }
@@ -203,6 +209,7 @@ pub const Model = struct {
                     .aur => try aur_model.handleKey(self, ctx, key, command != null),
                     .flatpak => try flatpak_model.handleKey(self, ctx, key, command != null),
                     .upgrade => try updates_model.handleKey(self, ctx, key),
+                    .appimage => try appimage_model.handleKey(self, ctx, key),
                     .settings => try settings_model.handleKey(self, ctx, key),
                 };
                 if (handled) return;
@@ -214,6 +221,7 @@ pub const Model = struct {
                             self.switchTab(if (action == .next_tab) 1 else -1);
                             try self.focusActiveTab(ctx);
                             try updates_model.ensureUpdates(self, ctx);
+                            try appimage_model.ensureLoaded(self, ctx);
                             try aur_model.ensureAur(self, ctx);
                             try flatpak_model.ensureFlatpak(self, ctx);
                         },
@@ -253,9 +261,11 @@ pub const Model = struct {
             },
             .tick => {
                 const loading = try packages_model.pollLoad(self);
+                _ = try self.appimage_state.poll(self.gpa);
                 try flatpak_model.pollFlatpakProbe(self, ctx);
                 _ = try aur_model.pollAurSearch(self);
                 const installing = try operation_model.pollInstall(self);
+                try appimage_model.ensureLoaded(self, ctx);
                 updates_model.pollUpdates(self);
                 try updates_model.ensureUpdates(self, ctx);
                 try aur_model.ensureAur(self, ctx);
@@ -285,7 +295,7 @@ pub const Model = struct {
                     if (aur_model.catalogActive(self) or self.aur_state.aur_installed_only or self.aur_state.aur_query.len > 0) try aur_model.startAurSearch(self, ctx, self.aur_state.aur_query);
                     self.aur_state.refresh_aur_after_operation = false;
                 }
-                if (loading or installing or self.packages_state.loading or self.updates_state.updates_job != null or self.operation_state.pkgbuild_job != null or self.flatpak_state.flatpak_job != null or self.flatpak_state.flatpak_probe_job != null) {
+                if ((self.appimage_state.source_draft != null and self.appimage_state.source_draft.?.save_job != null) or self.appimage_state.install_closing != null or (self.appimage_state.install_form != null and self.appimage_state.install_form.?.job != null) or self.appimage_state.load != null or loading or installing or self.packages_state.loading or self.updates_state.updates_job != null or self.operation_state.pkgbuild_job != null or self.flatpak_state.flatpak_job != null or self.flatpak_state.flatpak_probe_job != null) {
                     try ctx.tick(100, self.widget());
                 }
                 return ctx.consumeAndRedraw();
@@ -295,6 +305,7 @@ pub const Model = struct {
                 .aur => aur_model.handleUnhandledKey(self, ctx, key),
                 .flatpak => flatpak_model.handleUnhandledKey(self, ctx, key),
                 .upgrade => updates_model.handleScrollEvent(self, ctx, event),
+                .appimage => {},
                 .settings => {},
             },
             .mouse => {
@@ -319,6 +330,7 @@ pub const Model = struct {
         return switch (tab) {
             .aur => self.settings_state.settings.aur_enabled,
             .flatpak => self.settings_state.settings.flatpak_enabled,
+            .appimage => self.settings_state.settings.appimage_enabled,
             else => true,
         };
     }
@@ -345,6 +357,7 @@ pub const Model = struct {
     }
 
     pub fn setTab(self: *Model, tab: Tab, ctx: *vxfw.EventContext) !void {
+        if (self.appimage_state.install_form != null or self.appimage_state.source_open) return;
         if (!self.tabEnabled(tab)) return;
         if (tab == self.active) return;
         if (self.overlay) |overlay| switch (overlay) {
@@ -357,11 +370,13 @@ pub const Model = struct {
         self.active = tab;
         try self.focusActiveTab(ctx);
         try updates_model.ensureUpdates(self, ctx);
+        try appimage_model.ensureLoaded(self, ctx);
         try aur_model.ensureAur(self, ctx);
         try flatpak_model.ensureFlatpak(self, ctx);
     }
 
     pub fn focusActiveTab(self: *Model, ctx: *vxfw.EventContext) !void {
+        if (self.active == .appimage) if (self.appimage_state.install_form) |form| return ctx.requestFocus(if (form.editing_path) form.field.widget() else self.widget());
         if (self.help_open or operation_model.operationPrompt(self) != null or operation_model.aurPaneFocused(self) or self.flatpak_state.flatpak_category_open) return ctx.requestFocus(self.widget());
         self.packages_state.package_list_active = false;
         self.aur_state.aur_list_active = false;
@@ -369,7 +384,7 @@ pub const Model = struct {
         switch (self.active) {
             .packages => try ctx.requestFocus(self.packages_state.text_field.widget()),
             .aur => try ctx.requestFocus(self.aur_state.aur_field.widget()),
-            .upgrade, .settings => try ctx.requestFocus(self.widget()),
+            .upgrade, .settings, .appimage => try ctx.requestFocus(self.widget()),
             .flatpak => try ctx.requestFocus(self.flatpak_state.flatpak_field.widget()),
         }
     }
@@ -438,6 +453,7 @@ pub const Model = struct {
             .aur => aur_model.aurView(self).statusText(arena),
             .upgrade => updates_model.updatesView(self).statusText(arena),
             .flatpak => flatpak_model.flatpakView(self).statusText(arena),
+            .appimage => "Installed AppImages",
             .settings => "Settings — source preferences are saved for future sessions",
         };
     }
@@ -466,7 +482,7 @@ test "tab switching requests focus on a widget in the active page" {
         const expected = switch (model.active) {
             .packages => model.packages_state.text_field.widget(),
             .aur => model.aur_state.aur_field.widget(),
-            .upgrade, .settings => model.widget(),
+            .upgrade, .settings, .appimage => model.widget(),
             .flatpak => model.flatpak_state.flatpak_field.widget(),
         };
         try std.testing.expect(ctx.cmds.items[0].request_focus.eql(expected));

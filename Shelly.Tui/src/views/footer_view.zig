@@ -14,7 +14,7 @@ const Shortcut = struct {
 /// Render current key labels rather than embedding shortcuts in status strings.
 pub fn draw(ctx: vxfw.DrawContext, context: commands.Context, status: ?[]const u8) Allocator.Error!vxfw.Surface {
     const size = ctx.max.size();
-    const help_label = if (context.settings_capture) "" else try std.fmt.allocPrint(ctx.arena, "{s} {s}", .{ try commands.label(ctx.arena, .help), if (context.mode == .help) "Back" else "Help" });
+    const help_label = if (context.settings_capture or context.appimage_path) "" else try std.fmt.allocPrint(ctx.arena, "{s} {s}", .{ try commands.label(ctx.arena, .help), if (context.mode == .help) "Back" else "Help" });
     const help_width: u16 = @intCast(@min(size.width, ctx.stringWidth(help_label)));
     const main_width = size.width -| (help_width + @as(u16, if (help_width > 0) 2 else 0));
     var shortcuts: std.ArrayList(Shortcut) = .empty;
@@ -42,7 +42,7 @@ pub fn draw(ctx: vxfw.DrawContext, context: commands.Context, status: ?[]const u
             .width = ctx.stringWidth(key) + ctx.stringWidth(description),
         });
     }
-    if (!context.quit_blocked and !context.settings_capture) {
+    if (!context.quit_blocked and !context.settings_capture and !context.appimage_path) {
         const quit_key = try commands.label(ctx.arena, .quit);
         try shortcuts.append(ctx.arena, .{
             .key = quit_key,
