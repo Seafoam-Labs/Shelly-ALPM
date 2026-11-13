@@ -120,6 +120,7 @@ pub fn resolve(self: *Model) commands.Context {
         },
         .appimage => {
             context.mode = .appimage;
+            context.appimage_path = self.appimage_state.install_form != null;
             context.split_details = self.appimage_state.details_active;
         },
         .settings => {

@@ -220,3 +220,21 @@ pub const View = struct {
         }
     }
 };
+
+pub fn drawInstall(form: *@import("../models/appimage_model.zig").Form, ctx: vxfw.DrawContext, children: *std.ArrayList(vxfw.SubSurface)) !void {
+    const size = ctx.max.size();
+    if (size.width < 2 or size.height < 4) return;
+    var border: Border = .{ .child = form.field.widget(), .labels = &.{.{ .text = "Install AppImage · Local path", .alignment = .top_left }}, .focused = true };
+    try children.append(ctx.arena, .{ .origin = .{ .row = 1, .col = 0 }, .surface = try border.draw(ctx.withConstraints(.{}, .{ .width = size.width, .height = 3 })) });
+    var lines: std.ArrayList(u8) = .empty;
+    try lines.appendSlice(ctx.arena, "Enter: review installation · Tab: complete/cycle paths · Esc: cancel\n");
+    if (form.job != null) try lines.appendSlice(ctx.arena, "Checking path…\n");
+    if (form.failure) |err| try lines.appendSlice(ctx.arena, try std.fmt.allocPrint(ctx.arena, "Could not use this path: {s}\n", .{@errorName(err)}));
+    if (form.completion) |completion| {
+        if (completion.candidates.len == 0) try lines.appendSlice(ctx.arena, "No matching directories or AppImages.\n");
+        if (completion.truncated) try lines.appendSlice(ctx.arena, "Suggestions limited; type a longer path to narrow matches.\n");
+        for (completion.candidates[0..@min(completion.candidates.len, size.height -| 7)]) |candidate| try lines.appendSlice(ctx.arena, try std.fmt.allocPrint(ctx.arena, "{s}{f}\n", .{ if (candidate.is_directory) "Folder (navigation): " else "AppImage: ", diagnostics.safe(candidate.path) }));
+    }
+    var text: vxfw.Text = .{ .text = lines.items, .softwrap = true };
+    if (size.height > 4) try children.append(ctx.arena, .{ .origin = .{ .row = 4, .col = 0 }, .surface = try text.draw(ctx.withConstraints(.{}, .{ .width = size.width, .height = size.height - 4 })) });
+}

@@ -451,7 +451,7 @@ fn isFlatpak(request: OperationRequest) bool {
 }
 
 fn elevated(request: OperationRequest) bool {
-    return !isFlatpak(request) or flatpakNeedsElevation(request.action, request.flatpak);
+    return !std.mem.eql(u8, request.backend, "appimage") and (!isFlatpak(request) or flatpakNeedsElevation(request.action, request.flatpak));
 }
 
 fn operationArgv(alloc: std.mem.Allocator, request: OperationRequest) ![][]const u8 {
@@ -1815,4 +1815,16 @@ test "private terminal authentication can be interrupted without protocol input"
     const result = op.poll() orelse return error.TerminalFixtureTimedOut;
     try std.testing.expect(interrupted and result.failed);
     try std.testing.expect(!op.snapshot(std.testing.io).authenticating);
+}
+
+test "local AppImage installation uses a literal path without sudo" {
+    var env: std.process.Environ.Map = .init(std.testing.allocator);
+    defer env.deinit();
+    const request: OperationRequest = .{ .shelly_bin = "shelly", .environ_map = &env, .name = "/tmp/My App;literal.AppImage", .backend = "appimage" };
+    try std.testing.expect(!elevated(request));
+    const argv = try operationArgv(std.testing.allocator, request);
+    defer std.testing.allocator.free(argv);
+    const expected = [_][]const u8{ "shelly", "install", "appimage", request.name, "--no-confirm", "--ui-mode" };
+    try std.testing.expectEqual(expected.len, argv.len);
+    for (expected, argv) |a, b| try std.testing.expectEqualStrings(a, b);
 }
