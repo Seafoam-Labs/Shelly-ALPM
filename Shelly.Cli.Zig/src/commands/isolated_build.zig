@@ -67,6 +67,95 @@ const BootstrapOutputContext = struct {
     }
 };
 
+/// One `name => target` dependency entry from ldd output. Only bare sonames
+/// are returned: path-like names such as the ld-linux interpreter line can
+/// never be staged into the guest's usr/lib. Resolved targets lose their
+/// trailing load address so the path is usable directly.
+const RuntimeEntry = struct {
+    name: []const u8,
+    target: []const u8,
+};
+
+fn parseRuntimeEntry(value: []const u8) ?RuntimeEntry {
+    const trimmed = std.mem.trim(u8, value, " \t\r\n");
+    const separator = std.mem.indexOf(u8, trimmed, " => ") orelse return null;
+    const name = trimmed[0..separator];
+    var target = trimmed[separator + 4 ..];
+    if (name.len == 0 or target.len == 0) return null;
+    if (std.mem.indexOfScalar(u8, name, '/') != null) return null;
+    if (std.mem.eql(u8, name, ".") or std.mem.eql(u8, name, "..")) return null;
+    if (target[0] == '/') {
+        const address = std.mem.indexOf(u8, target, " (") orelse target.len;
+        target = target[0..address];
+    }
+    return .{ .name = name, .target = target };
+}
+
+/// Collects ldd output for runtime validation and private-library staging.
+/// The flags drive validation errors; the collected names and resolutions
+/// let staging copy host-resolved DSOs that the guest package profile lacks.
+const RuntimeCapture = struct {
+    operation: *const PackageManager.Operation,
+    allocator: std.mem.Allocator,
+    missing: bool = false,
+    forbidden: bool = false,
+    static: bool = false,
+    missing_names: std.ArrayList([]const u8) = .empty,
+    resolutions: std.ArrayList(ResolvedLibrary) = .empty,
+
+    const ResolvedLibrary = struct {
+        name: []const u8,
+        path: []const u8,
+    };
+
+    fn deinit(self: *RuntimeCapture) void {
+        for (self.missing_names.items) |name| self.allocator.free(name);
+        self.missing_names.deinit(self.allocator);
+        for (self.resolutions.items) |library| {
+            self.allocator.free(library.name);
+            self.allocator.free(library.path);
+        }
+        self.resolutions.deinit(self.allocator);
+    }
+
+    fn resolvedPath(self: *const RuntimeCapture, name: []const u8) ?[]const u8 {
+        for (self.resolutions.items) |library| {
+            if (std.mem.eql(u8, library.name, name)) return library.path;
+        }
+        return null;
+    }
+
+    fn record(self: *RuntimeCapture, entry: RuntimeEntry) void {
+        if (std.mem.startsWith(u8, entry.target, "not found")) {
+            const name = self.allocator.dupe(u8, entry.name) catch return;
+            self.missing_names.append(self.allocator, name) catch {
+                self.allocator.free(name);
+            };
+        } else if (entry.target[0] == '/') {
+            const name = self.allocator.dupe(u8, entry.name) catch return;
+            const path = self.allocator.dupe(u8, entry.target) catch {
+                self.allocator.free(name);
+                return;
+            };
+            self.resolutions.append(self.allocator, .{ .name = name, .path = path }) catch {
+                self.allocator.free(name);
+                self.allocator.free(path);
+            };
+        }
+    }
+
+    fn line(data: ?*anyopaque, _: PackageManager.process_runner.StreamKind, value: []const u8) void {
+        const self: *@This() = @ptrCast(@alignCast(data.?));
+        self.static = self.static or std.mem.indexOf(u8, value, "not a dynamic executable") != null or std.mem.indexOf(u8, value, "statically linked") != null;
+        const missing = std.mem.indexOf(u8, value, "not found") != null;
+        const forbidden = std.mem.indexOf(u8, value, "libalpm.so") != null;
+        self.missing = self.missing or missing;
+        self.forbidden = self.forbidden or forbidden;
+        if (missing or forbidden) self.operation.status(.warning, value, "build.isolation.runtime", null);
+        if (parseRuntimeEntry(value)) |entry| self.record(entry);
+    }
+};
+
 pub const Root = struct {
     allocator: std.mem.Allocator,
     io: std.Io,
@@ -295,6 +384,68 @@ pub const Root = struct {
         try std.Io.Dir.cwd().setFilePermissions(self.io, destination, .fromMode(0o755), .{});
     }
 
+    /// Stage private runtime DSOs that the clean root's package profile cannot
+    /// provide. The staged executable is a byte-exact copy of the host
+    /// coordinator, so a soname the guest lacks (the vendored libarchive-shelly
+    /// library, for example) must come from the host's resolved closure. Copies
+    /// land in usr/lib, matching the packaged layout, so the guest loader
+    /// resolves them without environment changes. validateRuntime remains the
+    /// authoritative check after staging.
+    pub fn stageRuntimeLibraries(
+        self: *Root,
+        environ: std.process.Environ,
+        host_executable: []const u8,
+        operation: *const PackageManager.Operation,
+    ) !void {
+        if (comptime !build_root.rlpm_only) return;
+        var host_capture: RuntimeCapture = .{ .operation = operation, .allocator = self.allocator };
+        defer host_capture.deinit();
+        // ldd exits nonzero when the closure is incomplete; staging only needs
+        // the parsed entries, and validateRuntime reports any final failure.
+        _ = try PackageManager.process_runner.runStreamingWithEnvironmentOperation(
+            self.allocator,
+            self.io,
+            environ,
+            &.{ "/usr/bin/env", "LC_ALL=C", "/usr/bin/ldd", host_executable },
+            null,
+            null,
+            .{ .function = RuntimeCapture.line, .data = &host_capture },
+            operation,
+        );
+        try operation.checkCancelled();
+
+        var guest_capture: RuntimeCapture = .{ .operation = operation, .allocator = self.allocator };
+        defer guest_capture.deinit();
+        _ = try PackageManager.process_runner.runStreamingWithEnvironmentOperation(
+            self.allocator,
+            self.io,
+            environ,
+            &.{ "/usr/bin/chroot", self.root_path, "/usr/bin/env", "LC_ALL=C", "/usr/bin/ldd", guest_executable },
+            null,
+            null,
+            .{ .function = RuntimeCapture.line, .data = &guest_capture },
+            operation,
+        );
+        try operation.checkCancelled();
+
+        for (guest_capture.missing_names.items) |name| {
+            const host_path = host_capture.resolvedPath(name) orelse continue;
+            const relative = try std.fmt.allocPrint(self.allocator, "usr/lib/{s}", .{name});
+            defer self.allocator.free(relative);
+            const destination = try self.rootJoin(relative);
+            defer self.allocator.free(destination);
+            try std.Io.Dir.copyFile(.cwd(), host_path, .cwd(), destination, self.io, .{});
+            try std.Io.Dir.cwd().setFilePermissions(self.io, destination, .fromMode(0o755), .{});
+            const message = try std.fmt.allocPrint(
+                self.allocator,
+                "Staged private runtime library {s} from the host closure",
+                .{name},
+            );
+            defer self.allocator.free(message);
+            operation.status(.information, message, "build.isolation.runtime", null);
+        }
+    }
+
     pub fn stageSourcePgpKeys(self: *Root, contents: []const u8) !void {
         try self.prepareExecutableDirectory();
         const path = try self.rootJoin(source_keys_relative);
@@ -316,23 +467,9 @@ pub const Root = struct {
     // libraries after staging.
     fn validateRuntimeAt(self: *Root, environ: std.process.Environ, operation: *const PackageManager.Operation, host_executable: ?[]const u8) !void {
         if (comptime !build_root.rlpm_only) return;
-        const Capture = struct {
-            operation: *const PackageManager.Operation,
-            missing: bool = false,
-            forbidden: bool = false,
-            static: bool = false,
-            fn line(data: ?*anyopaque, _: PackageManager.process_runner.StreamKind, value: []const u8) void {
-                const capture: *@This() = @ptrCast(@alignCast(data.?));
-                capture.static = capture.static or std.mem.indexOf(u8, value, "not a dynamic executable") != null or std.mem.indexOf(u8, value, "statically linked") != null;
-                const missing = std.mem.indexOf(u8, value, "not found") != null;
-                const forbidden = std.mem.indexOf(u8, value, "libalpm.so") != null;
-                capture.missing = capture.missing or missing;
-                capture.forbidden = capture.forbidden or forbidden;
-                if (missing or forbidden) capture.operation.status(.warning, value, "build.isolation.runtime", null);
-            }
-        };
         const path = host_executable orelse guest_executable;
-        var capture: Capture = .{ .operation = operation };
+        var capture: RuntimeCapture = .{ .operation = operation, .allocator = self.allocator };
+        defer capture.deinit();
         const argv: []const []const u8 = if (host_executable != null)
             &.{ "/usr/bin/env", "LC_ALL=C", "/usr/bin/ldd", path }
         else
@@ -344,7 +481,7 @@ pub const Root = struct {
             argv,
             null,
             null,
-            .{ .function = Capture.line, .data = &capture },
+            .{ .function = RuntimeCapture.line, .data = &capture },
             operation,
         );
         try operation.checkCancelled();
@@ -800,6 +937,42 @@ fn containsArgument(arguments: []const []const u8, wanted: []const u8) bool {
     for (arguments) |argument|
         if (std.mem.eql(u8, argument, wanted)) return true;
     return false;
+}
+
+test "runtime dependency parsing keeps bare sonames and strips load addresses" {
+    const resolved = parseRuntimeEntry("\tlibarchive-shelly.so.13 => /usr/lib/libarchive-shelly.so.13 (0x00007f00)").?;
+    try std.testing.expectEqualStrings("libarchive-shelly.so.13", resolved.name);
+    try std.testing.expectEqualStrings("/usr/lib/libarchive-shelly.so.13", resolved.target);
+
+    const missing = parseRuntimeEntry("\tlibarchive-shelly.so.13 => not found").?;
+    try std.testing.expectEqualStrings("libarchive-shelly.so.13", missing.name);
+    try std.testing.expectEqualStrings("not found", missing.target);
+
+    const bare = parseRuntimeEntry("libfoo.so.1 => /usr/lib/libfoo.so.1").?;
+    try std.testing.expectEqualStrings("/usr/lib/libfoo.so.1", bare.target);
+
+    try std.testing.expect(parseRuntimeEntry("\tlinux-vdso.so.1 (0x00007f00)") == null);
+    try std.testing.expect(parseRuntimeEntry("\t/lib64/ld-linux-x86-64.so.2 => /usr/lib64/ld-linux-x86-64.so.2 (0x00007f00)") == null);
+    try std.testing.expect(parseRuntimeEntry("statically linked") == null);
+    try std.testing.expect(parseRuntimeEntry("not a dynamic executable") == null);
+    try std.testing.expect(parseRuntimeEntry("\t.. => /usr/lib/evil") == null);
+    try std.testing.expect(parseRuntimeEntry("\tfoo/../bar.so => /usr/lib/bar.so") == null);
+    try std.testing.expect(parseRuntimeEntry("\t => /usr/lib/noname.so") == null);
+}
+
+test "runtime capture collects missing sonames and host resolutions for staging" {
+    const allocator = std.testing.allocator;
+    // record() never touches the operation; only the line callback reports.
+    var capture: RuntimeCapture = .{ .operation = undefined, .allocator = allocator };
+    defer capture.deinit();
+    capture.record(parseRuntimeEntry("\tlibarchive-shelly.so.13 => /usr/lib/libarchive-shelly.so.13 (0x00007f00)").?);
+    capture.record(parseRuntimeEntry("\tlibprivate.so.1 => not found").?);
+    capture.record(parseRuntimeEntry("\tlibarchive-shelly.so.13 => not found").?);
+    try std.testing.expectEqual(@as(usize, 2), capture.missing_names.items.len);
+    try std.testing.expectEqualStrings("libprivate.so.1", capture.missing_names.items[0]);
+    try std.testing.expectEqualStrings("libarchive-shelly.so.13", capture.missing_names.items[1]);
+    try std.testing.expectEqualStrings("/usr/lib/libarchive-shelly.so.13", capture.resolvedPath("libarchive-shelly.so.13").?);
+    try std.testing.expect(capture.resolvedPath("libprivate.so.1") == null);
 }
 
 test "operation paths are restricted to random children of the managed parent" {
