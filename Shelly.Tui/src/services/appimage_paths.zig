@@ -7,6 +7,7 @@ pub const max_suggestions: usize = 256;
 
 pub const AppImagePaths = struct {
     allocator: Allocator,
+    show_hidden: bool = false,
 
     max_entries_examined: usize = max_entries_examined,
     max_suggestions: usize = max_suggestions,
@@ -58,6 +59,7 @@ pub const AppImagePaths = struct {
                 truncated = true;
                 break;
             }
+            if (!self.show_hidden and std.mem.startsWith(u8, entry.name, ".")) continue;
             if (entry.kind == .file and !hasAppImageExtension(entry.name)) continue;
             if (entry.kind != .directory and entry.kind != .file) continue;
             if (!std.mem.startsWith(u8, entry.name, prefix)) continue;
@@ -214,6 +216,8 @@ test "completion filters, orders, marks directories, and truncates" {
     (try tmp.dir.createFile(io, "upper.APPIMAGE", .{})).close(io);
     (try tmp.dir.createFile(io, "notes.txt", .{})).close(io);
     try tmp.dir.createDir(io, "Downloads", .default_dir);
+    try tmp.dir.createDir(io, ".config", .default_dir);
+    (try tmp.dir.createFile(io, ".hidden.AppImage", .{})).close(io);
     try tmp.dir.createDir(io, "Applications", .default_dir);
 
     var service = AppImagePaths{ .allocator = allocator };
@@ -247,6 +251,15 @@ test "completion filters, orders, marks directories, and truncates" {
         const upper = try std.mem.concat(allocator, u8, &.{ real, "/upper.APPIMAGE" });
         defer allocator.free(upper);
         try std.testing.expectEqualStrings(upper, comp.candidates[4].path);
+    }
+
+    {
+        const listing = try std.mem.concat(allocator, u8, &.{ real, "/" });
+        defer allocator.free(listing);
+        const visible_hidden: AppImagePaths = .{ .allocator = allocator, .show_hidden = true };
+        const completion = try visible_hidden.complete(io, listing, real, "/home/u");
+        defer visible_hidden.freeCompletion(completion);
+        try std.testing.expectEqual(@as(usize, 7), completion.candidates.len);
     }
 
     const upper_candidate: AppImagePaths.Candidate = .{ .path = @constCast("/A.AppImage"), .is_directory = false };

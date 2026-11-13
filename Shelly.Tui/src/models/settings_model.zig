@@ -1635,7 +1635,7 @@ test "settings actions remain reachable from the list and binding editor" {
         fixture.load();
         try openTestBindingEditor(fixture);
         const model = fixture.model.?;
-        model.settings_state.keybinding_selected = std.mem.indexOfScalar(commands.Id, &keybindings.editable, .toggle_wrap).?;
+        model.settings_state.keybinding_selected = std.mem.indexOfScalar(commands.Id, &keybindings.editable, .toggle_hidden).?;
         try model.captureEvent(&fixture.events, .{ .key_press = commands.bindings.next });
         try std.testing.expect(!model.settings_state.keybindings_open);
         try std.testing.expectEqual(preferences.save_index, model.settings_state.settings_selected);

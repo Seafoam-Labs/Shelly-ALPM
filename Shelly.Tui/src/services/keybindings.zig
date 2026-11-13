@@ -10,7 +10,7 @@ pub const editable = [_]commands.Id{
     .refresh_list,      .filter,              .upgrade_all,     .upgrade_system,
     .upgrade_aur,       .upgrade_flatpak,     .categories,      .previous_catalog_page,
     .next_catalog_page, .previous_screenshot, .next_screenshot, .clear_selection,
-    .toggle_wrap,       .narrow_view,         .widen_view,
+    .toggle_wrap,       .narrow_view,         .widen_view,      .toggle_hidden,
 };
 
 fn indexOf(id: commands.Id) ?usize {
@@ -116,6 +116,7 @@ fn scope(id: commands.Id) u16 {
         .previous_screenshot, .next_screenshot => flatpak_details,
         .clear_selection => package_lists | aur_list,
         .toggle_wrap => preview | review,
+        .toggle_hidden => 2048, // File browser, outside path editing.
         .narrow_view, .widen_view => lists | details | searches | settings,
         else => unreachable,
     };

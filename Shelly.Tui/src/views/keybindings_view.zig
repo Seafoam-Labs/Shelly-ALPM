@@ -17,6 +17,7 @@ const sections = [_]Section{
     .{ .name = "AUR catalog", .ids = &.{ .previous_catalog_page, .next_catalog_page } },
     .{ .name = "Flatpak details", .ids = &.{ .categories, .previous_screenshot, .next_screenshot } },
     .{ .name = "PKGBUILD", .ids = &.{ .preview, .toggle_wrap } },
+    .{ .name = "File picker", .ids = &.{.toggle_hidden} },
 };
 
 fn commandIndex(id: commands.Id) usize {
@@ -165,6 +166,7 @@ fn title(id: commands.Id) []const u8 {
         .toggle_wrap => "Toggle source wrapping",
         .narrow_view => "Narrow left panel",
         .widen_view => "Widen left panel",
+        .toggle_hidden => "Show hidden files",
         else => unreachable,
     };
 }

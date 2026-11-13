@@ -44,6 +44,7 @@ pub const Id = enum {
     half_page_down,
     narrow_view,
     widen_view,
+    toggle_hidden,
     reset_binding,
     cancel_capture,
 };
@@ -89,6 +90,7 @@ pub const Bindings = struct {
     half_page_up: vaxis.Key = .{ .codepoint = 'u', .mods = .{ .ctrl = true } },
     half_page_down: vaxis.Key = .{ .codepoint = 'd', .mods = .{ .ctrl = true } },
     narrow_view: vaxis.Key = .{ .codepoint = vaxis.Key.left, .mods = .{ .ctrl = true } },
+    toggle_hidden: vaxis.Key = .{ .codepoint = '.' },
     widen_view: vaxis.Key = .{ .codepoint = vaxis.Key.right, .mods = .{ .ctrl = true } },
     reset_binding: vaxis.Key = .{ .codepoint = vaxis.Key.delete },
     cancel_capture: vaxis.Key = .{ .codepoint = vaxis.Key.escape },
@@ -312,6 +314,8 @@ pub fn scrollsOperation(key: vaxis.Key) bool {
 pub const Mode = enum { appimage, search, packages, details, aur, flatpak, updates, settings, authentication, confirmation, running, result, review, preview_document, answers, choice, help };
 pub const Context = struct {
     appimage_path: bool = false,
+    appimage_path_editing: bool = false,
+    hidden_files: bool = false,
     authenticating: bool = false,
     quit_blocked: bool = false,
     source_wrap: bool = true,
@@ -359,6 +363,7 @@ fn add(arena: std.mem.Allocator, list: *std.ArrayList(Entry), id: Id, short: []c
 pub fn entries(arena: std.mem.Allocator, context: Context) std.mem.Allocator.Error![]const Entry {
     var list: std.ArrayList(Entry) = .empty;
     if (context.appimage_path) {
+        if (!context.appimage_path_editing) try add(arena, &list, .toggle_hidden, if (context.hidden_files) "Hide hidden" else "Show hidden", "Toggle hidden files and folders in the AppImage browser");
         try add(arena, &list, .confirm, "Open/Install", "Open a folder or review AppImage installation");
         try add(arena, &list, .cancel_capture, "Cancel", "Return to installed AppImages");
         return list.toOwnedSlice(arena);

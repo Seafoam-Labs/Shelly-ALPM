@@ -121,6 +121,10 @@ pub fn resolve(self: *Model) commands.Context {
         .appimage => {
             context.mode = .appimage;
             context.appimage_path = self.appimage_state.install_form != null;
+            if (self.appimage_state.install_form) |form| {
+                context.appimage_path_editing = form.editing_path;
+                context.hidden_files = form.show_hidden;
+            }
             context.split_details = self.appimage_state.details_active;
         },
         .settings => {

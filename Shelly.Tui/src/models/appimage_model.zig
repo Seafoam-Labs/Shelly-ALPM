@@ -400,6 +400,7 @@ const PathJob = struct {
     cwd: []const u8,
     home: []const u8,
     validate: bool,
+    show_hidden: bool,
     generation: usize,
     completion: ?Paths.Completion = null,
     directory: ?[]const u8 = null,
@@ -423,6 +424,7 @@ pub const Form = struct {
     completion: ?Paths.Completion = null,
     completion_index: usize = 0,
     editing_path: bool = false,
+    show_hidden: bool = false,
     first_visible: usize = 0,
     directory: ?[]const u8 = null,
     has_parent: bool = false,
@@ -475,7 +477,7 @@ fn resolvePathThread(job: *PathJob) void {
     const allocator = job.arena.allocator();
     var threaded: std.Io.Threaded = .init(allocator, .{});
     defer threaded.deinit();
-    const paths: Paths = .{ .allocator = allocator };
+    const paths: Paths = .{ .allocator = allocator, .show_hidden = job.show_hidden };
     const resolved = paths.resolve(job.input, job.cwd, job.home) catch |err| {
         job.failure = err;
         return;
@@ -514,7 +516,7 @@ fn startPathJob(self: *Model, ctx: *vxfw.EventContext, validate: bool) !void {
     defer self.gpa.free(input);
     const job = try std.heap.page_allocator.create(PathJob);
     errdefer std.heap.page_allocator.destroy(job);
-    job.* = .{ .arena = .init(std.heap.page_allocator), .input = undefined, .cwd = undefined, .home = undefined, .validate = validate, .generation = form.generation };
+    job.* = .{ .arena = .init(std.heap.page_allocator), .input = undefined, .cwd = undefined, .home = undefined, .validate = validate, .show_hidden = form.show_hidden, .generation = form.generation };
     errdefer job.arena.deinit();
     job.input = try job.arena.allocator().dupe(u8, input);
     job.cwd = try job.arena.allocator().dupe(u8, form.cwd);
@@ -557,6 +559,19 @@ pub fn captureInstall(self: *Model, ctx: *vxfw.EventContext, event: vxfw.Event) 
     switch (event) {
         .key_press => |input| {
             const key = if (!form.editing_path) commands.vimNavigationKey(input) orelse input else input;
+            if (!form.editing_path and commands.matches(input, .toggle_hidden)) {
+                if (form.job == null) {
+                    try rememberBrowserPosition(form);
+                    form.field.clearRetainingCapacity();
+                    try form.field.insertSliceAtCursor(form.directory orelse form.cwd);
+                    try form.field.insertSliceAtCursor("/");
+                    form.generation += 1;
+                    form.show_hidden = !form.show_hidden;
+                    try startPathJob(self, ctx, false);
+                }
+                ctx.consumeAndRedraw();
+                return true;
+            }
             if (!form.editing_path and (key.matches('/', .{}) or key.matches(vaxis.Key.tab, .{}))) {
                 form.editing_path = true;
                 try ctx.requestFocus(form.field.widget());
@@ -782,6 +797,7 @@ test "path validation opens a user-scoped confirmation and stale results are ign
     (try tmp.dir.createFile(std.testing.io, "Editor.AppImage", .{})).close(std.testing.io);
     (try tmp.dir.createFile(std.testing.io, "notes.txt", .{})).close(std.testing.io);
     try tmp.dir.createDir(std.testing.io, "Documents", .default_dir);
+    try tmp.dir.createDir(std.testing.io, ".config", .default_dir);
     const cwd = try tmp.dir.realPathFileAlloc(std.testing.io, ".", allocator);
     const home = try browserHome(allocator, std.testing.io, cwd);
     defer allocator.free(home);
@@ -816,6 +832,19 @@ test "path validation opens a user-scoped confirmation and stale results are ign
     form.thread = null;
     try pollInstallForm(model);
     try std.testing.expectEqualStrings(home, form.cwd);
+    const original_bindings = commands.bindings;
+    defer commands.bindings = original_bindings;
+    const config = try (@import("../services/keybindings.zig").Config{}).withBinding(.toggle_hidden, .{ .codepoint = vaxis.Key.f8 });
+    commands.apply(config.resolve());
+    for ([_]bool{ true, false }) |show_hidden| {
+        try std.testing.expect(try captureInstall(model, &events, .{ .key_press = .{ .codepoint = vaxis.Key.f8 } }));
+        form.thread.?.join();
+        form.thread = null;
+        try pollInstallForm(model);
+        try std.testing.expectEqual(show_hidden, form.show_hidden);
+        try std.testing.expectEqual(@as(usize, if (show_hidden) 4 else 3), form.completion.?.candidates.len);
+    }
+
     try std.testing.expectEqual(@as(usize, 1), form.first_visible);
     try std.testing.expectEqual(@as(usize, 2), form.completion_index);
     try std.testing.expect(std.mem.endsWith(u8, form.completion.?.candidates[form.completion_index - 1].path, "/Documents/"));
