@@ -128,6 +128,7 @@ pub const Model = struct {
     }
 
     pub fn captureEvent(self: *Model, ctx: *vxfw.EventContext, event: vxfw.Event) anyerror!void {
+        if (try appimage_model.captureSource(self, ctx, event)) return;
         if (try appimage_model.captureInstall(self, ctx, event)) return;
         switch (event) {
             .key_press => |key| {
@@ -356,7 +357,7 @@ pub const Model = struct {
     }
 
     pub fn setTab(self: *Model, tab: Tab, ctx: *vxfw.EventContext) !void {
-        if (self.appimage_state.install_form != null) return;
+        if (self.appimage_state.install_form != null or self.appimage_state.source_open) return;
         if (!self.tabEnabled(tab)) return;
         if (tab == self.active) return;
         if (self.overlay) |overlay| switch (overlay) {

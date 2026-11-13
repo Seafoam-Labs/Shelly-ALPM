@@ -10,7 +10,8 @@ pub const editable = [_]commands.Id{
     .refresh_list,      .filter,              .upgrade_all,     .upgrade_system,
     .upgrade_aur,       .upgrade_flatpak,     .categories,      .previous_catalog_page,
     .next_catalog_page, .previous_screenshot, .next_screenshot, .clear_selection,
-    .toggle_wrap,       .narrow_view,         .widen_view,      .toggle_hidden,
+    .configure_updates, .toggle_wrap,         .narrow_view,     .widen_view,
+    .toggle_hidden,
 };
 
 fn indexOf(id: commands.Id) ?usize {
@@ -106,6 +107,7 @@ const details = package_details | aur_details | flatpak_details;
 fn scope(id: commands.Id) u16 {
     return switch (id) {
         .quit, .help, .next_tab, .previous_tab => all,
+        .configure_updates => appimages,
         .install, .remove => lists | details | appimages,
         .preview => aur_list | aur_details,
         .refresh => updates | settings | preview,

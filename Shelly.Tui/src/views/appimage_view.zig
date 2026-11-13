@@ -205,13 +205,15 @@ pub const View = struct {
             const surface = if (self.help) |panel|
                 try panel.draw(pane_ctx)
             else blk: {
-                const labels = [_]Border.BorderLabel{.{ .text = "AppImage details", .alignment = .top_left }};
+                const labels = [_]Border.BorderLabel{.{ .text = if (self.state.source_open) "Configure update source" else "AppImage details", .alignment = .top_left }};
                 const loading = self.state.load != null and self.state.items().len == 0;
                 var empty: vxfw.Text = .{ .text = if (loading) (if (split) "" else "Loading AppImages…") else "Select an AppImage to see details." };
                 const details = try arena.create(DetailsBody);
                 details.* = .{ .scroll = &self.state.details_scroll };
+                const editor = try arena.create(SourceEditor);
+                editor.* = .{ .draft = self.state.source_draft };
                 var border: Border = .{
-                    .child = if (self.state.selected() != null and !loading) details.widget() else empty.widget(),
+                    .child = if (self.state.source_open) editor.widget() else if (self.state.selected() != null and !loading) details.widget() else empty.widget(),
                     .labels = &labels,
                     .focused = self.state.details_active,
                 };
@@ -331,3 +333,59 @@ const BrowserBody = struct {
         return .{ .size = size, .widget = self.widget(), .buffer = &.{}, .children = children.items };
     }
 };
+
+const SourceEditor = struct {
+    draft: ?*@import("../models/appimage_model.zig").SourceDraft,
+
+    fn widget(self: *SourceEditor) vxfw.Widget {
+        return .{ .userdata = self, .drawFn = draw };
+    }
+
+    fn draw(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
+        const self: *SourceEditor = @ptrCast(@alignCast(ptr));
+        const draft = self.draft.?;
+        const size = ctx.max.size();
+        var children: std.ArrayList(vxfw.SubSurface) = .empty;
+        const selected_index: usize = draft.selected + 1;
+        const texts = [_][]const u8{
+            try std.fmt.allocPrint(ctx.arena, "{f}", .{diagnostics.safe(draft.name)}),
+            try std.fmt.allocPrint(ctx.arena, "Type: < {s} >", .{draft.update_type.toCliString()}),
+            if (draft.update_type == .None) "Source: disabled" else "Source:",
+            if (draft.hosted()) (if (draft.prerelease) "[x] Allow prereleases" else "[ ] Allow prereleases") else "",
+            "[ Save ]",
+            "[ Cancel ]",
+            draft.error_text orelse "Preview only — not saved.",
+        };
+        var visible: [texts.len]usize = undefined;
+        var count: usize = 0;
+        var selected_row: usize = 0;
+        for (texts, 0..) |text, index| {
+            if (text.len == 0) continue;
+            if (index == selected_index) selected_row = count;
+            visible[count] = index;
+            count += 1;
+        }
+        const first = selected_row -| (size.height -| 1);
+        for (visible[0..count], 0..) |index, position| {
+            if (position < first or position - first >= size.height) continue;
+            const text = texts[index];
+            const row: i16 = @intCast(position - first);
+            const style = if (index == selected_index) styles.selected else styles.secondary;
+            var label: vxfw.Text = .{ .text = text, .style = style, .softwrap = false, .overflow = .ellipsis, .width_basis = .parent };
+            try children.append(ctx.arena, .{ .origin = .{ .row = row, .col = 0 }, .surface = try label.draw(ctx.withConstraints(.{}, .{ .width = size.width, .height = 1 })) });
+            if (index == 2 and draft.update_type != .None and size.width > 0) {
+                const col: u16 = if (size.width > 8) 8 else 0;
+                try children.append(ctx.arena, .{ .origin = .{ .row = row, .col = @intCast(col) }, .surface = try draft.field.draw(ctx.withConstraints(.{}, .{ .width = size.width - col, .height = 1 })) });
+            }
+        }
+        return .{ .size = size, .widget = self.widget(), .buffer = &.{}, .children = children.items };
+    }
+};
+
+pub fn drawConfigureButton(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
+    const button: *vxfw.Button = @ptrCast(@alignCast(ptr));
+    const width: u16 = @intCast(@min(ctx.max.width orelse ctx.min.width, ctx.stringWidth(button.label)));
+    var surface = try button.draw(ctx.withConstraints(.{ .width = width }, .{ .width = width, .height = 1 }));
+    surface.widget.drawFn = drawConfigureButton;
+    return surface;
+}

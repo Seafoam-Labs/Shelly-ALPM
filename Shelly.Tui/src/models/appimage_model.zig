@@ -1,5 +1,6 @@
 //! Installed AppImage loading and browsing state. The UI polls worker completion.
 const std = @import("std");
+const UpdateType = @import("appimage.zig").UpdateType;
 const AppImage = @import("appimage.zig").AppImage;
 const ShellyCli = @import("../services/shelly_cli.zig").ShellyCli;
 const Allocator = std.mem.Allocator;
@@ -14,6 +15,9 @@ const LoadState = struct {
 };
 
 pub const State = struct {
+    source_draft: ?*SourceDraft = null,
+    source_open: bool = false,
+    source_button: vxfw.Button = .{ .label = " Configure update source ", .onClick = onConfigureClick },
     install_form: ?*Form = null,
     install_closing: ?*Form = null,
     refresh_after_operation: bool = false,
@@ -41,6 +45,7 @@ pub const State = struct {
     }
 
     pub fn deinit(self: *State, allocator: Allocator) void {
+        if (self.source_draft) |draft| draft.deinit(allocator);
         if (self.install_form) |form| form.deinit(allocator);
         if (self.install_closing) |form| form.deinit(allocator);
         if (self.load_thread) |thread| thread.join();
@@ -174,10 +179,12 @@ test "list and details builders terminate at bounds and follow the cursor" {
 
     model.appimage_state.cursor = 0;
     try std.testing.expect(buildDetails(ptr, 0, 0) != null);
-    try std.testing.expect(buildDetails(ptr, 1, 0) == null);
+    try std.testing.expect(buildDetails(ptr, 1, 0) != null);
+    try std.testing.expect(buildDetails(ptr, 2, 0) == null);
     model.appimage_state.cursor = 1;
     try std.testing.expect(buildDetails(ptr, 0, 0) != null);
-    try std.testing.expect(buildDetails(ptr, 1, 0) == null);
+    try std.testing.expect(buildDetails(ptr, 1, 0) != null);
+    try std.testing.expect(buildDetails(ptr, 2, 0) == null);
 
     model.appimage_state.parsed.?.deinit();
     model.appimage_state.parsed = null;
@@ -215,6 +222,10 @@ pub fn handleKey(self: *Model, ctx: *vxfw.EventContext, input: vaxis.Key) !bool 
         return true;
     }
     syncSelection(state);
+    if (commands.matches(input, .configure_updates)) {
+        try openSource(self, ctx);
+        return true;
+    }
     if (commands.matches(input, .remove)) {
         try openRemoval(self, ctx);
         return true;
@@ -225,11 +236,25 @@ pub fn handleKey(self: *Model, ctx: *vxfw.EventContext, input: vaxis.Key) !bool 
         try ctx.tick(100, self.widget());
     } else if (commands.matches(key, .back) or (state.details_active and commands.matches(key, .close))) {
         state.details_active = false;
+        state.source_button.focused = false;
         state.list_active = true;
+    } else if (state.details_active and state.source_button.focused and commands.matches(key, .confirm)) {
+        try openSource(self, ctx);
     } else if (commands.matches(key, .details) or commands.matches(key, .select)) {
         state.details_active = state.selected() != null;
         state.list_active = !state.details_active;
     } else if (state.details_active) {
+        if (commands.matches(key, .next) and !state.details_scroll.scroll.has_more_vertical) {
+            state.source_button.focused = true;
+            state.details_scroll.cursor = 1;
+            state.details_scroll.scroll.wants_cursor = true;
+            ctx.consumeAndRedraw();
+            return true;
+        }
+        if (commands.matches(key, .previous)) {
+            state.source_button.focused = false;
+            state.details_scroll.cursor = 0;
+        }
         if (commands.scrollKey(key)) |canonical| {
             try state.details_scroll.handleEvent(ctx, .{ .key_press = canonical });
         } else return false;
@@ -268,7 +293,12 @@ fn buildRow(ptr: *const anyopaque, index: usize, _: usize) ?vxfw.Widget {
 
 fn buildDetails(ptr: *const anyopaque, index: usize, _: usize) ?vxfw.Widget {
     const self: *const Model = @ptrCast(@alignCast(ptr));
-    if (index != 0 or self.appimage_state.selected() == null) return null;
+    if (index > 1 or self.appimage_state.selected() == null) return null;
+    if (index == 1) {
+        var widget = @constCast(&self.appimage_state.source_button).widget();
+        widget.drawFn = AppImageView.drawConfigureButton;
+        return widget;
+    }
     return .{ .userdata = @constCast(self), .drawFn = drawDetails };
 }
 
@@ -293,6 +323,7 @@ fn syncSelection(state: *State) void {
     const cursor = @min(state.list_view.cursor, state.items().len -| 1);
     if (state.cursor != cursor) {
         state.cursor = cursor;
+        state.source_button.focused = false;
         state.details_scroll.scroll = .{};
         state.details_cursor = null;
     }
@@ -303,7 +334,10 @@ fn initializeWidgets(self: *Model) void {
     if (!state.widgets_initialized) {
         state.list_view = .{ .item_count = @intCast(state.items().len), .children = .{ .builder = .{ .userdata = self, .buildFn = buildRow } } };
         state.list_view.jumpToItem(@intCast(state.cursor));
-        state.details_scroll = .{ .item_count = 1, .children = .{ .builder = .{ .userdata = self, .buildFn = buildDetails } } };
+        const styles = @import("../views/styles.zig");
+        state.source_button.userdata = self;
+        state.source_button.style = .{ .default = styles.button, .focus = styles.selected, .hover = styles.selected, .mouse_down = .{ .reverse = true } };
+        state.details_scroll = .{ .item_count = 2, .children = .{ .builder = .{ .userdata = self, .buildFn = buildDetails } } };
         state.widgets_initialized = true;
     }
     state.list_view.item_count = @intCast(state.items().len);
@@ -1085,4 +1119,146 @@ test "AppImage removal confirms the selected name without elevation" {
     try std.testing.expect(!prompt.elevated);
     try std.testing.expect(model.operation_state.install_job == null);
     try std.testing.expectEqual(commands.Mode.confirmation, model.commandContext().mode);
+}
+
+/// Owns its target and input independently of list refreshes.
+pub const SourceDraft = struct {
+    name: []const u8,
+    field: vxfw.TextField,
+    update_type: UpdateType,
+    prerelease: bool,
+    selected: usize = 0,
+    error_text: ?[]const u8 = null,
+
+    pub fn hosted(self: *const SourceDraft) bool {
+        return switch (self.update_type) {
+            .GitHub, .GitLab, .Codeberg, .Forgejo => true,
+            else => false,
+        };
+    }
+
+    fn deinit(self: *SourceDraft, allocator: Allocator) void {
+        self.field.deinit();
+        allocator.free(self.name);
+        allocator.destroy(self);
+    }
+};
+
+fn openSource(self: *Model, ctx: *vxfw.EventContext) !void {
+    if (self.overlay != null or self.operation_state.install_job != null or self.appimage_state.install_form != null) return;
+    const app = self.appimage_state.selected() orelse return;
+    const draft = try self.gpa.create(SourceDraft);
+    errdefer self.gpa.destroy(draft);
+    const name = try self.gpa.dupe(u8, app.Name);
+    errdefer self.gpa.free(name);
+    var field = vxfw.TextField.init(self.gpa);
+    errdefer field.deinit();
+    const source = switch (app.UpdateType) {
+        .GitHub, .GitLab, .Codeberg => if (app.RepoOwner != null and app.RepoName != null) try std.fmt.allocPrint(self.gpa, "{s}/{s}", .{ app.RepoOwner.?, app.RepoName.? }) else try self.gpa.dupe(u8, app.UpdateURl),
+        .None => try self.gpa.dupe(u8, ""),
+        else => try self.gpa.dupe(u8, app.UpdateURl),
+    };
+    defer self.gpa.free(source);
+    try field.insertSliceAtCursor(source);
+    draft.* = .{ .name = name, .field = field, .update_type = app.UpdateType, .prerelease = app.AllowPrerelease };
+    try ctx.requestFocus(self.widget());
+    if (self.appimage_state.source_draft) |old| old.deinit(self.gpa);
+    self.appimage_state.source_draft = draft;
+    self.appimage_state.source_open = true;
+    self.appimage_state.details_active = true;
+    self.appimage_state.list_active = false;
+    ctx.consumeAndRedraw();
+}
+
+pub fn captureSource(self: *Model, ctx: *vxfw.EventContext, event: vxfw.Event) !bool {
+    if (!self.appimage_state.source_open or self.help_open) return false;
+    const draft = self.appimage_state.source_draft.?;
+    switch (event) {
+        .key_press => |key| {
+            if (commands.matches(key, .help) or commands.matches(key, .quit)) return false;
+            if (commands.matches(key, .cancel_capture)) {
+                self.appimage_state.source_open = false;
+                self.appimage_state.source_draft = null;
+                draft.deinit(self.gpa);
+            } else if (key.matches(vaxis.Key.up, .{}) or key.matches(vaxis.Key.down, .{}) or key.matches(vaxis.Key.tab, .{})) {
+                const forward = !key.matches(vaxis.Key.up, .{});
+                draft.selected = if (forward) (draft.selected + 1) % 5 else (draft.selected + 4) % 5;
+                if ((draft.selected == 1 and draft.update_type == .None) or (draft.selected == 2 and !draft.hosted()))
+                    draft.selected = if (forward) draft.selected + 1 else draft.selected - 1;
+                if (draft.selected == 2 and !draft.hosted()) draft.selected = if (forward) 3 else 0;
+            } else if (draft.selected == 0 and (key.matches(vaxis.Key.left, .{}) or key.matches(vaxis.Key.right, .{}) or commands.matches(key, .confirm) or commands.matches(key, .mark))) {
+                const value: usize = @backingInt(draft.update_type);
+                draft.update_type = @fromBackingInt(@intCast(if (key.matches(vaxis.Key.left, .{})) (value + 6) % 7 else (value + 1) % 7));
+                draft.error_text = null;
+            } else if (draft.selected == 1) {
+                if (commands.matches(key, .confirm)) draft.selected = if (draft.hosted()) 2 else 3 else try draft.field.handleEvent(ctx, event);
+                draft.error_text = null;
+            } else if (commands.matches(key, .confirm) or commands.matches(key, .mark)) {
+                switch (draft.selected) {
+                    2 => draft.prerelease = !draft.prerelease,
+                    3 => {
+                        draft.error_text = "Preview only — changes are not saved.";
+                    },
+                    4 => {
+                        self.appimage_state.source_open = false;
+                        self.appimage_state.source_draft = null;
+                        draft.deinit(self.gpa);
+                    },
+                    else => {},
+                }
+            }
+        },
+        .paste => |text| if (draft.selected == 1) {
+            try draft.field.insertSliceAtCursor(text);
+            draft.error_text = null;
+        },
+        .mouse => {},
+        else => return false,
+    }
+    try ctx.requestFocus(self.widget());
+    ctx.consumeAndRedraw();
+    return true;
+}
+
+test "update source form prefills an owned draft and cancels without changing metadata" {
+    vxfw.DrawContext.init(.unicode);
+    const allocator = std.testing.allocator;
+    const model = try Model.init(allocator);
+    defer model.deinit();
+    model.active = .appimage;
+    model.appimage_state.checked = true;
+    model.appimage_state.parsed = try std.json.parseFromSlice([]AppImage, allocator, "[{\"Name\":\"Editor\",\"RepoOwner\":\"owner\",\"RepoName\":\"repo\",\"UpdateType\":2,\"AllowPrerelease\":true}]", .{ .allocate = .alloc_always });
+    var events: vxfw.EventContext = .{ .io = std.testing.io, .alloc = allocator, .cmds = .empty };
+    defer events.cmds.deinit(allocator);
+    try std.testing.expect(try handleKey(model, &events, commands.bindings.details));
+    model.appimage_state.details_scroll.scroll.has_more_vertical = false;
+    try std.testing.expect(try handleKey(model, &events, commands.bindings.next));
+    try std.testing.expect(model.appimage_state.source_button.focused);
+    try std.testing.expect(try handleKey(model, &events, commands.bindings.previous));
+    try std.testing.expect(!model.appimage_state.source_button.focused);
+    try std.testing.expect(try handleKey(model, &events, commands.bindings.next));
+    try std.testing.expect(try handleKey(model, &events, commands.bindings.confirm));
+    const draft = model.appimage_state.source_draft.?;
+    try std.testing.expect(draft.hosted() and draft.prerelease);
+    const text = try draft.field.buf.dupe();
+    defer allocator.free(text);
+    try std.testing.expectEqualStrings("owner/repo", text);
+    draft.selected = 1;
+    try std.testing.expect(try captureSource(model, &events, .{ .paste = "-changed" }));
+    try std.testing.expectEqualStrings("repo", model.appimage_state.selected().?.RepoName.?);
+    for ([_]u16{ 1, 40, 100 }) |width| {
+        var arena: std.heap.ArenaAllocator = .init(allocator);
+        defer arena.deinit();
+        var children: std.ArrayList(vxfw.SubSurface) = .empty;
+        try appendContent(model, .{ .arena = arena.allocator(), .min = .{}, .max = .{ .width = width, .height = 12 }, .cell_size = .{ .width = 10, .height = 20 } }, &children);
+    }
+    try std.testing.expect(try captureSource(model, &events, .{ .key_press = commands.bindings.cancel_capture }));
+    try std.testing.expect(!model.appimage_state.source_open);
+    try std.testing.expect(model.appimage_state.source_draft == null);
+    try std.testing.expectEqualStrings("repo", model.appimage_state.selected().?.RepoName.?);
+}
+
+fn onConfigureClick(ptr: ?*anyopaque, ctx: *vxfw.EventContext) !void {
+    const self: *Model = @ptrCast(@alignCast(ptr orelse return));
+    try openSource(self, ctx);
 }

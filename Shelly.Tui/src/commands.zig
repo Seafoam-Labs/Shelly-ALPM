@@ -5,6 +5,7 @@ const std = @import("std");
 pub const Id = enum {
     quit,
     interrupt,
+    configure_updates,
     help,
     next_tab,
     previous_tab,
@@ -50,6 +51,7 @@ pub const Id = enum {
 };
 
 pub const Bindings = struct {
+    configure_updates: vaxis.Key = .{ .codepoint = 'e' },
     quit: vaxis.Key = .{ .codepoint = 'c', .mods = .{ .ctrl = true } },
     interrupt: vaxis.Key = .{ .codepoint = 'c', .mods = .{ .ctrl = true } },
     help: vaxis.Key = .{ .codepoint = vaxis.Key.f1 },
@@ -313,6 +315,8 @@ pub fn scrollsOperation(key: vaxis.Key) bool {
 
 pub const Mode = enum { appimage, search, packages, details, aur, flatpak, updates, settings, authentication, confirmation, running, result, review, preview_document, answers, choice, help };
 pub const Context = struct {
+    appimage_source: bool = false,
+    appimage_configure_selected: bool = false,
     appimage_path: bool = false,
     appimage_path_editing: bool = false,
     hidden_files: bool = false,
@@ -362,6 +366,13 @@ fn add(arena: std.mem.Allocator, list: *std.ArrayList(Entry), id: Id, short: []c
 /// operation completes in the background.
 pub fn entries(arena: std.mem.Allocator, context: Context) std.mem.Allocator.Error![]const Entry {
     var list: std.ArrayList(Entry) = .empty;
+    if (context.appimage_source) {
+        try add(arena, &list, .previous, "Previous", "Previous update-source control");
+        try add(arena, &list, .next, "Next", "Next update-source control");
+        try add(arena, &list, .confirm, "Select", "Change the selected update-source control");
+        try add(arena, &list, .cancel_capture, "Cancel", "Discard the update-source draft");
+        return list.toOwnedSlice(arena);
+    }
     if (context.appimage_path) {
         if (!context.appimage_path_editing) try add(arena, &list, .toggle_hidden, if (context.hidden_files) "Hide hidden" else "Show hidden", "Toggle hidden files and folders in the AppImage browser");
         try add(arena, &list, .confirm, "Open/Install", "Open a folder or review AppImage installation");
@@ -448,6 +459,8 @@ pub fn entries(arena: std.mem.Allocator, context: Context) std.mem.Allocator.Err
             try add(arena, &list, .page_down, "Page down", "Scroll updates down half a page");
         },
         .appimage => {
+            if (context.appimage_configure_selected) try add(arena, &list, .confirm, "Configure", "Configure the selected AppImage update source");
+            if (context.removable) try add(arena, &list, .configure_updates, "Configure updates", "Edit the selected AppImage update source");
             try add(arena, &list, .install, "Install", "Install an AppImage from a local path");
             if (context.removable) try add(arena, &list, .remove, "Remove", "Remove the selected AppImage");
             try add(arena, &list, .previous, "Up", "Previous AppImage or scroll up");

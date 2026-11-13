@@ -17,6 +17,7 @@ const sections = [_]Section{
     .{ .name = "AUR catalog", .ids = &.{ .previous_catalog_page, .next_catalog_page } },
     .{ .name = "Flatpak details", .ids = &.{ .categories, .previous_screenshot, .next_screenshot } },
     .{ .name = "PKGBUILD", .ids = &.{ .preview, .toggle_wrap } },
+    .{ .name = "AppImages", .ids = &.{.configure_updates} },
     .{ .name = "File picker", .ids = &.{.toggle_hidden} },
 };
 
@@ -147,6 +148,7 @@ fn title(id: commands.Id) []const u8 {
         .help => "Help",
         .next_tab => "Next tab",
         .previous_tab => "Previous tab",
+        .configure_updates => "Configure update source",
         .install => "Install",
         .remove => "Remove",
         .preview => "PKGBUILD preview",
