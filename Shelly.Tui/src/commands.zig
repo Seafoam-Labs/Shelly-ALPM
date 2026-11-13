@@ -359,7 +359,7 @@ fn add(arena: std.mem.Allocator, list: *std.ArrayList(Entry), id: Id, short: []c
 pub fn entries(arena: std.mem.Allocator, context: Context) std.mem.Allocator.Error![]const Entry {
     var list: std.ArrayList(Entry) = .empty;
     if (context.appimage_path) {
-        try add(arena, &list, .confirm, "Review", "Validate the path and review installation");
+        try add(arena, &list, .confirm, "Open/Install", "Open a folder or review AppImage installation");
         try add(arena, &list, .cancel_capture, "Cancel", "Return to installed AppImages");
         return list.toOwnedSlice(arena);
     }
