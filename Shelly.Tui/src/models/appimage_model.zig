@@ -490,7 +490,13 @@ fn resolvePathThread(job: *PathJob) void {
             job.failure = err;
             return;
         };
-        job.completion = paths.complete(threaded.io(), input, job.cwd, job.home) catch |err| {
+        const browser_paths: Paths = .{
+            .allocator = allocator,
+            .show_hidden = job.show_hidden,
+            .max_entries_examined = std.math.maxInt(usize),
+            .max_suggestions = std.math.maxInt(usize),
+        };
+        job.completion = browser_paths.complete(threaded.io(), input, job.cwd, job.home) catch |err| {
             job.failure = err;
             return;
         };
@@ -929,4 +935,37 @@ fn browserHome(allocator: Allocator, io: std.Io, configured: ?[]const u8) ![]u8 
     const directory = try std.Io.Dir.openDirAbsolute(io, home, .{ .iterate = true });
     directory.close(io);
     return allocator.dupe(u8, home);
+}
+
+test "directory browsing reaches entries beyond autocomplete scan and result limits" {
+    const allocator = std.testing.allocator;
+    const io = std.testing.io;
+    var temporary = std.testing.tmpDir(.{});
+    defer temporary.cleanup();
+    const directory = try temporary.dir.realPathFileAlloc(io, ".", allocator);
+    defer allocator.free(directory);
+    const entry_count = @import("../services/appimage_paths.zig").max_entries_examined + 1;
+    for (0..entry_count) |index| {
+        var buffer: [64]u8 = undefined;
+        const name = try std.fmt.bufPrint(&buffer, "{d:0>5}.AppImage", .{index});
+        (try temporary.dir.createFile(io, name, .{})).close(io);
+    }
+    const job = try std.heap.page_allocator.create(PathJob);
+    job.* = .{ .arena = .init(allocator), .input = directory, .cwd = directory, .home = directory, .validate = false, .show_hidden = false, .generation = 0 };
+    defer destroyPathJob(job);
+    resolvePathThread(job);
+    try std.testing.expect(job.failure == null);
+    const completion = job.completion.?;
+    try std.testing.expectEqual(entry_count, completion.candidates.len);
+    try std.testing.expect(!completion.truncated);
+    var last_buffer: [64]u8 = undefined;
+    const last_name = try std.fmt.bufPrint(&last_buffer, "/{d:0>5}.AppImage", .{entry_count - 1});
+    try std.testing.expect(std.mem.endsWith(u8, completion.candidates[entry_count - 1].path, last_name));
+    const prefix = try std.fs.path.join(allocator, &.{ directory, "0" });
+    defer allocator.free(prefix);
+    const paths: Paths = .{ .allocator = allocator };
+    const bounded = try paths.complete(io, prefix, directory, directory);
+    defer paths.freeCompletion(bounded);
+    try std.testing.expect(bounded.truncated);
+    try std.testing.expectEqual(@import("../services/appimage_paths.zig").max_suggestions, bounded.candidates.len);
 }
