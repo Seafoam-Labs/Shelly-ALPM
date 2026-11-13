@@ -409,7 +409,10 @@ const PathJob = struct {
     done: std.atomic.Value(bool) = .init(false),
 };
 
+const BrowserPosition = struct { directory: []u8, selected: []u8, first_visible: usize };
+
 pub const Form = struct {
+    positions: std.ArrayList(BrowserPosition) = .empty,
     field: vxfw.TextField,
     cwd: [:0]const u8,
     home: []const u8,
@@ -427,6 +430,11 @@ pub const Form = struct {
     pub fn deinit(self: *Form, allocator: std.mem.Allocator) void {
         if (self.thread) |thread| thread.join();
         if (self.job) |job| destroyPathJob(job);
+        for (self.positions.items) |position| {
+            allocator.free(position.directory);
+            allocator.free(position.selected);
+        }
+        self.positions.deinit(allocator);
         self.field.deinit();
         if (self.completion) |completion| (Paths{ .allocator = allocator }).freeCompletion(completion);
         if (self.directory) |directory| allocator.free(directory);
@@ -501,6 +509,7 @@ fn resolvePathThread(job: *PathJob) void {
 fn startPathJob(self: *Model, ctx: *vxfw.EventContext, validate: bool) !void {
     const form = self.appimage_state.install_form.?;
     if (form.job != null) return;
+    try rememberBrowserPosition(form);
     const input = try form.field.buf.dupe();
     defer self.gpa.free(input);
     const job = try std.heap.page_allocator.create(PathJob);
@@ -529,6 +538,7 @@ fn choosePath(form: *Form) !void {
 pub fn selectInstallPath(form: *Form, index: usize) !void {
     const completion = form.completion orelse return;
     if (index >= completion.candidates.len) return;
+    try rememberBrowserPosition(form);
     form.completion_index = index;
     try choosePath(form);
 }
@@ -592,12 +602,14 @@ pub fn captureInstall(self: *Model, ctx: *vxfw.EventContext, event: vxfw.Event) 
             } else if (key.matches(vaxis.Key.tab, .{})) {
                 if (form.completion) |completion| {
                     if (completion.candidates.len == 1 and completion.candidates[0].is_directory) {
+                        try rememberBrowserPosition(form);
                         (Paths{ .allocator = self.gpa }).freeCompletion(completion);
                         form.completion = null;
                         try startPathJob(self, ctx, false);
                     } else try choosePath(form);
                 } else try startPathJob(self, ctx, false);
             } else if (key.matches(vaxis.Key.enter, .{})) {
+                try rememberBrowserPosition(form);
                 var validate = true;
                 if (form.completion) |completion| {
                     if (completion.candidates.len > 0 and form.completion_index > 0 and completion.candidates[(form.completion_index - 1) % completion.candidates.len].is_directory) {
@@ -632,6 +644,33 @@ pub fn captureInstall(self: *Model, ctx: *vxfw.EventContext, event: vxfw.Event) 
     }
     ctx.consumeAndRedraw();
     return true;
+}
+
+fn rememberBrowserPosition(form: *Form) !void {
+    const directory = form.directory orelse return;
+    const completion = form.completion orelse return;
+    if (form.completion_index == 0 or (form.has_parent and form.completion_index == 1)) return;
+    const path = completion.candidates[form.completion_index - 1].path;
+    const allocator = form.field.buf.allocator;
+    for (form.positions.items) |*position| {
+        if (std.mem.eql(u8, position.directory, directory)) {
+            const selected = try allocator.dupe(u8, path);
+            allocator.free(position.selected);
+            position.selected = selected;
+            position.first_visible = form.first_visible;
+            return;
+        }
+    }
+    const owned_directory = try allocator.dupe(u8, directory);
+    errdefer allocator.free(owned_directory);
+    const selected = try allocator.dupe(u8, path);
+    errdefer allocator.free(selected);
+    if (form.positions.items.len == 32) {
+        const old = form.positions.orderedRemove(0);
+        allocator.free(old.directory);
+        allocator.free(old.selected);
+    }
+    try form.positions.append(allocator, .{ .directory = owned_directory, .selected = selected, .first_visible = form.first_visible });
 }
 
 fn returningDirectoryIndex(
@@ -698,6 +737,18 @@ pub fn pollInstallForm(self: *Model) !void {
         }
         var selected_index: usize = 0;
         selected_index = returningDirectoryIndex(form.directory, directory, candidates);
+        var first_visible: usize = 0;
+        for (form.positions.items) |position| {
+            if (!std.mem.eql(u8, position.directory, directory)) continue;
+            for (candidates, 0..) |candidate, index| {
+                if (std.mem.eql(u8, candidate.path, position.selected)) {
+                    selected_index = index;
+                    first_visible = position.first_visible;
+                    break;
+                }
+            }
+            break;
+        }
         const cwd = try self.gpa.dupeSentinel(u8, directory, 0);
         errdefer self.gpa.free(cwd);
         if (job.browsing_directory) {
@@ -713,7 +764,7 @@ pub fn pollInstallForm(self: *Model) !void {
         form.has_parent = has_parent;
         form.completion = .{ .candidates = candidates, .truncated = completion.truncated };
         form.completion_index = 0;
-        form.first_visible = 0;
+        form.first_visible = first_visible;
         if (job.browsing_directory) {
             form.editing_path = false;
             if (candidates.len > 0) try selectInstallPath(form, selected_index);
@@ -752,6 +803,7 @@ test "path validation opens a user-scoped confirmation and stale results are ign
     try std.testing.expect(form.completion.?.candidates[1].is_directory);
     try std.testing.expect(std.mem.endsWith(u8, form.completion.?.candidates[2].path, "Editor.AppImage"));
     try selectInstallPath(form, 1);
+    form.first_visible = 1;
     try std.testing.expect(try captureInstall(model, &events, .{ .key_press = .{ .codepoint = vaxis.Key.enter } }));
     form.thread.?.join();
     form.thread = null;
@@ -764,6 +816,7 @@ test "path validation opens a user-scoped confirmation and stale results are ign
     form.thread = null;
     try pollInstallForm(model);
     try std.testing.expectEqualStrings(home, form.cwd);
+    try std.testing.expectEqual(@as(usize, 1), form.first_visible);
     try std.testing.expectEqual(@as(usize, 2), form.completion_index);
     try std.testing.expect(std.mem.endsWith(u8, form.completion.?.candidates[form.completion_index - 1].path, "/Documents/"));
     form.field.clearRetainingCapacity();
