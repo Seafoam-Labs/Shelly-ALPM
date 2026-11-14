@@ -8,6 +8,21 @@ pub const NavMode = enum(u8) {
     topbar = 1,
 };
 
+/// Which paint the UI uses: the built-in Pearl-style theme or the desktop's
+/// GTK theme. `system` reproduces the pre-theme rendering exactly.
+pub const ThemeMode = enum(u8) {
+    shelly = 0,
+    system = 1,
+};
+
+/// Color variant for the built-in theme; `follow_system` tracks the desktop's
+/// dark/light preference. In `system` mode it only sets the dark preference.
+pub const ThemeVariant = enum(u8) {
+    follow_system = 0,
+    dark = 1,
+    light = 2,
+};
+
 pub const ShellyTabs = enum(u8) {
     packages = 0,
     aur = 1,
@@ -47,6 +62,8 @@ pub const ShellyConfig = struct {
     // Window & View
     DefaultPageDropDown: ShellyTabs = .packages,
     NavMode: NavMode = .sidebar,
+    ThemeMode: ThemeMode = .shelly,
+    ThemeVariant: ThemeVariant = .follow_system,
     // Internal: persisted window geometry, not exposed in settings UI
     WindowLastWidth: i32 = 0,
     WindowLastHeight: i32 = 0,

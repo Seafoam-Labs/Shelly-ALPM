@@ -3,7 +3,7 @@
 pkgbase=shelly-bin
 pkgname=('shelly-bin' 'shelly-flatpak-backend-bin')
 pkgver=3.2.1
-pkgrel=1
+pkgrel=2
 arch=('x86_64')
 url="https://github.com/Seafoam-Labs/Shelly-ALPM"
 license=('GPL-3.0-only')
@@ -16,9 +16,13 @@ case $_shelly_libalpm in
   *) printf 'SHELLY_LIBALPM must be true or false\n' >&2; return 1 ;;
 esac
 
+# The release tarball bundles only PNG icons; fetch the symbolic tray icons
+# used by shelly-notifications (UseSymbolicTray) from the release tag.
 source=(
     "Shelly-ALPM-linux-x64-${pkgver}.tar.gz::https://github.com/Seafoam-Labs/Shelly-ALPM/releases/download/v${pkgver}/Shelly-ALPM-linux-x64.tar.gz"
     "Shelly-Flatpak-Backend-linux-x64-${pkgver}.tar.gz::https://github.com/Seafoam-Labs/Shelly-ALPM/releases/download/v${pkgver}/Shelly-Flatpak-Backend-linux-x64.tar.gz"
+    "shelly-updates-symbolic-${pkgver}.svg::https://raw.githubusercontent.com/Seafoam-Labs/Shelly-ALPM/v${pkgver}/assets/shelly-updates-symbolic.svg"
+    "shelly-shell-symbolic-${pkgver}.svg::https://raw.githubusercontent.com/Seafoam-Labs/Shelly-ALPM/v${pkgver}/assets/shelly-shell-symbolic.svg"
     'shellybuild.conf'
     'com.shellyorg.shelly.desktop'
     'com.shellyorg.shelly-notifications.desktop'
@@ -27,6 +31,8 @@ source=(
 
 sha256sums=('e548cd3a3322e717cd8d72b9560580753f4d4d06668de76839b4f35d47a677b1'
             'cb0c198505c6a9af334d70a65ccc46adcecb24eb87ff870cad14210ac6218a30'
+            'cfec9274ece30407404b3c41187c465c68f1a6017394ac31c0be937d06f8a850'
+            '27eb0cf269296254f45c68c88a27b0e43817bb6107db8e7edb87ea030730bf25'
             '4126da205e91a3ba3b15453c2aeade92f67e16e3386a52aae32fbd3f2e4af9cc'
             '4b7cb0e42eb322de9eb616d22ca05823f91d178db5b8b67497d497ed495aca9c'
             'cf0dc0a6d1865b9010054b36941e7bf4d445c3e7549219889f07ab08283c5c0f'
@@ -124,6 +130,8 @@ EOF
 
   # Install icon
   install -Dm644 "$srcdir/shellylogo.png" "$pkgdir/usr/share/icons/hicolor/256x256/apps/shelly.png"
+  install -Dm644 "$srcdir/shelly-updates-symbolic-${pkgver}.svg" "$pkgdir/usr/share/icons/hicolor/symbolic/apps/shelly-updates-symbolic.svg"
+  install -Dm644 "$srcdir/shelly-shell-symbolic-${pkgver}.svg" "$pkgdir/usr/share/icons/hicolor/symbolic/apps/shelly-shell-symbolic.svg"
 
   install -Dm644 "$srcdir/shellylogo-tray.png" "$pkgdir/usr/share/icons/hicolor/256x256/apps/shelly-tray.png"
   install -Dm644 "$srcdir/shellylogo-update.png" "$pkgdir/usr/share/icons/hicolor/256x256/apps/shelly-update.png"

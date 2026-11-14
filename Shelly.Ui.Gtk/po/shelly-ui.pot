@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Shelly-ALPM / Shelly: GTK\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-11-04 12:08-0500\n"
+"POT-Creation-Date: 2026-11-13 22:42-0500\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -111,6 +111,9 @@ msgstr ""
 msgid "AppImage"
 msgstr ""
 
+msgid "Install and integrate AppImage bundles."
+msgstr ""
+
 msgid "Search..."
 msgstr ""
 
@@ -192,6 +195,9 @@ msgid "Remove"
 msgstr ""
 
 msgid "AUR"
+msgstr ""
+
+msgid "Build and install packages from the Arch User Repository."
 msgstr ""
 
 msgid "Search the AUR by name or keyword"
@@ -331,6 +337,9 @@ msgstr ""
 msgid "Flatpak"
 msgstr ""
 
+msgid "Manage Flatpak applications and remotes."
+msgstr ""
+
 msgid "Search packages..."
 msgstr ""
 
@@ -410,6 +419,12 @@ msgid "Package actions"
 msgstr ""
 
 msgid "Package"
+msgstr ""
+
+msgid "Packages"
+msgstr ""
+
+msgid "Install and manage software on your system."
 msgstr ""
 
 msgid "Package Group Filter"
@@ -498,6 +513,12 @@ msgstr ""
 msgid "Shelly Search"
 msgstr ""
 
+msgid "Search"
+msgstr ""
+
+msgid "Search across every enabled backend."
+msgstr ""
+
 msgid "Search standard repositories, AUR and Flatpak"
 msgstr ""
 
@@ -525,6 +546,9 @@ msgid ""
 msgstr ""
 
 msgid "Settings"
+msgstr ""
+
+msgid "Make Shelly feel at home on your desktop."
 msgstr ""
 
 msgid "General"
@@ -558,6 +582,15 @@ msgid "Run Tray as cron"
 msgstr ""
 
 msgid "Tray update with ui"
+msgstr ""
+
+msgid "Update terminal"
+msgstr ""
+
+msgid "Terminal command"
+msgstr ""
+
+msgid "Custom update terminal command"
 msgstr ""
 
 msgid "Tray Check Interval (Hours)"
@@ -630,6 +663,12 @@ msgstr ""
 msgid "Navigation style"
 msgstr ""
 
+msgid "Theme"
+msgstr ""
+
+msgid "Color variant"
+msgstr ""
+
 msgid "Advanced"
 msgstr ""
 
@@ -651,9 +690,6 @@ msgstr ""
 msgid "Select Directory"
 msgstr ""
 
-msgid "View Changelog"
-msgstr ""
-
 msgid "v0.0.0"
 msgstr ""
 
@@ -666,19 +702,31 @@ msgstr ""
 msgid "Sponsor"
 msgstr ""
 
+msgid "View Changelog"
+msgstr ""
+
 msgid "Toggle output"
 msgstr ""
 
 msgid "Done"
 msgstr ""
 
+msgid "1 · Download"
+msgstr ""
+
+msgid "2 · Install"
+msgstr ""
+
 msgid "Update"
 msgstr ""
 
-msgid "Available Updates"
+msgid "Updates"
 msgstr ""
 
 msgid "7 of 7 updates included"
+msgstr ""
+
+msgid "System"
 msgstr ""
 
 msgid "Check all enabled sources again"
@@ -687,10 +735,7 @@ msgstr ""
 msgid "Check Again"
 msgstr ""
 
-msgid "Upgrade"
-msgstr ""
-
-msgid "System"
+msgid "Available updates"
 msgstr ""
 
 msgid "Checking for updates…"
@@ -700,6 +745,12 @@ msgid "Your system is up to date"
 msgstr ""
 
 msgid "Could not check for updates."
+msgstr ""
+
+msgid "Upgrading may require administrator authorization."
+msgstr ""
+
+msgid "Upgrade"
 msgstr ""
 
 msgid "Utilities"
@@ -1548,6 +1599,18 @@ msgstr ""
 msgid "AUR enabled"
 msgstr ""
 
+msgid "System GTK"
+msgstr ""
+
+msgid "Follow system"
+msgstr ""
+
+msgid "Dark"
+msgstr ""
+
+msgid "Light"
+msgstr ""
+
 msgid "System Default"
 msgstr ""
 
@@ -1593,7 +1656,10 @@ msgstr ""
 msgid "中文（简体）"
 msgstr ""
 
-msgid "Packages"
+msgid "Default (auto-detect)"
+msgstr ""
+
+msgid "Custom…"
 msgstr ""
 
 msgid "Pending"
@@ -1624,6 +1690,9 @@ msgid "Interrupted"
 msgstr ""
 
 msgid "Cancelled"
+msgstr ""
+
+msgid "Overall progress"
 msgstr ""
 
 msgid "Could not start the requested operation."
@@ -1671,6 +1740,27 @@ msgstr ""
 msgid "Checking disk space"
 msgstr ""
 
+msgid "Preparing transaction"
+msgstr ""
+
+msgid "Downloading packages"
+msgstr ""
+
+msgid "about"
+msgstr ""
+
+msgid "s left"
+msgstr ""
+
+msgid "packages downloaded"
+msgstr ""
+
+msgid "packages processed"
+msgstr ""
+
+msgid "Completed"
+msgstr ""
+
 msgid "Transaction Completed"
 msgstr ""
 
@@ -1711,6 +1801,9 @@ msgstr ""
 msgid "AUR package update"
 msgstr ""
 
+msgid "Include this update"
+msgstr ""
+
 msgid "Update this package"
 msgstr ""
 
@@ -1718,6 +1811,15 @@ msgid "updates included"
 msgstr ""
 
 msgid "Updates included"
+msgstr ""
+
+msgid "No download required"
+msgstr ""
+
+msgid "Total download:"
+msgstr ""
+
+msgid "Upgrade Selected"
 msgstr ""
 
 msgid "Upgrading packages"
@@ -1752,7 +1854,10 @@ msgstr ""
 msgid "Installing Flatpak and AppImage support"
 msgstr ""
 
-msgid "Main menu"
+msgid "BROWSE"
+msgstr ""
+
+msgid "SYSTEM"
 msgstr ""
 
 msgid "Expand sidebar"

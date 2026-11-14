@@ -1,0 +1,567 @@
+/* Shelly built-in theme — dark variant.
+ * Pearl look & feel: tokens from Pearl's Material palette
+ * (pearl/src/theme/material/palette.json), geometry from
+ * pearl/resources/settings-layout.css.
+ *
+ * The @define-color block repaints every rule in the base style.css (which is
+ * written against @theme_* names) plus native GTK widgets. Component rules
+ * are scoped under .shelly-root so system mode never sees them.
+ */
+
+@define-color theme_bg_color #17151c;
+@define-color theme_fg_color #e6e0e9;
+@define-color theme_base_color #141218;
+@define-color theme_text_color #e6e0e9;
+@define-color theme_selected_bg_color #4f378b;
+@define-color theme_selected_fg_color #eaddff;
+@define-color theme_unfocused_bg_color #17151c;
+@define-color theme_unfocused_fg_color #e6e0e9;
+@define-color insensitive_bg_color #211f26;
+@define-color insensitive_fg_color #8f899b;
+@define-color borders #49454e;
+@define-color accent_bg_color #d0bcff;
+@define-color accent_fg_color #381e72;
+@define-color accent_color #d0bcff;
+
+/* libadwaita-style names used by adw-gtk3 and friends; without these the
+   theme resolves labels/views/cards against the desktop palette. */
+@define-color window_bg_color #17151c;
+@define-color window_fg_color #e6e0e9;
+@define-color view_bg_color #141218;
+@define-color view_fg_color #e6e0e9;
+@define-color headerbar_bg_color #121017;
+@define-color headerbar_fg_color #e6e0e9;
+@define-color headerbar_border_color #2b2930;
+@define-color headerbar_backdrop_color #121017;
+@define-color headerbar_shade_color #2b2930;
+@define-color headerbar_darker_shade_color #2b2930;
+@define-color sidebar_bg_color #1b1922;
+@define-color sidebar_fg_color #e6e0e9;
+@define-color sidebar_backdrop_color #1b1922;
+@define-color sidebar_border_color #2b2930;
+@define-color sidebar_shade_color #2b2930;
+@define-color secondary_sidebar_bg_color #1b1922;
+@define-color secondary_sidebar_fg_color #e6e0e9;
+@define-color secondary_sidebar_backdrop_color #1b1922;
+@define-color secondary_sidebar_border_color #2b2930;
+@define-color secondary_sidebar_shade_color #2b2930;
+@define-color card_bg_color #232029;
+@define-color card_fg_color #e6e0e9;
+@define-color card_shade_color #2b2930;
+@define-color dialog_bg_color #232029;
+@define-color dialog_fg_color #e6e0e9;
+@define-color popover_bg_color #232029;
+@define-color popover_fg_color #e6e0e9;
+@define-color popover_shade_color #49454e;
+@define-color thumbnail_bg_color #2b2930;
+@define-color thumbnail_fg_color #e6e0e9;
+@define-color overview_bg_color #232029;
+@define-color overview_fg_color #e6e0e9;
+@define-color shade_color alpha(#e6e0e9, 0.08);
+@define-color scrollbar_outline_color #17151c;
+
+/* Window chrome. The proportional stack matches the approved mockup even
+   when the desktop font is monospace. */
+.shelly-root {
+  background: @theme_bg_color;
+  border-radius: 16px;
+  border: 1px solid #8fd4da;
+  font-family: "Inter", "Cantarell", "Segoe UI", system-ui, sans-serif;
+  font-size: 14px;
+}
+/* Plain labels inherit; pin them so desktop themes cannot dim row titles. */
+.shelly-root label {
+  color: @theme_fg_color;
+}
+.shelly-root link,
+.shelly-root link label,
+.shelly-root button.link label {
+  color: @accent_color;
+}
+.shelly-root headerbar {
+  background: #121017;
+  min-height: 50px;
+  padding: 0 12px;
+  border-bottom: 1px solid alpha(#e6e0e9, 0.07);
+  box-shadow: none;
+}
+.shelly-brand-dot {
+  background: #d0bcff;
+  border-radius: 50%;
+  box-shadow: 0 0 0 3px alpha(#d0bcff, 0.22);
+}
+.shelly-brand-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #e6e0e9;
+}
+
+/* Sidebar / topbar */
+.shelly-root .nav-rail {
+  background: #1b1922;
+  padding: 6px 12px 18px;
+  border-right: 1px solid alpha(#e6e0e9, 0.07);
+}
+.shelly-root .nav-topbar {
+  background: #121017;
+  padding: 6px 12px;
+  border-bottom: 1px solid alpha(#e6e0e9, 0.07);
+}
+.shelly-root .nav-group {
+  color: #8f899b;
+}
+
+/* Page headers */
+.shelly-root .page-head {
+  padding: 24px 30px 16px;
+}
+.shelly-root .page-heading {
+  font-size: 2em;
+  font-weight: 500;
+  letter-spacing: -0.6px;
+  color: #e6e0e9;
+}
+.shelly-root .page-subtitle {
+  color: #b3adbe;
+  margin-top: 6px;
+}
+
+/* Cards */
+.shelly-root .page-body {
+  margin: 0 30px 24px;
+}
+.shelly-root listbox {
+  background: transparent;
+}
+.shelly-root listbox row {
+  padding: 14px 20px;
+}
+.shelly-root listbox row:not(:first-child) {
+  border-top: 1px solid alpha(#e6e0e9, 0.08);
+}
+.shelly-root .toolbar-card {
+  margin: 0 30px 18px;
+  padding: 14px 16px;
+  background: #232029;
+  border-radius: 16px;
+}
+.shelly-root .pkg-card,
+.shelly-root .utility-row,
+.shelly-root .settings-card {
+  background: #232029;
+  border-radius: 16px;
+  border: none;
+  box-shadow: none;
+}
+.shelly-root .pkg-card {
+  padding: 16px 18px;
+}
+.shelly-root .pkg-card:hover {
+  background: #2b2930;
+}
+.shelly-root .settings-card {
+  padding: 0;
+  background: #232029;
+}
+.shelly-root .settings-form-row {
+  padding: 14px 20px;
+  margin-bottom: 0;
+}
+.shelly-root .settings-form-row:not(:first-child) {
+  border-top: 1px solid alpha(#e6e0e9, 0.08);
+}
+.shelly-root stackswitcher button:checked {
+  background: #4f378b;
+  border-color: transparent;
+}
+.shelly-root stackswitcher button:checked label {
+  color: #eaddff;
+  font-weight: 600;
+}
+.shelly-root .settings-footer {
+  border-top: 1px solid alpha(#e6e0e9, 0.1);
+  padding: 12px 24px;
+  background: #17151c;
+}
+
+/* Buttons: generic pill first, specific overrides after */
+.shelly-root button {
+  border-radius: 999px;
+  background: #2b2930;
+  border: 1px solid #49454e;
+  color: #e6e0e9;
+  min-height: 34px;
+  padding: 0 18px;
+  box-shadow: none;
+}
+.shelly-root button:hover {
+  background: #3a3740;
+}
+.shelly-root button.flat {
+  background: transparent;
+  border: none;
+}
+.shelly-root button.flat:hover {
+  background: alpha(#e6e0e9, 0.06);
+}
+.shelly-root button.suggested-action {
+  background: #d0bcff;
+  color: #381e72;
+  border: none;
+}
+/* The .shelly-root label pin overrides the button's inherited color, so
+   restate the accent foreground on the label/image themselves. */
+.shelly-root button.suggested-action label,
+.shelly-root button.suggested-action image {
+  color: #381e72;
+}
+.shelly-root button.suggested-action:hover {
+  background: #eaddff;
+}
+.shelly-root button.suggested-action:active {
+  background: #bda6ee;
+}
+.shelly-root button.suggested-action:disabled {
+  background: alpha(#d0bcff, 0.12);
+}
+.shelly-root button.suggested-action:disabled label,
+.shelly-root button.suggested-action:disabled image {
+  color: #8f899b;
+}
+.shelly-root button.destructive-action {
+  background: alpha(@error_color, 0.15);
+  color: @error_color;
+  border: none;
+}
+.shelly-root headerbar button.titlebutton,
+.shelly-root headerbar windowcontrols button {
+  border-radius: 50%;
+  min-width: 32px;
+  min-height: 32px;
+  padding: 0;
+  background: #2b2930;
+  color: #e6e0e9;
+  border: none;
+}
+.shelly-root headerbar button.titlebutton:hover,
+.shelly-root headerbar windowcontrols button:hover {
+  background: #3a3740;
+}
+
+/* Navigation */
+.shelly-root .nav-btn {
+  border-radius: 11px;
+  min-height: 44px;
+  padding: 0 12px;
+  margin: 2px 0;
+  background: transparent;
+  border: none;
+  color: #e6e0e9;
+}
+.shelly-root .nav-btn:hover {
+  background: alpha(#e6e0e9, 0.06);
+}
+/* button.nav-selected outranks button.flat, which the nav buttons carry. */
+.shelly-root button.nav-selected,
+.shelly-root button.nav-selected:hover {
+  background: #4f378b;
+}
+.shelly-root .nav-selected label {
+  color: #eaddff;
+  font-weight: 600;
+}
+.shelly-root .nav-selected image {
+  color: #eaddff;
+}
+
+/* Entries, dropdowns, popovers */
+.shelly-root entry,
+.shelly-root searchentry,
+.shelly-root searchentry entry {
+  background: #141218;
+  border: 1px solid #49454e;
+  border-radius: 10px;
+  min-height: 36px;
+  color: #e6e0e9;
+  box-shadow: none;
+}
+.shelly-root entry:focus-within,
+.shelly-root searchentry:focus-within {
+  border-color: #d0bcff;
+}
+.shelly-root dropdown > button {
+  background: #2b2930;
+  border: 1px solid #49454e;
+  border-radius: 10px;
+  min-height: 36px;
+  color: #e6e0e9;
+}
+.shelly-root popover > contents {
+  background: #232029;
+  border: 1px solid #49454e;
+  border-radius: 12px;
+  color: #e6e0e9;
+  box-shadow: 0 8px 24px alpha(black, 0.4);
+}
+.shelly-root popover > contents button {
+  border-radius: 8px;
+  background: transparent;
+  border: none;
+  min-height: 30px;
+}
+.shelly-root popover > contents button:hover {
+  background: alpha(#e6e0e9, 0.08);
+}
+.shelly-root spinbutton {
+  background: #141218;
+  border: 1px solid #49454e;
+  border-radius: 10px;
+  color: #e6e0e9;
+}
+.shelly-root spinbutton button {
+  border-radius: 0;
+  background: transparent;
+  border: none;
+  min-height: 20px;
+  padding: 0 6px;
+}
+
+/* Switches, checks */
+.shelly-root switch {
+  background: #2b2930;
+  border: 1px solid #49454e;
+  border-radius: 999px;
+  box-shadow: none;
+}
+.shelly-root switch:checked {
+  background: #d0bcff;
+  border-color: #d0bcff;
+}
+.shelly-root switch slider {
+  background: #17151c;
+  border-radius: 50%;
+  border: none;
+  box-shadow: none;
+}
+.shelly-root switch:checked slider {
+  background: #381e72;
+}
+.shelly-root checkbutton check,
+.shelly-root checkbutton radio {
+  border-radius: 5px;
+  border: 2px solid #8f899b;
+  background: transparent;
+  box-shadow: none;
+}
+.shelly-root checkbutton radio {
+  border-radius: 50%;
+}
+.shelly-root checkbutton check:checked,
+.shelly-root checkbutton radio:checked {
+  background: #d0bcff;
+  border-color: #d0bcff;
+  color: #381e72;
+}
+
+/* Scrollbars, separators, misc. The trough is a visible pill rail; the
+   accent thumb rides inside it with 2px of rail showing on each side. */
+.shelly-root scrollbar trough {
+  background: alpha(#e6e0e9, 0.08);
+  border: none;
+  border-radius: 999px;
+  min-width: 10px;
+  min-height: 10px;
+  margin: 2px;
+}
+.shelly-root scrollbar slider {
+  background: alpha(#d0bcff, 0.45);
+  border: none;
+  border-radius: 999px;
+  min-width: 6px;
+  min-height: 6px;
+  margin: 2px;
+}
+.shelly-root scrollbar slider:hover {
+  background: alpha(#d0bcff, 0.7);
+}
+.shelly-root scrollbar slider:active {
+  background: alpha(#d0bcff, 0.85);
+}
+/* Stock themes collapse idle overlay scrollbars to a hairline; keep the
+   rail geometry so the track stays legible. */
+.shelly-root scrollbar.overlay-indicator:not(.dragging):not(.hovering) trough {
+  background: alpha(#e6e0e9, 0.06);
+}
+.shelly-root scrollbar.overlay-indicator:not(.dragging):not(.hovering) slider {
+  min-width: 6px;
+  min-height: 6px;
+  margin: 2px;
+  background: alpha(#d0bcff, 0.35);
+}
+.shelly-root separator {
+  background: alpha(#e6e0e9, 0.1);
+}
+.shelly-root .pill {
+  background: alpha(#e6e0e9, 0.08);
+  color: #b3adbe;
+  border-radius: 999px;
+}
+.shelly-root .pkg-status {
+  border-radius: 999px;
+}
+.shelly-root .spec-row {
+  border-bottom: 1px solid alpha(#e6e0e9, 0.08);
+}
+.shelly-root flowboxchild:selected {
+  background: alpha(#4f378b, 0.6);
+  border-radius: 12px;
+}
+.shelly-root flowboxchild:focus-visible {
+  outline: 2px solid #d0bcff;
+  outline-offset: -3px;
+  border-radius: 12px;
+}
+.shelly-root textview text,
+.shelly-root .terminal-output text {
+  background: transparent;
+  color: #e6e0e9;
+}
+.shelly-root .toast-card {
+  border-radius: 12px;
+}
+.shelly-root .question-layer {
+  background: #232029;
+  border: 1px solid #49454e;
+  border-radius: 16px;
+}
+.shelly-root .lockout-card {
+  background: #232029;
+  border-radius: 16px;
+}
+.shelly-root .drop-zone {
+  border-color: #8f899b;
+  border-radius: 16px;
+}
+.shelly-root .drop-zone.drag-hover {
+  border-color: #d0bcff;
+  background: alpha(#d0bcff, 0.1);
+}
+
+/* Focus */
+.shelly-root button:focus-visible,
+.shelly-root entry:focus-visible,
+.shelly-root switch:focus-visible,
+.shelly-root checkbutton:focus-visible {
+  outline: 2px solid #d0bcff;
+  outline-offset: -3px;
+}
+
+/* Updates / transaction redesign (docs/updates-redesign): Pearl geometry
+   for the semantic classes added to the base style.css. */
+.shelly-root .chip {
+  border-radius: 999px;
+  background: alpha(#e6e0e9, 0.08);
+  border: none;
+  color: #b3adbe;
+  padding: 6px 14px;
+  min-height: 30px;
+}
+.shelly-root .chip:checked {
+  background: #4f378b;
+  color: #eaddff;
+}
+.shelly-root .updates-card {
+  background: #232029;
+  border-radius: 16px;
+}
+.shelly-root .updates-card-title {
+  padding: 16px 20px 4px;
+}
+.shelly-root .updates-card-sub {
+  padding: 0 20px 8px;
+  color: #b3adbe;
+}
+.shelly-root .action-bar {
+  padding: 14px 20px;
+}
+.shelly-root .action-bar-note {
+  color: #b3adbe;
+}
+
+.shelly-root .overall-card {
+  background: #232029;
+  border-radius: 16px;
+  padding: 20px 22px 18px;
+  margin: 0 16px 14px;
+}
+.shelly-root .overall-title {
+  font-size: 16px;
+}
+.shelly-root .overall-pct {
+  font-size: 26px;
+  letter-spacing: -0.5px;
+  color: #d0bcff;
+}
+.shelly-root .overall-meta {
+  color: #b3adbe;
+}
+.shelly-root .phase-chip {
+  border-radius: 999px;
+  background: alpha(#e6e0e9, 0.08);
+  color: #b3adbe;
+}
+.shelly-root .phase-chip.active {
+  background: #4f378b;
+  color: #eaddff;
+}
+.shelly-root .phase-chip.done {
+  background: alpha(@success_color, 0.14);
+  color: @success_color;
+}
+.shelly-root .phase-chip.err {
+  background: alpha(@error_color, 0.14);
+  color: @error_color;
+}
+
+.shelly-root progressbar trough {
+  min-height: 12px;
+  border-radius: 999px;
+  background: alpha(#e6e0e9, 0.09);
+  border: none;
+  box-shadow: none;
+}
+.shelly-root progressbar progress {
+  min-height: 12px;
+  border-radius: 999px;
+  background: #d0bcff;
+  border: none;
+}
+.shelly-root .bar-thin trough {
+  min-height: 4px;
+}
+.shelly-root .bar-thin progress {
+  min-height: 4px;
+}
+.shelly-root .overall-card.overall-ok progressbar progress { background: @success_color; }
+.shelly-root .overall-card.overall-err progressbar progress { background: @error_color; }
+.shelly-root .overall-card.overall-warn progressbar progress { background: @warning_color; }
+
+.shelly-root .urow {
+  padding: 8px 20px;
+}
+.shelly-root .urow:not(:last-child) {
+  border-bottom: 1px solid alpha(#e6e0e9, 0.07);
+}
+.shelly-root .urow-icon {
+  background: alpha(#d0bcff, 0.14);
+  color: #d0bcff;
+  border-radius: 8px;
+}
+.shelly-root .urow-sub,
+.shelly-root .urow-percent {
+  color: #b3adbe;
+}
+.shelly-root .pkg-status.mini {
+  font-size: 11px;
+  padding: 3px 10px;
+}
