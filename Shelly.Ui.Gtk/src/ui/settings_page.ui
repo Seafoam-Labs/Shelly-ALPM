@@ -22,6 +22,37 @@
             <property name="margin-bottom">20</property>
             <property name="spacing">15</property>
             <child>
+              <object class="GtkBox">
+                <property name="orientation">vertical</property>
+                <style>
+                  <class name="page-head"/>
+                  <class name="page-head-added"/>
+                </style>
+                <child>
+                  <object class="GtkLabel">
+                    <property name="label" translatable="yes">Settings</property>
+                    <property name="xalign">0</property>
+                    <property name="accessible-role">heading</property>
+                    <accessibility>
+                      <property name="level">1</property>
+                    </accessibility>
+                    <style>
+                      <class name="page-heading"/>
+                    </style>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkLabel">
+                    <property name="label" translatable="yes">Make Shelly feel at home on your desktop.</property>
+                    <property name="xalign">0</property>
+                    <style>
+                      <class name="page-subtitle"/>
+                    </style>
+                  </object>
+                </child>
+              </object>
+            </child>
+            <child>
               <object class="GtkStackSwitcher">
                 <property name="stack">settings_stack</property>
                 <property name="halign">center</property>
@@ -46,15 +77,21 @@
                             <property name="margin-end">20</property>
                             <property name="margin-top">20</property>
                             <property name="margin-bottom">20</property>
-                            <property name="spacing">20</property>
+                            <property name="spacing">0</property>
                             <property name="hexpand">true</property>
                             <property name="vexpand">true</property>
                             <property name="halign">center</property>
                             <property name="width-request">600</property>
+                            <style>
+                              <class name="settings-card"/>
+                            </style>
                             <child>
                               <object class="GtkBox">
                                 <property name="orientation">horizontal</property>
                                 <property name="spacing">12</property>
+                                <style>
+                                  <class name="settings-form-row"/>
+                                </style>
                                 <child>
                                   <object class="GtkLabel" id="aur_row_label">
                                     <property name="label" translatable="yes">Enable AUR</property>
@@ -76,6 +113,9 @@
                               <object class="GtkBox">
                                 <property name="orientation">horizontal</property>
                                 <property name="spacing">12</property>
+                                <style>
+                                  <class name="settings-form-row"/>
+                                </style>
                                 <child>
                                   <object class="GtkLabel">
                                     <property name="label" translatable="yes">Language</property>
@@ -94,6 +134,9 @@
                               <object class="GtkBox">
                                 <property name="orientation">horizontal</property>
                                 <property name="spacing">12</property>
+                                <style>
+                                  <class name="settings-form-row"/>
+                                </style>
                                 <child>
                                   <object class="GtkLabel">
                                     <property name="label" translatable="yes">Enable Flatpak</property>
@@ -115,6 +158,9 @@
                               <object class="GtkBox">
                                 <property name="orientation">horizontal</property>
                                 <property name="spacing">12</property>
+                                <style>
+                                  <class name="settings-form-row"/>
+                                </style>
                                 <child>
                                   <object class="GtkLabel">
                                     <property name="label" translatable="yes">Enable Recommended</property>
@@ -136,6 +182,9 @@
                               <object class="GtkBox">
                                 <property name="orientation">horizontal</property>
                                 <property name="spacing">12</property>
+                                <style>
+                                  <class name="settings-form-row"/>
+                                </style>
                                 <child>
                                   <object class="GtkLabel">
                                     <property name="label" translatable="yes">Enable AppImage</property>
@@ -157,6 +206,9 @@
                               <object class="GtkBox">
                                 <property name="orientation">horizontal</property>
                                 <property name="spacing">12</property>
+                                <style>
+                                  <class name="settings-form-row"/>
+                                </style>
                                 <child>
                                   <object class="GtkLabel">
                                     <property name="label" translatable="yes">Enable Tray Icon</property>
@@ -441,15 +493,21 @@
                             <property name="margin-end">20</property>
                             <property name="margin-top">20</property>
                             <property name="margin-bottom">20</property>
-                            <property name="spacing">20</property>
+                            <property name="spacing">0</property>
                             <property name="hexpand">true</property>
                             <property name="vexpand">true</property>
                             <property name="halign">center</property>
                             <property name="width-request">600</property>
+                            <style>
+                              <class name="settings-card"/>
+                            </style>
                             <child>
                               <object class="GtkBox">
                                 <property name="orientation">horizontal</property>
                                 <property name="spacing">12</property>
+                                <style>
+                                  <class name="settings-form-row"/>
+                                </style>
                                 <child>
                                   <object class="GtkLabel">
                                     <property name="label" translatable="yes">Icons Enabled</property>
@@ -494,6 +552,9 @@
                               <object class="GtkBox">
                                 <property name="orientation">horizontal</property>
                                 <property name="spacing">12</property>
+                                <style>
+                                  <class name="settings-form-row"/>
+                                </style>
                                 <child>
                                   <object class="GtkLabel">
                                     <property name="label" translatable="yes">Tray Icon</property>
@@ -520,6 +581,9 @@
                               <object class="GtkBox">
                                 <property name="orientation">horizontal</property>
                                 <property name="spacing">12</property>
+                                <style>
+                                  <class name="settings-form-row"/>
+                                </style>
                                 <child>
                                   <object class="GtkLabel">
                                     <property name="label" translatable="yes">Tray Updates Icon</property>
@@ -564,6 +628,9 @@
                               <object class="GtkBox">
                                 <property name="orientation">horizontal</property>
                                 <property name="spacing">12</property>
+                                <style>
+                                  <class name="settings-form-row"/>
+                                </style>
                                 <child>
                                   <object class="GtkLabel">
                                     <property name="label" translatable="yes">Navigation style</property>
@@ -574,6 +641,54 @@
                                 <child>
                                   <object class="GtkDropDown" id="nav_mode_drop">
                                     <property name="halign">end</property>
+                                  </object>
+                                </child>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="GtkBox">
+                                <property name="orientation">horizontal</property>
+                                <property name="spacing">12</property>
+                                <style>
+                                  <class name="settings-form-row"/>
+                                </style>
+                                <child>
+                                  <object class="GtkLabel">
+                                    <property name="label" translatable="yes">Theme</property>
+                                    <property name="halign">start</property>
+                                    <property name="hexpand">true</property>
+                                  </object>
+                                </child>
+                                <child>
+                                  <object class="GtkDropDown" id="theme_mode_drop">
+                                    <property name="halign">end</property>
+                                    <accessibility>
+                                      <property name="label" translatable="yes">Theme</property>
+                                    </accessibility>
+                                  </object>
+                                </child>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="GtkBox">
+                                <property name="orientation">horizontal</property>
+                                <property name="spacing">12</property>
+                                <style>
+                                  <class name="settings-form-row"/>
+                                </style>
+                                <child>
+                                  <object class="GtkLabel">
+                                    <property name="label" translatable="yes">Color variant</property>
+                                    <property name="halign">start</property>
+                                    <property name="hexpand">true</property>
+                                  </object>
+                                </child>
+                                <child>
+                                  <object class="GtkDropDown" id="theme_variant_drop">
+                                    <property name="halign">end</property>
+                                    <accessibility>
+                                      <property name="label" translatable="yes">Color variant</property>
+                                    </accessibility>
                                   </object>
                                 </child>
                               </object>
@@ -600,15 +715,21 @@
                             <property name="margin-end">20</property>
                             <property name="margin-top">20</property>
                             <property name="margin-bottom">20</property>
-                            <property name="spacing">20</property>
+                            <property name="spacing">0</property>
                             <property name="hexpand">true</property>
                             <property name="vexpand">true</property>
                             <property name="halign">center</property>
                             <property name="width-request">600</property>
+                            <style>
+                              <class name="settings-card"/>
+                            </style>
                             <child>
                               <object class="GtkBox">
                                 <property name="orientation">horizontal</property>
                                 <property name="spacing">12</property>
+                                <style>
+                                  <class name="settings-form-row"/>
+                                </style>
                                 <child>
                                   <object class="GtkLabel">
                                     <property name="label" translatable="yes">Remove Cache on Uninstall</property>
@@ -630,6 +751,9 @@
                               <object class="GtkBox">
                                 <property name="orientation">horizontal</property>
                                 <property name="spacing">12</property>
+                                <style>
+                                  <class name="settings-form-row"/>
+                                </style>
                                 <child>
                                   <object class="GtkLabel">
                                     <property name="label" translatable="yes">No Confirm</property>
@@ -651,6 +775,9 @@
                               <object class="GtkBox">
                                 <property name="orientation">horizontal</property>
                                 <property name="spacing">12</property>
+                                <style>
+                                  <class name="settings-form-row"/>
+                                </style>
                                 <child>
                                   <object class="GtkLabel">
                                     <property name="label" translatable="yes">Enable Shelly Search</property>
@@ -672,6 +799,9 @@
                               <object class="GtkBox">
                                 <property name="orientation">horizontal</property>
                                 <property name="spacing">12</property>
+                                <style>
+                                  <class name="settings-form-row"/>
+                                </style>
                                 <child>
                                   <object class="GtkLabel">
                                     <property name="label" translatable="yes">Enable Atoll Powered AUR</property>
@@ -721,26 +851,15 @@
               <object class="GtkBox">
                 <property name="orientation">horizontal</property>
                 <property name="spacing">10</property>
-                <child>
-                  <object class="GtkButton" id="save_button">
-                    <property name="label" translatable="yes">Save</property>
-                    <property name="halign">start</property>
-                    <style>
-                      <class name="suggested-action"/>
-                    </style>
-                  </object>
-                </child>
-                <child>
-                  <object class="GtkButton" id="changelog_button">
-                    <property name="label" translatable="yes">View Changelog</property>
-                  </object>
-                </child>
+                <style>
+                  <class name="settings-footer"/>
+                </style>
                 <child>
                   <object class="GtkBox">
                     <property name="orientation">horizontal</property>
                     <property name="spacing">10</property>
                     <property name="hexpand">true</property>
-                    <property name="halign">end</property>
+                    <property name="halign">start</property>
                     <child>
                       <object class="GtkLabel" id="version_label">
                         <property name="margin-start">20</property>
@@ -769,6 +888,20 @@
                         <property name="uri">https://www.patreon.com/cw/SeafoamLabs</property>
                       </object>
                     </child>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkButton" id="changelog_button">
+                    <property name="label" translatable="yes">View Changelog</property>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkButton" id="save_button">
+                    <property name="label" translatable="yes">Save</property>
+                    <property name="halign">end</property>
+                    <style>
+                      <class name="suggested-action"/>
+                    </style>
                   </object>
                 </child>
               </object>

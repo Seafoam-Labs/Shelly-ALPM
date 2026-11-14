@@ -13,6 +13,37 @@
         <property name="vexpand">true</property>
          <property name="margin-bottom">10</property>
         <child>
+            <object class="GtkBox">
+                <property name="orientation">vertical</property>
+                <style>
+                    <class name="page-head"/>
+                    <class name="page-head-added"/>
+                </style>
+                <child>
+                    <object class="GtkLabel">
+                        <property name="label" translatable="yes">Packages</property>
+                        <property name="xalign">0</property>
+                        <property name="accessible-role">heading</property>
+                        <accessibility>
+                            <property name="level">1</property>
+                        </accessibility>
+                        <style>
+                            <class name="page-heading"/>
+                        </style>
+                    </object>
+                </child>
+                <child>
+                    <object class="GtkLabel">
+                        <property name="label" translatable="yes">Install and manage software on your system.</property>
+                        <property name="xalign">0</property>
+                        <style>
+                            <class name="page-subtitle"/>
+                        </style>
+                    </object>
+                </child>
+            </object>
+        </child>
+        <child>
             <object class="GtkOverlay" id="PackageWindow">
                 <property name="hexpand">true</property>
                 <property name="vexpand">true</property>
@@ -24,13 +55,12 @@
                         <child>
                             <object class="GtkBox">
                                 <property name="halign">baseline</property>
-                                <property name="margin-bottom">10</property>
-                                <property name="margin-end">10</property>
-                                <property name="margin-start">10</property>
-                                <property name="margin-top">10</property>
                                 <property name="orientation">horizontal</property>
                                 <property name="spacing">5</property>
                                 <property name="valign">baseline-center</property>
+                                <style>
+                                    <class name="toolbar-card"/>
+                                </style>
                                 <child>
                                   <object class="GtkSearchEntry" id="search_entry">
                                       <property name="placeholder-text" translatable="yes">Search packages...</property>

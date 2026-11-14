@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shelly-ui 2.2.4.1\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-11-04 12:08-0500\n"
+"POT-Creation-Date: 2026-11-13 21:12-0500\n"
 "PO-Revision-Date: 2026-11-06 10:18+0100\n"
 "Last-Translator: Roxfr <roxfr-dev@outlook.com>\n"
 "Language-Team: French\n"
@@ -126,6 +126,10 @@ msgstr "Ignorer"
 msgid "AppImage"
 msgstr "AppImage"
 
+#| msgid "Install a new AppImage from a file"
+msgid "Install and integrate AppImage bundles."
+msgstr ""
+
 msgid "Search..."
 msgstr "Rechercher..."
 
@@ -216,6 +220,10 @@ msgstr "Supprimer"
 
 msgid "AUR"
 msgstr "AUR"
+
+#| msgid "Show results from the Arch User Repository"
+msgid "Build and install packages from the Arch User Repository."
+msgstr ""
 
 msgid "Search the AUR by name or keyword"
 msgstr "Rechercher dans l'AUR par nom ou mot-clé"
@@ -357,6 +365,10 @@ msgstr "Historique des versions"
 msgid "Flatpak"
 msgstr "Flatpak"
 
+#| msgid "No Flatpak applications are available."
+msgid "Manage Flatpak applications and remotes."
+msgstr ""
+
 msgid "Search packages..."
 msgstr "Rechercher des paquets..."
 
@@ -437,6 +449,12 @@ msgstr "Actions sur les paquets"
 
 msgid "Package"
 msgstr "Paquet"
+
+msgid "Packages"
+msgstr "Paquets"
+
+msgid "Install and manage software on your system."
+msgstr ""
 
 msgid "Package Group Filter"
 msgstr "Filtre des groupes de paquets"
@@ -530,6 +548,13 @@ msgstr ""
 msgid "Shelly Search"
 msgstr "Recherche Shelly"
 
+#| msgid "Search..."
+msgid "Search"
+msgstr ""
+
+msgid "Search across every enabled backend."
+msgstr ""
+
 msgid "Search standard repositories, AUR and Flatpak"
 msgstr "Rechercher dans les dépôts standards, l'AUR et Flatpak"
 
@@ -563,6 +588,9 @@ msgstr ""
 msgid "Settings"
 msgstr "Paramètres"
 
+msgid "Make Shelly feel at home on your desktop."
+msgstr ""
+
 msgid "General"
 msgstr "Général"
 
@@ -595,6 +623,16 @@ msgstr "Exécuter la zone de notification via cron"
 
 msgid "Tray update with ui"
 msgstr "Mise à jour de la zone de notification avec l'interface"
+
+#| msgid "Update Strategy"
+msgid "Update terminal"
+msgstr ""
+
+msgid "Terminal command"
+msgstr ""
+
+msgid "Custom update terminal command"
+msgstr ""
 
 msgid "Tray Check Interval (Hours)"
 msgstr "Intervalle de vérification de la zone de notification (heures)"
@@ -670,6 +708,12 @@ msgstr "Page par défaut"
 msgid "Navigation style"
 msgstr "Style de navigation"
 
+msgid "Theme"
+msgstr ""
+
+msgid "Color variant"
+msgstr ""
+
 msgid "Advanced"
 msgstr "Avancé"
 
@@ -691,9 +735,6 @@ msgstr "Chemin d'installation des AppImages"
 msgid "Select Directory"
 msgstr "Sélectionner un répertoire"
 
-msgid "View Changelog"
-msgstr "Afficher le journal des modifications"
-
 msgid "v0.0.0"
 msgstr "v0.0.0"
 
@@ -705,6 +746,9 @@ msgstr "Flux de la communauté"
 
 msgid "Sponsor"
 msgstr "Sponsoriser"
+
+msgid "View Changelog"
+msgstr "Afficher le journal des modifications"
 
 msgid "Toggle output"
 msgstr "Afficher/masquer la sortie"
@@ -1644,6 +1688,20 @@ msgstr "Service de démarrage systemd supprimé."
 msgid "AUR enabled"
 msgstr "AUR activé"
 
+#| msgid "System Tray"
+msgid "System GTK"
+msgstr ""
+
+#| msgid "system"
+msgid "Follow system"
+msgstr ""
+
+msgid "Dark"
+msgstr ""
+
+msgid "Light"
+msgstr ""
+
 msgid "System Default"
 msgstr "Valeur par défaut du système"
 
@@ -1689,8 +1747,12 @@ msgstr "Turc"
 msgid "中文（简体）"
 msgstr "Chinois (simplifié)"
 
-msgid "Packages"
-msgstr "Paquets"
+#| msgid "Default page"
+msgid "Default (auto-detect)"
+msgstr ""
+
+msgid "Custom…"
+msgstr ""
 
 msgid "Pending"
 msgstr "En attente"
@@ -1855,8 +1917,11 @@ msgstr ""
 msgid "Installing Flatpak and AppImage support"
 msgstr "Installation du support Flatpak et AppImage"
 
-msgid "Main menu"
-msgstr "Menu principal"
+msgid "BROWSE"
+msgstr ""
+
+msgid "SYSTEM"
+msgstr ""
 
 msgid "Expand sidebar"
 msgstr "Élargir la barre latérale"

@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Shelly-ALPM / Shelly: UI\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-11-04 12:08-0500\n"
+"POT-Creation-Date: 2026-11-13 21:12-0500\n"
 "PO-Revision-Date: 2026-09-09 12:00+0400\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: Azerbaijani <az@li.org>\n"
@@ -123,6 +123,9 @@ msgstr "Ötür"
 msgid "AppImage"
 msgstr "AppImage"
 
+msgid "Install and integrate AppImage bundles."
+msgstr ""
+
 msgid "Search..."
 msgstr "Axtarış..."
 
@@ -209,6 +212,9 @@ msgstr "Sil"
 
 msgid "AUR"
 msgstr "AUR"
+
+msgid "Build and install packages from the Arch User Repository."
+msgstr ""
 
 msgid "Search the AUR by name or keyword"
 msgstr "AUR anbarında ada və ya açar sözə görə axtarış aparın"
@@ -351,6 +357,9 @@ msgstr "Versiya tarixçəsi"
 msgid "Flatpak"
 msgstr "Flatpak"
 
+msgid "Manage Flatpak applications and remotes."
+msgstr ""
+
 msgid "Search packages..."
 msgstr "Paket axtarışı..."
 
@@ -432,6 +441,12 @@ msgstr "Paket əməliyyatları"
 msgid "Package"
 msgstr "Paket"
 
+msgid "Packages"
+msgstr "Paketlər"
+
+msgid "Install and manage software on your system."
+msgstr ""
+
 msgid "Package Group Filter"
 msgstr "Paket qrupu süzgəci"
 
@@ -500,15 +515,12 @@ msgstr "Seafoam Labs tərəfindən seçilmiş tövsiyələr"
 msgid "Refresh the recommended packages list from the network"
 msgstr "Tövsiyə olunan paketlərin siyahısını şəbəkədən yenilə"
 
-#| msgid "Mixed selection"
 msgid "Clear selection"
 msgstr ""
 
-#| msgid "Recommended Packages"
 msgid "Deselect all recommended packages"
 msgstr ""
 
-#| msgid "Install the selected packages?"
 msgid "Install all selected packages in one transaction"
 msgstr ""
 
@@ -523,6 +535,12 @@ msgstr ""
 
 msgid "Shelly Search"
 msgstr "Shelly axtarışı"
+
+msgid "Search"
+msgstr ""
+
+msgid "Search across every enabled backend."
+msgstr ""
 
 msgid "Search standard repositories, AUR and Flatpak"
 msgstr "Standart anbarlarda, AUR və Flatpak mənbələrində axtarış apar"
@@ -554,6 +572,9 @@ msgstr ""
 
 msgid "Settings"
 msgstr "Parametrlər"
+
+msgid "Make Shelly feel at home on your desktop."
+msgstr ""
 
 msgid "General"
 msgstr "Ümumi"
@@ -587,6 +608,15 @@ msgstr "Sistem treyini cron tapşırığı kimi işə sal"
 
 msgid "Tray update with ui"
 msgstr "Sistem treyindən interfeys vasitəsilə yeniləmə"
+
+msgid "Update terminal"
+msgstr ""
+
+msgid "Terminal command"
+msgstr ""
+
+msgid "Custom update terminal command"
+msgstr ""
 
 msgid "Tray Check Interval (Hours)"
 msgstr "Sistem treyində yoxlama intervalı (saat)"
@@ -662,6 +692,12 @@ msgstr "Standart səhifə"
 msgid "Navigation style"
 msgstr "Naviqasiya üslubu"
 
+msgid "Theme"
+msgstr ""
+
+msgid "Color variant"
+msgstr ""
+
 msgid "Advanced"
 msgstr "Qabaqcıl"
 
@@ -683,9 +719,6 @@ msgstr "AppImage quraşdırma yolu"
 msgid "Select Directory"
 msgstr "Qovluq seç"
 
-msgid "View Changelog"
-msgstr "Dəyişiklik jurnalına bax"
-
 msgid "v0.0.0"
 msgstr "v0.0.0"
 
@@ -697,6 +730,9 @@ msgstr "İcmanın fluxer səhifəsi"
 
 msgid "Sponsor"
 msgstr "Sponsor ol"
+
+msgid "View Changelog"
+msgstr "Dəyişiklik jurnalına bax"
 
 msgid "Toggle output"
 msgstr "Çıxışı göstər və ya gizlət"
@@ -857,24 +893,15 @@ msgstr "Davam et"
 msgid "Start Shelly"
 msgstr "Shelly tətbiqini başlat"
 
-#| msgid "Enable AUR?"
 msgid "Enable Atoll?"
 msgstr ""
 
-#| msgid ""
-#| "The Arch User Repository contains build scripts that are known as "
-#| "PKGBUILDs. Those scripts are uploaded by users, and are not verified or "
-#| "vetted in any way. Only enable this feature if you are comfortable in "
-#| "verifying the build scripts."
 msgid ""
 "Atoll contains build scripts that are known as PKGBUILDs. Those scripts are "
 "uploaded by users, and are not verified or vetted in any way. Only enable "
 "this feature if you are comfortable in verifying the build scripts."
 msgstr ""
 
-#| msgid ""
-#| "<a href=\"https://www.seafoam-labs.org/shelly-alpm/docs/aur-safety/\">AUR "
-#| "Safety Guide</a>"
 msgid ""
 "<a href=\"https://www.seafoam-labs.org/shelly-alpm/docs/aur-safety/\">Atoll "
 "Safety Guide</a>"
@@ -1486,17 +1513,12 @@ msgstr "Paketlər quraşdırılır"
 msgid "Select package for batch installation"
 msgstr ""
 
-#| msgid "Search standard repositories, AUR and Flatpak"
 msgid "Search standard repositories, Atoll and Flatpak"
 msgstr ""
 
-#| msgid "Show results from the Arch User Repository"
 msgid "Show results from Atoll"
 msgstr ""
 
-#| msgid ""
-#| "Search the standard repositories, the AUR, and Flatpak all at once. Type "
-#| "a name to begin."
 msgid ""
 "Search the standard repositories, Atoll, and Flatpak all at once. Type a "
 "name to begin."
@@ -1527,7 +1549,6 @@ msgstr "Paketləri quraşdır"
 msgid "Install the selected packages?"
 msgstr "Seçilmiş paketlər quraşdırılsın?"
 
-#| msgid "Enable AUR"
 msgid "Enable Atoll"
 msgstr ""
 
@@ -1613,6 +1634,18 @@ msgstr "systemd başlatma xidməti silindi."
 msgid "AUR enabled"
 msgstr "AUR aktivləşdirildi"
 
+msgid "System GTK"
+msgstr ""
+
+msgid "Follow system"
+msgstr ""
+
+msgid "Dark"
+msgstr ""
+
+msgid "Light"
+msgstr ""
+
 msgid "System Default"
 msgstr "Sistem standartı"
 
@@ -1658,8 +1691,11 @@ msgstr "Türk dili"
 msgid "中文（简体）"
 msgstr "Çin dili (sadələşdirilmiş)"
 
-msgid "Packages"
-msgstr "Paketlər"
+msgid "Default (auto-detect)"
+msgstr ""
+
+msgid "Custom…"
+msgstr ""
 
 msgid "Pending"
 msgstr "Gözləyir"
@@ -1795,7 +1831,6 @@ msgstr "Paketlər yenilənir"
 msgid "Refreshing package databases"
 msgstr "Paket bazaları yenilənir"
 
-#| msgid "Removing Flatpak"
 msgid "Removing stale database lock"
 msgstr ""
 
@@ -1824,7 +1859,10 @@ msgstr ""
 msgid "Installing Flatpak and AppImage support"
 msgstr "Flatpak və AppImage dəstəyi quraşdırılır"
 
-msgid "Main menu"
+msgid "BROWSE"
+msgstr ""
+
+msgid "SYSTEM"
 msgstr ""
 
 msgid "Expand sidebar"

@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shelly-ui 2.2.4.1\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-11-04 12:08-0500\n"
+"POT-Creation-Date: 2026-11-13 21:12-0500\n"
 "PO-Revision-Date: 2026-08-13 11:51+0200\n"
 "Last-Translator: Impostor0729\n"
 "Language-Team: csnyder@seafoam-labs.org\n"
@@ -120,6 +120,9 @@ msgstr "Kihagyás"
 msgid "AppImage"
 msgstr "AppImage"
 
+msgid "Install and integrate AppImage bundles."
+msgstr ""
+
 msgid "Search..."
 msgstr "Keresés..."
 
@@ -204,6 +207,9 @@ msgstr "Eltávolítás"
 
 msgid "AUR"
 msgstr "AUR"
+
+msgid "Build and install packages from the Arch User Repository."
+msgstr ""
 
 msgid "Search the AUR by name or keyword"
 msgstr "Keresés az AUR-ban név vagy kulcsszó alapján"
@@ -345,6 +351,9 @@ msgstr "Verziótörténet"
 msgid "Flatpak"
 msgstr "Flatpak"
 
+msgid "Manage Flatpak applications and remotes."
+msgstr ""
+
 msgid "Search packages..."
 msgstr "Csomagok keresése..."
 
@@ -426,6 +435,12 @@ msgstr "Csomagműveletek"
 msgid "Package"
 msgstr "Csomag"
 
+msgid "Packages"
+msgstr "Csomagok"
+
+msgid "Install and manage software on your system."
+msgstr ""
+
 msgid "Package Group Filter"
 msgstr "Csomagcsoport szűrő"
 
@@ -493,15 +508,12 @@ msgstr "A Seafoam Labs válogatott javaslatai"
 msgid "Refresh the recommended packages list from the network"
 msgstr "Az ajánlott csomagok listájának frissítése a hálózatról"
 
-#| msgid "Mixed selection"
 msgid "Clear selection"
 msgstr ""
 
-#| msgid "Recommended Packages"
 msgid "Deselect all recommended packages"
 msgstr ""
 
-#| msgid "Install the selected packages?"
 msgid "Install all selected packages in one transaction"
 msgstr ""
 
@@ -517,6 +529,12 @@ msgstr ""
 
 msgid "Shelly Search"
 msgstr "Shelly-keresés"
+
+msgid "Search"
+msgstr ""
+
+msgid "Search across every enabled backend."
+msgstr ""
 
 msgid "Search standard repositories, AUR and Flatpak"
 msgstr "Keresés az AUR és Flatpak szabványos tárolóiban"
@@ -546,6 +564,9 @@ msgstr ""
 
 msgid "Settings"
 msgstr "Beállítások"
+
+msgid "Make Shelly feel at home on your desktop."
+msgstr ""
 
 msgid "General"
 msgstr "Általános"
@@ -578,6 +599,15 @@ msgid "Run Tray as cron"
 msgstr ""
 
 msgid "Tray update with ui"
+msgstr ""
+
+msgid "Update terminal"
+msgstr ""
+
+msgid "Terminal command"
+msgstr ""
+
+msgid "Custom update terminal command"
 msgstr ""
 
 msgid "Tray Check Interval (Hours)"
@@ -654,6 +684,12 @@ msgstr "Alapértelmezett lap"
 msgid "Navigation style"
 msgstr "Navigációs stílus"
 
+msgid "Theme"
+msgstr ""
+
+msgid "Color variant"
+msgstr ""
+
 msgid "Advanced"
 msgstr "Haladó"
 
@@ -675,9 +711,6 @@ msgstr "AppImage telepítési útvonala"
 msgid "Select Directory"
 msgstr "Könyvtár kiválasztása"
 
-msgid "View Changelog"
-msgstr "Változásnapló megtekintése"
-
 msgid "v0.0.0"
 msgstr "v0.0.0"
 
@@ -689,6 +722,9 @@ msgstr "Közösségi fluxer"
 
 msgid "Sponsor"
 msgstr "Támogató"
+
+msgid "View Changelog"
+msgstr "Változásnapló megtekintése"
 
 msgid "Toggle output"
 msgstr "Kimenet váltása"
@@ -850,7 +886,6 @@ msgstr "Következő"
 msgid "Start Shelly"
 msgstr "Shelly indítása"
 
-#| msgid "Enable AUR?"
 msgid "Enable Atoll?"
 msgstr ""
 
@@ -1467,17 +1502,12 @@ msgstr "Csomagok telepítése"
 msgid "Select package for batch installation"
 msgstr ""
 
-#| msgid "Search standard repositories, AUR and Flatpak"
 msgid "Search standard repositories, Atoll and Flatpak"
 msgstr ""
 
-#| msgid "Show results from the Arch User Repository"
 msgid "Show results from Atoll"
 msgstr ""
 
-#| msgid ""
-#| "Search standard repositories, the AUR and Flatpak at once. Type a name to "
-#| "begin."
 msgid ""
 "Search the standard repositories, Atoll, and Flatpak all at once. Type a "
 "name to begin."
@@ -1508,7 +1538,6 @@ msgstr "Csomagok telepítése"
 msgid "Install the selected packages?"
 msgstr "Telepíti a kiválasztott csomagokat?"
 
-#| msgid "Enable AUR"
 msgid "Enable Atoll"
 msgstr ""
 
@@ -1594,6 +1623,18 @@ msgstr "Indítási szolgáltatás eltávolítva a Systemd-ből."
 msgid "AUR enabled"
 msgstr "AUR engedélyezve"
 
+msgid "System GTK"
+msgstr ""
+
+msgid "Follow system"
+msgstr ""
+
+msgid "Dark"
+msgstr ""
+
+msgid "Light"
+msgstr ""
+
 msgid "System Default"
 msgstr "Rendszer alapértelmezett"
 
@@ -1639,8 +1680,11 @@ msgstr "Türkçe"
 msgid "中文（简体）"
 msgstr "中文（简体）"
 
-msgid "Packages"
-msgstr "Csomagok"
+msgid "Default (auto-detect)"
+msgstr ""
+
+msgid "Custom…"
+msgstr ""
 
 msgid "Pending"
 msgstr "Függőben"
@@ -1772,7 +1816,6 @@ msgstr "Csomagok frissítése"
 msgid "Refreshing package databases"
 msgstr "Csomagadatbázisok frissítése"
 
-#| msgid "Removing Flatpak"
 msgid "Removing stale database lock"
 msgstr ""
 
@@ -1801,7 +1844,10 @@ msgstr ""
 msgid "Installing Flatpak and AppImage support"
 msgstr "Flatpak és AppImage támogatás telepítése"
 
-msgid "Main menu"
+msgid "BROWSE"
+msgstr ""
+
+msgid "SYSTEM"
 msgstr ""
 
 msgid "Expand sidebar"

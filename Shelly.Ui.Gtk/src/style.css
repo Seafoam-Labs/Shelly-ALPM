@@ -38,6 +38,38 @@
 .detail-title { font-size: 1.3em; font-weight: bold; }
 .spec-value { font-weight: 600; }
 
+/* Sidebar group labels and added page headers exist only for the built-in
+   theme; services/theme.zig hides them in system mode. */
+.nav-group {
+  font-size: 0.72em;
+  font-weight: 600;
+  letter-spacing: 1.4px;
+  color: alpha(@theme_fg_color, 0.55);
+  margin: 10px 12px 6px;
+}
+
+.page-head {
+  padding: 24px 30px 16px;
+}
+
+/* Margins live in CSS (not widget properties) so the themed sheets can
+   override them; system mode keeps the historical 10px inset. */
+.toolbar-card {
+  margin: 10px;
+}
+
+/* Settings rows: the page boxes use spacing 0; this reproduces the legacy
+   20px gap in system mode while the themed sheets swap it for hairlines. */
+.settings-form-row:not(:last-child) {
+  margin-bottom: 20px;
+}
+
+/* Updates page insets live in CSS so the themed sheet can align them with
+   the 30px page headers; system mode keeps the historical 20px. */
+.page-body {
+  margin: 20px;
+}
+
 .nav-rail {
   padding: 2px 2px;}
 

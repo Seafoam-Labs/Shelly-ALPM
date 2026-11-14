@@ -653,3 +653,33 @@ Document any known issues that are being tracked:
 - [ ] Upgrade unrelated packages after a previous upgrade left a service stale;
   confirm the stale service is not restarted again because its libraries did not
   change in the current transaction.
+
+## Pearl-style default theme (docs/pearl-redesign)
+
+- [ ] With a config lacking `ThemeMode` (or `ThemeMode: shelly`), the window opens with the
+  built-in theme: rounded window with outline, brand headerbar with circular window buttons,
+  accent-filled selection pill, card toolbars, large page headings.
+- [ ] Settings → Look & Feel → Theme = "System GTK" switches live to the desktop GTK theme with
+  the default titlebar; added page headings and sidebar group labels disappear and the legacy
+  spacing returns. Switching back to "Shelly" restores the built-in look without a restart.
+- [ ] Color variant Dark/Light applies live in both theme modes; "Follow system" tracks the
+  desktop dark preference (flip the desktop color scheme while Shelly is open and verify the
+  sheet swaps without a restart).
+- [ ] Collapse the sidebar with the chevron: group labels hide while collapsed and return when
+  expanded; the selection pill tracks the active page in sidebar and topbar modes.
+- [ ] Topbar navigation mode renders the themed bar, pills and selected state.
+- [ ] Utilities and Settings appear under SYSTEM in the sidebar (and as topbar items in
+  topbar mode), navigate like other pages, and track the selected pill; no main-menu
+  popover remains in either nav mode.
+- [ ] Welcome lockout, polkit warning, confirm/plan dialogs and success/error/warning toasts
+  stay legible in both variants; transaction terminal output stays readable.
+- [ ] `shelly config set ThemeMode system` is honored at next start; corrupt or missing keys
+  fall back to the defaults without crashing.
+- [ ] Keyboard-only focus shows the 2px accent outline on buttons, entries and switches in the
+  built-in theme; screen reader names for nav buttons and window controls are unchanged.
+- [ ] At 200% scale / large text, headings, cards and the settings rows do not clip.
+- [ ] On a desktop that installs a fixed dark GTK override at user priority (e.g. Pearl's
+  matugen palette), the light variant still shows dark-on-light row labels and surfaces;
+  switching to System GTK restores the desktop override.
+- [ ] With the desktop set to dark, `Follow system` opens dark without touching gsettings
+  (portal-driven `gtk-interface-color-scheme` on GTK >= 4.23).

@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Shelly-ALPM / Shelly: UI\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-11-04 12:08-0500\n"
+"POT-Creation-Date: 2026-11-13 21:12-0500\n"
 "PO-Revision-Date: 2026-06-29 21:36+0330\n"
 "Last-Translator: Sohrab Behdani <behdanisohrab@proton.me>\n"
 "Language-Team: fa\n"
@@ -115,6 +115,9 @@ msgstr ""
 msgid "AppImage"
 msgstr "AppImage"
 
+msgid "Install and integrate AppImage bundles."
+msgstr ""
+
 msgid "Search..."
 msgstr "جست‌وجو...."
 
@@ -199,6 +202,9 @@ msgstr "حذف"
 
 msgid "AUR"
 msgstr "AUR"
+
+msgid "Build and install packages from the Arch User Repository."
+msgstr ""
 
 msgid "Search the AUR by name or keyword"
 msgstr ""
@@ -337,6 +343,9 @@ msgstr "تاریخچه نگارش"
 msgid "Flatpak"
 msgstr "فلت‌پک"
 
+msgid "Manage Flatpak applications and remotes."
+msgstr ""
+
 msgid "Search packages..."
 msgstr "جست‌جوی بسته‌ها..."
 
@@ -418,6 +427,12 @@ msgstr ""
 msgid "Package"
 msgstr ""
 
+msgid "Packages"
+msgstr "بسته‌ها"
+
+msgid "Install and manage software on your system."
+msgstr ""
+
 msgid "Package Group Filter"
 msgstr "صافی گروه بسته‌ها"
 
@@ -489,7 +504,6 @@ msgstr ""
 msgid "Clear selection"
 msgstr ""
 
-#| msgid "Loading Recommended Packages..."
 msgid "Deselect all recommended packages"
 msgstr ""
 
@@ -508,6 +522,12 @@ msgstr ""
 
 msgid "Shelly Search"
 msgstr "جست‌جوگر Shelly"
+
+msgid "Search"
+msgstr ""
+
+msgid "Search across every enabled backend."
+msgstr ""
 
 msgid "Search standard repositories, AUR and Flatpak"
 msgstr ""
@@ -537,6 +557,9 @@ msgstr ""
 
 msgid "Settings"
 msgstr "تنظیمات"
+
+msgid "Make Shelly feel at home on your desktop."
+msgstr ""
 
 msgid "General"
 msgstr "عمومی"
@@ -569,6 +592,15 @@ msgid "Run Tray as cron"
 msgstr ""
 
 msgid "Tray update with ui"
+msgstr ""
+
+msgid "Update terminal"
+msgstr ""
+
+msgid "Terminal command"
+msgstr ""
+
+msgid "Custom update terminal command"
 msgstr ""
 
 msgid "Tray Check Interval (Hours)"
@@ -645,6 +677,12 @@ msgstr "صفحه پیش‌فرض"
 msgid "Navigation style"
 msgstr ""
 
+msgid "Theme"
+msgstr ""
+
+msgid "Color variant"
+msgstr ""
+
 msgid "Advanced"
 msgstr "پیشرفته"
 
@@ -666,9 +704,6 @@ msgstr "مسیر نصب AppImage"
 msgid "Select Directory"
 msgstr "انتخاب مسیر"
 
-msgid "View Changelog"
-msgstr "مشاهده تغییرات"
-
 msgid "v0.0.0"
 msgstr ""
 
@@ -680,6 +715,9 @@ msgstr "فلوکسر جامعه"
 
 msgid "Sponsor"
 msgstr "حامی"
+
+msgid "View Changelog"
+msgstr "مشاهده تغییرات"
 
 msgid "Toggle output"
 msgstr ""
@@ -836,7 +874,6 @@ msgstr ""
 msgid "Start Shelly"
 msgstr ""
 
-#| msgid "Enable AUR?"
 msgid "Enable Atoll?"
 msgstr ""
 
@@ -1483,7 +1520,6 @@ msgstr ""
 msgid "Install the selected packages?"
 msgstr ""
 
-#| msgid "Enable AUR"
 msgid "Enable Atoll"
 msgstr ""
 
@@ -1569,6 +1605,18 @@ msgstr "سرویس اجرای اولیه سیستم‌دی حذف شد."
 msgid "AUR enabled"
 msgstr ""
 
+msgid "System GTK"
+msgstr ""
+
+msgid "Follow system"
+msgstr ""
+
+msgid "Dark"
+msgstr ""
+
+msgid "Light"
+msgstr ""
+
 msgid "System Default"
 msgstr ""
 
@@ -1614,8 +1662,11 @@ msgstr ""
 msgid "中文（简体）"
 msgstr ""
 
-msgid "Packages"
-msgstr "بسته‌ها"
+msgid "Default (auto-detect)"
+msgstr ""
+
+msgid "Custom…"
+msgstr ""
 
 msgid "Pending"
 msgstr ""
@@ -1773,7 +1824,10 @@ msgstr ""
 msgid "Installing Flatpak and AppImage support"
 msgstr ""
 
-msgid "Main menu"
+msgid "BROWSE"
+msgstr ""
+
+msgid "SYSTEM"
 msgstr ""
 
 msgid "Expand sidebar"

@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Shelly-ALPM / Shelly: GTK\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-11-04 12:08-0500\n"
+"POT-Creation-Date: 2026-11-13 21:12-0500\n"
 "PO-Revision-Date: 2026-07-27 19:10+0200\n"
 "Last-Translator: bingen <bingenm@gmail.com>\n"
 "Language-Team: Basque <translation-team-eu@googlegroups.com>\n"
@@ -120,6 +120,9 @@ msgstr "Eskapatu"
 msgid "AppImage"
 msgstr "AppImage"
 
+msgid "Install and integrate AppImage bundles."
+msgstr ""
+
 msgid "Search..."
 msgstr "Bilatu..."
 
@@ -205,6 +208,9 @@ msgstr "Kendu"
 
 msgid "AUR"
 msgstr "AUR"
+
+msgid "Build and install packages from the Arch User Repository."
+msgstr ""
 
 msgid "Search the AUR by name or keyword"
 msgstr "Bilatu AURen izenez edo gako-hitzez"
@@ -345,6 +351,9 @@ msgstr "Bertsioen historia"
 msgid "Flatpak"
 msgstr "Flatpak"
 
+msgid "Manage Flatpak applications and remotes."
+msgstr ""
+
 msgid "Search packages..."
 msgstr "Bilatu paketeak..."
 
@@ -426,6 +435,12 @@ msgstr "Pakete-ekintzak"
 msgid "Package"
 msgstr "Paketea"
 
+msgid "Packages"
+msgstr "Paketeak"
+
+msgid "Install and manage software on your system."
+msgstr ""
+
 msgid "Package Group Filter"
 msgstr "Pakete-taldearen iragazkia"
 
@@ -494,11 +509,9 @@ msgstr "Seafoam Labs-ek hautatutako iradokizunak"
 msgid "Refresh the recommended packages list from the network"
 msgstr "Freskatu gomendatutako paketeen zerrenda saretik"
 
-#| msgid "Mixed selection"
 msgid "Clear selection"
 msgstr ""
 
-#| msgid "Recommended Packages"
 msgid "Deselect all recommended packages"
 msgstr ""
 
@@ -517,6 +530,12 @@ msgstr ""
 
 msgid "Shelly Search"
 msgstr "Shelly bilaketa"
+
+msgid "Search"
+msgstr ""
+
+msgid "Search across every enabled backend."
+msgstr ""
 
 msgid "Search standard repositories, AUR and Flatpak"
 msgstr ""
@@ -546,6 +565,9 @@ msgstr ""
 
 msgid "Settings"
 msgstr "Ezarpenak"
+
+msgid "Make Shelly feel at home on your desktop."
+msgstr ""
 
 msgid "General"
 msgstr "Orokorra"
@@ -578,6 +600,15 @@ msgid "Run Tray as cron"
 msgstr ""
 
 msgid "Tray update with ui"
+msgstr ""
+
+msgid "Update terminal"
+msgstr ""
+
+msgid "Terminal command"
+msgstr ""
+
+msgid "Custom update terminal command"
 msgstr ""
 
 msgid "Tray Check Interval (Hours)"
@@ -654,6 +685,12 @@ msgstr "Orri lehenetsia"
 msgid "Navigation style"
 msgstr "Nabigazio-estiloa"
 
+msgid "Theme"
+msgstr ""
+
+msgid "Color variant"
+msgstr ""
+
 msgid "Advanced"
 msgstr "Aurreratua"
 
@@ -675,9 +712,6 @@ msgstr "AppImage-ren instalazio-bidea"
 msgid "Select Directory"
 msgstr "Hautatu direktorioa"
 
-msgid "View Changelog"
-msgstr "Ikusizkoztatu aldaketen erregistroa"
-
 msgid "v0.0.0"
 msgstr "v0.0.0"
 
@@ -689,6 +723,9 @@ msgstr "Komunitatearen fluxer-a"
 
 msgid "Sponsor"
 msgstr "Babeslea"
+
+msgid "View Changelog"
+msgstr "Ikusizkoztatu aldaketen erregistroa"
 
 msgid "Toggle output"
 msgstr "Txandakatu irteera"
@@ -849,7 +886,6 @@ msgstr "Hurrengoa"
 msgid "Start Shelly"
 msgstr "Abiarazi Shelly"
 
-#| msgid "Enable AUR?"
 msgid "Enable Atoll?"
 msgstr ""
 
@@ -1502,7 +1538,6 @@ msgstr ""
 msgid "Install the selected packages?"
 msgstr ""
 
-#| msgid "Enable AUR"
 msgid "Enable Atoll"
 msgstr ""
 
@@ -1588,6 +1623,18 @@ msgstr "Systemd hasierako zerbitzua kenduta."
 msgid "AUR enabled"
 msgstr "AUR gaituta"
 
+msgid "System GTK"
+msgstr ""
+
+msgid "Follow system"
+msgstr ""
+
+msgid "Dark"
+msgstr ""
+
+msgid "Light"
+msgstr ""
+
 msgid "System Default"
 msgstr "Sistemaren lehenetsia"
 
@@ -1633,8 +1680,11 @@ msgstr "Türkçe"
 msgid "中文（简体）"
 msgstr "中文（简体）"
 
-msgid "Packages"
-msgstr "Paketeak"
+msgid "Default (auto-detect)"
+msgstr ""
+
+msgid "Custom…"
+msgstr ""
 
 msgid "Pending"
 msgstr "Zorrotz / Zazke"
@@ -1766,7 +1816,6 @@ msgstr "Paketeak bertsio-berritzen"
 msgid "Refreshing package databases"
 msgstr "Paketeen datu-baseak freskatzen"
 
-#| msgid "Removing Flatpak"
 msgid "Removing stale database lock"
 msgstr ""
 
@@ -1795,7 +1844,10 @@ msgstr ""
 msgid "Installing Flatpak and AppImage support"
 msgstr "Flatpak eta AppImage euskarria instalatzen"
 
-msgid "Main menu"
+msgid "BROWSE"
+msgstr ""
+
+msgid "SYSTEM"
 msgstr ""
 
 msgid "Expand sidebar"

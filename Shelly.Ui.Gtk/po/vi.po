@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Shelly-ALPM / Shelly: UI\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-11-04 12:08-0500\n"
+"POT-Creation-Date: 2026-11-13 21:12-0500\n"
 "PO-Revision-Date: 2026-11-03 12:00+0700\n"
 "Last-Translator: dinhkarate <dinhkarat@gmail.com>\n"
 "Language-Team: Vietnamese <vi@li.org>\n"
@@ -123,6 +123,9 @@ msgstr "Bỏ qua"
 msgid "AppImage"
 msgstr "AppImage"
 
+msgid "Install and integrate AppImage bundles."
+msgstr ""
+
 msgid "Search..."
 msgstr "Tìm kiếm..."
 
@@ -208,6 +211,9 @@ msgstr "Gỡ bỏ"
 
 msgid "AUR"
 msgstr "AUR"
+
+msgid "Build and install packages from the Arch User Repository."
+msgstr ""
 
 msgid "Search the AUR by name or keyword"
 msgstr "Tìm kiếm trên AUR theo tên hoặc từ khóa"
@@ -348,6 +354,9 @@ msgstr "Lịch sử phiên bản"
 msgid "Flatpak"
 msgstr "Flatpak"
 
+msgid "Manage Flatpak applications and remotes."
+msgstr ""
+
 msgid "Search packages..."
 msgstr "Tìm kiếm gói..."
 
@@ -429,6 +438,12 @@ msgstr "Thao tác với gói"
 msgid "Package"
 msgstr "Gói"
 
+msgid "Packages"
+msgstr "Gói"
+
+msgid "Install and manage software on your system."
+msgstr ""
+
 msgid "Package Group Filter"
 msgstr "Lọc theo nhóm gói"
 
@@ -497,15 +512,12 @@ msgstr "Gợi ý được Seafoam Labs chọn lọc"
 msgid "Refresh the recommended packages list from the network"
 msgstr "Làm mới danh sách gói được đề xuất từ mạng"
 
-#| msgid "Mixed selection"
 msgid "Clear selection"
 msgstr ""
 
-#| msgid "Recommended Packages"
 msgid "Deselect all recommended packages"
 msgstr ""
 
-#| msgid "Install the selected packages?"
 msgid "Install all selected packages in one transaction"
 msgstr ""
 
@@ -520,6 +532,12 @@ msgstr ""
 
 msgid "Shelly Search"
 msgstr "Tìm kiếm Shelly"
+
+msgid "Search"
+msgstr ""
+
+msgid "Search across every enabled backend."
+msgstr ""
 
 msgid "Search standard repositories, AUR and Flatpak"
 msgstr "Tìm kiếm trong kho tiêu chuẩn, AUR và Flatpak"
@@ -551,6 +569,9 @@ msgstr ""
 
 msgid "Settings"
 msgstr "Cài đặt"
+
+msgid "Make Shelly feel at home on your desktop."
+msgstr ""
 
 msgid "General"
 msgstr "Chung"
@@ -584,6 +605,15 @@ msgstr "Chạy khay hệ thống dưới dạng cron"
 
 msgid "Tray update with ui"
 msgstr "Khay hệ thống cập nhật qua giao diện"
+
+msgid "Update terminal"
+msgstr ""
+
+msgid "Terminal command"
+msgstr ""
+
+msgid "Custom update terminal command"
+msgstr ""
 
 msgid "Tray Check Interval (Hours)"
 msgstr "Chu kỳ kiểm tra của khay hệ thống (giờ)"
@@ -659,6 +689,12 @@ msgstr "Trang mặc định"
 msgid "Navigation style"
 msgstr "Kiểu điều hướng"
 
+msgid "Theme"
+msgstr ""
+
+msgid "Color variant"
+msgstr ""
+
 msgid "Advanced"
 msgstr "Nâng cao"
 
@@ -680,9 +716,6 @@ msgstr "Đường dẫn cài đặt AppImage"
 msgid "Select Directory"
 msgstr "Chọn thư mục"
 
-msgid "View Changelog"
-msgstr "Xem nhật ký thay đổi"
-
 msgid "v0.0.0"
 msgstr "v0.0.0"
 
@@ -694,6 +727,9 @@ msgstr "Cộng đồng Fluxer"
 
 msgid "Sponsor"
 msgstr "Tài trợ"
+
+msgid "View Changelog"
+msgstr "Xem nhật ký thay đổi"
 
 msgid "Toggle output"
 msgstr "Hiện/ẩn đầu ra"
@@ -855,24 +891,15 @@ msgstr "Tiếp"
 msgid "Start Shelly"
 msgstr "Bắt đầu dùng Shelly"
 
-#| msgid "Enable AUR?"
 msgid "Enable Atoll?"
 msgstr ""
 
-#| msgid ""
-#| "The Arch User Repository contains build scripts that are known as "
-#| "PKGBUILDs. Those scripts are uploaded by users, and are not verified or "
-#| "vetted in any way. Only enable this feature if you are comfortable in "
-#| "verifying the build scripts."
 msgid ""
 "Atoll contains build scripts that are known as PKGBUILDs. Those scripts are "
 "uploaded by users, and are not verified or vetted in any way. Only enable "
 "this feature if you are comfortable in verifying the build scripts."
 msgstr ""
 
-#| msgid ""
-#| "<a href=\"https://www.seafoam-labs.org/shelly-alpm/docs/aur-safety/\">AUR "
-#| "Safety Guide</a>"
 msgid ""
 "<a href=\"https://www.seafoam-labs.org/shelly-alpm/docs/aur-safety/\">Atoll "
 "Safety Guide</a>"
@@ -1486,17 +1513,12 @@ msgstr "Đang cài đặt gói"
 msgid "Select package for batch installation"
 msgstr ""
 
-#| msgid "Search standard repositories, AUR and Flatpak"
 msgid "Search standard repositories, Atoll and Flatpak"
 msgstr ""
 
-#| msgid "Show results from the Arch User Repository"
 msgid "Show results from Atoll"
 msgstr ""
 
-#| msgid ""
-#| "Search the standard repositories, the AUR, and Flatpak all at once. Type "
-#| "a name to begin."
 msgid ""
 "Search the standard repositories, Atoll, and Flatpak all at once. Type a "
 "name to begin."
@@ -1527,7 +1549,6 @@ msgstr "Cài đặt gói"
 msgid "Install the selected packages?"
 msgstr "Cài đặt các gói đã chọn?"
 
-#| msgid "Enable AUR"
 msgid "Enable Atoll"
 msgstr ""
 
@@ -1617,6 +1638,18 @@ msgstr "Đã gỡ bỏ dịch vụ khởi động systemd."
 msgid "AUR enabled"
 msgstr "Đã bật AUR"
 
+msgid "System GTK"
+msgstr ""
+
+msgid "Follow system"
+msgstr ""
+
+msgid "Dark"
+msgstr ""
+
+msgid "Light"
+msgstr ""
+
 msgid "System Default"
 msgstr "Mặc định hệ thống"
 
@@ -1662,8 +1695,11 @@ msgstr "Türkçe"
 msgid "中文（简体）"
 msgstr "中文（简体）"
 
-msgid "Packages"
-msgstr "Gói"
+msgid "Default (auto-detect)"
+msgstr ""
+
+msgid "Custom…"
+msgstr ""
 
 msgid "Pending"
 msgstr "Đang chờ"
@@ -1799,7 +1835,6 @@ msgstr "Đang nâng cấp gói"
 msgid "Refreshing package databases"
 msgstr "Đang làm mới cơ sở dữ liệu gói"
 
-#| msgid "Removing Flatpak"
 msgid "Removing stale database lock"
 msgstr ""
 
@@ -1828,8 +1863,11 @@ msgstr ""
 msgid "Installing Flatpak and AppImage support"
 msgstr "Đang cài đặt hỗ trợ Flatpak và AppImage"
 
-msgid "Main menu"
-msgstr "Trình đơn chính"
+msgid "BROWSE"
+msgstr ""
+
+msgid "SYSTEM"
+msgstr ""
 
 msgid "Expand sidebar"
 msgstr "Mở rộng thanh bên"

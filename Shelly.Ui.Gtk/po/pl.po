@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shelly-ui 2.2.4.1\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-11-04 12:08-0500\n"
+"POT-Creation-Date: 2026-11-13 21:12-0500\n"
 "PO-Revision-Date: 2026-11-05 19:58+0000\n"
 "Last-Translator: juliazero <juliazero2@gmail.com>\n"
 "Language-Team: Polish\n"
@@ -126,6 +126,10 @@ msgstr "Pomiń"
 msgid "AppImage"
 msgstr "AppImage"
 
+#| msgid "Install a new AppImage from a file"
+msgid "Install and integrate AppImage bundles."
+msgstr ""
+
 msgid "Search..."
 msgstr "Wyszukaj..."
 
@@ -216,6 +220,10 @@ msgstr "Usuń"
 
 msgid "AUR"
 msgstr "AUR"
+
+#| msgid "Show results from the Arch User Repository"
+msgid "Build and install packages from the Arch User Repository."
+msgstr ""
 
 msgid "Search the AUR by name or keyword"
 msgstr "Wyszukaj w AUR..."
@@ -358,6 +366,10 @@ msgstr "Historia wersji"
 msgid "Flatpak"
 msgstr "Flatpak"
 
+#| msgid "No Flatpak applications are available."
+msgid "Manage Flatpak applications and remotes."
+msgstr ""
+
 msgid "Search packages..."
 msgstr "Wyszukaj pakiety..."
 
@@ -438,6 +450,12 @@ msgstr "Działania na pakiecie"
 
 msgid "Package"
 msgstr "Pakiet"
+
+msgid "Packages"
+msgstr "Pakiety"
+
+msgid "Install and manage software on your system."
+msgstr ""
 
 msgid "Package Group Filter"
 msgstr "Filtr grup pakietów"
@@ -529,6 +547,13 @@ msgstr ""
 msgid "Shelly Search"
 msgstr "Wyszukiwarka Shelly"
 
+#| msgid "Search..."
+msgid "Search"
+msgstr ""
+
+msgid "Search across every enabled backend."
+msgstr ""
+
 msgid "Search standard repositories, AUR and Flatpak"
 msgstr "Przeszukuj standardowe repozytoria, AUR i Flatpak"
 
@@ -559,6 +584,9 @@ msgstr ""
 
 msgid "Settings"
 msgstr "Ustawienia"
+
+msgid "Make Shelly feel at home on your desktop."
+msgstr ""
 
 msgid "General"
 msgstr "Ogólne"
@@ -593,6 +621,16 @@ msgstr "Uruchamiaj ikonę zasobnika systemowego jako zadanie cron"
 msgid "Tray update with ui"
 msgstr ""
 "Użyj interfejsu użytkownika wykonując aktualizację przez ikonę zasobnika"
+
+#| msgid "Update Strategy"
+msgid "Update terminal"
+msgstr ""
+
+msgid "Terminal command"
+msgstr ""
+
+msgid "Custom update terminal command"
+msgstr ""
 
 msgid "Tray Check Interval (Hours)"
 msgstr ""
@@ -670,6 +708,12 @@ msgstr "Strona domyślna"
 msgid "Navigation style"
 msgstr "Styl nawigacji"
 
+msgid "Theme"
+msgstr ""
+
+msgid "Color variant"
+msgstr ""
+
 msgid "Advanced"
 msgstr "Zaawansowane"
 
@@ -691,9 +735,6 @@ msgstr "Ścieżka instalacji AppImage"
 msgid "Select Directory"
 msgstr "Wybierz katalog"
 
-msgid "View Changelog"
-msgstr "Wyświetl dziennik zmian"
-
 msgid "v0.0.0"
 msgstr "v0.0.0"
 
@@ -705,6 +746,9 @@ msgstr "Społeczność Fluxer"
 
 msgid "Sponsor"
 msgstr "Wesprzyj projekt"
+
+msgid "View Changelog"
+msgstr "Wyświetl dziennik zmian"
 
 msgid "Toggle output"
 msgstr "Przełącz widok konsoli"
@@ -887,8 +931,8 @@ msgid ""
 "<a href=\"https://www.seafoam-labs.org/shelly-alpm/docs/aur-safety/\">Atoll "
 "Safety Guide</a>"
 msgstr ""
-"<a href=\"https://www.seafoam-labs.org/shelly-alpm/docs/aur-safety/\">"
-"Przewodnik bezpieczeństwa Atoll</a>"
+"<a href=\"https://www.seafoam-labs.org/shelly-alpm/docs/aur-safety/"
+"\">Przewodnik bezpieczeństwa Atoll</a>"
 
 msgid "System files"
 msgstr "Systemowe pliki"
@@ -1628,6 +1672,20 @@ msgstr "Usunięto usługę autostartu systemd."
 msgid "AUR enabled"
 msgstr "Obsługa AUR włączona"
 
+#| msgid "System Tray"
+msgid "System GTK"
+msgstr ""
+
+#| msgid "system"
+msgid "Follow system"
+msgstr ""
+
+msgid "Dark"
+msgstr ""
+
+msgid "Light"
+msgstr ""
+
 msgid "System Default"
 msgstr "Domyślny systemowy"
 
@@ -1673,8 +1731,12 @@ msgstr "Turecki"
 msgid "中文（简体）"
 msgstr "Chiński (uproszczony)"
 
-msgid "Packages"
-msgstr "Pakiety"
+#| msgid "Default page"
+msgid "Default (auto-detect)"
+msgstr ""
+
+msgid "Custom…"
+msgstr ""
 
 msgid "Pending"
 msgstr "Oczekuje"
@@ -1839,8 +1901,11 @@ msgstr ""
 msgid "Installing Flatpak and AppImage support"
 msgstr "Instalowanie obsługi Flatpak i AppImage"
 
-msgid "Main menu"
-msgstr "Menu główne"
+msgid "BROWSE"
+msgstr ""
+
+msgid "SYSTEM"
+msgstr ""
 
 msgid "Expand sidebar"
 msgstr "Rozszerz boczny panel"

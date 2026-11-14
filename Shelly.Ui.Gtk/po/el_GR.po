@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Shelly-ALPM / Shelly: GTK\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-11-04 12:08-0500\n"
+"POT-Creation-Date: 2026-11-13 21:12-0500\n"
 "PO-Revision-Date: 2026-08-05 17:02+0300\n"
 "Last-Translator: CozyKernel <antwnhs.mpl@gmail.com>\n"
 "Language-Team: \n"
@@ -113,6 +113,9 @@ msgstr "Παράβλεψη"
 msgid "AppImage"
 msgstr "AppImage"
 
+msgid "Install and integrate AppImage bundles."
+msgstr ""
+
 msgid "Search..."
 msgstr "Αναζήτηση..."
 
@@ -199,6 +202,9 @@ msgstr "Κατάργηση"
 
 msgid "AUR"
 msgstr "AUR"
+
+msgid "Build and install packages from the Arch User Repository."
+msgstr ""
 
 msgid "Search the AUR by name or keyword"
 msgstr "Αναζήτηση στο AUR κατά όνομα ή λέξη-κλειδί"
@@ -339,6 +345,9 @@ msgstr "Ιστορικό εκδόσεων"
 msgid "Flatpak"
 msgstr "Flatpak"
 
+msgid "Manage Flatpak applications and remotes."
+msgstr ""
+
 msgid "Search packages..."
 msgstr "Αναζήτηση πακέτων..."
 
@@ -420,6 +429,12 @@ msgstr "Ενέργειες πακέτου"
 msgid "Package"
 msgstr "Πακέτο"
 
+msgid "Packages"
+msgstr "Πακέτα"
+
+msgid "Install and manage software on your system."
+msgstr ""
+
 msgid "Package Group Filter"
 msgstr "Φίλτρο ομάδων πακέτων"
 
@@ -488,11 +503,9 @@ msgstr "Επιλεγμένες προτάσεις από τη Seafoam Labs"
 msgid "Refresh the recommended packages list from the network"
 msgstr "Ανανέωση της λίστας προτεινόμενων πακέτων από το δίκτυο"
 
-#| msgid "Mixed selection"
 msgid "Clear selection"
 msgstr ""
 
-#| msgid "Recommended Packages"
 msgid "Deselect all recommended packages"
 msgstr ""
 
@@ -511,6 +524,12 @@ msgstr ""
 
 msgid "Shelly Search"
 msgstr "Αναζήτηση Shelly"
+
+msgid "Search"
+msgstr ""
+
+msgid "Search across every enabled backend."
+msgstr ""
 
 msgid "Search standard repositories, AUR and Flatpak"
 msgstr ""
@@ -540,6 +559,9 @@ msgstr ""
 
 msgid "Settings"
 msgstr "Ρυθμίσεις"
+
+msgid "Make Shelly feel at home on your desktop."
+msgstr ""
 
 msgid "General"
 msgstr "Γενικά"
@@ -572,6 +594,15 @@ msgid "Run Tray as cron"
 msgstr ""
 
 msgid "Tray update with ui"
+msgstr ""
+
+msgid "Update terminal"
+msgstr ""
+
+msgid "Terminal command"
+msgstr ""
+
+msgid "Custom update terminal command"
 msgstr ""
 
 msgid "Tray Check Interval (Hours)"
@@ -648,6 +679,12 @@ msgstr "Προεπιλεγμένη σελίδα"
 msgid "Navigation style"
 msgstr "Μέθοδος πλοήγησης"
 
+msgid "Theme"
+msgstr ""
+
+msgid "Color variant"
+msgstr ""
+
 msgid "Advanced"
 msgstr "Για προχωρημένους"
 
@@ -669,9 +706,6 @@ msgstr "Διαδρομή εγκατάστασης AppImage"
 msgid "Select Directory"
 msgstr "Επιλογή φακέλου"
 
-msgid "View Changelog"
-msgstr "Προβολή αρχείου αλλαγών"
-
 msgid "v0.0.0"
 msgstr "v0.0.0"
 
@@ -683,6 +717,9 @@ msgstr "Κοινότητα fluxer"
 
 msgid "Sponsor"
 msgstr "Χορηγός"
+
+msgid "View Changelog"
+msgstr "Προβολή αρχείου αλλαγών"
 
 msgid "Toggle output"
 msgstr "Εναλλαγή προβολής εξόδου"
@@ -843,7 +880,6 @@ msgstr "Επόμενο"
 msgid "Start Shelly"
 msgstr "Έναρξη Shelly"
 
-#| msgid "Enable AUR?"
 msgid "Enable Atoll?"
 msgstr ""
 
@@ -1496,7 +1532,6 @@ msgstr ""
 msgid "Install the selected packages?"
 msgstr ""
 
-#| msgid "Enable AUR"
 msgid "Enable Atoll"
 msgstr ""
 
@@ -1582,6 +1617,18 @@ msgstr "Η υπηρεσία εκκίνησης Systemd καταργήθηκε."
 msgid "AUR enabled"
 msgstr "AUR ενεργοποιημένο"
 
+msgid "System GTK"
+msgstr ""
+
+msgid "Follow system"
+msgstr ""
+
+msgid "Dark"
+msgstr ""
+
+msgid "Light"
+msgstr ""
+
 msgid "System Default"
 msgstr "Προεπιλογή συστήματος"
 
@@ -1627,8 +1674,11 @@ msgstr "Τουρκικά"
 msgid "中文（简体）"
 msgstr "Κινεζικά (Απλοποιημένα)"
 
-msgid "Packages"
-msgstr "Πακέτα"
+msgid "Default (auto-detect)"
+msgstr ""
+
+msgid "Custom…"
+msgstr ""
 
 msgid "Pending"
 msgstr "Σε εκκρεμότητα"
@@ -1760,7 +1810,6 @@ msgstr "Αναβάθμιση πακέτων"
 msgid "Refreshing package databases"
 msgstr "Ανανέωση βάσεων δεδομένων πακέτων"
 
-#| msgid "Removing Flatpak"
 msgid "Removing stale database lock"
 msgstr ""
 
@@ -1790,7 +1839,10 @@ msgstr ""
 msgid "Installing Flatpak and AppImage support"
 msgstr ""
 
-msgid "Main menu"
+msgid "BROWSE"
+msgstr ""
+
+msgid "SYSTEM"
 msgstr ""
 
 msgid "Expand sidebar"

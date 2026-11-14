@@ -12,10 +12,9 @@
     <property name="hexpand">true</property>
     <property name="vexpand">true</property>
     <property name="spacing">14</property>
-    <property name="margin-top">20</property>
-    <property name="margin-bottom">20</property>
-    <property name="margin-start">20</property>
-    <property name="margin-end">20</property>
+    <style>
+      <class name="page-body"/>
+    </style>
     <child>
       <object class="GtkBox">
         <property name="spacing">12</property>
@@ -33,6 +32,7 @@
                 </accessibility>
                 <style>
                   <class name="title-2"/>
+                  <class name="page-heading"/>
                 </style>
               </object>
             </child>
@@ -42,6 +42,7 @@
                 <property name="xalign">0</property>
                 <style>
                   <class name="dim-label"/>
+                  <class name="page-subtitle"/>
                 </style>
               </object>
             </child>

@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shelly-ui 3.1.10\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-11-04 12:08-0500\n"
+"POT-Creation-Date: 2026-11-13 21:12-0500\n"
 "PO-Revision-Date: 2026-10-30 22:43+0200\n"
 "Last-Translator: Francesc Pastó <francescpasto@proton.me>\n"
 "Language-Team: csnyder@seafoam-labs.org\n"
@@ -124,6 +124,9 @@ msgstr "Omet"
 msgid "AppImage"
 msgstr "AppImage"
 
+msgid "Install and integrate AppImage bundles."
+msgstr ""
+
 msgid "Search..."
 msgstr "Cerca..."
 
@@ -213,6 +216,9 @@ msgstr "Elimina"
 
 msgid "AUR"
 msgstr "AUR"
+
+msgid "Build and install packages from the Arch User Repository."
+msgstr ""
 
 msgid "Search the AUR by name or keyword"
 msgstr "Cerca a l'AUR per nom o paraula clau"
@@ -354,6 +360,9 @@ msgstr "Historial de versions"
 msgid "Flatpak"
 msgstr "Flatpak"
 
+msgid "Manage Flatpak applications and remotes."
+msgstr ""
+
 msgid "Search packages..."
 msgstr "Cerca paquets..."
 
@@ -435,6 +444,12 @@ msgstr "Accions del paquet"
 msgid "Package"
 msgstr "Paquet"
 
+msgid "Packages"
+msgstr "Paquets"
+
+msgid "Install and manage software on your system."
+msgstr ""
+
 msgid "Package Group Filter"
 msgstr "Filtre de grup de paquets"
 
@@ -503,15 +518,12 @@ msgstr "Suggeriments seleccionats per Seafoam Labs"
 msgid "Refresh the recommended packages list from the network"
 msgstr "Actualitza la llista de paquets recomanats des de la xarxa"
 
-#| msgid "Mixed selection"
 msgid "Clear selection"
 msgstr ""
 
-#| msgid "Recommended Packages"
 msgid "Deselect all recommended packages"
 msgstr ""
 
-#| msgid "Install the selected packages?"
 msgid "Install all selected packages in one transaction"
 msgstr ""
 
@@ -527,6 +539,12 @@ msgstr ""
 
 msgid "Shelly Search"
 msgstr "Cerca de Shelly"
+
+msgid "Search"
+msgstr ""
+
+msgid "Search across every enabled backend."
+msgstr ""
 
 msgid "Search standard repositories, AUR and Flatpak"
 msgstr "Cerca als repositoris estàndard, AUR i Flatpak"
@@ -561,6 +579,9 @@ msgstr ""
 msgid "Settings"
 msgstr "Paràmetres"
 
+msgid "Make Shelly feel at home on your desktop."
+msgstr ""
+
 msgid "General"
 msgstr "Opcions generals"
 
@@ -593,6 +614,15 @@ msgstr "Executa la safata com a cron"
 
 msgid "Tray update with ui"
 msgstr "Actualització de la safata amb IU"
+
+msgid "Update terminal"
+msgstr ""
+
+msgid "Terminal command"
+msgstr ""
+
+msgid "Custom update terminal command"
+msgstr ""
 
 msgid "Tray Check Interval (Hours)"
 msgstr "Interval de comprovació de la safata (hores)"
@@ -668,6 +698,12 @@ msgstr "Pàgina per defecte"
 msgid "Navigation style"
 msgstr "Estil de navegació"
 
+msgid "Theme"
+msgstr ""
+
+msgid "Color variant"
+msgstr ""
+
 msgid "Advanced"
 msgstr "Ajusts avançats"
 
@@ -689,9 +725,6 @@ msgstr "Camí d'instal·lació d'AppImage"
 msgid "Select Directory"
 msgstr "Selecciona el directori"
 
-msgid "View Changelog"
-msgstr "Veure registre de canvis"
-
 msgid "v0.0.0"
 msgstr "v0.0.0"
 
@@ -703,6 +736,9 @@ msgstr "Fluxer de la comunitat"
 
 msgid "Sponsor"
 msgstr "Patrocinador"
+
+msgid "View Changelog"
+msgstr "Veure registre de canvis"
 
 msgid "Toggle output"
 msgstr "Commuta la sortida"
@@ -866,24 +902,15 @@ msgstr "Següent"
 msgid "Start Shelly"
 msgstr "Inicia Shelly"
 
-#| msgid "Enable AUR?"
 msgid "Enable Atoll?"
 msgstr ""
 
-#| msgid ""
-#| "The Arch User Repository contains build scripts that are known as "
-#| "PKGBUILDs. Those scripts are uploaded by users, and are not verified or "
-#| "vetted in any way. Only enable this feature if you are comfortable in "
-#| "verifying the build scripts."
 msgid ""
 "Atoll contains build scripts that are known as PKGBUILDs. Those scripts are "
 "uploaded by users, and are not verified or vetted in any way. Only enable "
 "this feature if you are comfortable in verifying the build scripts."
 msgstr ""
 
-#| msgid ""
-#| "<a href=\"https://www.seafoam-labs.org/shelly-alpm/docs/aur-safety/\">AUR "
-#| "Safety Guide</a>"
 msgid ""
 "<a href=\"https://www.seafoam-labs.org/shelly-alpm/docs/aur-safety/\">Atoll "
 "Safety Guide</a>"
@@ -1502,17 +1529,12 @@ msgstr "S'estan instal·lant els paquets"
 msgid "Select package for batch installation"
 msgstr ""
 
-#| msgid "Search standard repositories, AUR and Flatpak"
 msgid "Search standard repositories, Atoll and Flatpak"
 msgstr ""
 
-#| msgid "Show results from the Arch User Repository"
 msgid "Show results from Atoll"
 msgstr ""
 
-#| msgid ""
-#| "Search the standard repositories, the AUR, and Flatpak all at once. Type "
-#| "a name to begin."
 msgid ""
 "Search the standard repositories, Atoll, and Flatpak all at once. Type a "
 "name to begin."
@@ -1543,7 +1565,6 @@ msgstr "Instal·la els paquets"
 msgid "Install the selected packages?"
 msgstr "Voleu instal·lar els paquets seleccionats?"
 
-#| msgid "Enable AUR"
 msgid "Enable Atoll"
 msgstr ""
 
@@ -1633,6 +1654,18 @@ msgstr "S'ha suprimit el servei d'inici de Systemd."
 msgid "AUR enabled"
 msgstr "AUR habilitat"
 
+msgid "System GTK"
+msgstr ""
+
+msgid "Follow system"
+msgstr ""
+
+msgid "Dark"
+msgstr ""
+
+msgid "Light"
+msgstr ""
+
 msgid "System Default"
 msgstr "Predeterminat del sistema"
 
@@ -1678,8 +1711,11 @@ msgstr "Turc"
 msgid "中文（简体）"
 msgstr "Xinès simplificat"
 
-msgid "Packages"
-msgstr "Paquets"
+msgid "Default (auto-detect)"
+msgstr ""
+
+msgid "Custom…"
+msgstr ""
 
 msgid "Pending"
 msgstr "Pendent"
@@ -1815,7 +1851,6 @@ msgstr "S'estan actualitzant els paquets"
 msgid "Refreshing package databases"
 msgstr "S'estan actualitzant les bases de dades de paquets"
 
-#| msgid "Removing Flatpak"
 msgid "Removing stale database lock"
 msgstr ""
 
@@ -1844,8 +1879,11 @@ msgstr ""
 msgid "Installing Flatpak and AppImage support"
 msgstr "S'està instal·lant el suport per a Flatpak i AppImage"
 
-msgid "Main menu"
-msgstr "Menú principal"
+msgid "BROWSE"
+msgstr ""
+
+msgid "SYSTEM"
+msgstr ""
 
 msgid "Expand sidebar"
 msgstr "Expandeix la barra lateral"
