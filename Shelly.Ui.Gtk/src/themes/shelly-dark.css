@@ -209,8 +209,24 @@
   color: #381e72;
   border: none;
 }
+/* The .shelly-root label pin overrides the button's inherited color, so
+   restate the accent foreground on the label/image themselves. */
+.shelly-root button.suggested-action label,
+.shelly-root button.suggested-action image {
+  color: #381e72;
+}
 .shelly-root button.suggested-action:hover {
   background: #eaddff;
+}
+.shelly-root button.suggested-action:active {
+  background: #bda6ee;
+}
+.shelly-root button.suggested-action:disabled {
+  background: alpha(#d0bcff, 0.12);
+}
+.shelly-root button.suggested-action:disabled label,
+.shelly-root button.suggested-action:disabled image {
+  color: #8f899b;
 }
 .shelly-root button.destructive-action {
   background: alpha(@error_color, 0.15);
@@ -347,20 +363,40 @@
   color: #381e72;
 }
 
-/* Scrollbars, separators, misc */
+/* Scrollbars, separators, misc. The trough is a visible pill rail; the
+   accent thumb rides inside it with 2px of rail showing on each side. */
 .shelly-root scrollbar trough {
-  background: transparent;
+  background: alpha(#e6e0e9, 0.08);
   border: none;
+  border-radius: 999px;
+  min-width: 10px;
+  min-height: 10px;
+  margin: 2px;
 }
 .shelly-root scrollbar slider {
-  background: alpha(#d0bcff, 0.3);
+  background: alpha(#d0bcff, 0.45);
+  border: none;
   border-radius: 999px;
   min-width: 6px;
   min-height: 6px;
   margin: 2px;
 }
 .shelly-root scrollbar slider:hover {
-  background: alpha(#d0bcff, 0.55);
+  background: alpha(#d0bcff, 0.7);
+}
+.shelly-root scrollbar slider:active {
+  background: alpha(#d0bcff, 0.85);
+}
+/* Stock themes collapse idle overlay scrollbars to a hairline; keep the
+   rail geometry so the track stays legible. */
+.shelly-root scrollbar.overlay-indicator:not(.dragging):not(.hovering) trough {
+  background: alpha(#e6e0e9, 0.06);
+}
+.shelly-root scrollbar.overlay-indicator:not(.dragging):not(.hovering) slider {
+  min-width: 6px;
+  min-height: 6px;
+  margin: 2px;
+  background: alpha(#d0bcff, 0.35);
 }
 .shelly-root separator {
   background: alpha(#e6e0e9, 0.1);

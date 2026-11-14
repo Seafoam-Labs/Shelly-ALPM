@@ -209,8 +209,24 @@
   color: #ffffff;
   border: none;
 }
+/* The .shelly-root label pin overrides the button's inherited color, so
+   restate the accent foreground on the label/image themselves. */
+.shelly-root button.suggested-action label,
+.shelly-root button.suggested-action image {
+  color: #ffffff;
+}
 .shelly-root button.suggested-action:hover {
   background: #7a63b8;
+}
+.shelly-root button.suggested-action:active {
+  background: #594391;
+}
+.shelly-root button.suggested-action:disabled {
+  background: alpha(#6750a4, 0.12);
+}
+.shelly-root button.suggested-action:disabled label,
+.shelly-root button.suggested-action:disabled image {
+  color: #7a7582;
 }
 .shelly-root button.destructive-action {
   background: alpha(@error_color, 0.12);
@@ -347,20 +363,40 @@
   color: #ffffff;
 }
 
-/* Scrollbars, separators, misc */
+/* Scrollbars, separators, misc. The trough is a visible pill rail; the
+   accent thumb rides inside it with 2px of rail showing on each side. */
 .shelly-root scrollbar trough {
-  background: transparent;
+  background: alpha(#1d1b20, 0.08);
   border: none;
+  border-radius: 999px;
+  min-width: 10px;
+  min-height: 10px;
+  margin: 2px;
 }
 .shelly-root scrollbar slider {
-  background: alpha(#6750a4, 0.35);
+  background: alpha(#6750a4, 0.5);
+  border: none;
   border-radius: 999px;
   min-width: 6px;
   min-height: 6px;
   margin: 2px;
 }
 .shelly-root scrollbar slider:hover {
-  background: alpha(#6750a4, 0.6);
+  background: alpha(#6750a4, 0.75);
+}
+.shelly-root scrollbar slider:active {
+  background: alpha(#6750a4, 0.9);
+}
+/* Stock themes collapse idle overlay scrollbars to a hairline; keep the
+   rail geometry so the track stays legible. */
+.shelly-root scrollbar.overlay-indicator:not(.dragging):not(.hovering) trough {
+  background: alpha(#1d1b20, 0.06);
+}
+.shelly-root scrollbar.overlay-indicator:not(.dragging):not(.hovering) slider {
+  min-width: 6px;
+  min-height: 6px;
+  margin: 2px;
+  background: alpha(#6750a4, 0.4);
 }
 .shelly-root separator {
   background: alpha(#1d1b20, 0.1);
