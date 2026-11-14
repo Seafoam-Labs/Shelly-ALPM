@@ -230,6 +230,9 @@
                               <object class="GtkBox" id="tray_auto_switch_box">
                                 <property name="orientation">horizontal</property>
                                 <property name="spacing">12</property>
+                                <style>
+                                  <class name="settings-form-row"/>
+                                </style>
                                 <child>
                                   <object class="GtkLabel">
                                     <property name="label" translatable="yes">Add Tray To Auto Start</property>
@@ -251,6 +254,9 @@
                               <object class="GtkBox" id="weekly_schedule_switch_box">
                                 <property name="orientation">horizontal</property>
                                 <property name="spacing">12</property>
+                                <style>
+                                  <class name="settings-form-row"/>
+                                </style>
                                 <child>
                                   <object class="GtkLabel">
                                     <property name="label" translatable="yes">Use weekly schedule</property>
@@ -272,6 +278,9 @@
                               <object class="GtkBox" id="tray_cron_box">
                                 <property name="orientation">horizontal</property>
                                 <property name="spacing">12</property>
+                                <style>
+                                  <class name="settings-form-row"/>
+                                </style>
                                 <child>
                                   <object class="GtkLabel">
                                     <property name="label" translatable="yes">Run Tray as cron</property>
@@ -293,6 +302,9 @@
                               <object class="GtkBox" id="use_ui_switch_box">
                                 <property name="orientation">horizontal</property>
                                 <property name="spacing">12</property>
+                                <style>
+                                  <class name="settings-form-row"/>
+                                </style>
                                 <child>
                                   <object class="GtkLabel">
                                     <property name="label" translatable="yes">Tray update with ui</property>
@@ -314,6 +326,9 @@
                               <object class="GtkBox" id="terminal_update_box">
                                 <property name="orientation">horizontal</property>
                                 <property name="spacing">12</property>
+                                <style>
+                                  <class name="settings-form-row"/>
+                                </style>
                                 <child>
                                   <object class="GtkLabel">
                                     <property name="label" translatable="yes">Update terminal</property>
@@ -349,6 +364,9 @@
                               <object class="GtkBox" id="tray_interval_box">
                                 <property name="orientation">horizontal</property>
                                 <property name="spacing">12</property>
+                                <style>
+                                  <class name="settings-form-row"/>
+                                </style>
                                 <child>
                                   <object class="GtkLabel">
                                     <property name="label" translatable="yes">Tray Check Interval (Hours)</property>
@@ -375,6 +393,9 @@
                               <object class="GtkBox" id="weekly_schedule_box">
                                 <property name="orientation">vertical</property>
                                 <property name="spacing">8</property>
+                                <style>
+                                  <class name="settings-form-row"/>
+                                </style>
                                 <child>
                                   <object class="GtkLabel">
                                     <property name="label" translatable="yes">Weekly Schedule</property>
@@ -530,6 +551,9 @@
                               <object class="GtkBox" id="symbolic_tray_box">
                                 <property name="orientation">horizontal</property>
                                 <property name="spacing">12</property>
+                                <style>
+                                  <class name="settings-form-row"/>
+                                </style>
                                 <child>
                                   <object class="GtkLabel">
                                     <property name="label" translatable="yes">Use Symbolic Tray Icon</property>
@@ -610,6 +634,9 @@
                               <object class="GtkBox" id="default_page_box">
                                 <property name="orientation">horizontal</property>
                                 <property name="spacing">12</property>
+                                <style>
+                                  <class name="settings-form-row"/>
+                                </style>
                                 <child>
                                   <object class="GtkLabel">
                                     <property name="label" translatable="yes">Default page</property>
@@ -823,6 +850,9 @@
                               <object class="GtkBox" id="appimage_install_path_box">
                                 <property name="orientation">horizontal</property>
                                 <property name="spacing">12</property>
+                                <style>
+                                  <class name="settings-form-row"/>
+                                </style>
                                 <child>
                                   <object class="GtkLabel">
                                     <property name="label" translatable="yes">AppImage Install Path</property>

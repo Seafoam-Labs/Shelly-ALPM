@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shelly-ui 2.2.4.1\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-11-13 21:12-0500\n"
+"POT-Creation-Date: 2026-11-13 21:34-0500\n"
 "PO-Revision-Date: 2026-11-09 14:25+0000\n"
 "Last-Translator: Ricardo Simões - xmcorporation.com "
 "<xmcorporation@gmail.com>\n"
@@ -126,7 +126,6 @@ msgstr "Ignorar"
 msgid "AppImage"
 msgstr "AppImage"
 
-#| msgid "Install a new AppImage from a file"
 msgid "Install and integrate AppImage bundles."
 msgstr ""
 
@@ -219,7 +218,6 @@ msgstr "Remover"
 msgid "AUR"
 msgstr "AUR"
 
-#| msgid "Show results from the Arch User Repository"
 msgid "Build and install packages from the Arch User Repository."
 msgstr ""
 
@@ -363,7 +361,6 @@ msgstr "Histórico de Versões"
 msgid "Flatpak"
 msgstr "Flatpak"
 
-#| msgid "No Flatpak applications are available."
 msgid "Manage Flatpak applications and remotes."
 msgstr ""
 
@@ -544,7 +541,6 @@ msgstr ""
 msgid "Shelly Search"
 msgstr "Procura do Shelly"
 
-#| msgid "Search..."
 msgid "Search"
 msgstr ""
 
@@ -619,7 +615,6 @@ msgstr "Executar Área de Notificação como cron"
 msgid "Tray update with ui"
 msgstr "Atualização da Área de Notificação com interface"
 
-#| msgid "Update Strategy"
 msgid "Update terminal"
 msgstr ""
 
@@ -1673,11 +1668,9 @@ msgstr "Serviço de arranque do Systemd removido."
 msgid "AUR enabled"
 msgstr "AUR ativado"
 
-#| msgid "System Tray"
 msgid "System GTK"
 msgstr ""
 
-#| msgid "system"
 msgid "Follow system"
 msgstr ""
 
@@ -1732,7 +1725,6 @@ msgstr "Türkçe"
 msgid "中文（简体）"
 msgstr "中文（简体）"
 
-#| msgid "Default page"
 msgid "Default (auto-detect)"
 msgstr ""
 

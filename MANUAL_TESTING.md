@@ -683,3 +683,6 @@ Document any known issues that are being tracked:
   switching to System GTK restores the desktop override.
 - [ ] With the desktop set to dark, `Follow system` opens dark without touching gsettings
   (portal-driven `gtk-interface-color-scheme` on GTK >= 4.23).
+- [ ] Round-trip Theme Shelly → System GTK → Shelly several times (also with dialogs or
+  popovers open): no crash, and the brand headerbar with circular window controls returns
+  each time (headerbar is kept alive across titlebar swaps).

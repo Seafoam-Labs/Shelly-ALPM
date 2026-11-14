@@ -114,6 +114,11 @@ fn loadSheet(prov: *gtk.CssProvider, dark: bool) void {
 fn ensureHeaderBar() *gtk.HeaderBar {
     if (headerbar) |bar| return bar;
     const bar = gtk.HeaderBar.new();
+    // Own a reference: the window sinks the floating ref while the bar is the
+    // titlebar and drops it again in system mode (setTitlebar(null)); without
+    // this ref the cached bar would be finalized and switching back to the
+    // built-in theme would re-attach freed memory.
+    _ = bar.as(gobject.Object).ref();
     gtk.Widget.addCssClass(bar.as(gtk.Widget), "shelly-headerbar");
 
     const brand = gtk.Box.new(.horizontal, 9);
@@ -211,11 +216,7 @@ fn setScopedVisible(root: *gtk.Widget, visible: bool) void {
     if (gtk.Widget.hasCssClass(root, "page-head-added") != 0 or gtk.Widget.hasCssClass(root, "nav-group") != 0) {
         gtk.Widget.setVisible(root, @intFromBool(visible));
     }
-    // Settings cards fill the content width in the built-in theme (mockup);
-    // system mode keeps the legacy centered 600px column.
-    if (gtk.Widget.hasCssClass(root, "settings-card") != 0) {
-        gtk.Widget.setSizeRequest(root, if (visible) -1 else 600, -1);
-    }
+
     var child = gtk.Widget.getFirstChild(root);
     while (child) |c| : (child = gtk.Widget.getNextSibling(c)) {
         setScopedVisible(c, visible);
