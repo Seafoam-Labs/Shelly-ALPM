@@ -1,7 +1,7 @@
 .{
     .name = .shelly_diagnostics,
     .fingerprint = 0xa462b69f7f2312f3,
-    .version = "3.2.1",
+    .version = "3.3.0",
     .minimum_zig_version = "0.17.1",
     .dependencies = .{},
     .paths = .{ "build.zig", "build.zig.zon", "src" },
