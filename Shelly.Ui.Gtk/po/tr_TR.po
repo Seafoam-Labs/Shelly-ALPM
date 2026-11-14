@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Shelly-ALPM / Shelly: UI\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-11-04 12:08-0500\n"
+"POT-Creation-Date: 2026-11-13 22:42-0500\n"
 "PO-Revision-Date: 2026-09-21 23:24-0400\n"
 "Last-Translator: Mehmet Akif Öngün <mehmetakif.ongun@proton.me>\n"
 "Language-Team: Turkish (Turkiye)<>\n"
@@ -123,6 +123,9 @@ msgstr "Atla"
 msgid "AppImage"
 msgstr "AppImage"
 
+msgid "Install and integrate AppImage bundles."
+msgstr ""
+
 msgid "Search..."
 msgstr "Ara..."
 
@@ -210,6 +213,9 @@ msgstr "Kaldır"
 
 msgid "AUR"
 msgstr "AUR"
+
+msgid "Build and install packages from the Arch User Repository."
+msgstr ""
 
 msgid "Search the AUR by name or keyword"
 msgstr "AUR'da isim veya anahtar kelime ile arat"
@@ -351,6 +357,9 @@ msgstr "Sürüm Geçmişi"
 msgid "Flatpak"
 msgstr "Flatpak"
 
+msgid "Manage Flatpak applications and remotes."
+msgstr ""
+
 msgid "Search packages..."
 msgstr "Paket ara..."
 
@@ -432,6 +441,12 @@ msgstr "Paket Eylemleri"
 msgid "Package"
 msgstr "Paket"
 
+msgid "Packages"
+msgstr "Paketler"
+
+msgid "Install and manage software on your system."
+msgstr ""
+
 msgid "Package Group Filter"
 msgstr "Paket Grubu Filtresi"
 
@@ -500,15 +515,12 @@ msgstr "Seafoam Labs'ten seçilmiş öneriler"
 msgid "Refresh the recommended packages list from the network"
 msgstr "Önerilen paketler listesini ağdan yenile"
 
-#| msgid "Mixed selection"
 msgid "Clear selection"
 msgstr ""
 
-#| msgid "Recommended Packages"
 msgid "Deselect all recommended packages"
 msgstr ""
 
-#| msgid "Install the selected packages?"
 msgid "Install all selected packages in one transaction"
 msgstr ""
 
@@ -524,6 +536,12 @@ msgstr ""
 
 msgid "Shelly Search"
 msgstr "Shelly Arama"
+
+msgid "Search"
+msgstr ""
+
+msgid "Search across every enabled backend."
+msgstr ""
 
 msgid "Search standard repositories, AUR and Flatpak"
 msgstr "Standart depolarda arama yap, AUR ve Flatpak"
@@ -554,6 +572,9 @@ msgstr ""
 
 msgid "Settings"
 msgstr "Ayarlar"
+
+msgid "Make Shelly feel at home on your desktop."
+msgstr ""
 
 msgid "General"
 msgstr "Genel"
@@ -587,6 +608,15 @@ msgstr "Tepsiyi cron olarak çalıştır"
 
 msgid "Tray update with ui"
 msgstr "Tepsiyi arayüzle güncelle"
+
+msgid "Update terminal"
+msgstr ""
+
+msgid "Terminal command"
+msgstr ""
+
+msgid "Custom update terminal command"
+msgstr ""
 
 msgid "Tray Check Interval (Hours)"
 msgstr "Tepsi Kontrol Aralığı (Saat)"
@@ -663,6 +693,12 @@ msgstr "Varsayılan Sayfa"
 msgid "Navigation style"
 msgstr "Navigasyon Stili"
 
+msgid "Theme"
+msgstr ""
+
+msgid "Color variant"
+msgstr ""
+
 msgid "Advanced"
 msgstr "Gelişmiş"
 
@@ -684,9 +720,6 @@ msgstr "AppImage Kurulum Yolu"
 msgid "Select Directory"
 msgstr "Dizin Seç"
 
-msgid "View Changelog"
-msgstr "Değişiklik Günlüğünü Görüntüle"
-
 msgid "v0.0.0"
 msgstr ""
 
@@ -699,20 +732,32 @@ msgstr "Topluluk Katkıcısı"
 msgid "Sponsor"
 msgstr "Sponsor"
 
+msgid "View Changelog"
+msgstr "Değişiklik Günlüğünü Görüntüle"
+
 msgid "Toggle output"
 msgstr "Çıktıyı Aç/Kapat"
 
 msgid "Done"
 msgstr "Tamamlandı"
 
+msgid "1 · Download"
+msgstr ""
+
+msgid "2 · Install"
+msgstr ""
+
 msgid "Update"
 msgstr "Güncelleme"
 
-msgid "Available Updates"
-msgstr "Mevcut Güncellemeler"
+msgid "Updates"
+msgstr ""
 
 msgid "7 of 7 updates included"
 msgstr "7 güncellemenin 7'si dahil edildi"
+
+msgid "System"
+msgstr "Sistem"
 
 msgid "Check all enabled sources again"
 msgstr "Tüm etkinleştirilmiş kaynakları tekrar kontrol et"
@@ -720,11 +765,8 @@ msgstr "Tüm etkinleştirilmiş kaynakları tekrar kontrol et"
 msgid "Check Again"
 msgstr "Tekrar kontrol et"
 
-msgid "Upgrade"
-msgstr "Yükselt"
-
-msgid "System"
-msgstr "Sistem"
+msgid "Available updates"
+msgstr ""
 
 msgid "Checking for updates…"
 msgstr "Güncellemeler için kontrol ediliyor"
@@ -734,6 +776,12 @@ msgstr "Sisteminiz güncel"
 
 msgid "Could not check for updates."
 msgstr "Güncellemeler kontrol edilemedi"
+
+msgid "Upgrading may require administrator authorization."
+msgstr ""
+
+msgid "Upgrade"
+msgstr "Yükselt"
 
 msgid "Utilities"
 msgstr "Araçlar"
@@ -859,15 +907,9 @@ msgstr "Sıradaki"
 msgid "Start Shelly"
 msgstr "Shell'i başlat"
 
-#| msgid "Enable AUR?"
 msgid "Enable Atoll?"
 msgstr ""
 
-#| msgid ""
-#| "The Arch User Repository contains build scripts that are known as "
-#| "PKGBUILDs. Those scripts are uploaded by users, and are not verified or "
-#| "vetted in any way. Only enable this feature if you are comfortable in "
-#| "verifying the build scripts."
 msgid ""
 "Atoll contains build scripts that are known as PKGBUILDs. Those scripts are "
 "uploaded by users, and are not verified or vetted in any way. Only enable "
@@ -1488,17 +1530,12 @@ msgstr "Paketler kuruluyor"
 msgid "Select package for batch installation"
 msgstr ""
 
-#| msgid "Search standard repositories, AUR and Flatpak"
 msgid "Search standard repositories, Atoll and Flatpak"
 msgstr ""
 
-#| msgid "Show results from the Arch User Repository"
 msgid "Show results from Atoll"
 msgstr ""
 
-#| msgid ""
-#| "Search the standard repositories, the AUR, and Flatpak all at once. Type "
-#| "a name to begin."
 msgid ""
 "Search the standard repositories, Atoll, and Flatpak all at once. Type a "
 "name to begin."
@@ -1528,7 +1565,6 @@ msgstr "Paketleri kurun"
 msgid "Install the selected packages?"
 msgstr "Seçilmiş paketleri kurun"
 
-#| msgid "Enable AUR"
 msgid "Enable Atoll"
 msgstr ""
 
@@ -1618,6 +1654,18 @@ msgstr "Systemd başlangıç hizmeti kaldırıldı."
 msgid "AUR enabled"
 msgstr "AUR etkinleştirildi"
 
+msgid "System GTK"
+msgstr ""
+
+msgid "Follow system"
+msgstr ""
+
+msgid "Dark"
+msgstr ""
+
+msgid "Light"
+msgstr ""
+
 msgid "System Default"
 msgstr "Sistem Varsayılanı"
 
@@ -1663,8 +1711,11 @@ msgstr ""
 msgid "中文（简体）"
 msgstr ""
 
-msgid "Packages"
-msgstr "Paketler"
+msgid "Default (auto-detect)"
+msgstr ""
+
+msgid "Custom…"
+msgstr ""
 
 msgid "Pending"
 msgstr "Askıda"
@@ -1695,6 +1746,9 @@ msgstr "Kesintiye uğradı"
 
 msgid "Cancelled"
 msgstr "İptal edildi"
+
+msgid "Overall progress"
+msgstr ""
 
 msgid "Could not start the requested operation."
 msgstr "İstenilen operasyon gerçekleşemedi."
@@ -1741,6 +1795,27 @@ msgstr "Çakışmalar denetleniyor"
 msgid "Checking disk space"
 msgstr "Disk alanı denetleniyor"
 
+msgid "Preparing transaction"
+msgstr ""
+
+msgid "Downloading packages"
+msgstr ""
+
+msgid "about"
+msgstr ""
+
+msgid "s left"
+msgstr ""
+
+msgid "packages downloaded"
+msgstr ""
+
+msgid "packages processed"
+msgstr ""
+
+msgid "Completed"
+msgstr ""
+
 msgid "Transaction Completed"
 msgstr "İşlem tamamlandı"
 
@@ -1784,6 +1859,9 @@ msgstr "Sistem paket güncellemesi"
 msgid "AUR package update"
 msgstr "AUR paket güncellemesi"
 
+msgid "Include this update"
+msgstr ""
+
 msgid "Update this package"
 msgstr "Bu paketi güncelle"
 
@@ -1793,13 +1871,21 @@ msgstr "güncellemeler eklendi"
 msgid "Updates included"
 msgstr "Güncellemeler eklendi"
 
+msgid "No download required"
+msgstr ""
+
+msgid "Total download:"
+msgstr ""
+
+msgid "Upgrade Selected"
+msgstr ""
+
 msgid "Upgrading packages"
 msgstr "Paketler yükseltiliyor"
 
 msgid "Refreshing package databases"
 msgstr "Paket veri tabanı yenileniyor"
 
-#| msgid "Removing Flatpak"
 msgid "Removing stale database lock"
 msgstr ""
 
@@ -1828,7 +1914,10 @@ msgstr ""
 msgid "Installing Flatpak and AppImage support"
 msgstr "Flatpak ve AppImage desteği kuruluyor"
 
-msgid "Main menu"
+msgid "BROWSE"
+msgstr ""
+
+msgid "SYSTEM"
 msgstr ""
 
 msgid "Expand sidebar"

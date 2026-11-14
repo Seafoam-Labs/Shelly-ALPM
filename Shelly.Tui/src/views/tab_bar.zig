@@ -10,12 +10,13 @@ pub const Tab = enum {
     packages,
     aur,
     flatpak,
+    appimage,
     upgrade,
     settings,
 
     pub const always: []const Tab = &.{ .packages, .upgrade, .settings };
 
-    pub const all: []const Tab = &.{ .packages, .aur, .flatpak, .upgrade, .settings };
+    pub const all: []const Tab = &.{ .packages, .aur, .flatpak, .appimage, .upgrade, .settings };
 
     pub fn title(self: Tab) []const u8 {
         return switch (self) {
@@ -23,6 +24,7 @@ pub const Tab = enum {
             .aur => "AUR",
             .upgrade => "Updates",
             .flatpak => "Flatpak",
+            .appimage => "AppImage",
             .settings => "Settings",
         };
     }
@@ -35,6 +37,7 @@ pub const Tab = enum {
                 .packages => "\u{f487}",
                 .aur => "\u{f303}",
                 .flatpak => "\u{f1b2}",
+                .appimage => "\u{f085}",
                 .upgrade => "\u{f46a}",
                 .settings => "\u{f423}",
             },
@@ -42,6 +45,7 @@ pub const Tab = enum {
                 .packages => "[#]",
                 .aur => "[*]",
                 .flatpak => "[F]",
+                .appimage => "[A]",
                 .upgrade => "[^]",
                 .settings => "[=]",
             },

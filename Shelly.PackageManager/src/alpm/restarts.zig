@@ -241,6 +241,44 @@ pub fn check(self: anytype, options: RestartCheckOptions) error{OutOfMemory}!Res
                 try appendSkipped(self, &skipped_services, service, .session_critical);
                 continue;
             }
+            // cgroup paths expose the canonical unit name, not aliases such as
+            // display-manager.service. Resolve Names before deciding a unit is
+            // safe to restart, and fail closed when the lookup is unavailable.
+            const names_result = std.process.run(self.allocator, self.io(), .{
+                .argv = &.{ options.systemctl_path, "show", "--property=Names", "--value", service },
+                .stdout_limit = .limited(64 * 1024),
+                .stderr_limit = .limited(64 * 1024),
+            }) catch |err| {
+                try appendFailure(self, &failures, service, .spawn, null, @errorName(err));
+                continue;
+            };
+            defer self.allocator.free(names_result.stdout);
+            defer self.allocator.free(names_result.stderr);
+
+            var names_critical = false;
+            switch (names_result.term) {
+                .exited => |code| {
+                    if (code != 0) {
+                        const stderr = std.mem.trim(u8, names_result.stderr, " \t\r\n");
+                        const message = if (stderr.len != 0) stderr else "Could not resolve systemd unit names; automatic restart skipped.";
+                        try appendFailure(self, &failures, service, .exit_status, code, message);
+                        continue;
+                    }
+                    if (std.mem.trim(u8, names_result.stdout, " \t\r\n").len == 0) {
+                        try appendFailure(self, &failures, service, .exit_status, code, "Could not resolve systemd unit names; automatic restart skipped.");
+                        continue;
+                    }
+                    names_critical = namesIncludeSessionCritical(names_result.stdout);
+                },
+                else => {
+                    try appendFailure(self, &failures, service, .terminated, null, "Could not resolve systemd unit names; automatic restart skipped.");
+                    continue;
+                },
+            }
+            if (names_critical) {
+                try appendSkipped(self, &skipped_services, service, .session_critical);
+                continue;
+            }
             if (!unitIsActive(self, options.systemctl_path, service)) {
                 try appendSkipped(self, &skipped_services, service, .inactive);
                 continue;
@@ -413,6 +451,26 @@ fn appendSkipped(
         return error.OutOfMemory;
 }
 
+fn appendFailure(
+    self: anytype,
+    failures: *std.ArrayList(ServiceRestartFailure),
+    service: []const u8,
+    kind: ServiceRestartFailureKind,
+    exit_code: ?u8,
+    message: []const u8,
+) error{OutOfMemory}!void {
+    const owned_message = self.allocator.dupe(u8, message) catch return error.OutOfMemory;
+    errdefer self.allocator.free(owned_message);
+    const owned_service = self.allocator.dupe(u8, service) catch return error.OutOfMemory;
+    errdefer self.allocator.free(owned_service);
+    failures.append(self.allocator, .{
+        .service = owned_service,
+        .kind = kind,
+        .exit_code = exit_code,
+        .message = owned_message,
+    }) catch return error.OutOfMemory;
+}
+
 /// Runs `systemctl is-active --quiet`. Only the documented inactive (3) and
 /// unknown (4) exit codes skip a restart; other failures proceed so the
 /// restart attempt reports the real error.
@@ -469,6 +527,7 @@ pub fn isSessionCriticalUnit(unit: []const u8) bool {
         "sddm.service",
         "lightdm.service",
         "lxdm.service",
+        "plasmalogin.service",
         "pearl-greeter.service",
         "devario-gpu-driver.service",
         "devario-gpu-hotplug.service",
@@ -478,6 +537,14 @@ pub fn isSessionCriticalUnit(unit: []const u8) bool {
     }
     return (std.mem.startsWith(u8, unit, "user@") or std.mem.startsWith(u8, unit, "getty@")) and
         std.mem.endsWith(u8, unit, ".service");
+}
+
+fn namesIncludeSessionCritical(names: []const u8) bool {
+    var tokens = std.mem.tokenizeAny(u8, names, " \t\r\n");
+    while (tokens.next()) |name| {
+        if (isSessionCriticalUnit(name)) return true;
+    }
+    return false;
 }
 
 pub fn isCriticalRestartProcess(command: []const u8) bool {
@@ -516,10 +583,21 @@ test "session-critical units are never restarted automatically" {
     const testing = std.testing;
     try testing.expect(isSessionCriticalUnit("dbus-broker.service"));
     try testing.expect(isSessionCriticalUnit("systemd-logind.service"));
+    try testing.expect(isSessionCriticalUnit("plasmalogin.service"));
     try testing.expect(isSessionCriticalUnit("pearl-greeter.service"));
     try testing.expect(isSessionCriticalUnit("getty@tty1.service"));
     try testing.expect(isSessionCriticalUnit("user@1000.service"));
     try testing.expect(!isSessionCriticalUnit("NetworkManager.service"));
+}
+
+test "session-critical classification matches any name in systemd Names output" {
+    const testing = std.testing;
+    try testing.expect(namesIncludeSessionCritical("plasmalogin.service display-manager.service"));
+    try testing.expect(namesIncludeSessionCritical("custom-dm.service display-manager.service"));
+    try testing.expect(namesIncludeSessionCritical("display-manager.service"));
+    try testing.expect(namesIncludeSessionCritical("dbus-broker.service dbus.service"));
+    try testing.expect(!namesIncludeSessionCritical("demo.service"));
+    try testing.expect(!namesIncludeSessionCritical(""));
 }
 
 test "user-slice cgroups identify session restarts and not system reboots" {
@@ -623,4 +701,171 @@ test "report policy lists affected services without invoking systemctl" {
     try testing.expectEqual(@as(usize, 0), report.restarted_services.len);
     try testing.expectEqual(@as(usize, 0), report.skipped_services.len);
     try testing.expectEqual(@as(usize, 0), report.failures.len);
+}
+
+fn writeTestExecutable(path: []const u8, contents: []const u8) !void {
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = path, .data = contents });
+    var file = try std.Io.Dir.cwd().openFile(std.testing.io, path, .{ .mode = .read_write });
+    defer file.close(std.testing.io);
+    try file.setPermissions(std.testing.io, .fromMode(0o755));
+}
+
+fn writeFakeSystemctl(path: []const u8, log_path: []const u8, show_output: []const u8, show_exit: u8) !void {
+    const script = try std.fmt.allocPrint(
+        std.testing.allocator,
+        "#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"{s}\"\nif [ \"$1\" = show ]; then\n  printf '%s\\n' '{s}'\n  exit {d}\nfi\nexit 0\n",
+        .{ log_path, show_output, show_exit },
+    );
+    defer std.testing.allocator.free(script);
+    try writeTestExecutable(path, script);
+}
+
+test "automatic restarts resolve display-manager aliases before restarting" {
+    if (builtin.os.tag != .linux) return error.SkipZigTest;
+    const testing = std.testing;
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+    const root = try tmp.dir.realPathFileAlloc(testing.io, ".", testing.allocator);
+    defer testing.allocator.free(root);
+
+    const proc_root = try std.fs.path.join(testing.allocator, &.{ root, "proc" });
+    defer testing.allocator.free(proc_root);
+    const modules_root = try std.fs.path.join(testing.allocator, &.{ root, "modules" });
+    defer testing.allocator.free(modules_root);
+    const kernel_parent = try std.fs.path.join(testing.allocator, &.{ proc_root, "sys", "kernel" });
+    defer testing.allocator.free(kernel_parent);
+    const process_dir = try std.fs.path.join(testing.allocator, &.{ proc_root, "123" });
+    defer testing.allocator.free(process_dir);
+    const kernel_file = try std.fs.path.join(testing.allocator, &.{ kernel_parent, "osrelease" });
+    defer testing.allocator.free(kernel_file);
+    const maps_file = try std.fs.path.join(testing.allocator, &.{ process_dir, "maps" });
+    defer testing.allocator.free(maps_file);
+    const comm_file = try std.fs.path.join(testing.allocator, &.{ process_dir, "comm" });
+    defer testing.allocator.free(comm_file);
+    const cgroup_file = try std.fs.path.join(testing.allocator, &.{ process_dir, "cgroup" });
+    defer testing.allocator.free(cgroup_file);
+    const kernel_dir = try std.fs.path.join(testing.allocator, &.{ modules_root, "6.12.1-test" });
+    defer testing.allocator.free(kernel_dir);
+    const systemctl_path = try std.fs.path.join(testing.allocator, &.{ root, "systemctl" });
+    defer testing.allocator.free(systemctl_path);
+    const log_path = try std.fs.path.join(testing.allocator, &.{ root, "systemctl.log" });
+    defer testing.allocator.free(log_path);
+
+    try std.Io.Dir.cwd().createDirPath(testing.io, kernel_parent);
+    try std.Io.Dir.cwd().createDirPath(testing.io, process_dir);
+    try std.Io.Dir.cwd().createDirPath(testing.io, kernel_dir);
+    try std.Io.Dir.cwd().writeFile(testing.io, .{ .sub_path = kernel_file, .data = "6.12.1-test\n" });
+    try std.Io.Dir.cwd().writeFile(testing.io, .{
+        .sub_path = maps_file,
+        .data = "7f00-7f01 r-xp 00000000 00:00 0 /usr/lib/libdemo.so.1 (deleted)\n",
+    });
+    try std.Io.Dir.cwd().writeFile(testing.io, .{ .sub_path = comm_file, .data = "demo\n" });
+    try std.Io.Dir.cwd().writeFile(testing.io, .{ .sub_path = log_path, .data = "" });
+
+    const Host = struct {
+        allocator: std.mem.Allocator,
+        pub fn io(self: *@This()) std.Io {
+            _ = self;
+            return testing.io;
+        }
+    };
+    var host = Host{ .allocator = testing.allocator };
+
+    // A canonical display-manager name absent from the exact list is still
+    // protected through its display-manager.service alias.
+    try std.Io.Dir.cwd().writeFile(testing.io, .{
+        .sub_path = cgroup_file,
+        .data = "0::/system.slice/custom-dm.service\n",
+    });
+    try writeFakeSystemctl(systemctl_path, log_path, "custom-dm.service display-manager.service", 0);
+    try std.Io.Dir.cwd().writeFile(testing.io, .{ .sub_path = log_path, .data = "" });
+    {
+        var report = try check(&host, .{
+            .proc_root = proc_root,
+            .modules_root = modules_root,
+            .systemctl_path = systemctl_path,
+            .policy = .automatic,
+        });
+        defer report.deinit();
+        try testing.expectEqual(@as(usize, 1), report.skipped_services.len);
+        try testing.expectEqualStrings("custom-dm.service", report.skipped_services[0].service);
+        try testing.expectEqual(contract.RestartSkipReason.session_critical, report.skipped_services[0].reason);
+        try testing.expectEqual(@as(usize, 0), report.restarted_services.len);
+        try testing.expectEqual(@as(usize, 0), report.failures.len);
+        const log = try pseudo_file.readAlloc(testing.io, testing.allocator, log_path, .limited(64 * 1024));
+        defer testing.allocator.free(log);
+        try testing.expect(std.mem.indexOf(u8, log, "show --property=Names --value custom-dm.service") != null);
+        try testing.expect(std.mem.indexOf(u8, log, "try-restart") == null);
+    }
+
+    // Plasma Login Manager is also covered directly when alias lookup is unavailable.
+    try std.Io.Dir.cwd().writeFile(testing.io, .{
+        .sub_path = cgroup_file,
+        .data = "0::/system.slice/plasmalogin.service\n",
+    });
+    try writeFakeSystemctl(systemctl_path, log_path, "", 1);
+    try std.Io.Dir.cwd().writeFile(testing.io, .{ .sub_path = log_path, .data = "" });
+    {
+        var report = try check(&host, .{
+            .proc_root = proc_root,
+            .modules_root = modules_root,
+            .systemctl_path = systemctl_path,
+            .policy = .automatic,
+        });
+        defer report.deinit();
+        try testing.expectEqual(@as(usize, 1), report.skipped_services.len);
+        try testing.expectEqualStrings("plasmalogin.service", report.skipped_services[0].service);
+        try testing.expectEqual(contract.RestartSkipReason.session_critical, report.skipped_services[0].reason);
+        try testing.expectEqual(@as(usize, 0), report.restarted_services.len);
+        try testing.expectEqual(@as(usize, 0), report.failures.len);
+        const log = try pseudo_file.readAlloc(testing.io, testing.allocator, log_path, .limited(64 * 1024));
+        defer testing.allocator.free(log);
+        try testing.expectEqual(@as(usize, 0), log.len);
+    }
+
+    // Safe units still restart after their names resolve without a critical alias.
+    try std.Io.Dir.cwd().writeFile(testing.io, .{
+        .sub_path = cgroup_file,
+        .data = "0::/system.slice/demo.service\n",
+    });
+    try writeFakeSystemctl(systemctl_path, log_path, "demo.service", 0);
+    try std.Io.Dir.cwd().writeFile(testing.io, .{ .sub_path = log_path, .data = "" });
+    {
+        var report = try check(&host, .{
+            .proc_root = proc_root,
+            .modules_root = modules_root,
+            .systemctl_path = systemctl_path,
+            .policy = .automatic,
+        });
+        defer report.deinit();
+        try testing.expectEqual(@as(usize, 1), report.restarted_services.len);
+        try testing.expectEqualStrings("demo.service", report.restarted_services[0]);
+        try testing.expectEqual(@as(usize, 0), report.skipped_services.len);
+        try testing.expectEqual(@as(usize, 0), report.failures.len);
+        const log = try pseudo_file.readAlloc(testing.io, testing.allocator, log_path, .limited(64 * 1024));
+        defer testing.allocator.free(log);
+        try testing.expect(std.mem.indexOf(u8, log, "try-restart demo.service") != null);
+    }
+
+    // A failed Names lookup must never fall through to try-restart.
+    try writeFakeSystemctl(systemctl_path, log_path, "", 1);
+    try std.Io.Dir.cwd().writeFile(testing.io, .{ .sub_path = log_path, .data = "" });
+    {
+        var report = try check(&host, .{
+            .proc_root = proc_root,
+            .modules_root = modules_root,
+            .systemctl_path = systemctl_path,
+            .policy = .automatic,
+        });
+        defer report.deinit();
+        try testing.expectEqual(@as(usize, 0), report.restarted_services.len);
+        try testing.expectEqual(@as(usize, 0), report.skipped_services.len);
+        try testing.expectEqual(@as(usize, 1), report.failures.len);
+        try testing.expectEqualStrings("demo.service", report.failures[0].service);
+        try testing.expectEqual(contract.ServiceRestartFailureKind.exit_status, report.failures[0].kind);
+        try testing.expectEqual(@as(?u8, 1), report.failures[0].exit_code);
+        const log = try pseudo_file.readAlloc(testing.io, testing.allocator, log_path, .limited(64 * 1024));
+        defer testing.allocator.free(log);
+        try testing.expect(std.mem.indexOf(u8, log, "try-restart") == null);
+    }
 }

@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shelly-ui 2.3.0.1\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-11-04 12:08-0500\n"
+"POT-Creation-Date: 2026-11-13 22:42-0500\n"
 "PO-Revision-Date: 2026-09-14 21:25+0400\n"
 "Last-Translator: Andrei Stepanov <adem4ik@gmail.com>\n"
 "Language-Team: Russian (Russia) <anton@azdanov.dev>\n"
@@ -126,6 +126,9 @@ msgstr "Пропустить"
 msgid "AppImage"
 msgstr "AppImage"
 
+msgid "Install and integrate AppImage bundles."
+msgstr ""
+
 msgid "Search..."
 msgstr "Поиск..."
 
@@ -214,6 +217,9 @@ msgstr "Удалить"
 
 msgid "AUR"
 msgstr "AUR"
+
+msgid "Build and install packages from the Arch User Repository."
+msgstr ""
 
 msgid "Search the AUR by name or keyword"
 msgstr "Поиск в AUR по имени или ключевому слову"
@@ -354,6 +360,9 @@ msgstr "История версий"
 msgid "Flatpak"
 msgstr "Flatpak"
 
+msgid "Manage Flatpak applications and remotes."
+msgstr ""
+
 msgid "Search packages..."
 msgstr "Поиск пакетов..."
 
@@ -435,6 +444,12 @@ msgstr "Действия с пакетами"
 msgid "Package"
 msgstr "Пакет"
 
+msgid "Packages"
+msgstr "Пакеты"
+
+msgid "Install and manage software on your system."
+msgstr ""
+
 msgid "Package Group Filter"
 msgstr "Фильтр групп пакетов"
 
@@ -503,15 +518,12 @@ msgstr "Отобранные рекомендации от Seafoam Labs"
 msgid "Refresh the recommended packages list from the network"
 msgstr "Обновить список рекомендуемых пакетов из сети"
 
-#| msgid "Mixed selection"
 msgid "Clear selection"
 msgstr ""
 
-#| msgid "Recommended Packages"
 msgid "Deselect all recommended packages"
 msgstr ""
 
-#| msgid "Install the selected packages?"
 msgid "Install all selected packages in one transaction"
 msgstr ""
 
@@ -527,6 +539,12 @@ msgstr ""
 
 msgid "Shelly Search"
 msgstr "Поиск Shelly"
+
+msgid "Search"
+msgstr ""
+
+msgid "Search across every enabled backend."
+msgstr ""
 
 msgid "Search standard repositories, AUR and Flatpak"
 msgstr "Поиск в стандартных репозиториях, AUR и Flatpak"
@@ -558,6 +576,9 @@ msgstr ""
 
 msgid "Settings"
 msgstr "Настройки"
+
+msgid "Make Shelly feel at home on your desktop."
+msgstr ""
 
 msgid "General"
 msgstr "Общие"
@@ -591,6 +612,15 @@ msgstr "Запускать трей как cron"
 
 msgid "Tray update with ui"
 msgstr "Обновление трея вместе с интерфейсом"
+
+msgid "Update terminal"
+msgstr ""
+
+msgid "Terminal command"
+msgstr ""
+
+msgid "Custom update terminal command"
+msgstr ""
 
 msgid "Tray Check Interval (Hours)"
 msgstr "Интервал проверки в трее (часы)"
@@ -666,6 +696,12 @@ msgstr "Страница по умолчанию"
 msgid "Navigation style"
 msgstr "Стиль навигации"
 
+msgid "Theme"
+msgstr ""
+
+msgid "Color variant"
+msgstr ""
+
 msgid "Advanced"
 msgstr "Дополнительно"
 
@@ -687,9 +723,6 @@ msgstr "Путь установки AppImage"
 msgid "Select Directory"
 msgstr "Выбрать каталог"
 
-msgid "View Changelog"
-msgstr "Обзор журнала изменений"
-
 msgid "v0.0.0"
 msgstr "v0.0.0"
 
@@ -702,20 +735,32 @@ msgstr "Сообщество Fluxer"
 msgid "Sponsor"
 msgstr "Поддержать"
 
+msgid "View Changelog"
+msgstr "Обзор журнала изменений"
+
 msgid "Toggle output"
 msgstr "Включить/отключить вывод"
 
 msgid "Done"
 msgstr "Готово"
 
+msgid "1 · Download"
+msgstr ""
+
+msgid "2 · Install"
+msgstr ""
+
 msgid "Update"
 msgstr "Обновить"
 
-msgid "Available Updates"
-msgstr "Доступные обновления"
+msgid "Updates"
+msgstr ""
 
 msgid "7 of 7 updates included"
 msgstr "7 из 7 обновлений включены"
+
+msgid "System"
+msgstr "Система"
 
 msgid "Check all enabled sources again"
 msgstr "Проверить все включённые источники снова"
@@ -723,11 +768,8 @@ msgstr "Проверить все включённые источники сно
 msgid "Check Again"
 msgstr "Проверить снова"
 
-msgid "Upgrade"
-msgstr "Обновить"
-
-msgid "System"
-msgstr "Система"
+msgid "Available updates"
+msgstr ""
 
 msgid "Checking for updates…"
 msgstr "Проверяются обновления…"
@@ -737,6 +779,12 @@ msgstr "Ваша система обновлена"
 
 msgid "Could not check for updates."
 msgstr "Не удалось проверить обновления."
+
+msgid "Upgrading may require administrator authorization."
+msgstr ""
+
+msgid "Upgrade"
+msgstr "Обновить"
 
 msgid "Utilities"
 msgstr "Инструменты"
@@ -861,24 +909,15 @@ msgstr "Далее"
 msgid "Start Shelly"
 msgstr "Запустить Shelly"
 
-#| msgid "Enable AUR?"
 msgid "Enable Atoll?"
 msgstr ""
 
-#| msgid ""
-#| "The Arch User Repository contains build scripts that are known as "
-#| "PKGBUILDs. Those scripts are uploaded by users, and are not verified or "
-#| "vetted in any way. Only enable this feature if you are comfortable in "
-#| "verifying the build scripts."
 msgid ""
 "Atoll contains build scripts that are known as PKGBUILDs. Those scripts are "
 "uploaded by users, and are not verified or vetted in any way. Only enable "
 "this feature if you are comfortable in verifying the build scripts."
 msgstr ""
 
-#| msgid ""
-#| "<a href=\"https://www.seafoam-labs.org/shelly-alpm/docs/aur-safety/\">AUR "
-#| "Safety Guide</a>"
 msgid ""
 "<a href=\"https://www.seafoam-labs.org/shelly-alpm/docs/aur-safety/\">Atoll "
 "Safety Guide</a>"
@@ -1493,17 +1532,12 @@ msgstr "Установка пакетов"
 msgid "Select package for batch installation"
 msgstr ""
 
-#| msgid "Search standard repositories, AUR and Flatpak"
 msgid "Search standard repositories, Atoll and Flatpak"
 msgstr ""
 
-#| msgid "Show results from the Arch User Repository"
 msgid "Show results from Atoll"
 msgstr ""
 
-#| msgid ""
-#| "Search the standard repositories, the AUR, and Flatpak all at once. Type "
-#| "a name to begin."
 msgid ""
 "Search the standard repositories, Atoll, and Flatpak all at once. Type a "
 "name to begin."
@@ -1534,7 +1568,6 @@ msgstr "Установить пакеты"
 msgid "Install the selected packages?"
 msgstr "Установить выбранные пакеты?"
 
-#| msgid "Enable AUR"
 msgid "Enable Atoll"
 msgstr ""
 
@@ -1624,6 +1657,18 @@ msgstr "Служба автозапуска systemd удалена."
 msgid "AUR enabled"
 msgstr "AUR включён"
 
+msgid "System GTK"
+msgstr ""
+
+msgid "Follow system"
+msgstr ""
+
+msgid "Dark"
+msgstr ""
+
+msgid "Light"
+msgstr ""
+
 msgid "System Default"
 msgstr "Системный язык"
 
@@ -1669,8 +1714,11 @@ msgstr "Турецкий"
 msgid "中文（简体）"
 msgstr "Китайский (упрощённый)"
 
-msgid "Packages"
-msgstr "Пакеты"
+msgid "Default (auto-detect)"
+msgstr ""
+
+msgid "Custom…"
+msgstr ""
 
 msgid "Pending"
 msgstr "Ожидание"
@@ -1701,6 +1749,9 @@ msgstr "Прервано"
 
 msgid "Cancelled"
 msgstr "Отменено"
+
+msgid "Overall progress"
+msgstr ""
 
 msgid "Could not start the requested operation."
 msgstr "Не удалось начать запрошенную операцию."
@@ -1747,6 +1798,27 @@ msgstr "Проверка конфликтов"
 msgid "Checking disk space"
 msgstr "Проверка свободного места на диске"
 
+msgid "Preparing transaction"
+msgstr ""
+
+msgid "Downloading packages"
+msgstr ""
+
+msgid "about"
+msgstr ""
+
+msgid "s left"
+msgstr ""
+
+msgid "packages downloaded"
+msgstr ""
+
+msgid "packages processed"
+msgstr ""
+
+msgid "Completed"
+msgstr ""
+
 msgid "Transaction Completed"
 msgstr "Транзакция завершена"
 
@@ -1791,6 +1863,9 @@ msgstr "Обновление системного пакета"
 msgid "AUR package update"
 msgstr "Обновление пакета AUR"
 
+msgid "Include this update"
+msgstr ""
+
 msgid "Update this package"
 msgstr "Обновить этот пакет"
 
@@ -1800,13 +1875,21 @@ msgstr "обновлений включено"
 msgid "Updates included"
 msgstr "Обновления включены"
 
+msgid "No download required"
+msgstr ""
+
+msgid "Total download:"
+msgstr ""
+
+msgid "Upgrade Selected"
+msgstr ""
+
 msgid "Upgrading packages"
 msgstr "Обновление пакетов"
 
 msgid "Refreshing package databases"
 msgstr "Обновление баз данных пакетов"
 
-#| msgid "Removing Flatpak"
 msgid "Removing stale database lock"
 msgstr ""
 
@@ -1835,8 +1918,11 @@ msgstr ""
 msgid "Installing Flatpak and AppImage support"
 msgstr "Установка поддержки Flatpak и AppImage"
 
-msgid "Main menu"
-msgstr "Главное меню"
+msgid "BROWSE"
+msgstr ""
+
+msgid "SYSTEM"
+msgstr ""
 
 msgid "Expand sidebar"
 msgstr "Развернуть боковую панель"

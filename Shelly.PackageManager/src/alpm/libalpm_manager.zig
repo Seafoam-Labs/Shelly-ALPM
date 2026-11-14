@@ -4101,10 +4101,20 @@ test "restart report detects kernels and records structured service results" {
     try testing.expectEqual(ServiceRestartFailureKind.spawn, spawn_failure_report.failures[0].kind);
     try testing.expect(spawn_failure_report.failures[0].exit_code == null);
 
+    const fake_systemctl = try std.fs.path.join(testing.allocator, &.{ root, "systemctl" });
+    defer testing.allocator.free(fake_systemctl);
+    try std.Io.Dir.cwd().writeFile(testing.io, .{
+        .sub_path = fake_systemctl,
+        .data = "#!/bin/sh\nif [ \"$1\" = show ]; then\n  printf 'demo.service\\n'\n  exit 0\nfi\nexit 0\n",
+    });
+    var fake_systemctl_file = try std.Io.Dir.cwd().openFile(testing.io, fake_systemctl, .{ .mode = .read_write });
+    defer fake_systemctl_file.close(testing.io);
+    try fake_systemctl_file.setPermissions(testing.io, .fromMode(0o755));
+
     var success_report = try manager.checkForRequiredRestarts(.{
         .proc_root = proc_root,
         .modules_root = modules_root,
-        .systemctl_path = "/bin/true",
+        .systemctl_path = fake_systemctl,
         .policy = .automatic,
     });
     defer success_report.deinit();

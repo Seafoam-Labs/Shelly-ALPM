@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shelly-ui 2.2.4.1\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-11-04 12:08-0500\n"
+"POT-Creation-Date: 2026-11-13 22:42-0500\n"
 "PO-Revision-Date: 2026-09-3 12:00+0800\n"
 "Last-Translator: DeepSeek AI\n"
 "Language-Team: China (Simplified)\n"
@@ -107,6 +107,9 @@ msgstr "跳过"
 msgid "AppImage"
 msgstr "AppImage"
 
+msgid "Install and integrate AppImage bundles."
+msgstr ""
+
 msgid "Search..."
 msgstr "搜索..."
 
@@ -189,6 +192,9 @@ msgstr "移除"
 
 msgid "AUR"
 msgstr "AUR"
+
+msgid "Build and install packages from the Arch User Repository."
+msgstr ""
 
 msgid "Search the AUR by name or keyword"
 msgstr "通过包名或关键词搜索AUR"
@@ -327,6 +333,9 @@ msgstr "版本历史"
 msgid "Flatpak"
 msgstr "Flatpak"
 
+msgid "Manage Flatpak applications and remotes."
+msgstr ""
+
 msgid "Search packages..."
 msgstr "搜索软件包..."
 
@@ -408,6 +417,12 @@ msgstr "软件包操作"
 msgid "Package"
 msgstr "软件包"
 
+msgid "Packages"
+msgstr "软件包"
+
+msgid "Install and manage software on your system."
+msgstr ""
+
 msgid "Package Group Filter"
 msgstr "软件包分组筛选"
 
@@ -474,15 +489,12 @@ msgstr ""
 msgid "Refresh the recommended packages list from the network"
 msgstr "从网络刷新推荐包列表"
 
-#| msgid "Mixed selection"
 msgid "Clear selection"
 msgstr ""
 
-#| msgid "Recommended Packages"
 msgid "Deselect all recommended packages"
 msgstr ""
 
-#| msgid "Install the selected packages?"
 msgid "Install all selected packages in one transaction"
 msgstr ""
 
@@ -496,6 +508,12 @@ msgstr "未找到推荐内容。请检查网络连接后重试。"
 
 msgid "Shelly Search"
 msgstr "Shelly 搜索"
+
+msgid "Search"
+msgstr ""
+
+msgid "Search across every enabled backend."
+msgstr ""
 
 msgid "Search standard repositories, AUR and Flatpak"
 msgstr "搜索标准仓库，AUR和Flatpak"
@@ -525,6 +543,9 @@ msgstr ""
 
 msgid "Settings"
 msgstr "设置"
+
+msgid "Make Shelly feel at home on your desktop."
+msgstr ""
 
 msgid "General"
 msgstr "常规"
@@ -557,6 +578,15 @@ msgid "Run Tray as cron"
 msgstr ""
 
 msgid "Tray update with ui"
+msgstr ""
+
+msgid "Update terminal"
+msgstr ""
+
+msgid "Terminal command"
+msgstr ""
+
+msgid "Custom update terminal command"
 msgstr ""
 
 msgid "Tray Check Interval (Hours)"
@@ -629,6 +659,12 @@ msgstr "默认页面"
 msgid "Navigation style"
 msgstr "导航样式"
 
+msgid "Theme"
+msgstr ""
+
+msgid "Color variant"
+msgstr ""
+
 msgid "Advanced"
 msgstr "高级"
 
@@ -650,9 +686,6 @@ msgstr "AppImage 安装路径"
 msgid "Select Directory"
 msgstr "选择目录"
 
-msgid "View Changelog"
-msgstr "查看变更日志"
-
 msgid "v0.0.0"
 msgstr ""
 
@@ -665,20 +698,32 @@ msgstr "社区 Fluxer"
 msgid "Sponsor"
 msgstr "赞助"
 
+msgid "View Changelog"
+msgstr "查看变更日志"
+
 msgid "Toggle output"
 msgstr ""
 
 msgid "Done"
 msgstr "完成"
 
+msgid "1 · Download"
+msgstr ""
+
+msgid "2 · Install"
+msgstr ""
+
 msgid "Update"
 msgstr "更新"
 
-msgid "Available Updates"
-msgstr "可用更新"
+msgid "Updates"
+msgstr ""
 
 msgid "7 of 7 updates included"
 msgstr ""
+
+msgid "System"
+msgstr "系统"
 
 msgid "Check all enabled sources again"
 msgstr "再次检查所有启用的软件源"
@@ -686,11 +731,8 @@ msgstr "再次检查所有启用的软件源"
 msgid "Check Again"
 msgstr "再次检查"
 
-msgid "Upgrade"
-msgstr "更新"
-
-msgid "System"
-msgstr "系统"
+msgid "Available updates"
+msgstr ""
 
 msgid "Checking for updates…"
 msgstr "检查更新..."
@@ -700,6 +742,12 @@ msgstr "你的系统已是最新"
 
 msgid "Could not check for updates."
 msgstr ""
+
+msgid "Upgrading may require administrator authorization."
+msgstr ""
+
+msgid "Upgrade"
+msgstr "更新"
 
 msgid "Utilities"
 msgstr "工具"
@@ -819,7 +867,6 @@ msgstr "下一步"
 msgid "Start Shelly"
 msgstr "启动 Shelly"
 
-#| msgid "Enable AUR?"
 msgid "Enable Atoll?"
 msgstr ""
 
@@ -1432,15 +1479,12 @@ msgstr "正在安装软件包"
 msgid "Select package for batch installation"
 msgstr ""
 
-#| msgid "Search standard repositories, AUR and Flatpak"
 msgid "Search standard repositories, Atoll and Flatpak"
 msgstr ""
 
-#| msgid "Show results from the Arch User Repository"
 msgid "Show results from Atoll"
 msgstr ""
 
-#| msgid "Search standard repositories, AUR and Flatpak"
 msgid ""
 "Search the standard repositories, Atoll, and Flatpak all at once. Type a "
 "name to begin."
@@ -1469,7 +1513,6 @@ msgstr "安装软件包"
 msgid "Install the selected packages?"
 msgstr "安装所选软件包？"
 
-#| msgid "Enable AUR"
 msgid "Enable Atoll"
 msgstr ""
 
@@ -1555,6 +1598,18 @@ msgstr "已删除 systemd 启动服务"
 msgid "AUR enabled"
 msgstr "AUR 已启用"
 
+msgid "System GTK"
+msgstr ""
+
+msgid "Follow system"
+msgstr ""
+
+msgid "Dark"
+msgstr ""
+
+msgid "Light"
+msgstr ""
+
 msgid "System Default"
 msgstr ""
 
@@ -1600,8 +1655,11 @@ msgstr ""
 msgid "中文（简体）"
 msgstr ""
 
-msgid "Packages"
-msgstr "软件包"
+msgid "Default (auto-detect)"
+msgstr ""
+
+msgid "Custom…"
+msgstr ""
 
 msgid "Pending"
 msgstr "等待中"
@@ -1632,6 +1690,9 @@ msgstr ""
 
 msgid "Cancelled"
 msgstr "已取消"
+
+msgid "Overall progress"
+msgstr ""
 
 msgid "Could not start the requested operation."
 msgstr ""
@@ -1678,6 +1739,27 @@ msgstr "正在检查冲突"
 msgid "Checking disk space"
 msgstr "正在检查磁盘空间"
 
+msgid "Preparing transaction"
+msgstr ""
+
+msgid "Downloading packages"
+msgstr ""
+
+msgid "about"
+msgstr ""
+
+msgid "s left"
+msgstr ""
+
+msgid "packages downloaded"
+msgstr ""
+
+msgid "packages processed"
+msgstr ""
+
+msgid "Completed"
+msgstr ""
+
 msgid "Transaction Completed"
 msgstr ""
 
@@ -1718,6 +1800,9 @@ msgstr "系统软件包更新"
 msgid "AUR package update"
 msgstr "AUR 软件包更新"
 
+msgid "Include this update"
+msgstr ""
+
 msgid "Update this package"
 msgstr "更新此软件包"
 
@@ -1727,13 +1812,21 @@ msgstr ""
 msgid "Updates included"
 msgstr ""
 
+msgid "No download required"
+msgstr ""
+
+msgid "Total download:"
+msgstr ""
+
+msgid "Upgrade Selected"
+msgstr ""
+
 msgid "Upgrading packages"
 msgstr "正在升级软件包"
 
 msgid "Refreshing package databases"
 msgstr "正在刷新软件包数据库"
 
-#| msgid "Removing Flatpak"
 msgid "Removing stale database lock"
 msgstr ""
 
@@ -1761,7 +1854,10 @@ msgstr ""
 msgid "Installing Flatpak and AppImage support"
 msgstr "正在安装 Flatpak 和 AppImage 支持"
 
-msgid "Main menu"
+msgid "BROWSE"
+msgstr ""
+
+msgid "SYSTEM"
 msgstr ""
 
 msgid "Expand sidebar"

@@ -76,7 +76,11 @@ stays enabled.
 Both profiles stage one CLI at `/usr/local/libexec/shelly/shelly`; its private
 worker modes re-execute that binary inside the guest. The RLPM-only profile checks
 its runtime libraries before provisioning and inside the guest, and rejects
-missing libraries or libalpm linkage. No sibling worker files are required.
+missing libraries or libalpm linkage. Private runtime DSOs that the clean root's
+package profile cannot provide, such as the vendored `libarchive-shelly` library,
+are copied from the host coordinator's resolved closure into the guest's
+`/usr/lib` before the guest check, matching the packaged layout so no guest
+environment changes are needed. No sibling worker files are required.
 These checks apply to the staged Shelly executable, not the recipe's tools or
 outputs, which may link to libalpm.
 The guest receives a local-database-only package configuration after provisioning;
