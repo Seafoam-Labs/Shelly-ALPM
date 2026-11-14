@@ -14,6 +14,21 @@ pub fn isRoot() bool {
     return builtin.os.tag == .linux and std.os.linux.geteuid() == 0;
 }
 
+/// linux adds " (deleted)" to the path once the running binary is replaced or removed
+pub fn liveExecutablePath(path: []const u8) []const u8 {
+    return std.mem.cutSuffix(u8, path, " (deleted)") orelse path;
+}
+
+test "live executable path removes only the exact deleted suffix" {
+    try std.testing.expectEqualStrings("/usr/bin/shelly", liveExecutablePath("/usr/bin/shelly"));
+    try std.testing.expectEqualStrings("/usr/bin/shelly", liveExecutablePath("/usr/bin/shelly (deleted)"));
+    try std.testing.expectEqualStrings("/usr/local/bin/shelly-speed", liveExecutablePath("/usr/local/bin/shelly-speed"));
+    try std.testing.expectEqualStrings("/opt/shelly-dev", liveExecutablePath("/opt/shelly-dev (deleted)"));
+    try std.testing.expectEqualStrings("/opt/shelly-test", liveExecutablePath("/opt/shelly-test (deleted)"));
+    try std.testing.expectEqualStrings("/tmp/build/shelly-test", liveExecutablePath("/tmp/build/shelly-test"));
+    try std.testing.expectEqualStrings("/opt/shelly-old", liveExecutablePath("/opt/shelly-old"));
+}
+
 /// Relaunches the current executable through the configured privilege
 /// elevator when the process is not already root. A non-null result is the
 /// elevated child's exit code and must be returned by the caller immediately.
@@ -27,7 +42,7 @@ pub fn relaunchIfNeeded(
     if (isRoot()) return null;
 
     const executable = try std.process.executablePathAlloc(context.io, context.allocator);
-    const safe_executable: []const u8 = std.mem.trimEnd(u8, executable, " (deleted)");
+    const safe_executable: []const u8 = liveExecutablePath(executable);
     defer context.allocator.free(executable);
     const elevator = findElevator(context);
     const elevated_arguments = try buildArguments(context.allocator, elevator, safe_executable, arguments);
@@ -70,7 +85,7 @@ pub fn relaunchIfNeededCancellable(
     if (isRoot()) return null;
 
     const executable = try std.process.executablePathAlloc(context.io, context.allocator);
-    const safe_executable: []const u8 = std.mem.trimEnd(u8, executable, " (deleted)");
+    const safe_executable: []const u8 = liveExecutablePath(executable);
     defer context.allocator.free(executable);
     const elevated_arguments = try buildArguments(
         context.allocator,
@@ -251,7 +266,7 @@ pub fn runAsInvokingUser(
     const home = try invokingUserHome(context, identity.username);
     defer context.allocator.free(home);
     const executable = try std.process.executablePathAlloc(context.io, context.allocator);
-    const safe_executable: []const u8 = std.mem.trimEnd(u8, executable, " (deleted)");
+    const safe_executable: []const u8 = liveExecutablePath(executable);
     defer context.allocator.free(executable);
     const home_environment = try std.fmt.allocPrint(context.allocator, "HOME={s}", .{home});
     defer context.allocator.free(home_environment);
@@ -395,7 +410,7 @@ pub fn runAsInvokingUserCapture(
     defer context.allocator.free(home);
     const executable_allocated = try std.process.executablePathAlloc(context.io, context.allocator);
     defer context.allocator.free(executable_allocated);
-    const executable = std.mem.trimEnd(u8, executable_allocated, " (deleted)");
+    const executable = liveExecutablePath(executable_allocated);
     const home_environment = try std.fmt.allocPrint(context.allocator, "HOME={s}", .{home});
     defer context.allocator.free(home_environment);
     const config_environment = try userPathEnvironment(context, "XDG_CONFIG_HOME", home, ".config");
