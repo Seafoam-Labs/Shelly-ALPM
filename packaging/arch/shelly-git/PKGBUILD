@@ -7,6 +7,7 @@ pkgname=(
   'shelly-git'
   'shelly-cli-git'
   'shelly-flatpak-backend-git'
+  'shelly-tui-git'
   'shelly-notify-git'
   'shelly-notify-none-git'
 )
@@ -50,6 +51,7 @@ _components=(
   Shelly.PackageManager
   Shelly.Cli.Zig
   Shelly.Key
+  Shelly.Tui
   Shelly.Notifications.Zig
   Shelly.Ui.Gtk
 )
@@ -93,6 +95,12 @@ build() {
     --prefix "${srcdir}/out-key" \
     -Dpath-profile="${_shelly_path_profile}" \
     -Doptimize=small)
+
+  # Release builds look up the CLI on PATH; pin it to the packaged binary.
+  (cd Shelly.Tui && _zig_build \
+    --prefix "${srcdir}/out-tui" \
+    -Dshelly-bin=/usr/bin/shelly \
+    -Doptimize=safe)
 
   (cd Shelly.Notifications.Zig && _zig_build \
     --prefix "${srcdir}/out-notify" \
@@ -144,6 +152,7 @@ check() {
   (cd Shelly.Key && _zig_build test -Dpath-profile="${_shelly_path_profile}")
   (cd Shelly.Cli.Zig && _zig_build test -Dlibalpm="${_shelly_libalpm}" \
     -Dpath-profile="${_shelly_path_profile}")
+  (cd Shelly.Tui && _zig_build test -Dshelly-bin=/usr/bin/shelly)
 
   scripts/check-flatpak-separation.sh \
     "${srcdir}/out-cli/bin/shelly" \
@@ -282,6 +291,18 @@ package_shelly-flatpak-backend-git() {
     -t "${pkgdir}/usr/lib/shelly"
   ln -s libshelly-flatpak-backend.so.1.0.0 \
     "${pkgdir}/usr/lib/shelly/libshelly-flatpak-backend.so.1"
+}
+
+package_shelly-tui-git() {
+  pkgdesc='Terminal interface for Shelly (Arch RLPM git version)'
+  # The TUI drives the CLI from the same build and runs privileged
+  # operations through its own sudo PTY.
+  depends=("shelly-cli-git=${pkgver}-${pkgrel}" 'glibc' 'sudo')
+  optdepends=('shelly-flatpak-backend-git: Flatpak tab')
+  provides=("shelly-tui=${pkgver}")
+  conflicts=('shelly-tui')
+
+  install -Dm755 "${srcdir}/out-tui/bin/Shelly_Tui" "${pkgdir}/usr/bin/shelly-tui"
 }
 
 package_shelly-notify-git() {
