@@ -731,3 +731,7 @@ Document any known issues that are being tracked:
   per-row bars keep their package-name accessible names and status descriptions.
 - [ ] At 200% scale / large text the overall card meta wraps and compact rows ellipsize
   instead of clipping; long package names do not push the status pills off-row.
+- [ ] Immediately after a completed upgrade (while the tray is still refreshing its
+  own update check), the Updates page reload recovers via retry instead of showing
+  "Could not check for updates."; a genuinely broken check (e.g. missing CLI) still
+  shows the error page without retry delays.

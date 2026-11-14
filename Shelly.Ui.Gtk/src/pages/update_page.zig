@@ -214,16 +214,40 @@ pub const UpdatePage = extern struct {
         var threaded: std.Io.Threaded = .init(alloc, .{});
         defer threaded.deinit();
 
-        const cli = ShellyCli{ .allocator = alloc, .io = threaded.io() };
-        const parsed = cli.check_updates() catch {
-            post_result(page, &.{}, arena, generation, true);
-            return;
+        // Arena-owned; overwritten by each failed attempt.
+        var detail: ?[]u8 = null;
+
+        const cli = ShellyCli{ .allocator = alloc, .io = threaded.io(), .failure_detail = &detail };
+        var attempt: u8 = 0;
+        const parsed = while (true) {
+            break cli.check_updates() catch {
+                attempt += 1;
+                if (attempt >= 4 or !isRetryableCheckFailure(detail)) {
+                    post_result(page, &.{}, arena, generation, true);
+                    return;
+                }
+                // The tray refreshes the same preview database right after a
+                // transaction; its fail-fast lock makes this check lose the
+                // race. Wait out the tray's sync instead of failing the page.
+                threaded.io().sleep(.fromMilliseconds(@as(i64, attempt) * 1500), .awake) catch {};
+                continue;
+            };
         };
         const updates = flatten_updates(alloc, parsed.value) catch {
             post_result(page, &.{}, arena, generation, true);
             return;
         };
         post_result(page, updates, arena, generation, false);
+    }
+
+    /// A contended preview-database refresh (tray and UI checking at the same
+    /// time, e.g. right after a transaction) reports SyncDbFailed because the
+    /// refresh lock is fail-fast. Those failures are worth retrying; anything
+    /// else keeps the historical immediate error page.
+    fn isRetryableCheckFailure(detail: ?[]const u8) bool {
+        const message = detail orelse return false;
+        return std.mem.indexOf(u8, message, "SyncDbFailed") != null or
+            std.mem.indexOf(u8, message, "DatabaseLocked") != null;
     }
 
     fn flatten_updates(allocator: std.mem.Allocator, response: CheckUpdates) ![]UpdateItem {
@@ -719,3 +743,12 @@ pub const UpdatePage = extern struct {
         }
     };
 };
+
+test "update check retries only contended refresh failures" {
+    try std.testing.expect(!UpdatePage.isRetryableCheckFailure(null));
+    try std.testing.expect(!UpdatePage.isRetryableCheckFailure("Could not spawn the Shelly command."));
+    try std.testing.expect(UpdatePage.isRetryableCheckFailure(
+        "Could not check for standard updates.\n\nTechnical details: SyncDbFailed",
+    ));
+    try std.testing.expect(UpdatePage.isRetryableCheckFailure("database is locked: DatabaseLocked"));
+}
