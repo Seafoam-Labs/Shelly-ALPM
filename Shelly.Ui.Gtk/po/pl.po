@@ -1,9 +1,9 @@
 msgid ""
 msgstr ""
-"Project-Id-Version: shelly-ui 2.2.4.1\n"
+"Project-Id-Version: Polish (Shelly-ALPM)\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
 "POT-Creation-Date: 2026-11-13 22:42-0500\n"
-"PO-Revision-Date: 2026-11-05 19:58+0000\n"
+"PO-Revision-Date: 2026-11-14 11:53+0000\n"
 "Last-Translator: juliazero <juliazero2@gmail.com>\n"
 "Language-Team: Polish\n"
 "Language: pl\n"
@@ -127,7 +127,7 @@ msgid "AppImage"
 msgstr "AppImage"
 
 msgid "Install and integrate AppImage bundles."
-msgstr ""
+msgstr "Instaluj i integruj pakiety AppImage."
 
 msgid "Search..."
 msgstr "Wyszukaj..."
@@ -221,7 +221,7 @@ msgid "AUR"
 msgstr "AUR"
 
 msgid "Build and install packages from the Arch User Repository."
-msgstr ""
+msgstr "Buduj i instaluj pakiety z repozytorium użytkowników Arch."
 
 msgid "Search the AUR by name or keyword"
 msgstr "Wyszukaj w AUR..."
@@ -365,7 +365,7 @@ msgid "Flatpak"
 msgstr "Flatpak"
 
 msgid "Manage Flatpak applications and remotes."
-msgstr ""
+msgstr "Zarządzaj aplikacjami Flatpak i repozytoriami zdalnymi."
 
 msgid "Search packages..."
 msgstr "Wyszukaj pakiety..."
@@ -452,7 +452,7 @@ msgid "Packages"
 msgstr "Pakiety"
 
 msgid "Install and manage software on your system."
-msgstr ""
+msgstr "Instaluj oprogramowanie w systemie i zarządzaj nim."
 
 msgid "Package Group Filter"
 msgstr "Filtr grup pakietów"
@@ -545,10 +545,10 @@ msgid "Shelly Search"
 msgstr "Wyszukiwarka Shelly"
 
 msgid "Search"
-msgstr ""
+msgstr "Szukaj"
 
 msgid "Search across every enabled backend."
-msgstr ""
+msgstr "Szukaj we wszystkich włączonych źródłach pakietów."
 
 msgid "Search standard repositories, AUR and Flatpak"
 msgstr "Przeszukuj standardowe repozytoria, AUR i Flatpak"
@@ -582,7 +582,7 @@ msgid "Settings"
 msgstr "Ustawienia"
 
 msgid "Make Shelly feel at home on your desktop."
-msgstr ""
+msgstr "Dostosuj Shelly do swojego środowiska graficznego."
 
 msgid "General"
 msgstr "Ogólne"
@@ -619,13 +619,13 @@ msgstr ""
 "Użyj interfejsu użytkownika wykonując aktualizację przez ikonę zasobnika"
 
 msgid "Update terminal"
-msgstr ""
+msgstr "Terminal aktualizacji"
 
 msgid "Terminal command"
-msgstr ""
+msgstr "Polecenie terminala"
 
 msgid "Custom update terminal command"
-msgstr ""
+msgstr "Niestandardowe polecenie terminala do aktualizacji"
 
 msgid "Tray Check Interval (Hours)"
 msgstr ""
@@ -704,10 +704,10 @@ msgid "Navigation style"
 msgstr "Styl nawigacji"
 
 msgid "Theme"
-msgstr ""
+msgstr "Motyw"
 
 msgid "Color variant"
-msgstr ""
+msgstr "Wariant kolorystyczny"
 
 msgid "Advanced"
 msgstr "Zaawansowane"
@@ -752,16 +752,16 @@ msgid "Done"
 msgstr "Gotowe"
 
 msgid "1 · Download"
-msgstr ""
+msgstr "1 · Pobieranie"
 
 msgid "2 · Install"
-msgstr ""
+msgstr "2 · Instalacja"
 
 msgid "Update"
 msgstr "Zaktualizuj"
 
 msgid "Updates"
-msgstr ""
+msgstr "Aktualizacje"
 
 msgid "7 of 7 updates included"
 msgstr "Uwzględniono 7 z 7 aktualizacji"
@@ -776,7 +776,7 @@ msgid "Check Again"
 msgstr "Sprawdź ponownie"
 
 msgid "Available updates"
-msgstr ""
+msgstr "Dostępne aktualizacje"
 
 msgid "Checking for updates…"
 msgstr "Sprawdzanie dostępności aktualizacji…"
@@ -788,7 +788,7 @@ msgid "Could not check for updates."
 msgstr "Nie można sprawdzić dostępności aktualizacji."
 
 msgid "Upgrading may require administrator authorization."
-msgstr ""
+msgstr "Aktualizacja może wymagać uwierzytelnienia administratora."
 
 msgid "Upgrade"
 msgstr "Aktualizuj"
@@ -1680,16 +1680,16 @@ msgid "AUR enabled"
 msgstr "Obsługa AUR włączona"
 
 msgid "System GTK"
-msgstr ""
+msgstr "Systemowy GTK"
 
 msgid "Follow system"
-msgstr ""
+msgstr "Zgodnie z ustawieniami systemu"
 
 msgid "Dark"
-msgstr ""
+msgstr "Ciemny"
 
 msgid "Light"
-msgstr ""
+msgstr "Jasny"
 
 msgid "System Default"
 msgstr "Domyślny systemowy"
@@ -1737,10 +1737,10 @@ msgid "中文（简体）"
 msgstr "Chiński (uproszczony)"
 
 msgid "Default (auto-detect)"
-msgstr ""
+msgstr "Domyślny (wykryj automatycznie)"
 
 msgid "Custom…"
-msgstr ""
+msgstr "Niestandardowy…"
 
 msgid "Pending"
 msgstr "Oczekuje"
@@ -1773,7 +1773,7 @@ msgid "Cancelled"
 msgstr "Anulowano"
 
 msgid "Overall progress"
-msgstr ""
+msgstr "Całkowity postęp"
 
 msgid "Could not start the requested operation."
 msgstr "Nie można rozpocząć żądanej operacji."
@@ -1821,25 +1821,25 @@ msgid "Checking disk space"
 msgstr "Sprawdzanie miejsca na dysku"
 
 msgid "Preparing transaction"
-msgstr ""
+msgstr "Przygotowywanie transakcji"
 
 msgid "Downloading packages"
-msgstr ""
+msgstr "Pobieranie pakietów"
 
 msgid "about"
-msgstr ""
+msgstr "około"
 
 msgid "s left"
-msgstr ""
+msgstr "s pozostało"
 
 msgid "packages downloaded"
-msgstr ""
+msgstr "pobranych pakietów"
 
 msgid "packages processed"
-msgstr ""
+msgstr "przetworzonych pakietów"
 
 msgid "Completed"
-msgstr ""
+msgstr "Ukończono"
 
 msgid "Transaction Completed"
 msgstr "Operacja ukończona"
@@ -1886,7 +1886,7 @@ msgid "AUR package update"
 msgstr "Aktualizacja pakietu AUR"
 
 msgid "Include this update"
-msgstr ""
+msgstr "Uwzględnij tę aktualizację"
 
 msgid "Update this package"
 msgstr "Zaktualizuj ten pakiet"
@@ -1898,13 +1898,13 @@ msgid "Updates included"
 msgstr "Uwzględnione aktualizacje"
 
 msgid "No download required"
-msgstr ""
+msgstr "Pobieranie nie jest wymagane"
 
 msgid "Total download:"
-msgstr ""
+msgstr "Łączny rozmiar pobierania:"
 
 msgid "Upgrade Selected"
-msgstr ""
+msgstr "Aktualizuj wybrane"
 
 msgid "Upgrading packages"
 msgstr "Aktualizowanie pakietów"
@@ -1942,10 +1942,10 @@ msgid "Installing Flatpak and AppImage support"
 msgstr "Instalowanie obsługi Flatpak i AppImage"
 
 msgid "BROWSE"
-msgstr ""
+msgstr "PRZEGLĄDAJ"
 
 msgid "SYSTEM"
-msgstr ""
+msgstr "SYSTEM"
 
 msgid "Expand sidebar"
 msgstr "Rozszerz boczny panel"
