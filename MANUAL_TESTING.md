@@ -646,6 +646,10 @@ Document any known issues that are being tracked:
 - [ ] From a graphical session, upgrade `systemd-libs` and confirm
   `dbus-broker.service`, `systemd-logind.service`, and the display manager are
   not restarted and the session survives.
+- [ ] On Plasma Login Manager (`plasmalogin.service`, aliased
+  `display-manager.service`), upgrade a mapped library such as Qt 6 or Mesa and
+  confirm `[RESTART_REQUIRED]service:plasmalogin.service|session-critical`, no
+  `systemctl try-restart plasmalogin.service`, and the session survives.
 - [ ] Confirm a stale user manager or user bus reports
   `[RESTART_REQUIRED]session` rather than a reboot, and that a missing running
   kernel module directory or stale system manager still reports

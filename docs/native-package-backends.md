@@ -156,6 +156,12 @@ Session-critical units, including the system bus, `systemd-logind`, journald,
 udevd, account/policy services, display managers, greeters, `getty@*`, `user@*`,
 and the Devario GPU helpers, are always reported instead of restarted;
 restarting them can end the invoking session or leave the system without a bus.
+Because cgroup paths expose canonical unit names, Shelly also resolves systemd
+aliases with `systemctl show --property=Names`; a unit is session-critical when
+any of its names matches, so canonical display-manager units such as
+`plasmalogin.service` are covered by the `display-manager.service` alias. If the
+unit names cannot be resolved, automatic restart is skipped and reported as a
+failure.
 
 `RestartPolicy = report` lists affected services without restarting anything.
 
