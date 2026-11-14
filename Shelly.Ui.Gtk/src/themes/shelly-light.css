@@ -419,3 +419,113 @@
   outline: 2px solid #6750a4;
   outline-offset: -3px;
 }
+
+/* Updates / transaction redesign (docs/updates-redesign): Pearl geometry
+   for the semantic classes added to the base style.css. */
+.shelly-root .chip {
+  border-radius: 999px;
+  background: alpha(#1d1b20, 0.06);
+  border: none;
+  color: #5f5b66;
+  padding: 6px 14px;
+  min-height: 30px;
+}
+.shelly-root .chip:checked {
+  background: #eaddff;
+  color: #21005d;
+}
+.shelly-root .updates-card {
+  background: #f9f5fc;
+  border-radius: 16px;
+}
+.shelly-root .updates-card-title {
+  padding: 16px 20px 4px;
+}
+.shelly-root .updates-card-sub {
+  padding: 0 20px 8px;
+  color: #5f5b66;
+}
+.shelly-root .action-bar {
+  padding: 14px 20px;
+}
+.shelly-root .action-bar-note {
+  color: #5f5b66;
+}
+
+.shelly-root .overall-card {
+  background: #f9f5fc;
+  border-radius: 16px;
+  padding: 20px 22px 18px;
+  margin: 0 16px 14px;
+}
+.shelly-root .overall-title {
+  font-size: 16px;
+}
+.shelly-root .overall-pct {
+  font-size: 26px;
+  letter-spacing: -0.5px;
+  color: #6750a4;
+}
+.shelly-root .overall-meta {
+  color: #5f5b66;
+}
+.shelly-root .phase-chip {
+  border-radius: 999px;
+  background: alpha(#1d1b20, 0.06);
+  color: #5f5b66;
+}
+.shelly-root .phase-chip.active {
+  background: #eaddff;
+  color: #21005d;
+}
+.shelly-root .phase-chip.done {
+  background: alpha(@success_color, 0.14);
+  color: @success_color;
+}
+.shelly-root .phase-chip.err {
+  background: alpha(@error_color, 0.14);
+  color: @error_color;
+}
+
+.shelly-root progressbar trough {
+  min-height: 12px;
+  border-radius: 999px;
+  background: alpha(#1d1b20, 0.09);
+  border: none;
+  box-shadow: none;
+}
+.shelly-root progressbar progress {
+  min-height: 12px;
+  border-radius: 999px;
+  background: #6750a4;
+  border: none;
+}
+.shelly-root .bar-thin trough {
+  min-height: 4px;
+}
+.shelly-root .bar-thin progress {
+  min-height: 4px;
+}
+.shelly-root .overall-card.overall-ok progressbar progress { background: @success_color; }
+.shelly-root .overall-card.overall-err progressbar progress { background: @error_color; }
+.shelly-root .overall-card.overall-warn progressbar progress { background: @warning_color; }
+
+.shelly-root .urow {
+  padding: 8px 20px;
+}
+.shelly-root .urow:not(:last-child) {
+  border-bottom: 1px solid alpha(#1d1b20, 0.08);
+}
+.shelly-root .urow-icon {
+  background: alpha(#6750a4, 0.14);
+  color: #6750a4;
+  border-radius: 8px;
+}
+.shelly-root .urow-sub,
+.shelly-root .urow-percent {
+  color: #5f5b66;
+}
+.shelly-root .pkg-status.mini {
+  font-size: 11px;
+  padding: 3px 10px;
+}

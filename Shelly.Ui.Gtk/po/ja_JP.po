@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shelly-ui 2.2.4.1\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-11-13 21:46-0500\n"
+"POT-Creation-Date: 2026-11-13 22:42-0500\n"
 "PO-Revision-Date: 2026-08-06 21:03+0900\n"
 "Last-Translator: UTUMI Hirosi <utuhiro78@yahoo.co.jp>\n"
 "Language-Team: csnyder@seafoam-labs.org\n"
@@ -743,14 +743,23 @@ msgstr "出力を切り替える"
 msgid "Done"
 msgstr "完了"
 
+msgid "1 · Download"
+msgstr ""
+
+msgid "2 · Install"
+msgstr ""
+
 msgid "Update"
 msgstr "アップデート"
 
-msgid "Available Updates"
-msgstr "利用可能なアップデート"
+msgid "Updates"
+msgstr ""
 
 msgid "7 of 7 updates included"
 msgstr "7 of 7 アップデートが含まれます"
+
+msgid "System"
+msgstr "システム"
 
 msgid "Check all enabled sources again"
 msgstr "有効なすべてのソースを再度確認する"
@@ -758,11 +767,8 @@ msgstr "有効なすべてのソースを再度確認する"
 msgid "Check Again"
 msgstr "再度確認"
 
-msgid "Upgrade"
-msgstr "アップグレード"
-
-msgid "System"
-msgstr "システム"
+msgid "Available updates"
+msgstr ""
 
 msgid "Checking for updates…"
 msgstr "アップデートを確認中…"
@@ -772,6 +778,12 @@ msgstr "お使いのシステムは最新です"
 
 msgid "Could not check for updates."
 msgstr ""
+
+msgid "Upgrading may require administrator authorization."
+msgstr ""
+
+msgid "Upgrade"
+msgstr "アップグレード"
 
 msgid "Utilities"
 msgstr "ユーティリティ"
@@ -1730,6 +1742,9 @@ msgstr "中断されました"
 msgid "Cancelled"
 msgstr "キャンセル"
 
+msgid "Overall progress"
+msgstr ""
+
 msgid "Could not start the requested operation."
 msgstr ""
 
@@ -1775,6 +1790,27 @@ msgstr "競合を確認中"
 msgid "Checking disk space"
 msgstr "ディスク容量を確認中"
 
+msgid "Preparing transaction"
+msgstr ""
+
+msgid "Downloading packages"
+msgstr ""
+
+msgid "about"
+msgstr ""
+
+msgid "s left"
+msgstr ""
+
+msgid "packages downloaded"
+msgstr ""
+
+msgid "packages processed"
+msgstr ""
+
+msgid "Completed"
+msgstr ""
+
 msgid "Transaction Completed"
 msgstr "トランザクションが完了しました"
 
@@ -1819,6 +1855,9 @@ msgstr "システムパッケージのアップデート"
 msgid "AUR package update"
 msgstr "AUR パッケージのアップデート"
 
+msgid "Include this update"
+msgstr ""
+
 msgid "Update this package"
 msgstr "このパッケージをアップデート"
 
@@ -1827,6 +1866,15 @@ msgstr "アップデートがあります"
 
 msgid "Updates included"
 msgstr "アップデートが含まれます"
+
+msgid "No download required"
+msgstr ""
+
+msgid "Total download:"
+msgstr ""
+
+msgid "Upgrade Selected"
+msgstr ""
 
 msgid "Upgrading packages"
 msgstr "パッケージをアップグレード中"

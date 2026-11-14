@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shelly-ui 2.3.0.1\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-11-13 21:46-0500\n"
+"POT-Creation-Date: 2026-11-13 22:42-0500\n"
 "PO-Revision-Date: 2026-09-14 21:25+0400\n"
 "Last-Translator: Andrei Stepanov <adem4ik@gmail.com>\n"
 "Language-Team: Russian (Russia) <anton@azdanov.dev>\n"
@@ -744,14 +744,23 @@ msgstr "Включить/отключить вывод"
 msgid "Done"
 msgstr "Готово"
 
+msgid "1 · Download"
+msgstr ""
+
+msgid "2 · Install"
+msgstr ""
+
 msgid "Update"
 msgstr "Обновить"
 
-msgid "Available Updates"
-msgstr "Доступные обновления"
+msgid "Updates"
+msgstr ""
 
 msgid "7 of 7 updates included"
 msgstr "7 из 7 обновлений включены"
+
+msgid "System"
+msgstr "Система"
 
 msgid "Check all enabled sources again"
 msgstr "Проверить все включённые источники снова"
@@ -759,11 +768,8 @@ msgstr "Проверить все включённые источники сно
 msgid "Check Again"
 msgstr "Проверить снова"
 
-msgid "Upgrade"
-msgstr "Обновить"
-
-msgid "System"
-msgstr "Система"
+msgid "Available updates"
+msgstr ""
 
 msgid "Checking for updates…"
 msgstr "Проверяются обновления…"
@@ -773,6 +779,12 @@ msgstr "Ваша система обновлена"
 
 msgid "Could not check for updates."
 msgstr "Не удалось проверить обновления."
+
+msgid "Upgrading may require administrator authorization."
+msgstr ""
+
+msgid "Upgrade"
+msgstr "Обновить"
 
 msgid "Utilities"
 msgstr "Инструменты"
@@ -1738,6 +1750,9 @@ msgstr "Прервано"
 msgid "Cancelled"
 msgstr "Отменено"
 
+msgid "Overall progress"
+msgstr ""
+
 msgid "Could not start the requested operation."
 msgstr "Не удалось начать запрошенную операцию."
 
@@ -1783,6 +1798,27 @@ msgstr "Проверка конфликтов"
 msgid "Checking disk space"
 msgstr "Проверка свободного места на диске"
 
+msgid "Preparing transaction"
+msgstr ""
+
+msgid "Downloading packages"
+msgstr ""
+
+msgid "about"
+msgstr ""
+
+msgid "s left"
+msgstr ""
+
+msgid "packages downloaded"
+msgstr ""
+
+msgid "packages processed"
+msgstr ""
+
+msgid "Completed"
+msgstr ""
+
 msgid "Transaction Completed"
 msgstr "Транзакция завершена"
 
@@ -1827,6 +1863,9 @@ msgstr "Обновление системного пакета"
 msgid "AUR package update"
 msgstr "Обновление пакета AUR"
 
+msgid "Include this update"
+msgstr ""
+
 msgid "Update this package"
 msgstr "Обновить этот пакет"
 
@@ -1835,6 +1874,15 @@ msgstr "обновлений включено"
 
 msgid "Updates included"
 msgstr "Обновления включены"
+
+msgid "No download required"
+msgstr ""
+
+msgid "Total download:"
+msgstr ""
+
+msgid "Upgrade Selected"
+msgstr ""
 
 msgid "Upgrading packages"
 msgstr "Обновление пакетов"

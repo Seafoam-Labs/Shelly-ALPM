@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Shelly-ALPM / Shelly: UI\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-11-13 21:46-0500\n"
+"POT-Creation-Date: 2026-11-13 22:42-0500\n"
 "PO-Revision-Date: 2026-09-09 12:00+0400\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: Azerbaijani <az@li.org>\n"
@@ -740,14 +740,23 @@ msgstr "Çıxışı göstər və ya gizlət"
 msgid "Done"
 msgstr "Hazırdır"
 
+msgid "1 · Download"
+msgstr ""
+
+msgid "2 · Install"
+msgstr ""
+
 msgid "Update"
 msgstr "Yenilə"
 
-msgid "Available Updates"
-msgstr "Mövcud yeniləmələr"
+msgid "Updates"
+msgstr ""
 
 msgid "7 of 7 updates included"
 msgstr "7 yeniləmədən 7-si daxildir"
+
+msgid "System"
+msgstr "Sistem"
 
 msgid "Check all enabled sources again"
 msgstr "Bütün aktiv mənbələri yenidən yoxla"
@@ -755,11 +764,8 @@ msgstr "Bütün aktiv mənbələri yenidən yoxla"
 msgid "Check Again"
 msgstr "Yenidən yoxla"
 
-msgid "Upgrade"
-msgstr "Yenilə"
-
-msgid "System"
-msgstr "Sistem"
+msgid "Available updates"
+msgstr ""
 
 msgid "Checking for updates…"
 msgstr "Yeniləmələr yoxlanılır…"
@@ -769,6 +775,12 @@ msgstr "Sisteminiz ən son vəziyyətdədir"
 
 msgid "Could not check for updates."
 msgstr ""
+
+msgid "Upgrading may require administrator authorization."
+msgstr ""
+
+msgid "Upgrade"
+msgstr "Yenilə"
 
 msgid "Utilities"
 msgstr "Yardımçı alətlər"
@@ -1727,6 +1739,9 @@ msgstr ""
 msgid "Cancelled"
 msgstr "Ləğv edildi"
 
+msgid "Overall progress"
+msgstr ""
+
 msgid "Could not start the requested operation."
 msgstr ""
 
@@ -1772,6 +1787,27 @@ msgstr "Toqquşmalar yoxlanılır"
 msgid "Checking disk space"
 msgstr "Disk sahəsi yoxlanılır"
 
+msgid "Preparing transaction"
+msgstr ""
+
+msgid "Downloading packages"
+msgstr ""
+
+msgid "about"
+msgstr ""
+
+msgid "s left"
+msgstr ""
+
+msgid "packages downloaded"
+msgstr ""
+
+msgid "packages processed"
+msgstr ""
+
+msgid "Completed"
+msgstr ""
+
 msgid "Transaction Completed"
 msgstr "Əməliyyat tamamlandı"
 
@@ -1816,6 +1852,9 @@ msgstr "Sistem paketlərinin yenilənməsi"
 msgid "AUR package update"
 msgstr "AUR paketlərinin yenilənməsi"
 
+msgid "Include this update"
+msgstr ""
+
 msgid "Update this package"
 msgstr "Bu paketi yenilə"
 
@@ -1824,6 +1863,15 @@ msgstr "yeniləmə daxildir"
 
 msgid "Updates included"
 msgstr "Daxil edilmiş yeniləmələr"
+
+msgid "No download required"
+msgstr ""
+
+msgid "Total download:"
+msgstr ""
+
+msgid "Upgrade Selected"
+msgstr ""
 
 msgid "Upgrading packages"
 msgstr "Paketlər yenilənir"

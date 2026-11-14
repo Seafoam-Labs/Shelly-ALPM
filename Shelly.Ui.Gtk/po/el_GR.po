@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Shelly-ALPM / Shelly: GTK\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-11-13 21:46-0500\n"
+"POT-Creation-Date: 2026-11-13 22:42-0500\n"
 "PO-Revision-Date: 2026-08-05 17:02+0300\n"
 "Last-Translator: CozyKernel <antwnhs.mpl@gmail.com>\n"
 "Language-Team: \n"
@@ -727,14 +727,23 @@ msgstr "Εναλλαγή προβολής εξόδου"
 msgid "Done"
 msgstr "Ολοκληρώθηκε"
 
+msgid "1 · Download"
+msgstr ""
+
+msgid "2 · Install"
+msgstr ""
+
 msgid "Update"
 msgstr "Ενημέρωση"
 
-msgid "Available Updates"
-msgstr "Διαθέσιμες ενημερώσεις"
+msgid "Updates"
+msgstr ""
 
 msgid "7 of 7 updates included"
 msgstr "Περιλαμβάνονται 7 από τις 7 ενημερώσεις"
+
+msgid "System"
+msgstr "Σύστημα"
 
 msgid "Check all enabled sources again"
 msgstr "Έλεγχος όλων των ενεργοποιημένων πηγών ξανά"
@@ -742,11 +751,8 @@ msgstr "Έλεγχος όλων των ενεργοποιημένων πηγών
 msgid "Check Again"
 msgstr "Έλεγχος ξανά"
 
-msgid "Upgrade"
-msgstr "Αναβάθμιση"
-
-msgid "System"
-msgstr "Σύστημα"
+msgid "Available updates"
+msgstr ""
 
 msgid "Checking for updates…"
 msgstr "Γίνεται έλεγχος για ενημερώσεις…"
@@ -756,6 +762,12 @@ msgstr "Το σύστημα είναι ενημερωμένο"
 
 msgid "Could not check for updates."
 msgstr ""
+
+msgid "Upgrading may require administrator authorization."
+msgstr ""
+
+msgid "Upgrade"
+msgstr "Αναβάθμιση"
 
 msgid "Utilities"
 msgstr "Βοηθήματα"
@@ -1710,6 +1722,9 @@ msgstr ""
 msgid "Cancelled"
 msgstr "Ακυρώθηκε"
 
+msgid "Overall progress"
+msgstr ""
+
 msgid "Could not start the requested operation."
 msgstr ""
 
@@ -1755,6 +1770,27 @@ msgstr ""
 msgid "Checking disk space"
 msgstr ""
 
+msgid "Preparing transaction"
+msgstr ""
+
+msgid "Downloading packages"
+msgstr ""
+
+msgid "about"
+msgstr ""
+
+msgid "s left"
+msgstr ""
+
+msgid "packages downloaded"
+msgstr ""
+
+msgid "packages processed"
+msgstr ""
+
+msgid "Completed"
+msgstr ""
+
 msgid "Transaction Completed"
 msgstr ""
 
@@ -1795,6 +1831,9 @@ msgstr "Ενημέρωση πακέτου συστήματος"
 msgid "AUR package update"
 msgstr "Ενημέρωση πακέτου AUR"
 
+msgid "Include this update"
+msgstr ""
+
 msgid "Update this package"
 msgstr ""
 
@@ -1803,6 +1842,15 @@ msgstr "περιλαμβάνονται ενημερώσεις"
 
 msgid "Updates included"
 msgstr "Περιλαμβάνονται ενημερώσεις"
+
+msgid "No download required"
+msgstr ""
+
+msgid "Total download:"
+msgstr ""
+
+msgid "Upgrade Selected"
+msgstr ""
 
 msgid "Upgrading packages"
 msgstr "Αναβάθμιση πακέτων"

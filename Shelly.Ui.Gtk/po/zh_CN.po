@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shelly-ui 2.2.4.1\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-11-13 21:46-0500\n"
+"POT-Creation-Date: 2026-11-13 22:42-0500\n"
 "PO-Revision-Date: 2026-09-3 12:00+0800\n"
 "Last-Translator: DeepSeek AI\n"
 "Language-Team: China (Simplified)\n"
@@ -707,14 +707,23 @@ msgstr ""
 msgid "Done"
 msgstr "完成"
 
+msgid "1 · Download"
+msgstr ""
+
+msgid "2 · Install"
+msgstr ""
+
 msgid "Update"
 msgstr "更新"
 
-msgid "Available Updates"
-msgstr "可用更新"
+msgid "Updates"
+msgstr ""
 
 msgid "7 of 7 updates included"
 msgstr ""
+
+msgid "System"
+msgstr "系统"
 
 msgid "Check all enabled sources again"
 msgstr "再次检查所有启用的软件源"
@@ -722,11 +731,8 @@ msgstr "再次检查所有启用的软件源"
 msgid "Check Again"
 msgstr "再次检查"
 
-msgid "Upgrade"
-msgstr "更新"
-
-msgid "System"
-msgstr "系统"
+msgid "Available updates"
+msgstr ""
 
 msgid "Checking for updates…"
 msgstr "检查更新..."
@@ -736,6 +742,12 @@ msgstr "你的系统已是最新"
 
 msgid "Could not check for updates."
 msgstr ""
+
+msgid "Upgrading may require administrator authorization."
+msgstr ""
+
+msgid "Upgrade"
+msgstr "更新"
 
 msgid "Utilities"
 msgstr "工具"
@@ -1679,6 +1691,9 @@ msgstr ""
 msgid "Cancelled"
 msgstr "已取消"
 
+msgid "Overall progress"
+msgstr ""
+
 msgid "Could not start the requested operation."
 msgstr ""
 
@@ -1724,6 +1739,27 @@ msgstr "正在检查冲突"
 msgid "Checking disk space"
 msgstr "正在检查磁盘空间"
 
+msgid "Preparing transaction"
+msgstr ""
+
+msgid "Downloading packages"
+msgstr ""
+
+msgid "about"
+msgstr ""
+
+msgid "s left"
+msgstr ""
+
+msgid "packages downloaded"
+msgstr ""
+
+msgid "packages processed"
+msgstr ""
+
+msgid "Completed"
+msgstr ""
+
 msgid "Transaction Completed"
 msgstr ""
 
@@ -1764,6 +1800,9 @@ msgstr "系统软件包更新"
 msgid "AUR package update"
 msgstr "AUR 软件包更新"
 
+msgid "Include this update"
+msgstr ""
+
 msgid "Update this package"
 msgstr "更新此软件包"
 
@@ -1771,6 +1810,15 @@ msgid "updates included"
 msgstr ""
 
 msgid "Updates included"
+msgstr ""
+
+msgid "No download required"
+msgstr ""
+
+msgid "Total download:"
+msgstr ""
+
+msgid "Upgrade Selected"
 msgstr ""
 
 msgid "Upgrading packages"

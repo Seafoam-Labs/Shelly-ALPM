@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shelly-ui 2.2.4.1\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-11-13 21:46-0500\n"
+"POT-Creation-Date: 2026-11-13 22:42-0500\n"
 "PO-Revision-Date: 2026-10-10 15:13+0200\n"
 "Last-Translator: csnyder@seafoam-labs.org\n"
 "Language-Team: csnyder@seafoam-labs.org\n"
@@ -746,14 +746,23 @@ msgstr "Attiva/disattiva output"
 msgid "Done"
 msgstr "Fatto"
 
+msgid "1 · Download"
+msgstr ""
+
+msgid "2 · Install"
+msgstr ""
+
 msgid "Update"
 msgstr "Aggiorna"
 
-msgid "Available Updates"
-msgstr "Aggiornamenti disponibili"
+msgid "Updates"
+msgstr ""
 
 msgid "7 of 7 updates included"
 msgstr "7 di 7 aggiornamenti inclusi"
+
+msgid "System"
+msgstr "Sistema"
 
 msgid "Check all enabled sources again"
 msgstr "Controlla di nuovo tutte le sorgenti abilitate"
@@ -761,11 +770,8 @@ msgstr "Controlla di nuovo tutte le sorgenti abilitate"
 msgid "Check Again"
 msgstr "Controlla di nuovo"
 
-msgid "Upgrade"
-msgstr "Aggiorna"
-
-msgid "System"
-msgstr "Sistema"
+msgid "Available updates"
+msgstr ""
 
 msgid "Checking for updates…"
 msgstr "Controllo degli aggiornamenti in corso…"
@@ -775,6 +781,12 @@ msgstr "Il tuo sistema è aggiornato"
 
 msgid "Could not check for updates."
 msgstr "Impossibile controllare gli aggiornamenti."
+
+msgid "Upgrading may require administrator authorization."
+msgstr ""
+
+msgid "Upgrade"
+msgstr "Aggiorna"
 
 msgid "Utilities"
 msgstr "Utilità"
@@ -1748,6 +1760,9 @@ msgstr "Interrotto"
 msgid "Cancelled"
 msgstr "Annullato"
 
+msgid "Overall progress"
+msgstr ""
+
 msgid "Could not start the requested operation."
 msgstr "Impossibile avviare l'operazione richiesta."
 
@@ -1793,6 +1808,27 @@ msgstr "Controllo conflitti in corso"
 msgid "Checking disk space"
 msgstr "Controllo spazio su disco in corso"
 
+msgid "Preparing transaction"
+msgstr ""
+
+msgid "Downloading packages"
+msgstr ""
+
+msgid "about"
+msgstr ""
+
+msgid "s left"
+msgstr ""
+
+msgid "packages downloaded"
+msgstr ""
+
+msgid "packages processed"
+msgstr ""
+
+msgid "Completed"
+msgstr ""
+
 msgid "Transaction Completed"
 msgstr "Transazione completata"
 
@@ -1837,6 +1873,9 @@ msgstr "Aggiornamento pacchetto di sistema"
 msgid "AUR package update"
 msgstr "Aggiornamento pacchetto AUR"
 
+msgid "Include this update"
+msgstr ""
+
 msgid "Update this package"
 msgstr "Aggiorna questo pacchetto"
 
@@ -1845,6 +1884,15 @@ msgstr "aggiornamenti inclusi"
 
 msgid "Updates included"
 msgstr "Aggiornamenti inclusi"
+
+msgid "No download required"
+msgstr ""
+
+msgid "Total download:"
+msgstr ""
+
+msgid "Upgrade Selected"
+msgstr ""
 
 msgid "Upgrading packages"
 msgstr "Aggiornamento pacchetti in corso"

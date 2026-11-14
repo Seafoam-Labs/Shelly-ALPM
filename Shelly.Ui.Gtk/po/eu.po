@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Shelly-ALPM / Shelly: GTK\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-11-13 21:46-0500\n"
+"POT-Creation-Date: 2026-11-13 22:42-0500\n"
 "PO-Revision-Date: 2026-07-27 19:10+0200\n"
 "Last-Translator: bingen <bingenm@gmail.com>\n"
 "Language-Team: Basque <translation-team-eu@googlegroups.com>\n"
@@ -733,14 +733,23 @@ msgstr "Txandakatu irteera"
 msgid "Done"
 msgstr "Eginda"
 
+msgid "1 · Download"
+msgstr ""
+
+msgid "2 · Install"
+msgstr ""
+
 msgid "Update"
 msgstr "Eguneratu"
 
-msgid "Available Updates"
-msgstr "Eguneraketa eskuragarriak"
+msgid "Updates"
+msgstr ""
 
 msgid "7 of 7 updates included"
 msgstr "7tik 7 eguneraketa barne hartuta"
+
+msgid "System"
+msgstr "Sistema"
 
 msgid "Check all enabled sources again"
 msgstr "Egiaztatu berriro gaitutako jatorri guztiak"
@@ -748,11 +757,8 @@ msgstr "Egiaztatu berriro gaitutako jatorri guztiak"
 msgid "Check Again"
 msgstr "Egiaztatu berriro"
 
-msgid "Upgrade"
-msgstr "Bertsio-berritu"
-
-msgid "System"
-msgstr "Sistema"
+msgid "Available updates"
+msgstr ""
 
 msgid "Checking for updates…"
 msgstr "Eguneraketak bilatzen…"
@@ -762,6 +768,12 @@ msgstr "Zure sistema eguneratuta dago"
 
 msgid "Could not check for updates."
 msgstr ""
+
+msgid "Upgrading may require administrator authorization."
+msgstr ""
+
+msgid "Upgrade"
+msgstr "Bertsio-berritu"
 
 msgid "Utilities"
 msgstr "Utilitateak"
@@ -1716,6 +1728,9 @@ msgstr ""
 msgid "Cancelled"
 msgstr "Ezeztatuta"
 
+msgid "Overall progress"
+msgstr ""
+
 msgid "Could not start the requested operation."
 msgstr ""
 
@@ -1761,6 +1776,27 @@ msgstr "Gatazkak egiaztatzen"
 msgid "Checking disk space"
 msgstr "Disko-espazioa egiaztatzen"
 
+msgid "Preparing transaction"
+msgstr ""
+
+msgid "Downloading packages"
+msgstr ""
+
+msgid "about"
+msgstr ""
+
+msgid "s left"
+msgstr ""
+
+msgid "packages downloaded"
+msgstr ""
+
+msgid "packages processed"
+msgstr ""
+
+msgid "Completed"
+msgstr ""
+
 msgid "Transaction Completed"
 msgstr ""
 
@@ -1801,6 +1837,9 @@ msgstr "Sistemako paketeen eguneraketa"
 msgid "AUR package update"
 msgstr "AUR paketeen eguneraketa"
 
+msgid "Include this update"
+msgstr ""
+
 msgid "Update this package"
 msgstr "Eguneratu pakete hau"
 
@@ -1809,6 +1848,15 @@ msgstr "eguneraketa barne"
 
 msgid "Updates included"
 msgstr "Sartutako eguneraketak"
+
+msgid "No download required"
+msgstr ""
+
+msgid "Total download:"
+msgstr ""
+
+msgid "Upgrade Selected"
+msgstr ""
 
 msgid "Upgrading packages"
 msgstr "Paketeak bertsio-berritzen"

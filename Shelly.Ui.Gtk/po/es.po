@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shelly-ui 2.2.4.1\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-11-13 21:46-0500\n"
+"POT-Creation-Date: 2026-11-13 22:42-0500\n"
 "PO-Revision-Date: 2026-07-29 17:32+0000\n"
 "Last-Translator: Tiago Centurion <tiagodecgo2@gmail.com>\n"
 "Language-Team: Spanish <https://hosted.weblate.org/projects/shelly-alpm/"
@@ -726,14 +726,23 @@ msgstr "Mostrar/Ocultar detalles de salida"
 msgid "Done"
 msgstr "Hecho"
 
+msgid "1 · Download"
+msgstr ""
+
+msgid "2 · Install"
+msgstr ""
+
 msgid "Update"
 msgstr "Actualizacion"
 
-msgid "Available Updates"
-msgstr "Actualizaciones disponibles"
+msgid "Updates"
+msgstr ""
 
 msgid "7 of 7 updates included"
 msgstr "7 de 7 actualizaciones incluidas"
+
+msgid "System"
+msgstr "Sistema"
 
 msgid "Check all enabled sources again"
 msgstr "Compruebe todas las fuentes habilitadas de nuevo"
@@ -741,11 +750,8 @@ msgstr "Compruebe todas las fuentes habilitadas de nuevo"
 msgid "Check Again"
 msgstr "Revisa de nuevo"
 
-msgid "Upgrade"
-msgstr "Actualización"
-
-msgid "System"
-msgstr "Sistema"
+msgid "Available updates"
+msgstr ""
 
 msgid "Checking for updates…"
 msgstr "Comprobando actualizaciones…"
@@ -755,6 +761,12 @@ msgstr "Su sistema está actualizado"
 
 msgid "Could not check for updates."
 msgstr ""
+
+msgid "Upgrading may require administrator authorization."
+msgstr ""
+
+msgid "Upgrade"
+msgstr "Actualización"
 
 msgid "Utilities"
 msgstr "Utilidades"
@@ -1709,6 +1721,9 @@ msgstr ""
 msgid "Cancelled"
 msgstr "Cancelado"
 
+msgid "Overall progress"
+msgstr ""
+
 msgid "Could not start the requested operation."
 msgstr ""
 
@@ -1754,6 +1769,27 @@ msgstr ""
 msgid "Checking disk space"
 msgstr ""
 
+msgid "Preparing transaction"
+msgstr ""
+
+msgid "Downloading packages"
+msgstr ""
+
+msgid "about"
+msgstr ""
+
+msgid "s left"
+msgstr ""
+
+msgid "packages downloaded"
+msgstr ""
+
+msgid "packages processed"
+msgstr ""
+
+msgid "Completed"
+msgstr ""
+
 msgid "Transaction Completed"
 msgstr ""
 
@@ -1794,6 +1830,9 @@ msgstr "Actualización del paquete del sistema"
 msgid "AUR package update"
 msgstr "Actualización del paquete AUR"
 
+msgid "Include this update"
+msgstr ""
+
 msgid "Update this package"
 msgstr "Actualizar este paquete"
 
@@ -1802,6 +1841,15 @@ msgstr "actualizaciones incluidas"
 
 msgid "Updates included"
 msgstr "Actualizaciones incluidas"
+
+msgid "No download required"
+msgstr ""
+
+msgid "Total download:"
+msgstr ""
+
+msgid "Upgrade Selected"
+msgstr ""
 
 msgid "Upgrading packages"
 msgstr "Actualización de paquetes"

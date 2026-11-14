@@ -686,3 +686,48 @@ Document any known issues that are being tracked:
 - [ ] Round-trip Theme Shelly → System GTK → Shelly several times (also with dialogs or
   popovers open): no crash, and the brand headerbar with circular window controls returns
   each time (headerbar is kept alive across titlebar swaps).
+
+## Updates page redesign (docs/updates-redesign)
+
+- [ ] Updates page opens with the Pearl page heading ("Updates") and subtitle; in
+  System GTK mode the heading renders with native title paint and the same layout.
+- [ ] Source filters render as chips with per-source counts; toggling a chip filters
+  the list and recomputes "N of M updates included", the total download size and the
+  Upgrade button label ("Upgrade All" vs "Upgrade Selected (n)").
+- [ ] Per-row include checkboxes appear only on AUR and Flatpak rows; System rows have
+  none and are always included while the System source is enabled (all-or-nothing
+  native upgrades). With System disabled and every AUR/Flatpak row unchecked, Upgrade
+  starts no transaction.
+- [ ] AUR/Flatpak row checkboxes survive scrolling (list recycling): scroll a long update
+  list up and down and verify checked state matches the summary count; System rows never
+  show a checkbox after recycling.
+- [ ] Upgrade with a mix of System/AUR/Flatpak updates: the transaction page shows the
+  overall progress card on top (phase title, percent, bar, bytes/speed/ETA meta and
+  Download → Install phase chips) with compact per-package rows underneath.
+- [ ] During database sync the overall bar pulses (indeterminate); once package
+  downloads start it becomes determinate and never moves backwards, even with
+  out-of-order or duplicate progress events.
+- [ ] Downloading rows show a thin bar plus percent; building (AUR) rows pulse with a
+  stage pill; pending rows are dimmed with a Pending pill; finished rows show result
+  pills (Upgraded/Installed/Updated) and no bar.
+- [ ] Terminal output is collapsed by default; "Toggle output" reveals and re-hides it
+  without losing lines, and progress lines still rewrite in place.
+- [ ] Plan/provider/pkgbuild/yes-no questions still appear over the transaction and
+  can be answered; the overall card keeps updating behind the question layer.
+- [ ] Successful transaction: overall card turns success-tinted at 100% with both
+  phase chips done, meta reads "N of N packages processed", Done closes the lockout
+  and the Updates page reloads to "Your system is up to date".
+- [ ] Failed transaction (e.g. an AUR build failure): overall bar freezes below 100%
+  in error tint, the failed row keeps a Failed pill, completed rows keep their
+  success pills, and the Install phase chip shows the error state.
+- [ ] Cancelled transaction: overall card shows the warning tint and Cancelled title;
+  unfinished rows read Cancelled/Not processed as before.
+- [ ] Flatpak-only and AppImage transactions drive the overall bar through their
+  aggregate percentage rows without per-package byte data.
+- [ ] System GTK mode: overall card, chips, compact rows and pills render with native
+  theme colors and modest radii (no Pearl geometry); dark and light desktop themes
+  both stay legible.
+- [ ] Screen reader: the overall bar announces "Overall progress" with value changes;
+  per-row bars keep their package-name accessible names and status descriptions.
+- [ ] At 200% scale / large text the overall card meta wraps and compact rows ellipsize
+  instead of clipping; long package names do not push the status pills off-row.

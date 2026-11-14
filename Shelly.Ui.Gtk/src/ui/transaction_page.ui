@@ -90,6 +90,77 @@
               </object>
             </child>
             <child>
+              <object class="GtkBox" id="overall_card">
+                <property name="orientation">vertical</property>
+                <property name="hexpand">true</property>
+                <style><class name="overall-card"/></style>
+                <child>
+                  <object class="GtkBox">
+                    <property name="orientation">horizontal</property>
+                    <property name="spacing">12</property>
+                    <child>
+                      <object class="GtkLabel" id="overall_title">
+                        <property name="halign">start</property>
+                        <property name="hexpand">true</property>
+                        <property name="xalign">0</property>
+                        <property name="ellipsize">end</property>
+                        <style><class name="overall-title"/></style>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkLabel" id="overall_pct">
+                        <property name="halign">end</property>
+                        <property name="xalign">1</property>
+                        <style><class name="overall-pct"/></style>
+                      </object>
+                    </child>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkProgressBar" id="overall_bar">
+                    <property name="hexpand">true</property>
+                    <property name="margin-top">14</property>
+                    <property name="margin-bottom">12</property>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkLabel" id="overall_meta">
+                    <property name="halign">start</property>
+                    <property name="hexpand">true</property>
+                    <property name="xalign">0</property>
+                    <property name="wrap">true</property>
+                    <property name="wrap-mode">word-char</property>
+                    <style><class name="overall-meta"/></style>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkBox">
+                    <property name="orientation">horizontal</property>
+                    <property name="spacing">8</property>
+                    <property name="margin-top">14</property>
+                    <child>
+                      <object class="GtkLabel" id="phase_download">
+                        <property name="label" translatable="yes">1 · Download</property>
+                        <style><class name="phase-chip"/></style>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkLabel">
+                        <property name="label">→</property>
+                        <style><class name="phase-arrow"/></style>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkLabel" id="phase_install">
+                        <property name="label" translatable="yes">2 · Install</property>
+                        <style><class name="phase-chip"/></style>
+                      </object>
+                    </child>
+                  </object>
+                </child>
+              </object>
+            </child>
+            <child>
               <object class="GtkPaned" id="paned">
                 <property name="orientation">vertical</property>
                 <property name="vexpand">true</property>
@@ -102,7 +173,7 @@
                     <child>
                       <object class="GtkBox" id="rows_box">
                         <property name="orientation">vertical</property>
-                        <property name="spacing">8</property>
+                        <property name="spacing">0</property>
                         <property name="margin-start">16</property>
                         <property name="margin-end">16</property>
                         <property name="margin-top">8</property>

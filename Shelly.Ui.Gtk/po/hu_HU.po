@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shelly-ui 2.2.4.1\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-11-13 21:46-0500\n"
+"POT-Creation-Date: 2026-11-13 22:42-0500\n"
 "PO-Revision-Date: 2026-08-13 11:51+0200\n"
 "Last-Translator: Impostor0729\n"
 "Language-Team: csnyder@seafoam-labs.org\n"
@@ -732,14 +732,23 @@ msgstr "Kimenet váltása"
 msgid "Done"
 msgstr "Kész"
 
+msgid "1 · Download"
+msgstr ""
+
+msgid "2 · Install"
+msgstr ""
+
 msgid "Update"
 msgstr "Frissítés"
 
-msgid "Available Updates"
-msgstr "Elérhető frissítések"
+msgid "Updates"
+msgstr ""
 
 msgid "7 of 7 updates included"
 msgstr "7 frissítésből 7 szerepel"
+
+msgid "System"
+msgstr "Rendszer"
 
 msgid "Check all enabled sources again"
 msgstr "Az összes engedélyezett forrás újbóli ellenőrzése"
@@ -747,11 +756,8 @@ msgstr "Az összes engedélyezett forrás újbóli ellenőrzése"
 msgid "Check Again"
 msgstr "Újbóli ellenőrzés"
 
-msgid "Upgrade"
-msgstr "Frissítés"
-
-msgid "System"
-msgstr "Rendszer"
+msgid "Available updates"
+msgstr ""
 
 msgid "Checking for updates…"
 msgstr "Frissítések keresése…"
@@ -761,6 +767,12 @@ msgstr "A rendszered naprakész"
 
 msgid "Could not check for updates."
 msgstr ""
+
+msgid "Upgrading may require administrator authorization."
+msgstr ""
+
+msgid "Upgrade"
+msgstr "Frissítés"
 
 msgid "Utilities"
 msgstr "Segédprogramok"
@@ -1716,6 +1728,9 @@ msgstr ""
 msgid "Cancelled"
 msgstr "Törölt<"
 
+msgid "Overall progress"
+msgstr ""
+
 msgid "Could not start the requested operation."
 msgstr ""
 
@@ -1761,6 +1776,27 @@ msgstr "Konfliktusok ellenőrzése"
 msgid "Checking disk space"
 msgstr "Lemezterület ellenőrzése"
 
+msgid "Preparing transaction"
+msgstr ""
+
+msgid "Downloading packages"
+msgstr ""
+
+msgid "about"
+msgstr ""
+
+msgid "s left"
+msgstr ""
+
+msgid "packages downloaded"
+msgstr ""
+
+msgid "packages processed"
+msgstr ""
+
+msgid "Completed"
+msgstr ""
+
 msgid "Transaction Completed"
 msgstr ""
 
@@ -1801,6 +1837,9 @@ msgstr "Rendszercsomag frissítése"
 msgid "AUR package update"
 msgstr "AUR csomag frissítése"
 
+msgid "Include this update"
+msgstr ""
+
 msgid "Update this package"
 msgstr "Frissítse ezt a csomagot"
 
@@ -1809,6 +1848,15 @@ msgstr "frissítéseket tartalmaz"
 
 msgid "Updates included"
 msgstr "Frissítéseket tartalmaz"
+
+msgid "No download required"
+msgstr ""
+
+msgid "Total download:"
+msgstr ""
+
+msgid "Upgrade Selected"
+msgstr ""
 
 msgid "Upgrading packages"
 msgstr "Csomagok frissítése"

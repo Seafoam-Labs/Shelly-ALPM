@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shelly-ui 3.1.10\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-11-13 21:46-0500\n"
+"POT-Creation-Date: 2026-11-13 22:42-0500\n"
 "PO-Revision-Date: 2026-10-30 22:43+0200\n"
 "Last-Translator: Francesc Pastó <francescpasto@proton.me>\n"
 "Language-Team: csnyder@seafoam-labs.org\n"
@@ -746,14 +746,23 @@ msgstr "Commuta la sortida"
 msgid "Done"
 msgstr "Fet"
 
+msgid "1 · Download"
+msgstr ""
+
+msgid "2 · Install"
+msgstr ""
+
 msgid "Update"
 msgstr "Actualitza"
 
-msgid "Available Updates"
-msgstr "Actualitzacions disponibles"
+msgid "Updates"
+msgstr ""
 
 msgid "7 of 7 updates included"
 msgstr "7 de 7 actualitzacions incloses"
+
+msgid "System"
+msgstr "Sistema"
 
 msgid "Check all enabled sources again"
 msgstr "Torna a comprovar totes les fonts habilitades"
@@ -761,11 +770,8 @@ msgstr "Torna a comprovar totes les fonts habilitades"
 msgid "Check Again"
 msgstr "Torna a comprovar"
 
-msgid "Upgrade"
-msgstr "Actualitza"
-
-msgid "System"
-msgstr "Sistema"
+msgid "Available updates"
+msgstr ""
 
 msgid "Checking for updates…"
 msgstr "S'estan cercant actualitzacions..."
@@ -775,6 +781,12 @@ msgstr "El vostre sistema està actualitzat"
 
 msgid "Could not check for updates."
 msgstr "No s'han pogut cercar actualitzacions."
+
+msgid "Upgrading may require administrator authorization."
+msgstr ""
+
+msgid "Upgrade"
+msgstr "Actualitza"
 
 msgid "Utilities"
 msgstr "Utilitats"
@@ -1747,6 +1759,9 @@ msgstr "Interromput"
 msgid "Cancelled"
 msgstr "Cancel·lat"
 
+msgid "Overall progress"
+msgstr ""
+
 msgid "Could not start the requested operation."
 msgstr "No s'ha pogut iniciar l'operació sol·licitada."
 
@@ -1792,6 +1807,27 @@ msgstr "S'estan comprovant els conflictes"
 msgid "Checking disk space"
 msgstr "S'està comprovant l'espai en disc"
 
+msgid "Preparing transaction"
+msgstr ""
+
+msgid "Downloading packages"
+msgstr ""
+
+msgid "about"
+msgstr ""
+
+msgid "s left"
+msgstr ""
+
+msgid "packages downloaded"
+msgstr ""
+
+msgid "packages processed"
+msgstr ""
+
+msgid "Completed"
+msgstr ""
+
 msgid "Transaction Completed"
 msgstr "Transacció completada"
 
@@ -1836,6 +1872,9 @@ msgstr "Actualització de paquets del sistema"
 msgid "AUR package update"
 msgstr "Actualització de paquets de l'AUR"
 
+msgid "Include this update"
+msgstr ""
+
 msgid "Update this package"
 msgstr "Actualitza aquest paquet"
 
@@ -1844,6 +1883,15 @@ msgstr "actualitzacions incloses"
 
 msgid "Updates included"
 msgstr "Actualitzacions incloses"
+
+msgid "No download required"
+msgstr ""
+
+msgid "Total download:"
+msgstr ""
+
+msgid "Upgrade Selected"
+msgstr ""
 
 msgid "Upgrading packages"
 msgstr "S'estan actualitzant els paquets"

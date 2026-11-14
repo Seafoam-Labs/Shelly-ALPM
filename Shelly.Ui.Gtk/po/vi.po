@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Shelly-ALPM / Shelly: UI\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-11-13 21:46-0500\n"
+"POT-Creation-Date: 2026-11-13 22:42-0500\n"
 "PO-Revision-Date: 2026-11-03 12:00+0700\n"
 "Last-Translator: dinhkarate <dinhkarat@gmail.com>\n"
 "Language-Team: Vietnamese <vi@li.org>\n"
@@ -737,14 +737,23 @@ msgstr "Hiện/ẩn đầu ra"
 msgid "Done"
 msgstr "Xong"
 
+msgid "1 · Download"
+msgstr ""
+
+msgid "2 · Install"
+msgstr ""
+
 msgid "Update"
 msgstr "Cập nhật"
 
-msgid "Available Updates"
-msgstr "Bản cập nhật hiện có"
+msgid "Updates"
+msgstr ""
 
 msgid "7 of 7 updates included"
 msgstr "7 trên 7 bản cập nhật được đưa vào"
+
+msgid "System"
+msgstr "Hệ thống"
 
 msgid "Check all enabled sources again"
 msgstr "Kiểm tra lại tất cả các nguồn đã bật"
@@ -752,11 +761,8 @@ msgstr "Kiểm tra lại tất cả các nguồn đã bật"
 msgid "Check Again"
 msgstr "Kiểm tra lại"
 
-msgid "Upgrade"
-msgstr "Nâng cấp"
-
-msgid "System"
-msgstr "Hệ thống"
+msgid "Available updates"
+msgstr ""
 
 msgid "Checking for updates…"
 msgstr "Đang kiểm tra cập nhật…"
@@ -766,6 +772,12 @@ msgstr "Hệ thống của bạn đã được cập nhật đầy đủ"
 
 msgid "Could not check for updates."
 msgstr "Không thể kiểm tra cập nhật."
+
+msgid "Upgrading may require administrator authorization."
+msgstr ""
+
+msgid "Upgrade"
+msgstr "Nâng cấp"
 
 msgid "Utilities"
 msgstr "Tiện ích"
@@ -1731,6 +1743,9 @@ msgstr "Bị gián đoạn"
 msgid "Cancelled"
 msgstr "Đã hủy"
 
+msgid "Overall progress"
+msgstr ""
+
 msgid "Could not start the requested operation."
 msgstr "Không thể bắt đầu thao tác được yêu cầu."
 
@@ -1776,6 +1791,27 @@ msgstr "Đang kiểm tra xung đột"
 msgid "Checking disk space"
 msgstr "Đang kiểm tra dung lượng đĩa"
 
+msgid "Preparing transaction"
+msgstr ""
+
+msgid "Downloading packages"
+msgstr ""
+
+msgid "about"
+msgstr ""
+
+msgid "s left"
+msgstr ""
+
+msgid "packages downloaded"
+msgstr ""
+
+msgid "packages processed"
+msgstr ""
+
+msgid "Completed"
+msgstr ""
+
 msgid "Transaction Completed"
 msgstr "Giao dịch đã hoàn tất"
 
@@ -1820,6 +1856,9 @@ msgstr "Cập nhật gói hệ thống"
 msgid "AUR package update"
 msgstr "Cập nhật gói AUR"
 
+msgid "Include this update"
+msgstr ""
+
 msgid "Update this package"
 msgstr "Cập nhật gói này"
 
@@ -1828,6 +1867,15 @@ msgstr "bản cập nhật được đưa vào"
 
 msgid "Updates included"
 msgstr "Các bản cập nhật được đưa vào"
+
+msgid "No download required"
+msgstr ""
+
+msgid "Total download:"
+msgstr ""
+
+msgid "Upgrade Selected"
+msgstr ""
 
 msgid "Upgrading packages"
 msgstr "Đang nâng cấp gói"

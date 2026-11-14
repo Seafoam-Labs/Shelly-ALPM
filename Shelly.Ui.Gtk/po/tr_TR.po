@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Shelly-ALPM / Shelly: UI\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-11-13 21:46-0500\n"
+"POT-Creation-Date: 2026-11-13 22:42-0500\n"
 "PO-Revision-Date: 2026-09-21 23:24-0400\n"
 "Last-Translator: Mehmet Akif Öngün <mehmetakif.ongun@proton.me>\n"
 "Language-Team: Turkish (Turkiye)<>\n"
@@ -741,14 +741,23 @@ msgstr "Çıktıyı Aç/Kapat"
 msgid "Done"
 msgstr "Tamamlandı"
 
+msgid "1 · Download"
+msgstr ""
+
+msgid "2 · Install"
+msgstr ""
+
 msgid "Update"
 msgstr "Güncelleme"
 
-msgid "Available Updates"
-msgstr "Mevcut Güncellemeler"
+msgid "Updates"
+msgstr ""
 
 msgid "7 of 7 updates included"
 msgstr "7 güncellemenin 7'si dahil edildi"
+
+msgid "System"
+msgstr "Sistem"
 
 msgid "Check all enabled sources again"
 msgstr "Tüm etkinleştirilmiş kaynakları tekrar kontrol et"
@@ -756,11 +765,8 @@ msgstr "Tüm etkinleştirilmiş kaynakları tekrar kontrol et"
 msgid "Check Again"
 msgstr "Tekrar kontrol et"
 
-msgid "Upgrade"
-msgstr "Yükselt"
-
-msgid "System"
-msgstr "Sistem"
+msgid "Available updates"
+msgstr ""
 
 msgid "Checking for updates…"
 msgstr "Güncellemeler için kontrol ediliyor"
@@ -770,6 +776,12 @@ msgstr "Sisteminiz güncel"
 
 msgid "Could not check for updates."
 msgstr "Güncellemeler kontrol edilemedi"
+
+msgid "Upgrading may require administrator authorization."
+msgstr ""
+
+msgid "Upgrade"
+msgstr "Yükselt"
 
 msgid "Utilities"
 msgstr "Araçlar"
@@ -1735,6 +1747,9 @@ msgstr "Kesintiye uğradı"
 msgid "Cancelled"
 msgstr "İptal edildi"
 
+msgid "Overall progress"
+msgstr ""
+
 msgid "Could not start the requested operation."
 msgstr "İstenilen operasyon gerçekleşemedi."
 
@@ -1780,6 +1795,27 @@ msgstr "Çakışmalar denetleniyor"
 msgid "Checking disk space"
 msgstr "Disk alanı denetleniyor"
 
+msgid "Preparing transaction"
+msgstr ""
+
+msgid "Downloading packages"
+msgstr ""
+
+msgid "about"
+msgstr ""
+
+msgid "s left"
+msgstr ""
+
+msgid "packages downloaded"
+msgstr ""
+
+msgid "packages processed"
+msgstr ""
+
+msgid "Completed"
+msgstr ""
+
 msgid "Transaction Completed"
 msgstr "İşlem tamamlandı"
 
@@ -1823,6 +1859,9 @@ msgstr "Sistem paket güncellemesi"
 msgid "AUR package update"
 msgstr "AUR paket güncellemesi"
 
+msgid "Include this update"
+msgstr ""
+
 msgid "Update this package"
 msgstr "Bu paketi güncelle"
 
@@ -1831,6 +1870,15 @@ msgstr "güncellemeler eklendi"
 
 msgid "Updates included"
 msgstr "Güncellemeler eklendi"
+
+msgid "No download required"
+msgstr ""
+
+msgid "Total download:"
+msgstr ""
+
+msgid "Upgrade Selected"
+msgstr ""
 
 msgid "Upgrading packages"
 msgstr "Paketler yükseltiliyor"

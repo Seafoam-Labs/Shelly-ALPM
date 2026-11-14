@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shelly-ui 2.3.0.3\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-11-13 21:46-0500\n"
+"POT-Creation-Date: 2026-11-13 22:42-0500\n"
 "PO-Revision-Date: 2026-05-16 11:00+EST\n"
 "Last-Translator: momchil.nikolov@outlook.com\n"
 "Language-Team: Bulgarian (Bulgaria) momchil.nikolov@outlook.com\n"
@@ -711,14 +711,23 @@ msgstr ""
 msgid "Done"
 msgstr ""
 
+msgid "1 · Download"
+msgstr ""
+
+msgid "2 · Install"
+msgstr ""
+
 msgid "Update"
 msgstr ""
 
-msgid "Available Updates"
-msgstr "Налични актуализации"
+msgid "Updates"
+msgstr ""
 
 msgid "7 of 7 updates included"
 msgstr ""
+
+msgid "System"
+msgstr "Система"
 
 msgid "Check all enabled sources again"
 msgstr ""
@@ -726,11 +735,8 @@ msgstr ""
 msgid "Check Again"
 msgstr ""
 
-msgid "Upgrade"
+msgid "Available updates"
 msgstr ""
-
-msgid "System"
-msgstr "Система"
 
 msgid "Checking for updates…"
 msgstr ""
@@ -739,6 +745,12 @@ msgid "Your system is up to date"
 msgstr ""
 
 msgid "Could not check for updates."
+msgstr ""
+
+msgid "Upgrading may require administrator authorization."
+msgstr ""
+
+msgid "Upgrade"
 msgstr ""
 
 msgid "Utilities"
@@ -1682,6 +1694,9 @@ msgstr ""
 msgid "Cancelled"
 msgstr ""
 
+msgid "Overall progress"
+msgstr ""
+
 msgid "Could not start the requested operation."
 msgstr ""
 
@@ -1727,6 +1742,27 @@ msgstr ""
 msgid "Checking disk space"
 msgstr ""
 
+msgid "Preparing transaction"
+msgstr ""
+
+msgid "Downloading packages"
+msgstr ""
+
+msgid "about"
+msgstr ""
+
+msgid "s left"
+msgstr ""
+
+msgid "packages downloaded"
+msgstr ""
+
+msgid "packages processed"
+msgstr ""
+
+msgid "Completed"
+msgstr ""
+
 msgid "Transaction Completed"
 msgstr ""
 
@@ -1767,6 +1803,9 @@ msgstr ""
 msgid "AUR package update"
 msgstr ""
 
+msgid "Include this update"
+msgstr ""
+
 msgid "Update this package"
 msgstr ""
 
@@ -1774,6 +1813,15 @@ msgid "updates included"
 msgstr ""
 
 msgid "Updates included"
+msgstr ""
+
+msgid "No download required"
+msgstr ""
+
+msgid "Total download:"
+msgstr ""
+
+msgid "Upgrade Selected"
 msgstr ""
 
 msgid "Upgrading packages"
