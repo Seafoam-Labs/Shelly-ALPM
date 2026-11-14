@@ -188,6 +188,13 @@ pub const shared_modifiers = [_]SharedModifier{
         .aliases = &.{"-p"},
         .description = "Page number for paginated results",
     },
+    .{
+        .action = .upgrade,
+        .type_names = &.{ "standard", "all", "aur" },
+        .name = "--ignore",
+        .aliases = &.{},
+        .description = "Temporarily ignore one or more packages during upgrade; repeatable or comma-separated",
+    },
 };
 
 pub fn resolveOptions(comptime variant: Variant) []const Option {
