@@ -215,6 +215,8 @@ pub const InitOptions = struct {
     root_hooks_only: bool = false,
     /// RLPM host executable with internal worker dispatch; null re-executes self.
     worker_executable: ?[]const u8 = null,
+    /// Additional package names to temporarily ignore during upgrade/sysupgrade operations without modifying pacman.conf.
+    ignore_packages: ?[]const []const u8 = null,
 };
 
 pub fn applyInitPathOverrides(
@@ -250,6 +252,22 @@ pub fn applyInitPathOverrides(
             const relative = std.mem.trimStart(u8, directory, "/");
             const path = try std.fs.path.join(allocator, &.{ config.root_directory, relative });
             try config.hook_directory.append(allocator, try allocator.dupeSentinel(u8, path, 0));
+        }
+    }
+    if (options.ignore_packages) |packages| {
+        for (packages) |package_name| {
+            if (package_name.len == 0) continue;
+            var duplicate = false;
+            for (config.ignore_package.items) |existing| {
+                if (std.mem.eql(u8, existing, package_name)) {
+                    duplicate = true;
+                    break;
+                }
+            }
+            if (!duplicate) {
+                const owned = try allocator.dupeSentinel(u8, package_name, 0);
+                try config.ignore_package.append(allocator, owned);
+            }
         }
     }
 }

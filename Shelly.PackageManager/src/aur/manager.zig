@@ -68,6 +68,8 @@ pub const InitOptions = struct {
     /// files at either path still mean "no override".
     shellybuild_configuration_paths: ?ShellyBuildConfigurationPaths = null,
     operation_context: ?*operation_api.OperationContext = null,
+    /// Additional package names to temporarily ignore during upgrade operations without modifying pacman.conf.
+    ignore_packages: ?[]const []const u8 = null,
 };
 
 pub const ShellyBuildConfigurationPaths = struct {
@@ -262,6 +264,7 @@ pub const Manager = struct {
     operation_depth: usize = 0,
     availability_error_generation: usize = 0,
     package_error_generation: usize = 0,
+    ignore_packages: []const []const u8,
 
     pub fn init(
         allocator: std.mem.Allocator,
@@ -273,7 +276,12 @@ pub const Manager = struct {
             if (options.build_command == null) return error.IsolatedBuildCommandRequired;
         }
         const temporary_root = if (options.use_temp_path) options.temp_path else null;
-        const alpm = try AlpmManager.init(allocator, environ, .{ .config_path = options.config_path, .use_root = options.root, .temp_root_path = temporary_root });
+        const alpm = try AlpmManager.init(allocator, environ, .{
+            .config_path = options.config_path,
+            .use_root = options.root,
+            .temp_root_path = temporary_root,
+            .ignore_packages = options.ignore_packages,
+        });
         errdefer alpm.deinit();
         const shellybuild_config = if (options.use_chroot or options.makepkg_command != null)
             try ShellyBuildConfiguration.initFromBuffers(allocator, null, null)
@@ -325,6 +333,24 @@ pub const Manager = struct {
         try caller_io.makePath(allocator, alpm.io(), environ, cache_root);
         if (options.show_hidden_packages and !alpm.show_hidden_packages) _ = alpm.toggle_hidden_packages();
 
+        const owned_ignore_packages = if (options.ignore_packages) |packages| blk: {
+            const list = try allocator.alloc([]const u8, packages.len);
+            var initialized_count: usize = 0;
+            errdefer {
+                for (list[0..initialized_count]) |item| allocator.free(item);
+                allocator.free(list);
+            }
+            for (packages) |pkg| {
+                list[initialized_count] = try allocator.dupe(u8, pkg);
+                initialized_count += 1;
+            }
+            break :blk list;
+        } else try allocator.alloc([]const u8, 0);
+        errdefer {
+            for (owned_ignore_packages) |item| allocator.free(item);
+            allocator.free(owned_ignore_packages);
+        }
+
         const self = try allocator.create(Self);
         errdefer allocator.destroy(self);
         self.* = .{
@@ -349,6 +375,7 @@ pub const Manager = struct {
             .use_chroot = options.use_chroot,
             .use_isolated = options.use_isolated,
             .needed = options.needed,
+            .ignore_packages = owned_ignore_packages,
             .no_check = !(options.check orelse if (options.use_chroot or options.makepkg_command != null)
                 false
             else
@@ -402,6 +429,8 @@ pub const Manager = struct {
         if (self.config_path) |path| allocator.free(path);
         allocator.free(self.vcs_store_path);
         allocator.free(self.chroot_path);
+        for (self.ignore_packages) |pkg| allocator.free(pkg);
+        allocator.free(self.ignore_packages);
         allocator.destroy(self);
     }
 
@@ -592,6 +621,16 @@ pub const Manager = struct {
         }
     }
 
+    pub fn isIgnored(self: *const Self, package_name: []const u8) bool {
+        for (self.ignore_packages) |ignored| {
+            if (std.mem.eql(u8, ignored, package_name)) return true;
+        }
+        for (self.alpm.config.ignore_package.items) |ignored| {
+            if (std.mem.eql(u8, ignored, package_name)) return true;
+        }
+        return false;
+    }
+
     pub fn getPackagesNeedingUpdate(self: *Self, check_devel: bool) ![]models.Update {
         var operation_scope = OperationScope.init(self, .search, null);
         operation_scope.attach();
@@ -606,6 +645,7 @@ pub const Manager = struct {
         defer installed.deinit(self.allocator);
         for (foreign) |package| {
             const name = package.name() orelse continue;
+            if (self.isIgnored(name)) continue;
             try names.append(self.allocator, name);
             try installed.append(self.allocator, .{
                 .name = name,
