@@ -88,6 +88,7 @@
 .shelly-brand-dot {
   background: #d0bcff;
   border-radius: 50%;
+  box-shadow: 0 0 0 3px alpha(#d0bcff, 0.22);
 }
 .shelly-brand-label {
   font-size: 13px;

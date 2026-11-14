@@ -123,19 +123,27 @@ fn ensureHeaderBar() *gtk.HeaderBar {
 
     const brand = gtk.Box.new(.horizontal, 9);
     gtk.Widget.addCssClass(brand.as(gtk.Widget), "shelly-brand");
-    // Fill the headerbar's center allocation so the brand sits left, like
-    // Pearl's titlebar, instead of being centered by GtkHeaderBar.
+    // Pack at start (not setTitleWidget, which GtkHeaderBar centers) so the
+    // brand sits left like Pearl's titlebar; valign keeps the dot circular
+    // instead of stretching to the headerbar height.
     gtk.Widget.setHexpand(brand.as(gtk.Widget), 1);
     gtk.Widget.setHalign(brand.as(gtk.Widget), .start);
+    gtk.Widget.setValign(brand.as(gtk.Widget), .center);
     const dot = gtk.Box.new(.horizontal, 0);
     gtk.Widget.addCssClass(dot.as(gtk.Widget), "shelly-brand-dot");
     gtk.Widget.setSizeRequest(dot.as(gtk.Widget), 15, 15);
+    gtk.Widget.setValign(dot.as(gtk.Widget), .center);
     gtk.Box.append(brand, dot.as(gtk.Widget));
     const label = gtk.Label.new(translations._("Shelly"));
     gtk.Widget.addCssClass(label.as(gtk.Widget), "shelly-brand-label");
     gtk.Box.append(brand, label.as(gtk.Widget));
 
-    gtk.HeaderBar.setTitleWidget(bar, brand.as(gtk.Widget));
+    gtk.HeaderBar.packStart(bar, brand.as(gtk.Widget));
+    // Without a title widget GtkHeaderBar falls back to rendering the window
+    // title centered; an empty widget suppresses it so the start-packed brand
+    // is the only title.
+    const title_spacer = gtk.Box.new(.horizontal, 0);
+    gtk.HeaderBar.setTitleWidget(bar, title_spacer.as(gtk.Widget));
     // Keep the native window controls: WM behavior and accessibility come for
     // free; the themed sheet paints them as circles. Pin the layout so the
     // mockup's three buttons show even when the desktop layout hides them.
