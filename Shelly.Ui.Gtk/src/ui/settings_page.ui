@@ -847,6 +847,57 @@
                               </object>
                             </child>
                             <child>
+                              <object class="GtkBox" id="github_token_box">
+                                <property name="orientation">vertical</property>
+                                <property name="spacing">6</property>
+                                <child>
+                                  <object class="GtkLabel">
+                                    <property name="label" translatable="yes">GitHub API token</property>
+                                    <property name="halign">start</property>
+                                  </object>
+                                </child>
+                                <child>
+                                  <object class="GtkLabel">
+                                    <property name="label" translatable="yes">Stored in the desktop keyring. GITHUB_TOKEN from the environment takes precedence.</property>
+                                    <property name="halign">start</property>
+                                    <property name="wrap">true</property>
+                                  </object>
+                                </child>
+                                <child>
+                                  <object class="GtkBox">
+                                    <property name="orientation">horizontal</property>
+                                    <property name="spacing">6</property>
+                                    <child>
+                                      <object class="GtkEntry" id="github_token_entry">
+                                        <property name="visibility">false</property>
+                                        <property name="hexpand">true</property>
+                                        <property name="placeholder-text" translatable="yes">Enter a token to save or replace it</property>
+                                        <accessibility>
+                                          <property name="label" translatable="yes">GitHub API token</property>
+                                        </accessibility>
+                                      </object>
+                                    </child>
+                                    <child>
+                                      <object class="GtkButton" id="github_token_save_button">
+                                        <property name="label" translatable="yes">Save token</property>
+                                      </object>
+                                    </child>
+                                    <child>
+                                      <object class="GtkButton" id="github_token_clear_button">
+                                        <property name="label" translatable="yes">Remove saved token</property>
+                                      </object>
+                                    </child>
+                                  </object>
+                                </child>
+                                <child>
+                                  <object class="GtkLabel" id="github_token_status">
+                                    <property name="halign">start</property>
+                                    <property name="wrap">true</property>
+                                  </object>
+                                </child>
+                              </object>
+                            </child>
+                            <child>
                               <object class="GtkBox" id="appimage_install_path_box">
                                 <property name="orientation">horizontal</property>
                                 <property name="spacing">12</property>

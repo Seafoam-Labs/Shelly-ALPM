@@ -39,6 +39,14 @@ tests.
 - [ ] Verify `shelly upgrade appimage` and `shelly list-updates appimage` still check AppImages explicitly.
 - [ ] Restore `false` and verify combined upgrades include AppImages again; `--no-appimage` still skips them for one run.
 
+## GitHub token in the GTK UI
+
+- [ ] In Settings, save a GitHub token with an unlocked desktop Secret Service keyring; confirm the field masks input and the status reports the token is available.
+- [ ] Restart Shelly and verify the saved token remains available without appearing in Shelly's settings file.
+- [ ] Update multiple GitHub AppImages from the GTK AppImage page and confirm the token is used for GitHub API requests.
+- [ ] Set `GITHUB_TOKEN` in the desktop environment and confirm it takes precedence over the saved token.
+- [ ] Remove the saved token and verify it is no longer available after restarting Shelly.
+
 ## Flatpak checks during combined upgrades
 
 - [ ] Verify `shelly config get DisableFlatpakUpdateCheck` returns `False` for a configuration without the new key.

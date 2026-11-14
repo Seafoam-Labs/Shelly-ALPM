@@ -14,6 +14,7 @@ const translations = @import("helpers/translations.zig");
 const deep_link = @import("helpers/deep_link.zig");
 const tray_service = @import("services/tray_service.zig");
 const features = @import("services/build_features.zig");
+const github_token_store = @import("services/github_token_store.zig");
 const IconDownloadService = @import("services/icon_fetcher.zig").downloadIconsInBackground;
 
 var did_activate: bool = false;
@@ -28,6 +29,24 @@ var requested_appimage_path: ?[:0]const u8 = null;
 pub fn main(init: std.process.Init) void {
     runtime.io = init.io;
     runtime.environ_map = init.environ_map;
+    if (init.environ_map.get("GITHUB_TOKEN")) |token| {
+        runtime.github_token_from_environment = token.len > 0;
+    }
+    if (!runtime.github_token_from_environment) {
+        if (github_token_store.read(std.heap.c_allocator)) |stored_token| {
+            if (stored_token) |token| {
+                defer std.heap.c_allocator.free(token);
+                if (init.environ_map.put("GITHUB_TOKEN", token)) |_| {
+                    runtime.github_token_from_secret_store = true;
+                } else |err| {
+                    std.log.warn("Could not make the saved GitHub token available to Shelly operations. Technical details: {s}", .{@errorName(err)});
+                }
+            }
+        } else |err| {
+            runtime.github_token_store_load_failed = true;
+            std.log.info("Could not load a saved GitHub token from the system keyring. Technical details: {s}", .{@errorName(err)});
+        }
+    }
     HttpClient.setDefaultProxyEnvironment(init.environ_map);
 
     if (!translations.init()) {
