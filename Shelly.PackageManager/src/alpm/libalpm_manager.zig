@@ -4107,9 +4107,12 @@ test "restart report detects kernels and records structured service results" {
         .sub_path = fake_systemctl,
         .data = "#!/bin/sh\nif [ \"$1\" = show ]; then\n  printf 'demo.service\\n'\n  exit 0\nfi\nexit 0\n",
     });
-    var fake_systemctl_file = try std.Io.Dir.cwd().openFile(testing.io, fake_systemctl, .{ .mode = .read_write });
-    defer fake_systemctl_file.close(testing.io);
-    try fake_systemctl_file.setPermissions(testing.io, .fromMode(0o755));
+    {
+        // Close the writable handle before execution to avoid ETXTBSY on Linux.
+        var fake_systemctl_file = try std.Io.Dir.cwd().openFile(testing.io, fake_systemctl, .{ .mode = .read_write });
+        defer fake_systemctl_file.close(testing.io);
+        try fake_systemctl_file.setPermissions(testing.io, .fromMode(0o755));
+    }
 
     var success_report = try manager.checkForRequiredRestarts(.{
         .proc_root = proc_root,

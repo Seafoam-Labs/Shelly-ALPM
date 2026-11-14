@@ -27,7 +27,7 @@ makedepends=(
 )
 checkdepends=('ripgrep')
 source=("${pkgbase}-${pkgver}.tar.gz::${url}/archive/v${pkgver}.tar.gz")
-sha256sums=('2217744ade8b05e3b79a854a812c2613de1ae5cc026f8c8aa006117f4667d2bc')
+sha256sums=('4f21a3e593ba9c58e37652112e32892ee5c4a7185b3160f9af7887d0cb054bbd')
 
 # GitHub replaces "+" with "-" in archive top-level directory names.
 _srcdir="Shelly-ALPM-${pkgver//+/-}"
