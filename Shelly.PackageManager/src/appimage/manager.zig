@@ -743,8 +743,8 @@ pub const AppImageManager = struct {
         var term_buffer: [96]u8 = undefined;
         const term_description = switch (result.term) {
             .exited => |code| std.fmt.bufPrint(&term_buffer, "exited with status {d}", .{code}) catch "failed",
-            .signal => |signal| std.fmt.bufPrint(&term_buffer, "terminated by signal {d}", .{@intFromEnum(signal)}) catch "failed",
-            .stopped => |signal| std.fmt.bufPrint(&term_buffer, "stopped by signal {d}", .{@intFromEnum(signal)}) catch "failed",
+            .signal => |signal| std.fmt.bufPrint(&term_buffer, "terminated by signal {d}", .{@backingInt(signal)}) catch "failed",
+            .stopped => |signal| std.fmt.bufPrint(&term_buffer, "stopped by signal {d}", .{@backingInt(signal)}) catch "failed",
             .unknown => |status| std.fmt.bufPrint(&term_buffer, "returned unknown status {d}", .{status}) catch "failed",
         };
 
@@ -1380,15 +1380,34 @@ pub const AppImageManager = struct {
                 break :blk null;
             };
 
-            const dest_name = std.fmt.allocPrint(self.allocator, "{s}.AppImage", .{app_name}) catch {
-                success = false;
-                continue;
-            };
-            defer self.allocator.free(dest_name);
-            const appimage_path = std.fs.path.join(self.allocator, &.{ self.install_directory, dest_name }) catch {
-                success = false;
-                continue;
-            };
+            // Versioned AppImage filenames are persisted in the database.
+            // Keep that managed path during synchronization instead of
+            // incorrectly treating the stable legacy name as the only path.
+            var appimage_path: []u8 = undefined;
+            if (existing) |ex| {
+                const same_directory = if (std.fs.path.dirname(ex.path)) |directory|
+                    std.mem.eql(u8, directory, self.install_directory)
+                else
+                    false;
+                const existing_stat = if (same_directory and ex.path.len > 0)
+                    std.Io.Dir.cwd().statFile(self.io, ex.path, .{}) catch |err| switch (err) {
+                        error.FileNotFound => null,
+                        else => return err,
+                    }
+                else
+                    null;
+                if (existing_stat != null) {
+                    appimage_path = try self.allocator.dupe(u8, ex.path);
+                } else {
+                    const dest_name = try std.fmt.allocPrint(self.allocator, "{s}.AppImage", .{app_name});
+                    defer self.allocator.free(dest_name);
+                    appimage_path = try std.fs.path.join(self.allocator, &.{ self.install_directory, dest_name });
+                }
+            } else {
+                const dest_name = try std.fmt.allocPrint(self.allocator, "{s}.AppImage", .{app_name});
+                defer self.allocator.free(dest_name);
+                appimage_path = try std.fs.path.join(self.allocator, &.{ self.install_directory, dest_name });
+            }
             defer self.allocator.free(appimage_path);
 
             // Only a missing file is stale. Permission and I/O errors must leave
