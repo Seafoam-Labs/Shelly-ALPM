@@ -17,6 +17,17 @@ body:
           required: false
         - label: I have checked whether the issue occurs across different network conditions or devices.
           required: false
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      description: Which platform are you running Shelly on? (Check ~/.config/shelly/config.json NativePackageBackend if you are unsure)
+      options:
+        - Arch-based with libalpm
+        - Arch-based with RLPM 
+        - Devario with RLPM
+    validations:
+      required: true
   - type: input
     id: firmware
     attributes:

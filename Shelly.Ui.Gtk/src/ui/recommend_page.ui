@@ -33,6 +33,7 @@
                 </accessibility>
                 <style>
                   <class name="title-2"/>
+                  <class name="page-heading"/>
                 </style>
               </object>
             </child>
@@ -42,6 +43,7 @@
                 <property name="hexpand">true</property>
                 <style>
                   <class name="dim-label"/>
+                  <class name="page-subtitle"/>
                 </style>
               </object>
             </child>

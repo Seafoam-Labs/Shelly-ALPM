@@ -646,6 +646,10 @@ Document any known issues that are being tracked:
 - [ ] From a graphical session, upgrade `systemd-libs` and confirm
   `dbus-broker.service`, `systemd-logind.service`, and the display manager are
   not restarted and the session survives.
+- [ ] On Plasma Login Manager (`plasmalogin.service`, aliased
+  `display-manager.service`), upgrade a mapped library such as Qt 6 or Mesa and
+  confirm `[RESTART_REQUIRED]service:plasmalogin.service|session-critical`, no
+  `systemctl try-restart plasmalogin.service`, and the session survives.
 - [ ] Confirm a stale user manager or user bus reports
   `[RESTART_REQUIRED]session` rather than a reboot, and that a missing running
   kernel module directory or stale system manager still reports
@@ -653,3 +657,85 @@ Document any known issues that are being tracked:
 - [ ] Upgrade unrelated packages after a previous upgrade left a service stale;
   confirm the stale service is not restarted again because its libraries did not
   change in the current transaction.
+
+## Pearl-style default theme (docs/pearl-redesign)
+
+- [ ] With a config lacking `ThemeMode` (or `ThemeMode: shelly`), the window opens with the
+  built-in theme: rounded window with outline, brand headerbar with circular window buttons,
+  accent-filled selection pill, card toolbars, large page headings.
+- [ ] Settings → Look & Feel → Theme = "System GTK" switches live to the desktop GTK theme with
+  the default titlebar; added page headings and sidebar group labels disappear and the legacy
+  spacing returns. Switching back to "Shelly" restores the built-in look without a restart.
+- [ ] Color variant Dark/Light applies live in both theme modes; "Follow system" tracks the
+  desktop dark preference (flip the desktop color scheme while Shelly is open and verify the
+  sheet swaps without a restart).
+- [ ] Collapse the sidebar with the chevron: group labels hide while collapsed and return when
+  expanded; the selection pill tracks the active page in sidebar and topbar modes.
+- [ ] Topbar navigation mode renders the themed bar, pills and selected state.
+- [ ] Utilities and Settings appear under SYSTEM in the sidebar (and as topbar items in
+  topbar mode), navigate like other pages, and track the selected pill; no main-menu
+  popover remains in either nav mode.
+- [ ] Welcome lockout, polkit warning, confirm/plan dialogs and success/error/warning toasts
+  stay legible in both variants; transaction terminal output stays readable.
+- [ ] `shelly config set ThemeMode system` is honored at next start; corrupt or missing keys
+  fall back to the defaults without crashing.
+- [ ] Keyboard-only focus shows the 2px accent outline on buttons, entries and switches in the
+  built-in theme; screen reader names for nav buttons and window controls are unchanged.
+- [ ] At 200% scale / large text, headings, cards and the settings rows do not clip.
+- [ ] On a desktop that installs a fixed dark GTK override at user priority (e.g. Pearl's
+  matugen palette), the light variant still shows dark-on-light row labels and surfaces;
+  switching to System GTK restores the desktop override.
+- [ ] With the desktop set to dark, `Follow system` opens dark without touching gsettings
+  (portal-driven `gtk-interface-color-scheme` on GTK >= 4.23).
+- [ ] Round-trip Theme Shelly → System GTK → Shelly several times (also with dialogs or
+  popovers open): no crash, and the brand headerbar with circular window controls returns
+  each time (headerbar is kept alive across titlebar swaps).
+
+## Updates page redesign (docs/updates-redesign)
+
+- [ ] Updates page opens with the Pearl page heading ("Updates") and subtitle; in
+  System GTK mode the heading renders with native title paint and the same layout.
+- [ ] Source filters render as chips with per-source counts; toggling a chip filters
+  the list and recomputes "N of M updates included", the total download size and the
+  Upgrade button label ("Upgrade All" vs "Upgrade Selected (n)").
+- [ ] Per-row include checkboxes appear only on AUR and Flatpak rows; System rows have
+  none and are always included while the System source is enabled (all-or-nothing
+  native upgrades). With System disabled and every AUR/Flatpak row unchecked, Upgrade
+  starts no transaction.
+- [ ] AUR/Flatpak row checkboxes survive scrolling (list recycling): scroll a long update
+  list up and down and verify checked state matches the summary count; System rows never
+  show a checkbox after recycling.
+- [ ] Upgrade with a mix of System/AUR/Flatpak updates: the transaction page shows the
+  overall progress card on top (phase title, percent, bar, bytes/speed/ETA meta and
+  Download → Install phase chips) with compact per-package rows underneath.
+- [ ] During database sync the overall bar pulses (indeterminate); once package
+  downloads start it becomes determinate and never moves backwards, even with
+  out-of-order or duplicate progress events.
+- [ ] Downloading rows show a thin bar plus percent; building (AUR) rows pulse with a
+  stage pill; pending rows are dimmed with a Pending pill; finished rows show result
+  pills (Upgraded/Installed/Updated) and no bar.
+- [ ] Terminal output is collapsed by default; "Toggle output" reveals and re-hides it
+  without losing lines, and progress lines still rewrite in place.
+- [ ] Plan/provider/pkgbuild/yes-no questions still appear over the transaction and
+  can be answered; the overall card keeps updating behind the question layer.
+- [ ] Successful transaction: overall card turns success-tinted at 100% with both
+  phase chips done, meta reads "N of N packages processed", Done closes the lockout
+  and the Updates page reloads to "Your system is up to date".
+- [ ] Failed transaction (e.g. an AUR build failure): overall bar freezes below 100%
+  in error tint, the failed row keeps a Failed pill, completed rows keep their
+  success pills, and the Install phase chip shows the error state.
+- [ ] Cancelled transaction: overall card shows the warning tint and Cancelled title;
+  unfinished rows read Cancelled/Not processed as before.
+- [ ] Flatpak-only and AppImage transactions drive the overall bar through their
+  aggregate percentage rows without per-package byte data.
+- [ ] System GTK mode: overall card, chips, compact rows and pills render with native
+  theme colors and modest radii (no Pearl geometry); dark and light desktop themes
+  both stay legible.
+- [ ] Screen reader: the overall bar announces "Overall progress" with value changes;
+  per-row bars keep their package-name accessible names and status descriptions.
+- [ ] At 200% scale / large text the overall card meta wraps and compact rows ellipsize
+  instead of clipping; long package names do not push the status pills off-row.
+- [ ] Immediately after a completed upgrade (while the tray is still refreshing its
+  own update check), the Updates page reload recovers via retry instead of showing
+  "Could not check for updates."; a genuinely broken check (e.g. missing CLI) still
+  shows the error page without retry delays.

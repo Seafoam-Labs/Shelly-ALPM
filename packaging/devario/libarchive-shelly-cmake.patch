@@ -1,0 +1,15 @@
+diff --git a/libarchive/CMakeLists.txt b/libarchive/CMakeLists.txt
+--- a/libarchive/CMakeLists.txt
++++ b/libarchive/CMakeLists.txt
+@@ -253,7 +253,11 @@
+   ADD_LIBRARY(archive SHARED ${libarchive_SOURCES} ${include_HEADERS})
+   TARGET_INCLUDE_DIRECTORIES(archive PUBLIC .)
+   TARGET_LINK_LIBRARIES(archive ${ADDITIONAL_LIBS})
++  # Fail the link on unresolved symbols so DT_NEEDED is always complete.
++  TARGET_LINK_OPTIONS(archive PRIVATE "-Wl,-z,defs")
++  # Private ABI: never provide or conflict with the system libarchive.
+   SET_TARGET_PROPERTIES(archive PROPERTIES
++                        OUTPUT_NAME archive-shelly
+                         VERSION ${SOVERSION_FULL}
+                         SOVERSION ${SOVERSION}
+                         MACHO_COMPATIBILITY_VERSION ${MACHO_COMPATIBILITY_VERSION}

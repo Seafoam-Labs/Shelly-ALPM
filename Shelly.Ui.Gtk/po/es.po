@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shelly-ui 2.2.4.1\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-11-04 12:08-0500\n"
+"POT-Creation-Date: 2026-11-13 22:42-0500\n"
 "PO-Revision-Date: 2026-07-29 17:32+0000\n"
 "Last-Translator: Tiago Centurion <tiagodecgo2@gmail.com>\n"
 "Language-Team: Spanish <https://hosted.weblate.org/projects/shelly-alpm/"
@@ -112,6 +112,9 @@ msgstr "Saltar"
 msgid "AppImage"
 msgstr "AppImage"
 
+msgid "Install and integrate AppImage bundles."
+msgstr ""
+
 msgid "Search..."
 msgstr "Buscar..."
 
@@ -198,6 +201,9 @@ msgstr "Eliminar"
 
 msgid "AUR"
 msgstr "AUR"
+
+msgid "Build and install packages from the Arch User Repository."
+msgstr ""
 
 msgid "Search the AUR by name or keyword"
 msgstr "Buscar el AUR por nombre o palabra clave"
@@ -338,6 +344,9 @@ msgstr "Historial de versiones"
 msgid "Flatpak"
 msgstr "Flatpak"
 
+msgid "Manage Flatpak applications and remotes."
+msgstr ""
+
 msgid "Search packages..."
 msgstr "Buscar paquetes..."
 
@@ -419,6 +428,12 @@ msgstr "Acciones de paquetes"
 msgid "Package"
 msgstr "Paquete"
 
+msgid "Packages"
+msgstr "Paquetes"
+
+msgid "Install and manage software on your system."
+msgstr ""
+
 msgid "Package Group Filter"
 msgstr "Filtro de grupo de paquetes"
 
@@ -487,11 +502,9 @@ msgstr "Sugerencias seleccionadas de Seafoam Labs"
 msgid "Refresh the recommended packages list from the network"
 msgstr ""
 
-#| msgid "Mixed selection"
 msgid "Clear selection"
 msgstr ""
 
-#| msgid "Recommended Packages"
 msgid "Deselect all recommended packages"
 msgstr ""
 
@@ -510,6 +523,12 @@ msgstr ""
 
 msgid "Shelly Search"
 msgstr "Búsqueda de Shelly"
+
+msgid "Search"
+msgstr ""
+
+msgid "Search across every enabled backend."
+msgstr ""
 
 msgid "Search standard repositories, AUR and Flatpak"
 msgstr ""
@@ -539,6 +558,9 @@ msgstr ""
 
 msgid "Settings"
 msgstr "Configuración"
+
+msgid "Make Shelly feel at home on your desktop."
+msgstr ""
 
 msgid "General"
 msgstr "General"
@@ -571,6 +593,15 @@ msgid "Run Tray as cron"
 msgstr ""
 
 msgid "Tray update with ui"
+msgstr ""
+
+msgid "Update terminal"
+msgstr ""
+
+msgid "Terminal command"
+msgstr ""
+
+msgid "Custom update terminal command"
 msgstr ""
 
 msgid "Tray Check Interval (Hours)"
@@ -647,6 +678,12 @@ msgstr "Página predeterminada"
 msgid "Navigation style"
 msgstr "Estilo de navegación"
 
+msgid "Theme"
+msgstr ""
+
+msgid "Color variant"
+msgstr ""
+
 msgid "Advanced"
 msgstr "Avanzado"
 
@@ -668,9 +705,6 @@ msgstr "Ruta de instalación de AppImage"
 msgid "Select Directory"
 msgstr "Seleccionar carpeta"
 
-msgid "View Changelog"
-msgstr "Ver registro de cambios"
-
 msgid "v0.0.0"
 msgstr "v0.0.0"
 
@@ -683,20 +717,32 @@ msgstr "Fluxer de la comunidad"
 msgid "Sponsor"
 msgstr "Patrocinador"
 
+msgid "View Changelog"
+msgstr "Ver registro de cambios"
+
 msgid "Toggle output"
 msgstr "Mostrar/Ocultar detalles de salida"
 
 msgid "Done"
 msgstr "Hecho"
 
+msgid "1 · Download"
+msgstr ""
+
+msgid "2 · Install"
+msgstr ""
+
 msgid "Update"
 msgstr "Actualizacion"
 
-msgid "Available Updates"
-msgstr "Actualizaciones disponibles"
+msgid "Updates"
+msgstr ""
 
 msgid "7 of 7 updates included"
 msgstr "7 de 7 actualizaciones incluidas"
+
+msgid "System"
+msgstr "Sistema"
 
 msgid "Check all enabled sources again"
 msgstr "Compruebe todas las fuentes habilitadas de nuevo"
@@ -704,11 +750,8 @@ msgstr "Compruebe todas las fuentes habilitadas de nuevo"
 msgid "Check Again"
 msgstr "Revisa de nuevo"
 
-msgid "Upgrade"
-msgstr "Actualización"
-
-msgid "System"
-msgstr "Sistema"
+msgid "Available updates"
+msgstr ""
 
 msgid "Checking for updates…"
 msgstr "Comprobando actualizaciones…"
@@ -718,6 +761,12 @@ msgstr "Su sistema está actualizado"
 
 msgid "Could not check for updates."
 msgstr ""
+
+msgid "Upgrading may require administrator authorization."
+msgstr ""
+
+msgid "Upgrade"
+msgstr "Actualización"
 
 msgid "Utilities"
 msgstr "Utilidades"
@@ -842,7 +891,6 @@ msgstr "Siguiente"
 msgid "Start Shelly"
 msgstr "Iniciar Shelly"
 
-#| msgid "Enable AUR?"
 msgid "Enable Atoll?"
 msgstr ""
 
@@ -1495,7 +1543,6 @@ msgstr ""
 msgid "Install the selected packages?"
 msgstr ""
 
-#| msgid "Enable AUR"
 msgid "Enable Atoll"
 msgstr ""
 
@@ -1581,6 +1628,18 @@ msgstr "Servicio de inicio de systemd eliminado."
 msgid "AUR enabled"
 msgstr "AUR habilitados"
 
+msgid "System GTK"
+msgstr ""
+
+msgid "Follow system"
+msgstr ""
+
+msgid "Dark"
+msgstr ""
+
+msgid "Light"
+msgstr ""
+
 msgid "System Default"
 msgstr "Sistema predeterminado"
 
@@ -1626,8 +1685,11 @@ msgstr "turco (Türkçe)"
 msgid "中文（简体）"
 msgstr ""
 
-msgid "Packages"
-msgstr "Paquetes"
+msgid "Default (auto-detect)"
+msgstr ""
+
+msgid "Custom…"
+msgstr ""
 
 msgid "Pending"
 msgstr "Pendiente"
@@ -1658,6 +1720,9 @@ msgstr ""
 
 msgid "Cancelled"
 msgstr "Cancelado"
+
+msgid "Overall progress"
+msgstr ""
 
 msgid "Could not start the requested operation."
 msgstr ""
@@ -1704,6 +1769,27 @@ msgstr ""
 msgid "Checking disk space"
 msgstr ""
 
+msgid "Preparing transaction"
+msgstr ""
+
+msgid "Downloading packages"
+msgstr ""
+
+msgid "about"
+msgstr ""
+
+msgid "s left"
+msgstr ""
+
+msgid "packages downloaded"
+msgstr ""
+
+msgid "packages processed"
+msgstr ""
+
+msgid "Completed"
+msgstr ""
+
 msgid "Transaction Completed"
 msgstr ""
 
@@ -1744,6 +1830,9 @@ msgstr "Actualización del paquete del sistema"
 msgid "AUR package update"
 msgstr "Actualización del paquete AUR"
 
+msgid "Include this update"
+msgstr ""
+
 msgid "Update this package"
 msgstr "Actualizar este paquete"
 
@@ -1753,13 +1842,21 @@ msgstr "actualizaciones incluidas"
 msgid "Updates included"
 msgstr "Actualizaciones incluidas"
 
+msgid "No download required"
+msgstr ""
+
+msgid "Total download:"
+msgstr ""
+
+msgid "Upgrade Selected"
+msgstr ""
+
 msgid "Upgrading packages"
 msgstr "Actualización de paquetes"
 
 msgid "Refreshing package databases"
 msgstr "Recargando las bases de datos de paquetes"
 
-#| msgid "Removing Flatpak"
 msgid "Removing stale database lock"
 msgstr ""
 
@@ -1789,7 +1886,10 @@ msgstr ""
 msgid "Installing Flatpak and AppImage support"
 msgstr "Instalando soporte para Flatpak y AppImage"
 
-msgid "Main menu"
+msgid "BROWSE"
+msgstr ""
+
+msgid "SYSTEM"
 msgstr ""
 
 msgid "Expand sidebar"

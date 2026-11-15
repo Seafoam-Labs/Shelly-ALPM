@@ -29,6 +29,8 @@ pub const ProvidedPackage = struct {
 };
 
 pub const Backend = struct {
+    /// Prefer a satisfying repository package; installed-only dependencies remain usable.
+    prefer_repositories: bool = false,
     context: ?*anyopaque,
     is_installed: *const fn (context: ?*anyopaque, dependency: [:0]const u8) anyerror!bool,
     find_repo_satisfier: *const fn (context: ?*anyopaque, dependency: [:0]const u8) anyerror!?[]const u8,
@@ -112,7 +114,7 @@ fn resolveGroup(
         if (try dependencySatisfiedByProvided(allocator, dependency, provided_packages)) continue;
         const dependency_string = try formatDependencyZ(allocator, dependency);
         defer allocator.free(dependency_string);
-        if (try backend.is_installed(backend.context, dependency_string)) continue;
+        if (!backend.prefer_repositories and try backend.is_installed(backend.context, dependency_string)) continue;
         if (try backend.find_repo_satisfier(backend.context, dependency_string)) |name| {
             if (findRepoDependency(repo.items, name)) |index| {
                 repo.items[index].role = strongerRole(repo.items[index].role, role);
@@ -120,6 +122,8 @@ fn resolveGroup(
                 .name = try allocator.dupe(u8, name),
                 .role = role,
             });
+        } else if (backend.prefer_repositories and try backend.is_installed(backend.context, dependency_string)) {
+            continue;
         } else if (findAurDependency(aur.items, dependency)) |index| {
             aur.items[index].role = strongerRole(aur.items[index].role, role);
         } else try aur.append(allocator, .{
@@ -399,4 +403,49 @@ test "dependency resolution excludes version-compatible outputs from the same PK
     }});
     defer wrong_version.deinit(allocator);
     try std.testing.expectEqual(@as(usize, 2), wrong_version.aur_packages.len);
+}
+
+test "dependency resolution prefers repositories only when requested and preserves installed fallback" {
+    const Context = struct {
+        fn installed(_: ?*anyopaque, dependency: [:0]const u8) anyerror!bool {
+            return !std.mem.eql(u8, dependency, "missing");
+        }
+        fn repo(_: ?*anyopaque, dependency: [:0]const u8) anyerror!?[]const u8 {
+            if (std.mem.eql(u8, dependency, "virtual>=2")) return "repo-provider";
+            if (std.mem.eql(u8, dependency, "compiler")) return "compiler";
+            if (std.mem.eql(u8, dependency, "checker")) return "checker";
+            return null;
+        }
+    };
+    const allocator = std.testing.allocator;
+    const info_parser = pkgbuild.PkgbuildParser{ .allocator = allocator, .io = std.testing.io };
+    var info = try info_parser.parser_content(
+        \\pkgname=demo
+        \\arch=('any')
+        \\depends=('virtual>=2' 'installed-only' 'missing')
+        \\makedepends=('compiler')
+        \\checkdepends=('checker')
+    , null);
+    defer info.deinit(allocator);
+    for ([_]bool{ false, true }) |prefer| {
+        for ([_]bool{ false, true }) |no_check| {
+            var result = try resolveBuild(allocator, &info, no_check, .{
+                .context = null,
+                .is_installed = Context.installed,
+                .find_repo_satisfier = Context.repo,
+                .prefer_repositories = prefer,
+            });
+            defer result.deinit(allocator);
+            try std.testing.expectEqual(@as(usize, if (!prefer) 0 else if (no_check) 2 else 3), result.repo_packages.len);
+            if (prefer) {
+                try std.testing.expectEqualStrings("repo-provider", result.repo_packages[0].name);
+                try std.testing.expectEqual(Role.runtime, result.repo_packages[0].role);
+                try std.testing.expectEqualStrings("compiler", result.repo_packages[1].name);
+                try std.testing.expectEqual(Role.build, result.repo_packages[1].role);
+                if (!no_check) try std.testing.expectEqual(Role.check, result.repo_packages[2].role);
+            }
+            try std.testing.expectEqual(@as(usize, 1), result.aur_packages.len);
+            try std.testing.expectEqualStrings("missing", result.aur_packages[0].dependency.name);
+        }
+    }
 }

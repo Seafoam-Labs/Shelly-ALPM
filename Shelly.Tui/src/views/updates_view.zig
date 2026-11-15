@@ -18,6 +18,7 @@ pub const View = struct {
     flatpak_available: bool = false,
     flatpak_enabled: bool = true,
     aur_enabled: bool = true,
+    appimage_enabled: bool = true,
 
     /// A full upgrade synchronizes sources again, even when the cached check is empty.
     pub fn canUpgradeAll(self: View) bool {
@@ -36,19 +37,24 @@ pub const View = struct {
         return self.flatpak_available and !self.loading and !self.failed and self.data != null and self.data.?.Flatpak.len > 0;
     }
 
+    pub fn canUpgradeAppImage(self: View) bool {
+        return self.appimage_enabled and !self.loading and !self.failed and self.data != null and self.data.?.AppImage.len > 0;
+    }
+
     pub fn handleKey(self: View, key: vaxis.Key) ?commands.Updates {
         const action = commands.updates(key) orelse return null;
         if (action == .upgrade_all and !self.canUpgradeAll()) return null;
         if (action == .upgrade_system and !self.canUpgrade()) return null;
         if (action == .upgrade_aur and !self.canUpgradeAur()) return null;
         if (action == .upgrade_flatpak and !self.canUpgradeFlatpak()) return null;
+        if (action == .upgrade_appimage and !self.canUpgradeAppImage()) return null;
         return action;
     }
 
     pub fn statusText(self: View, arena: Allocator) Allocator.Error![]const u8 {
         if (self.loading) return "Checking for updates…";
         if (self.failed) return "Update check failed";
-        if (self.data) |data| return std.fmt.allocPrint(arena, "{d} updates — System: {d}, AUR: {d}, Flatpak: {d}", .{ data.count(), data.Packages.len, data.Aur.len, data.Flatpak.len });
+        if (self.data) |data| return std.fmt.allocPrint(arena, "{d} updates — System: {d}, AUR: {d}, Flatpak: {d}, AppImage: {d}", .{ data.count(), data.Packages.len, data.Aur.len, data.Flatpak.len, data.AppImage.len });
         return "Updates have not been checked.";
     }
 
@@ -120,7 +126,8 @@ pub const View = struct {
         const data = self.data orelse return "";
         const aur = if (self.aur_enabled) try std.fmt.allocPrint(arena, " · AUR {d}", .{data.Aur.len}) else "";
         const flatpak = if (!self.flatpak_enabled) "" else if (self.flatpak_available) try std.fmt.allocPrint(arena, " · Flatpak {d}", .{data.Flatpak.len}) else " · Flatpak unavailable";
-        return std.fmt.allocPrint(arena, "System {d}{s}{s} · AppImage {d}", .{ data.Packages.len, aur, flatpak, data.AppImage.len });
+        const appimage = if (self.appimage_enabled) try std.fmt.allocPrint(arena, " · AppImage {d}", .{data.AppImage.len}) else "";
+        return std.fmt.allocPrint(arena, "System {d}{s}{s}{s}", .{ data.Packages.len, aur, flatpak, appimage });
     }
 };
 
@@ -335,6 +342,8 @@ test "update source summary respects settings and backend availability" {
     try std.testing.expectEqualStrings("System 0 · AUR 0 · Flatpak unavailable · AppImage 0", try view.sourceSummary(arena.allocator()));
     view.flatpak_available = true;
     try std.testing.expectEqualStrings("System 0 · AUR 0 · Flatpak 0 · AppImage 0", try view.sourceSummary(arena.allocator()));
+    view.appimage_enabled = false;
+    try std.testing.expectEqualStrings("System 0 · AUR 0 · Flatpak 0", try view.sourceSummary(arena.allocator()));
 }
 
 test "updates panel centers its table below counts and retains empty source status" {

@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shelly-ui 2.2.4.1\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-11-04 12:08-0500\n"
+"POT-Creation-Date: 2026-11-13 22:42-0500\n"
 "PO-Revision-Date: 2026-11-06 10:18+0100\n"
 "Last-Translator: Roxfr <roxfr-dev@outlook.com>\n"
 "Language-Team: French\n"
@@ -126,6 +126,9 @@ msgstr "Ignorer"
 msgid "AppImage"
 msgstr "AppImage"
 
+msgid "Install and integrate AppImage bundles."
+msgstr ""
+
 msgid "Search..."
 msgstr "Rechercher..."
 
@@ -216,6 +219,9 @@ msgstr "Supprimer"
 
 msgid "AUR"
 msgstr "AUR"
+
+msgid "Build and install packages from the Arch User Repository."
+msgstr ""
 
 msgid "Search the AUR by name or keyword"
 msgstr "Rechercher dans l'AUR par nom ou mot-clé"
@@ -357,6 +363,9 @@ msgstr "Historique des versions"
 msgid "Flatpak"
 msgstr "Flatpak"
 
+msgid "Manage Flatpak applications and remotes."
+msgstr ""
+
 msgid "Search packages..."
 msgstr "Rechercher des paquets..."
 
@@ -437,6 +446,12 @@ msgstr "Actions sur les paquets"
 
 msgid "Package"
 msgstr "Paquet"
+
+msgid "Packages"
+msgstr "Paquets"
+
+msgid "Install and manage software on your system."
+msgstr ""
 
 msgid "Package Group Filter"
 msgstr "Filtre des groupes de paquets"
@@ -530,6 +545,12 @@ msgstr ""
 msgid "Shelly Search"
 msgstr "Recherche Shelly"
 
+msgid "Search"
+msgstr ""
+
+msgid "Search across every enabled backend."
+msgstr ""
+
 msgid "Search standard repositories, AUR and Flatpak"
 msgstr "Rechercher dans les dépôts standards, l'AUR et Flatpak"
 
@@ -563,6 +584,9 @@ msgstr ""
 msgid "Settings"
 msgstr "Paramètres"
 
+msgid "Make Shelly feel at home on your desktop."
+msgstr ""
+
 msgid "General"
 msgstr "Général"
 
@@ -595,6 +619,15 @@ msgstr "Exécuter la zone de notification via cron"
 
 msgid "Tray update with ui"
 msgstr "Mise à jour de la zone de notification avec l'interface"
+
+msgid "Update terminal"
+msgstr ""
+
+msgid "Terminal command"
+msgstr ""
+
+msgid "Custom update terminal command"
+msgstr ""
 
 msgid "Tray Check Interval (Hours)"
 msgstr "Intervalle de vérification de la zone de notification (heures)"
@@ -670,6 +703,12 @@ msgstr "Page par défaut"
 msgid "Navigation style"
 msgstr "Style de navigation"
 
+msgid "Theme"
+msgstr ""
+
+msgid "Color variant"
+msgstr ""
+
 msgid "Advanced"
 msgstr "Avancé"
 
@@ -691,9 +730,6 @@ msgstr "Chemin d'installation des AppImages"
 msgid "Select Directory"
 msgstr "Sélectionner un répertoire"
 
-msgid "View Changelog"
-msgstr "Afficher le journal des modifications"
-
 msgid "v0.0.0"
 msgstr "v0.0.0"
 
@@ -706,20 +742,32 @@ msgstr "Flux de la communauté"
 msgid "Sponsor"
 msgstr "Sponsoriser"
 
+msgid "View Changelog"
+msgstr "Afficher le journal des modifications"
+
 msgid "Toggle output"
 msgstr "Afficher/masquer la sortie"
 
 msgid "Done"
 msgstr "Terminé"
 
+msgid "1 · Download"
+msgstr ""
+
+msgid "2 · Install"
+msgstr ""
+
 msgid "Update"
 msgstr "Mettre à jour"
 
-msgid "Available Updates"
-msgstr "Mises à jour disponibles"
+msgid "Updates"
+msgstr ""
 
 msgid "7 of 7 updates included"
 msgstr "7 mises à jour sur 7 incluses"
+
+msgid "System"
+msgstr "Système"
 
 msgid "Check all enabled sources again"
 msgstr "Vérifier à nouveau toutes les sources activées"
@@ -727,11 +775,8 @@ msgstr "Vérifier à nouveau toutes les sources activées"
 msgid "Check Again"
 msgstr "Vérifier à nouveau"
 
-msgid "Upgrade"
-msgstr "Mettre à jour"
-
-msgid "System"
-msgstr "Système"
+msgid "Available updates"
+msgstr ""
 
 msgid "Checking for updates…"
 msgstr "Vérification des mises à jour…"
@@ -741,6 +786,12 @@ msgstr "Votre système est à jour"
 
 msgid "Could not check for updates."
 msgstr "Impossible de vérifier les mises à jour."
+
+msgid "Upgrading may require administrator authorization."
+msgstr ""
+
+msgid "Upgrade"
+msgstr "Mettre à jour"
 
 msgid "Utilities"
 msgstr "Utilitaires"
@@ -1644,6 +1695,18 @@ msgstr "Service de démarrage systemd supprimé."
 msgid "AUR enabled"
 msgstr "AUR activé"
 
+msgid "System GTK"
+msgstr ""
+
+msgid "Follow system"
+msgstr ""
+
+msgid "Dark"
+msgstr ""
+
+msgid "Light"
+msgstr ""
+
 msgid "System Default"
 msgstr "Valeur par défaut du système"
 
@@ -1689,8 +1752,11 @@ msgstr "Turc"
 msgid "中文（简体）"
 msgstr "Chinois (simplifié)"
 
-msgid "Packages"
-msgstr "Paquets"
+msgid "Default (auto-detect)"
+msgstr ""
+
+msgid "Custom…"
+msgstr ""
 
 msgid "Pending"
 msgstr "En attente"
@@ -1721,6 +1787,9 @@ msgstr "Interrompu"
 
 msgid "Cancelled"
 msgstr "Annulé"
+
+msgid "Overall progress"
+msgstr ""
 
 msgid "Could not start the requested operation."
 msgstr "Impossible de démarrer l'opération demandée."
@@ -1767,6 +1836,27 @@ msgstr "Vérification des conflits"
 msgid "Checking disk space"
 msgstr "Vérification de l'espace disque"
 
+msgid "Preparing transaction"
+msgstr ""
+
+msgid "Downloading packages"
+msgstr ""
+
+msgid "about"
+msgstr ""
+
+msgid "s left"
+msgstr ""
+
+msgid "packages downloaded"
+msgstr ""
+
+msgid "packages processed"
+msgstr ""
+
+msgid "Completed"
+msgstr ""
+
 msgid "Transaction Completed"
 msgstr "Transaction terminée"
 
@@ -1811,6 +1901,9 @@ msgstr "Mise à jour des paquets système"
 msgid "AUR package update"
 msgstr "Mise à jour des paquets AUR"
 
+msgid "Include this update"
+msgstr ""
+
 msgid "Update this package"
 msgstr "Mettre à jour ce paquet"
 
@@ -1819,6 +1912,15 @@ msgstr "mises à jour incluses"
 
 msgid "Updates included"
 msgstr "Mises à jour incluses"
+
+msgid "No download required"
+msgstr ""
+
+msgid "Total download:"
+msgstr ""
+
+msgid "Upgrade Selected"
+msgstr ""
 
 msgid "Upgrading packages"
 msgstr "Mise à jour des paquets"
@@ -1855,8 +1957,11 @@ msgstr ""
 msgid "Installing Flatpak and AppImage support"
 msgstr "Installation du support Flatpak et AppImage"
 
-msgid "Main menu"
-msgstr "Menu principal"
+msgid "BROWSE"
+msgstr ""
+
+msgid "SYSTEM"
+msgstr ""
 
 msgid "Expand sidebar"
 msgstr "Élargir la barre latérale"

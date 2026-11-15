@@ -706,7 +706,7 @@ fn prepareReviewOnly(
         defer repositories.deinit(context);
         const manager = repositories.manager;
         if (optionEnabled(invocation, "--review-host-dependencies")) {
-            var resolver_context: AlpmResolverContext = .{ .manager = manager };
+            var resolver_context: AlpmResolverContext = .{ .manager = manager, .prefer_repositories = optionEnabled(invocation, "--prefer-repo-deps") };
             dependency_plan = try trackReturnError(resolveSyncDependencies(
                 context.allocator,
                 builder.package_builds,
@@ -1887,6 +1887,7 @@ fn runIsolatedCoordinator(
     try root.stageReviewedInputs(context.environ, pkgbuild_content, review.reviewed_files, &operation);
 
     try root.stageExecutable(executable);
+    try root.stageRuntimeLibraries(context.environ, executable, &operation);
     try root.validateRuntime(context.environ, &operation);
     if (source_keys.len != 0) try root.stageSourcePgpKeys(source_keys);
 
@@ -2235,7 +2236,7 @@ fn runHostBuildCoordinator(
         // graphs are covered without touching packages that predated this build.
         dependency_cleanup = try BuildDependencyCleanup.init(context.allocator, alpm);
 
-        var backend_context: AlpmResolverContext = .{ .manager = alpm };
+        var backend_context: AlpmResolverContext = .{ .manager = alpm, .prefer_repositories = optionEnabled(invocation, "--prefer-repo-deps") };
         const backend = backend_context.backend();
 
         var plan = if (coordinator_review) |*review|
@@ -2286,7 +2287,18 @@ fn runHostBuildCoordinator(
             }
             for (plan.repo_dependencies) |dependency|
                 try targets.append(context.allocator, try context.allocator.dupeSentinel(u8, dependency.name, 0));
-            try alpm.install_packages(targets.items, .{ .alldeps = true });
+            const prefer_repositories = optionEnabled(invocation, "--prefer-repo-deps");
+            // ALLDEPS would demote pre-existing explicit packages when replacing
+            // them from repositories. Preserve their reasons, then mark only
+            // newly introduced targets as build dependencies for cleanup.
+            try alpm.install_packages(targets.items, .{ .alldeps = !prefer_repositories });
+            if (prefer_repositories) {
+                try alpm.refresh();
+                for (targets.items) |target| {
+                    if (!dependency_cleanup.?.baseline.contains(target))
+                        try alpm.update_package_reason(target, .Dependency);
+                }
+            }
         }
     }
     if (dependency_cleanup != null and install_requested) {
@@ -2373,10 +2385,12 @@ fn signOverride(invocation: *const parser.Invocation) ?bool {
 
 const AlpmResolverContext = struct {
     manager: *PackageManager.Manager,
+    prefer_repositories: bool = false,
 
     fn backend(self: *AlpmResolverContext) PackageManager.aur.dependency_resolver.Backend {
         return .{
             .context = self,
+            .prefer_repositories = self.prefer_repositories,
             .is_installed = alpmDependencyInstalled,
             .find_repo_satisfier = alpmRepoSatisfier,
         };
@@ -2847,7 +2861,7 @@ const ChildArgumentDisposition = enum {
 };
 
 fn childArgumentDisposition(argument: []const u8) ChildArgumentDisposition {
-    const boolean_flags = [_][]const u8{ "--sync-deps", "-s", "--install", "-l" };
+    const boolean_flags = [_][]const u8{ "--sync-deps", "-s", "--prefer-repo-deps", "--install", "-l" };
     for (boolean_flags) |name| {
         if (std.mem.eql(u8, argument, name)) return .drop_boolean_next;
         if (isInlineValueOf(argument, name)) return .drop;
@@ -3250,6 +3264,7 @@ fn coordinatorReviewArguments(
     try arguments.appendSlice(allocator, &.{ "build", "--review-only", "--review-dependencies", "--json", "--no-confirm" });
     if (dependency_mode == .host) {
         try arguments.append(allocator, "--review-host-dependencies");
+        if (optionEnabled(invocation, "--prefer-repo-deps")) try arguments.append(allocator, "--prefer-repo-deps");
     } else {
         try arguments.append(allocator, "--review-build-environment");
     }
@@ -5695,4 +5710,33 @@ test "updpkgsums cancellation leaves both original files untouched" {
     try std.testing.expectError(error.Cancelled, runner.run(&context.context, &operations, &outcome.dispatch));
     try std.testing.expectEqualStrings(content, try temporary.dir.readFileAlloc(std.testing.io, "PKGBUILD", allocator, .unlimited));
     try std.testing.expectEqualStrings("old", try temporary.dir.readFileAlloc(std.testing.io, ".SRCINFO", allocator, .unlimited));
+}
+
+test "host coordinator transports repository preference to review and strips it from build children" {
+    const allocator = std.testing.allocator;
+    var arena = std.heap.ArenaAllocator.init(allocator);
+    defer arena.deinit();
+    const manifest = try @import("../cli/spec.zig").Manifest.load(arena.allocator());
+    for ([_][]const []const u8{
+        &.{ "build", "--sync-deps", "--prefer-repo-deps", "/tmp/PKGBUILD" },
+        &.{ "build", "--sync-deps", "--prefer-repo-deps=true", "/tmp/PKGBUILD" },
+        &.{ "build", "--sync-deps", "--prefer-repo-deps", "true", "/tmp/PKGBUILD" },
+        &.{ "build", "--sync-deps", "--prefer-repo-deps=false", "/tmp/PKGBUILD" },
+        &.{ "build", "--sync-deps", "/tmp/PKGBUILD" },
+    }) |args| {
+        const parsed = try parser.parse(arena.allocator(), &manifest, args);
+        const prefer = optionEnabled(&parsed.dispatch, "--prefer-repo-deps");
+        for ([_]CoordinatorReviewDependencyMode{ .host, .isolated }) |mode| {
+            const review = try coordinatorReviewArguments(allocator, &parsed.dispatch, "/tmp/PKGBUILD", mode);
+            defer allocator.free(review);
+            const reviewed = try parser.parse(arena.allocator(), &manifest, review);
+            try std.testing.expectEqual(prefer and mode == .host, optionEnabled(&reviewed.dispatch, "--prefer-repo-deps"));
+        }
+        const child_args = try buildChildArguments(allocator, args, null);
+        defer allocator.free(child_args);
+        const child = try parser.parse(arena.allocator(), &manifest, child_args);
+        try std.testing.expect(!optionEnabled(&child.dispatch, "--prefer-repo-deps"));
+        try std.testing.expectEqual(@as(usize, 1), child.dispatch.positionals.len);
+        try std.testing.expectEqualStrings("/tmp/PKGBUILD", child.dispatch.positionals[0]);
+    }
 }

@@ -33,6 +33,7 @@ pub const variants = [_]types.Variant{.{
         flag("--makesrcinfo", &.{}, "Generates SRCINFO; when pkgver() exists, prepares sources and updates PKGBUILD version first"),
         hiddenFlag("--metadata-only", "With --makesrcinfo, evaluates metadata without preparing sources or updating pkgver"),
         flag("--sync-deps", &.{"-s"}, "Installs missing dependencies"),
+        flag("--prefer-repo-deps", &.{}, "With --sync-deps, prefers repository packages over installed build dependencies"),
         flag("--check", &.{"-c"}, "Performs check on PKGBUILD and installs check depends"),
         flag("--no-check", &.{}, "Skips the PKGBUILD check() function"),
         flag("--sign", &.{}, "Signs the resulting packages with GPG"),

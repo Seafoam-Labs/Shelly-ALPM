@@ -1145,6 +1145,28 @@ test "single-pane download speed only uses spare label columns" {
     }
 }
 
+test "pacman progress bar keeps pellets in place while the mouth advances" {
+    const cases = [_]struct { percentage: u8, expected: []const u8 }{
+        .{ .percentage = 0, .expected = "co  o  o  " },
+        .{ .percentage = 30, .expected = "---Co  o  " },
+        .{ .percentage = 40, .expected = "----c  o  " },
+        .{ .percentage = 100, .expected = "----------" },
+    };
+    for (cases) |case| {
+        // The mouth follows each bar's own fill, not the shared frame counter.
+        for ([_]usize{ 0, 1 }) |frame| {
+            var bar = std.Io.Writer.Allocating.init(std.testing.allocator);
+            defer bar.deinit();
+            try renderBar(&bar.writer, case.percentage, frame, .pacman, 10, true);
+            try std.testing.expectEqualStrings(case.expected, bar.written());
+        }
+    }
+    var empty = std.Io.Writer.Allocating.init(std.testing.allocator);
+    defer empty.deinit();
+    try renderBar(&empty.writer, 50, 0, .pacman, 0, true);
+    try std.testing.expectEqualStrings("", empty.written());
+}
+
 fn renderBar(
     writer: *std.Io.Writer,
     percentage: u8,
@@ -1180,12 +1202,14 @@ fn renderBar(
             }
         },
         .pacman => {
-            if (filled > 0) {
-                try writer.splatByteAll('-', filled - 1);
-                try writer.writeByte(if (percentage < 100 and frame & 1 == 0) 'C' else if (percentage < 100) 'c' else '-');
-            }
-            for (filled..width) |index| {
-                try writer.writeByte(if (percentage < 100 and (index - filled) % 2 == 0) 'o' else ' ');
+            // Like pacman: pellets stay on every third column counted from the
+            // end, and each bar's mouth toggles as its own fill advances.
+            try writer.splatByteAll('-', filled);
+            if (filled < width) {
+                try writer.writeByte(if (filled % 2 == 1) 'C' else 'c');
+                for (filled + 1..width) |index| {
+                    try writer.writeByte(if ((width - index) % 3 == 0) 'o' else ' ');
+                }
             }
         },
         .nerdfont => {

@@ -15,12 +15,42 @@
 
     <child>
       <object class="GtkBox">
+        <property name="orientation">vertical</property>
+        <style>
+          <class name="page-head"/>
+          <class name="page-head-added"/>
+        </style>
+        <child>
+          <object class="GtkLabel">
+            <property name="label" translatable="yes">Search</property>
+            <property name="xalign">0</property>
+            <property name="accessible-role">heading</property>
+            <accessibility>
+              <property name="level">1</property>
+            </accessibility>
+            <style>
+              <class name="page-heading"/>
+            </style>
+          </object>
+        </child>
+        <child>
+          <object class="GtkLabel">
+            <property name="label" translatable="yes">Search across every enabled backend.</property>
+            <property name="xalign">0</property>
+            <style>
+              <class name="page-subtitle"/>
+            </style>
+          </object>
+        </child>
+      </object>
+    </child>
+    <child>
+      <object class="GtkBox">
         <property name="halign">fill</property>
-        <property name="margin-bottom">10</property>
-        <property name="margin-top">10</property>
-        <property name="margin-start">10</property>
-        <property name="margin-end">10</property>
         <property name="spacing">5</property>
+        <style>
+          <class name="toolbar-card"/>
+        </style>
         <child>
           <object class="GtkSearchEntry" id="search_entry">
             <property name="placeholder-text" translatable="yes">Search standard repositories, AUR and Flatpak</property>

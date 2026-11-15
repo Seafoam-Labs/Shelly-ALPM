@@ -69,6 +69,7 @@ pub const SudoPrompt = struct {
     elevated: bool = true,
     include_flatpak: bool = true,
     include_aur: bool = true,
+    include_appimage: bool = false,
     flatpak_target: ?shelly_operation.FlatpakTarget = null,
     state: SudoPrompt.State = .entering,
     /// Failure detail shown after a failed attempt; owned by `gpa`.
@@ -95,6 +96,7 @@ pub const SudoPrompt = struct {
             .combined = self.backend == .all,
             .backend = self.backend,
             .include_aur = self.include_aur,
+            .include_appimage = self.include_appimage,
             .include_flatpak = self.include_flatpak,
             .target = self.flatpak_target,
             .review = self.review_text,
@@ -606,7 +608,7 @@ pub fn operationPrompt(self: *Model) ?*SudoPrompt {
 
 pub fn promptView(self: *const Model, prompt: *const SudoPrompt) operation_view.View {
     var view = prompt.operationView();
-    view.refresh_pending = self.updates_state.refresh_after_upgrade or self.flatpak_state.refresh_flatpak_after_operation or
+    view.refresh_pending = self.appimage_state.refresh_after_operation or self.appimage_state.load != null or self.updates_state.refresh_after_upgrade or self.flatpak_state.refresh_flatpak_after_operation or
         self.updates_state.refresh_updates_after_operation or self.packages_state.loading or self.updates_state.updates_job != null or self.flatpak_state.flatpak_job != null;
     return view;
 }
@@ -626,6 +628,7 @@ pub fn startElevatedInstall(self: *Model, ctx: *vxfw.EventContext, prompt: *Sudo
         .flatpak = prompt.flatpak_target,
         .include_flatpak = prompt.include_flatpak,
         .include_aur = prompt.include_aur,
+        .include_appimage = prompt.include_appimage,
     });
 }
 
@@ -660,9 +663,14 @@ pub fn pollInstall(self: *Model) !bool {
     const failed = completed.failed;
     self.operation_state.install_job = null;
     self.quit_blocked_notice = false;
-    const is_flatpak = std.mem.eql(u8, job.request.backend, "flatpak");
+    const is_appimage = std.mem.eql(u8, job.request.backend, "appimage");
     const is_combined = std.mem.eql(u8, job.request.backend, "all");
-    if (!is_flatpak) {
+    if (is_appimage or (is_combined and job.request.include_appimage)) {
+        self.appimage_state.refresh_after_operation = true;
+        @import("updates_model.zig").invalidate(self);
+    }
+    const is_flatpak = std.mem.eql(u8, job.request.backend, "flatpak");
+    if (!is_flatpak and !is_appimage) {
         aur_model.invalidateInstalledCache(self);
         if (self.settings_state.settings.aur_enabled) self.aur_state.refresh_aur_after_operation = true;
     }
@@ -681,11 +689,11 @@ pub fn pollInstall(self: *Model) !bool {
     }
     if (is_flatpak or (is_combined and job.request.include_flatpak)) self.flatpak_state.refresh_flatpak_after_operation = true;
     if (job.request.action == .upgrade or is_flatpak or std.mem.eql(u8, job.request.backend, "aur")) self.updates_state.refresh_updates_after_operation = true;
-    if (!is_flatpak and (job.request.action == .upgrade or std.mem.eql(u8, job.request.backend, "aur"))) self.updates_state.refresh_after_upgrade = true;
+    if (!is_flatpak and !is_appimage and (job.request.action == .upgrade or std.mem.eql(u8, job.request.backend, "aur"))) self.updates_state.refresh_after_upgrade = true;
     if ((is_combined and job.request.include_aur) or std.mem.eql(u8, job.request.backend, "aur")) self.aur_state.refresh_aur_after_operation = true;
 
     // Native and AUR operations change the same installed package database.
-    if (!package_batch and !is_flatpak and !failed and !completed.declined and job.request.action != .upgrade) {
+    if (!package_batch and package_change and !failed and !completed.declined and job.request.action != .upgrade) {
         for (self.packages_state.packages) |*pkg| {
             if (std.mem.eql(u8, pkg.Name, job.request.name)) {
                 pkg.Installed = job.request.action == .install;
@@ -693,7 +701,7 @@ pub fn pollInstall(self: *Model) !bool {
             }
         }
     }
-    if (!package_batch and !is_flatpak and !failed and !completed.declined and job.request.action != .upgrade) {
+    if (!package_batch and package_change and !failed and !completed.declined and job.request.action != .upgrade) {
         if (self.aur_state.aur_parsed) |parsed| {
             for (parsed.value) |*pkg| {
                 if (std.mem.eql(u8, pkg.Name, job.request.name))
