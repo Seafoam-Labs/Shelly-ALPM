@@ -88,12 +88,11 @@ As with makepkg, a `build()` function requires a package function, and split
 packages require a package function for every member.
 
 Bare `*.so` entries in `provides` and `depends` are versioned from the packaged
-payload when `.PKGINFO` is written (`soname.zig`), matching the
-libprovides/libdepends behavior Arch's pacman keeps: upstream removed it in
-pacman 6.1, but Arch's pacman package reverse-applies that removal, and repo
-packages depend on versioned sonames such as `libfprint-2.so=2-64`. Provides
-gain `=<soname version>-<32|64>` from the `DT_SONAME` of matching regular
-files (symlinks are not scanned); depends gain the versions packaged
+payload when `.PKGINFO` is written (`soname.zig`), reproducing makepkg's
+libprovides/libdepends step so versioned soname dependencies such as
+`libfprint-2.so=2-64` can be satisfied by the libraries a package ships.
+Provides gain `=<soname version>-<32|64>` from the `DT_SONAME` of matching
+regular files (symlinks are not scanned); depends gain the versions packaged
 user-executable files require through `DT_NEEDED`. Already-versioned entries,
 `prefix:name` entries, and unresolvable bare entries pass through unchanged;
 unresolvable entries emit makepkg's warnings without failing the build.
@@ -168,7 +167,7 @@ or cancelled extraction discards staging and preserves the previous source tree.
 | `sources.zig` | **Source pipeline.** Copies local files, downloads HTTP sources into the cache, mirror-clones git sources, verifies checksums and PGP signatures (including compressed `.sig` payloads), runs the optional `verify()` step, and safely extracts archives into the staging tree (path traversal, symlink, and size limits). |
 | `steps.zig` | **Step execution.** Build-directory validation, build logging, lifecycle Bash execution, and atomic sandboxed capture of the base PKGBUILD's scalar and indexed-array state. Scalar and array set/unset records are NUL-delimited, validated, and bounded before becoming parser overrides. Also owns messaging/virtual-metadata preludes, stream forwarding, `pkgver()` capture, and package-metadata capture. |
 | `package_file.zig` | **Package assembly.** `tidy`/strip handling, `.PKGINFO` and `.BUILDINFO` writers (including soname expansion of bare `*.so` provides/depends), install-script/changelog placement from reviewed contents, `.MTREE` generation, archive creation via the Shelly archive writer, detached OpenPGP signing, and rollback cleanup. |
-| `soname.zig` | **Soname expansion.** Native ELF dynamic-section reader (class, `ET_DYN`, `DT_SONAME`, `DT_NEEDED`) and makepkg-compatible versioning of bare `*.so` provides/depends from the packaged payload, matching the libprovides/libdepends behavior Arch's pacman keeps. Unresolvable entries stay bare with makepkg's warnings; identical versioned entries are deduplicated. |
+| `soname.zig` | **Soname expansion.** Native ELF dynamic-section reader (class, `ET_DYN`, `DT_SONAME`, `DT_NEEDED`) and makepkg-compatible versioning of bare `*.so` provides/depends from the packaged payload, reproducing makepkg's libprovides/libdepends step. Unresolvable entries stay bare with makepkg's warnings; identical versioned entries are deduplicated. |
 | `pkgbuild_review.zig` | **Review snapshot.** `preparePkgbuildReview` hashes the PKGBUILD plus its local/install/auxiliary files into a `Digest` and keeps byte-exact copies (`ReviewedFile`); the builder re-checks this digest immediately before executing anything, so a PKGBUILD changed after approval is rejected. |
 | `pkgbuild_validation.zig` | **Validation facade.** Runs the pkgbuild validator suite (shared validator, homograph, post-install/install-script scanners, local-source checks) over parsed PKGBUILDs and reports findings. |
 | `builder_test.zig` | **Black-box test suite (~2,900 lines).** Exercises `PackageBuilder` strictly through its public API: full builds, split packages, review-integrity rejection, PGP verification, signing, strip behavior, non-root guard. Wired in via the test block in `src/root.zig` and the aur-test filter in `build.zig`. |
