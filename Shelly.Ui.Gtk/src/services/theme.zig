@@ -1,10 +1,23 @@
 //! Applies Shelly's built-in Pearl-style theme, or falls back to the system
 //! GTK theme.
 //!
-//! The built-in theme lives in two resource stylesheets (dark/light). Each
-//! sheet redefines the GTK named colors consumed by `style.css` and adds
+//! While the built-in theme is active it must render exactly as designed, so
+//! the desktop GTK theme is taken out of the picture entirely instead of
+//! being layered under:
+//!  - `gtk-theme-name` is pinned to the blank theme embedded in libgtk
+//!    ("Empty", since GTK 4.0), so GTK's own theme slot loads nothing from
+//!    the desktop selection;
+//!  - a provider at THEME priority loads the version-matched base stylesheet
+//!    that ships inside the running libgtk (GTK 4.23+ embeds it as the
+//!    "Default" theme, older builds as "Adwaita"), restoring the stock
+//!    structure the Pearl sheets are authored against.
+//! If neither embedded base can be found the pin is dropped and the previous
+//! layering behavior applies, logged as a warning.
+//!
+//! The built-in theme itself lives in two resource stylesheets (dark/light).
+//! Each sheet redefines the GTK named colors consumed by `style.css` and adds
 //! component rules scoped under the `shelly-root` window class, so removing
-//! the provider and the class restores the legacy system-theme rendering
+//! the providers and the class restores the legacy system-theme rendering
 //! exactly. `@define-color` is provider-global (not selector-scoped), hence
 //! one sheet per variant and a provider reload when the variant changes.
 //!
@@ -28,6 +41,35 @@ pub const ThemeVariant = config_model.ThemeVariant;
 const dark_resource = "/com/shellyorg/shelly/themes/shelly-dark.css";
 const light_resource = "/com/shellyorg/shelly/themes/shelly-light.css";
 
+/// A base theme stylesheet embedded in the running libgtk resource bundle.
+/// These travel with the GTK build, so they are always version-matched to
+/// the widget internals; the pin is the theme name that resolves to the
+/// same embedded file when GTK loads a theme by name.
+const ThemeBase = struct {
+    resource: [:0]const u8,
+    /// Separate dark sheet for pre-4.16 builds, which predate the
+    /// `@media (prefers-color-scheme)` block in the base stylesheet.
+    dark_resource: ?[:0]const u8,
+    pin: [:0]const u8,
+};
+
+/// GTK 4.23 renamed the embedded Adwaita base to "Default"; probe this one
+/// first, then fall back to the classic name.
+const default_base = ThemeBase{
+    .resource = "/org/gtk/libgtk/theme/Default/gtk.css",
+    .dark_resource = null,
+    .pin = "Default",
+};
+const adwaita_base = ThemeBase{
+    .resource = "/org/gtk/libgtk/theme/Adwaita/gtk.css",
+    .dark_resource = "/org/gtk/libgtk/theme/Adwaita/gtk-dark.css",
+    .pin = "Adwaita",
+};
+/// 28-byte placeholder theme GTK embeds for testing; pinning it makes
+/// GTK's theme slot load a no-op stylesheet.
+const empty_resource = "/org/gtk/libgtk/theme/Empty/gtk.css";
+const empty_pin: [:0]const u8 = "Empty";
+
 /// Above USER: desktops may install system-wide GTK overrides at USER
 /// priority (e.g. Pearl's matugen Material palette in ~/.config/gtk-4.0),
 /// which would otherwise repaint the built-in theme's surfaces with the
@@ -37,6 +79,14 @@ const themed_priority = gtk.STYLE_PROVIDER_PRIORITY_USER + 1;
 
 var provider: ?*gtk.CssProvider = null;
 var provider_added: bool = false;
+var base_resolved: bool = false;
+var base: ?ThemeBase = null;
+var base_media_driven: bool = true;
+var base_provider: ?*gtk.CssProvider = null;
+var base_added: bool = false;
+var pin_name: ?[:0]const u8 = null;
+var pin_applied: bool = false;
+var dark_hint_applied: bool = false;
 var headerbar: ?*gtk.HeaderBar = null;
 var watched_window: ?*gtk.Window = null;
 var current_mode: ThemeMode = .shelly;
@@ -72,6 +122,20 @@ pub fn applyWith(win: *gtk.Window, mode: ThemeMode, variant: ThemeVariant) void 
     resolved_dark = dark;
 
     if (mode == .shelly) {
+        resolveBaseTheme();
+        applyThemePin();
+        if (base != null) {
+            const base_prov = ensureBaseProvider();
+            loadBaseSheet(base_prov, dark);
+            if (!base_added) {
+                gtk.StyleContext.addProviderForDisplay(
+                    display,
+                    base_prov.as(gtk.StyleProvider),
+                    gtk.STYLE_PROVIDER_PRIORITY_THEME,
+                );
+                base_added = true;
+            }
+        }
         const prov = ensureProvider();
         loadSheet(prov, dark);
         if (!provider_added) {
@@ -87,11 +151,16 @@ pub fn applyWith(win: *gtk.Window, mode: ThemeMode, variant: ThemeVariant) void 
             gtk.StyleContext.removeProviderForDisplay(display, provider.?.as(gtk.StyleProvider));
             provider_added = false;
         }
+        if (base_added) {
+            gtk.StyleContext.removeProviderForDisplay(display, base_provider.?.as(gtk.StyleProvider));
+            base_added = false;
+        }
+        restoreThemeName();
+        restoreColorScheme();
         gtk.Widget.removeCssClass(widget, "shelly-root");
         gtk.Window.setTitlebar(win, null);
         setScopedVisible(widget, false);
         setupGnomeThemePreference();
-        if (variant != .follow_system) setDarkHint(variant == .dark);
     }
     ensureWatchers();
 }
@@ -105,6 +174,124 @@ fn ensureProvider() *gtk.CssProvider {
     const prov = gtk.CssProvider.new();
     provider = prov;
     return prov;
+}
+
+fn resourceExists(path: [:0]const u8) bool {
+    return gio.resourcesGetInfo(path, .{}, null, null, null) != 0;
+}
+
+/// Picks the embedded base theme and the name to pin `gtk-theme-name` to.
+/// Runs once; GTK's resource set does not change during a session.
+fn resolveBaseTheme() void {
+    if (base_resolved) return;
+    base_resolved = true;
+
+    if (resourceExists(default_base.resource)) {
+        base = default_base;
+        base_media_driven = true;
+    } else if (resourceExists(adwaita_base.resource)) {
+        base = adwaita_base;
+        // Adwaita moved light/dark selection into a `prefers-color-scheme`
+        // media block in GTK 4.16; older builds keep separate light and dark
+        // stylesheets that must be swapped explicitly on variant changes.
+        const major = gtk.getMajorVersion();
+        const minor = gtk.getMinorVersion();
+        base_media_driven = major > 4 or (major == 4 and minor >= 16);
+    } else {
+        base = null;
+        base_media_driven = true;
+    }
+
+    if (base) |chosen| {
+        // The blank embedded theme empties GTK's own theme slot entirely.
+        // Without it, pin the same base we load ourselves: GTK then resolves
+        // that name (possibly to a user-overlaid copy), but this provider is
+        // added after GTK's theme provider at the same priority and still
+        // wins every conflict.
+        pin_name = if (resourceExists(empty_resource)) empty_pin else chosen.pin;
+    } else {
+        pin_name = null;
+        std.log.warn(
+            "Could not find a built-in base theme inside the GTK resources. The built-in theme may pick up colors from the desktop GTK theme.",
+            .{},
+        );
+    }
+}
+
+fn ensureBaseProvider() *gtk.CssProvider {
+    if (base_provider) |prov| return prov;
+    const prov = gtk.CssProvider.new();
+    base_provider = prov;
+    return prov;
+}
+
+fn loadBaseSheet(prov: *gtk.CssProvider, dark: bool) void {
+    const chosen = base orelse return;
+    if (!base_media_driven and dark) {
+        if (chosen.dark_resource) |base_dark_resource| {
+            gtk.CssProvider.loadFromResource(prov, base_dark_resource);
+            return;
+        }
+    }
+    gtk.CssProvider.loadFromResource(prov, chosen.resource);
+}
+
+fn currentThemeName() ?[*:0]const u8 {
+    const gtk_settings = gtk.Settings.getDefault() orelse return null;
+    var value = std.mem.zeroes(gobject.Value);
+    _ = value.init(gobject.typeFromName("gchararray"));
+    gtk_settings.as(gobject.Object).getProperty("gtk-theme-name", &value);
+    return value.getString();
+}
+
+fn setThemeName(name: [*:0]const u8) void {
+    const gtk_settings = gtk.Settings.getDefault() orelse return;
+    var value = std.mem.zeroes(gobject.Value);
+    _ = value.init(gobject.typeFromName("gchararray"));
+    value.setString(name);
+    gtk_settings.as(gobject.Object).setProperty("gtk-theme-name", &value);
+}
+
+/// Points `gtk-theme-name` at the embedded blank theme while the built-in
+/// theme is active. Once set by the application GtkSettings shields the
+/// property from further settings-backend pushes, which keeps the pin stable
+/// when the desktop re-applies its theme; that is also why leaving Shelly
+/// mode must go through `gtk_settings_reset_property` rather than writing a
+/// value back — resetting hands the property to the settings backends again,
+/// so GTK mode immediately follows the user's current theme and later
+/// changes to it.
+fn applyThemePin() void {
+    const pin = pin_name orelse return;
+    if (currentThemeName()) |name| {
+        if (std.mem.eql(u8, std.mem.span(name), pin)) {
+            pin_applied = true;
+            return;
+        }
+    }
+    setThemeName(pin);
+    pin_applied = true;
+}
+
+fn restoreThemeName() void {
+    if (!pin_applied) return;
+    pin_applied = false;
+    if (gtk.Settings.getDefault()) |gtk_settings| {
+        gtk.Settings.resetProperty(gtk_settings, "gtk-theme-name");
+    }
+}
+
+/// Like the theme-name pin, the color-scheme property is shielded from the
+/// settings backends once Shelly mode sets it. Reset it when returning to the
+/// desktop theme so system mode follows the desktop dark/light preference
+/// instead of the value Shelly last pinned. The stored variant is a Shelly-mode
+/// preference and is deliberately not applied in system mode.
+fn restoreColorScheme() void {
+    if (!dark_hint_applied) return;
+    dark_hint_applied = false;
+    if (gtk.Settings.getDefault()) |gtk_settings| {
+        const property: [:0]const u8 = if (hasInterfaceColorScheme()) "gtk-interface-color-scheme" else "gtk-application-prefer-dark-theme";
+        gtk.Settings.resetProperty(gtk_settings, property);
+    }
 }
 
 fn loadSheet(prov: *gtk.CssProvider, dark: bool) void {
@@ -205,6 +392,7 @@ fn gnomeInterfaceSettings() ?*gio.Settings {
 fn setDarkHint(dark: bool) void {
     const gtk_settings = gtk.Settings.getDefault() orelse return;
     const obj = gtk_settings.as(gobject.Object);
+    dark_hint_applied = true;
     if (hasInterfaceColorScheme()) {
         var value = std.mem.zeroes(gobject.Value);
         _ = value.init(gobject.typeFromName("GtkInterfaceColorScheme"));
@@ -251,6 +439,13 @@ fn ensureWatchers() void {
             &watch_dummy,
             .{ .detail = if (hasInterfaceColorScheme()) "gtk-interface-color-scheme" else "gtk-application-prefer-dark-theme" },
         );
+        _ = gobject.Object.signals.notify.connect(
+            gtk_settings.as(gobject.Object),
+            *c_int,
+            &onThemeNameNotify,
+            &watch_dummy,
+            .{ .detail = "gtk-theme-name" },
+        );
     }
 }
 
@@ -262,6 +457,15 @@ fn onPreferDarkNotify(_: *gobject.Object, _: *gobject.ParamSpec, _: *c_int) call
     refreshFollowSystem();
 }
 
+/// Desktop theme changes arrive as `gtk-theme-name` updates. Settings
+/// backends stop pushing once the application has set the property, but
+/// other channels (e.g. xsettings broadcasts) may still deliver updates
+/// while the built-in theme is active; re-assert the pin for those.
+fn onThemeNameNotify(_: *gobject.Object, _: *gobject.ParamSpec, _: *c_int) callconv(.c) void {
+    if (current_mode != .shelly) return;
+    applyThemePin();
+}
+
 fn refreshFollowSystem() void {
     if (current_mode != .shelly or current_variant != .follow_system) return;
     if (watched_window == null) return;
@@ -269,6 +473,7 @@ fn refreshFollowSystem() void {
     if (dark == resolved_dark) return;
     resolved_dark = dark;
     loadSheet(ensureProvider(), dark);
+    if (base_added) loadBaseSheet(base_provider.?, dark);
 }
 
 /// Mirrors the desktop's dark preference into GTK at startup. Moved verbatim

@@ -666,9 +666,17 @@ Document any known issues that are being tracked:
 - [ ] Settings → Look & Feel → Theme = "System GTK" switches live to the desktop GTK theme with
   the default titlebar; added page headings and sidebar group labels disappear and the legacy
   spacing returns. Switching back to "Shelly" restores the built-in look without a restart.
-- [ ] Color variant Dark/Light applies live in both theme modes; "Follow system" tracks the
+- [ ] Color variant Dark/Light applies live in Shelly mode; "Follow system" tracks the
   desktop dark preference (flip the desktop color scheme while Shelly is open and verify the
   sheet swaps without a restart).
+- [ ] The Color variant row hides while Theme = "System GTK" and returns on switching back to
+  "Shelly" with the previous selection intact; the row is already hidden on first open when the
+  config has `ThemeMode: system`. System GTK follows the desktop dark/light preference regardless
+  of the stored variant: Shelly(Dark) → System GTK on a light desktop renders light (no hidden
+  override), and switching back to Shelly restores Dark.
+- [ ] The Shelly color variant persists between reboots: set Shelly + Dark, switch to System GTK,
+  restart Shelly (it still follows the desktop), then switch back to Shelly and Dark is restored;
+  the config's `ThemeVariant` is unchanged by the mode round-trip.
 - [ ] Collapse the sidebar with the chevron: group labels hide while collapsed and return when
   expanded; the selection pill tracks the active page in sidebar and topbar modes.
 - [ ] Topbar navigation mode renders the themed bar, pills and selected state.
@@ -690,6 +698,14 @@ Document any known issues that are being tracked:
 - [ ] Round-trip Theme Shelly → System GTK → Shelly several times (also with dialogs or
   popovers open): no crash, and the brand headerbar with circular window controls returns
   each time (headerbar is kept alive across titlebar swaps).
+- [ ] Shelly mode never consults the desktop GTK theme: set any third-party, dark-only or
+  high-contrast GTK theme (user or system priority) and the built-in theme still renders
+  exactly as designed for the selected variant, with no foreign colors leaking into any
+  widget.
+- [ ] With the desktop `gtk-theme` changed externally while Shelly is open, Shelly mode
+  keeps its pinned look; switching to System GTK immediately follows the new desktop
+  theme (the restore path re-enables backend tracking), and switching back re-pins the
+  built-in theme.
 
 ## Updates page redesign (docs/updates-redesign)
 
