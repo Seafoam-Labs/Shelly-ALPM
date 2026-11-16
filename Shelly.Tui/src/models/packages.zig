@@ -12,7 +12,9 @@ const InstalledNameContext = struct {
     }
 };
 
-pub fn markInstalled(allocator: std.mem.Allocator, available: []Package, installed: []const Package) !void {
+pub const InstalledPackage = struct { Name: []const u8 };
+
+pub fn markInstalled(allocator: std.mem.Allocator, available: []Package, installed: []const InstalledPackage) !void {
     if (available.len == 0 or installed.len == 0) return;
     var names: std.HashMap([]const u8, void, InstalledNameContext, std.hash_map.default_max_load_percentage) = .init(allocator);
     defer names.deinit();
@@ -94,7 +96,7 @@ test "installed matching preserves case folding, duplicates and existing flags" 
                 .{ .Name = "previous", .Installed = true },
                 .{ .Name = "demo-tools" },
             };
-            const installed = [_]Package{ .{ .Name = "Demo" }, .{ .Name = "demo" }, .{ .Name = "absent" } };
+            const installed = [_]InstalledPackage{ .{ .Name = "Demo" }, .{ .Name = "demo" }, .{ .Name = "absent" } };
             try markInstalled(allocator, &available, &installed);
             const expected = [_]bool{ true, true, false, true, false };
             for (available, expected) |pkg, want| try std.testing.expectEqual(want, pkg.Installed);
@@ -108,5 +110,5 @@ test "empty installed matching does not allocate or clear existing flags" {
     var available = [_]Package{.{ .Name = "demo", .Installed = true }};
     try markInstalled(std.testing.failing_allocator, &available, &.{});
     try std.testing.expect(available[0].Installed);
-    try markInstalled(std.testing.failing_allocator, &.{}, &available);
+    try markInstalled(std.testing.failing_allocator, &.{}, &.{.{ .Name = "demo" }});
 }

@@ -1,6 +1,7 @@
 const std = @import("std");
 const Io = std.Io;
 const Package = @import("../models/packages.zig").Package;
+const InstalledPackage = @import("../models/packages.zig").InstalledPackage;
 const AurPackage = @import("../models/packages.zig").AurPackage;
 const PkgBuild = @import("../models/pkgbuild.zig").PkgBuild;
 const Remote = @import("../models/flatpak.zig").Remote;
@@ -110,12 +111,12 @@ pub const ShellyCli = struct {
         return decodeQuery([]Package, self.allocator, result.stdout, true);
     }
 
-    pub fn get_installed_packages(self: ShellyCli) !std.json.Parsed([]Package) {
+    pub fn get_installed_packages(self: ShellyCli) !std.json.Parsed([]InstalledPackage) {
         const result = try self.run(&.{"-Ls"});
         defer self.allocator.free(result.stdout);
         defer self.allocator.free(result.stderr);
 
-        return decodeQuery([]Package, self.allocator, result.stdout, true);
+        return decodeQuery([]InstalledPackage, self.allocator, result.stdout, true);
     }
 
     /// Read-only usability probe through the CLI's backend loader. An empty
@@ -578,4 +579,17 @@ fn UpdateQuery(comptime T: type, comptime source: []const u8) type {
             if (self.result) |parsed| parsed.deinit();
         }
     };
+}
+
+test "installed status decoding retains names and ignores package metadata" {
+    const allocator = std.testing.allocator;
+    const output = try queryTestFrame(allocator, "[{\"Name\":\"editor\",\"Description\":\"Long description\",\"Depends\":[\"libc\"],\"PackageFile\":{\"Name\":\"root\",\"Files\":[]}}]");
+    const parsed = decodeQuery([]InstalledPackage, allocator, output, true) catch |err| {
+        allocator.free(output);
+        return err;
+    };
+    allocator.free(output);
+    defer parsed.deinit();
+    try std.testing.expectEqual(@as(usize, 1), parsed.value.len);
+    try std.testing.expectEqualStrings("editor", parsed.value[0].Name);
 }
