@@ -380,6 +380,7 @@ pub const ShellySettingsPage = extern struct {
 
         applyScheduleVisibility(p);
         applyTrayVisibility(p);
+        applyThemeVariantVisibility(p);
     }
 
     pub fn onUnmap(self: *Self) void {
@@ -428,6 +429,7 @@ pub const ShellySettingsPage = extern struct {
 
         applyScheduleVisibility(p);
         applyTrayVisibility(p);
+        applyThemeVariantVisibility(p);
 
         if (support.getWindow(ShellyWindow, self)) |win| {
             win.applyConfig();
@@ -1145,6 +1147,7 @@ pub const ShellySettingsPage = extern struct {
         const dd: *gtk.DropDown = @ptrCast(@alignCast(obj));
         const idx = gtk.DropDown.getSelected(dd);
         if (idx >= theme_mode_entries.len) return;
+        applyThemeVariantVisibility(p);
         const vidx = gtk.DropDown.getSelected(p.theme_variant_drop);
         const variant = if (vidx < theme_variant_entries.len) theme_variant_entries[vidx].value else .follow_system;
         if (support.getWindow(ShellyWindow, self)) |win| {
@@ -1793,6 +1796,15 @@ fn applyTrayVisibility(p: *ShellySettingsPage.Private) void {
     const enabled = gtk.Switch.getActive(p.tray_switch) != 0;
     gtk.Widget.setVisible(p.tray_auto_switch_box.as(gtk.Widget), @intFromBool(enabled));
     gtk.Widget.setVisible(p.symbolic_tray_box.as(gtk.Widget), @intFromBool(enabled));
+}
+
+/// System GTK follows the desktop theme, so the color variant row is only
+/// shown for the built-in theme. The stored variant is left untouched.
+fn applyThemeVariantVisibility(p: *ShellySettingsPage.Private) void {
+    const idx = gtk.DropDown.getSelected(p.theme_mode_drop);
+    const mode = if (idx < theme_mode_entries.len) theme_mode_entries[idx].value else .shelly;
+    const row = gtk.Widget.getParent(p.theme_variant_drop.as(gtk.Widget)) orelse return;
+    gtk.Widget.setVisible(row, @intFromBool(mode == .shelly));
 }
 
 fn setSwitch(s: *gtk.Switch, value: bool) void {

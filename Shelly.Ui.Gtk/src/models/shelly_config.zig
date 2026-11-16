@@ -16,7 +16,8 @@ pub const ThemeMode = enum(u8) {
 };
 
 /// Color variant for the built-in theme; `follow_system` tracks the desktop's
-/// dark/light preference. In `system` mode it only sets the dark preference.
+/// dark/light preference. Applies only in `shelly` mode: `system` mode always
+/// follows the desktop, and the stored variant is kept for the switch back.
 pub const ThemeVariant = enum(u8) {
     follow_system = 0,
     dark = 1,
