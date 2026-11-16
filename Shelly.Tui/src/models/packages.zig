@@ -28,7 +28,6 @@ pub fn markInstalled(allocator: std.mem.Allocator, available: []Package, install
 pub const Package = struct {
     Name: []const u8 = "",
     Version: []const u8 = "",
-    Size: i64 = 0,
     Description: []const u8 = "",
     Url: ?[]const u8 = null,
     Repository: []const u8 = "",
@@ -39,14 +38,9 @@ pub const Package = struct {
     Depends: []const []const u8 = &.{},
     OptDepends: []const []const u8 = &.{},
     Conflicts: []const []const u8 = &.{},
-    PackageFile: ?FileNode = null,
-    InstallReason: []const u8 = "",
     BuildDate: []const u8 = "",
-    InstallDate: ?[]const u8 = null,
     DownloadSize: i64 = 0,
     InstalledSize: i64 = 0,
-    RequiredBy: []const []const u8 = &.{},
-    OptionalFor: []const []const u8 = &.{},
     Installed: bool = false,
 };
 
@@ -83,8 +77,6 @@ pub const AurPackage = struct {
     Keywords: ?[]const []const u8 = null,
     Explicit: bool = false,
 };
-
-const FileNode = struct { Name: []const u8, Files: []const FileNode };
 
 test "installed matching preserves case folding, duplicates and existing flags" {
     const Case = struct {
