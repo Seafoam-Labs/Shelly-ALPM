@@ -48,6 +48,7 @@ test {
     _ = @import("steps.zig");
     _ = @import("sources.zig");
     _ = @import("package_file.zig");
+    _ = @import("soname.zig");
     _ = @import("package_permissions.zig");
     _ = @import("virtual_ownership.zig");
 }
