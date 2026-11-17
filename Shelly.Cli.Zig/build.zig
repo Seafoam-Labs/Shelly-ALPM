@@ -227,6 +227,8 @@ pub fn build(b: *std.Build) void {
             "isolated public source key bundle is readable under restrictive umasks",
             "isolated guest traversal permissions",
             "isolated configuration permissions",
+            "runtime dependency parsing",
+            "runtime capture collects",
         },
     });
     const isolated_test_step = b.step("isolated-build-test", "Test reviewed staging and integrity under restrictive umasks");

@@ -20,6 +20,7 @@ const PkgbuildReviewDialog = @import("../dialog/page/pkg_build.zig").PkgbuildRev
 const PlanDialog = @import("../dialog/page/plan.zig").PlanDialog;
 const ProviderDialog = @import("../dialog/page/provider.zig").ProviderDialog;
 const translations = @import("../helpers/translations.zig");
+const size_helper = @import("../helpers/size_converts.zig").SizeConverter;
 
 const log = std.log.scoped(.transaction_page);
 
@@ -27,6 +28,9 @@ pub const TransactionRequest = struct {
     title: []const u8,
     argv: []const []const u8,
     packages: []const []const u8,
+    /// Optional per-package sublines ("old → new · size"), parallel to
+    /// `packages`. Empty or missing entries render no subline.
+    details: ?[]const []const u8 = null,
     privileged: bool = true,
     on_complete: ?*const fn (ctx: *anyopaque, success: bool) void = null,
     ctx: ?*anyopaque = null,
@@ -37,9 +41,15 @@ const PackageRow = struct {
     root: *gtk.Box,
     status_label: *gtk.Label,
     progress: *gtk.ProgressBar,
+    percent_label: *gtk.Label,
+    sub_label: *gtk.Label,
     stage: ?[]const u8 = null,
     pulse_source: c_uint = 0,
     result: PackageResult = .pending,
+    is_database: bool = false,
+    /// True while the row shows a determinate download; those rows render
+    /// bar + percent instead of a stage pill (see syncRowWidgets).
+    determinate_download: bool = false,
 };
 
 const PackageResult = enum {
@@ -58,6 +68,15 @@ const PackageResult = enum {
 
     fn terminal(self: PackageResult) bool {
         return self != .pending and self != .running;
+    }
+
+    /// Terminal results that represent completed work; failed/interrupted
+    /// rows never add to the overall fraction.
+    fn succeeded(self: PackageResult) bool {
+        return switch (self) {
+            .done, .installed, .upgraded, .downgraded, .reinstalled, .removed => true,
+            else => false,
+        };
     }
 
     fn finish(self: PackageResult, outcome: TransactionPage.Outcome) PackageResult {
@@ -106,6 +125,37 @@ const ProgressLine = struct {
     end: *gtk.TextMark,
 };
 
+/// Phases of the overall progress card, in transaction order. The phase
+/// only ever advances: late download events during install must not drag
+/// the overall bar backwards.
+const OverallPhase = enum {
+    prep,
+    download,
+    install,
+};
+
+const DownloadSample = struct {
+    current: i64 = 0,
+    total: i64 = 0,
+    percent: i64 = 0,
+    database: bool = false,
+};
+
+/// UI-side aggregation of the per-package progress events into one overall
+/// bar. No backend changes: everything here is derived from events that
+/// already arrive (see docs/updates-redesign/plan.md §3).
+const OverallState = struct {
+    phase: OverallPhase = .prep,
+    downloads: std.StringHashMapUnmanaged(DownloadSample) = .empty,
+    /// Total download size announced by the transaction plan question,
+    /// used until per-package totals are known.
+    seed_total: i64 = 0,
+    fraction: f64 = 0,
+    speed_bps: f64 = 0,
+    last_bytes: i64 = -1,
+    last_time_us: i64 = 0,
+};
+
 /// Packs an optional ANSI color into a tag-name-safe integer; the value
 /// above the 24-bit color range marks "unset" without colliding with black.
 fn rgbValue(color: ?ansi.Rgb) u32 {
@@ -131,6 +181,15 @@ pub const TransactionPage = extern struct {
         terminal_view: *gtk.TextView,
         question_layer: *gtk.Box,
         status_label: *gtk.Label,
+        overall_card: *gtk.Box,
+        overall_title: *gtk.Label,
+        overall_pct: *gtk.Label,
+        overall_bar: *gtk.ProgressBar,
+        overall_meta: *gtk.Label,
+        phase_download: *gtk.Label,
+        phase_install: *gtk.Label,
+        overall: OverallState,
+        overall_pulse: c_uint,
         arena: ?*std.heap.ArenaAllocator,
         rows: std.StringHashMapUnmanaged(*PackageRow),
         terminal_lines: std.StringHashMapUnmanaged(void),
@@ -178,9 +237,13 @@ pub const TransactionPage = extern struct {
         p.failure_message = null;
         p.privileged = false;
         p.cancelled = false;
-        p.terminal_visible = true;
+        p.terminal_visible = false;
+        gtk.Widget.setVisible(p.terminal_scroll.as(gtk.Widget), 0);
+        p.overall = .{};
+        p.overall_pulse = 0;
         p.progress_lines = .empty;
         p.ansi_tags = .empty;
+        a11y.setName(p.overall_bar.as(gtk.Widget), translations._("Overall progress"));
     }
 
     pub fn new() *Self {
@@ -198,9 +261,13 @@ pub const TransactionPage = extern struct {
 
         setLabel(p.title_label, request.title);
 
-        for (request.packages) |name| {
+        for (request.packages, 0..) |name, i| {
             const owned = alloc.dupeSentinel(u8, name, 0) catch continue;
-            const row = build_row(alloc, owned) catch continue;
+            const detail: ?[]const u8 = if (request.details) |details|
+                (if (i < details.len and details[i].len > 0) details[i] else null)
+            else
+                null;
+            const row = build_row(alloc, owned, detail) catch continue;
             gtk.Box.append(p.rows_box, row.root.as(gtk.Widget));
             p.rows.put(alloc, owned, row) catch {};
         }
@@ -230,6 +297,9 @@ pub const TransactionPage = extern struct {
         p.privileged = request.privileged;
         p.on_complete = request.on_complete;
         p.on_complete_ctx = request.ctx;
+
+        self.resetOverallUI();
+        startOverallPulse(self);
 
         const started = if (request.privileged) op.startPrivileged(argv) else op.start(argv);
         started catch {
@@ -285,6 +355,7 @@ pub const TransactionPage = extern struct {
         }
         p.rows.clearRetainingCapacity();
         p.terminal_lines = .empty;
+        self.resetOverallUI();
 
         const buffer = gtk.TextView.getBuffer(p.terminal_view);
         gtk.TextBuffer.setText(buffer, "", 0);
@@ -297,42 +368,91 @@ pub const TransactionPage = extern struct {
         }
     }
 
-    fn build_row(alloc: std.mem.Allocator, name: [:0]const u8) !*PackageRow {
+    fn build_row(alloc: std.mem.Allocator, name: [:0]const u8, detail: ?[]const u8) !*PackageRow {
         const row = try alloc.create(PackageRow);
 
-        const card = gtk.Box.new(.vertical, 6);
-        gtk.Widget.addCssClass(card.as(gtk.Widget), "pkg-card");
+        const root = gtk.Box.new(.horizontal, 12);
+        gtk.Widget.addCssClass(root.as(gtk.Widget), "urow");
+        gtk.Widget.addCssClass(root.as(gtk.Widget), "dim");
 
-        const row_top = gtk.Box.new(.horizontal, 8);
+        const icon = gtk.Image.newFromIconName("package-x-generic-symbolic");
+        gtk.Image.setPixelSize(icon, 16);
+        gtk.Widget.setValign(icon.as(gtk.Widget), .center);
+        gtk.Widget.addCssClass(icon.as(gtk.Widget), "urow-icon");
+        gtk.Box.append(root, icon.as(gtk.Widget));
+
+        const grow = gtk.Box.new(.vertical, 2);
+        gtk.Widget.setHexpand(grow.as(gtk.Widget), 1);
 
         const name_label = gtk.Label.new(name);
         gtk.Widget.setHalign(name_label.as(gtk.Widget), .start);
-        gtk.Widget.setHexpand(name_label.as(gtk.Widget), 1);
         gtk.Label.setXalign(name_label, 0);
-        gtk.Widget.addCssClass(name_label.as(gtk.Widget), "pkg-name");
         gtk.Label.setEllipsize(name_label, .end);
-        gtk.Box.append(row_top, name_label.as(gtk.Widget));
+        gtk.Widget.addCssClass(name_label.as(gtk.Widget), "urow-name");
+        gtk.Box.append(grow, name_label.as(gtk.Widget));
+
+        const sub = gtk.Label.new(if (detail) |d| alloc.dupeSentinel(u8, d, 0) catch "" else "");
+        gtk.Widget.setHalign(sub.as(gtk.Widget), .start);
+        gtk.Label.setXalign(sub, 0);
+        gtk.Label.setEllipsize(sub, .end);
+        gtk.Widget.addCssClass(sub.as(gtk.Widget), "urow-sub");
+        gtk.Widget.setVisible(sub.as(gtk.Widget), @intFromBool(detail != null));
+        gtk.Box.append(grow, sub.as(gtk.Widget));
+        gtk.Box.append(root, grow.as(gtk.Widget));
+
+        const right = gtk.Box.new(.horizontal, 10);
+        gtk.Widget.setValign(right.as(gtk.Widget), .center);
+
+        const progress = gtk.ProgressBar.new();
+        gtk.Widget.addCssClass(progress.as(gtk.Widget), "bar-thin");
+        gtk.Widget.setValign(progress.as(gtk.Widget), .center);
+        gtk.Widget.setVisible(progress.as(gtk.Widget), 0);
+        a11y.setName(progress.as(gtk.Widget), name);
+        gtk.Box.append(right, progress.as(gtk.Widget));
+
+        const percent = gtk.Label.new("");
+        gtk.Label.setXalign(percent, 1);
+        gtk.Label.setWidthChars(percent, 4);
+        gtk.Widget.addCssClass(percent.as(gtk.Widget), "urow-percent");
+        gtk.Widget.setVisible(percent.as(gtk.Widget), 0);
+        gtk.Box.append(right, percent.as(gtk.Widget));
 
         const status = gtk.Label.new(translations._("Pending"));
         gtk.Widget.setHalign(status.as(gtk.Widget), .end);
         gtk.Label.setXalign(status, 1);
         gtk.Widget.addCssClass(status.as(gtk.Widget), "pkg-status");
-        gtk.Box.append(row_top, status.as(gtk.Widget));
+        gtk.Widget.addCssClass(status.as(gtk.Widget), "mini");
+        gtk.Box.append(right, status.as(gtk.Widget));
 
-        gtk.Box.append(card, row_top.as(gtk.Widget));
-
-        const progress = gtk.ProgressBar.new();
-        gtk.Widget.setHexpand(progress.as(gtk.Widget), 1);
-        a11y.setName(progress.as(gtk.Widget), name);
-        gtk.Box.append(card, progress.as(gtk.Widget));
+        gtk.Box.append(root, right.as(gtk.Widget));
 
         row.* = .{
             .name = name,
-            .root = card,
+            .root = root,
             .status_label = status,
             .progress = progress,
+            .percent_label = percent,
+            .sub_label = sub,
         };
         return row;
+    }
+
+    /// Keeps the compact row's right-hand widgets in sync with its state:
+    /// determinate downloads show bar + percent, indeterminate builds show
+    /// bar + stage pill, everything else shows just the pill.
+    fn syncRowWidgets(row: *PackageRow) void {
+        const running = row.result == .running;
+        const pulsing = row.pulse_source != 0;
+        const show_percent = running and !pulsing and row.determinate_download;
+        const show_pill = !running or pulsing or !row.determinate_download;
+        gtk.Widget.setVisible(row.progress.as(gtk.Widget), @intFromBool(running));
+        gtk.Widget.setVisible(row.percent_label.as(gtk.Widget), @intFromBool(show_percent));
+        gtk.Widget.setVisible(row.status_label.as(gtk.Widget), @intFromBool(show_pill));
+        if (row.result == .pending) {
+            gtk.Widget.addCssClass(row.root.as(gtk.Widget), "dim");
+        } else {
+            gtk.Widget.removeCssClass(row.root.as(gtk.Widget), "dim");
+        }
     }
 
     fn on_op_event(ctx: *anyopaque, event: Event) void {
@@ -345,6 +465,7 @@ pub const TransactionPage = extern struct {
     }
 
     fn handle_event(self: *Self, event: Event) void {
+        defer self.updateOverall();
         switch (event) {
             .info => |i| {
                 append_terminal(self, i.message);
@@ -354,6 +475,7 @@ pub const TransactionPage = extern struct {
                 // Transaction frames describe the batch, not each package's result.
                 if (i.package_name) |name| {
                     if (PackageResult.fromEvent(i.event_type)) |result| {
+                        self.advanceOverallPhase(.install);
                         if (ensure_row_named(self, name, name)) |row| {
                             if (row.result != .failed) setRowResult(row, result);
                         }
@@ -379,6 +501,7 @@ pub const TransactionPage = extern struct {
             },
             .alpm_progress => |pr| {
                 appendAlpmProgress(self, pr);
+                if (overallPhaseFor(pr.progress_type)) |phase| self.advanceOverallPhase(phase);
 
                 if (is_transaction_phase(pr.progress_type)) {
                     var phase_buffer: [1024]u8 = undefined;
@@ -387,6 +510,7 @@ pub const TransactionPage = extern struct {
                     else
                         phase_label(pr.progress_type);
                     setLabel(self.priv().status_label, label);
+                    setLabel(self.priv().overall_title, label);
                     return;
                 }
 
@@ -401,6 +525,7 @@ pub const TransactionPage = extern struct {
                     pr.package_name;
 
                 if (ensure_row_named(self, pr.package_name, display_name)) |row| {
+                    if (is_database) row.is_database = true;
                     if (isAurPackageFailed(pr.stage)) {
                         var key_buf: [256]u8 = undefined;
                         finalizeProgressKey(self, progressKey(&key_buf, pr));
@@ -432,13 +557,21 @@ pub const TransactionPage = extern struct {
                     }
 
                     stopRowPulse(row);
-                    gtk.ProgressBar.setFraction(row.progress, progressFraction(
+                    const fraction = progressFraction(
                         pr.progress_type,
                         pr.stage,
                         pr.percent,
                         pr.current_download,
                         pr.total_download,
-                    ));
+                    );
+                    gtk.ProgressBar.setFraction(row.progress, fraction);
+                    row.determinate_download = isDownloadProgress(pr.progress_type) and !isAurLifecycleStage(pr.stage);
+                    if (row.determinate_download) {
+                        var pct_buf: [16]u8 = undefined;
+                        setLabel(row.percent_label, std.fmt.bufPrint(&pct_buf, "{d}%", .{@as(i64, @intFromFloat(fraction * 100.0))}) catch "");
+                        self.recordDownload(pr);
+                    }
+                    syncRowWidgets(row);
                     setRowStatus(row, nonEmpty(pr.message) orelse phase_label(pr.progress_type));
                 }
             },
@@ -473,7 +606,7 @@ pub const TransactionPage = extern struct {
         const alloc = arena.allocator();
         const owned_key = alloc.dupeSentinel(u8, key, 0) catch return null;
         const owned_display = alloc.dupeSentinel(u8, display, 0) catch return null;
-        const row = build_row(alloc, owned_display) catch return null;
+        const row = build_row(alloc, owned_display, null) catch return null;
 
         gtk.Box.append(p.rows_box, row.root.as(gtk.Widget));
         p.rows.put(alloc, owned_key, row) catch return null;
@@ -535,6 +668,300 @@ pub const TransactionPage = extern struct {
             std.mem.eql(u8, progress_type, "AurDownload");
     }
 
+    // ------------------------------------------------------------------
+    // Overall progress (docs/updates-redesign): one bar above the rows,
+    // aggregated from the per-package events. Pure helpers are unit
+    // tested at the bottom of this file.
+    // ------------------------------------------------------------------
+
+    fn overallPhaseFor(progress_type: []const u8) ?OverallPhase {
+        if (is_transaction_phase(progress_type)) return .prep;
+        if (isDownloadProgress(progress_type)) return .download;
+        if (std.mem.eql(u8, progress_type, "MakepkgBuild") or
+            std.mem.eql(u8, progress_type, "MakepkgPackage") or
+            std.mem.eql(u8, progress_type, "AddStart") or
+            std.mem.eql(u8, progress_type, "UpgradeStart") or
+            std.mem.eql(u8, progress_type, "DowngradeStart") or
+            std.mem.eql(u8, progress_type, "ReinstallStart") or
+            std.mem.eql(u8, progress_type, "RemoveStart")) return .install;
+        return null;
+    }
+
+    fn clamp01(value: f64) f64 {
+        return @min(@max(value, 0.0), 1.0);
+    }
+
+    fn downloadFraction(sum_current: i64, sum_total: i64, mean_percent: f64) f64 {
+        if (sum_total > 0) {
+            return clamp01(@as(f64, @floatFromInt(@max(sum_current, 0))) /
+                @as(f64, @floatFromInt(sum_total)));
+        }
+        return clamp01(mean_percent);
+    }
+
+    fn installFraction(done: usize, active: f64, total: usize) f64 {
+        if (total == 0) return 0;
+        return clamp01((@as(f64, @floatFromInt(done)) + clamp01(active)) /
+            @as(f64, @floatFromInt(total)));
+    }
+
+    fn monotonicFraction(previous: f64, next: f64) f64 {
+        return @max(previous, clamp01(next));
+    }
+
+    fn advanceOverallPhase(self: *Self, phase: OverallPhase) void {
+        const p = self.priv();
+        if (@backingInt(phase) <= @backingInt(p.overall.phase)) return;
+        p.overall.phase = phase;
+        p.overall.fraction = 0;
+        p.overall.last_bytes = -1;
+        p.overall.speed_bps = 0;
+        syncPhaseChips(self);
+    }
+
+    fn recordDownload(self: *Self, pr: anytype) void {
+        const p = self.priv();
+        const arena = p.arena orelse return;
+        const alloc = arena.allocator();
+        const key = alloc.dupe(u8, pr.package_name) catch return;
+        const entry = p.overall.downloads.getOrPut(alloc, key) catch {
+            alloc.free(key);
+            return;
+        };
+        if (!entry.found_existing) entry.value_ptr.* = .{};
+        const sample = entry.value_ptr;
+        sample.current = @max(sample.current, pr.current_download);
+        if (pr.total_download > 0) sample.total = @max(sample.total, pr.total_download);
+        sample.percent = @max(sample.percent, pr.percent);
+        sample.database = std.mem.eql(u8, pr.progress_type, "DatabaseDownload");
+
+        var sum: i64 = 0;
+        var it = p.overall.downloads.valueIterator();
+        while (it.next()) |s| sum += @max(s.current, 0);
+        const now = glib.getMonotonicTime();
+        if (p.overall.last_bytes >= 0 and now > p.overall.last_time_us) {
+            const dt = @as(f64, @floatFromInt(now - p.overall.last_time_us)) / 1_000_000.0;
+            const delta = @as(f64, @floatFromInt(sum - p.overall.last_bytes));
+            if (dt > 0 and delta >= 0) {
+                const instant = delta / dt;
+                p.overall.speed_bps = if (p.overall.speed_bps == 0)
+                    instant
+                else
+                    0.6 * p.overall.speed_bps + 0.4 * instant;
+            }
+        }
+        p.overall.last_bytes = sum;
+        p.overall.last_time_us = now;
+    }
+
+    fn countPackageRows(self: *Self) usize {
+        const p = self.priv();
+        var total: usize = 0;
+        var it = p.rows.valueIterator();
+        while (it.next()) |row| {
+            if (!row.*.is_database) total += 1;
+        }
+        return total;
+    }
+
+    fn setPhaseChip(label: *gtk.Label, state: ?[:0]const u8) void {
+        const widget = label.as(gtk.Widget);
+        gtk.Widget.removeCssClass(widget, "active");
+        gtk.Widget.removeCssClass(widget, "done");
+        gtk.Widget.removeCssClass(widget, "err");
+        if (state) |s| gtk.Widget.addCssClass(widget, s);
+    }
+
+    fn syncPhaseChips(self: *Self) void {
+        const p = self.priv();
+        switch (p.overall.phase) {
+            .prep, .download => {
+                setPhaseChip(p.phase_download, "active");
+                setPhaseChip(p.phase_install, null);
+            },
+            .install => {
+                setPhaseChip(p.phase_download, "done");
+                setPhaseChip(p.phase_install, "active");
+            },
+        }
+    }
+
+    fn startOverallPulse(self: *Self) void {
+        const p = self.priv();
+        if (p.overall_pulse != 0) return;
+        gtk.ProgressBar.pulse(p.overall_bar);
+        p.overall_pulse = glib.timeoutAdd(100, &onOverallPulse, self);
+    }
+
+    fn stopOverallPulse(self: *Self) void {
+        const p = self.priv();
+        if (p.overall_pulse == 0) return;
+        _ = glib.Source.remove(p.overall_pulse);
+        p.overall_pulse = 0;
+    }
+
+    fn onOverallPulse(data: ?*anyopaque) callconv(.c) c_int {
+        const self: *Self = @ptrCast(@alignCast(data.?));
+        const p = self.priv();
+        if (p.overall_pulse == 0) return 0;
+        gtk.ProgressBar.pulse(p.overall_bar);
+        return 1;
+    }
+
+    fn resetOverallUI(self: *Self) void {
+        const p = self.priv();
+        stopOverallPulse(self);
+        p.overall = .{};
+        const widget = p.overall_card.as(gtk.Widget);
+        gtk.Widget.removeCssClass(widget, "overall-ok");
+        gtk.Widget.removeCssClass(widget, "overall-err");
+        gtk.Widget.removeCssClass(widget, "overall-warn");
+        gtk.ProgressBar.setFraction(p.overall_bar, 0.0);
+        setLabel(p.overall_pct, "");
+        setLabel(p.overall_meta, "");
+        setLabel(p.overall_title, translations._("Preparing transaction"));
+        syncPhaseChips(self);
+    }
+
+    fn updateOverall(self: *Self) void {
+        const p = self.priv();
+        if (p.finished) return;
+
+        var sum_current: i64 = 0;
+        var sum_total: i64 = 0;
+        var percent_sum: f64 = 0;
+        var samples: usize = 0;
+        var completed: usize = 0;
+        var it = p.overall.downloads.valueIterator();
+        while (it.next()) |s| {
+            sum_current += @max(s.current, 0);
+            sum_total += @max(s.total, 0);
+            percent_sum += @as(f64, @floatFromInt(std.math.clamp(s.percent, 0, 100)));
+            samples += 1;
+            if (!s.database and ((s.total > 0 and s.current >= s.total) or s.percent >= 100))
+                completed += 1;
+        }
+
+        switch (p.overall.phase) {
+            .prep => {
+                startOverallPulse(self);
+                setLabel(p.overall_pct, "");
+                setLabel(p.overall_meta, "");
+            },
+            .download => {
+                stopOverallPulse(self);
+                const mean = if (samples > 0)
+                    percent_sum / @as(f64, @floatFromInt(samples)) / 100.0
+                else
+                    0;
+                const total = if (sum_total > 0) sum_total else p.overall.seed_total;
+                const fraction = monotonicFraction(p.overall.fraction, downloadFraction(sum_current, total, mean));
+                p.overall.fraction = fraction;
+                gtk.ProgressBar.setFraction(p.overall_bar, fraction);
+                var pct_buf: [16]u8 = undefined;
+                setLabel(p.overall_pct, std.fmt.bufPrint(&pct_buf, "{d}%", .{@as(i64, @intFromFloat(fraction * 100.0))}) catch "");
+                setLabel(p.overall_title, translations._("Downloading packages"));
+
+                var cur_buf: [32]u8 = undefined;
+                var tot_buf: [32]u8 = undefined;
+                var speed_buf: [32]u8 = undefined;
+                var meta_buf: [256]u8 = undefined;
+                const cur = size_helper.convert_null_term(&cur_buf, sum_current);
+                const tot = size_helper.convert_null_term(&tot_buf, total);
+                var meta: []const u8 = std.fmt.bufPrint(&meta_buf, "{s} {s} {s}", .{ cur, translations._("of"), tot }) catch "";
+                if (p.overall.speed_bps > 1.0 and total > sum_current) {
+                    const speed = size_helper.convert_null_term(&speed_buf, @intFromFloat(p.overall.speed_bps));
+                    const eta: i64 = @intFromFloat(@as(f64, @floatFromInt(total - sum_current)) / p.overall.speed_bps);
+                    meta = std.fmt.bufPrint(&meta_buf, "{s} {s} {s} · {s}/s · {s} {d} {s}", .{
+                        cur,                     translations._("of"), tot,                      speed,
+                        translations._("about"), eta,                  translations._("s left"),
+                    }) catch meta;
+                }
+                var tail_buf: [96]u8 = undefined;
+                const tail = std.fmt.bufPrint(&tail_buf, " · {d} {s} {d} {s}", .{
+                    completed, translations._("of"), countPackageRows(self), translations._("packages downloaded"),
+                }) catch "";
+                var full_buf: [384]u8 = undefined;
+                setLabel(p.overall_meta, std.fmt.bufPrint(&full_buf, "{s}{s}", .{ meta, tail }) catch meta);
+            },
+            .install => {
+                stopOverallPulse(self);
+                var succeeded: usize = 0;
+                var processed: usize = 0;
+                var total: usize = 0;
+                var active: f64 = 0;
+                var rows = p.rows.valueIterator();
+                while (rows.next()) |row| {
+                    if (row.*.is_database) continue;
+                    total += 1;
+                    if (row.*.result.terminal()) {
+                        processed += 1;
+                        if (row.*.result.succeeded()) succeeded += 1;
+                    } else if (row.*.result == .running and !row.*.determinate_download) {
+                        active = @max(active, gtk.ProgressBar.getFraction(row.*.progress));
+                    }
+                }
+                const fraction = monotonicFraction(p.overall.fraction, installFraction(succeeded, active, total));
+                p.overall.fraction = fraction;
+                gtk.ProgressBar.setFraction(p.overall_bar, fraction);
+                var pct_buf: [16]u8 = undefined;
+                setLabel(p.overall_pct, std.fmt.bufPrint(&pct_buf, "{d}%", .{@as(i64, @intFromFloat(fraction * 100.0))}) catch "");
+                setLabel(p.overall_title, translations._("Installing packages"));
+                var meta_buf: [128]u8 = undefined;
+                setLabel(p.overall_meta, std.fmt.bufPrint(&meta_buf, "{d} {s} {d} {s}", .{
+                    processed, translations._("of"), total, translations._("packages processed"),
+                }) catch "");
+            },
+        }
+    }
+
+    fn finishOverall(self: *Self, outcome: Outcome) void {
+        const p = self.priv();
+        stopOverallPulse(self);
+
+        var done: usize = 0;
+        var total: usize = 0;
+        var rows = p.rows.valueIterator();
+        while (rows.next()) |row| {
+            if (row.*.is_database) continue;
+            total += 1;
+            if (row.*.result.terminal()) done += 1;
+        }
+
+        const widget = p.overall_card.as(gtk.Widget);
+        gtk.Widget.removeCssClass(widget, "overall-ok");
+        gtk.Widget.removeCssClass(widget, "overall-err");
+        gtk.Widget.removeCssClass(widget, "overall-warn");
+        switch (outcome) {
+            .success => {
+                gtk.Widget.addCssClass(widget, "overall-ok");
+                p.overall.fraction = 1.0;
+                gtk.ProgressBar.setFraction(p.overall_bar, 1.0);
+                setLabel(p.overall_pct, "100%");
+                setLabel(p.overall_title, translations._("Completed"));
+                setPhaseChip(p.phase_download, "done");
+                setPhaseChip(p.phase_install, "done");
+            },
+            .failed, .cancelled => {
+                gtk.Widget.addCssClass(widget, if (outcome == .failed) "overall-err" else "overall-warn");
+                gtk.ProgressBar.setFraction(p.overall_bar, p.overall.fraction);
+                var pct_buf: [16]u8 = undefined;
+                setLabel(p.overall_pct, std.fmt.bufPrint(&pct_buf, "{d}%", .{@as(i64, @intFromFloat(p.overall.fraction * 100.0))}) catch "");
+                setLabel(p.overall_title, if (outcome == .failed) translations._("Failed") else translations._("Cancelled"));
+                if (@backingInt(p.overall.phase) > @backingInt(OverallPhase.download)) {
+                    setPhaseChip(p.phase_download, "done");
+                } else {
+                    setPhaseChip(p.phase_download, "err");
+                }
+                setPhaseChip(p.phase_install, if (p.overall.phase == .install) "err" else null);
+            },
+        }
+        var meta_buf: [128]u8 = undefined;
+        setLabel(p.overall_meta, std.fmt.bufPrint(&meta_buf, "{d} {s} {d} {s}", .{
+            done, translations._("of"), total, translations._("packages processed"),
+        }) catch "");
+    }
+
     fn stageChanged(previous: ?[]const u8, current: []const u8) bool {
         const old = previous orelse return true;
         return !std.mem.eql(u8, old, current);
@@ -571,12 +998,14 @@ pub const TransactionPage = extern struct {
         if (row.pulse_source != 0) return;
         gtk.ProgressBar.pulse(row.progress);
         row.pulse_source = glib.timeoutAdd(100, &onRowPulse, row);
+        syncRowWidgets(row);
     }
 
     fn stopRowPulse(row: *PackageRow) void {
         if (row.pulse_source == 0) return;
         _ = glib.Source.remove(row.pulse_source);
         row.pulse_source = 0;
+        syncRowWidgets(row);
     }
 
     fn onRowPulse(data: ?*anyopaque) callconv(.c) c_int {
@@ -609,6 +1038,7 @@ pub const TransactionPage = extern struct {
             .failed => gtk.Widget.addCssClass(widget, "status-failed"),
             else => {},
         }
+        syncRowWidgets(row);
     }
 
     const Outcome = enum { success, failed, cancelled };
@@ -655,6 +1085,7 @@ pub const TransactionPage = extern struct {
 
         setLabel(p.status_label, detail);
         gtk.Widget.setVisible(p.close_button.as(gtk.Widget), 1);
+        self.finishOverall(outcome);
         _ = gtk.Widget.grabFocus(p.close_button.as(gtk.Widget));
     }
 
@@ -673,6 +1104,13 @@ pub const TransactionPage = extern struct {
         else
             .failed;
 
+        // Finish rows first so the overall card counts final results.
+        var it = p.rows.valueIterator();
+        while (it.next()) |row_ptr| {
+            const row = row_ptr.*;
+            setRowResult(row, row.result.finish(outcome));
+        }
+
         switch (outcome) {
             .cancelled => self.showFinishedUI(outcome, translations._("Operation cancelled.")),
             .success => self.showFinishedUI(outcome, translations._("All operations finished successfully.")),
@@ -687,12 +1125,6 @@ pub const TransactionPage = extern struct {
                     std.mem.indexOf(u8, detail, "\nTechnical details:") orelse detail.len;
                 self.showFinishedUI(outcome, detail[0..end]);
             },
-        }
-
-        var it = p.rows.valueIterator();
-        while (it.next()) |row_ptr| {
-            const row = row_ptr.*;
-            setRowResult(row, row.result.finish(outcome));
         }
 
         if (p.on_complete) |cb| {
@@ -740,6 +1172,7 @@ pub const TransactionPage = extern struct {
         status: ?[]const u8,
         percentage: i64,
     ) void {
+        self.advanceOverallPhase(.install);
         const message = nonEmpty(status) orelse translations._("Working");
         if (formatSimpleProgress(std.heap.c_allocator, backend, status, percentage)) |line| {
             defer std.heap.c_allocator.free(line);
@@ -749,8 +1182,10 @@ pub const TransactionPage = extern struct {
         if (ensure_row_named(self, backend, backend)) |row| {
             if (row.result.terminal()) return;
             row.result = .running;
+            row.determinate_download = false;
             setRowStatus(row, message);
             gtk.ProgressBar.setFraction(row.progress, fractionFromPercent(percentage));
+            syncRowWidgets(row);
         }
     }
 
@@ -1251,6 +1686,7 @@ pub const TransactionPage = extern struct {
             .transaction => |q| {
                 pending.on_dismiss = &dismiss_question;
                 pending.dismiss_ctx = self;
+                p.overall.seed_total = if (q.total_download_size) |size| @intCast(size) else 0;
                 const dialog = PlanDialog.new(q, &on_plan_response, pending);
                 gtk.Box.append(p.question_layer, dialog.as(gtk.Widget));
                 gtk.Widget.setVisible(p.question_layer.as(gtk.Widget), 1);
@@ -1377,6 +1813,13 @@ pub const TransactionPage = extern struct {
         .{ "close_button", @offsetOf(Private, "close_button") },
         .{ "question_layer", @offsetOf(Private, "question_layer") },
         .{ "status_label", @offsetOf(Private, "status_label") },
+        .{ "overall_card", @offsetOf(Private, "overall_card") },
+        .{ "overall_title", @offsetOf(Private, "overall_title") },
+        .{ "overall_pct", @offsetOf(Private, "overall_pct") },
+        .{ "overall_bar", @offsetOf(Private, "overall_bar") },
+        .{ "overall_meta", @offsetOf(Private, "overall_meta") },
+        .{ "phase_download", @offsetOf(Private, "phase_download") },
+        .{ "phase_install", @offsetOf(Private, "phase_install") },
     };
 
     pub const Class = extern struct {
@@ -1398,6 +1841,7 @@ pub const TransactionPage = extern struct {
 
     fn finalize(self: *Self) callconv(.c) void {
         const p = self.priv();
+        stopOverallPulse(self);
         var rows = p.rows.valueIterator();
         while (rows.next()) |row| stopRowPulse(row.*);
         if (p.operation) |op| {
@@ -1713,4 +2157,174 @@ test "progress console rewrites colored lines in place" {
     const raw = gtk.TextBuffer.getText(buffer, &start, &end, 0);
     defer glib.free(raw);
     try std.testing.expectEqualStrings("[AddStart] demo — Installing (20%)\n", std.mem.span(raw));
+}
+
+test "overall phase detection maps backend progress types" {
+    try std.testing.expectEqual(OverallPhase.prep, TransactionPage.overallPhaseFor("KeyringStart").?);
+    try std.testing.expectEqual(OverallPhase.prep, TransactionPage.overallPhaseFor("DiskspaceStart").?);
+    try std.testing.expectEqual(OverallPhase.download, TransactionPage.overallPhaseFor("PackageDownload").?);
+    try std.testing.expectEqual(OverallPhase.download, TransactionPage.overallPhaseFor("DatabaseDownload").?);
+    try std.testing.expectEqual(OverallPhase.download, TransactionPage.overallPhaseFor("AurDownload").?);
+    try std.testing.expectEqual(OverallPhase.install, TransactionPage.overallPhaseFor("UpgradeStart").?);
+    try std.testing.expectEqual(OverallPhase.install, TransactionPage.overallPhaseFor("MakepkgBuild").?);
+    try std.testing.expectEqual(OverallPhase.install, TransactionPage.overallPhaseFor("RemoveStart").?);
+    try std.testing.expectEqual(@as(?OverallPhase, null), TransactionPage.overallPhaseFor("SomethingElse"));
+}
+
+test "overall download fraction prefers byte totals and falls back to percent mean" {
+    try std.testing.expectEqual(@as(f64, 0.5), TransactionPage.downloadFraction(50, 100, 0.1));
+    try std.testing.expectEqual(@as(f64, 0.37), TransactionPage.downloadFraction(0, 0, 0.37));
+    try std.testing.expectEqual(@as(f64, 1.0), TransactionPage.downloadFraction(150, 100, 0.0));
+    try std.testing.expectEqual(@as(f64, 0.0), TransactionPage.downloadFraction(-5, 100, 0.9));
+    try std.testing.expectEqual(@as(f64, 0.0), TransactionPage.downloadFraction(0, 0, 0.0));
+}
+
+test "overall install fraction counts terminal rows plus active partial credit" {
+    try std.testing.expectEqual(@as(f64, 0.5), TransactionPage.installFraction(3, 0.5, 7));
+    try std.testing.expectEqual(@as(f64, 0.0), TransactionPage.installFraction(0, 0, 0));
+    try std.testing.expectEqual(@as(f64, 1.0), TransactionPage.installFraction(7, 0, 7));
+    try std.testing.expectEqual(@as(f64, 1.0), TransactionPage.installFraction(6, 1.5, 7));
+}
+
+test "overall fraction never regresses within a phase" {
+    try std.testing.expectEqual(@as(f64, 0.6), TransactionPage.monotonicFraction(0.6, 0.4));
+    try std.testing.expectEqual(@as(f64, 0.9), TransactionPage.monotonicFraction(0.2, 0.9));
+    try std.testing.expectEqual(@as(f64, 1.0), TransactionPage.monotonicFraction(0.2, 1.4));
+}
+
+test "overall card aggregates downloads then install and finishes green" {
+    try @import("../helpers/gtk_test.zig").requireDisplay();
+    const page = TransactionPage.new();
+    _ = page.as(gobject.Object).refSink();
+    defer page.as(gobject.Object).unref();
+    const arena = try std.heap.c_allocator.create(std.heap.ArenaAllocator);
+    arena.* = std.heap.ArenaAllocator.init(std.heap.c_allocator);
+    page.priv().arena = arena;
+    defer page.reset();
+
+    const p = page.priv();
+    _ = TransactionPage.ensure_row_named(page, "linux", "linux").?;
+    _ = TransactionPage.ensure_row_named(page, "mesa", "mesa").?;
+
+    // Database sync rows are tracked for bytes but excluded from package counts.
+    page.handle_event(.{ .alpm_progress = .{
+        .package_name = "core.db",
+        .stage = null,
+        .progress_type = "DatabaseDownload",
+        .percent = 100,
+        .current_download = 0,
+        .total_download = 0,
+        .message = null,
+    } });
+    try std.testing.expectEqual(OverallPhase.download, p.overall.phase);
+    try std.testing.expect(TransactionPage.find_row(page, "core.db").?.is_database);
+
+    page.handle_event(.{ .alpm_progress = .{
+        .package_name = "linux",
+        .stage = null,
+        .progress_type = "PackageDownload",
+        .percent = 50,
+        .current_download = 50,
+        .total_download = 100,
+        .message = null,
+    } });
+    page.handle_event(.{ .alpm_progress = .{
+        .package_name = "mesa",
+        .stage = null,
+        .progress_type = "PackageDownload",
+        .percent = 50,
+        .current_download = 50,
+        .total_download = 100,
+        .message = null,
+    } });
+    try std.testing.expectEqual(@as(f64, 0.5), p.overall.fraction);
+    try std.testing.expectEqualStrings("50%", std.mem.span(gtk.Label.getLabel(p.overall_pct)));
+    try std.testing.expectEqual(@as(usize, 2), TransactionPage.countPackageRows(page));
+
+    // Out-of-order duplicates must not drag the overall bar backwards.
+    page.handle_event(.{ .alpm_progress = .{
+        .package_name = "linux",
+        .stage = null,
+        .progress_type = "PackageDownload",
+        .percent = 10,
+        .current_download = 10,
+        .total_download = 100,
+        .message = null,
+    } });
+    try std.testing.expectEqual(@as(f64, 0.5), p.overall.fraction);
+
+    page.handle_event(.{ .alpm_progress = .{
+        .package_name = "linux",
+        .stage = null,
+        .progress_type = "UpgradeStart",
+        .percent = 40,
+        .current_download = 0,
+        .total_download = 0,
+        .message = null,
+    } });
+    try std.testing.expectEqual(OverallPhase.install, p.overall.phase);
+    try std.testing.expectEqual(@as(f64, 0.2), p.overall.fraction);
+
+    page.handle_event(.{ .info = .{
+        .event_type = "PackageUpgraded",
+        .message = "Package operation completed.",
+        .package_name = "linux",
+        .current = null,
+        .total = null,
+    } });
+    try std.testing.expectEqual(@as(f64, 0.5), p.overall.fraction);
+
+    page.handle_done(0);
+    try std.testing.expect(gtk.Widget.hasCssClass(p.overall_card.as(gtk.Widget), "overall-ok") != 0);
+    try std.testing.expectEqual(@as(f64, 1.0), gtk.ProgressBar.getFraction(p.overall_bar));
+    try std.testing.expectEqualStrings("100%", std.mem.span(gtk.Label.getLabel(p.overall_pct)));
+    try std.testing.expect(gtk.Widget.hasCssClass(p.phase_download.as(gtk.Widget), "done") != 0);
+    try std.testing.expect(gtk.Widget.hasCssClass(p.phase_install.as(gtk.Widget), "done") != 0);
+}
+
+test "overall card freezes on failure and keeps completed rows" {
+    try @import("../helpers/gtk_test.zig").requireDisplay();
+    const page = TransactionPage.new();
+    _ = page.as(gobject.Object).refSink();
+    defer page.as(gobject.Object).unref();
+    const arena = try std.heap.c_allocator.create(std.heap.ArenaAllocator);
+    arena.* = std.heap.ArenaAllocator.init(std.heap.c_allocator);
+    page.priv().arena = arena;
+    defer page.reset();
+
+    const p = page.priv();
+    _ = TransactionPage.ensure_row_named(page, "ok", "ok").?;
+    _ = TransactionPage.ensure_row_named(page, "bad", "bad").?;
+    page.handle_event(.{ .alpm_progress = .{
+        .package_name = "ok",
+        .stage = null,
+        .progress_type = "PackageDownload",
+        .percent = 100,
+        .current_download = 100,
+        .total_download = 100,
+        .message = null,
+    } });
+    page.handle_event(.{ .info = .{
+        .event_type = "PackageUpgraded",
+        .message = "Package operation completed.",
+        .package_name = "ok",
+        .current = null,
+        .total = null,
+    } });
+    page.handle_event(.{ .alpm_progress = .{
+        .package_name = "bad",
+        .stage = "aur_package_failed",
+        .progress_type = "MakepkgBuild",
+        .percent = 0,
+        .current_download = 0,
+        .total_download = 0,
+        .message = null,
+    } });
+    const frozen = p.overall.fraction;
+    page.handle_done(1);
+    try std.testing.expect(gtk.Widget.hasCssClass(p.overall_card.as(gtk.Widget), "overall-err") != 0);
+    try std.testing.expectEqual(frozen, gtk.ProgressBar.getFraction(p.overall_bar));
+    try std.testing.expect(gtk.Widget.hasCssClass(p.phase_download.as(gtk.Widget), "done") != 0);
+    try std.testing.expect(gtk.Widget.hasCssClass(p.phase_install.as(gtk.Widget), "err") != 0);
+    try std.testing.expectEqualStrings("Failed", std.mem.span(gtk.Label.getLabel(p.overall_title)));
 }

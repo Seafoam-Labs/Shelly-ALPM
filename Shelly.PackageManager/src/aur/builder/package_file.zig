@@ -13,6 +13,7 @@ const metadata = @import("metadata.zig");
 const virtual_ownership = @import("virtual_ownership.zig");
 const package_permissions = @import("package_permissions.zig");
 const steps = @import("steps.zig");
+const soname = @import("soname.zig");
 const PackageManager = @import("../../alpm/manager.zig").Manager;
 const package_types = @import("../../alpm/types.zig");
 const PackageBuilder = @import("builder.zig").PackageBuilder;
@@ -498,9 +499,15 @@ fn writePackageInfo(
     try writeKeyValues(self, writer, "replaces", package_build.replaces);
     try writeKeyValues(self, writer, "group", package_build.groups);
     try writeKeyValues(self, writer, "conflict", package_build.conflicts);
-    try writeKeyValues(self, writer, "provides", package_build.provides);
+    // Version bare *.so entries from the packaged payload when writing
+    // .PKGINFO, as makepkg's libprovides/libdepends step does (see soname.zig).
+    const expanded_provides = try soname.expandProvides(self, package_name, pkgdir, package_build.provides);
+    defer if (expanded_provides) |entries| soname.freeEntries(self.allocator, entries);
+    const expanded_depends = try soname.expandDepends(self, package_name, pkgdir, package_build.depends);
+    defer if (expanded_depends) |entries| soname.freeEntries(self.allocator, entries);
+    try writeKeyValues(self, writer, "provides", expanded_provides orelse package_build.provides);
     try writeKeyValues(self, writer, "backup", package_build.backup);
-    try writeKeyValues(self, writer, "depend", package_build.depends);
+    try writeKeyValues(self, writer, "depend", expanded_depends orelse package_build.depends);
     try writeKeyValues(self, writer, "optdepend", package_build.opt_depends);
     try writeKeyValues(self, writer, "makedepend", package_build.make_depends);
     try writeKeyValues(self, writer, "checkdepend", package_build.check_depends);

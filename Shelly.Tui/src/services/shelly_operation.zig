@@ -76,6 +76,7 @@ pub const OperationRequest = struct {
     flatpak: ?FlatpakTarget = null,
     include_flatpak: bool = true,
     include_aur: bool = true,
+    include_appimage: bool = false,
 };
 
 /// Fixed-size, owned display data; safe to copy between the worker and UI.
@@ -451,7 +452,7 @@ fn isFlatpak(request: OperationRequest) bool {
 }
 
 fn elevated(request: OperationRequest) bool {
-    return !isFlatpak(request) or flatpakNeedsElevation(request.action, request.flatpak);
+    return !std.mem.eql(u8, request.backend, "appimage") and (!isFlatpak(request) or flatpakNeedsElevation(request.action, request.flatpak));
 }
 
 fn operationArgv(alloc: std.mem.Allocator, request: OperationRequest) ![][]const u8 {
@@ -460,7 +461,7 @@ fn operationArgv(alloc: std.mem.Allocator, request: OperationRequest) ![][]const
         return error.UnsupportedBatchAction;
     if (std.mem.eql(u8, request.backend, "all") and request.action != .upgrade) return error.UnsupportedCombinedAction;
     const keep_dependencies = request.action == .remove and std.mem.eql(u8, request.backend, "standard");
-    if (request.action == .upgrade and !std.mem.eql(u8, request.backend, "standard") and !std.mem.eql(u8, request.backend, "aur") and !isFlatpak(request) and !combined(request))
+    if (request.action == .upgrade and !std.mem.eql(u8, request.backend, "standard") and !std.mem.eql(u8, request.backend, "aur") and !isFlatpak(request) and !std.mem.eql(u8, request.backend, "appimage") and !combined(request))
         return error.UnsupportedUpgradeSource;
     if (isFlatpak(request) and request.action != .upgrade) {
         const target = request.flatpak orelse return error.MissingFlatpakTarget;
@@ -485,7 +486,7 @@ fn operationArgv(alloc: std.mem.Allocator, request: OperationRequest) ![][]const
     if (isFlatpak(request) and request.action == .remove)
         try argv.append(alloc, if (request.flatpak.?.scope == .user) "--user" else "--system");
     if (combined(request)) {
-        try argv.append(alloc, "--no-appimage");
+        if (!request.include_appimage) try argv.append(alloc, "--no-appimage");
         if (!request.include_aur) try argv.append(alloc, "--no-aur");
         if (!request.include_flatpak) try argv.append(alloc, "--no-flatpak");
     }
@@ -497,9 +498,9 @@ fn operationArgv(alloc: std.mem.Allocator, request: OperationRequest) ![][]const
 
 fn runInstall(io: std.Io, alloc: std.mem.Allocator, request: OperationRequest, operation: ?*Operation) OperationResult {
     var result: OperationResult = .{};
-    if (request.action == .remove and !std.mem.eql(u8, request.backend, "standard") and !std.mem.eql(u8, request.backend, "aur") and !isFlatpak(request)) {
+    if (request.action == .remove and !std.mem.eql(u8, request.backend, "standard") and !std.mem.eql(u8, request.backend, "aur") and !isFlatpak(request) and !std.mem.eql(u8, request.backend, "appimage")) {
         result.failed = true;
-        result.error_detail = alloc.dupe(u8, "Removal currently supports system, AUR and Flatpak packages only.") catch "";
+        result.error_detail = alloc.dupe(u8, "Removal currently supports system, AUR, Flatpak and AppImage packages only.") catch "";
         return result;
     }
     if (operation == null) {
@@ -1286,11 +1287,11 @@ test "operation rejects removal from unsupported sources before launching" {
         .shelly_bin = "unused",
         .environ_map = &env,
         .name = "test",
-        .backend = "appimage",
+        .backend = "unsupported",
     }, null);
     defer result.deinit(std.testing.allocator);
     try std.testing.expect(result.failed);
-    try std.testing.expectEqualStrings("Removal currently supports system, AUR and Flatpak packages only.", result.error_detail);
+    try std.testing.expectEqualStrings("Removal currently supports system, AUR, Flatpak and AppImage packages only.", result.error_detail);
 }
 
 test "operation native upgrade has no package operand or other sources" {
@@ -1308,7 +1309,7 @@ test "operation native upgrade has no package operand or other sources" {
     const expected = [_][]const u8{ "sudo", "shelly", "upgrade", "standard", "--no-confirm", "--ui-mode" };
     try std.testing.expectEqual(expected.len, args.len);
     for (expected, args) |want, actual| try std.testing.expectEqualStrings(want, actual);
-    request.backend = "appimage";
+    request.backend = "unsupported";
     try std.testing.expectError(error.UnsupportedUpgradeSource, operationArgv(std.testing.allocator, request));
 }
 
@@ -1437,7 +1438,7 @@ test "operation Flatpak target owns its reference fields" {
     try std.testing.expectEqualStrings("app/org.example.App/x86_64/beta", copy.reference);
 }
 
-test "operation combined upgrade is interactive and always excludes AppImages" {
+test "operation combined upgrade is interactive and respects AppImage inclusion" {
     const allocator = std.testing.allocator;
     var env: std.process.Environ.Map = .init(allocator);
     defer env.deinit();
@@ -1453,6 +1454,10 @@ test "operation combined upgrade is interactive and always excludes AppImages" {
     const expected_excluded = [_][]const u8{ "sudo", "shelly", "upgrade", "all", "--no-appimage", "--no-flatpak", "--ui-mode" };
     try std.testing.expectEqual(expected_excluded.len, excluded.len);
     for (expected_excluded, excluded) |want, actual| try std.testing.expectEqualStrings(want, actual);
+    request.include_appimage = true;
+    const with_appimages = try operationArgv(allocator, request);
+    defer allocator.free(with_appimages);
+    for (with_appimages) |arg| try std.testing.expect(!std.mem.eql(u8, arg, "--no-appimage"));
     request.action = .install;
     try std.testing.expectError(error.UnsupportedCombinedAction, operationArgv(allocator, request));
 }
@@ -1815,4 +1820,61 @@ test "private terminal authentication can be interrupted without protocol input"
     const result = op.poll() orelse return error.TerminalFixtureTimedOut;
     try std.testing.expect(interrupted and result.failed);
     try std.testing.expect(!op.snapshot(std.testing.io).authenticating);
+}
+
+test "AppImage operations run without sudo and upgrades have no package operand" {
+    var env: std.process.Environ.Map = .init(std.testing.allocator);
+    defer env.deinit();
+    for ([_]Action{ .install, .remove, .upgrade }) |action| {
+        const request: OperationRequest = .{ .action = action, .shelly_bin = "shelly", .environ_map = &env, .name = if (action == .install) "/tmp/My App;literal.AppImage" else "My App;literal", .backend = "appimage" };
+        try std.testing.expect(!elevated(request));
+        const argv = try operationArgv(std.testing.allocator, request);
+        defer std.testing.allocator.free(argv);
+        const expected: []const []const u8 = if (action == .upgrade) &.{ "shelly", "upgrade", "appimage", "--no-confirm", "--ui-mode" } else &.{ "shelly", @tagName(action), "appimage", request.name, "--no-confirm", "--ui-mode" };
+        try std.testing.expectEqual(expected.len, argv.len);
+        for (expected, argv) |a, b| try std.testing.expectEqualStrings(a, b);
+    }
+}
+
+test "AppImage upgrade subprocess requires completion and reports failures without elevation" {
+    const allocator = std.testing.allocator;
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    try tmp.dir.writeFile(std.testing.io, .{ .sub_path = "fixture", .flags = .{ .permissions = .executable_file }, .data =
+        \\#!/bin/sh
+        \\[ "$#" = 4 ] && [ "$1" = upgrade ] && [ "$2" = appimage ] && [ "$3" = --no-confirm ] && [ "$4" = --ui-mode ] || exit 2
+        \\printf '%s' "$FRAMES"
+    });
+    const directory = try tmp.dir.realPathFileAlloc(std.testing.io, ".", allocator);
+    defer allocator.free(directory);
+    const binary = try std.fs.path.join(allocator, &.{ directory, "fixture" });
+    defer allocator.free(binary);
+    const Fixture = struct {
+        fn frame(alloc: std.mem.Allocator, event: []const u8) ![]u8 {
+            const json = try std.fmt.allocPrint(alloc, "{{\"$kind\":\"alpm.info\",\"EventType\":\"{s}\",\"Message\":\"Fixture status\"}}", .{event});
+            defer alloc.free(json);
+            const encoded = try alloc.alloc(u8, std.base64.standard.Encoder.calcSize(json.len));
+            defer alloc.free(encoded);
+            _ = std.base64.standard.Encoder.encode(encoded, json);
+            return std.fmt.allocPrint(alloc, "[JSON]{s}[/JSON]\n", .{encoded});
+        }
+    };
+    const start = try Fixture.frame(allocator, "TransactionStart");
+    defer allocator.free(start);
+    for ([_][]const u8{ "TransactionDone", "TransactionFailed", "" }) |end| {
+        const ending = if (end.len > 0) try Fixture.frame(allocator, end) else try allocator.dupe(u8, "");
+        defer allocator.free(ending);
+        const frames = try std.mem.concat(allocator, u8, &.{ start, ending });
+        defer allocator.free(frames);
+        var env: std.process.Environ.Map = .init(allocator);
+        defer env.deinit();
+        try env.put("FRAMES", frames);
+        const op = try Operation.start(.{ .action = .upgrade, .shelly_bin = binary, .sudo_bin = "/nonexistent-sudo", .environ_map = &env, .name = "AppImages", .backend = "appimage" });
+        defer op.deinit();
+        op.thread.?.join();
+        op.thread = null;
+        const result = op.poll() orelse return error.MissingOperationResult;
+        try std.testing.expectEqual(!std.mem.eql(u8, end, "TransactionDone"), result.failed);
+        if (result.failed) try std.testing.expect(result.error_detail.len > 0);
+    }
 }

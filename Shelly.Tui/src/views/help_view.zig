@@ -43,6 +43,7 @@ pub const Panel = struct {
             .details => "Package details",
             .aur => "AUR browsing",
             .flatpak => "Flatpak browsing",
+            .appimage => "AppImage browsing",
             .updates => "Updates",
             .settings => "Settings",
             .authentication => "Authentication",
@@ -64,7 +65,13 @@ pub const Panel = struct {
                     "j / k: Next / previous package, or scroll details down / up",
                     "l: Open details from the package list",
                     "h: Return from details to the package list",
-                    "/: Return to search",
+                });
+                try lines.append(arena, try std.fmt.allocPrint(
+                    arena,
+                    "{s}: Return to search",
+                    .{try commands.label(arena, .search)},
+                ));
+                try lines.appendSlice(arena, &.{
                     "While editing search, h/j/k/l remain ordinary text.",
                     "",
                 });
@@ -77,7 +84,11 @@ pub const Panel = struct {
         }
         if (self.context.mode == .search) try lines.append(arena, "While editing search, letters and Left/Right edit the text.");
         if (self.context.mode == .authentication) try lines.append(arena, "Enter starts sudo authentication in a private terminal. No password is collected before starting.");
-        if (self.context.authenticating) try lines.append(arena, "Follow sudo's password or fingerprint prompt. Password input is not echoed. Ctrl+c or Ctrl+q interrupts authentication; Backspace and Ctrl+u edit input.");
+        if (self.context.authenticating) try lines.append(arena, try std.fmt.allocPrint(
+            arena,
+            "Follow sudo's password or fingerprint prompt. Password input is not echoed. {s} or {s} interrupts authentication; Backspace and Ctrl+u edit input.",
+            .{ try commands.label(arena, .quit), try commands.label(arena, .cancel) },
+        ));
         try lines.appendSlice(arena, &.{ "", "Application", "" });
         const globals = [_]struct { id: commands.Id, description: []const u8 }{
             .{ .id = .help, .description = "Open/close help; return to the previous focus" },
@@ -121,4 +132,30 @@ test "browsing help explicitly lists Vim aliases and search escape" {
             try std.testing.expect(std.mem.indexOf(u8, body, expected) != null);
         }
     }
+}
+
+test "search shortcut label is dynamic" {
+    const original = commands.bindings.search;
+    defer commands.bindings.search = original;
+    commands.bindings.search = .{ .codepoint = 's', .mods = .{ .alt = true } };
+
+    var arena: std.heap.ArenaAllocator = .init(std.testing.allocator);
+    defer arena.deinit();
+    const body = try (Panel{ .context = .{ .mode = .search } }).text(arena.allocator());
+    try std.testing.expect(std.mem.indexOf(u8, body, "Alt+S: Return to search") != null);
+    try std.testing.expect(std.mem.indexOf(u8, body, "/: Return to search") == null);
+}
+
+test "authentication help uses dynamic quit and cancel labels" {
+    const original_quit = commands.bindings.quit;
+    defer commands.bindings.quit = original_quit;
+    commands.bindings.quit = .{ .codepoint = 'z', .mods = .{ .ctrl = true } };
+
+    var arena: std.heap.ArenaAllocator = .init(std.testing.allocator);
+    defer arena.deinit();
+    const body = try (Panel{ .context = .{ .mode = .authentication, .authenticating = true } }).text(arena.allocator());
+
+    try std.testing.expect(std.mem.indexOf(u8, body, "Ctrl+Z or Ctrl+Q interrupts authentication") != null);
+    try std.testing.expect(std.mem.indexOf(u8, body, "Ctrl+c or Ctrl+q") == null);
+    try std.testing.expect(std.mem.indexOf(u8, body, "Backspace and Ctrl+u edit input") != null);
 }

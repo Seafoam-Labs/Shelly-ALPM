@@ -17,6 +17,7 @@ const UpdateType = @import("../models/appimage.zig").UpdateType;
 const SizeConverter = @import("../helpers/size_converts.zig").SizeConverter;
 const Toast = @import("../helpers/custom_ui_comps/toast.zig").Toast;
 const ConfirmDialog = @import("../dialog/page/yn_dialog.zig").ConfirmDialog;
+const FlatpakRemoveDialog = @import("../dialog/page/flatpak_remove_dialog.zig").FlatpakRemoveDialog;
 const appimage_icon = @import("../helpers/appimage_icon.zig");
 const c_string = @import("../helpers/c_string.zig");
 const translations = @import("../helpers/translations.zig");
@@ -957,21 +958,30 @@ pub const AppImagePage = extern struct {
         const index = p.selected_index orelse return;
         const app = p.apps[index];
 
+        var remove_config = false;
+        if (runtime.config) |cfg_service| {
+            if (cfg_service.get()) |cfg| {
+                remove_config = cfg.PackageManagementRemoveConfigs;
+            } else |_| {}
+        }
+
         var buf: [512]u8 = undefined;
         const message = std.fmt.bufPrintSentinel(
             &buf,
-            "{s} {s}? {s}",
-            .{ translations._("Remove"), app.Name, translations._("Configuration files will be kept.") },
+            "{s} {s}?",
+            .{ translations._("Remove"), app.Name },
             0,
         ) catch translations._("Remove this AppImage?");
-        const dialog = ConfirmDialog.new(translations._("Remove AppImage"), message, &on_remove_response, self);
+        const dialog = FlatpakRemoveDialog.new(translations._("Remove AppImage"), message, &on_remove_response, self);
         dialog.setButtons(translations._("Remove"), translations._("Cancel"));
+        dialog.setDefaultRemoveConfig(remove_config);
         if (support.getWindow(ShellyWindow, self)) |win| {
             win.showLockout(dialog.as(gtk.Widget));
+            dialog.focusConfirm();
         }
     }
 
-    fn on_remove_response(ctx: ?*anyopaque, confirmed: bool) void {
+    fn on_remove_response(ctx: ?*anyopaque, confirmed: bool, remove_config: bool) void {
         const self: *Self = @ptrCast(@alignCast(ctx.?));
         if (support.getWindow(ShellyWindow, self)) |win| win.hideLockout();
         if (!confirmed) return;
@@ -979,13 +989,6 @@ pub const AppImagePage = extern struct {
         const p = self.priv();
         const index = p.selected_index orelse return;
         const app = p.apps[index];
-
-        var remove_config = false;
-        if (runtime.config) |cfg_service| {
-            if (cfg_service.get()) |cfg| {
-                remove_config = cfg.PackageManagementRemoveConfigs;
-            } else |_| {}
-        }
 
         const argv = ShellyCommands.remove_appimage(std.heap.c_allocator, app.Name, remove_config) catch return;
         defer std.heap.c_allocator.free(argv);

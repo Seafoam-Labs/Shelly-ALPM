@@ -9,6 +9,7 @@ const glib = bindings.glib;
 const gobject = bindings.gobject;
 const ShellyWindow = @import("shelly_window.zig").ShellyWindow;
 const runtime = @import("services/runtime.zig");
+const theme = @import("services/theme.zig");
 const translations = @import("helpers/translations.zig");
 const deep_link = @import("helpers/deep_link.zig");
 const tray_service = @import("services/tray_service.zig");
@@ -214,9 +215,10 @@ fn activate(app: *gtk.Application, _: ?*anyopaque) callconv(.c) void {
 
     if (features.builtWithBackgroundServices) tryStartTray(runtime.io, std.heap.c_allocator);
 
-    setupGnomeThemePreference();
+    theme.setupGnomeThemePreference();
 
     const window = ShellyWindow.new(app);
+    window.refreshTheme();
     dispatchPendingNavigation(window);
     gtk.Window.present(window.as(gtk.Window));
 }
@@ -227,43 +229,6 @@ fn tryStartTray(io: std.Io, alloc: std.mem.Allocator) void {
         if (!cfg.TrayEnabled) return;
     }
     tray_service.start(io, alloc);
-}
-
-fn setupGnomeThemePreference() void {
-    const desktop = runtime.environ_map.get("XDG_CURRENT_DESKTOP") orelse return;
-
-    std.debug.print("desktop = {s}\n", .{desktop});
-
-    if (!std.mem.containsAtLeast(u8, desktop, 1, "GNOME")) {
-        return;
-    }
-
-    const settings = gio.Settings.new("org.gnome.desktop.interface");
-
-    const scheme = settings.getString("color-scheme");
-
-    const prefer_dark = std.mem.eql(u8, std.mem.span(scheme), "prefer-dark");
-
-    std.debug.print("prefer_dark = {}\n", .{prefer_dark});
-
-    if (prefer_dark) {
-        const gtk_settings = gtk.Settings.getDefault() orelse {
-            std.debug.print("Could not read the desktop theme settings. Shelly will use the available theme defaults.\n", .{});
-            return;
-        };
-        const base_object = @as(*gobject.Object, @ptrCast(@alignCast(gtk_settings)));
-        var value = std.mem.zeroes(gobject.Value);
-        const bool_type = gobject.typeFromName("gboolean");
-        _ = value.init(bool_type);
-        value.setBoolean(1);
-        base_object.setProperty("gtk-application-prefer-dark-theme", &value);
-    }
-
-    _ = glib.setenv(
-        "GTK_APPLICATION_PREFER_DARK_THEME",
-        if (prefer_dark) "1" else "0",
-        1,
-    );
 }
 
 test {

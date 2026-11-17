@@ -1,19 +1,20 @@
 const std = @import("std");
+const AppImageUpdate = @import("appimage.zig").AppImageUpdate;
 
 /// owns the arenas backing value.
 pub const ParsedCheckUpdates = struct {
     value: CheckUpdates,
-    arenas: [3]?*std.heap.ArenaAllocator,
+    arenas: [4]?*std.heap.ArenaAllocator,
 
-    pub fn fromSources(native: std.json.Parsed([]CheckUpdatesPackage), aur: ?std.json.Parsed([]CheckUpdatesAur), flatpak: ?std.json.Parsed([]CheckUpdatesFlatpak)) ParsedCheckUpdates {
+    pub fn fromSources(native: std.json.Parsed([]CheckUpdatesPackage), aur: ?std.json.Parsed([]CheckUpdatesAur), flatpak: ?std.json.Parsed([]CheckUpdatesFlatpak), appimage: ?std.json.Parsed([]AppImageUpdate)) ParsedCheckUpdates {
         return .{
-            .value = .{ .Packages = native.value, .Aur = if (aur) |parsed| parsed.value else &.{}, .Flatpak = if (flatpak) |parsed| parsed.value else &.{} },
-            .arenas = .{ native.arena, if (aur) |parsed| parsed.arena else null, if (flatpak) |parsed| parsed.arena else null },
+            .value = .{ .Packages = native.value, .Aur = if (aur) |parsed| parsed.value else &.{}, .Flatpak = if (flatpak) |parsed| parsed.value else &.{}, .AppImage = if (appimage) |parsed| parsed.value else &.{} },
+            .arenas = .{ native.arena, if (aur) |parsed| parsed.arena else null, if (flatpak) |parsed| parsed.arena else null, if (appimage) |parsed| parsed.arena else null },
         };
     }
 
     pub fn fromParsed(parsed: std.json.Parsed(CheckUpdates)) ParsedCheckUpdates {
-        return .{ .value = parsed.value, .arenas = .{ parsed.arena, null, null } };
+        return .{ .value = parsed.value, .arenas = .{ parsed.arena, null, null, null } };
     }
 
     pub fn deinit(self: ParsedCheckUpdates) void {
@@ -29,7 +30,7 @@ pub const CheckUpdates = struct {
     Packages: []CheckUpdatesPackage = &.{},
     Aur: []CheckUpdatesAur = &.{},
     Flatpak: []CheckUpdatesFlatpak = &.{},
-    AppImage: []@import("appimage.zig").AppImageUpdate = &.{},
+    AppImage: []AppImageUpdate = &.{},
 
     pub fn count(self: *const CheckUpdates) usize {
         return self.Packages.len + self.Aur.len + self.Flatpak.len + self.AppImage.len;
@@ -99,7 +100,8 @@ test "combined updates retain source arrays and release every enabled source" {
             if (flatpak_enabled) flatpak = try std.json.parseFromSlice([]CheckUpdatesFlatpak, allocator,
                 \\[{"Id":"org.example.App","Permissions":["network"]}]
             , .{ .allocate = .alloc_always });
-            return ParsedCheckUpdates.fromSources(native, aur, flatpak);
+            const appimage = try std.json.parseFromSlice([]AppImageUpdate, allocator, "[{\"Name\":\"Editor\",\"Version\":\"2\",\"DownloadUrl\":\"https://example.org/Editor.AppImage\",\"IsUpdateAvailable\":true}]", .{ .allocate = .alloc_always });
+            return ParsedCheckUpdates.fromSources(native, aur, flatpak, appimage);
         }
 
         fn run(allocator: std.mem.Allocator) !void {
@@ -107,6 +109,7 @@ test "combined updates retain source arrays and release every enabled source" {
                 for ([_]bool{ false, true }) |flatpak_enabled| {
                     const combined = try make(allocator, aur_enabled, flatpak_enabled);
                     defer combined.deinit();
+                    try std.testing.expectEqualStrings("Editor", combined.value.AppImage[0].Name);
                     try std.testing.expectEqualStrings("libc", combined.value.Packages[0].Depends[0]);
                     try std.testing.expectEqual(@intFromBool(aur_enabled), combined.value.Aur.len);
                     try std.testing.expectEqual(@intFromBool(flatpak_enabled), combined.value.Flatpak.len);

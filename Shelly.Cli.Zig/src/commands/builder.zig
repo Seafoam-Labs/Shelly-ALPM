@@ -1887,6 +1887,7 @@ fn runIsolatedCoordinator(
     try root.stageReviewedInputs(context.environ, pkgbuild_content, review.reviewed_files, &operation);
 
     try root.stageExecutable(executable);
+    try root.stageRuntimeLibraries(context.environ, executable, &operation);
     try root.validateRuntime(context.environ, &operation);
     if (source_keys.len != 0) try root.stageSourcePgpKeys(source_keys);
 

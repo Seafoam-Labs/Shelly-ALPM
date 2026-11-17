@@ -2,8 +2,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shelly-ui 2.2.4.1\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-11-04 12:08-0500\n"
-"PO-Revision-Date: 2026-10-12 17:30-0300\n"
+"POT-Creation-Date: 2026-11-14 01:29-0300\n"
+"PO-Revision-Date: 2026-11-16 08:58-0300\n"
 "Last-Translator: Vinícius Fonseca <viniqf@proton.me>\n"
 "Language-Team: Portuguese (Brazil) <viniqf@proton.me>\n"
 "Language: pt_BR\n"
@@ -123,6 +123,9 @@ msgstr "Pular"
 msgid "AppImage"
 msgstr "AppImage"
 
+msgid "Install and integrate AppImage bundles."
+msgstr "Instale e integre bundles AppImage."
+
 msgid "Search..."
 msgstr "Pesquisar..."
 
@@ -212,6 +215,9 @@ msgstr "Remover"
 
 msgid "AUR"
 msgstr "AUR"
+
+msgid "Build and install packages from the Arch User Repository."
+msgstr "Compile e instale pacotes do Arch User Repository."
 
 msgid "Search the AUR by name or keyword"
 msgstr "Procure na AUR por nome ou palavra-chave"
@@ -353,6 +359,9 @@ msgstr "Histórico de versões"
 msgid "Flatpak"
 msgstr "Flatpak"
 
+msgid "Manage Flatpak applications and remotes."
+msgstr "Gerencie aplicativos e repositórios Flatpak."
+
 msgid "Search packages..."
 msgstr "Pesquisar pacotes..."
 
@@ -434,6 +443,12 @@ msgstr "Ações do pacote"
 msgid "Package"
 msgstr "Pacote"
 
+msgid "Packages"
+msgstr "Pacotes"
+
+msgid "Install and manage software on your system."
+msgstr "Instale e gerencie programas no seu sistema."
+
 msgid "Package Group Filter"
 msgstr "Filtro de grupo de pacotes"
 
@@ -502,17 +517,14 @@ msgstr "Sugestões da Seafoam Labs"
 msgid "Refresh the recommended packages list from the network"
 msgstr "Atualizar a lista de pacotes recomendados pela network"
 
-#| msgid "Mixed selection"
 msgid "Clear selection"
-msgstr ""
+msgstr "Limpar seleção"
 
-#| msgid "Recommended Packages"
 msgid "Deselect all recommended packages"
-msgstr ""
+msgstr "Desmarcar todos os pacotes recomendados"
 
-#| msgid "Install the selected packages?"
 msgid "Install all selected packages in one transaction"
-msgstr ""
+msgstr "Instalar todos os pacotes selecionados em uma única transação"
 
 msgid "Loading Recommended Packages..."
 msgstr "Carregando pacotes recomendados..."
@@ -526,6 +538,12 @@ msgstr ""
 
 msgid "Shelly Search"
 msgstr "Pesquisa Shelly"
+
+msgid "Search"
+msgstr "Pesquisar"
+
+msgid "Search across every enabled backend."
+msgstr "Pesquise em todas as fontes de software ativadas."
 
 msgid "Search standard repositories, AUR and Flatpak"
 msgstr "Pesquise repositórios padrão, AUR e Flatpak"
@@ -559,6 +577,9 @@ msgstr ""
 msgid "Settings"
 msgstr "Configurações"
 
+msgid "Make Shelly feel at home on your desktop."
+msgstr "Personalize o Shelly para combinar com seu ambiente de trabalho."
+
 msgid "General"
 msgstr "Geral"
 
@@ -591,6 +612,15 @@ msgstr "Executar a bandeja como tarefa cron"
 
 msgid "Tray update with ui"
 msgstr "Atualização da bandeja com interface gráfica"
+
+msgid "Update terminal"
+msgstr "Terminal para atualizações"
+
+msgid "Terminal command"
+msgstr "Comando do terminal"
+
+msgid "Custom update terminal command"
+msgstr "Comando personalizado do terminal para atualizações"
 
 msgid "Tray Check Interval (Hours)"
 msgstr "Intervalo de verificação da bandeja (horas)"
@@ -666,6 +696,12 @@ msgstr "Página padrão"
 msgid "Navigation style"
 msgstr "Estilo de navegação"
 
+msgid "Theme"
+msgstr "Tema"
+
+msgid "Color variant"
+msgstr "Variante de cor"
+
 msgid "Advanced"
 msgstr "Avançado"
 
@@ -687,9 +723,6 @@ msgstr "Caminho de instalação das AppImages"
 msgid "Select Directory"
 msgstr "Selecionar diretório"
 
-msgid "View Changelog"
-msgstr "Visualizar histórico de alterações"
-
 msgid "v0.0.0"
 msgstr ""
 
@@ -702,20 +735,32 @@ msgstr "Servidor Fluxer da comunidade"
 msgid "Sponsor"
 msgstr "Patrocinar"
 
+msgid "View Changelog"
+msgstr "Visualizar histórico de alterações"
+
 msgid "Toggle output"
 msgstr "Exibir resultado"
 
 msgid "Done"
 msgstr "Concluído"
 
+msgid "1 · Download"
+msgstr "1 · Baixar"
+
+msgid "2 · Install"
+msgstr "2 · Instalar"
+
 msgid "Update"
 msgstr "Atualizar"
 
-msgid "Available Updates"
-msgstr "Atualizações disponíveis"
+msgid "Updates"
+msgstr "Atualizações"
 
 msgid "7 of 7 updates included"
 msgstr "7 de 7 atualizações inclusas"
+
+msgid "System"
+msgstr "Sistema"
 
 msgid "Check all enabled sources again"
 msgstr "Verificar todas as fontes habilitadas novamente"
@@ -723,11 +768,8 @@ msgstr "Verificar todas as fontes habilitadas novamente"
 msgid "Check Again"
 msgstr "Verificar novamente"
 
-msgid "Upgrade"
-msgstr "Atualizar"
-
-msgid "System"
-msgstr "Sistema"
+msgid "Available updates"
+msgstr "Atualizações disponíveis"
 
 msgid "Checking for updates…"
 msgstr "Verificando atualizações..."
@@ -737,6 +779,12 @@ msgstr "Seu sistema está atualizado"
 
 msgid "Could not check for updates."
 msgstr "Não foi possível buscar atualizações."
+
+msgid "Upgrading may require administrator authorization."
+msgstr "A atualização pode exigir autorização de administrador."
+
+msgid "Upgrade"
+msgstr "Atualizar"
 
 msgid "Utilities"
 msgstr "Utilidades"
@@ -783,7 +831,8 @@ msgstr "Limpar cache de pacotes"
 msgid ""
 "Keeps the selected number of repository package versions and clears the "
 "entire Shelly cache, including AUR sources and build directories."
-msgstr ""
+msgstr "Mantém o número selecionado de versões dos pacotes dos repositórios e limpa todo o cache do Shelly, "
+"incluindo os arquivos-fonte do AUR e os diretórios de compilação."
 
 msgid "Keep"
 msgstr "Manter"
@@ -791,7 +840,8 @@ msgstr "Manter"
 msgid ""
 "Number of repository package versions to keep; the Shelly cache is cleared "
 "completely"
-msgstr ""
+msgstr "Número de versões dos pacotes dos repositórios a manter. "
+"O cache do Shelly é limpo completamente"
 
 msgid "Welcome to Shelly v3"
 msgstr "Bem vindo(a) ao Shelly V3"
@@ -862,24 +912,17 @@ msgstr "Próximo"
 msgid "Start Shelly"
 msgstr "Inicializar o Shelly"
 
-#| msgid "Enable AUR?"
 msgid "Enable Atoll?"
-msgstr ""
+msgstr "Ativar Atoll?"
 
-#| msgid ""
-#| "The Arch User Repository contains build scripts that are known as "
-#| "PKGBUILDs. Those scripts are uploaded by users, and are not verified or "
-#| "vetted in any way. Only enable this feature if you are comfortable in "
-#| "verifying the build scripts."
 msgid ""
 "Atoll contains build scripts that are known as PKGBUILDs. Those scripts are "
 "uploaded by users, and are not verified or vetted in any way. Only enable "
 "this feature if you are comfortable in verifying the build scripts."
-msgstr ""
+msgstr "O Atoll contém scripts de compilação conhecidos como PKGBUILDs. "
+"Esses scripts são enviados por usuários e não passam por nenhum tipo de verificação ou análise. "
+"Ative este recurso somente se você se sentir à vontade para verificar os scripts de compilação."
 
-#| msgid ""
-#| "<a href=\"https://www.seafoam-labs.org/shelly-alpm/docs/aur-safety/\">AUR "
-#| "Safety Guide</a>"
 msgid ""
 "<a href=\"https://www.seafoam-labs.org/shelly-alpm/docs/aur-safety/\">Atoll "
 "Safety Guide</a>"
@@ -1051,7 +1094,8 @@ msgstr ""
 msgid ""
 "Enter the http(s) URL of the .zsync control file, optionally as a zsync|"
 "<url> update information string."
-msgstr ""
+msgstr "Insira a URL HTTP(S) do arquivo de controle .zsync, "
+"opcionalmente no formato de informações de atualização zsync|<url>."
 
 msgid "Choose an AppImage file"
 msgstr "Escolha um arquivo AppImage"
@@ -1497,23 +1541,19 @@ msgid "Installing packages"
 msgstr "Instalando pacotes"
 
 msgid "Select package for batch installation"
-msgstr ""
+msgstr "Selecionar pacote para instalação em lote"
 
-#| msgid "Search standard repositories, AUR and Flatpak"
 msgid "Search standard repositories, Atoll and Flatpak"
-msgstr ""
+msgstr "Pesquisar nos repositórios padrão, no Atoll e no Flatpak"
 
-#| msgid "Show results from the Arch User Repository"
 msgid "Show results from Atoll"
-msgstr ""
+msgstr "Mostrar resultados do Atoll"
 
-#| msgid ""
-#| "Search the standard repositories, the AUR, and Flatpak all at once. Type "
-#| "a name to begin."
 msgid ""
 "Search the standard repositories, Atoll, and Flatpak all at once. Type a "
 "name to begin."
-msgstr ""
+msgstr "Pesquisar nos repositórios padrão, no Atoll e no Flatpak. Digite um "
+"nome para começar."
 
 msgid ""
 "Search standard repositories, the AUR and Flatpak at once. Type a name to "
@@ -1540,9 +1580,8 @@ msgstr "Instalar pacotes"
 msgid "Install the selected packages?"
 msgstr "Instalar os pacotes selecionados?"
 
-#| msgid "Enable AUR"
 msgid "Enable Atoll"
-msgstr ""
+msgstr "Ativar Atoll"
 
 msgid ""
 "Could not save settings to the configured file. Your latest changes were not "
@@ -1632,6 +1671,18 @@ msgstr "Serviço de inicialização do systemd removido"
 msgid "AUR enabled"
 msgstr "AUR habilitada"
 
+msgid "System GTK"
+msgstr "GTK do sistema"
+
+msgid "Follow system"
+msgstr "Seguir o sistema"
+
+msgid "Dark"
+msgstr "Escuro"
+
+msgid "Light"
+msgstr "Claro"
+
 msgid "System Default"
 msgstr "Padrões do sistema"
 
@@ -1677,8 +1728,11 @@ msgstr ""
 msgid "中文（简体）"
 msgstr ""
 
-msgid "Packages"
-msgstr "Pacotes"
+msgid "Default (auto-detect)"
+msgstr "Padrão (detecção automática)"
+
+msgid "Custom…"
+msgstr "Personalizado…"
 
 msgid "Pending"
 msgstr "Em espera"
@@ -1709,6 +1763,9 @@ msgstr "Interrompido"
 
 msgid "Cancelled"
 msgstr "Cancelado"
+
+msgid "Overall progress"
+msgstr "Progresso geral"
 
 msgid "Could not start the requested operation."
 msgstr "Não foi possível iniciar a operação solicitada."
@@ -1755,6 +1812,27 @@ msgstr "Verificando conflitos"
 msgid "Checking disk space"
 msgstr "Verificando o espaço em disco"
 
+msgid "Preparing transaction"
+msgstr "Preparando transação"
+
+msgid "Downloading packages"
+msgstr "Baixando pacotes"
+
+msgid "about"
+msgstr "aproximadamente"
+
+msgid "s left"
+msgstr "s restantes"
+
+msgid "packages downloaded"
+msgstr "pacotes baixados"
+
+msgid "packages processed"
+msgstr "pacotes processados"
+
+msgid "Completed"
+msgstr "Concluído"
+
 msgid "Transaction Completed"
 msgstr "Transação concluída"
 
@@ -1799,6 +1877,9 @@ msgstr "Atualização de pacotes do sistema"
 msgid "AUR package update"
 msgstr "Atualização de pacotes AUR"
 
+msgid "Include this update"
+msgstr "Incluir esta atualização"
+
 msgid "Update this package"
 msgstr "Atualizar esse pacote"
 
@@ -1808,15 +1889,23 @@ msgstr "atualizações inclusas"
 msgid "Updates included"
 msgstr "Atualizações inclusas"
 
+msgid "No download required"
+msgstr "Nenhum download necessário"
+
+msgid "Total download:"
+msgstr "Total a baixar:"
+
+msgid "Upgrade Selected"
+msgstr "Atualizar selecionados"
+
 msgid "Upgrading packages"
 msgstr "Atualizando pacotes"
 
 msgid "Refreshing package databases"
 msgstr "Atualizando bases de dados de pacote"
 
-#| msgid "Removing Flatpak"
 msgid "Removing stale database lock"
-msgstr ""
+msgstr "Removendo bloqueio obsoleto do banco de dados"
 
 msgid "Fixing permissions"
 msgstr "Corrigindo permissões"
@@ -1843,8 +1932,11 @@ msgstr ""
 msgid "Installing Flatpak and AppImage support"
 msgstr "Instalando suporte ao Flatpak e ao AppImage"
 
-msgid "Main menu"
-msgstr "Menu principal"
+msgid "BROWSE"
+msgstr "EXPLORAR"
+
+msgid "SYSTEM"
+msgstr "SISTEMA"
 
 msgid "Expand sidebar"
 msgstr "Expandir barra lateral"

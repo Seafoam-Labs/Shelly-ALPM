@@ -3896,6 +3896,116 @@ test "PackageBuilder discards partial output from failed strip commands" {
     }
 }
 
+test "PackageBuilder expands bare soname provides to versioned entries like makepkg" {
+    const allocator = testing.allocator;
+    var fixture = try Fixture.create(allocator,
+        \\pkgname=soname-provides-demo
+        \\pkgver=1
+        \\pkgrel=1
+        \\arch=('x86_64')
+        \\provides=('libdemo.so' 'libdemo.so=9-64' 'plain-provider=1')
+        \\build() {
+        \\  printf 'int demo(void) { return 42; }\n' > demo.c
+        \\  cc -shared -fPIC -Wl,-soname,libdemo.so.1 -o libdemo.so.1.0.0 demo.c
+        \\}
+        \\package() {
+        \\  install -Dm755 libdemo.so.1.0.0 "$pkgdir/usr/lib/libdemo.so.1.0.0"
+        \\  install -Dm755 libdemo.so.1.0.0 "$pkgdir/usr/lib/libdemo.so.1.0.0.copy"
+        \\  ln -s libdemo.so.1.0.0 "$pkgdir/usr/lib/libdemo.so.1"
+        \\  ln -s libdemo.so.1 "$pkgdir/usr/lib/libdemo.so"
+        \\}
+    , null, null);
+    defer fixture.destroy();
+    const artifacts = try fixture.builder.BuildPackage();
+    defer builder_mod.deinitArtifacts(allocator, artifacts);
+    const pkginfo = try readPkgInfo(allocator, artifacts[0].path);
+    defer allocator.free(pkginfo);
+    // Both regular files carry the same soname; the expansion deduplicates.
+    try testing.expectEqual(@as(usize, 1), std.mem.count(u8, pkginfo, "provides = libdemo.so=1-64\n"));
+    try testing.expect(std.mem.indexOf(u8, pkginfo, "provides = libdemo.so=9-64\n") != null);
+    try testing.expect(std.mem.indexOf(u8, pkginfo, "provides = plain-provider=1\n") != null);
+    try testing.expect(std.mem.indexOf(u8, pkginfo, "provides = libdemo.so\n") == null);
+}
+
+test "PackageBuilder expands bare soname depends from packaged executables" {
+    const allocator = testing.allocator;
+    var fixture = try Fixture.create(allocator,
+        \\pkgname=soname-depends-demo
+        \\pkgver=1
+        \\pkgrel=1
+        \\arch=('x86_64')
+        \\depends=('libdemo.so')
+        \\build() {
+        \\  printf 'int demo(void) { return 42; }\n' > demo.c
+        \\  printf 'int demo(void);\nint main(void) { return demo(); }\n' > tool.c
+        \\  cc -shared -fPIC -Wl,-soname,libdemo.so.1 -o libdemo.so.1.0.0 demo.c
+        \\  ln -s libdemo.so.1.0.0 libdemo.so
+        \\  cc -o tool tool.c -L. -ldemo
+        \\}
+        \\package() {
+        \\  install -Dm755 libdemo.so.1.0.0 "$pkgdir/usr/lib/libdemo.so.1.0.0"
+        \\  ln -s libdemo.so.1.0.0 "$pkgdir/usr/lib/libdemo.so.1"
+        \\  install -Dm755 tool "$pkgdir/usr/bin/soname-depends-demo"
+        \\}
+    , null, null);
+    defer fixture.destroy();
+    const artifacts = try fixture.builder.BuildPackage();
+    defer builder_mod.deinitArtifacts(allocator, artifacts);
+    const pkginfo = try readPkgInfo(allocator, artifacts[0].path);
+    defer allocator.free(pkginfo);
+    try testing.expect(std.mem.indexOf(u8, pkginfo, "depend = libdemo.so=1-64\n") != null);
+    try testing.expect(std.mem.indexOf(u8, pkginfo, "depend = libdemo.so\n") == null);
+}
+
+test "PackageBuilder keeps unresolvable bare soname provides and warns like makepkg" {
+    const allocator = testing.allocator;
+    const WarningCapture = struct {
+        missing: bool = false,
+        unversioned: bool = false,
+
+        fn handle(data: ?*anyopaque, event: op_context.Event) void {
+            const self: *@This() = @ptrCast(@alignCast(data.?));
+            switch (event) {
+                .status => |status| {
+                    if (std.mem.indexOf(u8, status.message, "Cannot find library listed in 'provides': libabsent.so") != null)
+                        self.missing = true;
+                    if (std.mem.indexOf(u8, status.message, "Library listed in 'provides' is not versioned: libplain.so") != null)
+                        self.unversioned = true;
+                },
+                else => {},
+            }
+        }
+    };
+    var capture = WarningCapture{};
+    var fixture = try Fixture.create(allocator,
+        \\pkgname=soname-warning-demo
+        \\pkgver=1
+        \\pkgrel=1
+        \\arch=('x86_64')
+        \\provides=('libabsent.so' 'libplain.so')
+        \\build() {
+        \\  printf 'int plain(void) { return 0; }\n' > plain.c
+        \\  cc -shared -fPIC -o libplain.so.1 plain.c
+        \\}
+        \\package() {
+        \\  install -Dm755 libplain.so.1 "$pkgdir/usr/lib/libplain.so.1"
+        \\}
+    , .{ .function = WarningCapture.handle, .data = &capture }, null);
+    defer fixture.destroy();
+    const artifacts = try fixture.builder.BuildPackage();
+    defer builder_mod.deinitArtifacts(allocator, artifacts);
+    const pkginfo = try readPkgInfo(allocator, artifacts[0].path);
+    defer allocator.free(pkginfo);
+    try testing.expect(std.mem.indexOf(u8, pkginfo, "provides = libabsent.so\n") != null);
+    try testing.expect(std.mem.indexOf(u8, pkginfo, "provides = libplain.so\n") != null);
+    try testing.expect(capture.missing);
+    try testing.expect(capture.unversioned);
+    const log = try readOnlyBuildLog(allocator, testing.io, fixture.build_dir);
+    defer allocator.free(log);
+    try testing.expect(std.mem.indexOf(u8, log, "Cannot find library listed in 'provides': libabsent.so") != null);
+    try testing.expect(std.mem.indexOf(u8, log, "Library listed in 'provides' is not versioned: libplain.so") != null);
+}
+
 test "PackageBuilder runs local declarations and reviewed helper functions inside package steps" {
     const allocator = testing.allocator;
     const io = testing.io;
