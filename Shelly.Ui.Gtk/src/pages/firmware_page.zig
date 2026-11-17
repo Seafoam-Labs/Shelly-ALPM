@@ -13,7 +13,7 @@ pub const FirmwarePage = extern struct {
     pub const Parent = gtk.Box;
 
     pub const title: [:0]const u8 = "Firmware";
-    pub const icon_name: [:0]const u8 = "software-update-available-symbolic";
+    pub const icon_name: [:0]const u8 = "firmware-symbolic";
     const resource_path = "/com/shellyorg/shelly/ui/firmware_page.ui";
 
     const Private = struct {

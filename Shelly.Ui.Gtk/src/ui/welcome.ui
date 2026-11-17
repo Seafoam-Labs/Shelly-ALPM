@@ -266,7 +266,7 @@
                         <child>
                           <object class="GtkImage">
                             <property name="accessible-role">presentation</property>
-                            <property name="icon-name">software-update-available-symbolic</property>
+                            <property name="icon-name">firmware-symbolic</property>
                           </object>
                         </child>
                         <child>
