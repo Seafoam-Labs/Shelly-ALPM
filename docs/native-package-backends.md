@@ -70,7 +70,11 @@ Explicit caller options and configuration still override those defaults.
 `shelly --config /path/to/config utility --repair-db` resolves `DBPath` from that
 configuration before removing a stale lock. Configuration is parsed without
 opening the package database; an unreadable explicit configuration fails before
-any lock is touched.
+any lock is touched. The command also removes a stale `db.lck` from the invoking
+user's update-check cache (`XDG_CACHE_HOME/Shelly/db`, resolved through
+`SUDO_USER`/`DOAS_USER`/`PKEXEC_UID` when elevated) and reports each path it
+checks. Only a present system database lock triggers elevation; the user-owned
+cache lock is repaired without root.
 
 `shelly-key --populate` reads public bundles and their trusted/revoked lists from
 the profile's public key bundle directory. `--populate-from` overrides that

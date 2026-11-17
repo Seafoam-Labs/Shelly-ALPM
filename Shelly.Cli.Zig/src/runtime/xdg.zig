@@ -41,6 +41,13 @@ pub fn previewDatabase(context: *const runtime.RuntimeContext) ![]const u8 {
     return previewDatabaseFor(context, elevation.isRoot());
 }
 
+/// The invoking user's update-preview cache, resolved even when running
+/// elevated through sudo/doas/pkexec. Repair tools use it to reach the lock
+/// that blocks the user's own update check, which never lives in root's cache.
+pub fn invokingUserPreviewDatabase(context: *const runtime.RuntimeContext) ![]const u8 {
+    return previewDatabaseFor(context, false);
+}
+
 fn previewDatabaseFor(context: *const runtime.RuntimeContext, as_root: bool) ![]const u8 {
     if (!as_root) return shellyCache(context, &.{"db"});
     const account = (try user_account.byUid(context.allocator, 0)) orelse return error.HomeNotConfigured;
