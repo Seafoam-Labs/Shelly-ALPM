@@ -614,65 +614,61 @@ pub const screenshotButtonStyle: @TypeOf(@as(vxfw.Button, undefined).style) = .{
 
 /// Returns whether page input was consumed. Globals remain with the coordinator.
 pub fn handleKey(self: *Model, ctx: *vxfw.EventContext, input: vaxis.Key, global_command: bool) anyerror!bool {
-    if (input.matches(vaxis.Key.escape, .{})) {
-        self.flatpak_state.flatpak_list_active = true;
-        ctx.consumeAndRedraw();
-        return true;
-    }
-    const key = if (self.flatpak_state.flatpak_list_active) commands.vimNavigationKey(input) orelse input else input;
-    if (self.flatpak_state.flatpak_list_active) {
-        if (commands.matches(key, .search)) {
-            self.flatpak_state.flatpak_list_active = false;
-            ctx.consumeAndRedraw();
-            return true;
+    handled: {
+        if (input.matches(vaxis.Key.escape, .{})) {
+            self.flatpak_state.flatpak_list_active = true;
+            break :handled;
         }
-        if (commands.matches(key, .details) or commands.packageAction(key) != null) {
-            if (self.flatpak_state.flatpak_job == null and self.flatpak_state.flatpak_list.cursor < self.flatpak_state.flatpak_rows.items.len) {
-                self.overlay = .{ .flatpak = self.flatpak_state.flatpak_rows.items[self.flatpak_state.flatpak_list.cursor] };
-                if (commands.packageAction(key) != null) try handleDetailsKey(self, ctx, key, self.flatpak_state.flatpak_rows.items[self.flatpak_state.flatpak_list.cursor]);
+        const key = if (self.flatpak_state.flatpak_list_active) commands.vimNavigationKey(input) orelse input else input;
+        if (self.flatpak_state.flatpak_list_active) {
+            if (commands.matches(key, .search)) {
+                self.flatpak_state.flatpak_list_active = false;
+                break :handled;
             }
-            ctx.consumeAndRedraw();
+            if (commands.matches(key, .details) or commands.packageAction(key) != null) {
+                if (self.flatpak_state.flatpak_job == null and self.flatpak_state.flatpak_list.cursor < self.flatpak_state.flatpak_rows.items.len) {
+                    self.overlay = .{ .flatpak = self.flatpak_state.flatpak_rows.items[self.flatpak_state.flatpak_list.cursor] };
+                    if (commands.packageAction(key) != null) try handleDetailsKey(self, ctx, key, self.flatpak_state.flatpak_rows.items[self.flatpak_state.flatpak_list.cursor]);
+                }
+                break :handled;
+            }
+        }
+        if (commands.matches(key, .previous) or commands.matches(key, .next)) {
+            if (self.flatpak_state.flatpak_list_active and self.flatpak_state.flatpak_list.cursor == 0 and commands.matches(key, .previous)) {
+                self.flatpak_state.flatpak_list_active = false;
+                break :handled;
+            }
+            self.flatpak_state.flatpak_list_active = true;
+            try self.flatpak_state.flatpak_list.handleEvent(ctx, .{ .key_press = .{ .codepoint = if (commands.matches(key, .previous)) vaxis.Key.up else vaxis.Key.down } });
+            break :handled;
+        }
+        if (commands.matches(key, .confirm)) {
+            if (self.flatpak_state.flatpak_job == null and self.flatpak_state.flatpak_failure == null and self.flatpak_state.flatpak_list.cursor < self.flatpak_state.flatpak_rows.items.len)
+                self.overlay = .{ .flatpak = self.flatpak_state.flatpak_rows.items[self.flatpak_state.flatpak_list.cursor] };
+            break :handled;
+        }
+        if (commands.togglesInstalled(key)) {
+            if (self.flatpak_state.flatpak_job == null) {
+                self.flatpak_state.flatpak_installed_only = !self.flatpak_state.flatpak_installed_only;
+                self.flatpak_state.flatpak_rows.clearRetainingCapacity();
+                self.flatpak_state.flatpak_list.item_count = 0;
+                self.flatpak_state.flatpak_list.jumpToItem(0);
+                try startFlatpak(self, ctx);
+            }
+            break :handled;
+        }
+        if (commands.refreshesList(key)) {
+            if (!self.flatpak_state.flatpak_available or self.flatpak_state.flatpak_failure != null) try startFlatpakProbe(self, ctx) else try startFlatpak(self, ctx);
+            break :handled;
+        }
+        if (self.flatpak_state.flatpak_list_active and !global_command) {
+            ctx.consumeEvent();
             return true;
         }
+        return false;
     }
-    if (commands.matches(key, .previous) or commands.matches(key, .next)) {
-        if (self.flatpak_state.flatpak_list_active and self.flatpak_state.flatpak_list.cursor == 0 and commands.matches(key, .previous)) {
-            self.flatpak_state.flatpak_list_active = false;
-            ctx.consumeAndRedraw();
-            return true;
-        }
-        self.flatpak_state.flatpak_list_active = true;
-        try self.flatpak_state.flatpak_list.handleEvent(ctx, .{ .key_press = .{ .codepoint = if (commands.matches(key, .previous)) vaxis.Key.up else vaxis.Key.down } });
-        ctx.consumeAndRedraw();
-        return true;
-    }
-    if (commands.matches(key, .confirm)) {
-        if (self.flatpak_state.flatpak_job == null and self.flatpak_state.flatpak_failure == null and self.flatpak_state.flatpak_list.cursor < self.flatpak_state.flatpak_rows.items.len)
-            self.overlay = .{ .flatpak = self.flatpak_state.flatpak_rows.items[self.flatpak_state.flatpak_list.cursor] };
-        ctx.consumeAndRedraw();
-        return true;
-    }
-    if (commands.togglesInstalled(key)) {
-        if (self.flatpak_state.flatpak_job == null) {
-            self.flatpak_state.flatpak_installed_only = !self.flatpak_state.flatpak_installed_only;
-            self.flatpak_state.flatpak_rows.clearRetainingCapacity();
-            self.flatpak_state.flatpak_list.item_count = 0;
-            self.flatpak_state.flatpak_list.jumpToItem(0);
-            try startFlatpak(self, ctx);
-        }
-        ctx.consumeAndRedraw();
-        return true;
-    }
-    if (commands.refreshesList(key)) {
-        if (!self.flatpak_state.flatpak_available or self.flatpak_state.flatpak_failure != null) try startFlatpakProbe(self, ctx) else try startFlatpak(self, ctx);
-        ctx.consumeAndRedraw();
-        return true;
-    }
-    if (self.flatpak_state.flatpak_list_active and !global_command) {
-        ctx.consumeEvent();
-        return true;
-    }
-    return false;
+    ctx.consumeAndRedraw();
+    return true;
 }
 
 pub fn handleDetailsKey(self: *Model, ctx: *vxfw.EventContext, input: vaxis.Key, row: flatpak_view.Row) anyerror!void {

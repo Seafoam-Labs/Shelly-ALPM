@@ -693,15 +693,13 @@ pub fn pollInstall(self: *Model) !bool {
     if ((is_combined and job.request.include_aur) or std.mem.eql(u8, job.request.backend, "aur")) self.aur_state.refresh_aur_after_operation = true;
 
     // Native and AUR operations change the same installed package database.
-    if (!package_batch and package_change and !failed and !completed.declined and job.request.action != .upgrade) {
+    if (!package_batch and package_change and !failed and !completed.declined) {
         for (self.packages_state.packages) |*pkg| {
             if (std.mem.eql(u8, pkg.Name, job.request.name)) {
                 pkg.Installed = job.request.action == .install;
                 break;
             }
         }
-    }
-    if (!package_batch and package_change and !failed and !completed.declined and job.request.action != .upgrade) {
         if (self.aur_state.aur_parsed) |parsed| {
             for (parsed.value) |*pkg| {
                 if (std.mem.eql(u8, pkg.Name, job.request.name))
