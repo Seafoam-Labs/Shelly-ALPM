@@ -109,16 +109,15 @@ pub const State = struct {
 };
 
 fn loadInstalled(load: *LoadState) void {
+    defer load.done.store(true, .release);
     const allocator = std.heap.page_allocator;
     var threaded: std.Io.Threaded = .init(allocator, .{});
     defer threaded.deinit();
     const cli: ShellyCli = .{ .allocator = allocator, .io = threaded.io() };
     load.result = cli.get_installed_appimages() catch |err| {
         load.failure = err;
-        load.done.store(true, .release);
         return;
     };
-    load.done.store(true, .release);
 }
 
 test "refresh results preserve identity and failures retain owned data" {
@@ -628,10 +627,17 @@ fn moveInstallSelection(form: *Form, down: bool) !void {
 
 pub fn captureInstall(self: *Model, ctx: *vxfw.EventContext, event: vxfw.Event) !bool {
     const form = self.appimage_state.install_form orelse return false;
+    var edited = false;
     switch (event) {
         .key_press => |input| {
-            const key = if (!form.editing_path) commands.vimNavigationKey(input) orelse input else input;
-            if (!form.editing_path and commands.matches(input, .toggle_hidden)) {
+            const browsing = !form.editing_path;
+            const key = if (browsing) commands.vimNavigationKey(input) orelse input else input;
+            const directory_selected = if (form.completion) |completion|
+                completion.candidates.len > 0 and form.completion_index > 0 and
+                    completion.candidates[(form.completion_index - 1) % completion.candidates.len].is_directory
+            else
+                false;
+            if (browsing and commands.matches(input, .toggle_hidden)) {
                 if (form.job == null) {
                     try rememberBrowserPosition(form);
                     form.field.clearRetainingCapacity();
@@ -641,76 +647,48 @@ pub fn captureInstall(self: *Model, ctx: *vxfw.EventContext, event: vxfw.Event) 
                     form.show_hidden = !form.show_hidden;
                     try startPathJob(self, ctx, false);
                 }
-                ctx.consumeAndRedraw();
-                return true;
-            }
-            if (!form.editing_path and (key.matches('/', .{}) or key.matches(vaxis.Key.tab, .{}))) {
+            } else if (browsing and (key.matches('/', .{}) or key.matches(vaxis.Key.tab, .{}))) {
                 form.editing_path = true;
                 try ctx.requestFocus(form.field.widget());
-                ctx.consumeAndRedraw();
-                return true;
-            }
-            if (form.editing_path and key.matches(vaxis.Key.escape, .{})) {
-                form.field.clearRetainingCapacity();
-                try form.field.insertSliceAtCursor(form.directory orelse form.cwd);
-                try startPathJob(self, ctx, false);
-                form.editing_path = false;
+            } else if (key.matches(vaxis.Key.escape, .{})) {
                 try ctx.requestFocus(self.widget());
-                ctx.consumeAndRedraw();
-                return true;
-            }
-            if (!form.editing_path and key.matches(vaxis.Key.left, .{})) {
+                if (form.editing_path) {
+                    form.field.clearRetainingCapacity();
+                    try form.field.insertSliceAtCursor(form.directory orelse form.cwd);
+                    try startPathJob(self, ctx, false);
+                    form.editing_path = false;
+                } else {
+                    form.generation += 1;
+                    self.appimage_state.install_form = null;
+                    if (form.job == null) {
+                        form.deinit(self.gpa);
+                    } else {
+                        self.appimage_state.install_closing = form;
+                        try ctx.tick(100, self.widget());
+                    }
+                }
+            } else if (browsing and key.matches(vaxis.Key.left, .{})) {
                 if (form.has_parent) {
                     try selectInstallPath(form, 0);
                     try startPathJob(self, ctx, false);
                 }
-                ctx.consumeAndRedraw();
-                return true;
-            }
-            if (!form.editing_path and key.matches(vaxis.Key.right, .{})) {
-                if (form.completion) |completion| {
-                    if (form.completion_index > 0 and completion.candidates[form.completion_index - 1].is_directory)
-                        return captureInstall(self, ctx, .{ .key_press = .{ .codepoint = vaxis.Key.enter } });
-                }
-                ctx.consumeAndRedraw();
-                return true;
-            }
-            if (key.matches(vaxis.Key.escape, .{})) {
-                form.generation += 1;
-                self.appimage_state.install_form = null;
-                try ctx.requestFocus(self.widget());
-                if (form.job == null) {
-                    form.deinit(self.gpa);
-                } else {
-                    self.appimage_state.install_closing = form;
-                    try ctx.tick(100, self.widget());
-                }
+            } else if (browsing and key.matches(vaxis.Key.right, .{})) {
+                if (directory_selected) try startPathJob(self, ctx, false);
             } else if (key.matches(vaxis.Key.up, .{}) or key.matches(vaxis.Key.down, .{})) {
                 form.editing_path = false;
                 try ctx.requestFocus(self.widget());
                 try moveInstallSelection(form, key.matches(vaxis.Key.down, .{}));
             } else if (key.matches(vaxis.Key.tab, .{})) {
-                if (form.completion) |completion| {
-                    if (completion.candidates.len == 1 and completion.candidates[0].is_directory) {
-                        try rememberBrowserPosition(form);
-                        try startPathJob(self, ctx, false);
-                    } else try choosePath(form);
-                } else try startPathJob(self, ctx, false);
+                const fetch = if (form.completion) |completion|
+                    completion.candidates.len == 1 and completion.candidates[0].is_directory
+                else
+                    true;
+                if (fetch) try startPathJob(self, ctx, false) else try choosePath(form);
             } else if (key.matches(vaxis.Key.enter, .{})) {
-                try rememberBrowserPosition(form);
-                var validate = true;
-                if (form.completion) |completion| {
-                    if (completion.candidates.len > 0 and form.completion_index > 0 and completion.candidates[(form.completion_index - 1) % completion.candidates.len].is_directory) {
-                        validate = false;
-                    }
-                }
-                try startPathJob(self, ctx, validate);
+                try startPathJob(self, ctx, !directory_selected);
             } else if (form.editing_path) {
                 try form.field.handleEvent(ctx, event);
-                form.generation += 1;
-                form.failure = null;
-                if (form.completion) |completion| (Paths{ .allocator = self.gpa }).freeCompletion(completion);
-                form.completion = null;
+                edited = true;
             }
         },
         .paste => |text| {
@@ -718,16 +696,19 @@ pub fn captureInstall(self: *Model, ctx: *vxfw.EventContext, event: vxfw.Event) 
             form.editing_path = true;
             try ctx.requestFocus(form.field.widget());
             try form.field.insertSliceAtCursor(text);
-            form.generation += 1;
-            if (form.completion) |completion| (Paths{ .allocator = self.gpa }).freeCompletion(completion);
-            form.completion = null;
+            edited = true;
         },
         .mouse => |mouse| {
-            if (mouse.button == .wheel_up or mouse.button == .wheel_down) {
-                try moveInstallSelection(form, mouse.button == .wheel_down);
-            } else return false;
+            if (mouse.button != .wheel_up and mouse.button != .wheel_down) return false;
+            try moveInstallSelection(form, mouse.button == .wheel_down);
         },
         else => return false,
+    }
+    if (edited) {
+        form.generation += 1;
+        form.failure = null;
+        if (form.completion) |completion| (Paths{ .allocator = self.gpa }).freeCompletion(completion);
+        form.completion = null;
     }
     ctx.consumeAndRedraw();
     return true;
@@ -1190,7 +1171,8 @@ pub fn captureSource(self: *Model, ctx: *vxfw.EventContext, event: vxfw.Event) !
                 ctx.consumeAndRedraw();
                 return true;
             }
-            if (commands.matches(key, .cancel_capture)) {
+            const activate = commands.matches(key, .confirm) or commands.matches(key, .mark);
+            if (commands.matches(key, .cancel_capture) or (activate and draft.selected == 4)) {
                 self.appimage_state.source_open = false;
                 self.appimage_state.source_draft = null;
                 draft.deinit(self.gpa);
@@ -1200,27 +1182,18 @@ pub fn captureSource(self: *Model, ctx: *vxfw.EventContext, event: vxfw.Event) !
                 if ((draft.selected == 1 and draft.update_type == .None) or (draft.selected == 2 and !draft.hosted()))
                     draft.selected = if (forward) draft.selected + 1 else draft.selected - 1;
                 if (draft.selected == 2 and !draft.hosted()) draft.selected = if (forward) 3 else 0;
-            } else if (draft.selected == 0 and (key.matches(vaxis.Key.left, .{}) or key.matches(vaxis.Key.right, .{}) or commands.matches(key, .confirm) or commands.matches(key, .mark))) {
+            } else if (draft.selected == 0 and (key.matches(vaxis.Key.left, .{}) or key.matches(vaxis.Key.right, .{}) or activate)) {
                 const value: usize = @backingInt(draft.update_type);
                 draft.update_type = @fromBackingInt(@intCast(if (key.matches(vaxis.Key.left, .{})) (value + 6) % 7 else (value + 1) % 7));
                 draft.error_text = null;
             } else if (draft.selected == 1) {
                 if (commands.matches(key, .confirm)) draft.selected = if (draft.hosted()) 2 else 3 else try draft.field.handleEvent(ctx, event);
                 draft.error_text = null;
-            } else if (commands.matches(key, .confirm) or commands.matches(key, .mark)) {
-                switch (draft.selected) {
-                    2 => draft.prerelease = !draft.prerelease,
-                    3 => {
-                        try startSourceSave(self, ctx);
-                    },
-                    4 => {
-                        self.appimage_state.source_open = false;
-                        self.appimage_state.source_draft = null;
-                        draft.deinit(self.gpa);
-                    },
-                    else => {},
-                }
-            }
+            } else if (activate) switch (draft.selected) {
+                2 => draft.prerelease = !draft.prerelease,
+                3 => try startSourceSave(self, ctx),
+                else => {},
+            };
         },
         .paste => |text| if (draft.selected == 1 and draft.save_job == null) {
             try draft.field.insertSliceAtCursor(text);
