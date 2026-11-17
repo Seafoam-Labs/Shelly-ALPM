@@ -1889,6 +1889,9 @@ test "transaction events keep successful rows when an AUR package fails" {
     const page = TransactionPage.new();
     _ = page.as(gobject.Object).refSink();
     defer page.as(gobject.Object).unref();
+    // The window paints the surface; the stock .background class here would
+    // cover the themed page with the desktop theme's window color.
+    try std.testing.expectEqual(@as(c_int, 0), gtk.Widget.hasCssClass(page.as(gtk.Widget), "background"));
     const arena = try std.heap.c_allocator.create(std.heap.ArenaAllocator);
     arena.* = std.heap.ArenaAllocator.init(std.heap.c_allocator);
     page.priv().arena = arena;
@@ -2328,3 +2331,4 @@ test "overall card freezes on failure and keeps completed rows" {
     try std.testing.expect(gtk.Widget.hasCssClass(p.phase_install.as(gtk.Widget), "err") != 0);
     try std.testing.expectEqualStrings("Failed", std.mem.span(gtk.Label.getLabel(p.overall_title)));
 }
+

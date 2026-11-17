@@ -256,4 +256,7 @@ test {
     _ = @import("services/fwupd_enums.zig");
     _ = @import("models/fwupd.zig");
     _ = @import("services/fwupd.zig");
+    _ = @import("g_objects/firmware_device_object.zig");
+    _ = @import("g_objects/firmware_release_object.zig");
+    _ = @import("pages/firmware_page.zig");
 }

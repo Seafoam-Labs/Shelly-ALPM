@@ -14,31 +14,448 @@
     <property name="spacing">0</property>
     <child>
       <object class="GtkBox">
-        <property name="orientation">vertical</property>
+        <property name="orientation">horizontal</property>
+        <property name="spacing">12</property>
         <style>
           <class name="page-head"/>
         </style>
         <child>
-          <object class="GtkLabel">
-            <property name="label" translatable="yes">Firmware</property>
-            <property name="xalign">0</property>
-            <property name="accessible-role">heading</property>
-            <accessibility>
-              <property name="level">1</property>
-            </accessibility>
-            <style>
-              <class name="title-2"/>
-              <class name="page-heading"/>
-            </style>
+          <object class="GtkBox">
+            <property name="orientation">vertical</property>
+            <property name="hexpand">true</property>
+            <child>
+              <object class="GtkLabel">
+                <property name="label" translatable="yes">Firmware</property>
+                <property name="xalign">0</property>
+                <property name="accessible-role">heading</property>
+                <accessibility>
+                  <property name="level">1</property>
+                </accessibility>
+                <style>
+                  <class name="title-2"/>
+                  <class name="page-heading"/>
+                </style>
+              </object>
+            </child>
+            <child>
+              <object class="GtkLabel" id="summary_label">
+                <property name="label" translatable="yes">Device firmware updates</property>
+                <property name="xalign">0</property>
+                <style>
+                  <class name="dim-label"/>
+                  <class name="page-subtitle"/>
+                </style>
+              </object>
+            </child>
           </object>
         </child>
         <child>
-          <object class="GtkLabel">
-            <property name="label" translatable="yes">Device firmware updates will appear here.</property>
+          <object class="GtkSpinner" id="header_spinner">
+            <property name="valign">center</property>
+            <property name="visible">false</property>
+          </object>
+        </child>
+        <child>
+          <object class="GtkButton" id="refresh_button">
+            <property name="valign">center</property>
+            <property name="tooltip-text" translatable="yes">Check devices again</property>
+            <signal name="clicked" handler="refresh_firmware" swapped="true"/>
+            <child>
+              <object class="GtkBox">
+                <property name="spacing">6</property>
+                <child>
+                  <object class="GtkImage">
+                    <property name="accessible-role">presentation</property>
+                    <property name="icon-name">view-refresh-symbolic</property>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkLabel">
+                    <property name="label" translatable="yes">Check Again</property>
+                  </object>
+                </child>
+              </object>
+            </child>
+          </object>
+        </child>
+      </object>
+    </child>
+    <child>
+      <object class="GtkBox" id="banner_box">
+        <property name="orientation">horizontal</property>
+        <property name="visible">false</property>
+        <property name="spacing">8</property>
+        <style>
+          <class name="toolbar-card"/>
+        </style>
+        <child>
+          <object class="GtkImage">
+            <property name="accessible-role">presentation</property>
+            <property name="icon-name">dialog-warning-symbolic</property>
+          </object>
+        </child>
+        <child>
+          <object class="GtkLabel" id="banner_label">
             <property name="xalign">0</property>
+            <property name="wrap">true</property>
+            <property name="hexpand">true</property>
+          </object>
+        </child>
+      </object>
+    </child>
+    <child>
+      <object class="GtkStack" id="page_stack">
+        <property name="vexpand">true</property>
+        <property name="transition-type">crossfade</property>
+        <child>
+          <object class="GtkBox" id="loading_page">
+            <property name="orientation">vertical</property>
+            <property name="spacing">12</property>
+            <property name="halign">center</property>
+            <property name="valign">center</property>
+            <child>
+              <object class="GtkSpinner" id="loading_spinner">
+                <property name="width-request">32</property>
+                <property name="height-request">32</property>
+              </object>
+            </child>
+            <child>
+              <object class="GtkLabel">
+                <property name="label" translatable="yes">Looking for devices…</property>
+                <style><class name="dim-label"/></style>
+              </object>
+            </child>
+          </object>
+        </child>
+        <child>
+          <object class="GtkBox" id="content_page">
+            <property name="orientation">horizontal</property>
+            <property name="spacing">12</property>
             <style>
-              <class name="dim-label"/>
+              <class name="page-body"/>
             </style>
+            <child>
+              <object class="GtkBox">
+                <property name="vexpand">true</property>
+                <style>
+                  <class name="updates-card"/>
+                </style>
+                <child>
+                  <!-- Inset viewport: row hover/selection paints stay square,
+                       so they must not reach the card's rounded corners. -->
+                  <object class="GtkScrolledWindow">
+                    <property name="width-request">320</property>
+                    <property name="vexpand">true</property>
+                    <property name="hscrollbar-policy">never</property>
+                    <property name="margin-start">8</property>
+                    <property name="margin-end">8</property>
+                    <property name="margin-top">8</property>
+                    <property name="margin-bottom">8</property>
+                    <child>
+                      <object class="GtkListView" id="device_list">
+                        <style>
+                          <class name="rich-list"/>
+                          <class name="firmware-list"/>
+                        </style>
+                      </object>
+                    </child>
+                  </object>
+                </child>
+              </object>
+            </child>
+            <child>
+              <object class="GtkStack" id="detail_stack">
+                <property name="hexpand">true</property>
+                <property name="vexpand">true</property>
+                <property name="transition-type">crossfade</property>
+                <child>
+                  <object class="GtkBox" id="detail_empty">
+                    <property name="orientation">vertical</property>
+                    <property name="spacing">10</property>
+                    <property name="halign">center</property>
+                    <property name="valign">center</property>
+                    <child>
+                      <object class="GtkImage">
+                        <property name="accessible-role">presentation</property>
+                        <property name="icon-name">firmware-symbolic</property>
+                        <property name="pixel-size">48</property>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkLabel">
+                        <property name="label" translatable="yes">Select a device to see its firmware releases</property>
+                        <style><class name="dim-label"/></style>
+                      </object>
+                    </child>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkBox" id="detail_loading">
+                    <property name="orientation">vertical</property>
+                    <property name="spacing">12</property>
+                    <property name="halign">center</property>
+                    <property name="valign">center</property>
+                    <child>
+                      <object class="GtkSpinner" id="detail_spinner">
+                        <property name="width-request">32</property>
+                        <property name="height-request">32</property>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkLabel">
+                        <property name="label" translatable="yes">Loading releases…</property>
+                        <style><class name="dim-label"/></style>
+                      </object>
+                    </child>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkBox" id="detail_page">
+                    <property name="orientation">vertical</property>
+                    <property name="spacing">10</property>
+                    <style>
+                      <class name="updates-card"/>
+                      <class name="firmware-detail"/>
+                    </style>
+                    <child>
+                      <object class="GtkLabel" id="detail_name">
+                        <property name="xalign">0</property>
+                        <property name="selectable">true</property>
+                        <property name="wrap">true</property>
+                        <property name="accessible-role">heading</property>
+                        <accessibility>
+                          <property name="level">2</property>
+                        </accessibility>
+                        <style><class name="detail-title"/></style>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkLabel" id="detail_vendor">
+                        <property name="xalign">0</property>
+                        <property name="selectable">true</property>
+                        <style><class name="dim-label"/></style>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkLabel" id="detail_summary">
+                        <property name="xalign">0</property>
+                        <property name="selectable">true</property>
+                        <property name="wrap">true</property>
+                      </object>
+                    </child>
+                    <child>
+                      <!-- Row gaps are per-row margins, not row-spacing: a hidden
+                           row takes its margins with it, so empty specs collapse. -->
+                      <object class="GtkGrid">
+                        <property name="column-spacing">16</property>
+                        <property name="row-spacing">0</property>
+                        <child>
+                          <object class="GtkLabel">
+                            <property name="label" translatable="yes">Current version</property>
+                            <property name="xalign">0</property>
+                            <style><class name="dim-label"/></style>
+                            <layout>
+                              <property name="column">0</property>
+                              <property name="row">0</property>
+                            </layout>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkLabel" id="detail_version">
+                            <property name="xalign">0</property>
+                            <property name="selectable">true</property>
+                            <style><class name="spec-value"/></style>
+                            <layout>
+                              <property name="column">1</property>
+                              <property name="row">0</property>
+                            </layout>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkLabel" id="detail_lowest_caption">
+                            <property name="margin-top">6</property>
+                            <property name="label" translatable="yes">Minimum version</property>
+                            <property name="xalign">0</property>
+                            <style><class name="dim-label"/></style>
+                            <layout>
+                              <property name="column">0</property>
+                              <property name="row">1</property>
+                            </layout>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkLabel" id="detail_version_lowest">
+                            <property name="margin-top">6</property>
+                            <property name="xalign">0</property>
+                            <property name="selectable">true</property>
+                            <layout>
+                              <property name="column">1</property>
+                              <property name="row">1</property>
+                            </layout>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkLabel" id="detail_latest_caption">
+                            <property name="margin-top">6</property>
+                            <property name="label" translatable="yes">Latest update</property>
+                            <property name="xalign">0</property>
+                            <style><class name="dim-label"/></style>
+                            <layout>
+                              <property name="column">0</property>
+                              <property name="row">2</property>
+                            </layout>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkLabel" id="detail_latest">
+                            <property name="margin-top">6</property>
+                            <property name="xalign">0</property>
+                            <property name="selectable">true</property>
+                            <style><class name="spec-value"/></style>
+                            <layout>
+                              <property name="column">1</property>
+                              <property name="row">2</property>
+                            </layout>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkLabel" id="detail_branch_caption">
+                            <property name="margin-top">6</property>
+                            <property name="label" translatable="yes">Branch</property>
+                            <property name="xalign">0</property>
+                            <style><class name="dim-label"/></style>
+                            <layout>
+                              <property name="column">0</property>
+                              <property name="row">3</property>
+                            </layout>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkLabel" id="detail_branch">
+                            <property name="margin-top">6</property>
+                            <property name="xalign">0</property>
+                            <layout>
+                              <property name="column">1</property>
+                              <property name="row">3</property>
+                            </layout>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkLabel" id="detail_flags">
+                        <property name="xalign">0</property>
+                        <property name="wrap">true</property>
+                        <style><class name="dim-label"/><class name="caption"/></style>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkLabel" id="detail_problems">
+                        <property name="xalign">0</property>
+                        <property name="wrap">true</property>
+                        <property name="visible">false</property>
+                        <style><class name="warning"/></style>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkLabel" id="detail_guids">
+                        <property name="xalign">0</property>
+                        <property name="wrap">true</property>
+                        <property name="selectable">true</property>
+                        <style><class name="dim-label"/><class name="caption"/></style>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkLabel" id="detail_warning">
+                        <property name="xalign">0</property>
+                        <property name="wrap">true</property>
+                        <property name="visible">false</property>
+                        <style><class name="error"/></style>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkLabel" id="detail_no_releases">
+                        <property name="label" translatable="yes">No releases available</property>
+                        <property name="xalign">0</property>
+                        <property name="visible">false</property>
+                        <style><class name="dim-label"/></style>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkScrolledWindow" id="release_scroll">
+                        <property name="vexpand">true</property>
+                        <property name="hscrollbar-policy">never</property>
+                        <property name="min-content-height">160</property>
+                        <child>
+                          <object class="GtkListView" id="release_list">
+                            <style>
+                              <class name="rich-list"/>
+                              <class name="firmware-list"/>
+                            </style>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+                  </object>
+                </child>
+              </object>
+            </child>
+          </object>
+        </child>
+        <child>
+          <object class="GtkBox" id="empty_page">
+            <property name="orientation">vertical</property>
+            <property name="spacing">10</property>
+            <property name="halign">center</property>
+            <property name="valign">center</property>
+            <child>
+              <object class="GtkImage">
+                <property name="accessible-role">presentation</property>
+                <property name="icon-name">firmware-symbolic</property>
+                <property name="pixel-size">48</property>
+              </object>
+            </child>
+            <child>
+              <object class="GtkLabel">
+                <property name="label" translatable="yes">No devices found</property>
+                <style><class name="title-3"/></style>
+              </object>
+            </child>
+            <child>
+              <object class="GtkLabel">
+                <property name="label" translatable="yes">Devices that support firmware updates will appear here.</property>
+                <style><class name="dim-label"/></style>
+              </object>
+            </child>
+          </object>
+        </child>
+        <child>
+          <object class="GtkBox" id="error_page">
+            <property name="orientation">vertical</property>
+            <property name="spacing">10</property>
+            <property name="halign">center</property>
+            <property name="valign">center</property>
+            <child>
+              <object class="GtkImage">
+                <property name="accessible-role">presentation</property>
+                <property name="icon-name">dialog-error-symbolic</property>
+                <property name="pixel-size">48</property>
+              </object>
+            </child>
+            <child>
+              <object class="GtkLabel" id="error_label">
+                <property name="label" translatable="yes">Could not load firmware devices.</property>
+                <property name="wrap">true</property>
+                <property name="justify">center</property>
+              </object>
+            </child>
+            <child>
+              <object class="GtkButton">
+                <property name="label" translatable="yes">Try Again</property>
+                <property name="halign">center</property>
+                <signal name="clicked" handler="refresh_firmware" swapped="true"/>
+              </object>
+            </child>
           </object>
         </child>
       </object>
