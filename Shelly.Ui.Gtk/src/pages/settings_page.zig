@@ -1822,6 +1822,21 @@ test "Firmware support installs fwupd without a backend stage" {
     );
 }
 
+test "Firmware is a selectable default page only while enabled" {
+    if (!features.builtWithFwupd) return error.SkipZigTest;
+
+    const entry = DefaultPageEntry{ .label = "Firmware", .value = .firmware };
+    const disabled = PageFilter{};
+    const enabled = PageFilter{ .firmware = true };
+
+    try std.testing.expect(!isPageEntryEnabled(entry, disabled));
+    try std.testing.expect(isPageEntryEnabled(entry, enabled));
+
+    const idx = defaultPageIndex(.firmware, enabled);
+    try std.testing.expectEqual(@as(?ShellyTabs, .firmware), pageEntryValue(idx, enabled));
+    try std.testing.expectEqualStrings("Firmware", pageEntryLabel(entry));
+}
+
 fn applyScheduleVisibility(p: *ShellySettingsPage.Private) void {
     const tray_enabled = gtk.Switch.getActive(p.tray_switch) != 0;
     if (!tray_enabled) {
