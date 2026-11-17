@@ -255,4 +255,5 @@ test {
     _ = @import("pages/transaction_page.zig");
     _ = @import("services/fwupd_enums.zig");
     _ = @import("models/fwupd.zig");
+    _ = @import("services/fwupd.zig");
 }

@@ -363,6 +363,32 @@ pub const Error = enum {
     }
 };
 
+/// Methods on the `org.freedesktop.fwupd` interface this client calls.
+/// (`GetAll` lives on `org.freedesktop.DBus.Properties` and is not listed.)
+pub const Method = enum {
+    get_devices,
+    get_upgrades,
+    get_releases,
+    get_remotes,
+    install,
+    update_metadata,
+    set_hints,
+    set_feature_flags,
+
+    pub fn wireName(self: Method) [:0]const u8 {
+        return switch (self) {
+            .get_devices => "GetDevices",
+            .get_upgrades => "GetUpgrades",
+            .get_releases => "GetReleases",
+            .get_remotes => "GetRemotes",
+            .install => "Install",
+            .update_metadata => "UpdateMetadata",
+            .set_hints => "SetHints",
+            .set_feature_flags => "SetFeatureFlags",
+        };
+    }
+};
+
 test "status decoder covers all 15 wire values and tolerates unknown ones" {
     const expected = [_]Status{
         .unknown,        .idle,         .loading,          .decompressing,
@@ -437,4 +463,21 @@ test "error names round-trip for all 22 wire values" {
     try std.testing.expect(Error.fromName("Bogus") == null);
     try std.testing.expect(Error.fromName("") == null);
     try std.testing.expect(Error.unknown.wireName() == null);
+}
+
+test "method wire names match the daemon interface" {
+    const expected = [_]struct { method: Method, name: [:0]const u8 }{
+        .{ .method = .get_devices, .name = "GetDevices" },
+        .{ .method = .get_upgrades, .name = "GetUpgrades" },
+        .{ .method = .get_releases, .name = "GetReleases" },
+        .{ .method = .get_remotes, .name = "GetRemotes" },
+        .{ .method = .install, .name = "Install" },
+        .{ .method = .update_metadata, .name = "UpdateMetadata" },
+        .{ .method = .set_hints, .name = "SetHints" },
+        .{ .method = .set_feature_flags, .name = "SetFeatureFlags" },
+    };
+    try std.testing.expectEqual(std.enums.values(Method).len, expected.len);
+    for (expected) |case| {
+        try std.testing.expectEqualStrings(case.name, case.method.wireName());
+    }
 }
