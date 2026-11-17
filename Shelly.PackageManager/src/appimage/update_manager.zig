@@ -408,10 +408,11 @@ pub const UpdateManager = struct {
             return false;
         }
 
-        const current_filename = try std.fmt.allocPrint(self.allocator, "{s}.AppImage", .{app_to_update.name});
-        defer self.allocator.free(current_filename);
-        const current_path = try std.fs.path.join(self.allocator, &.{ self.install_directory, current_filename });
-        defer self.allocator.free(current_path);
+        const legacy_filename = try std.fmt.allocPrint(self.allocator, "{s}.AppImage", .{app_to_update.name});
+        defer self.allocator.free(legacy_filename);
+        const legacy_path = try std.fs.path.join(self.allocator, &.{ self.install_directory, legacy_filename });
+        defer self.allocator.free(legacy_path);
+        const current_path = if (app_to_update.path.len > 0) app_to_update.path else legacy_path;
 
         const current_exists = std.Io.Dir.cwd().statFile(self.io, current_path, .{}) catch null;
         if (current_exists == null) {
@@ -484,6 +485,29 @@ pub const UpdateManager = struct {
         defer content.deinit();
         const new_metadata = content.metadata;
 
+        // Keep versions visible in the install directory. Use the release
+        // version selected by the update provider; sanitize it before building
+        // a filename because tags may contain slashes or other path characters.
+        const safe_name = try manager.cleanInvalidNames(app_to_update.name);
+        defer self.allocator.free(safe_name);
+        const safe_version = try manager.cleanInvalidNames(appimage_ptr.version);
+        defer self.allocator.free(safe_version);
+        const target_filename = if (safe_version.len > 0 and !std.mem.eql(u8, safe_version, "unknown"))
+            try std.fmt.allocPrint(self.allocator, "{s}-{s}.AppImage", .{ safe_name, safe_version })
+        else
+            try std.fmt.allocPrint(self.allocator, "{s}.AppImage", .{safe_name});
+        defer self.allocator.free(target_filename);
+        const target_path = try std.fs.path.join(self.allocator, &.{ self.install_directory, target_filename });
+        defer self.allocator.free(target_path);
+        const target_exists = std.Io.Dir.cwd().statFile(self.io, target_path, .{}) catch |err| switch (err) {
+            error.FileNotFound => null,
+            else => return err,
+        };
+        if (target_exists != null and !std.mem.eql(u8, target_path, current_path)) {
+            self.emitStatusFmt(.err, "Cannot install AppImage update because {s} already exists.", .{target_path});
+            return false;
+        }
+
         self.emitStatusFmt(
             .information,
             "Extracted update metadata: desktop name '{s}' -> '{s}', version '{s}' -> '{s}'.",
@@ -503,25 +527,28 @@ pub const UpdateManager = struct {
         self.emitStatusFmt(.information, "Backing up the current AppImage to {s}...", .{backup_path});
         std.Io.Dir.hardLink(.cwd(), current_path, .cwd(), backup_path, self.io, .{}) catch try manager.copyFile(current_path, backup_path);
 
-        manager.writeFileAtomically(download_path, current_path, "replacement") catch |err| {
+        manager.writeFileAtomically(download_path, target_path, "replacement") catch |err| {
             std.log.warn("Could not install the AppImage update for {0f}. {1s}\n\nTechnical details: {2s}", .{ diagnostics.safe(appimage_ptr.name), diagnostics.cause(err), @errorName(err) });
             self.emitStatusFmt(.err, "Could not install the AppImage update for {0f}. {1s}\n\nTechnical details: {2s}", .{ diagnostics.safe(appimage_ptr.name), diagnostics.cause(err), @errorName(err) });
             return false;
         };
-        manager.setExecutable(current_path) catch |err| {
+        manager.setExecutable(target_path) catch |err| {
             std.log.warn("Could not make the updated AppImage executable. {0s}\n\nTechnical details: {1s}", .{ diagnostics.cause(err), @errorName(err) });
             self.emitStatusFmt(.err, "Could not make the updated AppImage executable. {0s}\n\nTechnical details: {1s}", .{ diagnostics.cause(err), @errorName(err) });
             manager.writeFileAtomically(backup_path, current_path, "restore") catch {};
+            if (!std.mem.eql(u8, target_path, current_path)) std.Io.Dir.cwd().deleteFile(self.io, target_path) catch {};
             return false;
         };
         self.emitStatus(.information, "Replaced installed AppImage binary.");
 
         var updated_app = appimage_manager.AppImageManager.mergeMetadata(app_to_update, new_metadata, appimage_ptr.version);
-        updated_app.path = current_path;
-        var integration = manager.beginDesktopIntegration(updated_app, current_path, content.source_desktop_path, content.icon_source, &.{}) catch |err| {
+        updated_app.path = target_path;
+        const previous_paths: []const []const u8 = if (std.mem.eql(u8, target_path, current_path)) &.{} else &.{current_path};
+        var integration = manager.beginDesktopIntegration(updated_app, target_path, content.source_desktop_path, content.icon_source, previous_paths) catch |err| {
             std.log.warn("Could not refresh desktop integration for {0f}. {1s} Attempting to restore the previous version.\n\nTechnical details: {2s}", .{ diagnostics.safe(appimage_ptr.name), diagnostics.cause(err), @errorName(err) });
             self.emitStatusFmt(.err, "Could not refresh desktop integration for {0f}. {1s} Attempting to restore the previous version.\n\nTechnical details: {2s}", .{ diagnostics.safe(appimage_ptr.name), diagnostics.cause(err), @errorName(err) });
             manager.writeFileAtomically(backup_path, current_path, "restore") catch {};
+            if (!std.mem.eql(u8, target_path, current_path)) std.Io.Dir.cwd().deleteFile(self.io, target_path) catch {};
             return false;
         };
         defer integration.deinit();
@@ -530,9 +557,15 @@ pub const UpdateManager = struct {
             self.emitStatusFmt(.err, "Could not save updated AppImage metadata for {0f}. {1s} Attempting to restore the previous version.\n\nTechnical details: {2s}", .{ diagnostics.safe(appimage_ptr.name), diagnostics.cause(err), @errorName(err) });
             integration.rollback() catch |rollback_err| self.emitStatusFmt(.err, "Could not restore desktop integration for {0f} after the operation failed. {1s} Desktop entries or icons may need repair.\n\nTechnical details: {2s}", .{ diagnostics.safe(appimage_ptr.name), diagnostics.cause(rollback_err), @errorName(rollback_err) });
             manager.writeFileAtomically(backup_path, current_path, "restore") catch |restore_err| self.emitStatusFmt(.err, "Could not restore the previous AppImage for {0f} from the backup path. {1s} Check the installed file and backup before launching or retrying the update.\n\nTechnical details: {2s}", .{ diagnostics.safe(appimage_ptr.name), diagnostics.cause(restore_err), @errorName(restore_err) });
+            if (!std.mem.eql(u8, target_path, current_path)) std.Io.Dir.cwd().deleteFile(self.io, target_path) catch {};
             return false;
         };
         try integration.finish();
+        if (!std.mem.eql(u8, target_path, current_path)) {
+            std.Io.Dir.cwd().deleteFile(self.io, current_path) catch |err| {
+                self.emitStatusFmt(.warning, "Updated AppImage is ready, but the previous file remains at {s}: {s}.", .{ current_path, @errorName(err) });
+            };
+        }
         // Entries used to be named after the AppImage file. Refreshing the
         // integration under the name the application ships must not leave the
         // old entry behind, or the application appears in menus twice.
@@ -544,7 +577,7 @@ pub const UpdateManager = struct {
             self.emitStatusFmt(.warning, "Could not remove the backup for {0f} at the backup path. {1s} The backup remains on disk.\n\nTechnical details: {2s}", .{ diagnostics.safe(appimage_ptr.name), diagnostics.cause(err), @errorName(err) });
         };
 
-        self.emitStatusFmt(.success, "Updated AppImage {s} to {s}.", .{ app_to_update.name, updated_app.version });
+        self.emitStatusFmt(.success, "Updated AppImage {s} to {s} at {s}.", .{ app_to_update.name, updated_app.version, target_filename });
         return true;
     }
 
@@ -1125,8 +1158,8 @@ pub const UpdateManager = struct {
             return null;
         };
         defer request.deinit();
-        request.accept_encoding[@intFromEnum(std.http.ContentEncoding.gzip)] = false;
-        request.accept_encoding[@intFromEnum(std.http.ContentEncoding.deflate)] = false;
+        request.accept_encoding[@backingInt(std.http.ContentEncoding.gzip)] = false;
+        request.accept_encoding[@backingInt(std.http.ContentEncoding.deflate)] = false;
         request.sendBodiless() catch {
             self.emitStatus(.err, "Could not send the update request for the selected AppImage to the configured server.");
             return null;
@@ -1138,7 +1171,7 @@ pub const UpdateManager = struct {
             return null;
         };
         if (response.head.status.class() != .success) {
-            self.emitStatusFmt(.warning, "AppImage update provider returned HTTP {d}.", .{@intFromEnum(response.head.status)});
+            self.emitStatusFmt(.warning, "AppImage update provider returned HTTP {d}.", .{@backingInt(response.head.status)});
             return null;
         }
 
@@ -2671,7 +2704,7 @@ test "update: downloads real AppImage and returns true" {
     try std.testing.expectEqualStrings(app_name, apps[0].name);
     const expected_path = try std.fmt.allocPrint(
         std.testing.allocator,
-        "{s}/{s}.AppImage",
+        "{s}/{s}-continuous.AppImage",
         .{ dir_path, app_name },
     );
     defer std.testing.allocator.free(expected_path);
@@ -2880,13 +2913,16 @@ test "update: automated update commits despite cache refresh failure" {
     try std.testing.expectEqual(@as(usize, 1), apps.len);
     try std.testing.expectEqualStrings("New Name", apps[0].desktop_name);
     try std.testing.expectEqualStrings("2.0.0", apps[0].version);
-    try std.testing.expectEqualStrings(current_path, apps[0].path);
+    const versioned_path = try std.fs.path.join(std.testing.allocator, &.{ install_dir, "editor-2.0.0.AppImage" });
+    defer std.testing.allocator.free(versioned_path);
+    try std.testing.expectEqualStrings(versioned_path, apps[0].path);
+    try std.testing.expectError(error.FileNotFound, std.Io.Dir.cwd().statFile(std.testing.io, current_path, .{}));
 
     const desktop = try readUpdateFile(std.testing.allocator, std.testing.io, desktop_path);
     defer std.testing.allocator.free(desktop);
     try std.testing.expect(std.mem.indexOf(u8, desktop, "Name=New Name\n") != null);
     try std.testing.expect(std.mem.indexOf(u8, desktop, "Name=Old Name") == null);
-    const expected_exec = try std.fmt.allocPrint(std.testing.allocator, "Exec=\"{s}\" %U\n", .{current_path});
+    const expected_exec = try std.fmt.allocPrint(std.testing.allocator, "Exec=\"{s}\" %U\n", .{versioned_path});
     defer std.testing.allocator.free(expected_exec);
     try std.testing.expect(std.mem.indexOf(u8, desktop, expected_exec) != null);
     try std.testing.expect(capture.saw_cache_warning);
@@ -2948,7 +2984,7 @@ test "update follows a symlinked install directory" {
     try std.testing.expect(try um.update(&dto));
 
     // The replacement must land in the directory the symlink points to.
-    const resolved_path = try std.fs.path.join(std.testing.allocator, &.{ install_target, "Editor.AppImage" });
+    const resolved_path = try std.fs.path.join(std.testing.allocator, &.{ install_target, "editor-2.0.0.AppImage" });
     defer std.testing.allocator.free(resolved_path);
     const installed = try readUpdateFile(std.testing.allocator, std.testing.io, resolved_path);
     defer std.testing.allocator.free(installed);
@@ -2965,7 +3001,7 @@ test "update follows a symlinked install directory" {
     defer manager.freeAppImages(apps);
     try std.testing.expectEqual(@as(usize, 1), apps.len);
     try std.testing.expectEqualStrings("2.0.0", apps[0].version);
-    try std.testing.expectEqualStrings(current_path, apps[0].path);
+    try std.testing.expect(std.mem.endsWith(u8, apps[0].path, "/editor-2.0.0.AppImage"));
 }
 
 test "update: preserves GitHub provider configuration" {
@@ -3260,7 +3296,9 @@ test "update: preserves Exec= field codes" {
     defer std.testing.allocator.free(desktop_path);
     const desktop = try readUpdateFile(std.testing.allocator, std.testing.io, desktop_path);
     defer std.testing.allocator.free(desktop);
-    const expected_exec = try std.fmt.allocPrint(std.testing.allocator, "Exec=\"{s}\" %U\n", .{current_path});
+    const versioned_path = try std.fs.path.join(std.testing.allocator, &.{ install_dir, "editor-2.0.0.AppImage" });
+    defer std.testing.allocator.free(versioned_path);
+    const expected_exec = try std.fmt.allocPrint(std.testing.allocator, "Exec=\"{s}\" %U\n", .{versioned_path});
     defer std.testing.allocator.free(expected_exec);
     try std.testing.expect(std.mem.indexOf(u8, desktop, expected_exec) != null);
 }
@@ -3428,7 +3466,9 @@ test "update: no embedded desktop file uses fallback entry" {
     defer std.testing.allocator.free(desktop);
     // Fallback entry should use the logical app name and final installed path.
     try std.testing.expect(std.mem.indexOf(u8, desktop, "Name=Editor\n") != null);
-    const expected_exec = try std.fmt.allocPrint(std.testing.allocator, "Exec=\"{s}\"\n", .{current_path});
+    const versioned_path = try std.fs.path.join(std.testing.allocator, &.{ install_dir, "editor-2.0.0.AppImage" });
+    defer std.testing.allocator.free(versioned_path);
+    const expected_exec = try std.fmt.allocPrint(std.testing.allocator, "Exec=\"{s}\"\n", .{versioned_path});
     defer std.testing.allocator.free(expected_exec);
     try std.testing.expect(std.mem.indexOf(u8, desktop, expected_exec) != null);
 }
@@ -3520,6 +3560,10 @@ test "update: sync and automated update produce equivalent metadata" {
     defer update_env.deinit(std.testing.allocator);
 
     const app_name = "Editor";
+    const sync_versioned_path = try std.fs.path.join(std.testing.allocator, &.{ sync_env.install_dir, "Editor-1.0.0.AppImage" });
+    try std.Io.Dir.rename(.cwd(), sync_env.current_path, .cwd(), sync_versioned_path, std.testing.io);
+    std.testing.allocator.free(sync_env.current_path);
+    sync_env.current_path = sync_versioned_path;
 
     // Seed both databases with the same old record.
     try seedDb(std.testing.allocator, std.testing.io, sync_env.db_path, &.{
@@ -3554,6 +3598,12 @@ test "update: sync and automated update produce equivalent metadata" {
         .local_db_path = sync_env.db_path,
     };
     try std.testing.expect(try sync_manager.syncAppImageMeta(&.{app_name}));
+    const sync_apps_after = try sync_manager.getAppImagesFromLocalDb();
+    defer sync_manager.freeAppImages(sync_apps_after);
+    try std.testing.expectEqualStrings(sync_versioned_path, sync_apps_after[0].path);
+    const legacy_sync_path = try std.fs.path.join(std.testing.allocator, &.{ sync_env.install_dir, "Editor.AppImage" });
+    defer std.testing.allocator.free(legacy_sync_path);
+    try std.testing.expectError(error.FileNotFound, std.Io.Dir.cwd().statFile(std.testing.io, legacy_sync_path, .{}));
 
     // Run update against the update environment.
     var um = makeStagedUpdateManager(std.testing.allocator, update_env.install_dir, update_env.db_path, staged_path);
@@ -3613,14 +3663,14 @@ test "update: sync and automated update produce equivalent metadata" {
     // Both should reference their respective installed paths via Exec=.
     const sync_exec = try std.fmt.allocPrint(std.testing.allocator, "Exec=env \"WEBKIT_DISABLE_DMABUF_RENDERER=1\" \"{s}\" %U\n", .{sync_env.current_path});
     defer std.testing.allocator.free(sync_exec);
-    const update_exec = try std.fmt.allocPrint(std.testing.allocator, "Exec=env \"WEBKIT_DISABLE_DMABUF_RENDERER=1\" \"{s}\" %U\n", .{update_env.current_path});
+    const update_exec = try std.fmt.allocPrint(std.testing.allocator, "Exec=env \"WEBKIT_DISABLE_DMABUF_RENDERER=1\" \"{s}\" %U\n", .{update_apps[0].path});
     defer std.testing.allocator.free(update_exec);
     try std.testing.expect(std.mem.indexOf(u8, sync_desktop, sync_exec) != null);
     try std.testing.expect(std.mem.indexOf(u8, update_desktop, update_exec) != null);
 
     const sync_try_exec = try std.fmt.allocPrint(std.testing.allocator, "TryExec={s}\n", .{sync_env.current_path});
     defer std.testing.allocator.free(sync_try_exec);
-    const update_try_exec = try std.fmt.allocPrint(std.testing.allocator, "TryExec={s}\n", .{update_env.current_path});
+    const update_try_exec = try std.fmt.allocPrint(std.testing.allocator, "TryExec={s}\n", .{update_apps[0].path});
     defer std.testing.allocator.free(update_try_exec);
     try std.testing.expect(std.mem.indexOf(u8, sync_desktop, sync_try_exec) != null);
     try std.testing.expect(std.mem.indexOf(u8, update_desktop, update_try_exec) != null);
