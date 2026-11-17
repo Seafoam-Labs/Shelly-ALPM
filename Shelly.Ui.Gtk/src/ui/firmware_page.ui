@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface domain="shelly-ui">
+  <requires lib="gtk" version="4.0"/>
+  <template class="ShellyFirmwarePage" parent="GtkBox">
+    <property name="focusable">true</property>
+    <property name="focus-on-click">false</property>
+    <property name="accessible-role">group</property>
+    <accessibility>
+      <property name="label" translatable="yes">Firmware</property>
+    </accessibility>
+    <property name="orientation">vertical</property>
+    <property name="hexpand">true</property>
+    <property name="vexpand">true</property>
+    <property name="spacing">0</property>
+    <child>
+      <object class="GtkBox">
+        <property name="orientation">vertical</property>
+        <style>
+          <class name="page-head"/>
+        </style>
+        <child>
+          <object class="GtkLabel">
+            <property name="label" translatable="yes">Firmware</property>
+            <property name="xalign">0</property>
+            <property name="accessible-role">heading</property>
+            <accessibility>
+              <property name="level">1</property>
+            </accessibility>
+            <style>
+              <class name="title-2"/>
+              <class name="page-heading"/>
+            </style>
+          </object>
+        </child>
+        <child>
+          <object class="GtkLabel">
+            <property name="label" translatable="yes">Device firmware updates will appear here.</property>
+            <property name="xalign">0</property>
+            <style>
+              <class name="dim-label"/>
+            </style>
+          </object>
+        </child>
+      </object>
+    </child>
+  </template>
+</interface>

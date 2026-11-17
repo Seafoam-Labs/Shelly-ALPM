@@ -15,6 +15,7 @@ pub const PageTarget = enum {
     flatpak_install,
     flatpak_remove,
     updates,
+    firmware,
 };
 
 
@@ -157,6 +158,8 @@ pub fn parsePageTarget(value: []const u8) ?PageTarget {
         return .flatpak_remove;
     if (std.mem.eql(u8, value, "flatpak-update"))
         return .updates;
+    if (std.mem.eql(u8, value, "firmware"))
+        return .firmware;
 
     return null;
 }
@@ -171,6 +174,16 @@ fn stripQueryAndFragment(value: []const u8) []const u8 {
         end = @min(end, index);
 
     return value[0..end];
+}
+
+test "parse page targets" {
+    try std.testing.expectEqual(PageTarget.firmware, parsePageTarget("firmware").?);
+    try std.testing.expectEqual(PageTarget.updates, parsePageTarget("flatpak-update").?);
+    try std.testing.expectEqual(PageTarget.flatpak_install, parsePageTarget("flatpak-install").?);
+    try std.testing.expectEqual(PageTarget.flatpak_remove, parsePageTarget("flatpak-remove").?);
+    try std.testing.expect(parsePageTarget("Firmware") == null);
+    try std.testing.expect(parsePageTarget("") == null);
+    try std.testing.expect(parsePageTarget("unknown-page") == null);
 }
 
 test "extract appstream application ID" {

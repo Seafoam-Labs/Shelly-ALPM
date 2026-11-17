@@ -66,6 +66,15 @@ pub fn build(b: *std.Build) void {
         ) orelse false,
     );
     options.addOption(
+        bool,
+        "exclude_fwupd",
+        b.option(
+            bool,
+            "exclude-fwupd",
+            "Compile out the Firmware page and its settings row",
+        ) orelse false,
+    );
+    options.addOption(
         AurBackend,
         "aur_backend",
         b.option(
@@ -162,6 +171,7 @@ pub fn build(b: *std.Build) void {
     gresource.addFileInput(b.path("src/ui/search_page.ui"));
     gresource.addFileInput(b.path("src/ui/package_page.ui"));
     gresource.addFileInput(b.path("src/ui/update_page.ui"));
+    gresource.addFileInput(b.path("src/ui/firmware_page.ui"));
     gresource.addFileInput(b.path("src/dialog/ui/yn.ui"));
     gresource.addFileInput(b.path("src/dialog/ui/flatpak_remove.ui"));
     gresource.addFileInput(b.path("src/dialog/ui/multiselect.ui"));
