@@ -760,6 +760,92 @@ pub fn dedupeDeviceChanged(old: Device, new: Device) bool {
 }
 
 // ---------------------------------------------------------------------------
+// Install flow decisions
+// ---------------------------------------------------------------------------
+
+/// Pre-install dialog queue after the mandatory confirm step. The branch
+/// warning fires on the daemon's alternate-branch flag or an actual branch
+/// difference; an unset release branch never warns on its own.
+pub const InstallDialogs = struct {
+    branch_warning: bool,
+    fde_gate: bool,
+};
+
+pub fn installDialogs(device: Device, release: Release) InstallDialogs {
+    const alternate = release.trust_flags & enums.TrustFlags.is_alternate_branch != 0;
+    const branch_diff = release.branch.len > 0 and !std.mem.eql(u8, release.branch, device.branch);
+    return .{
+        .branch_warning = alternate or branch_diff,
+        .fde_gate = enums.DeviceFlags.has(device.flags, enums.DeviceFlags.affects_fde),
+    };
+}
+
+/// Post-install power prompt from the (refreshed) device flags. Shutdown wins
+/// over reboot when both are set.
+pub const PowerPrompt = enum { none, reboot, shutdown };
+
+pub fn powerPrompt(device_flags: u64) PowerPrompt {
+    if (enums.DeviceFlags.has(device_flags, enums.DeviceFlags.needs_shutdown)) return .shutdown;
+    if (enums.DeviceFlags.has(device_flags, enums.DeviceFlags.needs_reboot)) return .reboot;
+    return .none;
+}
+
+/// DeviceRequest dialog text: the daemon's `UpdateMessage` wins; otherwise the
+/// canned strings from fwupd-request.h 2.1.9 (note the mixed id prefixes: five
+/// ids carry `.request.`, three do not). Images are deferred to v2.
+pub fn requestText(request: Request) []const u8 {
+    if (request.update_message.len > 0) return request.update_message;
+    const id = request.appstream_id;
+    if (std.mem.eql(u8, id, "org.freedesktop.fwupd.request.remove-replug"))
+        return translations._("The update will continue when the device USB cable has been unplugged and then re-inserted.");
+    if (std.mem.eql(u8, id, "org.freedesktop.fwupd.request.press-unlock"))
+        return translations._("Press unlock on the device to continue the update process.");
+    if (std.mem.eql(u8, id, "org.freedesktop.fwupd.request.remove-usb-cable"))
+        return translations._("The update will continue when the device USB cable has been unplugged.");
+    if (std.mem.eql(u8, id, "org.freedesktop.fwupd.request.insert-usb-cable"))
+        return translations._("The update will continue when the device USB cable has been re-inserted.");
+    if (std.mem.eql(u8, id, "org.freedesktop.fwupd.request.do-not-power-off"))
+        return translations._("Do not turn off your computer or remove the AC adaptor until you are sure the update has completed.");
+    if (std.mem.eql(u8, id, "org.freedesktop.fwupd.replug-install"))
+        return translations._("Unplug and replug the device, to continue the update process.");
+    if (std.mem.eql(u8, id, "org.freedesktop.fwupd.replug-power"))
+        return translations._("The update will continue when the device power cable has been unplugged and then re-inserted.");
+    if (std.mem.eql(u8, id, "org.freedesktop.fwupd.restart-daemon"))
+        return translations._("Please restart the fwupd service.");
+    return translations._("The device needs your attention to continue the update.");
+}
+
+/// Ordered post-install dialogs: queued device requests first (actionable
+/// instructions such as replug), then the release `UpdateMessage`, then the
+/// reboot/shutdown consent prompt. Every step is optional.
+pub const FinishStep = union(enum) {
+    request: Request,
+    update_message: []const u8,
+    power: PowerPrompt,
+};
+
+pub fn finishSteps(
+    alloc: std.mem.Allocator,
+    device_flags: u64,
+    update_message: []const u8,
+    requests: []const Request,
+) std.mem.Allocator.Error![]const FinishStep {
+    var list: std.ArrayListUnmanaged(FinishStep) = .empty;
+    for (requests) |request| try list.append(alloc, .{ .request = request });
+    if (update_message.len > 0) try list.append(alloc, .{ .update_message = update_message });
+    const power = powerPrompt(device_flags);
+    if (power != .none) try list.append(alloc, .{ .power = power });
+    return list.items;
+}
+
+/// Flash progress fraction: `PercentageFull` (double, smoother) when present,
+/// else `Percentage`; both are 0-100 on the wire. Zero means "pulse".
+pub fn progressFraction(props: DaemonProps) f64 {
+    if (props.percentage_full > 0) return @min(props.percentage_full / 100.0, 1.0);
+    return @min(@as(f64, @floatFromInt(props.percentage)) / 100.0, 1.0);
+}
+
+// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
@@ -1243,4 +1329,98 @@ test "fwupd DeviceChanged dedupe drops only fully equal updates" {
     changed = old;
     changed.summary = "different summary";
     try testing.expect(dedupeDeviceChanged(old, changed));
+}
+
+test "fwupd install dialog queue follows branch and FDE rules" {
+    const device = Device{ .branch = "main", .flags = enums.DeviceFlags.updatable };
+    const plain = Release{ .version = "1.1", .branch = "main" };
+    try testing.expectEqual(InstallDialogs{ .branch_warning = false, .fde_gate = false }, installDialogs(device, plain));
+
+    // Alternate-branch flag warns even when the branch strings match.
+    const flagged = Release{ .trust_flags = enums.TrustFlags.is_alternate_branch, .branch = "main" };
+    try testing.expect(installDialogs(device, flagged).branch_warning);
+
+    // A real branch difference warns; an unset release branch does not.
+    const other_branch = Release{ .branch = "beta" };
+    try testing.expect(installDialogs(device, other_branch).branch_warning);
+    const unset_branch = Release{ .branch = "" };
+    try testing.expect(!installDialogs(device, unset_branch).branch_warning);
+
+    const fde_device = Device{ .flags = enums.DeviceFlags.updatable | enums.DeviceFlags.affects_fde };
+    try testing.expect(installDialogs(fde_device, plain).fde_gate);
+    try testing.expect(installDialogs(fde_device, other_branch).branch_warning);
+    try testing.expect(!installDialogs(device, plain).fde_gate);
+}
+
+test "fwupd power prompt prefers shutdown over reboot" {
+    try testing.expectEqual(PowerPrompt.none, powerPrompt(enums.DeviceFlags.updatable));
+    try testing.expectEqual(PowerPrompt.reboot, powerPrompt(enums.DeviceFlags.needs_reboot));
+    try testing.expectEqual(PowerPrompt.shutdown, powerPrompt(enums.DeviceFlags.needs_shutdown));
+    try testing.expectEqual(
+        PowerPrompt.shutdown,
+        powerPrompt(enums.DeviceFlags.needs_reboot | enums.DeviceFlags.needs_shutdown),
+    );
+}
+
+test "fwupd request text prefers UpdateMessage and covers all 8 canned ids" {
+    const custom = Request{ .appstream_id = "org.freedesktop.fwupd.request.remove-replug", .update_message = "Custom instruction" };
+    try testing.expectEqualStrings("Custom instruction", requestText(custom));
+
+    const cases = [_]struct { id: []const u8, text: []const u8 }{
+        .{ .id = "org.freedesktop.fwupd.request.remove-replug", .text = "The update will continue when the device USB cable has been unplugged and then re-inserted." },
+        .{ .id = "org.freedesktop.fwupd.request.press-unlock", .text = "Press unlock on the device to continue the update process." },
+        .{ .id = "org.freedesktop.fwupd.request.remove-usb-cable", .text = "The update will continue when the device USB cable has been unplugged." },
+        .{ .id = "org.freedesktop.fwupd.request.insert-usb-cable", .text = "The update will continue when the device USB cable has been re-inserted." },
+        .{ .id = "org.freedesktop.fwupd.request.do-not-power-off", .text = "Do not turn off your computer or remove the AC adaptor until you are sure the update has completed." },
+        .{ .id = "org.freedesktop.fwupd.replug-install", .text = "Unplug and replug the device, to continue the update process." },
+        .{ .id = "org.freedesktop.fwupd.replug-power", .text = "The update will continue when the device power cable has been unplugged and then re-inserted." },
+        .{ .id = "org.freedesktop.fwupd.restart-daemon", .text = "Please restart the fwupd service." },
+    };
+    for (cases) |case| {
+        try testing.expectEqualStrings(case.text, requestText(.{ .appstream_id = case.id }));
+    }
+    try testing.expectEqualStrings(
+        "The device needs your attention to continue the update.",
+        requestText(.{ .appstream_id = "org.freedesktop.fwupd.future-request" }),
+    );
+    try testing.expectEqualStrings("The device needs your attention to continue the update.", requestText(.{}));
+}
+
+test "fwupd finish steps order requests, update message and power prompt" {
+    var arena = testArena();
+    defer arena.deinit();
+    const alloc = arena.allocator();
+
+    const requests = [_]Request{
+        .{ .appstream_id = "org.freedesktop.fwupd.request.remove-replug", .kind = .post },
+        .{ .appstream_id = "org.freedesktop.fwupd.replug-power", .kind = .post },
+    };
+    const steps = try finishSteps(alloc, enums.DeviceFlags.needs_reboot, "Replug to finish", &requests);
+    try testing.expectEqual(@as(usize, 4), steps.len);
+    try testing.expectEqualStrings(requests[0].appstream_id, steps[0].request.appstream_id);
+    try testing.expectEqualStrings(requests[1].appstream_id, steps[1].request.appstream_id);
+    try testing.expectEqualStrings("Replug to finish", steps[2].update_message);
+    try testing.expectEqual(PowerPrompt.reboot, steps[3].power);
+
+    const minimal = try finishSteps(alloc, 0, "", &.{});
+    try testing.expectEqual(@as(usize, 0), minimal.len);
+
+    const message_only = try finishSteps(alloc, 0, "Done", &.{});
+    try testing.expectEqual(@as(usize, 1), message_only.len);
+    try testing.expectEqualStrings("Done", message_only[0].update_message);
+
+    const shutdown = try finishSteps(alloc, enums.DeviceFlags.needs_shutdown, "", &.{});
+    try testing.expectEqual(@as(usize, 1), shutdown.len);
+    try testing.expectEqual(PowerPrompt.shutdown, shutdown[0].power);
+}
+
+test "fwupd progress fraction prefers PercentageFull and clamps" {
+    try testing.expectEqual(@as(f64, 0), progressFraction(.{}));
+    try testing.expectEqual(@as(f64, 0.42), progressFraction(.{ .percentage = 42 }));
+    try testing.expectEqual(@as(f64, 0.425), progressFraction(.{ .percentage = 42, .percentage_full = 42.5 }));
+    // Full wins even when the integer percentage is ahead or zero.
+    try testing.expectEqual(@as(f64, 0.1), progressFraction(.{ .percentage = 90, .percentage_full = 10 }));
+    try testing.expectEqual(@as(f64, 1.0), progressFraction(.{ .percentage = 100, .percentage_full = 100 }));
+    try testing.expectEqual(@as(f64, 1.0), progressFraction(.{ .percentage_full = 150 }));
+    try testing.expectEqual(@as(f64, 1.0), progressFraction(.{ .percentage = 200 }));
 }

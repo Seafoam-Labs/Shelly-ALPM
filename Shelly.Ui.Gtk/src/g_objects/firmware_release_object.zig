@@ -21,6 +21,7 @@ pub const FirmwareReleaseObject = extern struct {
         update_message: [:0]const u8,
         branch: [:0]const u8,
         locations: []const []const u8,
+        uri: [:0]const u8,
         trust_flags: u64,
         urgency: enums.Urgency,
         size: u64,
@@ -51,6 +52,7 @@ pub const FirmwareReleaseObject = extern struct {
         p.update_message = "";
         p.branch = "";
         p.locations = &.{};
+        p.uri = "";
         p.trust_flags = 0;
         p.urgency = .unknown;
         p.size = 0;
@@ -69,6 +71,7 @@ pub const FirmwareReleaseObject = extern struct {
         p.update_message = allocator.dupeSentinel(u8, release.update_message, 0) catch "";
         p.branch = allocator.dupeSentinel(u8, release.branch, 0) catch "";
         p.locations = dupeStrv(allocator, release.locations) catch &.{};
+        p.uri = allocator.dupeSentinel(u8, release.uri, 0) catch "";
         p.trust_flags = release.trust_flags;
         p.urgency = release.urgency;
         p.size = release.size;
@@ -113,6 +116,11 @@ pub const FirmwareReleaseObject = extern struct {
 
     pub fn getLocations(self: *Self) []const []const u8 {
         return self.priv().locations;
+    }
+
+    /// Legacy single-URL key; `getLocations` wins when both are present.
+    pub fn getUri(self: *Self) [:0]const u8 {
+        return self.priv().uri;
     }
 
     pub fn getTrustFlags(self: *Self) u64 {

@@ -17,6 +17,12 @@ const support = @import("support.zig");
 const models = @import("../models/fwupd.zig");
 const enums = @import("../services/fwupd_enums.zig");
 const fwupd = @import("../services/fwupd.zig");
+const fwupd_download = @import("../services/fwupd_download.zig");
+const DBus = @import("../services/dbus.zig").DBus;
+const features = @import("../services/build_features.zig");
+const runtime = @import("../services/runtime.zig");
+const ConfirmDialog = @import("../dialog/page/yn_dialog.zig").ConfirmDialog;
+const ShellyWindow = @import("../shelly_window.zig").ShellyWindow;
 const DeviceObject = @import("../g_objects/firmware_device_object.zig").FirmwareDeviceObject;
 const ReleaseObject = @import("../g_objects/firmware_release_object.zig").FirmwareReleaseObject;
 const translations = @import("../helpers/translations.zig");
@@ -43,6 +49,9 @@ pub const FirmwarePage = extern struct {
         refresh_button: *gtk.Button,
         banner_box: *gtk.Box,
         banner_label: *gtk.Label,
+        progress_box: *gtk.Box,
+        progress_label: *gtk.Label,
+        progress_bar: *gtk.ProgressBar,
         page_stack: *gtk.Stack,
         loading_page: *gtk.Box,
         loading_spinner: *gtk.Spinner,
@@ -91,6 +100,11 @@ pub const FirmwarePage = extern struct {
         loaded: bool,
         loading: bool,
         updating_store: bool,
+        install: ?*InstallState,
+        dialog_active: bool,
+        deferred_reload: bool,
+        last_busy: bool,
+        dialog_queue: std.ArrayListUnmanaged(QueuedDialog),
         var offset: c_int = 0;
     };
 
@@ -129,6 +143,11 @@ pub const FirmwarePage = extern struct {
         p.loaded = false;
         p.loading = false;
         p.updating_store = false;
+        p.install = null;
+        p.dialog_active = false;
+        p.deferred_reload = false;
+        p.last_busy = false;
+        p.dialog_queue = .empty;
         // GObject private memory is zeroed, which is not a valid Client
         // (its arena needs the child allocator); assign the defaults.
         p.client = .{};
@@ -179,8 +198,10 @@ pub const FirmwarePage = extern struct {
         p.generation += 1;
         p.detail_generation += 1;
         // The client itself stays alive: in-flight workers still use it and
-        // the connection is the shared GDBus singleton.
-        p.backend.unsubscribeSignals();
+        // the connection is the shared GDBus singleton. While an install is in
+        // flight the signal subscription stays too, so the reboot prompt and
+        // post-install requests survive navigating away.
+        if (p.install == null) p.backend.unsubscribeSignals();
         clear_data(self);
     }
 
@@ -190,6 +211,7 @@ pub const FirmwarePage = extern struct {
         gio.ListStore.removeAll(p.list_store);
         gio.ListStore.removeAll(p.release_store);
         p.updating_store = false;
+        hide_progress(self);
         // Lifetime rule: objects reference arena strings, so empty the stores
         // before the arenas die.
         if (p.arena) |arena| {
@@ -374,7 +396,7 @@ pub const FirmwarePage = extern struct {
             gtk.Spinner.stop(p.header_spinner);
         }
         gtk.Widget.setVisible(p.header_spinner.as(gtk.Widget), @intFromBool(busy));
-        gtk.Widget.setSensitive(p.refresh_button.as(gtk.Widget), @intFromBool(!busy));
+        gtk.Widget.setSensitive(p.refresh_button.as(gtk.Widget), @intFromBool(!busy and !isBusy(p)));
         const child: *gtk.Widget = switch (state) {
             .Loading => p.loading_page.as(gtk.Widget),
             .Loaded => p.content_page.as(gtk.Widget),
@@ -780,8 +802,25 @@ pub const FirmwarePage = extern struct {
         }
     }
 
-    fn sig_device_request(_: ?*anyopaque, request: models.Request) void {
-        log.debug("Ignoring DeviceRequest '{s}'", .{request.appstream_id});
+    fn sig_device_request(user_data: ?*anyopaque, request: models.Request) void {
+        const self: *Self = @ptrCast(@alignCast(user_data.?));
+        const p = self.priv();
+        if (request.kind == .post) {
+            // Post-install requests drain after the install finishes; outside
+            // an install they belong to another client's flow.
+            if (p.install) |state| {
+                const alloc = state.arena.allocator();
+                const copy = copyRequest(alloc, request) catch return;
+                state.post_requests.append(alloc, copy) catch return;
+            } else {
+                log.debug("Ignoring post-install request outside an install: {s}", .{request.appstream_id});
+            }
+            return;
+        }
+        // Immediate (and unknown kinds): show now, or queue behind an open dialog.
+        if (!p.loaded and p.install == null) return;
+        enqueueRequest(self, request);
+        pumpDialogs(self);
     }
 
     fn sig_changed(user_data: ?*anyopaque) void {
@@ -789,6 +828,12 @@ pub const FirmwarePage = extern struct {
         const p = self.priv();
         if (!p.loaded) return;
         // Transient daemon went away or finished a job: full reconnect+reload.
+        // Mid-install the reload waits so the generation stays stable under
+        // the worker; the finish path refreshes anyway.
+        if (p.install != null) {
+            p.deferred_reload = true;
+            return;
+        }
         start_load(self);
     }
 
@@ -797,6 +842,8 @@ pub const FirmwarePage = extern struct {
         const p = self.priv();
         p.props = props;
         if (!p.loaded) return;
+        if (p.install != null) update_flash_progress(self);
+        update_busy_ui(self);
         // Problem text interpolates the system battery values.
         if (p.selected_id) |id| {
             if (findDeviceIndex(self, id)) |index| {
@@ -862,6 +909,746 @@ pub const FirmwarePage = extern struct {
         c_alloc.destroy(result.arena);
         c_alloc.free(result.device_id);
         c_alloc.destroy(result);
+        return 0;
+    }
+
+    // -----------------------------------------------------------------------
+    // Install flow: consent dialogs -> download -> flash -> finish
+    // -----------------------------------------------------------------------
+
+    const DialogStep = enum { confirm, branch, fde };
+
+    /// Snapshot of one install attempt. Owns an arena with the device/release
+    /// copies (the page arenas may be reset under the worker) and any post
+    /// requests collected while the install runs.
+    pub const InstallState = struct {
+        arena: std.heap.ArenaAllocator,
+        device: models.Device,
+        release: models.Release,
+        options: fwupd.InstallOptions,
+        step: DialogStep = .confirm,
+        generation: u64 = 0,
+        post_requests: std.ArrayListUnmanaged(models.Request) = .empty,
+    };
+
+    /// FIFO of page dialogs waiting for the lockout: device requests, info
+    /// notes (errors, UpdateMessage) and the power consent prompt. Strings are
+    /// c_allocator copies freed when the entry is shown.
+    const QueuedDialog = union(enum) {
+        request: models.Request,
+        info: struct { title: [:0]const u8, text: []const u8 },
+        power: struct { kind: models.PowerPrompt, capability: DBus.PowerCapability },
+    };
+
+    fn isBusy(p: *const Private) bool {
+        if (p.install != null) return true;
+        return switch (p.props.status) {
+            .idle, .unknown => false,
+            else => true,
+        };
+    }
+
+    fn update_busy_ui(self: *Self) void {
+        const p = self.priv();
+        const busy = isBusy(p);
+        gtk.Widget.setSensitive(p.refresh_button.as(gtk.Widget), @intFromBool(!busy and !p.loading));
+        if (busy != p.last_busy) {
+            p.last_busy = busy;
+            rebind_release_rows(self);
+        }
+    }
+
+    /// Re-run the factory bind for every release row (busy state changed).
+    /// Re-appending the same objects is the only way to rebind a ListView
+    /// without resetting its model; the held refs keep them alive across the
+    /// removeAll.
+    fn rebind_release_rows(self: *Self) void {
+        const p = self.priv();
+        const model = p.release_store.as(gio.ListModel);
+        const n = gio.ListModel.getNItems(model);
+        if (n == 0) return;
+        var items: std.ArrayListUnmanaged(*gobject.Object) = .empty;
+        defer items.deinit(c_alloc);
+        for (0..n) |i| {
+            const item = modelItem(model, @intCast(i)) orelse continue;
+            items.append(c_alloc, item) catch {
+                item.unref();
+                continue;
+            };
+        }
+        gio.ListStore.removeAll(p.release_store);
+        for (items.items) |item| {
+            gio.ListStore.append(p.release_store, item);
+            item.unref();
+        }
+    }
+
+    fn beginInstall(self: *Self, device_object: *DeviceObject, release_object: *ReleaseObject) void {
+        const p = self.priv();
+        if (p.install != null or p.dialog_active or isBusy(p)) return;
+        const classification = release_object.getClassification();
+        if (classification == .blocked or classification == .other) return;
+        // Problems gate: buttons are already disabled, guard again here.
+        if (device_object.getProblems() != 0) return;
+
+        const state = c_alloc.create(InstallState) catch return;
+        state.* = .{
+            .arena = std.heap.ArenaAllocator.init(c_alloc),
+            .device = undefined,
+            .release = undefined,
+            .options = fwupd.optionsForAction(classification, false),
+            .generation = p.generation,
+        };
+        const alloc = state.arena.allocator();
+        state.device = copyDevice(alloc, device_object) catch {
+            freeInstallState(state);
+            return;
+        };
+        state.release = copyRelease(alloc, release_object) catch {
+            freeInstallState(state);
+            return;
+        };
+        p.install = state;
+        update_busy_ui(self);
+        showInstallDialog(self);
+    }
+
+    fn copyDevice(alloc: std.mem.Allocator, object: *DeviceObject) std.mem.Allocator.Error!models.Device {
+        return .{
+            .device_id = try alloc.dupe(u8, object.getDeviceId()),
+            .name = try alloc.dupe(u8, object.getName()),
+            .vendor = try alloc.dupe(u8, object.getVendor()),
+            .version = try alloc.dupe(u8, object.getVersion()),
+            .branch = try alloc.dupe(u8, object.getBranch()),
+            .flags = object.getFlags(),
+            .problems = object.getProblems(),
+        };
+    }
+
+    fn copyRelease(alloc: std.mem.Allocator, object: *ReleaseObject) std.mem.Allocator.Error!models.Release {
+        const locations = try alloc.alloc([]const u8, object.getLocations().len);
+        for (locations, object.getLocations()) |*slot, s| slot.* = try alloc.dupe(u8, s);
+        return .{
+            .version = try alloc.dupe(u8, object.getVersion()),
+            .trust_flags = object.getTrustFlags(),
+            .locations = locations,
+            .uri = try alloc.dupe(u8, object.getUri()),
+            .remote_id = try alloc.dupe(u8, object.getRemoteId()),
+            .checksum = try alloc.dupe(u8, object.getChecksum()),
+            .filename = try alloc.dupe(u8, object.getFilename()),
+            .size = object.getSize(),
+            .install_duration = object.getInstallDuration(),
+            .branch = try alloc.dupe(u8, object.getBranch()),
+            .update_message = try alloc.dupe(u8, object.getUpdateMessage()),
+        };
+    }
+
+    fn copyRequest(alloc: std.mem.Allocator, request: models.Request) std.mem.Allocator.Error!models.Request {
+        return .{
+            .appstream_id = try alloc.dupe(u8, request.appstream_id),
+            .update_message = try alloc.dupe(u8, request.update_message),
+            .kind = request.kind,
+        };
+    }
+
+    fn freeInstallState(state: *InstallState) void {
+        state.arena.deinit();
+        c_alloc.destroy(state);
+    }
+
+    fn abortInstall(self: *Self) void {
+        const p = self.priv();
+        if (p.install) |state| {
+            p.install = null;
+            freeInstallState(state);
+        }
+        hide_progress(self);
+        update_busy_ui(self);
+        pumpDialogs(self);
+    }
+
+    /// Runtime placeholder substitution for translated templates: Zig fmt
+    /// needs comptime formats, but gettext strings must stay whole sentences
+    /// so translators can reorder placeholders. Only {s} is handled; format
+    /// numbers before passing them in. Templates are our own strings, never
+    /// daemon data.
+    fn fillTemplate(alloc: std.mem.Allocator, template: []const u8, args: []const []const u8) std.mem.Allocator.Error![]const u8 {
+        var out: std.ArrayListUnmanaged(u8) = .empty;
+        var rest = template;
+        var arg_i: usize = 0;
+        while (std.mem.indexOf(u8, rest, "{s}")) |i| {
+            try out.appendSlice(alloc, rest[0..i]);
+            if (arg_i < args.len) {
+                try out.appendSlice(alloc, args[arg_i]);
+                arg_i += 1;
+            }
+            rest = rest[i + "{s}".len ..];
+        }
+        try out.appendSlice(alloc, rest);
+        return out.items;
+    }
+
+    /// Escape daemon-supplied names before interpolating them into Pango
+    /// markup (precedent: pkg_build.zig).
+    fn escapeMarkup(alloc: std.mem.Allocator, text: []const u8) []const u8 {
+        const escaped = glib.markupEscapeText(@ptrCast(text.ptr), @intCast(text.len));
+        defer glib.free(escaped);
+        return alloc.dupe(u8, std.mem.span(escaped)) catch text;
+    }
+
+    fn showInstallDialog(self: *Self) void {
+        const p = self.priv();
+        const state = p.install orelse return;
+        const win = support.getWindow(ShellyWindow, self) orelse {
+            // Consent is mandatory; without a window there is no dialog.
+            abortInstall(self);
+            return;
+        };
+        const alloc = state.arena.allocator();
+        const classification = models.classifyRelease(state.device, state.release);
+        var dialog_title: [:0]const u8 = "";
+        var dialog: *ConfirmDialog = undefined;
+        switch (state.step) {
+            .confirm => {
+                const name = escapeMarkup(alloc, state.device.name);
+                const version = escapeMarkup(alloc, state.release.version);
+                const name_bold = alloc.print("<b>{s}</b>", .{name}) catch name;
+                const version_bold = alloc.print("<b>{s}</b>", .{version}) catch version;
+                const template: []const u8 = switch (classification) {
+                    .upgrade => translations._("Update {s} to version {s}?"),
+                    .downgrade => translations._("Downgrade {s} to version {s}?"),
+                    .reinstall => translations._("Reinstall {s} version {s}?"),
+                    else => "{s} {s}",
+                };
+                var body: std.ArrayListUnmanaged(u8) = .empty;
+                body.appendSlice(alloc, fillTemplate(alloc, template, &.{ name_bold, version_bold }) catch "") catch {};
+                body.appendSlice(alloc, "\n\n") catch {};
+                const usable = enums.DeviceFlags.has(state.device.flags, enums.DeviceFlags.usable_during_update);
+                body.appendSlice(alloc, if (usable)
+                    translations._("The device will remain usable for the duration of the update.")
+                else
+                    translations._("The device will be unavailable during this action.")) catch {};
+                if (state.release.size > 0) {
+                    var size_buf: [32]u8 = undefined;
+                    const size_text = size_helper.convert_null_term(&size_buf, @intCast(state.release.size));
+                    body.appendSlice(alloc, "\n") catch {};
+                    body.appendSlice(alloc, fillTemplate(alloc, translations._("Download size: {s}"), &.{size_text}) catch "") catch {};
+                }
+                if (state.release.install_duration > 0) {
+                    var duration_buf: [16]u8 = undefined;
+                    const duration_text = std.fmt.bufPrint(&duration_buf, "{d}", .{state.release.install_duration}) catch "0";
+                    body.appendSlice(alloc, "\n") catch {};
+                    body.appendSlice(alloc, fillTemplate(alloc, translations._("Estimated install time: {s} seconds"), &.{duration_text}) catch "") catch {};
+                }
+                const message = alloc.dupeSentinel(u8, body.items, 0) catch "";
+                dialog_title = switch (classification) {
+                    .upgrade => translations._("Update device"),
+                    .downgrade => translations._("Downgrade device"),
+                    .reinstall => translations._("Reinstall device"),
+                    else => translations._("Install firmware"),
+                };
+                dialog = ConfirmDialog.new(dialog_title, message, &on_install_dialog_response, self);
+                dialog.setMarkupMessage(message);
+                dialog.setButtons(releaseActionLabel(classification) orelse translations._("Confirm"), translations._("Cancel"));
+            },
+            .branch => {
+                dialog_title = translations._("Switch firmware branch?");
+                const message: [:0]const u8 = if (state.device.vendor.len > 0)
+                    alloc.dupeSentinel(u8, fillTemplate(alloc, translations._("This firmware is not supplied by {s}. Installing it may damage your hardware or void your warranty."), &.{state.device.vendor}) catch "", 0) catch ""
+                else
+                    translations._("This firmware comes from a different branch. Installing it may damage your hardware or void your warranty.");
+                dialog = ConfirmDialog.new(dialog_title, message, &on_install_dialog_response, self);
+                dialog.setButtons(translations._("Switch Branch"), translations._("Cancel"));
+            },
+            .fde => {
+                dialog_title = translations._("You may lose all your data without recovery keys");
+                dialog = ConfirmDialog.new(
+                    dialog_title,
+                    translations._("Updating this firmware may invalidate the secrets that unlock your encrypted drives. Make sure you have the recovery keys for all your encrypted drives before continuing."),
+                    &on_install_dialog_response,
+                    self,
+                );
+                dialog.setCheckLabel(translations._("I have recovery keys for all my encrypted drives"));
+                dialog.setButtons(translations._("Continue"), translations._("Cancel"));
+            },
+        }
+        p.dialog_active = true;
+        win.showLockoutNamed(dialog.as(gtk.Widget), dialog_title);
+    }
+
+    fn on_install_dialog_response(ctx: ?*anyopaque, confirmed: bool) void {
+        const self: *Self = @ptrCast(@alignCast(ctx.?));
+        const p = self.priv();
+        if (support.getWindow(ShellyWindow, self)) |win| win.hideLockout();
+        p.dialog_active = false;
+        const state = p.install orelse return;
+        if (!confirmed) {
+            abortInstall(self);
+            return;
+        }
+        const dialogs = models.installDialogs(state.device, state.release);
+        switch (state.step) {
+            .confirm => {
+                if (dialogs.branch_warning) {
+                    state.step = .branch;
+                    showInstallDialog(self);
+                } else if (dialogs.fde_gate) {
+                    state.step = .fde;
+                    showInstallDialog(self);
+                } else {
+                    startInstallWorker(self);
+                }
+            },
+            .branch => {
+                state.options.allow_branch_switch = true;
+                if (dialogs.fde_gate) {
+                    state.step = .fde;
+                    showInstallDialog(self);
+                } else {
+                    startInstallWorker(self);
+                }
+            },
+            .fde => startInstallWorker(self),
+        }
+    }
+
+    fn startInstallWorker(self: *Self) void {
+        const p = self.priv();
+        const state = p.install orelse return;
+        show_progress(self, translations._("Downloading…"));
+        // Immediate requests queued while the consent dialogs were up.
+        pumpDialogs(self);
+        _ = self.as(gobject.Object).ref();
+        const thread = std.Thread.spawn(.{}, install_worker, .{ self, state }) catch {
+            self.as(gobject.Object).unref();
+            p.install = null;
+            hide_progress(self);
+            freeInstallState(state);
+            update_busy_ui(self);
+            enqueueInfo(self, translations._("Failed to install firmware"), translations._("Could not start the installation"));
+            pumpDialogs(self);
+            return;
+        };
+        thread.detach();
+    }
+
+    pub const InstallOutcome = struct {
+        failure_text: ?[:0]const u8 = null,
+        fresh_device: ?models.Device = null,
+        capability: DBus.PowerCapability = .unknown,
+    };
+
+    pub const PowerProbe = *const fn (kind: models.PowerPrompt) DBus.PowerCapability;
+
+    pub const StageHooks = struct {
+        ctx: ?*anyopaque = null,
+        on_flash_start: ?*const fn (ctx: ?*anyopaque) void = null,
+    };
+
+    /// GTK-free worker body: download, Install(fd), then the post-install
+    /// double refresh (properties + device list) and an optional power
+    /// capability probe. The probe is injected so tests never touch logind.
+    pub fn runInstall(
+        backend: fwupd.Backend,
+        alloc: std.mem.Allocator,
+        io: std.Io,
+        env: *const std.process.Environ.Map,
+        state: *InstallState,
+        user_agent: []const u8,
+        progress: fwupd_download.Progress,
+        hooks: StageHooks,
+        probe: ?PowerProbe,
+    ) InstallOutcome {
+        const payload_path = fwupd_download.fetchPayload(backend, alloc, io, env, state.release, user_agent, progress) catch |err| {
+            return .{ .failure_text = installFailureText(err, backend.lastFailure()) };
+        };
+        if (hooks.on_flash_start) |f| f(hooks.ctx);
+        backend.install(alloc, state.device.device_id, payload_path, state.options) catch |err| {
+            return .{ .failure_text = installFailureText(err, backend.lastFailure()) };
+        };
+        var outcome: InstallOutcome = .{};
+        // Best-effort refresh: the daemon may have restarted (transient), and
+        // the device flags now carry NEEDS_REBOOT/NEEDS_SHUTDOWN.
+        _ = backend.connect(alloc) catch {};
+        if (backend.getDevices(alloc)) |devices| {
+            for (devices) |device| {
+                if (std.mem.eql(u8, device.device_id, state.device.device_id)) {
+                    outcome.fresh_device = device;
+                    break;
+                }
+            }
+        } else |_| {}
+        const flags = (outcome.fresh_device orelse state.device).flags;
+        const prompt = models.powerPrompt(flags);
+        if (prompt != .none) {
+            if (probe) |f| outcome.capability = f(prompt);
+        }
+        return outcome;
+    }
+
+    fn installFailureText(err: anyerror, failure: ?fwupd.Failure) [:0]const u8 {
+        switch (err) {
+            error.CallFailed, error.InvalidReply => {
+                if (failure) |f| return models.errorText(f.kind);
+                return models.errorText(.unknown);
+            },
+            error.BusUnavailable => return translations._("Could not reach the firmware service"),
+            error.RemoteNotFound => return translations._("The firmware source for this release is unavailable"),
+            error.NoPayloadLocation => return translations._("This release has no download location"),
+            error.ReleaseWithoutChecksums => return translations._("This release provides no checksums, so it cannot be verified"),
+            error.InvalidChecksum => return translations._("The release checksum is invalid"),
+            error.ChecksumMismatch => return translations._("The downloaded firmware failed verification"),
+            error.DownloadFailed => return translations._("The firmware download failed"),
+            error.FileFailed, error.FileOpenFailed, error.FdAppendFailed => return translations._("Could not access the firmware cache"),
+            else => return models.errorText(.unknown),
+        }
+    }
+
+    fn realPowerProbe(kind: models.PowerPrompt) DBus.PowerCapability {
+        var dbus = DBus{};
+        defer dbus.deinit();
+        return if (kind == .reboot) dbus.canReboot() else dbus.canPowerOff();
+    }
+
+    fn install_worker(page: *Self, state: *InstallState) void {
+        const alloc = state.arena.allocator();
+        var threaded: std.Io.Threaded = .init(alloc, .{});
+        defer threaded.deinit();
+        const backend = page.priv().backend;
+        const props = backend.props();
+        const user_agent = alloc.print("shelly/{f} fwupd/{s}", .{ features.version, props.daemon_version }) catch "shelly fwupd";
+        const outcome = runInstall(backend, alloc, threaded.io(), runtime.environ_map, state, user_agent, .{
+            .ctx = page,
+            .on_progress = &on_download_progress_worker,
+        }, .{
+            .ctx = page,
+            .on_flash_start = &on_flash_start_worker,
+        }, &realPowerProbe);
+        post_install_result(page, state, outcome);
+    }
+
+    const InstallResult = struct {
+        page: *Self,
+        state: *InstallState,
+        generation: u64,
+        outcome: InstallOutcome,
+    };
+
+    fn post_install_result(page: *Self, state: *InstallState, outcome: InstallOutcome) void {
+        const result = c_alloc.create(InstallResult) catch {
+            state.arena.deinit();
+            c_alloc.destroy(state);
+            page.as(gobject.Object).unref();
+            return;
+        };
+        result.* = .{ .page = page, .state = state, .generation = state.generation, .outcome = outcome };
+        _ = glib.idleAdd(&on_install_complete, result);
+    }
+
+    fn on_install_complete(data: ?*anyopaque) callconv(.c) c_int {
+        const result: *InstallResult = @ptrCast(@alignCast(data.?));
+        defer c_alloc.destroy(result);
+        const page = result.page;
+        defer page.as(gobject.Object).unref();
+        const p = page.priv();
+        const state = result.state;
+        p.install = null;
+        hide_progress(page);
+        update_busy_ui(page);
+
+        if (result.outcome.failure_text) |text| {
+            log.warn("Firmware install failed: {s}", .{text});
+            if (result.generation == p.generation and p.loaded and p.deferred_reload) start_load(page);
+            p.deferred_reload = false;
+            freeInstallState(state);
+            if (!p.loaded) p.backend.unsubscribeSignals();
+            enqueueInfo(page, translations._("Failed to install firmware"), text);
+            pumpDialogs(page);
+            return 0;
+        }
+
+        // Finish dialogs: post requests, UpdateMessage, power prompt. The
+        // state's strings are copied into the queue so it can be freed now.
+        const fresh = result.outcome.fresh_device orelse state.device;
+        const steps = models.finishSteps(state.arena.allocator(), fresh.flags, state.release.update_message, state.post_requests.items) catch &.{};
+        for (steps) |step| {
+            switch (step) {
+                .request => |request| enqueueRequest(page, request),
+                .update_message => |text| enqueueInfo(page, translations._("Update complete"), text),
+                .power => |kind| enqueuePower(page, kind, result.outcome.capability),
+            }
+        }
+        freeInstallState(state);
+        if (result.generation == p.generation and p.loaded) {
+            // Post-install refresh of badges, versions and release lists.
+            start_load(page);
+        } else if (!p.loaded) {
+            p.backend.unsubscribeSignals();
+        }
+        p.deferred_reload = false;
+        pumpDialogs(page);
+        return 0;
+    }
+
+    // -----------------------------------------------------------------------
+    // Dialog queue (requests, info notes, power prompt)
+    // -----------------------------------------------------------------------
+
+    fn enqueueRequest(self: *Self, request: models.Request) void {
+        const p = self.priv();
+        const copy = copyRequest(c_alloc, request) catch return;
+        p.dialog_queue.append(c_alloc, .{ .request = copy }) catch {
+            freeQueuedDialog(.{ .request = copy });
+        };
+    }
+
+    fn enqueueInfo(self: *Self, note_title: [:0]const u8, text: []const u8) void {
+        const p = self.priv();
+        const copy = c_alloc.dupe(u8, text) catch return;
+        p.dialog_queue.append(c_alloc, .{ .info = .{ .title = note_title, .text = copy } }) catch {
+            c_alloc.free(copy);
+        };
+    }
+
+    fn enqueuePower(self: *Self, kind: models.PowerPrompt, capability: DBus.PowerCapability) void {
+        const p = self.priv();
+        p.dialog_queue.append(c_alloc, .{ .power = .{ .kind = kind, .capability = capability } }) catch {};
+    }
+
+    fn freeQueuedDialog(entry: QueuedDialog) void {
+        switch (entry) {
+            .request => |request| {
+                c_alloc.free(request.appstream_id);
+                c_alloc.free(request.update_message);
+            },
+            .info => |info| c_alloc.free(info.text),
+            .power => {},
+        }
+    }
+
+    fn clearDialogQueue(self: *Self) void {
+        const p = self.priv();
+        for (p.dialog_queue.items) |entry| freeQueuedDialog(entry);
+        p.dialog_queue.clearRetainingCapacity();
+    }
+
+    fn pumpDialogs(self: *Self) void {
+        const p = self.priv();
+        if (p.dialog_active) return;
+        while (p.dialog_queue.items.len > 0) {
+            const entry = p.dialog_queue.orderedRemove(0);
+            defer freeQueuedDialog(entry);
+            // GTK copies the strings, so the entry can be freed right after
+            // the dialog is built. No window (headless tests): skip and drain.
+            if (showQueuedDialog(self, entry)) {
+                p.dialog_active = true;
+                return;
+            }
+        }
+    }
+
+    fn showQueuedDialog(self: *Self, entry: QueuedDialog) bool {
+        const win = support.getWindow(ShellyWindow, self) orelse return false;
+        switch (entry) {
+            .request => |request| {
+                const text = models.requestText(request);
+                const text_z = c_alloc.dupeSentinel(u8, text, 0) catch return false;
+                defer c_alloc.free(text_z);
+                const req_title = translations._("Device request");
+                const dialog = ConfirmDialog.new(req_title, text_z, &on_queue_response, self);
+                dialog.setCancelVisible(false);
+                dialog.setButtons(translations._("OK"), "");
+                win.showLockoutNamed(dialog.as(gtk.Widget), req_title);
+            },
+            .info => |info| {
+                const text_z = c_alloc.dupeSentinel(u8, info.text, 0) catch return false;
+                defer c_alloc.free(text_z);
+                const dialog = ConfirmDialog.new(info.title, text_z, &on_queue_response, self);
+                dialog.setCancelVisible(false);
+                dialog.setButtons(translations._("OK"), "");
+                win.showLockoutNamed(dialog.as(gtk.Widget), info.title);
+            },
+            .power => |power| {
+                const reboot = power.kind == .reboot;
+                const power_title: [:0]const u8 = if (reboot)
+                    translations._("Restart to complete this update")
+                else
+                    translations._("Shutdown to complete this update");
+                var body: std.ArrayListUnmanaged(u8) = .empty;
+                defer body.deinit(c_alloc);
+                body.appendSlice(c_alloc, if (reboot)
+                    translations._("You must restart your device to complete the update. Make sure your device is plugged in or fully charged. Save your files before you restart to avoid losing data.")
+                else
+                    translations._("You must shut down your device to complete the update. Save your files before you shut down to avoid losing data.")) catch return false;
+                if (!power.capability.buttonEnabled()) {
+                    body.appendSlice(c_alloc, "\n\n") catch return false;
+                    body.appendSlice(c_alloc, if (reboot)
+                        translations._("Automatic restart is not available on this system.")
+                    else
+                        translations._("Automatic shutdown is not available on this system.")) catch return false;
+                }
+                const body_z = c_alloc.dupeSentinel(u8, body.items, 0) catch return false;
+                defer c_alloc.free(body_z);
+                const ctx = c_alloc.create(PowerCtx) catch return false;
+                ctx.* = .{ .page = self, .kind = power.kind };
+                const dialog = ConfirmDialog.new(power_title, body_z, &on_power_response, ctx);
+                if (!power.capability.buttonEnabled()) dialog.setConfirmSensitive(false);
+                dialog.setButtons(
+                    if (reboot) translations._("Restart now") else translations._("Shut down now"),
+                    if (reboot) translations._("Restart later") else translations._("Shut down later"),
+                );
+                win.showLockoutNamed(dialog.as(gtk.Widget), power_title);
+            },
+        }
+        return true;
+    }
+
+    fn on_queue_response(ctx: ?*anyopaque, _: bool) void {
+        const self: *Self = @ptrCast(@alignCast(ctx.?));
+        const p = self.priv();
+        if (support.getWindow(ShellyWindow, self)) |win| win.hideLockout();
+        p.dialog_active = false;
+        pumpDialogs(self);
+    }
+
+    const PowerCtx = struct { page: *Self, kind: models.PowerPrompt };
+
+    fn on_power_response(ctx_ptr: ?*anyopaque, confirmed: bool) void {
+        const ctx: *PowerCtx = @ptrCast(@alignCast(ctx_ptr.?));
+        defer c_alloc.destroy(ctx);
+        const self = ctx.page;
+        const p = self.priv();
+        if (support.getWindow(ShellyWindow, self)) |win| win.hideLockout();
+        p.dialog_active = false;
+        if (!confirmed) {
+            pumpDialogs(self);
+            return;
+        }
+        _ = self.as(gobject.Object).ref();
+        const thread = std.Thread.spawn(.{}, power_worker, .{ self, ctx.kind }) catch {
+            self.as(gobject.Object).unref();
+            pumpDialogs(self);
+            return;
+        };
+        thread.detach();
+    }
+
+    fn power_worker(page: *Self, kind: models.PowerPrompt) void {
+        var dbus = DBus{};
+        defer dbus.deinit();
+        // Interactive polkit: from an active local session allow_active=yes
+        // executes without a prompt, so the now/later dialog was the consent.
+        const outcome = if (kind == .reboot) dbus.reboot(true) else dbus.powerOff(true);
+        const result = c_alloc.create(PowerResult) catch {
+            page.as(gobject.Object).unref();
+            return;
+        };
+        result.* = .{ .page = page, .kind = kind, .outcome = outcome };
+        _ = glib.idleAdd(&on_power_complete, result);
+    }
+
+    const PowerResult = struct { page: *Self, kind: models.PowerPrompt, outcome: DBus.PowerOutcome };
+
+    fn on_power_complete(data: ?*anyopaque) callconv(.c) c_int {
+        const result: *PowerResult = @ptrCast(@alignCast(data.?));
+        defer c_alloc.destroy(result);
+        const page = result.page;
+        defer page.as(gobject.Object).unref();
+        const reboot = result.kind == .reboot;
+        switch (result.outcome) {
+            .success => return 0, // the system is going down
+            .cancelled => enqueueInfo(
+                page,
+                if (reboot) translations._("Restart cancelled") else translations._("Shutdown cancelled"),
+                if (reboot)
+                    translations._("The restart was cancelled. Restart later to complete the firmware update.")
+                else
+                    translations._("The shutdown was cancelled. Shut down later to complete the firmware update."),
+            ),
+            .failed => enqueueInfo(
+                page,
+                if (reboot) translations._("Restart failed") else translations._("Shutdown failed"),
+                translations._("The system did not accept the request. You can try again later."),
+            ),
+        }
+        pumpDialogs(page);
+        return 0;
+    }
+
+    // -----------------------------------------------------------------------
+    // Progress UI (download stage from the counting writer, flash from props)
+    // -----------------------------------------------------------------------
+
+    fn show_progress(self: *Self, label: [:0]const u8) void {
+        const p = self.priv();
+        gtk.Label.setLabel(p.progress_label, label);
+        gtk.ProgressBar.setFraction(p.progress_bar, 0);
+        gtk.Widget.setVisible(p.progress_box.as(gtk.Widget), 1);
+    }
+
+    fn hide_progress(self: *Self) void {
+        gtk.Widget.setVisible(self.priv().progress_box.as(gtk.Widget), 0);
+    }
+
+    fn update_flash_progress(self: *Self) void {
+        const p = self.priv();
+        const fraction = models.progressFraction(p.props);
+        if (fraction > 0) {
+            gtk.ProgressBar.setFraction(p.progress_bar, fraction);
+        } else {
+            gtk.ProgressBar.pulse(p.progress_bar);
+        }
+        gtk.Label.setLabel(p.progress_label, models.statusText(p.props.status));
+    }
+
+    const DownloadProgress = struct { page: *Self, generation: u64, received: u64, total: u64 };
+
+    /// Worker-thread callback from the counting writer; marshals to the main
+    /// loop (throttling already happened in the download service).
+    fn on_download_progress_worker(ctx: ?*anyopaque, received: u64, total: u64) void {
+        const page: *Self = @ptrCast(@alignCast(ctx.?));
+        const progress = c_alloc.create(DownloadProgress) catch return;
+        progress.* = .{ .page = page, .generation = page.priv().generation, .received = received, .total = total };
+        _ = glib.idleAdd(&on_download_progress, progress);
+    }
+
+    fn on_download_progress(data: ?*anyopaque) callconv(.c) c_int {
+        const progress: *DownloadProgress = @ptrCast(@alignCast(data.?));
+        defer c_alloc.destroy(progress);
+        const page = progress.page;
+        const p = page.priv();
+        if (progress.generation != p.generation or p.install == null) return 0;
+        if (progress.total > 0) {
+            const pct = @min(100, progress.received * 100 / progress.total);
+            var buf: [96]u8 = undefined;
+            const text = std.fmt.bufPrintSentinel(&buf, "{s} {d}%", .{ translations._("Downloading…"), pct }, 0) catch translations._("Downloading…");
+            gtk.Label.setLabel(p.progress_label, text);
+            gtk.ProgressBar.setFraction(p.progress_bar, @as(f64, @floatFromInt(pct)) / 100.0);
+        } else {
+            gtk.Label.setLabel(p.progress_label, translations._("Downloading…"));
+            gtk.ProgressBar.pulse(p.progress_bar);
+        }
+        return 0;
+    }
+
+    const FlashCtx = struct { page: *Self, generation: u64 };
+
+    fn on_flash_start_worker(ctx: ?*anyopaque) void {
+        const page: *Self = @ptrCast(@alignCast(ctx.?));
+        const flash = c_alloc.create(FlashCtx) catch return;
+        flash.* = .{ .page = page, .generation = page.priv().generation };
+        _ = glib.idleAdd(&on_flash_start, flash);
+    }
+
+    fn on_flash_start(data: ?*anyopaque) callconv(.c) c_int {
+        const flash: *FlashCtx = @ptrCast(@alignCast(data.?));
+        defer c_alloc.destroy(flash);
+        const page = flash.page;
+        const p = page.priv();
+        if (flash.generation != p.generation or p.install == null) return 0;
+        gtk.Label.setLabel(p.progress_label, translations._("Installing firmware…"));
+        gtk.ProgressBar.setFraction(p.progress_bar, 0);
+        gtk.ProgressBar.pulse(p.progress_bar);
         return 0;
     }
 
@@ -1028,7 +1815,7 @@ pub const FirmwarePage = extern struct {
         const object = gobject.ext.cast(ReleaseObject, item_obj) orelse return;
         const child = gtk.ListItem.getChild(list_item) orelse return;
         const grid = gobject.ext.cast(gtk.Grid, child) orelse return;
-        bindReleaseRow(grid, object, self.priv().selected_problems);
+        bindReleaseRow(grid, object, self.priv().selected_problems, isBusy(self.priv()));
     }
 
     fn buildReleaseRow() *gtk.Grid {
@@ -1090,7 +1877,7 @@ pub const FirmwarePage = extern struct {
         return grid;
     }
 
-    fn bindReleaseRow(grid: *gtk.Grid, object: *ReleaseObject, device_problems: u64) void {
+    fn bindReleaseRow(grid: *gtk.Grid, object: *ReleaseObject, device_problems: u64, busy: bool) void {
         const version_box = gobject.ext.cast(gtk.Box, gtk.Grid.getChildAt(grid, 0, 0) orelse return) orelse return;
         const version = gobject.ext.cast(gtk.Label, gtk.Widget.getFirstChild(version_box.as(gtk.Widget)) orelse return) orelse return;
         const urgency = gobject.ext.cast(gtk.Label, gtk.Widget.getNextSibling(version.as(gtk.Widget)) orelse return) orelse return;
@@ -1129,6 +1916,9 @@ pub const FirmwarePage = extern struct {
         } else if (device_problems != 0) {
             gtk.Widget.setSensitive(action.as(gtk.Widget), 0);
             gtk.Widget.setTooltipText(action.as(gtk.Widget), translations._("Resolve the device problems before updating"));
+        } else if (busy) {
+            gtk.Widget.setSensitive(action.as(gtk.Widget), 0);
+            gtk.Widget.setTooltipText(action.as(gtk.Widget), translations._("An update is in progress"));
         } else {
             gtk.Widget.setSensitive(action.as(gtk.Widget), 1);
             gtk.Widget.setTooltipText(action.as(gtk.Widget), null);
@@ -1140,7 +1930,13 @@ pub const FirmwarePage = extern struct {
         const list_item: *gtk.ListItem = @ptrCast(@alignCast(li_ptr));
         const item_obj = gtk.ListItem.getItem(list_item) orelse return;
         const object = gobject.ext.cast(ReleaseObject, item_obj) orelse return;
-        log.debug("Firmware action requested for release {s}", .{object.getVersion()});
+        const page_ptr = gobject.Object.getData(button.as(gobject.Object), "page") orelse return;
+        const self: *Self = @ptrCast(@alignCast(page_ptr));
+        const p = self.priv();
+        const id = p.selected_id orelse return;
+        const index = findDeviceIndex(self, id) orelse return;
+        const device_object = deviceAt(self, index) orelse return;
+        beginInstall(self, device_object, object);
     }
 
     // -----------------------------------------------------------------------
@@ -1218,6 +2014,9 @@ pub const FirmwarePage = extern struct {
         .{ "refresh_button", @offsetOf(Private, "refresh_button") },
         .{ "banner_box", @offsetOf(Private, "banner_box") },
         .{ "banner_label", @offsetOf(Private, "banner_label") },
+        .{ "progress_box", @offsetOf(Private, "progress_box") },
+        .{ "progress_label", @offsetOf(Private, "progress_label") },
+        .{ "progress_bar", @offsetOf(Private, "progress_bar") },
         .{ "page_stack", @offsetOf(Private, "page_stack") },
         .{ "loading_page", @offsetOf(Private, "loading_page") },
         .{ "loading_spinner", @offsetOf(Private, "loading_spinner") },
@@ -1581,7 +2380,7 @@ test "firmware rows bind device and release data" {
     const release_grid = FirmwarePage.buildReleaseRow();
     _ = release_grid.as(gobject.Object).refSink();
     defer release_grid.as(gobject.Object).unref();
-    FirmwarePage.bindReleaseRow(release_grid, release_obj, 0);
+    FirmwarePage.bindReleaseRow(release_grid, release_obj, 0, false);
     const action = gobject.ext.cast(gtk.Button, gtk.Grid.getChildAt(release_grid, 3, 0).?).?;
     const release_version_box = gobject.ext.cast(gtk.Box, gtk.Grid.getChildAt(release_grid, 0, 0).?).?;
     const release_version = gobject.ext.cast(gtk.Label, gtk.Widget.getFirstChild(release_version_box.as(gtk.Widget)).?).?;
@@ -1596,16 +2395,20 @@ test "firmware rows bind device and release data" {
     try testing.expectEqual(@as(c_int, 1), gtk.Label.getSelectable(release_summary));
     try testing.expectEqualStrings("Update", std.mem.span(gtk.Button.getLabel(action).?));
     try testing.expectEqual(@as(c_int, 1), gtk.Widget.getSensitive(action.as(gtk.Widget)));
-    // Device problems gate the action button.
-    FirmwarePage.bindReleaseRow(release_grid, release_obj, 1);
+    FirmwarePage.bindReleaseRow(release_grid, release_obj, 0, true);
     try testing.expectEqual(@as(c_int, 0), gtk.Widget.getSensitive(action.as(gtk.Widget)));
+    // Device problems gate the action button.
+    FirmwarePage.bindReleaseRow(release_grid, release_obj, 1, false);
+    try testing.expectEqual(@as(c_int, 0), gtk.Widget.getSensitive(action.as(gtk.Widget)));
+    FirmwarePage.bindReleaseRow(release_grid, release_obj, 0, false);
+    try testing.expectEqual(@as(c_int, 1), gtk.Widget.getSensitive(action.as(gtk.Widget)));
 
     const blocked = ReleaseObject.new(alloc, device, .{
         .version = "0.9",
         .trust_flags = enums.TrustFlags.is_downgrade | enums.TrustFlags.blocked_version,
     });
     defer blocked.as(gobject.Object).unref();
-    FirmwarePage.bindReleaseRow(release_grid, blocked, 0);
+    FirmwarePage.bindReleaseRow(release_grid, blocked, 0, false);
     try testing.expectEqualStrings("Blocked", std.mem.span(gtk.Button.getLabel(action).?));
     try testing.expectEqual(@as(c_int, 0), gtk.Widget.getSensitive(action.as(gtk.Widget)));
 
@@ -1615,8 +2418,281 @@ test "firmware rows bind device and release data" {
         .trust_flags = enums.TrustFlags.is_upgrade | enums.TrustFlags.is_community,
     });
     defer community.as(gobject.Object).unref();
-    FirmwarePage.bindReleaseRow(release_grid, community, 0);
+    FirmwarePage.bindReleaseRow(release_grid, community, 0, false);
     try testing.expectEqual(@as(c_int, 0), gtk.Widget.getVisible(urgency.as(gtk.Widget)));
     try testing.expectEqual(@as(c_int, 1), gtk.Widget.getVisible(release_badges.as(gtk.Widget)));
     try testing.expectEqualStrings("Community supported", std.mem.span(gtk.Label.getLabel(release_badges)));
+}
+
+test "firmware install flow runs download, install and finish refresh against the fake backend" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+    var threaded: std.Io.Threaded = .init(testing.allocator, .{});
+    defer threaded.deinit();
+    var map: std.process.Environ.Map = .init(testing.allocator);
+    defer map.deinit();
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    const payload = "install flow payload";
+    try tmp.dir.writeFile(testing.io, .{ .sub_path = "fw.cab", .data = payload });
+    var digest: [32]u8 = undefined;
+    std.crypto.hash.sha2.Sha256.hash(payload, &digest, .{});
+    const hex = std.fmt.bytesToHex(digest, .lower);
+    const location = try alloc.print("file://{s}/fw.cab", .{try std.fmt.allocPrint(alloc, ".zig-cache/tmp/{s}", .{tmp.sub_path})});
+
+    var fake = fwupd.FakeBackend{
+        .remotes = &.{.{ .remote_id = "dir", .kind = .directory }},
+        .devices = &.{.{
+            .device_id = "dev1",
+            .name = "Device",
+            .version = "1.1",
+            .flags = enums.DeviceFlags.updatable | enums.DeviceFlags.needs_reboot,
+        }},
+        .daemon_props = .{ .daemon_version = "2.1.10", .status = .idle },
+    };
+    const state = try testing.allocator.create(FirmwarePage.InstallState);
+    defer testing.allocator.destroy(state);
+    state.* = .{
+        .arena = std.heap.ArenaAllocator.init(testing.allocator),
+        .device = .{ .device_id = "dev1", .name = "Device", .version = "1.0", .flags = enums.DeviceFlags.updatable },
+        .release = .{
+            .version = "1.1",
+            .trust_flags = enums.TrustFlags.is_upgrade,
+            .remote_id = "dir",
+            .locations = &.{location},
+            .checksum = &hex,
+            .update_message = "Replug to finish",
+        },
+        .options = fwupd.optionsForAction(.upgrade, false),
+    };
+    defer state.arena.deinit();
+    try state.post_requests.append(state.arena.allocator(), .{ .appstream_id = "org.freedesktop.fwupd.request.remove-replug", .kind = .post });
+
+    var flash_calls: usize = 0;
+    const hooks = FirmwarePage.StageHooks{
+        .ctx = &flash_calls,
+        .on_flash_start = struct {
+            fn f(ctx: ?*anyopaque) void {
+                const count: *usize = @ptrCast(@alignCast(ctx.?));
+                count.* += 1;
+            }
+        }.f,
+    };
+    const outcome = FirmwarePage.runInstall(fake.backend(), alloc, threaded.io(), &map, state, "shelly/test", .{}, hooks, null);
+
+    try testing.expect(outcome.failure_text == null);
+    try testing.expectEqual(@as(usize, 1), flash_calls);
+    try testing.expectEqual(@as(usize, 1), fake.install_call_count);
+    try testing.expectEqualStrings("dev1", fake.install_calls[0].device_id);
+    try testing.expect(std.mem.endsWith(u8, fake.install_calls[0].payload_path, "/fw.cab"));
+    try testing.expect(!fake.install_calls[0].options.allow_older);
+    // Finish refresh found the device with its post-install flags.
+    try testing.expect(outcome.fresh_device != null);
+    try testing.expectEqualStrings("1.1", outcome.fresh_device.?.version);
+    try testing.expectEqual(models.PowerPrompt.reboot, models.powerPrompt(outcome.fresh_device.?.flags));
+    // No probe injected: capability stays unknown, never touches logind.
+    try testing.expectEqual(DBus.PowerCapability.unknown, outcome.capability);
+
+    // Finish order: post request, UpdateMessage, reboot prompt.
+    const steps = try models.finishSteps(alloc, outcome.fresh_device.?.flags, state.release.update_message, state.post_requests.items);
+    try testing.expectEqual(@as(usize, 3), steps.len);
+    try testing.expectEqualStrings("org.freedesktop.fwupd.request.remove-replug", steps[0].request.appstream_id);
+    try testing.expectEqualStrings("Replug to finish", steps[1].update_message);
+    try testing.expectEqual(models.PowerPrompt.reboot, steps[2].power);
+}
+
+test "firmware install flow surfaces friendly failure text" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+    var threaded: std.Io.Threaded = .init(testing.allocator, .{});
+    defer threaded.deinit();
+    var map: std.process.Environ.Map = .init(testing.allocator);
+    defer map.deinit();
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    var fake = fwupd.FakeBackend{
+        .remotes = &.{
+            .{ .remote_id = "lvfs", .kind = .download },
+            .{ .remote_id = "dir", .kind = .directory },
+        },
+    };
+    const state = try testing.allocator.create(FirmwarePage.InstallState);
+    defer testing.allocator.destroy(state);
+    state.* = .{
+        .arena = std.heap.ArenaAllocator.init(testing.allocator),
+        .device = .{ .device_id = "dev1" },
+        .release = .{ .version = "1.1", .remote_id = "lvfs", .locations = &.{"https://cdn.example/fw.cab"} },
+        .options = .{},
+    };
+    defer state.arena.deinit();
+
+    // No checksums: the download layer refuses before any HTTP request.
+    const no_sum = FirmwarePage.runInstall(fake.backend(), alloc, threaded.io(), &map, state, "shelly/test", .{}, .{}, null);
+    try testing.expectEqualStrings("This release provides no checksums, so it cannot be verified", no_sum.failure_text.?);
+    try testing.expectEqual(@as(usize, 0), fake.install_call_count);
+
+    // A local payload downloads fine; the fwupd install error maps to text.
+    const payload = "local payload";
+    try tmp.dir.writeFile(testing.io, .{ .sub_path = "fw.cab", .data = payload });
+    var digest: [32]u8 = undefined;
+    std.crypto.hash.sha2.Sha256.hash(payload, &digest, .{});
+    const hex = std.fmt.bytesToHex(digest, .lower);
+    const location = try alloc.print("file://{s}/fw.cab", .{try std.fmt.allocPrint(alloc, ".zig-cache/tmp/{s}", .{tmp.sub_path})});
+    state.release.remote_id = "dir";
+    state.release.locations = &.{location};
+    state.release.checksum = &hex;
+    fake.install_error = .auth_failed;
+    const denied = FirmwarePage.runInstall(fake.backend(), alloc, threaded.io(), &map, state, "shelly/test", .{}, .{}, null);
+    try testing.expectEqualStrings(models.errorText(.auth_failed), denied.failure_text.?);
+    // The fake records successful installs only; the failure is inspectable.
+    try testing.expectEqual(enums.Error.auth_failed, fake.failure.?.kind);
+}
+
+test "firmware install result queues finish dialogs and frees the state" {
+    try gtk_test.requireDisplay();
+    const page = FirmwarePage.new();
+    _ = page.as(gobject.Object).refSink();
+    defer page.as(gobject.Object).unref();
+    const p = page.priv();
+    var fake = fwupd.FakeBackend{};
+    p.backend = fake.backend();
+    p.generation = 7;
+    p.loaded = true;
+    // Hold the queue so the entries can be inspected; no window is attached,
+    // so pumping would drain them anyway.
+    p.dialog_active = true;
+    defer {
+        p.dialog_active = false;
+        FirmwarePage.clearDialogQueue(page);
+        p.generation += 1;
+        p.loaded = false;
+        FirmwarePage.setSelectedId(page, null);
+        FirmwarePage.clear_data(page);
+    }
+
+    const state = try c_alloc.create(FirmwarePage.InstallState);
+    state.* = .{
+        .arena = std.heap.ArenaAllocator.init(testing.allocator),
+        .device = .{ .device_id = "dev1", .flags = enums.DeviceFlags.updatable },
+        .release = .{ .version = "1.1", .update_message = "Replug to finish" },
+        .options = .{},
+        .generation = 6, // stale: no reload may start under the test
+    };
+    try state.post_requests.append(state.arena.allocator(), .{ .appstream_id = "org.freedesktop.fwupd.request.remove-replug", .kind = .post });
+    const result = try c_alloc.create(FirmwarePage.InstallResult);
+    result.* = .{
+        .page = page,
+        .state = state,
+        .generation = 6,
+        .outcome = .{
+            .fresh_device = .{ .device_id = "dev1", .flags = enums.DeviceFlags.updatable | enums.DeviceFlags.needs_reboot },
+            .capability = .yes,
+        },
+    };
+    // The handler drops the worker's page ref; balance the direct call.
+    _ = page.as(gobject.Object).ref();
+    try testing.expectEqual(@as(c_int, 0), FirmwarePage.on_install_complete(result));
+    try testing.expect(p.install == null);
+    try testing.expectEqual(@as(usize, 3), p.dialog_queue.items.len);
+    try testing.expectEqualStrings("org.freedesktop.fwupd.request.remove-replug", p.dialog_queue.items[0].request.appstream_id);
+    try testing.expectEqualStrings("Replug to finish", p.dialog_queue.items[1].info.text);
+    try testing.expectEqual(models.PowerPrompt.reboot, p.dialog_queue.items[2].power.kind);
+    try testing.expectEqual(DBus.PowerCapability.yes, p.dialog_queue.items[2].power.capability);
+    try testing.expectEqual(@as(c_int, 0), gtk.Widget.getVisible(p.progress_box.as(gtk.Widget)));
+}
+
+test "firmware install failure result queues the error note and frees the state" {
+    try gtk_test.requireDisplay();
+    const page = FirmwarePage.new();
+    _ = page.as(gobject.Object).refSink();
+    defer page.as(gobject.Object).unref();
+    const p = page.priv();
+    var fake = fwupd.FakeBackend{};
+    p.backend = fake.backend();
+    p.generation = 7;
+    p.loaded = true;
+    p.dialog_active = true;
+    defer {
+        p.dialog_active = false;
+        FirmwarePage.clearDialogQueue(page);
+        p.generation += 1;
+        p.loaded = false;
+        FirmwarePage.setSelectedId(page, null);
+        FirmwarePage.clear_data(page);
+    }
+
+    const state = try c_alloc.create(FirmwarePage.InstallState);
+    state.* = .{
+        .arena = std.heap.ArenaAllocator.init(testing.allocator),
+        .device = .{ .device_id = "dev1" },
+        .release = .{ .version = "1.1" },
+        .options = .{},
+        .generation = 7,
+    };
+    const result = try c_alloc.create(FirmwarePage.InstallResult);
+    result.* = .{
+        .page = page,
+        .state = state,
+        .generation = 7,
+        .outcome = .{ .failure_text = models.errorText(.write) },
+    };
+    // The handler drops the worker's page ref; balance the direct call.
+    _ = page.as(gobject.Object).ref();
+    try testing.expectEqual(@as(c_int, 0), FirmwarePage.on_install_complete(result));
+    try testing.expect(p.install == null);
+    try testing.expectEqual(@as(usize, 1), p.dialog_queue.items.len);
+    try testing.expectEqualStrings("Failed to install firmware", p.dialog_queue.items[0].info.title);
+    try testing.expectEqualStrings(models.errorText(.write), p.dialog_queue.items[0].info.text);
+}
+
+test "firmware beginInstall guards problems, blocked releases and busy state" {
+    try gtk_test.requireDisplay();
+    const page = FirmwarePage.new();
+    _ = page.as(gobject.Object).refSink();
+    defer page.as(gobject.Object).unref();
+    const p = page.priv();
+    var fake = fwupd.FakeBackend{};
+    p.backend = fake.backend();
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+    defer {
+        FirmwarePage.clearDialogQueue(page);
+        FirmwarePage.setSelectedId(page, null);
+        FirmwarePage.clear_data(page);
+    }
+
+    const device = models.Device{ .device_id = "dev1", .name = "Device", .version = "1.0", .flags = enums.DeviceFlags.updatable };
+    const device_obj = DeviceObject.new(alloc, device, .{}, 0);
+    defer device_obj.as(gobject.Object).unref();
+    const upgrade = ReleaseObject.new(alloc, device, .{ .version = "1.1", .trust_flags = enums.TrustFlags.is_upgrade });
+    defer upgrade.as(gobject.Object).unref();
+
+    // Problems gate the install even if a click gets through.
+    const problem_obj = DeviceObject.new(alloc, .{ .device_id = "dev2", .problems = 1, .flags = enums.DeviceFlags.updatable }, .{}, 1);
+    defer problem_obj.as(gobject.Object).unref();
+    FirmwarePage.beginInstall(page, problem_obj, upgrade);
+    try testing.expect(p.install == null);
+
+    // Blocked releases never start.
+    const blocked = ReleaseObject.new(alloc, device, .{ .version = "0.9", .trust_flags = enums.TrustFlags.blocked_version });
+    defer blocked.as(gobject.Object).unref();
+    FirmwarePage.beginInstall(page, device_obj, blocked);
+    try testing.expect(p.install == null);
+
+    // Busy daemon status gates the install.
+    p.props = .{ .status = .device_write };
+    FirmwarePage.beginInstall(page, device_obj, upgrade);
+    try testing.expect(p.install == null);
+    p.props = .{};
+
+    // Without a window the mandatory consent dialog cannot show, so the
+    // attempt aborts cleanly instead of installing without consent.
+    FirmwarePage.beginInstall(page, device_obj, upgrade);
+    try testing.expect(p.install == null);
+    try testing.expectEqual(@as(usize, 0), p.dialog_queue.items.len);
 }

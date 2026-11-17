@@ -57,6 +57,17 @@ pub const InstallOptions = struct {
     allow_branch_switch: bool = false,
 };
 
+/// Options per release classification: downgrades need `allow-older`,
+/// reinstalls `allow-reinstall`; the branch-switch flag is added only after the
+/// user accepts the branch warning.
+pub fn optionsForAction(classification: models.Classification, branch_switch: bool) InstallOptions {
+    return .{
+        .allow_older = classification == .downgrade,
+        .allow_reinstall = classification == .reinstall,
+        .allow_branch_switch = branch_switch,
+    };
+}
+
 /// Main-loop signal callbacks. Structs passed to callbacks are only valid for
 /// the duration of the call (see module comment).
 pub const SignalCallbacks = struct {
@@ -953,6 +964,25 @@ test "fwupd service install options dict carries reason, filename and only reque
         defer flag.unref();
         try testing.expect(flag.getBoolean() != 0);
     }
+}
+
+test "fwupd service options per action map classification to allow flags" {
+    const upgrade = optionsForAction(.upgrade, false);
+    try testing.expect(!upgrade.allow_older);
+    try testing.expect(!upgrade.allow_reinstall);
+    try testing.expect(!upgrade.allow_branch_switch);
+
+    const downgrade = optionsForAction(.downgrade, false);
+    try testing.expect(downgrade.allow_older);
+    try testing.expect(!downgrade.allow_reinstall);
+
+    const reinstall = optionsForAction(.reinstall, false);
+    try testing.expect(!reinstall.allow_older);
+    try testing.expect(reinstall.allow_reinstall);
+
+    const branch = optionsForAction(.upgrade, true);
+    try testing.expect(branch.allow_branch_switch);
+    try testing.expect(!branch.allow_older);
 }
 
 test "fwupd service install params use an fd-list index handle" {
