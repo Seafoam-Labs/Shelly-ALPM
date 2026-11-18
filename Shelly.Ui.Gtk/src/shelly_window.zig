@@ -394,7 +394,10 @@ pub const ShellyWindow = extern struct {
     fn add_nav_group(self: *ShellyWindow, parent: *gtk.Box, text: [:0]const u8) void {
         const label = gtk.Label.new(text);
         gtk.Widget.addCssClass(label.as(gtk.Widget), "nav-group");
-        gtk.Widget.setHalign(label.as(gtk.Widget), .start);
+        // Fill the rail so the themed sheet's section underline spans the
+        // group; the text itself stays left-aligned.
+        gtk.Widget.setHalign(label.as(gtk.Widget), .fill);
+        gtk.Label.setXalign(label, 0);
         gtk.Box.append(parent, label.as(gtk.Widget));
         self.private().nav_groups.append(std.heap.c_allocator, label) catch unreachable;
     }

@@ -120,6 +120,8 @@
 }
 .shelly-root .nav-group {
   color: #8f899b;
+  border-bottom: 1px solid alpha(#e6e0e9, 0.08);
+  padding-bottom: 6px;
 }
 
 /* Page headers */
@@ -277,6 +279,33 @@
 .shelly-root headerbar windowcontrols button:hover {
   background: #3a3740;
   box-shadow: inset 0 0 0 1px @button_border_hover_color;
+}
+
+/* Column headers: one pill bar with hairline dividers between columns
+   instead of a pill per column title. */
+.shelly-root columnview > header {
+  background: #2b2930;
+  border: 1px solid #49454e;
+  border-radius: 999px;
+}
+.shelly-root columnview > header > button {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 0 12px;
+}
+.shelly-root columnview > header > button + button {
+  border-left: 1px solid alpha(#e6e0e9, 0.1);
+}
+.shelly-root columnview > header > button:first-child {
+  border-radius: 999px 0 0 999px;
+}
+.shelly-root columnview > header > button:last-child {
+  border-radius: 0 999px 999px 0;
+}
+.shelly-root columnview > header > button:hover {
+  background: alpha(#e6e0e9, 0.06);
 }
 
 /* Navigation */
