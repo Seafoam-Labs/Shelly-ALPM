@@ -37,6 +37,7 @@ pub const UpdateObject = extern struct {
         old_version: [:0]const u8,
         new_version: [:0]const u8,
         size: [:0]const u8,
+        size_bytes: i64,
         selected: bool,
         enabled: bool,
         var offset: c_int = 0;
@@ -62,11 +63,12 @@ pub const UpdateObject = extern struct {
         p.old_version = "";
         p.new_version = "";
         p.size = "";
+        p.size_bytes = 0;
         p.selected = true;
         p.enabled = true;
     }
 
-    pub fn new(allocator: std.mem.Allocator, source: UpdateSource, name: []const u8, description: []const u8, old_version: []const u8, new_version: []const u8, size: []const u8) *Self {
+    pub fn new(allocator: std.mem.Allocator, source: UpdateSource, name: []const u8, description: []const u8, old_version: []const u8, new_version: []const u8, size: []const u8, size_bytes: i64) *Self {
         const self = gobject.ext.newInstance(Self, .{});
         const p = self.priv();
         p.source = source;
@@ -75,6 +77,7 @@ pub const UpdateObject = extern struct {
         p.old_version = allocator.dupeSentinel(u8, old_version, 0) catch "";
         p.new_version = allocator.dupeSentinel(u8, new_version, 0) catch "";
         p.size = allocator.dupeSentinel(u8, size, 0) catch "";
+        p.size_bytes = size_bytes;
         return self;
     }
 
@@ -100,6 +103,10 @@ pub const UpdateObject = extern struct {
 
     pub fn getSize(self: *Self) [:0]const u8 {
         return self.priv().size;
+    }
+
+    pub fn getSizeBytes(self: *Self) i64 {
+        return self.priv().size_bytes;
     }
 
     pub fn isSelected(self: *Self) bool {

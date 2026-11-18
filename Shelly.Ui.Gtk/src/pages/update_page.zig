@@ -30,6 +30,7 @@ pub const UpdatePage = extern struct {
     const Private = struct {
         content_list: *gtk.ListView,
         selected_label: *gtk.Label,
+        download_label: *gtk.Label,
         refresh_button: *gtk.Button,
         native_toggle: *gtk.ToggleButton,
         aur_toggle: *gtk.ToggleButton,
@@ -213,16 +214,40 @@ pub const UpdatePage = extern struct {
         var threaded: std.Io.Threaded = .init(alloc, .{});
         defer threaded.deinit();
 
-        const cli = ShellyCli{ .allocator = alloc, .io = threaded.io() };
-        const parsed = cli.check_updates() catch {
-            post_result(page, &.{}, arena, generation, true);
-            return;
+        // Arena-owned; overwritten by each failed attempt.
+        var detail: ?[]u8 = null;
+
+        const cli = ShellyCli{ .allocator = alloc, .io = threaded.io(), .failure_detail = &detail };
+        var attempt: u8 = 0;
+        const parsed = while (true) {
+            break cli.check_updates() catch {
+                attempt += 1;
+                if (attempt >= 4 or !isRetryableCheckFailure(detail)) {
+                    post_result(page, &.{}, arena, generation, true);
+                    return;
+                }
+                // The tray refreshes the same preview database right after a
+                // transaction; its fail-fast lock makes this check lose the
+                // race. Wait out the tray's sync instead of failing the page.
+                threaded.io().sleep(.fromMilliseconds(@as(i64, attempt) * 1500), .awake) catch {};
+                continue;
+            };
         };
         const updates = flatten_updates(alloc, parsed.value) catch {
             post_result(page, &.{}, arena, generation, true);
             return;
         };
         post_result(page, updates, arena, generation, false);
+    }
+
+    /// A contended preview-database refresh (tray and UI checking at the same
+    /// time, e.g. right after a transaction) reports SyncDbFailed because the
+    /// refresh lock is fail-fast. Those failures are worth retrying; anything
+    /// else keeps the historical immediate error page.
+    fn isRetryableCheckFailure(detail: ?[]const u8) bool {
+        const message = detail orelse return false;
+        return std.mem.indexOf(u8, message, "SyncDbFailed") != null or
+            std.mem.indexOf(u8, message, "DatabaseLocked") != null;
     }
 
     fn flatten_updates(allocator: std.mem.Allocator, response: CheckUpdates) ![]UpdateItem {
@@ -294,7 +319,7 @@ pub const UpdatePage = extern struct {
         const allocator = result.arena.allocator();
         var buf: [32]u8 = undefined;
         for (result.updates[result.index..end]) |update| {
-            const object = UpdateObject.new(allocator, update.source, update.name, update.description, update.old_version, update.new_version, size_helper.convert_null_term(&buf, update.size));
+            const object = UpdateObject.new(allocator, update.source, update.name, update.description, update.old_version, update.new_version, size_helper.convert_null_term(&buf, update.size), update.size);
             gio.ListStore.append(p.list_store, object.as(gobject.Object));
             object.as(gobject.Object).unref();
         }
@@ -314,6 +339,7 @@ pub const UpdatePage = extern struct {
         switch (state) {
             .Loading => {
                 gtk.Label.setLabel(p.selected_label, translations._("Checking for updates…"));
+                gtk.Label.setLabel(p.download_label, "");
                 gtk.Spinner.start(p.loading_spinner);
                 gtk.Stack.setVisibleChild(p.updates_stack, p.loading_page.as(gtk.Widget));
                 gtk.Widget.setSensitive(p.aur_toggle.as(gtk.Widget), 0);
@@ -337,6 +363,7 @@ pub const UpdatePage = extern struct {
             .Fail => {
                 gtk.Label.setLabel(p.error_label, translations._("Could not check for updates."));
                 gtk.Label.setLabel(p.selected_label, translations._("Could not check for updates."));
+                gtk.Label.setLabel(p.download_label, "");
                 gtk.Spinner.stop(p.loading_spinner);
                 gtk.Stack.setVisibleChild(p.updates_stack, p.error_page.as(gtk.Widget));
                 gtk.Widget.setSensitive(p.refresh_button.as(gtk.Widget), 1);
@@ -344,6 +371,7 @@ pub const UpdatePage = extern struct {
             },
             .NoUpdates => {
                 gtk.Label.setLabel(p.selected_label, translations._("Your system is up to date"));
+                gtk.Label.setLabel(p.download_label, "");
                 gtk.Stack.setVisibleChild(p.updates_stack, p.empty_page.as(gtk.Widget));
                 gtk.Widget.setSensitive(p.refresh_button.as(gtk.Widget), 1);
                 gtk.Widget.setSensitive(p.upgrade_button.as(gtk.Widget), 0);
@@ -391,17 +419,27 @@ pub const UpdatePage = extern struct {
         gtk.Grid.setRowSpacing(grid, 2);
         gtk.Widget.setHexpand(grid.as(gtk.Widget), 1);
 
+        const check = gtk.CheckButton.new();
+        gtk.Widget.setValign(check.as(gtk.Widget), .center);
+        gtk.Widget.setTooltipText(check.as(gtk.Widget), translations._("Include this update"));
+        gobject.Object.setData(check.as(gobject.Object), "page", self);
+        gobject.Object.setData(check.as(gobject.Object), "list_item", list_item);
+        _ = gtk.CheckButton.signals.toggled.connect(check, ?*anyopaque, &on_row_check_toggled, null, .{});
+        gtk.Grid.attach(grid, check.as(gtk.Widget), 0, 0, 1, 2);
+
         const icon = gtk.Image.new();
-        gtk.Image.setPixelSize(icon, 32);
+        gtk.Image.setPixelSize(icon, 16);
         gtk.Widget.setValign(icon.as(gtk.Widget), .center);
-        gtk.Grid.attach(grid, icon.as(gtk.Widget), 0, 0, 1, 2);
+        gtk.Widget.addCssClass(icon.as(gtk.Widget), "urow-icon");
+        gtk.Grid.attach(grid, icon.as(gtk.Widget), 1, 0, 1, 2);
 
         const name = gtk.Label.new("");
         gtk.Label.setXalign(name, 0);
         gtk.Label.setEllipsize(name, .end);
         gtk.Widget.setHexpand(name.as(gtk.Widget), 1);
         gtk.Widget.addCssClass(name.as(gtk.Widget), "heading");
-        gtk.Grid.attach(grid, name.as(gtk.Widget), 1, 0, 2, 1);
+        gtk.Widget.addCssClass(name.as(gtk.Widget), "urow-name");
+        gtk.Grid.attach(grid, name.as(gtk.Widget), 2, 0, 2, 1);
 
         const description = gtk.Label.new("");
         gtk.Label.setXalign(description, 0);
@@ -409,7 +447,7 @@ pub const UpdatePage = extern struct {
         gtk.Label.setMaxWidthChars(description, 64);
         gtk.Widget.addCssClass(description.as(gtk.Widget), "caption");
         gtk.Widget.addCssClass(description.as(gtk.Widget), "dim-label");
-        gtk.Grid.attach(grid, description.as(gtk.Widget), 1, 1, 2, 1);
+        gtk.Grid.attach(grid, description.as(gtk.Widget), 2, 1, 2, 1);
 
         const version = gtk.Box.new(.horizontal, 6);
         gtk.Widget.setValign(version.as(gtk.Widget), .center);
@@ -421,14 +459,14 @@ pub const UpdatePage = extern struct {
         const new_version = gtk.Label.new("");
         gtk.Widget.addCssClass(new_version.as(gtk.Widget), "heading");
         gtk.Box.append(version, new_version.as(gtk.Widget));
-        gtk.Grid.attach(grid, version.as(gtk.Widget), 3, 0, 1, 2);
+        gtk.Grid.attach(grid, version.as(gtk.Widget), 4, 0, 1, 2);
 
         const size = gtk.Label.new("");
         gtk.Label.setWidthChars(size, 10);
         gtk.Label.setXalign(size, 1);
         gtk.Widget.setValign(size.as(gtk.Widget), .center);
         gtk.Widget.addCssClass(size.as(gtk.Widget), "dim-label");
-        gtk.Grid.attach(grid, size.as(gtk.Widget), 4, 0, 1, 2);
+        gtk.Grid.attach(grid, size.as(gtk.Widget), 5, 0, 1, 2);
 
         const update_btn = gtk.Button.newFromIconName("software-update-available-symbolic");
         gtk.Widget.setValign(update_btn.as(gtk.Widget), .center);
@@ -439,7 +477,7 @@ pub const UpdatePage = extern struct {
         gobject.Object.setData(update_btn.as(gobject.Object), "page", self);
         gobject.Object.setData(update_btn.as(gobject.Object), "list_item", list_item);
         _ = gtk.Button.signals.clicked.connect(update_btn, ?*anyopaque, &on_row_update_clicked, null, .{});
-        gtk.Grid.attach(grid, update_btn.as(gtk.Widget), 5, 0, 1, 2);
+        gtk.Grid.attach(grid, update_btn.as(gtk.Widget), 6, 0, 1, 2);
 
         gtk.ListItem.setChild(list_item, grid.as(gtk.Widget));
     }
@@ -451,12 +489,13 @@ pub const UpdatePage = extern struct {
         const child = gtk.ListItem.getChild(list_item) orelse return;
         const grid = gobject.ext.cast(gtk.Grid, child) orelse return;
 
-        const icon = gobject.ext.cast(gtk.Image, gtk.Grid.getChildAt(grid, 0, 0) orelse return) orelse return;
-        const name = gobject.ext.cast(gtk.Label, gtk.Grid.getChildAt(grid, 1, 0) orelse return) orelse return;
-        const description = gobject.ext.cast(gtk.Label, gtk.Grid.getChildAt(grid, 1, 1) orelse return) orelse return;
-        const version = gobject.ext.cast(gtk.Box, gtk.Grid.getChildAt(grid, 3, 0) orelse return) orelse return;
-        const size = gobject.ext.cast(gtk.Label, gtk.Grid.getChildAt(grid, 4, 0) orelse return) orelse return;
-        const update_btn = gobject.ext.cast(gtk.Button, gtk.Grid.getChildAt(grid, 5, 0) orelse return) orelse return;
+        const check = gobject.ext.cast(gtk.CheckButton, gtk.Grid.getChildAt(grid, 0, 0) orelse return) orelse return;
+        const icon = gobject.ext.cast(gtk.Image, gtk.Grid.getChildAt(grid, 1, 0) orelse return) orelse return;
+        const name = gobject.ext.cast(gtk.Label, gtk.Grid.getChildAt(grid, 2, 0) orelse return) orelse return;
+        const description = gobject.ext.cast(gtk.Label, gtk.Grid.getChildAt(grid, 2, 1) orelse return) orelse return;
+        const version = gobject.ext.cast(gtk.Box, gtk.Grid.getChildAt(grid, 4, 0) orelse return) orelse return;
+        const size = gobject.ext.cast(gtk.Label, gtk.Grid.getChildAt(grid, 5, 0) orelse return) orelse return;
+        const update_btn = gobject.ext.cast(gtk.Button, gtk.Grid.getChildAt(grid, 6, 0) orelse return) orelse return;
         const old_version = gobject.ext.cast(gtk.Label, gtk.Widget.getFirstChild(version.as(gtk.Widget)) orelse return) orelse return;
         const arrow = gtk.Widget.getNextSibling(old_version.as(gtk.Widget)) orelse return;
         const new_version = gobject.ext.cast(gtk.Label, gtk.Widget.getNextSibling(arrow) orelse return) orelse return;
@@ -469,7 +508,24 @@ pub const UpdatePage = extern struct {
         gtk.Label.setLabel(size, update.getSize());
 
         const src = update.getSource();
+        // System updates are all-or-nothing: no per-package selection.
+        gtk.Widget.setVisible(check.as(gtk.Widget), @intFromBool(src != .package));
+        gtk.CheckButton.setActive(check, @intFromBool(update.isSelected()));
         gtk.Widget.setVisible(update_btn.as(gtk.Widget), @intFromBool(src == .aur or src == .flatpak));
+    }
+
+    fn on_row_check_toggled(check: *gtk.CheckButton, _: ?*anyopaque) callconv(.c) void {
+        const li_ptr = gobject.Object.getData(check.as(gobject.Object), "list_item") orelse return;
+        const list_item: *gtk.ListItem = @ptrCast(@alignCast(li_ptr));
+        const object = gtk.ListItem.getItem(list_item) orelse return;
+        const update = gobject.ext.cast(UpdateObject, object) orelse return;
+
+        const page_ptr = gobject.Object.getData(check.as(gobject.Object), "page") orelse return;
+        const self: *Self = @ptrCast(@alignCast(page_ptr));
+
+        if (update.getSource() == .package) return;
+        update.setSelected(gtk.CheckButton.getActive(check) != 0);
+        self.update_summary();
     }
 
     fn on_source_toggled(_: *gtk.ToggleButton, self: *Self) callconv(.c) void {
@@ -529,19 +585,69 @@ pub const UpdatePage = extern struct {
         }
     }
 
+    /// System updates are all-or-nothing: a partial native upgrade can leave
+    /// the system in an unsupported state, so only AUR/Flatpak rows offer
+    /// per-package selection.
+    fn isIncluded(update: *UpdateObject) bool {
+        return update.getSource() == .package or update.isSelected();
+    }
+
     fn update_summary(self: *Self) void {
         const p = self.priv();
         var included: usize = 0;
         const total = gio.ListModel.getNItems(p.list_store.as(gio.ListModel));
         self.forEachActiveUpdate(&included, struct {
-            fn cb(count: *usize, _: *UpdateObject) void {
-                count.* += 1;
+            fn cb(count: *usize, update: *UpdateObject) void {
+                if (Self.isIncluded(update)) count.* += 1;
             }
         }.cb);
 
         var buffer: [96]u8 = undefined;
         const text = std.fmt.bufPrintSentinel(&buffer, "{d} {s} {d} {s}", .{ included, translations._("of"), total, translations._("updates included") }, 0) catch translations._("Updates included");
         gtk.Label.setLabel(p.selected_label, text);
+        self.update_download_label();
+        self.update_upgrade_label();
+    }
+
+    fn update_download_label(self: *Self) void {
+        const p = self.priv();
+        var total_bytes: i64 = 0;
+        self.forEachActiveUpdate(&total_bytes, struct {
+            fn cb(sum: *i64, update: *UpdateObject) void {
+                if (Self.isIncluded(update)) sum.* += update.getSizeBytes();
+            }
+        }.cb);
+
+        if (total_bytes == 0) {
+            gtk.Label.setLabel(p.download_label, translations._("No download required"));
+            return;
+        }
+
+        var size_buffer: [32]u8 = undefined;
+        var buffer: [96]u8 = undefined;
+        const text = std.fmt.bufPrintSentinel(&buffer, "{s} {s}", .{ translations._("Total download:"), size_helper.convert_null_term(&size_buffer, total_bytes) }, 0) catch translations._("Total download:");
+        gtk.Label.setLabel(p.download_label, text);
+    }
+
+    fn update_upgrade_label(self: *Self) void {
+        const p = self.priv();
+        const Counts = struct { active: usize, included: usize };
+        var counts: Counts = .{ .active = 0, .included = 0 };
+        self.forEachActiveUpdate(&counts, struct {
+            fn cb(c: *Counts, update: *UpdateObject) void {
+                c.active += 1;
+                if (Self.isIncluded(update)) c.included += 1;
+            }
+        }.cb);
+
+        if (counts.included == counts.active) {
+            gtk.Button.setLabel(p.upgrade_button, translations._("Upgrade All"));
+            return;
+        }
+
+        var buffer: [96]u8 = undefined;
+        const text = std.fmt.bufPrintSentinel(&buffer, "{s} ({d})", .{ translations._("Upgrade Selected"), counts.included }, 0) catch translations._("Upgrade Selected");
+        gtk.Button.setLabel(p.upgrade_button, text);
     }
 
     fn refresh_updates(self: *Self) callconv(.c) void {
@@ -559,10 +665,29 @@ pub const UpdatePage = extern struct {
 
         var names: std.ArrayListUnmanaged([]const u8) = .empty;
         defer names.deinit(std.heap.c_allocator);
+        var details: std.ArrayListUnmanaged([]const u8) = .empty;
+        defer {
+            for (details.items) |detail| std.heap.c_allocator.free(detail);
+            details.deinit(std.heap.c_allocator);
+        }
 
-        self.forEachActiveUpdate(&names, struct {
-            fn cb(list: *std.ArrayListUnmanaged([]const u8), pkg: *UpdateObject) void {
-                list.append(std.heap.c_allocator, pkg.getName()) catch {};
+        const Selection = struct {
+            names: *std.ArrayListUnmanaged([]const u8),
+            details: *std.ArrayListUnmanaged([]const u8),
+        };
+        var selection: Selection = .{ .names = &names, .details = &details };
+        self.forEachActiveUpdate(&selection, struct {
+            fn cb(sel: *Selection, pkg: *UpdateObject) void {
+                if (!Self.isIncluded(pkg)) return;
+                const detail = std.fmt.allocPrintSentinel(std.heap.c_allocator, "{s} → {s} · {s}", .{ pkg.getOldVersion(), pkg.getNewVersion(), pkg.getSize() }, 0) catch return;
+                sel.names.append(std.heap.c_allocator, pkg.getName()) catch {
+                    std.heap.c_allocator.free(detail);
+                    return;
+                };
+                sel.details.append(std.heap.c_allocator, detail) catch {
+                    std.heap.c_allocator.free(detail);
+                    _ = sel.names.pop();
+                };
             }
         }.cb);
         if (names.items.len == 0) return;
@@ -572,6 +697,7 @@ pub const UpdatePage = extern struct {
                 .title = translations._("Upgrading packages"),
                 .argv = argv,
                 .packages = names.items,
+                .details = details.items,
                 .on_complete = &on_transaction_complete,
                 .privileged = true,
                 .ctx = self,
@@ -599,7 +725,7 @@ pub const UpdatePage = extern struct {
         thread.detach();
     }
 
-    const template_children = .{ .{ "content_list", @offsetOf(Private, "content_list") }, .{ "selected_label", @offsetOf(Private, "selected_label") }, .{ "refresh_button", @offsetOf(Private, "refresh_button") }, .{ "native_toggle", @offsetOf(Private, "native_toggle") }, .{ "aur_toggle", @offsetOf(Private, "aur_toggle") }, .{ "flatpak_toggle", @offsetOf(Private, "flatpak_toggle") }, .{ "updates_stack", @offsetOf(Private, "updates_stack") }, .{ "loading_page", @offsetOf(Private, "loading_page") }, .{ "list_page", @offsetOf(Private, "list_page") }, .{ "empty_page", @offsetOf(Private, "empty_page") }, .{ "error_page", @offsetOf(Private, "error_page") }, .{ "loading_spinner", @offsetOf(Private, "loading_spinner") }, .{ "error_label", @offsetOf(Private, "error_label") }, .{ "upgrade_button", @offsetOf(Private, "upgrade_button") } };
+    const template_children = .{ .{ "content_list", @offsetOf(Private, "content_list") }, .{ "selected_label", @offsetOf(Private, "selected_label") }, .{ "download_label", @offsetOf(Private, "download_label") }, .{ "refresh_button", @offsetOf(Private, "refresh_button") }, .{ "native_toggle", @offsetOf(Private, "native_toggle") }, .{ "aur_toggle", @offsetOf(Private, "aur_toggle") }, .{ "flatpak_toggle", @offsetOf(Private, "flatpak_toggle") }, .{ "updates_stack", @offsetOf(Private, "updates_stack") }, .{ "loading_page", @offsetOf(Private, "loading_page") }, .{ "list_page", @offsetOf(Private, "list_page") }, .{ "empty_page", @offsetOf(Private, "empty_page") }, .{ "error_page", @offsetOf(Private, "error_page") }, .{ "loading_spinner", @offsetOf(Private, "loading_spinner") }, .{ "error_label", @offsetOf(Private, "error_label") }, .{ "upgrade_button", @offsetOf(Private, "upgrade_button") } };
 
     pub const Class = extern struct {
         parent_class: Parent.Class,
@@ -617,3 +743,12 @@ pub const UpdatePage = extern struct {
         }
     };
 };
+
+test "update check retries only contended refresh failures" {
+    try std.testing.expect(!UpdatePage.isRetryableCheckFailure(null));
+    try std.testing.expect(!UpdatePage.isRetryableCheckFailure("Could not spawn the Shelly command."));
+    try std.testing.expect(UpdatePage.isRetryableCheckFailure(
+        "Could not check for standard updates.\n\nTechnical details: SyncDbFailed",
+    ));
+    try std.testing.expect(UpdatePage.isRetryableCheckFailure("database is locked: DatabaseLocked"));
+}

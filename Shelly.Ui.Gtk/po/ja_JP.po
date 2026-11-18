@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shelly-ui 2.2.4.1\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-11-04 12:08-0500\n"
+"POT-Creation-Date: 2026-11-13 22:42-0500\n"
 "PO-Revision-Date: 2026-08-06 21:03+0900\n"
 "Last-Translator: UTUMI Hirosi <utuhiro78@yahoo.co.jp>\n"
 "Language-Team: csnyder@seafoam-labs.org\n"
@@ -126,6 +126,9 @@ msgstr "スキップ"
 msgid "AppImage"
 msgstr "AppImage"
 
+msgid "Install and integrate AppImage bundles."
+msgstr ""
+
 msgid "Search..."
 msgstr "検索..."
 
@@ -211,6 +214,9 @@ msgstr "削除"
 
 msgid "AUR"
 msgstr "AUR"
+
+msgid "Build and install packages from the Arch User Repository."
+msgstr ""
 
 msgid "Search the AUR by name or keyword"
 msgstr "名前やキーワードで AUR を検索する"
@@ -353,6 +359,9 @@ msgstr "バージョン履歴"
 msgid "Flatpak"
 msgstr "Flatpak"
 
+msgid "Manage Flatpak applications and remotes."
+msgstr ""
+
 msgid "Search packages..."
 msgstr "パッケージを検索..."
 
@@ -434,6 +443,12 @@ msgstr "パッケージ操作"
 msgid "Package"
 msgstr "パッケージ"
 
+msgid "Packages"
+msgstr "パッケージ"
+
+msgid "Install and manage software on your system."
+msgstr ""
+
 msgid "Package Group Filter"
 msgstr "パッケージグループフィルター"
 
@@ -502,15 +517,12 @@ msgstr "Seafoam Labs が厳選したおすすめです"
 msgid "Refresh the recommended packages list from the network"
 msgstr "ネットワークからおすすめパッケージのリストを更新する"
 
-#| msgid "Mixed selection"
 msgid "Clear selection"
 msgstr ""
 
-#| msgid "Recommended Packages"
 msgid "Deselect all recommended packages"
 msgstr ""
 
-#| msgid "Install the selected packages?"
 msgid "Install all selected packages in one transaction"
 msgstr ""
 
@@ -526,6 +538,12 @@ msgstr ""
 
 msgid "Shelly Search"
 msgstr "Shelly 検索"
+
+msgid "Search"
+msgstr ""
+
+msgid "Search across every enabled backend."
+msgstr ""
 
 msgid "Search standard repositories, AUR and Flatpak"
 msgstr "標準リポジトリ、AUR、Flatpak を検索"
@@ -557,6 +575,9 @@ msgstr ""
 
 msgid "Settings"
 msgstr "設定"
+
+msgid "Make Shelly feel at home on your desktop."
+msgstr ""
 
 msgid "General"
 msgstr "全般"
@@ -590,6 +611,15 @@ msgstr "トレイを cron として実行"
 
 msgid "Tray update with ui"
 msgstr "トレイを UI 付きでアップデート"
+
+msgid "Update terminal"
+msgstr ""
+
+msgid "Terminal command"
+msgstr ""
+
+msgid "Custom update terminal command"
+msgstr ""
 
 msgid "Tray Check Interval (Hours)"
 msgstr "トレイのチェック間隔 (時間)"
@@ -665,6 +695,12 @@ msgstr "デフォルトのページ"
 msgid "Navigation style"
 msgstr "ナビゲーションスタイル"
 
+msgid "Theme"
+msgstr ""
+
+msgid "Color variant"
+msgstr ""
+
 msgid "Advanced"
 msgstr "上級者向け"
 
@@ -686,9 +722,6 @@ msgstr "AppImage のインストールパス"
 msgid "Select Directory"
 msgstr "ディレクトリを選択"
 
-msgid "View Changelog"
-msgstr "変更履歴を見る"
-
 msgid "v0.0.0"
 msgstr "v0.0.0"
 
@@ -701,20 +734,32 @@ msgstr "コミュニティー Fluxer"
 msgid "Sponsor"
 msgstr "スポンサー"
 
+msgid "View Changelog"
+msgstr "変更履歴を見る"
+
 msgid "Toggle output"
 msgstr "出力を切り替える"
 
 msgid "Done"
 msgstr "完了"
 
+msgid "1 · Download"
+msgstr ""
+
+msgid "2 · Install"
+msgstr ""
+
 msgid "Update"
 msgstr "アップデート"
 
-msgid "Available Updates"
-msgstr "利用可能なアップデート"
+msgid "Updates"
+msgstr ""
 
 msgid "7 of 7 updates included"
 msgstr "7 of 7 アップデートが含まれます"
+
+msgid "System"
+msgstr "システム"
 
 msgid "Check all enabled sources again"
 msgstr "有効なすべてのソースを再度確認する"
@@ -722,11 +767,8 @@ msgstr "有効なすべてのソースを再度確認する"
 msgid "Check Again"
 msgstr "再度確認"
 
-msgid "Upgrade"
-msgstr "アップグレード"
-
-msgid "System"
-msgstr "システム"
+msgid "Available updates"
+msgstr ""
 
 msgid "Checking for updates…"
 msgstr "アップデートを確認中…"
@@ -736,6 +778,12 @@ msgstr "お使いのシステムは最新です"
 
 msgid "Could not check for updates."
 msgstr ""
+
+msgid "Upgrading may require administrator authorization."
+msgstr ""
+
+msgid "Upgrade"
+msgstr "アップグレード"
 
 msgid "Utilities"
 msgstr "ユーティリティ"
@@ -860,24 +908,15 @@ msgstr "次へ"
 msgid "Start Shelly"
 msgstr "Shelly を起動"
 
-#| msgid "Enable AUR?"
 msgid "Enable Atoll?"
 msgstr ""
 
-#| msgid ""
-#| "The Arch User Repository contains build scripts that are known as "
-#| "PKGBUILDs. Those scripts are uploaded by users, and are not verified or "
-#| "vetted in any way. Only enable this feature if you are comfortable in "
-#| "verifying the build scripts."
 msgid ""
 "Atoll contains build scripts that are known as PKGBUILDs. Those scripts are "
 "uploaded by users, and are not verified or vetted in any way. Only enable "
 "this feature if you are comfortable in verifying the build scripts."
 msgstr ""
 
-#| msgid ""
-#| "<a href=\"https://www.seafoam-labs.org/shelly-alpm/docs/aur-safety/\">AUR "
-#| "Safety Guide</a>"
 msgid ""
 "<a href=\"https://www.seafoam-labs.org/shelly-alpm/docs/aur-safety/\">Atoll "
 "Safety Guide</a>"
@@ -1489,17 +1528,12 @@ msgstr "パッケージをインストール中"
 msgid "Select package for batch installation"
 msgstr ""
 
-#| msgid "Search standard repositories, AUR and Flatpak"
 msgid "Search standard repositories, Atoll and Flatpak"
 msgstr ""
 
-#| msgid "Show results from the Arch User Repository"
 msgid "Show results from Atoll"
 msgstr ""
 
-#| msgid ""
-#| "Search the standard repositories, the AUR, and Flatpak all at once. Type "
-#| "a name to begin."
 msgid ""
 "Search the standard repositories, Atoll, and Flatpak all at once. Type a "
 "name to begin."
@@ -1530,7 +1564,6 @@ msgstr "パッケージをインストール"
 msgid "Install the selected packages?"
 msgstr "選択したパッケージをインストールしますか？"
 
-#| msgid "Enable AUR"
 msgid "Enable Atoll"
 msgstr ""
 
@@ -1616,6 +1649,18 @@ msgstr "systemd 起動サービスが削除されました。"
 msgid "AUR enabled"
 msgstr "AUR を有効にしました"
 
+msgid "System GTK"
+msgstr ""
+
+msgid "Follow system"
+msgstr ""
+
+msgid "Dark"
+msgstr ""
+
+msgid "Light"
+msgstr ""
+
 msgid "System Default"
 msgstr "システムのデフォルト"
 
@@ -1661,8 +1706,11 @@ msgstr "Türkçe"
 msgid "中文（简体）"
 msgstr "中文（简体）"
 
-msgid "Packages"
-msgstr "パッケージ"
+msgid "Default (auto-detect)"
+msgstr ""
+
+msgid "Custom…"
+msgstr ""
 
 msgid "Pending"
 msgstr "保留中"
@@ -1693,6 +1741,9 @@ msgstr "中断されました"
 
 msgid "Cancelled"
 msgstr "キャンセル"
+
+msgid "Overall progress"
+msgstr ""
 
 msgid "Could not start the requested operation."
 msgstr ""
@@ -1739,6 +1790,27 @@ msgstr "競合を確認中"
 msgid "Checking disk space"
 msgstr "ディスク容量を確認中"
 
+msgid "Preparing transaction"
+msgstr ""
+
+msgid "Downloading packages"
+msgstr ""
+
+msgid "about"
+msgstr ""
+
+msgid "s left"
+msgstr ""
+
+msgid "packages downloaded"
+msgstr ""
+
+msgid "packages processed"
+msgstr ""
+
+msgid "Completed"
+msgstr ""
+
 msgid "Transaction Completed"
 msgstr "トランザクションが完了しました"
 
@@ -1783,6 +1855,9 @@ msgstr "システムパッケージのアップデート"
 msgid "AUR package update"
 msgstr "AUR パッケージのアップデート"
 
+msgid "Include this update"
+msgstr ""
+
 msgid "Update this package"
 msgstr "このパッケージをアップデート"
 
@@ -1792,13 +1867,21 @@ msgstr "アップデートがあります"
 msgid "Updates included"
 msgstr "アップデートが含まれます"
 
+msgid "No download required"
+msgstr ""
+
+msgid "Total download:"
+msgstr ""
+
+msgid "Upgrade Selected"
+msgstr ""
+
 msgid "Upgrading packages"
 msgstr "パッケージをアップグレード中"
 
 msgid "Refreshing package databases"
 msgstr "パッケージデータベースを更新中"
 
-#| msgid "Removing Flatpak"
 msgid "Removing stale database lock"
 msgstr ""
 
@@ -1827,7 +1910,10 @@ msgstr ""
 msgid "Installing Flatpak and AppImage support"
 msgstr "Flatpak と AppImage サポートをインストール中"
 
-msgid "Main menu"
+msgid "BROWSE"
+msgstr ""
+
+msgid "SYSTEM"
 msgstr ""
 
 msgid "Expand sidebar"

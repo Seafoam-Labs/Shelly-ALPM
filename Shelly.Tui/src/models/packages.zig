@@ -12,7 +12,9 @@ const InstalledNameContext = struct {
     }
 };
 
-pub fn markInstalled(allocator: std.mem.Allocator, available: []Package, installed: []const Package) !void {
+pub const InstalledPackage = struct { Name: []const u8 };
+
+pub fn markInstalled(allocator: std.mem.Allocator, available: []Package, installed: []const InstalledPackage) !void {
     if (available.len == 0 or installed.len == 0) return;
     var names: std.HashMap([]const u8, void, InstalledNameContext, std.hash_map.default_max_load_percentage) = .init(allocator);
     defer names.deinit();
@@ -26,7 +28,6 @@ pub fn markInstalled(allocator: std.mem.Allocator, available: []Package, install
 pub const Package = struct {
     Name: []const u8 = "",
     Version: []const u8 = "",
-    Size: i64 = 0,
     Description: []const u8 = "",
     Url: ?[]const u8 = null,
     Repository: []const u8 = "",
@@ -37,14 +38,9 @@ pub const Package = struct {
     Depends: []const []const u8 = &.{},
     OptDepends: []const []const u8 = &.{},
     Conflicts: []const []const u8 = &.{},
-    PackageFile: ?FileNode = null,
-    InstallReason: []const u8 = "",
     BuildDate: []const u8 = "",
-    InstallDate: ?[]const u8 = null,
     DownloadSize: i64 = 0,
     InstalledSize: i64 = 0,
-    RequiredBy: []const []const u8 = &.{},
-    OptionalFor: []const []const u8 = &.{},
     Installed: bool = false,
 };
 
@@ -82,8 +78,6 @@ pub const AurPackage = struct {
     Explicit: bool = false,
 };
 
-const FileNode = struct { Name: []const u8, Files: []const FileNode };
-
 test "installed matching preserves case folding, duplicates and existing flags" {
     const Case = struct {
         fn run(allocator: std.mem.Allocator) !void {
@@ -94,7 +88,7 @@ test "installed matching preserves case folding, duplicates and existing flags" 
                 .{ .Name = "previous", .Installed = true },
                 .{ .Name = "demo-tools" },
             };
-            const installed = [_]Package{ .{ .Name = "Demo" }, .{ .Name = "demo" }, .{ .Name = "absent" } };
+            const installed = [_]InstalledPackage{ .{ .Name = "Demo" }, .{ .Name = "demo" }, .{ .Name = "absent" } };
             try markInstalled(allocator, &available, &installed);
             const expected = [_]bool{ true, true, false, true, false };
             for (available, expected) |pkg, want| try std.testing.expectEqual(want, pkg.Installed);
@@ -108,5 +102,5 @@ test "empty installed matching does not allocate or clear existing flags" {
     var available = [_]Package{.{ .Name = "demo", .Installed = true }};
     try markInstalled(std.testing.failing_allocator, &available, &.{});
     try std.testing.expect(available[0].Installed);
-    try markInstalled(std.testing.failing_allocator, &.{}, &available);
+    try markInstalled(std.testing.failing_allocator, &.{}, &.{.{ .Name = "demo" }});
 }

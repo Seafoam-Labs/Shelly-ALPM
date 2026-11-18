@@ -15,6 +15,7 @@ pub const View = struct {
     combined: bool = false,
     include_aur: bool = true,
     include_flatpak: bool = true,
+    include_appimage: bool = false,
     target: ?operation.FlatpakTarget = null,
     action: operation.Action = .install,
     state: enum { entering, running, succeeded, failed, declined },
@@ -34,14 +35,17 @@ pub const View = struct {
             "";
         const note: []const u8 = if (self.combined)
             if (self.include_aur)
-                if (self.include_flatpak) "System packages, AUR, and system/user Flatpaks. PKGBUILDs require review. AppImage updates are detected but not managed by the TUI." else "System packages and AUR. Flatpak disabled or unavailable. PKGBUILDs require review. AppImage updates are detected but not managed by the TUI."
-            else if (self.include_flatpak) "System packages and system/user Flatpaks. AUR excluded. AppImage updates are detected but not managed by the TUI." else "Full system upgrade. AUR and Flatpak excluded. AppImage updates are detected but not managed by the TUI."
+                if (self.include_flatpak) "System packages, AUR, and system/user Flatpaks. PKGBUILDs require review." else "System packages and AUR. Flatpak disabled or unavailable. PKGBUILDs require review."
+            else if (self.include_flatpak) "System packages and system/user Flatpaks. AUR excluded." else "Full system upgrade. AUR and Flatpak excluded."
+        else if (self.backend == .appimage and self.action == .upgrade)
+            "Updates all configured AppImages with available updates as your user. Application configuration is kept."
         else if (self.backend == .flatpak)
             if (self.action == .upgrade) "Updates system and user Flatpaks as the invoking user. System changes may require a Flatpak authorization agent." else if (self.action == .remove) "Configuration and unused dependencies will be kept." else "Uses the selected remote and scope. Shelly handles dependencies and review."
         else if (self.action == .remove) "Unused dependencies and configuration will be kept." else if (self.action == .upgrade)
-            if (self.backend == .aur) "Upgrade AUR packages and required dependencies. PKGBUILDs require review." else "Full system upgrade. AUR and Flatpak excluded. AppImage updates are detected but not managed by the TUI."
+            if (self.backend == .aur) "Upgrade AUR packages and required dependencies. PKGBUILDs require review." else "Full system upgrade. AUR and Flatpak excluded."
         else if (self.backend == .aur) "PKGBUILDs require review before installation." else "";
-        return std.fmt.allocPrint(arena, "{s} {f}?{s}\n\n{s}", .{ self.action.verb(), diagnostics.safe(self.name), target, note });
+        const appimage = if (self.combined) (if (self.include_appimage) " AppImages included." else " AppImages excluded.") else "";
+        return std.fmt.allocPrint(arena, "{s} {f}?{s}\n\n{s}{s}", .{ self.action.verb(), diagnostics.safe(self.name), target, note, appimage });
     }
 
     fn body(self: View, arena: Allocator, width: u16) Allocator.Error![]const u8 {
@@ -70,15 +74,16 @@ pub const View = struct {
             if (self.progress.authentication_len > 0)
                 try lines.append(arena, try authenticationText(arena, self.progress.authentication[0..self.progress.authentication_len]));
         }
+        const failure_detail = if (self.state == .failed) std.mem.trim(u8, self.detail, " \t\r\n") else "";
         var last: []const u8 = "";
         for (&self.progress.messages, self.progress.lengths) |*message, len| {
             const text = std.mem.trim(u8, message[0..len], " \t\r\n");
-            if (text.len == 0) continue;
+            if (text.len == 0 or std.mem.eql(u8, text, failure_detail)) continue;
             try lines.append(arena, try diagnostics.sanitizeAlloc(arena, text));
             last = text;
         }
         const status = std.mem.trim(u8, self.progress.text(), " \t\r\n");
-        if (status.len > 0 and !std.mem.eql(u8, status, last))
+        if (status.len > 0 and !std.mem.eql(u8, status, last) and !std.mem.eql(u8, status, failure_detail))
             try lines.append(arena, try diagnostics.sanitizeAlloc(arena, status));
         if (lines.items.len == 0 and self.state == .running)
             try lines.append(arena, if (self.progress.authenticating) "Waiting for authentication…" else "Waiting for progress…");
@@ -279,6 +284,12 @@ test "operation panel wraps long results and scrolls output independently" {
     defer events.cmds.deinit(std.testing.allocator);
     _ = try panel.handleKey(view, &events, .{ .codepoint = vaxis.Key.up });
     try std.testing.expect(panel.scroll.scroll.pending_lines < 0);
+    @memcpy(view.progress.messages[0][0..view.detail.len], view.detail);
+    view.progress.lengths[0] = view.detail.len;
+    @memcpy(view.progress.status[0..view.detail.len], view.detail);
+    view.progress.status_len = view.detail.len;
+    const failed_body = try view.body(arena.allocator(), 38);
+    try std.testing.expectEqual(@as(usize, 1), std.mem.count(u8, failed_body, "First error"));
     view.state = .running;
     view.progress.percent = 150;
     _ = try panel.draw(view, ctx);

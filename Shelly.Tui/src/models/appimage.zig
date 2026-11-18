@@ -7,6 +7,18 @@ pub const UpdateType = enum(u8) {
     GitLab = 3,
     Codeberg = 4,
     Forgejo = 5,
+    Zsync = 6,
+    pub fn toCliString(self: UpdateType) []const u8 {
+        return switch (self) {
+            .None => "None",
+            .StaticUrl => "StaticUrl",
+            .GitHub => "GitHub",
+            .GitLab => "GitLab",
+            .Codeberg => "Codeberg",
+            .Forgejo => "Forgejo",
+            .Zsync => "Zsync",
+        };
+    }
 };
 
 pub const EnvironmentVariable = struct {
@@ -59,6 +71,17 @@ test "AppImage decodes from wire-format JSON" {
     try std.testing.expectEqualStrings("seafoam-labs", app.RepoOwner.?);
     try std.testing.expectEqualStrings("/home/user/.local/bin/blender.AppImage", app.Path.?);
     try std.testing.expect(app.CommandLineArgs == null);
+
+    const zsync_json =
+        \\{"Name":"Editor","UpdateType":6,"UpdateURl":"zsync|https://nightly.example.dev/latest/Editor.AppImage.zsync"}
+    ;
+    const zsync_parsed = try std.json.parseFromSlice(AppImage, std.testing.allocator, zsync_json, .{
+        .ignore_unknown_fields = true,
+        .allocate = .alloc_always,
+    });
+    defer zsync_parsed.deinit();
+    try std.testing.expectEqual(UpdateType.Zsync, zsync_parsed.value.UpdateType);
+    try std.testing.expectEqualStrings("Zsync", zsync_parsed.value.UpdateType.toCliString());
 }
 
 test "AppImage applies defaults for missing optional fields" {

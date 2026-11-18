@@ -47,5 +47,7 @@
     <file>ui/recommend_page.ui</file>
     <file>devario/package_page.ui</file>
     <file>style.css</file>
+    <file>themes/shelly-dark.css</file>
+    <file>themes/shelly-light.css</file>
   </gresource>
 </gresources>

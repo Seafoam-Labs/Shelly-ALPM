@@ -70,7 +70,11 @@ Explicit caller options and configuration still override those defaults.
 `shelly --config /path/to/config utility --repair-db` resolves `DBPath` from that
 configuration before removing a stale lock. Configuration is parsed without
 opening the package database; an unreadable explicit configuration fails before
-any lock is touched.
+any lock is touched. The command also removes a stale `db.lck` from the invoking
+user's update-check cache (`XDG_CACHE_HOME/Shelly/db`, resolved through
+`SUDO_USER`/`DOAS_USER`/`PKEXEC_UID` when elevated) and reports each path it
+checks. Only a present system database lock triggers elevation; the user-owned
+cache lock is repaired without root.
 
 `shelly-key --populate` reads public bundles and their trusted/revoked lists from
 the profile's public key bundle directory. `--populate-from` overrides that
@@ -156,6 +160,12 @@ Session-critical units, including the system bus, `systemd-logind`, journald,
 udevd, account/policy services, display managers, greeters, `getty@*`, `user@*`,
 and the Devario GPU helpers, are always reported instead of restarted;
 restarting them can end the invoking session or leave the system without a bus.
+Because cgroup paths expose canonical unit names, Shelly also resolves systemd
+aliases with `systemctl show --property=Names`; a unit is session-critical when
+any of its names matches, so canonical display-manager units such as
+`plasmalogin.service` are covered by the `display-manager.service` alias. If the
+unit names cannot be resolved, automatic restart is skipped and reported as a
+failure.
 
 `RestartPolicy = report` lists affected services without restarting anything.
 

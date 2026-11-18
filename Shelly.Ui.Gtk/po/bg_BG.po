@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shelly-ui 2.3.0.3\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-11-04 12:08-0500\n"
+"POT-Creation-Date: 2026-11-13 22:42-0500\n"
 "PO-Revision-Date: 2026-05-16 11:00+EST\n"
 "Last-Translator: momchil.nikolov@outlook.com\n"
 "Language-Team: Bulgarian (Bulgaria) momchil.nikolov@outlook.com\n"
@@ -107,6 +107,9 @@ msgstr ""
 msgid "AppImage"
 msgstr "AppImage"
 
+msgid "Install and integrate AppImage bundles."
+msgstr ""
+
 msgid "Search..."
 msgstr "Търсене..."
 
@@ -191,6 +194,9 @@ msgstr "Премахни"
 
 msgid "AUR"
 msgstr "AUR"
+
+msgid "Build and install packages from the Arch User Repository."
+msgstr ""
 
 msgid "Search the AUR by name or keyword"
 msgstr ""
@@ -329,6 +335,9 @@ msgstr "История на версиите"
 msgid "Flatpak"
 msgstr "Flatpak"
 
+msgid "Manage Flatpak applications and remotes."
+msgstr ""
+
 msgid "Search packages..."
 msgstr "Търсене на пакети..."
 
@@ -408,6 +417,12 @@ msgid "Package actions"
 msgstr ""
 
 msgid "Package"
+msgstr ""
+
+msgid "Packages"
+msgstr "Пакети"
+
+msgid "Install and manage software on your system."
 msgstr ""
 
 msgid "Package Group Filter"
@@ -498,6 +513,12 @@ msgstr ""
 msgid "Shelly Search"
 msgstr "Търсене в Shelly"
 
+msgid "Search"
+msgstr ""
+
+msgid "Search across every enabled backend."
+msgstr ""
+
 msgid "Search standard repositories, AUR and Flatpak"
 msgstr ""
 
@@ -526,6 +547,9 @@ msgstr ""
 
 msgid "Settings"
 msgstr "Настройки"
+
+msgid "Make Shelly feel at home on your desktop."
+msgstr ""
 
 msgid "General"
 msgstr "Общи"
@@ -558,6 +582,15 @@ msgid "Run Tray as cron"
 msgstr ""
 
 msgid "Tray update with ui"
+msgstr ""
+
+msgid "Update terminal"
+msgstr ""
+
+msgid "Terminal command"
+msgstr ""
+
+msgid "Custom update terminal command"
 msgstr ""
 
 msgid "Tray Check Interval (Hours)"
@@ -630,6 +663,12 @@ msgstr "Страница по подразбиране"
 msgid "Navigation style"
 msgstr ""
 
+msgid "Theme"
+msgstr ""
+
+msgid "Color variant"
+msgstr ""
+
 msgid "Advanced"
 msgstr "Разширени"
 
@@ -651,9 +690,6 @@ msgstr ""
 msgid "Select Directory"
 msgstr ""
 
-msgid "View Changelog"
-msgstr "Преглед на changelog"
-
 msgid "v0.0.0"
 msgstr ""
 
@@ -666,20 +702,32 @@ msgstr "Общностен fluxer"
 msgid "Sponsor"
 msgstr "Спонсор"
 
+msgid "View Changelog"
+msgstr "Преглед на changelog"
+
 msgid "Toggle output"
 msgstr ""
 
 msgid "Done"
 msgstr ""
 
+msgid "1 · Download"
+msgstr ""
+
+msgid "2 · Install"
+msgstr ""
+
 msgid "Update"
 msgstr ""
 
-msgid "Available Updates"
-msgstr "Налични актуализации"
+msgid "Updates"
+msgstr ""
 
 msgid "7 of 7 updates included"
 msgstr ""
+
+msgid "System"
+msgstr "Система"
 
 msgid "Check all enabled sources again"
 msgstr ""
@@ -687,11 +735,8 @@ msgstr ""
 msgid "Check Again"
 msgstr ""
 
-msgid "Upgrade"
+msgid "Available updates"
 msgstr ""
-
-msgid "System"
-msgstr "Система"
 
 msgid "Checking for updates…"
 msgstr ""
@@ -700,6 +745,12 @@ msgid "Your system is up to date"
 msgstr ""
 
 msgid "Could not check for updates."
+msgstr ""
+
+msgid "Upgrading may require administrator authorization."
+msgstr ""
+
+msgid "Upgrade"
 msgstr ""
 
 msgid "Utilities"
@@ -819,7 +870,6 @@ msgstr ""
 msgid "Start Shelly"
 msgstr ""
 
-#| msgid "Enable AUR?"
 msgid "Enable Atoll?"
 msgstr ""
 
@@ -1466,7 +1516,6 @@ msgstr ""
 msgid "Install the selected packages?"
 msgstr ""
 
-#| msgid "Enable AUR"
 msgid "Enable Atoll"
 msgstr ""
 
@@ -1552,6 +1601,18 @@ msgstr ""
 msgid "AUR enabled"
 msgstr ""
 
+msgid "System GTK"
+msgstr ""
+
+msgid "Follow system"
+msgstr ""
+
+msgid "Dark"
+msgstr ""
+
+msgid "Light"
+msgstr ""
+
 msgid "System Default"
 msgstr ""
 
@@ -1597,8 +1658,11 @@ msgstr ""
 msgid "中文（简体）"
 msgstr ""
 
-msgid "Packages"
-msgstr "Пакети"
+msgid "Default (auto-detect)"
+msgstr ""
+
+msgid "Custom…"
+msgstr ""
 
 msgid "Pending"
 msgstr ""
@@ -1628,6 +1692,9 @@ msgid "Interrupted"
 msgstr ""
 
 msgid "Cancelled"
+msgstr ""
+
+msgid "Overall progress"
 msgstr ""
 
 msgid "Could not start the requested operation."
@@ -1675,6 +1742,27 @@ msgstr ""
 msgid "Checking disk space"
 msgstr ""
 
+msgid "Preparing transaction"
+msgstr ""
+
+msgid "Downloading packages"
+msgstr ""
+
+msgid "about"
+msgstr ""
+
+msgid "s left"
+msgstr ""
+
+msgid "packages downloaded"
+msgstr ""
+
+msgid "packages processed"
+msgstr ""
+
+msgid "Completed"
+msgstr ""
+
 msgid "Transaction Completed"
 msgstr ""
 
@@ -1715,6 +1803,9 @@ msgstr ""
 msgid "AUR package update"
 msgstr ""
 
+msgid "Include this update"
+msgstr ""
+
 msgid "Update this package"
 msgstr ""
 
@@ -1722,6 +1813,15 @@ msgid "updates included"
 msgstr ""
 
 msgid "Updates included"
+msgstr ""
+
+msgid "No download required"
+msgstr ""
+
+msgid "Total download:"
+msgstr ""
+
+msgid "Upgrade Selected"
 msgstr ""
 
 msgid "Upgrading packages"
@@ -1756,7 +1856,10 @@ msgstr ""
 msgid "Installing Flatpak and AppImage support"
 msgstr ""
 
-msgid "Main menu"
+msgid "BROWSE"
+msgstr ""
+
+msgid "SYSTEM"
 msgstr ""
 
 msgid "Expand sidebar"

@@ -258,6 +258,7 @@ fn startAurRequest(self: *Model, ctx: *vxfw.EventContext, query: []const u8, pag
 }
 
 pub fn aurSearchThread(job: *AurSearchJob, query: []const u8) void {
+    defer job.done.store(true, .release);
     const alloc = std.heap.page_allocator;
     var threaded: std.Io.Threaded = .init(alloc, .{});
     defer threaded.deinit();
@@ -265,7 +266,6 @@ pub fn aurSearchThread(job: *AurSearchJob, query: []const u8) void {
     var cli: ShellyCli = .{ .allocator = alloc, .io = threaded.io() };
     const source = if (job.source_url == null) cli.get_aur_source() catch {
         job.failed = true;
-        job.done.store(true, .release);
         return;
     } else null;
     defer if (source) |parsed| parsed.deinit();
@@ -273,14 +273,12 @@ pub fn aurSearchThread(job: *AurSearchJob, query: []const u8) void {
     cli.aur_url = url;
     const parsed = (if (job.catalog_page > 0) fetchCatalog(job, alloc, threaded.io(), url) else if (job.installed_only) cli.list_aur_installed() else if (query.len == 0) std.json.parseFromSlice([]AurPackage, alloc, "[]", .{}) else cli.search_aur(query)) catch {
         job.failed = true;
-        job.done.store(true, .release);
         return;
     };
 
     const base = parsed.arena.allocator().dupe(u8, url) catch {
         parsed.deinit();
         job.failed = true;
-        job.done.store(true, .release);
         return;
     };
     for (parsed.value) |*pkg| pkg.AurBaseUrl = base;
@@ -288,13 +286,11 @@ pub fn aurSearchThread(job: *AurSearchJob, query: []const u8) void {
     if (job.installed_only or parsed.value.len == 0) {
         for (parsed.value) |*pkg| pkg.Installed = true;
         job.result = parsed;
-        job.done.store(true, .release);
         return;
     }
     const installed = cli.get_installed_packages() catch {
         parsed.deinit();
         job.failed = true;
-        job.done.store(true, .release);
         return;
     };
     defer installed.deinit();
@@ -308,7 +304,6 @@ pub fn aurSearchThread(job: *AurSearchJob, query: []const u8) void {
     }
 
     job.result = parsed;
-    job.done.store(true, .release);
 }
 
 fn fetchCatalog(job: *AurSearchJob, allocator: Allocator, io: std.Io, url: []const u8) !std.json.Parsed([]AurPackage) {
@@ -492,95 +487,85 @@ pub fn buildAurRow(ptr: *const anyopaque, idx: usize, _: usize) ?vxfw.Widget {
 
 /// Returns whether page input was consumed. Globals remain with the coordinator.
 pub fn handleKey(self: *Model, ctx: *vxfw.EventContext, input: vaxis.Key, global_command: bool) anyerror!bool {
-    if (input.matches(vaxis.Key.escape, .{})) {
-        self.aur_state.aur_list_active = true;
-        ctx.consumeAndRedraw();
-        return true;
-    }
-    const key = if (self.aur_state.aur_list_active) commands.vimNavigationKey(input) orelse input else input;
-    if (self.aur_state.aur_list_active) {
-        if (commands.matches(key, .previous_catalog_page) or commands.matches(key, .next_catalog_page)) {
-            try changeCatalogPage(self, ctx, commands.matches(key, .next_catalog_page));
-            ctx.consumeAndRedraw();
-            return true;
+    handled: {
+        if (input.matches(vaxis.Key.escape, .{})) {
+            self.aur_state.aur_list_active = true;
+            break :handled;
         }
-        if (commands.matches(key, .select) or commands.matches(key, .mark)) {
-            try toggleAurSelection(self);
-            ctx.consumeAndRedraw();
-            return true;
-        }
-        if (commands.matches(key, .clear_selection)) {
-            clearAurSelection(self);
-            ctx.consumeAndRedraw();
-            return true;
-        }
-        if (commands.matches(key, .search)) {
-            self.aur_state.aur_list_active = false;
-            ctx.consumeAndRedraw();
-            return true;
-        }
-        if (commands.matches(key, .details)) {
-            if (selectedAur(self)) |pkg| self.overlay = .{ .aur = pkg };
-            ctx.consumeAndRedraw();
-            return true;
-        }
-        if (commands.matches(key, .preview)) {
-            if (selectedAur(self)) |pkg| try operation_model.openPkgbuild(self, ctx, pkg.Name);
-            ctx.consumeAndRedraw();
-            return true;
-        }
-        if (commands.packageAction(key)) |action| {
-            try openAurPrompt(self, if (action == .install) .install else .remove);
-            ctx.consumeAndRedraw();
-            return true;
-        }
-    }
-    if (commands.matches(key, .previous) or commands.matches(key, .next)) {
-        if (self.aur_state.aur_list_active and self.aur_state.aur_list.cursor == 0 and commands.matches(key, .previous)) {
-            self.aur_state.aur_list_active = false;
-            ctx.consumeAndRedraw();
-            return true;
-        }
-        self.aur_state.aur_list_active = true;
-        try self.aur_state.aur_list.handleEvent(ctx, .{ .key_press = .{ .codepoint = if (commands.matches(key, .previous)) vaxis.Key.up else vaxis.Key.down } });
-        ctx.consumeAndRedraw();
-        return true;
-    }
-    if (commands.matches(key, .confirm)) {
-        const query = try self.aur_state.aur_field.buf.dupe();
-        defer self.gpa.free(query);
-        try onAurSubmit(self, ctx, query);
-        ctx.consumeAndRedraw();
-        return true;
-    }
-    if ((self.aur_state.aur_installed_only or catalogActive(self)) and commands.refreshesList(key)) {
-        if (self.aur_state.aur_job == null) {
-            invalidateInstalledCache(self);
-            try startAurRequest(self, ctx, "", catalogRefreshPage(self));
-        }
-        ctx.consumeAndRedraw();
-        return true;
-    }
-    if (commands.togglesInstalled(key)) {
-        if (self.aur_state.aur_job == null) {
-            self.aur_state.aur_installed_only = !self.aur_state.aur_installed_only;
-            if (self.aur_state.aur_installed_only and try restoreInstalledCache(self)) {
-                ctx.consumeAndRedraw();
-                return true;
+        const key = if (self.aur_state.aur_list_active) commands.vimNavigationKey(input) orelse input else input;
+        if (self.aur_state.aur_list_active) {
+            if (commands.matches(key, .previous_catalog_page) or commands.matches(key, .next_catalog_page)) {
+                try changeCatalogPage(self, ctx, commands.matches(key, .next_catalog_page));
+                break :handled;
             }
-            try startAurSearch(self, ctx, "");
-            self.aur_state.aur_filtered.clearRetainingCapacity();
-            self.aur_state.aur_list.item_count = 0;
-            self.aur_state.aur_list.jumpToItem(0);
+            if (commands.matches(key, .select) or commands.matches(key, .mark)) {
+                try toggleAurSelection(self);
+                break :handled;
+            }
+            if (commands.matches(key, .clear_selection)) {
+                clearAurSelection(self);
+                break :handled;
+            }
+            if (commands.matches(key, .search)) {
+                self.aur_state.aur_list_active = false;
+                break :handled;
+            }
+            if (commands.matches(key, .details)) {
+                if (selectedAur(self)) |pkg| self.overlay = .{ .aur = pkg };
+                break :handled;
+            }
+            if (commands.matches(key, .preview)) {
+                if (selectedAur(self)) |pkg| try operation_model.openPkgbuild(self, ctx, pkg.Name);
+                break :handled;
+            }
+            if (commands.packageAction(key)) |action| {
+                try openAurPrompt(self, if (action == .install) .install else .remove);
+                break :handled;
+            }
         }
-        ctx.consumeAndRedraw();
-        return true;
+        if (commands.matches(key, .previous) or commands.matches(key, .next)) {
+            if (self.aur_state.aur_list_active and self.aur_state.aur_list.cursor == 0 and commands.matches(key, .previous)) {
+                self.aur_state.aur_list_active = false;
+                break :handled;
+            }
+            self.aur_state.aur_list_active = true;
+            try self.aur_state.aur_list.handleEvent(ctx, .{ .key_press = .{ .codepoint = if (commands.matches(key, .previous)) vaxis.Key.up else vaxis.Key.down } });
+            break :handled;
+        }
+        if (commands.matches(key, .confirm)) {
+            const query = try self.aur_state.aur_field.buf.dupe();
+            defer self.gpa.free(query);
+            try onAurSubmit(self, ctx, query);
+            break :handled;
+        }
+        if ((self.aur_state.aur_installed_only or catalogActive(self)) and commands.refreshesList(key)) {
+            if (self.aur_state.aur_job == null) {
+                invalidateInstalledCache(self);
+                try startAurRequest(self, ctx, "", catalogRefreshPage(self));
+            }
+            break :handled;
+        }
+        if (commands.togglesInstalled(key)) {
+            if (self.aur_state.aur_job == null) {
+                self.aur_state.aur_installed_only = !self.aur_state.aur_installed_only;
+                if (self.aur_state.aur_installed_only and try restoreInstalledCache(self)) {
+                    break :handled;
+                }
+                try startAurSearch(self, ctx, "");
+                self.aur_state.aur_filtered.clearRetainingCapacity();
+                self.aur_state.aur_list.item_count = 0;
+                self.aur_state.aur_list.jumpToItem(0);
+            }
+            break :handled;
+        }
+        if (self.aur_state.aur_list_active and !global_command) {
+            ctx.consumeEvent();
+            return true;
+        }
+        return false;
     }
-    if (self.aur_state.aur_list_active and !global_command) {
-        ctx.consumeEvent();
-        return true;
-    }
-    return false;
+    ctx.consumeAndRedraw();
+    return true;
 }
 
 /// Returns whether page input was consumed; globals remain with the coordinator.

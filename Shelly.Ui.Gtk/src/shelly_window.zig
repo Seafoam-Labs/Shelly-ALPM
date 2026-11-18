@@ -29,6 +29,7 @@ const UtilitiesPage = @import("pages/utilities_page.zig").UtilitiesPage;
 const TransactionPage = @import("pages/transaction_page.zig").TransactionPage;
 const TransactionRequest = @import("pages/transaction_page.zig").TransactionRequest;
 const runtime = @import("services/runtime.zig");
+const theme = @import("services/theme.zig");
 const ShellyCli = @import("services/shelly_cli.zig").ShellyCli;
 const AtollApiService = @import("services/atoll_api.zig").AtollApiService;
 const NavMode = @import("models/shelly_config.zig").NavMode;
@@ -67,6 +68,7 @@ pub const ShellyWindow = extern struct {
         topnav: ?*gtk.Box,
         chevron_img: ?*gtk.Image,
         nav_buttons: std.ArrayListUnmanaged(*NavButton),
+        nav_groups: std.ArrayListUnmanaged(*gtk.Label),
         collapsed: bool,
         nav_mode: NavMode,
         pending_nav: NavMode,
@@ -103,7 +105,17 @@ pub const ShellyWindow = extern struct {
         p.topnav = null;
         p.chevron_img = null;
         p.nav_buttons = .empty;
-        p.collapsed = true;
+        p.nav_groups = .empty;
+        // The built-in theme's default layout is the mockup's expanded sidebar;
+        // system mode keeps the legacy collapsed rail.
+        p.collapsed = blk: {
+            if (runtime.config) |svc| {
+                if (svc.get()) |cfg| {
+                    break :blk cfg.ThemeMode == .system;
+                } else |_| {}
+            }
+            break :blk false;
+        };
         p.nav_mode = .sidebar;
         p.pending_nav = .sidebar;
         p.aur_slot_atoll = false;
@@ -142,6 +154,45 @@ pub const ShellyWindow = extern struct {
                 @intCast(cfg.WindowLastWidth),
                 @intCast(cfg.WindowLastHeight),
             );
+        }
+
+        self.refreshTheme();
+    }
+
+    /// Applies the persisted theme (or the defaults when no config service is
+    /// available) and syncs the theme-dependent structural margins.
+    pub fn refreshTheme(self: *ShellyWindow) void {
+        var mode: theme.ThemeMode = .shelly;
+        var variant: theme.ThemeVariant = .follow_system;
+        if (runtime.config) |svc| {
+            if (svc.get()) |cfg| {
+                mode = cfg.ThemeMode;
+                variant = cfg.ThemeVariant;
+            } else |_| {}
+        }
+        self.applyThemeNow(mode, variant);
+    }
+
+    /// Live theme application, used by Settings before the config is saved.
+    pub fn applyThemeNow(self: *ShellyWindow, mode: theme.ThemeMode, variant: theme.ThemeVariant) void {
+        theme.applyWith(self.as(gtk.Window), mode, variant);
+        self.sync_nav_groups();
+        self.sync_rail_width();
+        const themed = theme.isThemed();
+        const p = self.private();
+        if (p.rail) |rail| {
+            const w = rail.as(gtk.Widget);
+            gtk.Widget.setMarginTop(w, if (themed) 0 else 8);
+            gtk.Widget.setMarginBottom(w, if (themed) 0 else 8);
+            gtk.Widget.setMarginStart(w, if (themed) 0 else 6);
+            gtk.Widget.setMarginEnd(w, if (themed) 0 else 6);
+        }
+        if (p.topnav) |bar| {
+            const w = bar.as(gtk.Widget);
+            gtk.Widget.setMarginTop(w, if (themed) 0 else 6);
+            gtk.Widget.setMarginBottom(w, if (themed) 0 else 6);
+            gtk.Widget.setMarginStart(w, if (themed) 0 else 6);
+            gtk.Widget.setMarginEnd(w, if (themed) 0 else 6);
         }
     }
 
@@ -320,38 +371,40 @@ pub const ShellyWindow = extern struct {
         gtk.Widget.setMarginBottom(items.as(gtk.Widget), 4);
         gtk.Box.append(rail, items.as(gtk.Widget));
 
+        add_nav_group(self, items, translations._("BROWSE"));
         if (features.builtWithRecommend) add_nav_button(self, items, stack, true, "recommend", RecommendPage.icon_name, translations._(RecommendPage.title));
         add_nav_button(self, items, stack, true, "package", PackagePage.icon_name, translations._(PackagePage.title));
         if (features.builtWithAur) add_nav_button(self, items, stack, true, "aur", aur_icon_name, translations._(aur_title));
         if (features.builtWithFlatpak) add_nav_button(self, items, stack, true, "flatpak", FlatpakPage.icon_name, translations._(FlatpakPage.title));
         if (features.builtWithAppImage) add_nav_button(self, items, stack, true, "appimage", AppImagePage.icon_name, translations._(AppImagePage.title));
         if (features.builtWithShellySearch) add_nav_button(self, items, stack, true, "search", ShellySearchPage.icon_name, translations._(ShellySearchPage.title));
+        add_nav_group(self, items, translations._("SYSTEM"));
         add_nav_button(self, items, stack, true, "update", UpdatePage.icon_name, translations._(UpdatePage.title));
+        add_nav_button(self, items, stack, true, "utilities", UtilitiesPage.icon_name, translations._(UtilitiesPage.title));
+        add_nav_button(self, items, stack, true, "settings", SettingsPage.icon_name, translations._(SettingsPage.title));
 
         const sep = gtk.Box.new(.horizontal, 0);
         gtk.Widget.setVexpand(sep.as(gtk.Widget), 1);
         gtk.Box.append(rail, sep.as(gtk.Widget));
-
-        const menu_button = gtk.MenuButton.new();
-        gtk.Widget.addCssClass(menu_button.as(gtk.Widget), "flat");
-        gtk.MenuButton.setIconName(menu_button, "open-menu-symbolic");
-        const menu_label = translations._("Main menu");
-        a11y.setName(menu_button.as(gtk.Widget), menu_label);
-        gtk.Widget.setTooltipText(menu_button.as(gtk.Widget), menu_label);
-        const popover = gtk.Popover.new();
-        const menu_box = gtk.Box.new(.vertical, 4);
-        const utils_btn = gtk.Button.newWithLabel(translations._("Utilities"));
-        gtk.Widget.addCssClass(utils_btn.as(gtk.Widget), "flat");
-        _ = gtk.Button.signals.clicked.connect(utils_btn, *ShellyWindow, &on_utilities, self, .{});
-        gtk.Box.append(menu_box, utils_btn.as(gtk.Widget));
-        const sp_btn = gtk.Button.newWithLabel(translations._("Settings"));
-        gtk.Widget.addCssClass(sp_btn.as(gtk.Widget), "flat");
-        _ = gtk.Button.signals.clicked.connect(sp_btn, *ShellyWindow, &on_settings, self, .{});
-        gtk.Box.append(menu_box, sp_btn.as(gtk.Widget));
-        gtk.Popover.setChild(popover, menu_box.as(gtk.Widget));
-        gtk.MenuButton.setPopover(menu_button, popover);
-        gtk.Box.append(rail, menu_button.as(gtk.Widget));
         return rail;
+    }
+
+    /// Uppercase section label for the themed sidebar; hidden in system mode
+    /// and while the rail is collapsed so the legacy rail is unchanged.
+    fn add_nav_group(self: *ShellyWindow, parent: *gtk.Box, text: [:0]const u8) void {
+        const label = gtk.Label.new(text);
+        gtk.Widget.addCssClass(label.as(gtk.Widget), "nav-group");
+        gtk.Widget.setHalign(label.as(gtk.Widget), .start);
+        gtk.Box.append(parent, label.as(gtk.Widget));
+        self.private().nav_groups.append(std.heap.c_allocator, label) catch unreachable;
+    }
+
+    fn sync_nav_groups(self: *ShellyWindow) void {
+        const p = self.private();
+        const visible = !p.collapsed and theme.isThemed();
+        for (p.nav_groups.items) |label| {
+            gtk.Widget.setVisible(label.as(gtk.Widget), @intFromBool(visible));
+        }
     }
 
     fn build_topnav(self: *ShellyWindow, stack: *gtk.Stack) *gtk.Box {
@@ -379,30 +432,12 @@ pub const ShellyWindow = extern struct {
         if (features.builtWithAppImage) add_nav_button(self, items, stack, false, "appimage", AppImagePage.icon_name, translations._(AppImagePage.title));
         if (features.builtWithShellySearch) add_nav_button(self, items, stack, false, "search", ShellySearchPage.icon_name, translations._(ShellySearchPage.title));
         add_nav_button(self, items, stack, false, "update", UpdatePage.icon_name, translations._(UpdatePage.title));
+        add_nav_button(self, items, stack, false, "utilities", UtilitiesPage.icon_name, translations._(UtilitiesPage.title));
+        add_nav_button(self, items, stack, false, "settings", SettingsPage.icon_name, translations._(SettingsPage.title));
 
         const right_spacer = gtk.Box.new(.horizontal, 0);
         gtk.Widget.setHexpand(right_spacer.as(gtk.Widget), 1);
         gtk.Box.append(bar, right_spacer.as(gtk.Widget));
-
-        const menu_button = gtk.MenuButton.new();
-        gtk.Widget.addCssClass(menu_button.as(gtk.Widget), "flat");
-        gtk.MenuButton.setIconName(menu_button, "view-more-symbolic");
-        const menu_label = translations._("Main menu");
-        a11y.setName(menu_button.as(gtk.Widget), menu_label);
-        gtk.Widget.setTooltipText(menu_button.as(gtk.Widget), menu_label);
-        const popover = gtk.Popover.new();
-        const menu_box = gtk.Box.new(.vertical, 4);
-        const utils_btn = gtk.Button.newWithLabel(translations._("Utilities"));
-        gtk.Widget.addCssClass(utils_btn.as(gtk.Widget), "flat");
-        _ = gtk.Button.signals.clicked.connect(utils_btn, *ShellyWindow, &on_utilities, self, .{});
-        gtk.Box.append(menu_box, utils_btn.as(gtk.Widget));
-        const sp_btn = gtk.Button.newWithLabel(translations._("Settings"));
-        gtk.Widget.addCssClass(sp_btn.as(gtk.Widget), "flat");
-        _ = gtk.Button.signals.clicked.connect(sp_btn, *ShellyWindow, &on_settings, self, .{});
-        gtk.Box.append(menu_box, sp_btn.as(gtk.Widget));
-        gtk.Popover.setChild(popover, menu_box.as(gtk.Widget));
-        gtk.MenuButton.setPopover(menu_button, popover);
-        gtk.Box.append(bar, menu_button.as(gtk.Widget));
 
         return bar;
     }
@@ -420,6 +455,17 @@ pub const ShellyWindow = extern struct {
             if (!nb.is_rail) continue;
             gtk.Revealer.setRevealChild(nb.revealer, @intFromBool(!p.collapsed));
         }
+        self.sync_nav_groups();
+        self.sync_rail_width();
+    }
+
+    /// The expanded themed sidebar matches the mockup's 232px column; the
+    /// collapsed rail and system mode keep their content-driven width.
+    fn sync_rail_width(self: *ShellyWindow) void {
+        const p = self.private();
+        const rail = p.rail orelse return;
+        const wide = theme.isThemed() and !p.collapsed and p.nav_mode == .sidebar;
+        gtk.Widget.setSizeRequest(rail.as(gtk.Widget), if (wide) 232 else -1, -1);
     }
 
     /// The chevron's icon is its only content and its meaning flips with the rail's
@@ -564,26 +610,6 @@ pub const ShellyWindow = extern struct {
                 }
             }
         }
-    }
-
-    fn on_settings(btn: *gtk.Button, self: *ShellyWindow) callconv(.c) void {
-        const p = self.private();
-        gtk.Stack.setVisibleChildName(p.content_stack, "settings");
-        if (gtk.Widget.getAncestor(btn.as(gtk.Widget), gtk.Popover.getGObjectType())) |pop| {
-            gtk.Popover.popdown(@ptrCast(@alignCast(pop)));
-        }
-        // After popdown, so closing the popover cannot pull focus back to the
-        // menu button that opened it.
-        focusVisiblePage(self);
-    }
-
-    fn on_utilities(btn: *gtk.Button, self: *ShellyWindow) callconv(.c) void {
-        const p = self.private();
-        gtk.Stack.setVisibleChildName(p.content_stack, "utilities");
-        if (gtk.Widget.getAncestor(btn.as(gtk.Widget), gtk.Popover.getGObjectType())) |pop| {
-            gtk.Popover.popdown(@ptrCast(@alignCast(pop)));
-        }
-        focusVisiblePage(self);
     }
 
     fn populate_stack(self: *ShellyWindow) void {
@@ -869,6 +895,7 @@ pub const ShellyWindow = extern struct {
             std.heap.c_allocator.destroy(nb);
         }
         p.nav_buttons.deinit(std.heap.c_allocator);
+        p.nav_groups.deinit(std.heap.c_allocator);
         if (p.rail) |rail| rail.as(gobject.Object).unref();
         if (p.topnav) |topnav| topnav.as(gobject.Object).unref();
         gobject.Object.virtual_methods.finalize.call(Class.parent, self.as(Parent));
