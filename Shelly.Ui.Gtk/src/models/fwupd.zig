@@ -621,7 +621,7 @@ fn urlDirname(url: []const u8) []const u8 {
 }
 
 // ---------------------------------------------------------------------------
-// LVFS read-more links (Phase 10, D15-D18)
+// LVFS read-more links
 // ---------------------------------------------------------------------------
 
 /// LVFS component page: all releases with notes, success reports and advisories.
@@ -643,7 +643,7 @@ fn urlHost(url: []const u8) []const u8 {
     return authority;
 }
 
-/// D16 provenance gate: only LVFS remotes or LVFS-hosted payloads get a link, so
+/// Provenance gate: only LVFS remotes or LVFS-hosted payloads get a link, so
 /// local/directory remotes (numeric ids, file paths) never yield dead LVFS URLs.
 fn lvfsProvenance(release: Release) bool {
     if (std.mem.eql(u8, release.remote_id, "lvfs") or

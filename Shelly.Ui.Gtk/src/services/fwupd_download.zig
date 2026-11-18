@@ -11,7 +11,7 @@
 //! every failure. Local/directory remotes resolve to a file path directly; the
 //! daemon verifies those payloads on Install.
 //!
-//! Also owns the manual metadata refresh (Phase 6): per-remote `.jcat` fetch,
+//! Also owns the manual metadata refresh: per-remote `.jcat` fetch,
 //! signature-checksum skip check, `UpdateMetadata` fd call and the 24 h
 //! `last_refresh` throttle. GTK-free like the payload path; the page marshals
 //! results to the main loop itself.
@@ -261,7 +261,7 @@ pub const CountingWriter = struct {
 };
 
 // ---------------------------------------------------------------------------
-// Metadata refresh (Phase 6)
+// Metadata refresh
 // ---------------------------------------------------------------------------
 
 /// Automatic on-load refresh backs off for 24 h; the manual button bypasses it.

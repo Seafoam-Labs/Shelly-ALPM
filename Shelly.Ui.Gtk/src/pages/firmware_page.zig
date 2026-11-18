@@ -2235,7 +2235,7 @@ pub const FirmwarePage = extern struct {
         return alloc.printSentinel("<a href=\"{s}\">{s}</a>", .{ escaped, caption }, 0) catch "";
     }
 
-    /// Only http(s) URLs reach the launcher (D17); the builders emit https only, so
+    /// Only http(s) URLs reach the launcher; the builders emit https only, so
     /// this is defense in depth against a hostile daemon or a future caller.
     fn isHttpUri(uri: []const u8) bool {
         return std.mem.startsWith(u8, uri, "https://") or std.mem.startsWith(u8, uri, "http://");
@@ -2785,7 +2785,7 @@ test "firmware release row keeps badges plain (read-more link is device-level on
     const action = gobject.ext.cast(gtk.Button, gtk.Grid.getChildAt(grid, 3, 0).?).?;
 
     // Even an LVFS release with a community badge shows plain text, no per-row link:
-    // the single read-more link lives in the device detail pane (D18 revised).
+    // the single read-more link lives in the device detail pane.
     const lvfs = ReleaseObject.new(alloc, device, .{
         .version = "1.1",
         .trust_flags = enums.TrustFlags.is_upgrade | enums.TrustFlags.is_community,
