@@ -620,6 +620,52 @@ fn urlDirname(url: []const u8) []const u8 {
     return "";
 }
 
+// ---------------------------------------------------------------------------
+// LVFS read-more links (Phase 10, D15-D18)
+// ---------------------------------------------------------------------------
+
+/// LVFS component page: all releases with notes, success reports and advisories.
+/// Built client-side because no wire field carries an LVFS URL.
+fn lvfsComponentUrl(alloc: std.mem.Allocator, appstream_id: []const u8) ?[:0]const u8 {
+    return alloc.printSentinel("https://fwupd.org/lvfs/devices/{s}", .{appstream_id}, 0) catch null;
+}
+
+/// Host of a hierarchical URL: strip scheme, userinfo and port, stop at the
+/// path/query/fragment. Returns "" without a `://` scheme (file://, bare paths)
+/// so non-http payloads never pass the provenance gate.
+fn urlHost(url: []const u8) []const u8 {
+    const i = std.mem.indexOf(u8, url, "://") orelse return "";
+    var authority = url[i + 3 ..];
+    const end = std.mem.indexOfAny(u8, authority, "/?#") orelse authority.len;
+    authority = authority[0..end];
+    if (std.mem.lastIndexOfScalar(u8, authority, '@')) |at| authority = authority[at + 1 ..];
+    if (std.mem.indexOfScalar(u8, authority, ':')) |colon| authority = authority[0..colon];
+    return authority;
+}
+
+/// D16 provenance gate: only LVFS remotes or LVFS-hosted payloads get a link, so
+/// local/directory remotes (numeric ids, file paths) never yield dead LVFS URLs.
+fn lvfsProvenance(release: Release) bool {
+    if (std.mem.eql(u8, release.remote_id, "lvfs") or
+        std.mem.eql(u8, release.remote_id, "lvfs-testing")) return true;
+    const location = if (release.locations.len > 0) release.locations[0] else release.uri;
+    const host = urlHost(location);
+    return std.ascii.eqlIgnoreCase(host, "fwupd.org") or
+        std.ascii.eqlIgnoreCase(host, "cdn.fwupd.org");
+}
+
+/// Read-more URL for a device, derived from its releases (devices carry no
+/// AppstreamId on the wire): the first LVFS-gated release with an appstream id
+/// wins. Null when no release qualifies.
+pub fn deviceInfoUrl(alloc: std.mem.Allocator, releases: []const Release) ?[:0]const u8 {
+    for (releases) |release| {
+        if (release.appstream_id.len == 0) continue;
+        if (!lvfsProvenance(release)) continue;
+        return lvfsComponentUrl(alloc, release.appstream_id);
+    }
+    return null;
+}
+
 /// Map a bare fwupd D-Bus error name (prefix already stripped by the service layer)
 /// to the enum; unrecognized names fall back to `.unknown`.
 pub fn mapError(name: []const u8) enums.Error {
@@ -1448,4 +1494,44 @@ test "fwupd progress fraction prefers PercentageFull and clamps" {
     try testing.expectEqual(@as(f64, 1.0), progressFraction(.{ .percentage = 100, .percentage_full = 100 }));
     try testing.expectEqual(@as(f64, 1.0), progressFraction(.{ .percentage_full = 150 }));
     try testing.expectEqual(@as(f64, 1.0), progressFraction(.{ .percentage = 200 }));
+}
+
+test "fwupd device info URL picks the first gated appstream id from releases" {
+    var arena = testArena();
+    defer arena.deinit();
+    const alloc = arena.allocator();
+
+    // Devices have no appstream id; the link comes from the first qualifying release.
+    const releases = [_]Release{
+        .{ .remote_id = "lvfs", .release_id = "1" }, // no appstream id: skipped for the device link
+        .{ .remote_id = "local", .appstream_id = "org.local.fw", .locations = &.{"file:///srv/fw.cab"} }, // not LVFS: skipped
+        .{ .remote_id = "lvfs", .appstream_id = "com.lenovo.ThinkPadR2LET.firmware", .release_id = "2" },
+        .{ .remote_id = "lvfs", .appstream_id = "org.other.fw" },
+    };
+    try testing.expectEqualStrings("https://fwupd.org/lvfs/devices/com.lenovo.ThinkPadR2LET.firmware", deviceInfoUrl(alloc, &releases).?);
+
+    try testing.expect(deviceInfoUrl(alloc, &.{}) == null);
+    // Only release ids (no appstream ids): no device link.
+    try testing.expect(deviceInfoUrl(alloc, &.{.{ .remote_id = "lvfs", .release_id = "1" }}) == null);
+    // Non-LVFS appstream ids never produce a device link.
+    try testing.expect(deviceInfoUrl(alloc, &.{.{ .remote_id = "local", .appstream_id = "org.local.fw" }}) == null);
+
+    // Unknown remote but an LVFS payload host passes the gate (host branch).
+    const host_gated = [_]Release{.{ .remote_id = "vendor", .appstream_id = "org.test.fw", .locations = &.{"https://cdn.fwupd.org/downloads/a.cab"} }};
+    try testing.expectEqualStrings("https://fwupd.org/lvfs/devices/org.test.fw", deviceInfoUrl(alloc, &host_gated).?);
+    // lvfs-testing remote is LVFS.
+    try testing.expectEqualStrings("https://fwupd.org/lvfs/devices/org.test.fw", deviceInfoUrl(alloc, &.{.{ .remote_id = "lvfs-testing", .appstream_id = "org.test.fw" }}).?);
+    // Legacy single-Uri host also gates.
+    try testing.expectEqualStrings("https://fwupd.org/lvfs/devices/org.test.fw", deviceInfoUrl(alloc, &.{.{ .remote_id = "vendor", .appstream_id = "org.test.fw", .uri = "https://fwupd.org/downloads/a.cab" }}).?);
+}
+
+test "fwupd urlHost extracts the authority and fails closed without a scheme" {
+    try testing.expectEqualStrings("fwupd.org", urlHost("https://fwupd.org/downloads/x.cab"));
+    try testing.expectEqualStrings("cdn.fwupd.org", urlHost("https://cdn.fwupd.org/downloads/x.cab?a=1#f"));
+    try testing.expectEqualStrings("fwupd.org", urlHost("https://user@fwupd.org:443/x.cab"));
+    try testing.expectEqualStrings("", urlHost("file:///srv/fw.cab"));
+    try testing.expectEqualStrings("", urlHost("fw.cab"));
+    try testing.expectEqualStrings("", urlHost(""));
+    // A look-alike host is not LVFS.
+    try testing.expect(!std.ascii.eqlIgnoreCase(urlHost("https://fwupd.org.evil.com/x.cab"), "fwupd.org"));
 }

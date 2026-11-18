@@ -421,6 +421,13 @@
                       </object>
                     </child>
                     <child>
+                      <object class="GtkLabel" id="detail_link">
+                        <property name="xalign">0</property>
+                        <property name="visible">false</property>
+                        <style><class name="caption"/></style>
+                      </object>
+                    </child>
+                    <child>
                       <object class="GtkLabel" id="detail_warning">
                         <property name="xalign">0</property>
                         <property name="wrap">true</property>

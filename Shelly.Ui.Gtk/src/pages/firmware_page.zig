@@ -75,6 +75,7 @@ pub const FirmwarePage = extern struct {
         detail_flags: *gtk.Label,
         detail_problems: *gtk.Label,
         detail_guids: *gtk.Label,
+        detail_link: *gtk.Label,
         detail_warning: *gtk.Label,
         detail_no_releases: *gtk.Label,
         release_scroll: *gtk.ScrolledWindow,
@@ -195,6 +196,15 @@ pub const FirmwarePage = extern struct {
         _ = gtk.SignalListItemFactory.signals.bind.connect(release_factory, *Self, &on_release_row_bind, self, .{});
         gtk.ListView.setFactory(p.release_list, release_factory.as(gtk.ListItemFactory));
 
+        _ = gobject.signalConnectData(
+            p.detail_link.as(gobject.Object),
+            "activate-link",
+            @ptrCast(&on_info_link),
+            null,
+            null,
+            .{},
+        );
+
         support.connectLifecycle(Self, self);
     }
 
@@ -290,6 +300,7 @@ pub const FirmwarePage = extern struct {
         }
         gtk.Widget.setVisible(p.detail_warning.as(gtk.Widget), 0);
         gtk.Widget.setVisible(p.detail_no_releases.as(gtk.Widget), 0);
+        gtk.Widget.setVisible(p.detail_link.as(gtk.Widget), 0);
         gtk.Widget.setVisible(p.release_scroll.as(gtk.Widget), 1);
     }
 
@@ -953,6 +964,7 @@ pub const FirmwarePage = extern struct {
             // Keep the previous list (same-device refresh) and warn inline.
             gtk.Label.setLabel(p.detail_warning, models.errorText(f.kind));
             gtk.Widget.setVisible(p.detail_warning.as(gtk.Widget), 1);
+            gtk.Widget.setVisible(p.detail_link.as(gtk.Widget), 0);
             const empty = gio.ListModel.getNItems(p.release_store.as(gio.ListModel)) == 0;
             gtk.Widget.setVisible(p.detail_no_releases.as(gtk.Widget), @intFromBool(empty));
             gtk.Widget.setVisible(p.release_scroll.as(gtk.Widget), @intFromBool(!empty));
@@ -977,6 +989,14 @@ pub const FirmwarePage = extern struct {
         gtk.Widget.setVisible(p.detail_warning.as(gtk.Widget), 0);
         gtk.Widget.setVisible(p.detail_no_releases.as(gtk.Widget), @intFromBool(releases.len == 0));
         gtk.Widget.setVisible(p.release_scroll.as(gtk.Widget), @intFromBool(releases.len > 0));
+        // Device read-more link derives from the fetched releases (devices carry no
+        // AppstreamId). Hide it when no release qualifies so a stale link never lingers.
+        if (models.deviceInfoUrl(result.arena.allocator(), releases)) |url| {
+            gtk.Label.setMarkup(p.detail_link, infoLinkMarkup(result.arena.allocator(), url, translations._("View on LVFS")));
+            gtk.Widget.setVisible(p.detail_link.as(gtk.Widget), 1);
+        } else {
+            gtk.Widget.setVisible(p.detail_link.as(gtk.Widget), 0);
+        }
         gtk.Spinner.stop(p.detail_spinner);
         gtk.Stack.setVisibleChild(p.detail_stack, p.detail_page.as(gtk.Widget));
         c_alloc.free(result.device_id);
@@ -2208,6 +2228,32 @@ pub const FirmwarePage = extern struct {
         beginInstall(self, device_object, object);
     }
 
+    /// Pango markup for a read-more link. The URL is daemon-derived, so escape it
+    /// (incl. quotes) before interpolating into an href; the caption is our string.
+    fn infoLinkMarkup(alloc: std.mem.Allocator, url: []const u8, caption: []const u8) [:0]const u8 {
+        const escaped = escapeMarkup(alloc, url);
+        return alloc.printSentinel("<a href=\"{s}\">{s}</a>", .{ escaped, caption }, 0) catch "";
+    }
+
+    /// Only http(s) URLs reach the launcher (D17); the builders emit https only, so
+    /// this is defense in depth against a hostile daemon or a future caller.
+    fn isHttpUri(uri: []const u8) bool {
+        return std.mem.startsWith(u8, uri, "https://") or std.mem.startsWith(u8, uri, "http://");
+    }
+
+    /// activate-link for the LVFS read-more label in the device detail pane.
+    /// Return 1 to stop GTK's default handler; parent the launch to the window
+    /// (polkit_warning idiom). Unref after launch: the async GTask holds its own ref.
+    fn on_info_link(label: *gtk.Label, uri: [*:0]const u8, _: ?*anyopaque) callconv(.c) c_int {
+        if (!isHttpUri(std.mem.span(uri))) return 1;
+        const root = gtk.Widget.getRoot(label.as(gtk.Widget));
+        const parent: ?*gtk.Window = if (root) |r| gobject.ext.cast(gtk.Window, r) else null;
+        const launcher = gtk.UriLauncher.new(uri);
+        defer launcher.unref();
+        launcher.launch(parent, null, null, null);
+        return 1;
+    }
+
     // -----------------------------------------------------------------------
     // Pure label helpers
     // -----------------------------------------------------------------------
@@ -2309,6 +2355,7 @@ pub const FirmwarePage = extern struct {
         .{ "detail_flags", @offsetOf(Private, "detail_flags") },
         .{ "detail_problems", @offsetOf(Private, "detail_problems") },
         .{ "detail_guids", @offsetOf(Private, "detail_guids") },
+        .{ "detail_link", @offsetOf(Private, "detail_link") },
         .{ "detail_warning", @offsetOf(Private, "detail_warning") },
         .{ "detail_no_releases", @offsetOf(Private, "detail_no_releases") },
         .{ "release_scroll", @offsetOf(Private, "release_scroll") },
@@ -2390,6 +2437,27 @@ test "firmware release labels map classification, urgency and blocked reasons" {
         "This version is blocked on this device",
         FirmwarePage.blockedReason(enums.TrustFlags.blocked_version),
     );
+}
+
+test "firmware info link markup escapes the href and only http(s) launches" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+
+    // Daemon-supplied URL specials are escaped inside the href.
+    const markup = FirmwarePage.infoLinkMarkup(alloc, "https://fwupd.org/lvfs/devices/a.b?x=1&y=\"2\"", "View on LVFS");
+    try testing.expectEqualStrings(
+        "<a href=\"https://fwupd.org/lvfs/devices/a.b?x=1&amp;y=&quot;2&quot;\">View on LVFS</a>",
+        markup,
+    );
+
+    // Scheme gate: only http(s) is launchable.
+    try testing.expect(FirmwarePage.isHttpUri("https://fwupd.org/lvfs/devices/x"));
+    try testing.expect(FirmwarePage.isHttpUri("http://fwupd.org/lvfs/devices/x"));
+    try testing.expect(!FirmwarePage.isHttpUri("javascript:alert(1)"));
+    try testing.expect(!FirmwarePage.isHttpUri("file:///etc/passwd"));
+    try testing.expect(!FirmwarePage.isHttpUri("ftp://fwupd.org/x"));
+    try testing.expect(!FirmwarePage.isHttpUri(""));
 }
 
 test "firmware collectLoad filters updatable devices and attaches badges" {
@@ -2700,6 +2768,117 @@ test "firmware rows bind device and release data" {
     try testing.expectEqual(@as(c_int, 0), gtk.Widget.getVisible(urgency.as(gtk.Widget)));
     try testing.expectEqual(@as(c_int, 1), gtk.Widget.getVisible(release_badges.as(gtk.Widget)));
     try testing.expectEqualStrings("Community supported", std.mem.span(gtk.Label.getLabel(release_badges)));
+}
+
+test "firmware release row keeps badges plain (read-more link is device-level only)" {
+    try gtk_test.requireDisplay();
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+    const device = models.Device{ .device_id = "dev1", .version = "1.0" };
+
+    const grid = FirmwarePage.buildReleaseRow();
+    _ = grid.as(gobject.Object).refSink();
+    defer grid.as(gobject.Object).unref();
+    const text_box = gobject.ext.cast(gtk.Box, gtk.Grid.getChildAt(grid, 1, 0).?).?;
+    const badges = gobject.ext.cast(gtk.Label, gtk.Widget.getNextSibling(gtk.Widget.getFirstChild(text_box.as(gtk.Widget)).?).?).?;
+    const action = gobject.ext.cast(gtk.Button, gtk.Grid.getChildAt(grid, 3, 0).?).?;
+
+    // Even an LVFS release with a community badge shows plain text, no per-row link:
+    // the single read-more link lives in the device detail pane (D18 revised).
+    const lvfs = ReleaseObject.new(alloc, device, .{
+        .version = "1.1",
+        .trust_flags = enums.TrustFlags.is_upgrade | enums.TrustFlags.is_community,
+        .remote_id = "lvfs",
+        .appstream_id = "com.lenovo.ThinkPadR2LET.firmware",
+    });
+    defer lvfs.as(gobject.Object).unref();
+    FirmwarePage.bindReleaseRow(grid, lvfs, 0, false);
+    try testing.expectEqual(@as(c_int, 1), gtk.Widget.getVisible(badges.as(gtk.Widget)));
+    try testing.expectEqual(@as(c_int, 0), gtk.Label.getUseMarkup(badges));
+    try testing.expectEqualStrings("Community supported", std.mem.span(gtk.Label.getLabel(badges)));
+
+    // Blocked LVFS release: plain blocked reason, disabled action, still no row link.
+    const blocked = ReleaseObject.new(alloc, device, .{
+        .version = "0.9",
+        .trust_flags = enums.TrustFlags.is_downgrade | enums.TrustFlags.blocked_version,
+        .remote_id = "lvfs",
+        .appstream_id = "com.lenovo.ThinkPadR2LET.firmware",
+    });
+    defer blocked.as(gobject.Object).unref();
+    FirmwarePage.bindReleaseRow(grid, blocked, 0, false);
+    try testing.expectEqual(@as(c_int, 0), gtk.Widget.getSensitive(action.as(gtk.Widget)));
+    try testing.expectEqual(@as(c_int, 0), gtk.Label.getUseMarkup(badges));
+    const blocked_text = std.mem.span(gtk.Label.getLabel(badges));
+    try testing.expect(std.mem.indexOf(u8, blocked_text, "This version is blocked on this device") != null);
+    try testing.expect(std.mem.indexOf(u8, blocked_text, "<a href") == null);
+}
+
+test "firmware detail link follows fetched releases and hides on reset" {
+    try gtk_test.requireDisplay();
+    const page = FirmwarePage.new();
+    _ = page.as(gobject.Object).refSink();
+    defer page.as(gobject.Object).unref();
+    const p = page.priv();
+    var fake = fwupd.FakeBackend{};
+    p.backend = fake.backend();
+    p.generation = 7;
+    p.detail_generation = 3;
+    p.loaded = true;
+    defer {
+        p.generation += 1;
+        p.loaded = false;
+        FirmwarePage.setSelectedId(page, null);
+        FirmwarePage.clear_data(page);
+    }
+
+    // Success with an LVFS appstream id: the component-page link is shown.
+    const lvfs_arena = try c_alloc.create(std.heap.ArenaAllocator);
+    lvfs_arena.* = std.heap.ArenaAllocator.init(testing.allocator);
+    const lvfs_releases = try lvfs_arena.allocator().alloc(models.Release, 1);
+    lvfs_releases[0] = .{ .version = "1.1", .remote_id = "lvfs", .appstream_id = "com.lenovo.ThinkPadR2LET.firmware", .trust_flags = enums.TrustFlags.is_upgrade };
+    const lvfs_result = try c_alloc.create(FirmwarePage.DetailResult);
+    lvfs_result.* = .{
+        .page = page, .arena = lvfs_arena, .generation = 7, .token = 3,
+        .device_id = try c_alloc.dupe(u8, "dev1"), .device_version = try c_alloc.dupe(u8, "1.0"),
+        .releases = lvfs_releases, .failure = null,
+    };
+    try testing.expectEqual(@as(c_int, 0), FirmwarePage.on_detail_complete(lvfs_result));
+    try testing.expectEqual(@as(c_int, 1), gtk.Widget.getVisible(p.detail_link.as(gtk.Widget)));
+    const link_markup = std.mem.span(gtk.Label.getLabel(p.detail_link));
+    try testing.expect(std.mem.indexOf(u8, link_markup, "href=\"https://fwupd.org/lvfs/devices/com.lenovo.ThinkPadR2LET.firmware\"") != null);
+    try testing.expect(std.mem.indexOf(u8, link_markup, "View on LVFS</a>") != null);
+    try testing.expectEqual(@as(c_int, 0), gtk.Label.getSelectable(p.detail_link));
+
+    // Success with only non-LVFS releases: no device link.
+    const local_arena = try c_alloc.create(std.heap.ArenaAllocator);
+    local_arena.* = std.heap.ArenaAllocator.init(testing.allocator);
+    const local_releases = try local_arena.allocator().alloc(models.Release, 1);
+    local_releases[0] = .{ .version = "1.2", .remote_id = "local", .appstream_id = "org.local.fw" };
+    const local_result = try c_alloc.create(FirmwarePage.DetailResult);
+    local_result.* = .{
+        .page = page, .arena = local_arena, .generation = 7, .token = 3,
+        .device_id = try c_alloc.dupe(u8, "dev1"), .device_version = try c_alloc.dupe(u8, "1.0"),
+        .releases = local_releases, .failure = null,
+    };
+    try testing.expectEqual(@as(c_int, 0), FirmwarePage.on_detail_complete(local_result));
+    try testing.expectEqual(@as(c_int, 0), gtk.Widget.getVisible(p.detail_link.as(gtk.Widget)));
+
+    // Device switch / unmap reset hides the link.
+    FirmwarePage.clear_releases(page);
+    try testing.expectEqual(@as(c_int, 0), gtk.Widget.getVisible(p.detail_link.as(gtk.Widget)));
+
+    // A failed fetch hides the link as well.
+    const fail_arena = try c_alloc.create(std.heap.ArenaAllocator);
+    fail_arena.* = std.heap.ArenaAllocator.init(testing.allocator);
+    const fail_result = try c_alloc.create(FirmwarePage.DetailResult);
+    fail_result.* = .{
+        .page = page, .arena = fail_arena, .generation = 7, .token = 3,
+        .device_id = try c_alloc.dupe(u8, "dev1"), .device_version = try c_alloc.dupe(u8, "1.0"),
+        .releases = null, .failure = .{ .kind = .internal, .message = "" },
+    };
+    try testing.expectEqual(@as(c_int, 0), FirmwarePage.on_detail_complete(fail_result));
+    try testing.expectEqual(@as(c_int, 0), gtk.Widget.getVisible(p.detail_link.as(gtk.Widget)));
 }
 
 test "firmware install flow runs download, install and finish refresh against the fake backend" {
