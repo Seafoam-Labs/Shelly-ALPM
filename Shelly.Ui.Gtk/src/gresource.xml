@@ -10,6 +10,7 @@
     <file alias="settings-symbolic.svg" preprocess="xml-stripblanks">assets/icons/settings-symbolic.svg</file>
     <file alias="application-x-executable-symbolic.svg" preprocess="xml-stripblanks">assets/icons/application-x-executable-symbolic.svg</file>
     <file alias="software-update-available-symbolic.svg" preprocess="xml-stripblanks">assets/icons/software-update-available-symbolic.svg</file>
+    <file alias="firmware-symbolic.svg" preprocess="xml-stripblanks">assets/icons/firmware-symbolic.svg</file>
     <file alias="checkmark-small-symbolic.svg" preprocess="xml-stripblanks">assets/icons/checkmark-small-symbolic.svg</file>
   </gresource>
   <gresource prefix="/com/shellyorg/shelly">
@@ -44,6 +45,7 @@
     <file>ui/aur_package_detail.ui</file>
     <file>ui/flatpak_package_detail.ui</file>
     <file>ui/update_page.ui</file>
+    <file>ui/firmware_page.ui</file>
     <file>ui/recommend_page.ui</file>
     <file>devario/package_page.ui</file>
     <file>style.css</file>

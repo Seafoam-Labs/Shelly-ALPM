@@ -181,6 +181,7 @@ package_shelly-git() {
   )
   optdepends=(
     'fuse2: run AppImages that require FUSE 2'
+    'fwupd: Firmware page for device firmware updates'
     'libstarfish: dependency viewer for arch packages'
   )
   provides=("shelly=${pkgver}")

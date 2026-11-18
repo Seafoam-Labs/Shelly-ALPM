@@ -32,6 +32,7 @@ pub const ShellyTabs = enum(u8) {
     shelly_search = 4,
     recommend = 5,
     update = 6,
+    firmware = 7,
 };
 
 pub const DayOfWeek = enum(u8) {
@@ -57,6 +58,7 @@ pub const ShellyConfig = struct {
     AppImageUpgradeAllRecheck: bool = false,
     AppImageEnabled: bool = false,
     FlatPackEnabled: bool = false,
+    FirmwareEnabled: bool = false,
     RecommendedEnabled: bool = true,
     ShellyIconsEnabled: bool = true,
     ShellySearchEnabled: bool = false,

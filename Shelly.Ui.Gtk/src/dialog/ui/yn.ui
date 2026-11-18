@@ -39,6 +39,13 @@
               </object>
             </child>
             <child>
+              <object class="GtkCheckButton" id="check_button">
+                <property name="visible">false</property>
+                <property name="halign">center</property>
+                <signal name="toggled" handler="on_check_toggled" swapped="true"/>
+              </object>
+            </child>
+            <child>
               <object class="GtkBox">
                 <property name="spacing">12</property>
                 <property name="halign">center</property>

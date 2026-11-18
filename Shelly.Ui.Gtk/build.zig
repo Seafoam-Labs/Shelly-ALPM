@@ -66,6 +66,15 @@ pub fn build(b: *std.Build) void {
         ) orelse false,
     );
     options.addOption(
+        bool,
+        "exclude_fwupd",
+        b.option(
+            bool,
+            "exclude-fwupd",
+            "Compile out the Firmware page and its settings row",
+        ) orelse false,
+    );
+    options.addOption(
         AurBackend,
         "aur_backend",
         b.option(
@@ -151,6 +160,7 @@ pub fn build(b: *std.Build) void {
     gresource.addFileInput(b.path("src/assets/icons/settings-symbolic.svg"));
     gresource.addFileInput(b.path("src/assets/icons/application-x-executable-symbolic.svg"));
     gresource.addFileInput(b.path("src/assets/icons/software-update-available-symbolic.svg"));
+    gresource.addFileInput(b.path("src/assets/icons/firmware-symbolic.svg"));
     gresource.addFileInput(b.path("src/assets/icons/checkmark-small-symbolic.svg"));
     gresource.addFileInput(b.path("src/ui/main_window.ui"));
     gresource.addFileInput(b.path("src/ui/settings_page.ui"));
@@ -162,6 +172,7 @@ pub fn build(b: *std.Build) void {
     gresource.addFileInput(b.path("src/ui/search_page.ui"));
     gresource.addFileInput(b.path("src/ui/package_page.ui"));
     gresource.addFileInput(b.path("src/ui/update_page.ui"));
+    gresource.addFileInput(b.path("src/ui/firmware_page.ui"));
     gresource.addFileInput(b.path("src/dialog/ui/yn.ui"));
     gresource.addFileInput(b.path("src/dialog/ui/flatpak_remove.ui"));
     gresource.addFileInput(b.path("src/dialog/ui/multiselect.ui"));

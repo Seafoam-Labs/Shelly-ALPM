@@ -76,6 +76,9 @@ paru -Rns shelly
 - **Optional Flatpak Support**: Install `shelly-flatpak-backend` to manage
   Flatpak applications alongside native packages without making Flatpak a
   runtime dependency of the base Shelly package.
+- **Optional Firmware Support**: Install `fwupd` to update device firmware
+  (UEFI/BIOS and peripherals) from the Firmware page without making fwupd a
+  runtime dependency of the base Shelly package.
 
 ## AUR package availability
 

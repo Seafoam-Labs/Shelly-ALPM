@@ -138,8 +138,23 @@
 .shelly-root .page-body {
   margin: 0 30px 24px;
 }
-.shelly-root listbox {
+/* The stock base sheet paints list surfaces opaque, which squares off the
+   rounded cards; let the card or page background show through. GtkListBox's
+   CSS node is named "list". */
+.shelly-root listview,
+.shelly-root gridview,
+.shelly-root list {
   background: transparent;
+}
+/* ColumnView carries .view, which the stock base paints opaque, and its
+   header buttons get their own stock fill; let the page show through. */
+.shelly-root columnview.view,
+.shelly-root treeview.view,
+.shelly-root columnview.view > header > button,
+.shelly-root treeview.view > header > button {
+  background: transparent;
+  border: none;
+  box-shadow: none;
 }
 .shelly-root listbox row {
   padding: 14px 20px;
