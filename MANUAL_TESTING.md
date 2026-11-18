@@ -700,6 +700,13 @@ Document any known issues that are being tracked:
   fall back to the defaults without crashing.
 - [ ] Keyboard-only focus shows the 2px accent outline on buttons, entries and switches in the
   built-in theme; screen reader names for nav buttons and window controls are unchanged.
+- [ ] Selected cards/rows in the Package grid and list, AUR, search and Flatpak views use the
+  Pearl selection tint and accent focus outline in both variants (no base-theme blue selection
+  fill or focus ring); hovering a selected card/row keeps the tint.
+- [ ] Otherwise borderless buttons (flat, suggested/destructive, window controls, nav pills,
+  chips, checked stack switcher, popover rows) carry a 1px hairline in both variants that
+  strengthens on hover/checked; button sizes match the previous build and System GTK mode
+  renders unchanged.
 - [ ] At 200% scale / large text, headings, cards and the settings rows do not clip.
 - [ ] On a desktop that installs a fixed dark GTK override at user priority (e.g. Pearl's
   matugen palette), the light variant still shows dark-on-light row labels and surfaces;
