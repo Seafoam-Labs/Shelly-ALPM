@@ -1,0 +1,61 @@
+# Maintainer: Zoey Bauer <zoey.erin.bauer@gmail.com>
+
+pkgname=shelly-tui
+pkgver=3.2.1
+pkgrel=1
+pkgdesc='Terminal interface for the Shelly CLI'
+arch=('x86_64')
+url='https://github.com/Seafoam-Labs/Shelly-ALPM'
+license=('GPL-3.0-only')
+# The TUI is only a front end: it needs the Shelly CLI (PKGBUILD-cli or the
+# shelly-cli split package) and runs privileged operations through its own
+# sudo PTY.
+depends=(
+  'glibc'
+  'shelly-cli'
+  'sudo'
+)
+makedepends=(
+  'git'
+  'zig=0.17.1'
+)
+optdepends=('shelly-flatpak-backend: Flatpak tab')
+# The monolithic shelly and shelly-git packages ship the TUI themselves and
+# conflict with this package.
+conflicts=('shelly-tui-git')
+source=("${pkgname}::git+https://github.com/Seafoam-Labs/Shelly-ALPM.git#branch=development")
+sha256sums=('SKIP')
+
+pkgver() {
+  cd "${srcdir}/${pkgname}"
+
+  printf '3.2.1r%s.g%s' \
+    "$(git rev-list --count HEAD)" \
+    "$(git rev-parse --short=7 HEAD)"
+}
+
+build() {
+  cd "${srcdir}/${pkgname}"
+
+  # Release builds look up the CLI on PATH; pin it to the packaged binary.
+  (cd Shelly.Tui && zig build --verbose \
+    --prefix "${srcdir}/zig-out-tui" \
+    -Dshelly-bin=/usr/bin/shelly \
+    -Dcpu=baseline \
+    -Doptimize=safe)
+}
+
+check() {
+  cd "${srcdir}/${pkgname}"
+
+  (cd Shelly.Tui && zig build -Dshelly-bin=/usr/bin/shelly test)
+}
+
+package() {
+  cd "${srcdir}/${pkgname}"
+
+  install -Dm755 "${srcdir}/zig-out-tui/bin/Shelly_Tui" \
+    "${pkgdir}/usr/bin/shelly-tui"
+  install -Dm644 LICENSE \
+    "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
+}
