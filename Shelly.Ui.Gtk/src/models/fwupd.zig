@@ -680,6 +680,15 @@ fn batteryValid(level: u32, threshold: u32) bool {
     return level <= 100 and threshold <= 100;
 }
 
+/// System battery banner decision, mirroring the daemon's install power gate
+/// (fu-engine.c): both values must be valid percentages and the level strictly
+/// below the threshold. Invalid values (101, on AC or unknown) never warn.
+/// Advisory only: the daemon enforces the power rules regardless.
+pub fn batteryTooLow(props: DaemonProps) bool {
+    return batteryValid(props.battery_level, props.battery_threshold) and
+        props.battery_level < props.battery_threshold;
+}
+
 fn powerProblemText(
     alloc: std.mem.Allocator,
     base: []const u8,
@@ -1253,6 +1262,22 @@ test "fwupd problem strings interpolate battery percentages" {
     try testing.expectEqual(@as(usize, 2), texts.len);
     try testing.expectEqualStrings("System power is too low to perform the update (20%, requires 50%)", texts[0]);
     try testing.expectEqualStrings("Device battery power is too low (10%, requires 30%)", texts[1]);
+}
+
+test "fwupd battery banner decision mirrors the daemon power gate" {
+    // Defaults: both invalid (101), never a warning.
+    try testing.expect(!batteryTooLow(.{}));
+    try testing.expect(batteryTooLow(.{ .battery_level = 20, .battery_threshold = 50 }));
+    // Equal or above the threshold: no warning.
+    try testing.expect(!batteryTooLow(.{ .battery_level = 50, .battery_threshold = 50 }));
+    try testing.expect(!batteryTooLow(.{ .battery_level = 80, .battery_threshold = 50 }));
+    // Either side invalid: no warning, even when the raw comparison would trip.
+    try testing.expect(!batteryTooLow(.{ .battery_level = 20, .battery_threshold = enums.battery_level_invalid }));
+    try testing.expect(!batteryTooLow(.{ .battery_level = enums.battery_level_invalid, .battery_threshold = 50 }));
+    // Boundaries: 0 and 100 are valid percentages.
+    try testing.expect(batteryTooLow(.{ .battery_level = 0, .battery_threshold = 1 }));
+    try testing.expect(batteryTooLow(.{ .battery_level = 99, .battery_threshold = 100 }));
+    try testing.expect(!batteryTooLow(.{ .battery_level = 100, .battery_threshold = 100 }));
 }
 
 test "fwupd problem strings fall back to generic wording without battery data" {

@@ -527,18 +527,35 @@ pub const FirmwarePage = extern struct {
         gtk.Widget.setVisible(p.header_spinner.as(gtk.Widget), @intFromBool(active));
     }
 
-    /// Stale-metadata banner; Phase 7 extends this with the battery warning.
+    /// Page banner: the system battery warning (live from daemon properties)
+    /// plus the stale-metadata note. Battery comes first: it blocks updates
+    /// until AC power is connected.
     fn update_banner(self: *Self) void {
         const p = self.priv();
-        const show = p.metadata_stale and !p.refreshing;
-        if (show) blk: {
-            const text = fillTemplate(c_alloc, translations._("Firmware metadata is out of date. Use {s} to refresh."), &.{translations._("Check Again")}) catch break :blk;
-            defer c_alloc.free(text);
-            const text_z = c_alloc.dupeSentinel(u8, text, 0) catch break :blk;
-            defer c_alloc.free(text_z);
-            gtk.Label.setLabel(p.banner_label, text_z);
+        var parts: [2][]const u8 = undefined;
+        var n: usize = 0;
+        var stale_text: ?[]const u8 = null;
+        defer if (stale_text) |t| c_alloc.free(t);
+        if (models.batteryTooLow(p.props)) {
+            parts[n] = translations._("Battery too low: connect AC power before updating firmware");
+            n += 1;
         }
-        gtk.Widget.setVisible(p.banner_box.as(gtk.Widget), @intFromBool(show));
+        if (p.metadata_stale and !p.refreshing) {
+            stale_text = fillTemplate(c_alloc, translations._("Firmware metadata is out of date. Use {s} to refresh."), &.{translations._("Check Again")}) catch null;
+            if (stale_text) |t| {
+                parts[n] = t;
+                n += 1;
+            }
+        }
+        if (n > 0) blk: {
+            var buf: [512]u8 = undefined;
+            const text = if (n == 2)
+                std.fmt.bufPrintSentinel(&buf, "{s}\n{s}", .{ parts[0], parts[1] }, 0) catch break :blk
+            else
+                std.fmt.bufPrintSentinel(&buf, "{s}", .{parts[0]}, 0) catch break :blk;
+            gtk.Label.setLabel(p.banner_label, text);
+        }
+        gtk.Widget.setVisible(p.banner_box.as(gtk.Widget), @intFromBool(n > 0));
     }
 
     fn maybe_auto_refresh(self: *Self) void {
@@ -1040,6 +1057,8 @@ pub const FirmwarePage = extern struct {
         if (!p.loaded) return;
         if (p.install != null and p.install_flash_started) update_flash_progress(self);
         update_busy_ui(self);
+        // The battery banner tracks the daemon power properties live.
+        update_banner(self);
         // Problem text interpolates the system battery values.
         if (p.selected_id) |id| {
             if (findDeviceIndex(self, id)) |index| {
@@ -3326,4 +3345,80 @@ test "firmware refreshing gates the install flow" {
     try testing.expectEqual(@as(c_int, 0), gtk.Widget.getSensitive(p.refresh_button.as(gtk.Widget)));
     p.refreshing = false;
     FirmwarePage.update_busy_ui(page);
+}
+
+test "firmware battery banner tracks daemon property changes live" {
+    try gtk_test.requireDisplay();
+    const page = FirmwarePage.new();
+    _ = page.as(gobject.Object).refSink();
+    defer page.as(gobject.Object).unref();
+    const p = page.priv();
+    var fake = fwupd.FakeBackend{};
+    p.backend = fake.backend();
+    p.generation = 7;
+    p.loaded = true;
+    p.state = .Loaded;
+    defer {
+        p.generation += 1;
+        p.loaded = false;
+        FirmwarePage.setSelectedId(page, null);
+        FirmwarePage.clear_data(page);
+    }
+
+    const battery_text = "Battery too low: connect AC power before updating firmware";
+    FirmwarePage.sig_properties_changed(page, .{ .battery_level = 20, .battery_threshold = 50 });
+    try testing.expectEqual(@as(c_int, 1), gtk.Widget.getVisible(p.banner_box.as(gtk.Widget)));
+    try testing.expectEqualStrings(battery_text, std.mem.span(gtk.Label.getLabel(p.banner_label)));
+
+    // Plugged in / healthy level: the banner disappears without a reload.
+    FirmwarePage.sig_properties_changed(page, .{ .battery_level = 80, .battery_threshold = 50 });
+    try testing.expectEqual(@as(c_int, 0), gtk.Widget.getVisible(p.banner_box.as(gtk.Widget)));
+
+    // Invalid values (on AC or unknown) never warn.
+    FirmwarePage.sig_properties_changed(page, .{});
+    try testing.expectEqual(@as(c_int, 0), gtk.Widget.getVisible(p.banner_box.as(gtk.Widget)));
+}
+
+test "firmware battery and stale-metadata banners combine in one box" {
+    try gtk_test.requireDisplay();
+    const page = FirmwarePage.new();
+    _ = page.as(gobject.Object).refSink();
+    defer page.as(gobject.Object).unref();
+    const p = page.priv();
+    var fake = fwupd.FakeBackend{};
+    p.backend = fake.backend();
+    p.generation = 7;
+    p.loaded = true;
+    p.state = .Loaded;
+    p.metadata_stale = true;
+    p.props = .{ .battery_level = 20, .battery_threshold = 50 };
+    defer {
+        p.generation += 1;
+        p.loaded = false;
+        FirmwarePage.setSelectedId(page, null);
+        FirmwarePage.clear_data(page);
+    }
+
+    const battery_text = "Battery too low: connect AC power before updating firmware";
+    const stale_text = "Firmware metadata is out of date. Use Check Again to refresh.";
+    FirmwarePage.update_banner(page);
+    try testing.expectEqual(@as(c_int, 1), gtk.Widget.getVisible(p.banner_box.as(gtk.Widget)));
+    try testing.expectEqualStrings(battery_text ++ "\n" ++ stale_text, std.mem.span(gtk.Label.getLabel(p.banner_label)));
+
+    // A running refresh hides only the stale line; the battery warning stays.
+    p.refreshing = true;
+    FirmwarePage.update_banner(page);
+    try testing.expectEqual(@as(c_int, 1), gtk.Widget.getVisible(p.banner_box.as(gtk.Widget)));
+    try testing.expectEqualStrings(battery_text, std.mem.span(gtk.Label.getLabel(p.banner_label)));
+
+    // Healthy battery mid-refresh: nothing left to show.
+    p.props = .{};
+    FirmwarePage.update_banner(page);
+    try testing.expectEqual(@as(c_int, 0), gtk.Widget.getVisible(p.banner_box.as(gtk.Widget)));
+
+    // Refresh done, still stale: the stale line returns on its own.
+    p.refreshing = false;
+    FirmwarePage.update_banner(page);
+    try testing.expectEqual(@as(c_int, 1), gtk.Widget.getVisible(p.banner_box.as(gtk.Widget)));
+    try testing.expectEqualStrings(stale_text, std.mem.span(gtk.Label.getLabel(p.banner_label)));
 }
