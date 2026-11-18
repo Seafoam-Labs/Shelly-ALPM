@@ -57,8 +57,11 @@ pkgname = shelly
 	optdepends = util-linux: isolate fresh-root provisioning for --isolated builds
 	optdepends = fuse2: run AppImages that require FUSE 2
 	provides = shelly
+	provides = shelly-tui=3.2.1
 	conflicts = shelly-git
 	conflicts = shelly-bin
+	conflicts = shelly-tui
+	conflicts = shelly-tui-git
 	backup = etc/shellybuild.conf
 
 pkgname = shelly-flatpak-backend
