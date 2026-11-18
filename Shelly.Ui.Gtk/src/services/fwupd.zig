@@ -28,6 +28,8 @@ const FWUPD_NAME: [:0]const u8 = "org.freedesktop.fwupd";
 const FWUPD_PATH: [:0]const u8 = "/";
 const FWUPD_IFACE: [:0]const u8 = "org.freedesktop.fwupd";
 const PROPS_IFACE: [:0]const u8 = "org.freedesktop.DBus.Properties";
+const DBUS_NAME: [:0]const u8 = "org.freedesktop.DBus";
+const DBUS_PATH: [:0]const u8 = "/org/freedesktop/DBus";
 const ERROR_PREFIX = "org.freedesktop.fwupd.";
 
 pub const get_timeout_ms: c_int = 25_000;
@@ -91,7 +93,7 @@ pub const Client = struct {
     failure_len: usize = 0,
     callbacks: SignalCallbacks = .{},
     subscribed: bool = false,
-    subscription_ids: [6]c_uint = @splat(0),
+    subscription_ids: [7]c_uint = @splat(0),
     signal_arena: std.heap.ArenaAllocator = .init(std.heap.c_allocator),
 
     pub fn deinit(self: *Client) void {
@@ -366,6 +368,19 @@ pub const Client = struct {
             self,
             null,
         );
+        // Quit and crashes exit without a shutdown status; the bus name
+        // losing its owner is the reliable "daemon gone" signal.
+        self.subscription_ids[6] = conn.signalSubscribe(
+            DBUS_NAME,
+            DBUS_NAME,
+            "NameOwnerChanged",
+            DBUS_PATH,
+            FWUPD_NAME,
+            .{},
+            &onSignal,
+            self,
+            null,
+        );
         self.subscribed = true;
     }
 
@@ -411,6 +426,21 @@ pub const Client = struct {
             defer dict.unref();
             self.mergeProps(dict);
             if (cb.on_properties_changed) |f| f(cb.user_data, self.props);
+            return;
+        }
+        if (std.mem.eql(u8, member, "NameOwnerChanged")) {
+            // Empty new owner: the daemon vanished (quit, idle exit, crash).
+            // Synthesize the shutdown status so the page banner matches the
+            // idle-exit path; a reconnect refreshes the real status.
+            const new_owner = params.getChildValue(2);
+            defer new_owner.unref();
+            var len: usize = 0;
+            _ = new_owner.getString(&len);
+            if (len == 0) {
+                self.connected = false;
+                self.props.status = .shutdown;
+                if (cb.on_properties_changed) |f| f(cb.user_data, self.props);
+            }
             return;
         }
 
@@ -775,6 +805,7 @@ fn buildHintsParams() *glib.Variant {
     const vt = glib.VariantType.new("a{ss}");
     defer vt.free();
     var builder = glib.VariantBuilder.new(vt);
+    defer builder.unref();
     if (std.c.getenv("LANG")) |lang_z| {
         if (std.mem.span(lang_z).len > 0) builder.add("{ss}", "locale", lang_z);
     }
@@ -787,6 +818,7 @@ fn buildInstallOptions(filename_z: [:0]const u8, options: InstallOptions) *glib.
     const vt = glib.VariantType.new("a{sv}");
     defer vt.free();
     var builder = glib.VariantBuilder.new(vt);
+    defer builder.unref();
     builder.add("{sv}", "reason", glib.Variant.new("s", "user-action"));
     builder.add("{sv}", "filename", glib.Variant.new("s", filename_z.ptr));
     if (options.allow_older) builder.add("{sv}", "allow-older", glib.Variant.newBoolean(1));
@@ -1149,6 +1181,24 @@ test "fwupd service signal dispatch parses payloads and drives callbacks" {
     client.dispatch("Changed", empty);
     try testing.expectEqual(@as(usize, 1), capture.changed);
     try testing.expect(!client.connected);
+
+    // NameOwnerChanged with an empty new owner: the daemon vanished even
+    // though it never emitted a shutdown status (Quit, crash).
+    client.connected = true;
+    client.props.status = .idle;
+    const gone = fixture("(sss)", "('org.freedesktop.fwupd', ':1.42', '')");
+    defer gone.unref();
+    client.dispatch("NameOwnerChanged", gone);
+    try testing.expect(!client.connected);
+    try testing.expectEqual(enums.Status.shutdown, client.props.status);
+    try testing.expectEqual(@as(usize, 2), capture.props_updates);
+
+    // A new owner appearing leaves the stale state for the next reconnect.
+    const acquired = fixture("(sss)", "('org.freedesktop.fwupd', '', ':1.99')");
+    defer acquired.unref();
+    client.dispatch("NameOwnerChanged", acquired);
+    try testing.expectEqual(@as(usize, 2), capture.props_updates);
+    try testing.expectEqual(enums.Status.shutdown, client.props.status);
 }
 
 test "fwupd fake backend serves canned data and injectable errors" {

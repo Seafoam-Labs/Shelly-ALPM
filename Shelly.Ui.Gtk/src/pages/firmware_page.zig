@@ -231,6 +231,37 @@ pub const FirmwarePage = extern struct {
         clear_data(self);
     }
 
+    /// Free what Private owns. Template children (and the models they ref)
+    /// are already disposed by GtkWidget, so no GTK calls here; the stores
+    /// were emptied on unmap, which makes the arena teardown safe.
+    fn finalize(object: *gobject.Object) callconv(.c) void {
+        const parent_oc: *gobject.Object.Class = @ptrCast(Class.parent);
+        const self = gobject.ext.cast(Self, object) orelse {
+            parent_oc.f_finalize.?(object);
+            return;
+        };
+        const p = self.priv();
+        if (p.arena) |arena| {
+            arena.deinit();
+            c_alloc.destroy(arena);
+            p.arena = null;
+        }
+        if (p.detail_arena) |arena| {
+            arena.deinit();
+            c_alloc.destroy(arena);
+            p.detail_arena = null;
+        }
+        setSelectedId(self, null);
+        clearDialogQueue(self);
+        p.dialog_queue.deinit(c_alloc);
+        if (p.install) |state| {
+            p.install = null;
+            freeInstallState(state);
+        }
+        p.client.deinit();
+        parent_oc.f_finalize.?(object);
+    }
+
     fn clear_data(self: *Self) void {
         const p = self.priv();
         p.updating_store = true;
@@ -532,7 +563,7 @@ pub const FirmwarePage = extern struct {
     /// until AC power is connected.
     fn update_banner(self: *Self) void {
         const p = self.priv();
-        var parts: [2][]const u8 = undefined;
+        var parts: [3][]const u8 = undefined;
         var n: usize = 0;
         var stale_text: ?[]const u8 = null;
         defer if (stale_text) |t| c_alloc.free(t);
@@ -547,13 +578,21 @@ pub const FirmwarePage = extern struct {
                 n += 1;
             }
         }
+        // The transient daemon emits Status=shutdown before it exits; the
+        // cached list stays browsable but is stale until the next reconnect.
+        if (p.loaded and !p.loading and !p.refreshing and p.props.status == .shutdown) {
+            parts[n] = translations._("The firmware service stopped. Use Check Again to reconnect.");
+            n += 1;
+        }
         if (n > 0) blk: {
-            var buf: [512]u8 = undefined;
-            const text = if (n == 2)
-                std.fmt.bufPrintSentinel(&buf, "{s}\n{s}", .{ parts[0], parts[1] }, 0) catch break :blk
-            else
-                std.fmt.bufPrintSentinel(&buf, "{s}", .{parts[0]}, 0) catch break :blk;
-            gtk.Label.setLabel(p.banner_label, text);
+            var buf: [768]u8 = undefined;
+            var off: usize = 0;
+            for (parts[0..n], 0..) |part, i| {
+                const sep = if (i > 0) "\n" else "";
+                const written = std.fmt.bufPrintSentinel(buf[off..], "{s}{s}", .{ sep, part }, 0) catch break :blk;
+                off += written.len;
+            }
+            gtk.Label.setLabel(p.banner_label, buf[0..off :0]);
         }
         gtk.Widget.setVisible(p.banner_box.as(gtk.Widget), @intFromBool(n > 0));
     }
@@ -644,8 +683,11 @@ pub const FirmwarePage = extern struct {
             enqueueInfo(page, translations._("Metadata refresh failed"), translations._("Could not refresh the firmware catalog. Check your network connection and try again."));
             pumpDialogs(page);
         }
-        if (matched and (outcome.succeeded > 0 or p.state == .Fail)) {
-            // Reload devices and release lists against the refreshed silo.
+        // A manual press always re-checks devices, even when every remote
+        // skipped: the daemon may have restarted with a different device set
+        // while the catalog stayed current. The automatic path only reloads
+        // when the catalog actually changed (or the page needs a retry).
+        if (matched and (result.manual or outcome.succeeded > 0 or p.state == .Fail)) {
             start_load(page);
         }
         return 0;
@@ -1158,7 +1200,9 @@ pub const FirmwarePage = extern struct {
     fn isBusy(p: *const Private) bool {
         if (p.install != null or p.refreshing) return true;
         return switch (p.props.status) {
-            .idle, .unknown => false,
+            // Shutdown means the transient daemon is gone, not that it is
+            // working: Check Again must stay available to reconnect.
+            .idle, .unknown, .shutdown => false,
             else => true,
         };
     }
@@ -2290,6 +2334,8 @@ pub const FirmwarePage = extern struct {
                 support.bindChild(class, Private.offset, child[0], child[1]);
             }
             gtk.Widget.Class.bindTemplateCallbackFull(wc, "refresh_firmware", @ptrCast(&refresh_firmware));
+            const oc: *gobject.Object.Class = @ptrCast(class);
+            oc.f_finalize = &finalize;
         }
     };
 };
@@ -3204,6 +3250,55 @@ test "firmware refresh success clears the stale banner and reloads" {
     for (0..10) |_| _ = glib.MainContext.default().iteration(0);
 }
 
+test "firmware manual refresh reloads even when every remote skips" {
+    try gtk_test.requireDisplay();
+    const page = FirmwarePage.new();
+    _ = page.as(gobject.Object).refSink();
+    defer page.as(gobject.Object).unref();
+    const p = page.priv();
+    var fake = fwupd.FakeBackend{
+        .devices = &.{.{ .device_id = "dev1", .name = "Device", .flags = enums.DeviceFlags.updatable }},
+    };
+    p.backend = fake.backend();
+    p.generation = 7;
+    p.loaded = true;
+    p.state = .Loaded;
+    p.refreshing = true;
+    defer {
+        p.generation += 1;
+        p.loaded = false;
+        FirmwarePage.setSelectedId(page, null);
+        FirmwarePage.clear_data(page);
+    }
+
+    // All remotes skipped (signature unchanged): the catalog is current, but
+    // a manual press still re-checks devices against the live daemon, which
+    // may have restarted with a different device set.
+    const result = try c_alloc.create(FirmwarePage.RefreshResult);
+    result.* = .{
+        .page = page,
+        .generation = 7,
+        .outcome = .{ .attempted = 1, .skipped = 1 },
+        .failure_text = null,
+        .manual = true,
+    };
+    _ = page.as(gobject.Object).ref();
+    try testing.expectEqual(@as(c_int, 0), FirmwarePage.on_refresh_complete(result));
+    try testing.expect(!p.refreshing);
+    try testing.expect(p.loading);
+    try testing.expectEqual(FirmwarePage.PageState.Loading, p.state);
+
+    var spins: usize = 0;
+    while (p.loading and spins < 5000) : (spins += 1) {
+        _ = glib.MainContext.default().iteration(0);
+        const ts = std.c.timespec{ .sec = 0, .nsec = std.time.ns_per_ms };
+        _ = std.c.nanosleep(&ts, null);
+    }
+    try testing.expect(!p.loading);
+    try testing.expectEqual(FirmwarePage.PageState.Loaded, p.state);
+    for (0..10) |_| _ = glib.MainContext.default().iteration(0);
+}
+
 test "firmware refresh failures keep the banner and only manual presses dialog" {
     try gtk_test.requireDisplay();
     const page = FirmwarePage.new();
@@ -3275,9 +3370,18 @@ test "firmware refresh failures keep the banner and only manual presses dialog" 
     _ = page.as(gobject.Object).ref();
     try testing.expectEqual(@as(c_int, 0), FirmwarePage.on_refresh_complete(all_failed));
     try testing.expect(p.metadata_stale);
-    try testing.expect(!p.loading);
+    // Manual presses re-check devices even when every remote failed.
+    try testing.expect(p.loading);
     try testing.expectEqual(@as(usize, 1), p.dialog_queue.items.len);
     try testing.expectEqualStrings("Metadata refresh failed", p.dialog_queue.items[0].info.title);
+    var spins: usize = 0;
+    while (p.loading and spins < 5000) : (spins += 1) {
+        _ = glib.MainContext.default().iteration(0);
+        const ts = std.c.timespec{ .sec = 0, .nsec = std.time.ns_per_ms };
+        _ = std.c.nanosleep(&ts, null);
+    }
+    try testing.expect(!p.loading);
+    for (0..10) |_| _ = glib.MainContext.default().iteration(0);
 }
 
 test "firmware refresh result is discarded when its generation is stale" {
@@ -3421,4 +3525,87 @@ test "firmware battery and stale-metadata banners combine in one box" {
     FirmwarePage.update_banner(page);
     try testing.expectEqual(@as(c_int, 1), gtk.Widget.getVisible(p.banner_box.as(gtk.Widget)));
     try testing.expectEqualStrings(stale_text, std.mem.span(gtk.Label.getLabel(p.banner_label)));
+}
+
+test "firmware disconnected banner tracks daemon shutdown" {
+    try gtk_test.requireDisplay();
+    const page = FirmwarePage.new();
+    _ = page.as(gobject.Object).refSink();
+    defer page.as(gobject.Object).unref();
+    const p = page.priv();
+    var fake = fwupd.FakeBackend{};
+    p.backend = fake.backend();
+    p.generation = 7;
+    p.loaded = true;
+    p.state = .Loaded;
+    defer {
+        p.generation += 1;
+        p.loaded = false;
+        FirmwarePage.setSelectedId(page, null);
+        FirmwarePage.clear_data(page);
+    }
+
+    const gone_text = "The firmware service stopped. Use Check Again to reconnect.";
+    FirmwarePage.sig_properties_changed(page, .{ .status = .shutdown });
+    try testing.expectEqual(@as(c_int, 1), gtk.Widget.getVisible(p.banner_box.as(gtk.Widget)));
+    try testing.expectEqualStrings(gone_text, std.mem.span(gtk.Label.getLabel(p.banner_label)));
+
+    // Fresh props after a reconnect clear the banner without a reload.
+    FirmwarePage.sig_properties_changed(page, .{ .status = .idle });
+    try testing.expectEqual(@as(c_int, 0), gtk.Widget.getVisible(p.banner_box.as(gtk.Widget)));
+
+    // Combines with the battery warning; the reconnect itself is not stale.
+    FirmwarePage.sig_properties_changed(page, .{ .status = .shutdown, .battery_level = 20, .battery_threshold = 50 });
+    try testing.expectEqualStrings(
+        "Battery too low: connect AC power before updating firmware\n" ++ gone_text,
+        std.mem.span(gtk.Label.getLabel(p.banner_label)),
+    );
+    p.loading = true;
+    FirmwarePage.update_banner(page);
+    try testing.expectEqualStrings(
+        "Battery too low: connect AC power before updating firmware",
+        std.mem.span(gtk.Label.getLabel(p.banner_label)),
+    );
+    p.loading = false;
+    FirmwarePage.update_banner(page);
+    try testing.expectEqualStrings(
+        "Battery too low: connect AC power before updating firmware\n" ++ gone_text,
+        std.mem.span(gtk.Label.getLabel(p.banner_label)),
+    );
+}
+
+test "firmware shutdown status keeps Check Again available" {
+    try gtk_test.requireDisplay();
+    const page = FirmwarePage.new();
+    _ = page.as(gobject.Object).refSink();
+    defer page.as(gobject.Object).unref();
+    const p = page.priv();
+    var fake = fwupd.FakeBackend{};
+    p.backend = fake.backend();
+    p.generation = 7;
+    p.loaded = true;
+    p.state = .Loaded;
+    defer {
+        p.generation += 1;
+        p.loaded = false;
+        FirmwarePage.setSelectedId(page, null);
+        FirmwarePage.clear_data(page);
+    }
+
+    // A vanished daemon is not a busy daemon: the reconnect button stays
+    // sensitive while the banner explains the stale list.
+    FirmwarePage.sig_properties_changed(page, .{ .status = .shutdown });
+    try testing.expect(!FirmwarePage.isBusy(p));
+    try testing.expectEqual(@as(c_int, 1), gtk.Widget.getSensitive(p.refresh_button.as(gtk.Widget)));
+    try testing.expectEqual(@as(c_int, 1), gtk.Widget.getVisible(p.banner_box.as(gtk.Widget)));
+
+    // Real work statuses still gate the button.
+    FirmwarePage.sig_properties_changed(page, .{ .status = .device_write });
+    try testing.expect(FirmwarePage.isBusy(p));
+    try testing.expectEqual(@as(c_int, 0), gtk.Widget.getSensitive(p.refresh_button.as(gtk.Widget)));
+
+    FirmwarePage.sig_properties_changed(page, .{ .status = .idle });
+    try testing.expect(!FirmwarePage.isBusy(p));
+    try testing.expectEqual(@as(c_int, 1), gtk.Widget.getSensitive(p.refresh_button.as(gtk.Widget)));
+    try testing.expectEqual(@as(c_int, 0), gtk.Widget.getVisible(p.banner_box.as(gtk.Widget)));
 }
