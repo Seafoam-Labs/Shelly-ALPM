@@ -766,3 +766,58 @@ Document any known issues that are being tracked:
   own update check), the Updates page reload recovers via retry instead of showing
   "Could not check for updates."; a genuinely broken check (e.g. missing CLI) still
   shows the error page without retry delays.
+
+## Firmware page (#763)
+
+Requires `fwupd` (installed on demand by the enablement flow; never a hard
+dependency). Safe install testing uses the fwupd test plugin; set it up once
+via `docs/fwupd-emulation-testing.md` (fake Integrated Webcam, local cabinets,
+`[test]` knobs). Never flash real hardware you cannot afford to brick, and
+click "Restart later" unless the session is sacrificial.
+
+- [ ] Welcome screen: the Firmware checkbox installs fwupd through the normal
+  privileged transaction (no-op when already installed) and reveals the
+  Firmware nav entry; Settings "Enable Firmware" toggles the page on/off
+  (packages stay installed when toggled off).
+- [ ] `shelly-ui --page firmware` navigates on a cold start and on a running
+  instance; a disabled or excluded build logs the friendly unavailable-page
+  warning instead.
+- [ ] Device list shows updatable devices with upgrade badges and
+  upgrades-first order; selecting a device shows versions (current/minimum/
+  latest), vendor, flags, GUIDs and the release list with Update / Downgrade /
+  Reinstall buttons per classification; blocked releases are disabled with a
+  reason.
+- [ ] Upgrade on the fake webcam: confirm dialog names the device and version,
+  warns the device will be unavailable, shows download size and estimated
+  install time; progress shows "Downloading… x%" for remote payloads, then the
+  daemon flash percentage with status text; a mid-write DeviceRequest appears
+  as an OK-only dialog; the reboot prompt offers Restart now / Restart later
+  and "later" leaves the system untouched.
+- [ ] Downgrade wording and `allow-older` path: downgrades challenge polkit
+  even for trusted payloads; cancelling the authentication dialog shows the
+  friendly "Failed to get authentication" note and changes nothing. Signed
+  upgrades from an active local session install without a polkit prompt.
+- [ ] Reinstall wording for the current version; the LVFS release exercises the
+  HTTPS download, checksum verification and cache reuse under
+  `~/.cache/shelly/fwupd/<host>/`; a cached valid payload is reused without a
+  download.
+- [ ] Cancelling the confirm dialog aborts before any download; navigating away
+  mid-download does not crash or block the page when returning.
+- [ ] Check Again refreshes metadata (manual presses bypass the 24 h throttle
+  and always re-check devices); with a fresh catalog the refresh is fast
+  (signature skip). Backdate `~/.cache/shelly/fwupd/last_refresh` by >24 h and
+  reload to see the stale-metadata banner; a successful refresh clears it.
+- [ ] Transient daemon: `fwupdmgr quit` (or the daemon's idle exit) shows
+  "The firmware service stopped. Use Check Again to reconnect." while the last
+  list stays browsable; Check Again re-activates the daemon, reloads and hides
+  the banner. The button must remain clickable while the banner is up.
+- [ ] Battery banner appears when the daemon reports BatteryLevel below
+  BatteryThreshold and tracks property changes live; devices with Problems
+  show the reason text and disabled install buttons. (Live low-battery spoof
+  needs root; the decision logic is unit-tested.)
+- [ ] FDE gate (device with AFFECTS_FDE) and branch warning (alternate branch)
+  appear before install; the FDE confirm stays disabled until the recovery-key
+  checkbox is ticked. Only exercisable with emulation or real hardware that
+  sets those flags.
+- [ ] `-Dexclude-fwupd=true` builds without the Firmware page, settings row and
+  deep-link target; default builds are unaffected.
