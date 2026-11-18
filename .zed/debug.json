@@ -1,3 +1,5 @@
+// See DEBUGGING.md (next to this file) for how to adapt these configurations
+// to different commands and test suites.
 [
   {
     "adapter": "CodeLLDB",
