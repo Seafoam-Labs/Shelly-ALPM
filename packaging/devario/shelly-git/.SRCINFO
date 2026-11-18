@@ -75,6 +75,15 @@ pkgname = shelly-flatpak-backend-git
 	conflicts = shelly-cli-flatpak-backend-git
 	replaces = shelly-cli-flatpak-backend-git
 
+pkgname = shelly-tui-git
+	pkgdesc = Terminal interface for Shelly (Devario git version)
+	depends = shelly-cli-git=3.1.9-1
+	depends = glibc
+	depends = sudo
+	optdepends = shelly-flatpak-backend-git: Flatpak tab
+	provides = shelly-tui=3.1.9
+	conflicts = shelly-tui
+
 pkgname = shelly-notify-git
 	pkgdesc = Notification tray for Shelly (Devario git version)
 	depends = shelly-git=3.1.9-1

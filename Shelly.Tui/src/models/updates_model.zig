@@ -160,10 +160,6 @@ pub fn buildUpdateRow(ptr: *const anyopaque, index: usize, _: usize) ?vxfw.Widge
     return updates_view.row(&parsed.value, index);
 }
 
-pub fn upgradeSystemFromUpdates(self: *Model) !void {
-    return upgradeFromUpdates(self, .standard);
-}
-
 pub fn upgradeFromUpdates(self: *Model, backend: OperationBackend) !void {
     if (self.operation_state.install_job != null or self.overlay != null) return;
     if (backend == .all and !updatesView(self).canUpgradeAll()) return;
@@ -199,7 +195,7 @@ pub fn handleKey(self: *Model, ctx: *vxfw.EventContext, key: vaxis.Key) anyerror
         switch (action) {
             .refresh => try startUpdates(self, ctx),
             .upgrade_all => try upgradeFromUpdates(self, .all),
-            .upgrade_system => try upgradeSystemFromUpdates(self),
+            .upgrade_system => try upgradeFromUpdates(self, .standard),
             .upgrade_aur => try upgradeFromUpdates(self, .aur),
             .upgrade_flatpak => try upgradeFromUpdates(self, .flatpak),
             .upgrade_appimage => try upgradeFromUpdates(self, .appimage),
@@ -290,7 +286,7 @@ test "updates action opens a native-only upgrade prompt" {
     , .{ .allocate = .alloc_always }));
     const action = updatesView(model).handleKey(.{ .codepoint = 'u' });
     try std.testing.expectEqual(commands.Updates.upgrade_system, action.?);
-    try upgradeSystemFromUpdates(model);
+    try upgradeFromUpdates(model, .standard);
     const prompt = model.overlay.?.sudo;
     try std.testing.expectEqual(shelly_operation.Action.upgrade, prompt.action);
     try std.testing.expectEqual(OperationBackend.standard, prompt.backend);

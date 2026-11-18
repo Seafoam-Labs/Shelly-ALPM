@@ -106,6 +106,7 @@ pub const ShellySettingsPage = extern struct {
         no_confirm_switch: *gtk.Switch,
         shelly_search_switch: *gtk.Switch,
         atoll_aur_switch: *gtk.Switch,
+        appimage_upgrade_all_recheck_switch: *gtk.Switch,
         appimage_install_path_box: *gtk.Box,
         appimage_install_path_button: *gtk.Button,
 
@@ -271,6 +272,7 @@ pub const ShellySettingsPage = extern struct {
             p.no_confirm_switch,
             p.shelly_search_switch,
             p.atoll_aur_switch,
+            p.appimage_upgrade_all_recheck_switch,
             p.remove_cache_switch,
         };
         inline for (autosave_switches) |s| {
@@ -380,6 +382,7 @@ pub const ShellySettingsPage = extern struct {
 
         applyScheduleVisibility(p);
         applyTrayVisibility(p);
+        applyThemeVariantVisibility(p);
     }
 
     pub fn onUnmap(self: *Self) void {
@@ -428,6 +431,7 @@ pub const ShellySettingsPage = extern struct {
 
         applyScheduleVisibility(p);
         applyTrayVisibility(p);
+        applyThemeVariantVisibility(p);
 
         if (support.getWindow(ShellyWindow, self)) |win| {
             win.applyConfig();
@@ -1145,6 +1149,7 @@ pub const ShellySettingsPage = extern struct {
         const dd: *gtk.DropDown = @ptrCast(@alignCast(obj));
         const idx = gtk.DropDown.getSelected(dd);
         if (idx >= theme_mode_entries.len) return;
+        applyThemeVariantVisibility(p);
         const vidx = gtk.DropDown.getSelected(p.theme_variant_drop);
         const variant = if (vidx < theme_variant_entries.len) theme_variant_entries[vidx].value else .follow_system;
         if (support.getWindow(ShellyWindow, self)) |win| {
@@ -1231,6 +1236,7 @@ pub const ShellySettingsPage = extern struct {
         .{ "no_confirm_switch", @offsetOf(Private, "no_confirm_switch") },
         .{ "shelly_search_switch", @offsetOf(Private, "shelly_search_switch") },
         .{ "atoll_aur_switch", @offsetOf(Private, "atoll_aur_switch") },
+        .{ "appimage_upgrade_all_recheck_switch", @offsetOf(Private, "appimage_upgrade_all_recheck_switch") },
         .{ "appimage_install_path_box", @offsetOf(Private, "appimage_install_path_box") },
         .{ "appimage_install_path_button", @offsetOf(Private, "appimage_install_path_button") },
 
@@ -1509,6 +1515,7 @@ fn hideUnbuiltRows(p: *ShellySettingsPage.Private) void {
     if (!features.builtWithAppImage) {
         hideSettingsRow(p.appimage_switch);
         gtk.Widget.setVisible(p.appimage_install_path_box.as(gtk.Widget), @intFromBool(false));
+        hideSettingsRow(p.appimage_upgrade_all_recheck_switch);
     }
     if (!features.builtWithShellySearch) hideSettingsRow(p.shelly_search_switch);
 }
@@ -1630,6 +1637,7 @@ fn applyConfig(p: *ShellySettingsPage.Private, cfg: *ShellyConfig) void {
     setSwitch(p.no_confirm_switch, cfg.NoConfirm);
     setSwitch(p.shelly_search_switch, cfg.ShellySearchEnabled);
     setSwitch(p.atoll_aur_switch, cfg.AtollAurEnabled or features.builtWithAtollOnly);
+    setSwitch(p.appimage_upgrade_all_recheck_switch, cfg.AppImageUpgradeAllRecheck);
     setSwitch(p.remove_cache_switch, cfg.PackageManagementRemoveConfigs);
 
     applyAppImageInstallPath(p);
@@ -1721,6 +1729,7 @@ fn collectIntoConfig(p: *ShellySettingsPage.Private, allocator: std.mem.Allocato
     cfg.NoConfirm = getSwitch(p.no_confirm_switch);
     cfg.ShellySearchEnabled = getSwitch(p.shelly_search_switch);
     cfg.AtollAurEnabled = getSwitch(p.atoll_aur_switch);
+    cfg.AppImageUpgradeAllRecheck = getSwitch(p.appimage_upgrade_all_recheck_switch);
     cfg.PackageManagementRemoveConfigs = getSwitch(p.remove_cache_switch);
 }
 
@@ -1793,6 +1802,15 @@ fn applyTrayVisibility(p: *ShellySettingsPage.Private) void {
     const enabled = gtk.Switch.getActive(p.tray_switch) != 0;
     gtk.Widget.setVisible(p.tray_auto_switch_box.as(gtk.Widget), @intFromBool(enabled));
     gtk.Widget.setVisible(p.symbolic_tray_box.as(gtk.Widget), @intFromBool(enabled));
+}
+
+/// System GTK follows the desktop theme, so the color variant row is only
+/// shown for the built-in theme. The stored variant is left untouched.
+fn applyThemeVariantVisibility(p: *ShellySettingsPage.Private) void {
+    const idx = gtk.DropDown.getSelected(p.theme_mode_drop);
+    const mode = if (idx < theme_mode_entries.len) theme_mode_entries[idx].value else .shelly;
+    const row = gtk.Widget.getParent(p.theme_variant_drop.as(gtk.Widget)) orelse return;
+    gtk.Widget.setVisible(row, @intFromBool(mode == .shelly));
 }
 
 fn setSwitch(s: *gtk.Switch, value: bool) void {

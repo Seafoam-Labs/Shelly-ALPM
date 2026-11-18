@@ -61,14 +61,6 @@ pub const Hit = struct {
     permissions: ?[]const []const u8 = null,
 };
 
-pub const AppstreamIcon = struct {
-    Type: []const u8 = "",
-    Url: []const u8 = "",
-    Width: i32 = 0,
-    Height: i32 = 0,
-    Scale: i32 = 1,
-};
-
 pub const AppstreamImage = struct {
     Type: []const u8 = "",
     Url: []const u8 = "",
@@ -82,13 +74,6 @@ pub const AppstreamScreenshot = struct {
     Images: []const AppstreamImage = &.{},
 };
 
-pub const AppstreamRelease = struct {
-    Version: []const u8 = "",
-    Type: []const u8 = "",
-    Timestamp: i64 = 0,
-    Description: []const u8 = "",
-};
-
 pub const AppstreamApp = struct {
     /// Derived by the TUI from installed application IDs in either scope.
     Installed: bool = false,
@@ -100,16 +85,9 @@ pub const AppstreamApp = struct {
     ProjectLicense: []const u8 = "",
     DeveloperName: []const u8 = "",
     Categories: []const []const u8 = &.{},
-    Keywords: []const []const u8 = &.{},
-    Icons: []const AppstreamIcon = &.{},
     Screenshots: []const AppstreamScreenshot = &.{},
-    Releases: []const AppstreamRelease = &.{},
-    Urls: std.json.ArrayHashMap([]const u8) = .{},
     IsVerified: bool = false,
-    VerificationMethod: []const u8 = "",
     Remotes: []const Remote = &.{},
-    Extends: ?[]const u8 = null,
-    Addons: []const AppstreamApp = &.{},
 };
 
 test "parse AppStream app metadata" {
@@ -124,14 +102,10 @@ test "parse AppStream app metadata" {
 
     try std.testing.expectEqualStrings("org.example.App", parsed.value.Id);
     try std.testing.expectEqualStrings("Example", parsed.value.Name);
-    try std.testing.expectEqual(@as(usize, 1), parsed.value.Icons.len);
-    try std.testing.expectEqual(@as(i32, 2), parsed.value.Icons[0].Scale);
     try std.testing.expect(parsed.value.Screenshots[0].IsDefault);
-    try std.testing.expectEqual(@as(i64, 1735689600), parsed.value.Releases[0].Timestamp);
-    try std.testing.expectEqualStrings("https://example.test", parsed.value.Urls.map.get("homepage").?);
+    try std.testing.expectEqualStrings("https://example.test/screenshot.png", parsed.value.Screenshots[0].Images[0].Url);
+    try std.testing.expectEqualStrings("Long description", parsed.value.Description);
     try std.testing.expectEqual(InstallLevel.user, parsed.value.Remotes[0].Scope);
-    try std.testing.expect(parsed.value.Extends == null);
-    try std.testing.expectEqualStrings("org.example.App.Locale", parsed.value.Addons[0].Id);
 }
 
 test "AppStream app metadata defaults missing optional fields" {
@@ -140,10 +114,7 @@ test "AppStream app metadata defaults missing optional fields" {
 
     try std.testing.expectEqualStrings("org.example.Minimal", parsed.value.Id);
     try std.testing.expectEqualStrings("", parsed.value.Name);
-    try std.testing.expectEqual(@as(usize, 0), parsed.value.Icons.len);
-    try std.testing.expectEqual(@as(usize, 0), parsed.value.Urls.map.count());
     try std.testing.expect(!parsed.value.IsVerified);
-    try std.testing.expect(parsed.value.Extends == null);
 }
 
 test "parse Flatpak remote info metadata" {

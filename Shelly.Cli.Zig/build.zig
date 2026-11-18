@@ -87,7 +87,7 @@ pub fn build(b: *std.Build) void {
     });
 
     const repair_tests = b.addTest(.{ .root_module = test_cli, .filters = &.{"repairDb"} });
-    const repair_test_step = b.step("database-repair-test", "Test repair of the configured database");
+    const repair_test_step = b.step("database-repair-test", "Test repair of system and update-check cache database locks");
     repair_test_step.dependOn(&b.addRunArtifact(repair_tests).step);
 
     const configuration_tests = b.addTest(.{

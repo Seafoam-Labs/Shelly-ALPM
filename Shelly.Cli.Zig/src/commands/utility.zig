@@ -52,7 +52,8 @@ pub fn dispatch(
     if (selection != .operation) return try writeSelectionError(context, selection);
     const operation = selection.operation;
 
-    const needs_elevation = operation == .fix_permissions or operation == .repair_db or
+    const needs_elevation = operation == .fix_permissions or
+        (operation == .repair_db and !elevation.isRoot() and repairDbRequiresElevation(context)) or
         (operation == .pacfiles and pacfiles.requiresElevation(invocation));
     if (needs_elevation and !elevation.isRoot()) {
         const elevated_exit = elevation.relaunchIfNeeded(context, invocation.arguments) catch |err| {
@@ -196,6 +197,26 @@ fn fixPermissions(
 }
 
 fn repairConfiguredDb(context: *runtime.RuntimeContext, invocation: *const parser.Invocation) !u8 {
+    const database_path = try configuredDatabasePath(context);
+    defer context.allocator.free(database_path);
+
+    var status: u8 = 0;
+    if (try repairDb(context, invocation, database_path) != 0) status = 1;
+
+    // The update check refreshes a private preview database in the invoking
+    // user's cache. A stale lock there blocks every later check even when the
+    // system database is clean, and it is user-owned, so repair it too.
+    const preview_path = xdg.invokingUserPreviewDatabase(context) catch |err| {
+        const message = try std.fmt.allocPrint(context.allocator, "Could not locate the invoking user's update-check database cache. {0s}\n\nTechnical details: {1s}", .{ diagnostics.cause(err), @errorName(err) });
+        try writeResponseMessage(context, invocation, false, message);
+        return 1;
+    };
+    defer context.allocator.free(preview_path);
+    if (try repairDb(context, invocation, preview_path) != 0) status = 1;
+    return status;
+}
+
+fn configuredDatabasePath(context: *runtime.RuntimeContext) ![]const u8 {
     const Configuration = PackageManager.Manager.configuration.Configuration;
     var config = try (if (context.config_path != null) &Configuration.parseStrict else &Configuration.parse)(
         context.allocator,
@@ -203,7 +224,20 @@ fn repairConfiguredDb(context: *runtime.RuntimeContext, invocation: *const parse
         context.config_path orelse PackageManager.paths.config_file,
     );
     defer config.deinitialize();
-    return repairDb(context, invocation, config.database_path);
+    return try context.allocator.dupe(u8, config.database_path);
+}
+
+/// Only a present system database lock requires root. A stale update-check
+/// cache lock alone must not trigger an elevation prompt. An unreadable
+/// configuration is left to execute(), which reports it before touching any
+/// lock, so it does not need elevation either.
+fn repairDbRequiresElevation(context: *runtime.RuntimeContext) bool {
+    const database_path = configuredDatabasePath(context) catch return false;
+    defer context.allocator.free(database_path);
+    const db_lock = std.fs.path.join(context.allocator, &.{ database_path, "db.lck" }) catch return false;
+    defer context.allocator.free(db_lock);
+    std.Io.Dir.accessAbsolute(context.io, db_lock, .{}) catch return false;
+    return true;
 }
 
 fn repairDb(
@@ -213,7 +247,8 @@ fn repairDb(
 ) !u8 {
     const db_lock = try std.fs.path.join(context.allocator, &.{ database_directory, "db.lck" });
     std.Io.Dir.accessAbsolute(context.io, db_lock, .{}) catch {
-        try writeResponseMessage(context, invocation, true, "Database lock is not present; nothing to repair.");
+        const message = try std.fmt.allocPrint(context.allocator, "Database lock is not present at {0f}; nothing to repair.", .{diagnostics.safe(db_lock)});
+        try writeResponseMessage(context, invocation, true, message);
         return 0;
     };
     std.Io.Dir.deleteFileAbsolute(context.io, db_lock) catch |err| {
@@ -221,7 +256,8 @@ fn repairDb(
         try writeResponseMessage(context, invocation, false, message);
         return 1;
     };
-    try writeResponseMessage(context, invocation, true, "Removed stale database lock.");
+    const message = try std.fmt.allocPrint(context.allocator, "Removed stale database lock at {0f}.", .{diagnostics.safe(db_lock)});
+    try writeResponseMessage(context, invocation, true, message);
     return 0;
 }
 
@@ -258,7 +294,7 @@ fn runChown(
     errdefer child.kill(context.io);
     return switch (try child.wait(context.io)) {
         .exited => |code| code,
-        .signal => |signal| @truncate(128 + @intFromEnum(signal)),
+        .signal => |signal| @truncate(128 + @backingInt(signal)),
         .stopped, .unknown => 1,
     };
 }
@@ -513,12 +549,18 @@ test "repairDb uses the selected configuration database" {
     try temporary.dir.createDirPath(io, "selected-db");
     try temporary.dir.writeFile(io, .{ .sub_path = "selected-db/db.lck", .data = "" });
     try temporary.dir.writeFile(io, .{ .sub_path = "db.lck", .data = "untouched" });
+    try temporary.dir.createDirPath(io, "cache/Shelly/db");
+    try temporary.dir.writeFile(io, .{ .sub_path = "cache/Shelly/db/db.lck", .data = "" });
+    var environment = std.process.Environ.Map.init(allocator);
+    try environment.put("XDG_CACHE_HOME", try std.fs.path.join(allocator, &.{ root, "cache" }));
+    tc.context.environment = &environment;
     const config = try std.fmt.allocPrint(allocator, "[options]\nDBPath = {s}/selected-db\n", .{root});
     try temporary.dir.writeFile(io, .{ .sub_path = "shelly.conf", .data = config });
     tc.context.config_path = try std.fs.path.join(allocator, &.{ root, "shelly.conf" });
     const invocation = try parseInvocation(allocator, &.{ "utility", "--repair-db" });
     try std.testing.expectEqual(@as(u8, 0), try execute(&tc.context, &invocation, .repair_db, Real{}));
     try std.testing.expectError(error.FileNotFound, temporary.dir.access(io, "selected-db/db.lck", .{}));
+    try std.testing.expectError(error.FileNotFound, temporary.dir.access(io, "cache/Shelly/db/db.lck", .{}));
     try temporary.dir.access(io, "db.lck", .{});
 }
 
@@ -539,4 +581,57 @@ test "repairDb rejects invalid explicit configuration before touching a lock" {
     try temporary.dir.writeFile(io, .{ .sub_path = "shelly.conf", .data = invalid });
     try std.testing.expectError(error.InvalidHookDirMode, execute(&tc.context, &invocation, .repair_db, Real{}));
     try temporary.dir.access(io, "db.lck", .{});
+}
+
+test "repairDb requires elevation only for a present system lock" {
+    var tc: test_support.TestContext = .{};
+    tc.init();
+    defer tc.deinit();
+    const allocator = tc.arena.allocator();
+    const io = std.testing.io;
+    var temporary = std.testing.tmpDir(.{});
+    defer temporary.cleanup();
+    const root = try temporary.dir.realPathFileAlloc(io, ".", allocator);
+    try temporary.dir.createDirPath(io, "system-db");
+    const config = try std.fmt.allocPrint(allocator, "[options]\nDBPath = {s}/system-db\n", .{root});
+    try temporary.dir.writeFile(io, .{ .sub_path = "shelly.conf", .data = config });
+    tc.context.config_path = try std.fs.path.join(allocator, &.{ root, "shelly.conf" });
+
+    try std.testing.expect(!repairDbRequiresElevation(&tc.context));
+    try temporary.dir.writeFile(io, .{ .sub_path = "system-db/db.lck", .data = "" });
+    try std.testing.expect(repairDbRequiresElevation(&tc.context));
+
+    // An unreadable configuration is reported by execute without elevation.
+    try temporary.dir.writeFile(io, .{ .sub_path = "shelly.conf", .data = "[options]\nHookDirMode = invalid\n" });
+    try std.testing.expect(!repairDbRequiresElevation(&tc.context));
+}
+
+test "repairDb clears a stale update-check cache lock without a system lock" {
+    var tc: test_support.TestContext = .{};
+    tc.init();
+    defer tc.deinit();
+    const allocator = tc.arena.allocator();
+    const io = std.testing.io;
+    var temporary = std.testing.tmpDir(.{});
+    defer temporary.cleanup();
+    const root = try temporary.dir.realPathFileAlloc(io, ".", allocator);
+    try temporary.dir.createDirPath(io, "system-db");
+    try temporary.dir.createDirPath(io, "cache/Shelly/db");
+    try temporary.dir.writeFile(io, .{ .sub_path = "cache/Shelly/db/db.lck", .data = "" });
+    var environment = std.process.Environ.Map.init(allocator);
+    try environment.put("XDG_CACHE_HOME", try std.fs.path.join(allocator, &.{ root, "cache" }));
+    tc.context.environment = &environment;
+    const config = try std.fmt.allocPrint(allocator, "[options]\nDBPath = {s}/system-db\n", .{root});
+    try temporary.dir.writeFile(io, .{ .sub_path = "shelly.conf", .data = config });
+    tc.context.config_path = try std.fs.path.join(allocator, &.{ root, "shelly.conf" });
+
+    try std.testing.expect(!repairDbRequiresElevation(&tc.context));
+    const invocation = try parseInvocation(allocator, &.{ "utility", "--repair-db" });
+    try std.testing.expectEqual(@as(u8, 0), try execute(&tc.context, &invocation, .repair_db, Real{}));
+    try std.testing.expectError(error.FileNotFound, temporary.dir.access(io, "cache/Shelly/db/db.lck", .{}));
+    const reported = tc.stdout.writer.buffered();
+    try std.testing.expect(std.mem.indexOf(u8, reported, "Database lock is not present at") != null);
+    try std.testing.expect(std.mem.indexOf(u8, reported, "system-db/db.lck") != null);
+    try std.testing.expect(std.mem.indexOf(u8, reported, "Removed stale database lock at") != null);
+    try std.testing.expect(std.mem.indexOf(u8, reported, "cache/Shelly/db/db.lck") != null);
 }

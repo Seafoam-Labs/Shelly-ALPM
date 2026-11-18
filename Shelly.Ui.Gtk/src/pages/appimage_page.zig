@@ -17,6 +17,7 @@ const UpdateType = @import("../models/appimage.zig").UpdateType;
 const SizeConverter = @import("../helpers/size_converts.zig").SizeConverter;
 const Toast = @import("../helpers/custom_ui_comps/toast.zig").Toast;
 const ConfirmDialog = @import("../dialog/page/yn_dialog.zig").ConfirmDialog;
+const FlatpakRemoveDialog = @import("../dialog/page/flatpak_remove_dialog.zig").FlatpakRemoveDialog;
 const appimage_icon = @import("../helpers/appimage_icon.zig");
 const c_string = @import("../helpers/c_string.zig");
 const translations = @import("../helpers/translations.zig");
@@ -784,7 +785,17 @@ pub const AppImagePage = extern struct {
 
     fn upgrade_appimage(self: *Self) callconv(.c) void {
         const p = self.priv();
-        if (p.updates.len == 0) {
+        const config_service = runtime.config orelse {
+            std.log.err("Could not check the AppImage update setting because settings are not loaded.", .{});
+            p.toast.show(.@"error", translations._("Could not read the AppImage update setting."));
+            return;
+        };
+        const config = config_service.get() catch |err| {
+            std.log.err("Could not read the AppImage update setting. {0s}\n\nTechnical details: {1s}", .{ diagnostics.cause(err), @errorName(err) });
+            p.toast.show(.@"error", translations._("Could not read the AppImage update setting."));
+            return;
+        };
+        if (!shouldRunAppImageUpgrade(config.AppImageUpgradeAllRecheck, p.updates.len)) {
             p.toast.show(.info, translations._("No AppImages need to be upgraded"));
             return;
         }
@@ -801,6 +812,10 @@ pub const AppImagePage = extern struct {
             .ctx = self,
             .privileged = false,
         });
+    }
+
+    fn shouldRunAppImageUpgrade(always_recheck: bool, cached_update_count: usize) bool {
+        return always_recheck or cached_update_count > 0;
     }
 
     fn sync_all_appimage(self: *Self) callconv(.c) void {
@@ -943,21 +958,30 @@ pub const AppImagePage = extern struct {
         const index = p.selected_index orelse return;
         const app = p.apps[index];
 
+        var remove_config = false;
+        if (runtime.config) |cfg_service| {
+            if (cfg_service.get()) |cfg| {
+                remove_config = cfg.PackageManagementRemoveConfigs;
+            } else |_| {}
+        }
+
         var buf: [512]u8 = undefined;
         const message = std.fmt.bufPrintSentinel(
             &buf,
-            "{s} {s}? {s}",
-            .{ translations._("Remove"), app.Name, translations._("Configuration files will be kept.") },
+            "{s} {s}?",
+            .{ translations._("Remove"), app.Name },
             0,
         ) catch translations._("Remove this AppImage?");
-        const dialog = ConfirmDialog.new(translations._("Remove AppImage"), message, &on_remove_response, self);
+        const dialog = FlatpakRemoveDialog.new(translations._("Remove AppImage"), message, &on_remove_response, self);
         dialog.setButtons(translations._("Remove"), translations._("Cancel"));
+        dialog.setDefaultRemoveConfig(remove_config);
         if (support.getWindow(ShellyWindow, self)) |win| {
             win.showLockout(dialog.as(gtk.Widget));
+            dialog.focusConfirm();
         }
     }
 
-    fn on_remove_response(ctx: ?*anyopaque, confirmed: bool) void {
+    fn on_remove_response(ctx: ?*anyopaque, confirmed: bool, remove_config: bool) void {
         const self: *Self = @ptrCast(@alignCast(ctx.?));
         if (support.getWindow(ShellyWindow, self)) |win| win.hideLockout();
         if (!confirmed) return;
@@ -965,13 +989,6 @@ pub const AppImagePage = extern struct {
         const p = self.priv();
         const index = p.selected_index orelse return;
         const app = p.apps[index];
-
-        var remove_config = false;
-        if (runtime.config) |cfg_service| {
-            if (cfg_service.get()) |cfg| {
-                remove_config = cfg.PackageManagementRemoveConfigs;
-            } else |_| {}
-        }
 
         const argv = ShellyCommands.remove_appimage(std.heap.c_allocator, app.Name, remove_config) catch return;
         defer std.heap.c_allocator.free(argv);
@@ -1087,6 +1104,12 @@ test "AppImagePage.versionEquals strips leading v" {
     try std.testing.expect(AppImagePage.versionEquals("v1.2.3", "1.2.3"));
     try std.testing.expect(AppImagePage.versionEquals("1.2.3", "1.2.3"));
     try std.testing.expect(!AppImagePage.versionEquals("v1.2.3", "1.2.4"));
+}
+
+test "AppImage Upgrade All rechecks only when enabled or cached updates exist" {
+    try std.testing.expect(!AppImagePage.shouldRunAppImageUpgrade(false, 0));
+    try std.testing.expect(AppImagePage.shouldRunAppImageUpgrade(false, 1));
+    try std.testing.expect(AppImagePage.shouldRunAppImageUpgrade(true, 0));
 }
 
 test "AppImagePage.contains_ignore_case matches substrings case-insensitively" {

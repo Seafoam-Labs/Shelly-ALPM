@@ -85,6 +85,14 @@
   border-bottom: 1px solid alpha(#1d1b20, 0.08);
   box-shadow: none;
 }
+/* GtkHeaderBar's inner box inherits vertical padding from the desktop
+   theme, stretching the native window-control buttons to a 32xN rectangle;
+   border-radius: 50% then renders an egg. Pinning the strip to
+   50 - 2*9 = 32px keeps the .titlebutton nodes square in every theme. */
+.shelly-root headerbar > windowhandle > box {
+  padding-top: 9px;
+  padding-bottom: 9px;
+}
 .shelly-brand-dot {
   background: #6750a4;
   border-radius: 50%;

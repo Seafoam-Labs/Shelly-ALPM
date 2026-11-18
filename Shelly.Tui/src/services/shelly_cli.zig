@@ -1,6 +1,7 @@
 const std = @import("std");
 const Io = std.Io;
 const Package = @import("../models/packages.zig").Package;
+const InstalledPackage = @import("../models/packages.zig").InstalledPackage;
 const AurPackage = @import("../models/packages.zig").AurPackage;
 const PkgBuild = @import("../models/pkgbuild.zig").PkgBuild;
 const Remote = @import("../models/flatpak.zig").Remote;
@@ -24,10 +25,10 @@ fn decodeQuery(comptime T: type, allocator: std.mem.Allocator, output: []const u
     while (frames.next()) |payload| {
         const json = try JsonPackFrame.decodeBase64(allocator, payload);
         defer allocator.free(json);
-        const frame = try std.json.parseFromSlice(std.json.Value, allocator, json, .{});
-        defer frame.deinit();
-
-        if (frame.value == .object) {
+        const trimmed = std.mem.trimStart(u8, json, " \t\r\n");
+        if (trimmed.len > 0 and trimmed[0] == '{') {
+            const frame = try std.json.parseFromSlice(std.json.Value, allocator, json, .{});
+            defer frame.deinit();
             if (frame.value.object.get("$kind")) |kind| {
                 if (kind != .string) return error.UnexpectedFrame;
                 if (std.mem.eql(u8, kind.string, "alpm.error")) return error.CommandFailed;
@@ -110,12 +111,12 @@ pub const ShellyCli = struct {
         return decodeQuery([]Package, self.allocator, result.stdout, true);
     }
 
-    pub fn get_installed_packages(self: ShellyCli) !std.json.Parsed([]Package) {
+    pub fn get_installed_packages(self: ShellyCli) !std.json.Parsed([]InstalledPackage) {
         const result = try self.run(&.{"-Ls"});
         defer self.allocator.free(result.stdout);
         defer self.allocator.free(result.stderr);
 
-        return decodeQuery([]Package, self.allocator, result.stdout, true);
+        return decodeQuery([]InstalledPackage, self.allocator, result.stdout, true);
     }
 
     /// Read-only usability probe through the CLI's backend loader. An empty
@@ -305,7 +306,7 @@ test "query decoding owns package strings and handles informational frames" {
     const allocator = std.testing.allocator;
     const info = try queryTestFrame(allocator, "{\"$kind\":\"alpm.info\",\"Message\":\"Searching\"}");
     defer allocator.free(info);
-    const data = try queryTestFrame(allocator, "[{\"Name\":\"editor\",\"Description\":\"Contains \\\"$kind\\\" text\"}]");
+    const data = try queryTestFrame(allocator, " \n\t[{\"Name\":\"editor\",\"Description\":\"Contains \\\"$kind\\\" text\"}]");
     defer allocator.free(data);
     const output = try std.mem.concat(allocator, u8, &.{ info, data, info });
     const parsed = decodeQuery([]Package, allocator, output, true) catch |err| {
@@ -343,6 +344,12 @@ test "query decoding rejects trailing errors and unsupported questions" {
     const question = try queryTestFrame(allocator, "{\"$kind\":\"q.yesno\",\"QuestionId\":\"1\"}");
     defer allocator.free(question);
     try std.testing.expectError(error.UnsupportedFrame, decodeQuery([]Package, allocator, question, true));
+    const duplicate = try std.mem.concat(allocator, u8, &.{ data, data });
+    defer allocator.free(duplicate);
+    try std.testing.expectError(error.MultipleDataFrames, decodeQuery([]Package, allocator, duplicate, false));
+    const malformed = try queryTestFrame(allocator, "[{");
+    defer allocator.free(malformed);
+    try std.testing.expectError(error.UnexpectedEndOfInput, decodeQuery([]Package, allocator, malformed, false));
 }
 
 test "Flatpak probe decoding accepts empty remotes but rejects backend failure" {
@@ -572,4 +579,17 @@ fn UpdateQuery(comptime T: type, comptime source: []const u8) type {
             if (self.result) |parsed| parsed.deinit();
         }
     };
+}
+
+test "installed status decoding retains names and ignores package metadata" {
+    const allocator = std.testing.allocator;
+    const output = try queryTestFrame(allocator, "[{\"Name\":\"editor\",\"Description\":\"Long description\",\"Depends\":[\"libc\"],\"PackageFile\":{\"Name\":\"root\",\"Files\":[]}}]");
+    const parsed = decodeQuery([]InstalledPackage, allocator, output, true) catch |err| {
+        allocator.free(output);
+        return err;
+    };
+    allocator.free(output);
+    defer parsed.deinit();
+    try std.testing.expectEqual(@as(usize, 1), parsed.value.len);
+    try std.testing.expectEqualStrings("editor", parsed.value[0].Name);
 }

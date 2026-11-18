@@ -401,7 +401,7 @@ jobs:
           pacman -S --needed --noconfirm desktop-file-utils
       - uses: actions/checkout@v6
       - name: Validate Arch package recipes
-        run: bash -n PKGBUILD PKGBUILD-git PKGBUILD-bin PKGBUILD-cli
+        run: bash -n PKGBUILD PKGBUILD-git PKGBUILD-bin PKGBUILD-cli PKGBUILD-tui
       - name: Validate packaged desktop entries
         run: |
           desktop-file-validate com.shellyorg.shelly.desktop com.shellyorg.shelly-notifications.desktop
