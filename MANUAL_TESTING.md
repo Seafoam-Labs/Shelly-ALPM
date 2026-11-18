@@ -480,6 +480,10 @@ package first); for bash and zsh use a clean shell, and regenerate
 - [ ] Root/sudo operations work correctly
 - [ ] Permission errors are handled gracefully
 - [ ] User is prompted for elevation when needed
+- [ ] With only a stale `~/.cache/Shelly/db/db.lck` present, `shelly utility
+  --repair-db` runs without an elevation prompt, reports both the configured
+  database lock path and the cache lock path, removes the cache lock, and a
+  following `shelly -P` succeeds; a present system `db.lck` still elevates
 - [ ] `zig build --build-file Shelly.Cli.Zig/build.zig isolated-build-test`
   passes under umasks `0022`, `0007`, `0027`, and `0077`, preserving reviewed
   file modes, guest traversal permissions, readable configuration, and the

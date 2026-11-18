@@ -116,6 +116,7 @@ pub fn startLoad(self: *Model, ctx: *vxfw.EventContext) !void {
 }
 
 pub fn loadPackages(load: *LoadState) void {
+    defer load.done.store(true, .release);
     // Workers run their own threaded IO and use the page allocator so
     // they never share state with the UI thread.
     const alloc = std.heap.page_allocator;
@@ -125,24 +126,20 @@ pub fn loadPackages(load: *LoadState) void {
     const cli: ShellyCli = .{ .allocator = alloc, .io = threaded.io() };
     const parsed = cli.get_packages(false) catch {
         load.failed = true;
-        load.done.store(true, .release);
         return;
     };
     const installed = cli.get_installed_packages() catch {
         parsed.deinit();
         load.failed = true;
-        load.done.store(true, .release);
         return;
     };
     defer installed.deinit();
     @import("packages.zig").markInstalled(alloc, parsed.value, installed.value) catch {
         parsed.deinit();
         load.failed = true;
-        load.done.store(true, .release);
         return;
     };
     load.result = parsed;
-    load.done.store(true, .release);
 }
 
 pub fn pollLoad(self: *Model) !bool {
@@ -403,7 +400,7 @@ pub fn handleDetailsKey(self: *Model, ctx: *vxfw.EventContext, key: vaxis.Key, g
 
 pub fn handleUnhandledKey(self: *Model, ctx: *vxfw.EventContext, key: vaxis.Key) anyerror!void {
     if (self.packages_state.filtered.items.len == 0) return ctx.consumeEvent();
-    if (commands.matches(key, .select) and self.packages_state.filtered.items.len > 0 and self.packages_state.list_view.cursor < self.packages_state.filtered.items.len) {
+    if (commands.matches(key, .select) and self.packages_state.list_view.cursor < self.packages_state.filtered.items.len) {
         self.packages_state.package_list_active = true;
         try toggleSelectedList(self);
         return ctx.consumeAndRedraw();

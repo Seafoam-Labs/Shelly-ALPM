@@ -12,7 +12,7 @@ pub const variants = [_]types.Variant{
         .implementation = "Native Zig ownership repair; PackageManager.PacfileManager pacdiff workflow; Markdown documentation and Bash/Fish/Zsh completion generators",
         .options = &.{
             flag("--fix-permissions", &.{"-f"}, "Restore the invoking user's ownership of Shelly's configuration, cache, and data directories"),
-            flag("--repair-db", &.{"-r"}, "Remove a stale database lock"),
+            flag("--repair-db", &.{"-r"}, "Remove stale database locks from the system database and the invoking user's update-check cache"),
             flag("--docs", &.{"-d"}, "Write Markdown CLI reference documentation to standard output"),
             .{
                 .name = "--completions",
