@@ -110,6 +110,11 @@ pub const FirmwarePage = extern struct {
         download_pct: u32,
         dialog_active: bool,
         deferred_reload: bool,
+        refreshing: bool,
+        metadata_stale: bool,
+        /// Set from runtime on first map; null in headless tests so workers
+        /// never touch the undefined runtime globals.
+        env: ?*const std.process.Environ.Map,
         last_busy: bool,
         dialog_queue: std.ArrayListUnmanaged(QueuedDialog),
         var offset: c_int = 0;
@@ -156,6 +161,9 @@ pub const FirmwarePage = extern struct {
         p.download_pct = 0;
         p.dialog_active = false;
         p.deferred_reload = false;
+        p.refreshing = false;
+        p.metadata_stale = false;
+        p.env = null;
         p.last_busy = false;
         p.dialog_queue = .empty;
         // GObject private memory is zeroed, which is not a valid Client
@@ -198,6 +206,7 @@ pub const FirmwarePage = extern struct {
         const p = self.priv();
         if (p.loaded) return;
         p.loaded = true;
+        if (p.env == null) p.env = runtime.environ_map;
         // The daemon queues method calls behind a running install, so a load
         // started here would block until it finishes. Render the install from
         // the snapshot and live signals instead; the finish path reloads.
@@ -305,6 +314,7 @@ pub const FirmwarePage = extern struct {
         generation: u64,
         data: ?LoadData,
         failure: ?fwupd.Failure,
+        metadata_stale: bool,
     };
 
     fn load_worker(page: *Self, generation: u64) void {
@@ -312,24 +322,36 @@ pub const FirmwarePage = extern struct {
         arena.* = std.heap.ArenaAllocator.init(c_alloc);
         const alloc = arena.allocator();
         const backend = page.priv().backend;
+        const env = page.priv().env;
         const data = collectLoad(backend, alloc) catch {
             var failure: ?fwupd.Failure = null;
             if (backend.lastFailure()) |f| {
                 failure = .{ .kind = f.kind, .message = alloc.dupe(u8, f.message) catch "" };
             }
-            post_result(page, arena, generation, null, failure);
+            post_result(page, arena, generation, null, failure, false);
             return;
         };
-        post_result(page, arena, generation, data, null);
+        // Stale-metadata check for the automatic on-load refresh; the manual
+        // button ignores the throttle.
+        var metadata_stale = false;
+        if (env) |e| {
+            var threaded: std.Io.Threaded = .init(alloc, .{});
+            defer threaded.deinit();
+            const io = threaded.io();
+            const last = fwupd_download.readLastRefresh(io, alloc, e);
+            const now = std.Io.Clock.real.now(io).toSeconds();
+            metadata_stale = fwupd_download.shouldAutoRefresh(last, now);
+        }
+        post_result(page, arena, generation, data, null, metadata_stale);
     }
 
-    fn post_result(page: *Self, arena: *std.heap.ArenaAllocator, generation: u64, data: ?LoadData, failure: ?fwupd.Failure) void {
+    fn post_result(page: *Self, arena: *std.heap.ArenaAllocator, generation: u64, data: ?LoadData, failure: ?fwupd.Failure, metadata_stale: bool) void {
         const result = c_alloc.create(LoadResult) catch {
             arena.deinit();
             c_alloc.destroy(arena);
             return;
         };
-        result.* = .{ .page = page, .arena = arena, .generation = generation, .data = data, .failure = failure };
+        result.* = .{ .page = page, .arena = arena, .generation = generation, .data = data, .failure = failure, .metadata_stale = metadata_stale };
         _ = glib.idleAdd(&on_load_complete, result);
     }
 
@@ -365,18 +387,22 @@ pub const FirmwarePage = extern struct {
         p.updating_store = false;
         // Keep the arena even when empty so hotplug additions have storage.
         p.arena = result.arena;
+        p.metadata_stale = result.metadata_stale;
         c_alloc.destroy(result);
 
         p.props = p.backend.props();
         p.backend.subscribeSignals(signalCallbacks(page));
         update_summary(page);
+        update_banner(page);
         if (load.devices.len == 0) {
             set_state(page, .Empty);
+            maybe_auto_refresh(page);
             return 0;
         }
         set_state(page, .Loaded);
         restore_selection(page);
         queue_scroll_settle(page);
+        maybe_auto_refresh(page);
         return 0;
     }
 
@@ -408,17 +434,15 @@ pub const FirmwarePage = extern struct {
         const busy = state == .Loading;
         if (busy) {
             gtk.Spinner.start(p.loading_spinner);
-            gtk.Spinner.start(p.header_spinner);
         } else {
             gtk.Spinner.stop(p.loading_spinner);
-            gtk.Spinner.stop(p.header_spinner);
         }
         if (state == .Installing) {
             gtk.Spinner.start(p.installing_spinner);
         } else {
             gtk.Spinner.stop(p.installing_spinner);
         }
-        gtk.Widget.setVisible(p.header_spinner.as(gtk.Widget), @intFromBool(busy));
+        update_header_spinner(p);
         gtk.Widget.setSensitive(p.refresh_button.as(gtk.Widget), @intFromBool(!busy and !isBusy(p)));
         const child: *gtk.Widget = switch (state) {
             .Loading => p.loading_page.as(gtk.Widget),
@@ -486,7 +510,128 @@ pub const FirmwarePage = extern struct {
     }
 
     fn refresh_firmware(self: *Self) callconv(.c) void {
-        start_load(self);
+        start_refresh(self, true);
+    }
+
+    // -----------------------------------------------------------------------
+    // Metadata refresh (manual button + automatic stale check)
+    // -----------------------------------------------------------------------
+
+    fn update_header_spinner(p: *Private) void {
+        const active = p.loading or p.refreshing;
+        if (active) {
+            gtk.Spinner.start(p.header_spinner);
+        } else {
+            gtk.Spinner.stop(p.header_spinner);
+        }
+        gtk.Widget.setVisible(p.header_spinner.as(gtk.Widget), @intFromBool(active));
+    }
+
+    /// Stale-metadata banner; Phase 7 extends this with the battery warning.
+    fn update_banner(self: *Self) void {
+        const p = self.priv();
+        const show = p.metadata_stale and !p.refreshing;
+        if (show) blk: {
+            const text = fillTemplate(c_alloc, translations._("Firmware metadata is out of date. Use {s} to refresh."), &.{translations._("Check Again")}) catch break :blk;
+            defer c_alloc.free(text);
+            const text_z = c_alloc.dupeSentinel(u8, text, 0) catch break :blk;
+            defer c_alloc.free(text_z);
+            gtk.Label.setLabel(p.banner_label, text_z);
+        }
+        gtk.Widget.setVisible(p.banner_box.as(gtk.Widget), @intFromBool(show));
+    }
+
+    fn maybe_auto_refresh(self: *Self) void {
+        const p = self.priv();
+        if (!p.metadata_stale or p.env == null or p.loading or isBusy(p)) return;
+        start_refresh(self, false);
+    }
+
+    /// Manual press always refreshes (bypasses the 24 h throttle) and doubles
+    /// as the Fail-state retry; the automatic path only calls this when stale.
+    /// `manual` decides whether failures surface as a dialog or just a log.
+    fn start_refresh(self: *Self, manual: bool) void {
+        const p = self.priv();
+        if (p.refreshing or p.loading or isBusy(p)) return;
+        const env = p.env orelse return;
+        p.refreshing = true;
+        update_busy_ui(self);
+        update_banner(self);
+        _ = self.as(gobject.Object).ref();
+        const thread = std.Thread.spawn(.{}, refresh_worker, .{ self, p.generation, env, manual }) catch {
+            self.as(gobject.Object).unref();
+            p.refreshing = false;
+            update_busy_ui(self);
+            update_banner(self);
+            return;
+        };
+        thread.detach();
+    }
+
+    fn refresh_worker(page: *Self, generation: u64, env: *const std.process.Environ.Map, manual: bool) void {
+        var arena = std.heap.ArenaAllocator.init(c_alloc);
+        defer arena.deinit();
+        const alloc = arena.allocator();
+        var threaded: std.Io.Threaded = .init(alloc, .{});
+        defer threaded.deinit();
+        const backend = page.priv().backend;
+        const props = backend.props();
+        const user_agent = alloc.print("shelly/{f} fwupd/{s}", .{ features.version, props.daemon_version }) catch "shelly fwupd";
+        var failure_text: ?[:0]const u8 = null;
+        const outcome = fwupd_download.refreshMetadata(backend, alloc, threaded.io(), env, user_agent) catch |err| blk: {
+            failure_text = installFailureText(err, backend.lastFailure());
+            break :blk fwupd_download.RefreshOutcome{};
+        };
+        const result = c_alloc.create(RefreshResult) catch {
+            page.as(gobject.Object).unref();
+            return;
+        };
+        result.* = .{ .page = page, .generation = generation, .outcome = outcome, .failure_text = failure_text, .manual = manual };
+        _ = glib.idleAdd(&on_refresh_complete, result);
+    }
+
+    const RefreshResult = struct {
+        page: *Self,
+        generation: u64,
+        outcome: fwupd_download.RefreshOutcome,
+        failure_text: ?[:0]const u8,
+        manual: bool,
+    };
+
+    fn on_refresh_complete(data: ?*anyopaque) callconv(.c) c_int {
+        const result: *RefreshResult = @ptrCast(@alignCast(data.?));
+        defer c_alloc.destroy(result);
+        const page = result.page;
+        defer page.as(gobject.Object).unref();
+        const p = page.priv();
+        p.refreshing = false;
+        update_busy_ui(page);
+        const matched = result.generation == p.generation and p.loaded;
+        if (result.failure_text) |text| {
+            log.warn("Firmware metadata refresh failed: {s}", .{text});
+            update_banner(page);
+            if (matched and result.manual) {
+                enqueueInfo(page, translations._("Metadata refresh failed"), text);
+                pumpDialogs(page);
+            }
+            return 0;
+        }
+        const outcome = result.outcome;
+        // Nothing to refresh (no download remotes) or everything skipped means
+        // the catalog is as current as it can get; only failures keep the banner.
+        if (outcome.failed == 0 or outcome.succeeded > 0) {
+            p.metadata_stale = false;
+        }
+        update_banner(page);
+        if (matched and result.manual and outcome.succeeded == 0 and outcome.failed > 0) {
+            enqueueInfo(page, translations._("Metadata refresh failed"), translations._("Could not refresh the firmware catalog. Check your network connection and try again."));
+            pumpDialogs(page);
+        }
+        if (matched and (outcome.succeeded > 0 or p.state == .Fail)) {
+            // Reload devices and release lists against the refreshed silo.
+            start_load(page);
+        }
+        return 0;
     }
 
     // -----------------------------------------------------------------------
@@ -992,7 +1137,7 @@ pub const FirmwarePage = extern struct {
     };
 
     fn isBusy(p: *const Private) bool {
-        if (p.install != null) return true;
+        if (p.install != null or p.refreshing) return true;
         return switch (p.props.status) {
             .idle, .unknown => false,
             else => true,
@@ -1003,6 +1148,7 @@ pub const FirmwarePage = extern struct {
         const p = self.priv();
         const busy = isBusy(p);
         gtk.Widget.setSensitive(p.refresh_button.as(gtk.Widget), @intFromBool(!busy and !p.loading));
+        update_header_spinner(p);
         if (busy != p.last_busy) {
             p.last_busy = busy;
             rebind_release_rows(self);
@@ -2243,6 +2389,7 @@ test "firmware load result is discarded when its generation is stale" {
         .generation = 6,
         .data = .{ .devices = devices, .badges = badges },
         .failure = null,
+        .metadata_stale = false,
     };
     // Stale: the arena must be freed (testing.allocator catches leaks) and
     // nothing may reach the store.
@@ -2285,6 +2432,7 @@ test "firmware load result applies on matching generation with upgrades first" {
         .generation = 7,
         .data = .{ .devices = devices, .badges = badges },
         .failure = null,
+        .metadata_stale = false,
     };
     try testing.expectEqual(@as(c_int, 0), FirmwarePage.on_load_complete(result));
     try testing.expectEqual(@as(c_uint, 2), gio.ListModel.getNItems(p.list_store.as(gio.ListModel)));
@@ -2331,6 +2479,7 @@ test "firmware selection changes keep model items alive" {
         .generation = 7,
         .data = .{ .devices = devices, .badges = badges },
         .failure = null,
+        .metadata_stale = false,
     };
     try testing.expectEqual(@as(c_int, 0), FirmwarePage.on_load_complete(result));
 
@@ -2913,4 +3062,268 @@ test "firmware install completion reloads from the installing view despite a sta
     try testing.expect(!p.loading);
     try testing.expectEqual(FirmwarePage.PageState.Loaded, p.state);
     for (0..10) |_| _ = glib.MainContext.default().iteration(0);
+}
+
+test "firmware stale load result triggers the automatic refresh" {
+    try gtk_test.requireDisplay();
+    const page = FirmwarePage.new();
+    _ = page.as(gobject.Object).refSink();
+    defer page.as(gobject.Object).unref();
+    const p = page.priv();
+    var fake = fwupd.FakeBackend{
+        .devices = &.{.{ .device_id = "dev1", .name = "Device", .flags = enums.DeviceFlags.updatable }},
+    };
+    p.backend = fake.backend();
+    p.generation = 7;
+    p.loaded = true;
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+    var map: std.process.Environ.Map = .init(testing.allocator);
+    defer map.deinit();
+    const cache_root = try std.fmt.allocPrint(testing.allocator, ".zig-cache/tmp/{s}", .{tmp.sub_path});
+    defer testing.allocator.free(cache_root);
+    try map.put("XDG_CACHE_HOME", cache_root);
+    p.env = &map;
+    defer {
+        p.env = null;
+        p.generation += 1;
+        p.loaded = false;
+        FirmwarePage.setSelectedId(page, null);
+        FirmwarePage.clear_data(page);
+    }
+
+    const arena = try c_alloc.create(std.heap.ArenaAllocator);
+    arena.* = std.heap.ArenaAllocator.init(testing.allocator);
+    const devices = try arena.allocator().alloc(models.Device, 1);
+    devices[0] = .{ .device_id = "dev1", .name = "Device", .flags = enums.DeviceFlags.updatable };
+    const badges = try arena.allocator().alloc(DeviceObject.Badge, 1);
+    badges[0] = .{};
+    const result = try c_alloc.create(FirmwarePage.LoadResult);
+    result.* = .{
+        .page = page,
+        .arena = arena,
+        .generation = 7,
+        .data = .{ .devices = devices, .badges = badges },
+        .failure = null,
+        .metadata_stale = true,
+    };
+    try testing.expectEqual(@as(c_int, 0), FirmwarePage.on_load_complete(result));
+    // The automatic refresh started and gates the page while it runs.
+    try testing.expect(p.refreshing);
+    try testing.expectEqual(@as(c_int, 0), gtk.Widget.getSensitive(p.refresh_button.as(gtk.Widget)));
+    try testing.expectEqual(@as(c_int, 1), gtk.Widget.getVisible(p.header_spinner.as(gtk.Widget)));
+    // The banner hides while the refresh that fixes it is in flight.
+    try testing.expectEqual(@as(c_int, 0), gtk.Widget.getVisible(p.banner_box.as(gtk.Widget)));
+
+    var spins: usize = 0;
+    while (p.refreshing and spins < 5000) : (spins += 1) {
+        _ = glib.MainContext.default().iteration(0);
+        const ts = std.c.timespec{ .sec = 0, .nsec = std.time.ns_per_ms };
+        _ = std.c.nanosleep(&ts, null);
+    }
+    try testing.expect(!p.refreshing);
+    // No download remotes: nothing attempted, nothing failed, so the stale
+    // flag clears without a reload and the throttle marker was written.
+    try testing.expect(!p.metadata_stale);
+    try testing.expect(!p.loading);
+    try testing.expectEqual(FirmwarePage.PageState.Loaded, p.state);
+    try testing.expectEqual(@as(c_int, 0), gtk.Widget.getVisible(p.banner_box.as(gtk.Widget)));
+    const marker = try std.fs.path.join(testing.allocator, &.{ cache_root, "shelly", "fwupd", "last_refresh" });
+    defer testing.allocator.free(marker);
+    try std.Io.Dir.cwd().access(testing.io, marker, .{});
+    for (0..10) |_| _ = glib.MainContext.default().iteration(0);
+}
+
+test "firmware refresh success clears the stale banner and reloads" {
+    try gtk_test.requireDisplay();
+    const page = FirmwarePage.new();
+    _ = page.as(gobject.Object).refSink();
+    defer page.as(gobject.Object).unref();
+    const p = page.priv();
+    var fake = fwupd.FakeBackend{
+        .devices = &.{.{ .device_id = "dev1", .name = "Device", .flags = enums.DeviceFlags.updatable }},
+    };
+    p.backend = fake.backend();
+    p.generation = 7;
+    p.loaded = true;
+    p.state = .Loaded;
+    p.metadata_stale = true;
+    p.refreshing = true;
+    defer {
+        p.generation += 1;
+        p.loaded = false;
+        FirmwarePage.setSelectedId(page, null);
+        FirmwarePage.clear_data(page);
+    }
+
+    const result = try c_alloc.create(FirmwarePage.RefreshResult);
+    result.* = .{
+        .page = page,
+        .generation = 7,
+        .outcome = .{ .attempted = 1, .succeeded = 1 },
+        .failure_text = null,
+        .manual = true,
+    };
+    // The handler drops the worker's page ref; balance the direct call.
+    _ = page.as(gobject.Object).ref();
+    try testing.expectEqual(@as(c_int, 0), FirmwarePage.on_refresh_complete(result));
+    try testing.expect(!p.refreshing);
+    try testing.expect(!p.metadata_stale);
+    try testing.expectEqual(@as(c_int, 0), gtk.Widget.getVisible(p.banner_box.as(gtk.Widget)));
+    try testing.expect(p.loading);
+    try testing.expectEqual(FirmwarePage.PageState.Loading, p.state);
+
+    // Drain the fake-backed reload while the page is still alive.
+    var spins: usize = 0;
+    while (p.loading and spins < 5000) : (spins += 1) {
+        _ = glib.MainContext.default().iteration(0);
+        const ts = std.c.timespec{ .sec = 0, .nsec = std.time.ns_per_ms };
+        _ = std.c.nanosleep(&ts, null);
+    }
+    try testing.expect(!p.loading);
+    try testing.expectEqual(FirmwarePage.PageState.Loaded, p.state);
+    for (0..10) |_| _ = glib.MainContext.default().iteration(0);
+}
+
+test "firmware refresh failures keep the banner and only manual presses dialog" {
+    try gtk_test.requireDisplay();
+    const page = FirmwarePage.new();
+    _ = page.as(gobject.Object).refSink();
+    defer page.as(gobject.Object).unref();
+    const p = page.priv();
+    var fake = fwupd.FakeBackend{};
+    p.backend = fake.backend();
+    p.generation = 7;
+    p.loaded = true;
+    p.state = .Loaded;
+    p.metadata_stale = true;
+    p.dialog_active = true;
+    defer {
+        p.dialog_active = false;
+        FirmwarePage.clearDialogQueue(page);
+        p.generation += 1;
+        p.loaded = false;
+        FirmwarePage.setSelectedId(page, null);
+        FirmwarePage.clear_data(page);
+    }
+
+    // Manual bus failure: friendly note, banner stays, no reload.
+    p.refreshing = true;
+    const failed = try c_alloc.create(FirmwarePage.RefreshResult);
+    failed.* = .{
+        .page = page,
+        .generation = 7,
+        .outcome = .{},
+        .failure_text = models.errorText(.internal),
+        .manual = true,
+    };
+    _ = page.as(gobject.Object).ref();
+    try testing.expectEqual(@as(c_int, 0), FirmwarePage.on_refresh_complete(failed));
+    try testing.expect(!p.refreshing);
+    try testing.expect(p.metadata_stale);
+    try testing.expect(!p.loading);
+    try testing.expectEqual(@as(c_int, 1), gtk.Widget.getVisible(p.banner_box.as(gtk.Widget)));
+    try testing.expectEqual(@as(usize, 1), p.dialog_queue.items.len);
+    try testing.expectEqualStrings("Metadata refresh failed", p.dialog_queue.items[0].info.title);
+    try testing.expectEqualStrings(models.errorText(.internal), p.dialog_queue.items[0].info.text);
+    FirmwarePage.clearDialogQueue(page);
+
+    // Automatic failure: logged only, no dialog.
+    p.refreshing = true;
+    const auto_failed = try c_alloc.create(FirmwarePage.RefreshResult);
+    auto_failed.* = .{
+        .page = page,
+        .generation = 7,
+        .outcome = .{},
+        .failure_text = models.errorText(.internal),
+        .manual = false,
+    };
+    _ = page.as(gobject.Object).ref();
+    try testing.expectEqual(@as(c_int, 0), FirmwarePage.on_refresh_complete(auto_failed));
+    try testing.expectEqual(@as(usize, 0), p.dialog_queue.items.len);
+    try testing.expect(p.metadata_stale);
+
+    // Manual total per-remote failure: catalog note, banner stays.
+    p.refreshing = true;
+    const all_failed = try c_alloc.create(FirmwarePage.RefreshResult);
+    all_failed.* = .{
+        .page = page,
+        .generation = 7,
+        .outcome = .{ .attempted = 1, .failed = 1 },
+        .failure_text = null,
+        .manual = true,
+    };
+    _ = page.as(gobject.Object).ref();
+    try testing.expectEqual(@as(c_int, 0), FirmwarePage.on_refresh_complete(all_failed));
+    try testing.expect(p.metadata_stale);
+    try testing.expect(!p.loading);
+    try testing.expectEqual(@as(usize, 1), p.dialog_queue.items.len);
+    try testing.expectEqualStrings("Metadata refresh failed", p.dialog_queue.items[0].info.title);
+}
+
+test "firmware refresh result is discarded when its generation is stale" {
+    try gtk_test.requireDisplay();
+    const page = FirmwarePage.new();
+    _ = page.as(gobject.Object).refSink();
+    defer page.as(gobject.Object).unref();
+    const p = page.priv();
+    var fake = fwupd.FakeBackend{};
+    p.backend = fake.backend();
+    p.generation = 7;
+    p.loaded = true;
+    p.state = .Loaded;
+    p.refreshing = true;
+    defer {
+        p.generation += 1;
+        p.loaded = false;
+        FirmwarePage.clear_data(page);
+    }
+
+    const result = try c_alloc.create(FirmwarePage.RefreshResult);
+    result.* = .{
+        .page = page,
+        .generation = 6,
+        .outcome = .{ .attempted = 1, .succeeded = 1 },
+        .failure_text = null,
+        .manual = true,
+    };
+    _ = page.as(gobject.Object).ref();
+    try testing.expectEqual(@as(c_int, 0), FirmwarePage.on_refresh_complete(result));
+    // The busy state resets, but no reload starts under a stale generation.
+    try testing.expect(!p.refreshing);
+    try testing.expect(!p.loading);
+    try testing.expectEqual(FirmwarePage.PageState.Loaded, p.state);
+    try testing.expectEqual(@as(usize, 0), p.dialog_queue.items.len);
+}
+
+test "firmware refreshing gates the install flow" {
+    try gtk_test.requireDisplay();
+    const page = FirmwarePage.new();
+    _ = page.as(gobject.Object).refSink();
+    defer page.as(gobject.Object).unref();
+    const p = page.priv();
+    var fake = fwupd.FakeBackend{};
+    p.backend = fake.backend();
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+    defer {
+        FirmwarePage.clearDialogQueue(page);
+        FirmwarePage.setSelectedId(page, null);
+        FirmwarePage.clear_data(page);
+    }
+
+    const device = models.Device{ .device_id = "dev1", .name = "Device", .version = "1.0", .flags = enums.DeviceFlags.updatable };
+    const device_obj = DeviceObject.new(alloc, device, .{}, 0);
+    defer device_obj.as(gobject.Object).unref();
+    const upgrade = ReleaseObject.new(alloc, device, .{ .version = "1.1", .trust_flags = enums.TrustFlags.is_upgrade });
+    defer upgrade.as(gobject.Object).unref();
+
+    p.refreshing = true;
+    FirmwarePage.update_busy_ui(page);
+    FirmwarePage.beginInstall(page, device_obj, upgrade);
+    try testing.expect(p.install == null);
+    try testing.expectEqual(@as(c_int, 0), gtk.Widget.getSensitive(p.refresh_button.as(gtk.Widget)));
+    p.refreshing = false;
+    FirmwarePage.update_busy_ui(page);
 }

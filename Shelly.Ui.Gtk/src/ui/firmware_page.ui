@@ -58,7 +58,7 @@
         <child>
           <object class="GtkButton" id="refresh_button">
             <property name="valign">center</property>
-            <property name="tooltip-text" translatable="yes">Check devices again</property>
+            <property name="tooltip-text" translatable="yes">Refresh metadata and check devices again</property>
             <signal name="clicked" handler="refresh_firmware" swapped="true"/>
             <child>
               <object class="GtkBox">

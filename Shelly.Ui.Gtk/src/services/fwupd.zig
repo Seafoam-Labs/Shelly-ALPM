@@ -617,10 +617,12 @@ pub const FakeBackend = struct {
     connect_error: ?enums.Error = null,
     upgrades_error: ?enums.Error = null,
     releases_error: ?enums.Error = null,
+    remotes_error: ?enums.Error = null,
     install_error: ?enums.Error = null,
     metadata_error: ?enums.Error = null,
     install_calls: [8]InstallCall = undefined,
     install_call_count: usize = 0,
+    metadata_calls: [8]MetadataCall = undefined,
     metadata_call_count: usize = 0,
     callbacks: SignalCallbacks = .{},
     failure: ?Failure = null,
@@ -629,6 +631,12 @@ pub const FakeBackend = struct {
         device_id: []const u8,
         payload_path: []const u8,
         options: InstallOptions,
+    };
+
+    pub const MetadataCall = struct {
+        remote_id: []const u8,
+        data_path: []const u8,
+        signature_path: []const u8,
     };
 
     pub fn backend(self: *FakeBackend) Backend {
@@ -699,7 +707,9 @@ pub const FakeBackend = struct {
         }.f,
         .getRemotes = struct {
             fn f(ctx: *anyopaque, _: std.mem.Allocator) Error![]const models.Remote {
-                return asFake(ctx).remotes;
+                const self = asFake(ctx);
+                if (self.remotes_error) |k| return self.fail(k);
+                return self.remotes;
             }
         }.f,
         .install = struct {
@@ -717,9 +727,16 @@ pub const FakeBackend = struct {
             }
         }.f,
         .updateMetadata = struct {
-            fn f(ctx: *anyopaque, _: std.mem.Allocator, _: []const u8, _: []const u8, _: []const u8) Error!void {
+            fn f(ctx: *anyopaque, _: std.mem.Allocator, remote_id: []const u8, data_path: []const u8, signature_path: []const u8) Error!void {
                 const self = asFake(ctx);
                 if (self.metadata_error) |k| return self.fail(k);
+                if (self.metadata_call_count < self.metadata_calls.len) {
+                    self.metadata_calls[self.metadata_call_count] = .{
+                        .remote_id = remote_id,
+                        .data_path = data_path,
+                        .signature_path = signature_path,
+                    };
+                }
                 self.metadata_call_count += 1;
             }
         }.f,
