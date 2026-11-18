@@ -82,6 +82,10 @@ pub const FirmwarePage = extern struct {
         empty_page: *gtk.Box,
         error_page: *gtk.Box,
         error_label: *gtk.Label,
+        installing_page: *gtk.Box,
+        installing_spinner: *gtk.Spinner,
+        installing_device_label: *gtk.Label,
+        installing_version_label: *gtk.Label,
         // State
         list_store: *gio.ListStore,
         sorter: *gtk.CustomSorter,
@@ -99,8 +103,11 @@ pub const FirmwarePage = extern struct {
         props: models.DaemonProps,
         loaded: bool,
         loading: bool,
+        state: PageState,
         updating_store: bool,
         install: ?*InstallState,
+        install_flash_started: bool,
+        download_pct: u32,
         dialog_active: bool,
         deferred_reload: bool,
         last_busy: bool,
@@ -108,7 +115,7 @@ pub const FirmwarePage = extern struct {
         var offset: c_int = 0;
     };
 
-    const PageState = enum { Loading, Loaded, Fail, Empty };
+    const PageState = enum { Loading, Loaded, Fail, Empty, Installing };
 
     pub const getGObjectType = gobject.ext.defineClass(Self, .{
         .name = "ShellyFirmwarePage",
@@ -142,8 +149,11 @@ pub const FirmwarePage = extern struct {
         p.props = .{};
         p.loaded = false;
         p.loading = false;
+        p.state = .Loading;
         p.updating_store = false;
         p.install = null;
+        p.install_flash_started = false;
+        p.download_pct = 0;
         p.dialog_active = false;
         p.deferred_reload = false;
         p.last_busy = false;
@@ -188,6 +198,13 @@ pub const FirmwarePage = extern struct {
         const p = self.priv();
         if (p.loaded) return;
         p.loaded = true;
+        // The daemon queues method calls behind a running install, so a load
+        // started here would block until it finishes. Render the install from
+        // the snapshot and live signals instead; the finish path reloads.
+        if (p.install != null) {
+            show_install_view(self);
+            return;
+        }
         start_load(self);
     }
 
@@ -387,6 +404,7 @@ pub const FirmwarePage = extern struct {
 
     fn set_state(self: *Self, state: PageState) void {
         const p = self.priv();
+        p.state = state;
         const busy = state == .Loading;
         if (busy) {
             gtk.Spinner.start(p.loading_spinner);
@@ -395,6 +413,11 @@ pub const FirmwarePage = extern struct {
             gtk.Spinner.stop(p.loading_spinner);
             gtk.Spinner.stop(p.header_spinner);
         }
+        if (state == .Installing) {
+            gtk.Spinner.start(p.installing_spinner);
+        } else {
+            gtk.Spinner.stop(p.installing_spinner);
+        }
         gtk.Widget.setVisible(p.header_spinner.as(gtk.Widget), @intFromBool(busy));
         gtk.Widget.setSensitive(p.refresh_button.as(gtk.Widget), @intFromBool(!busy and !isBusy(p)));
         const child: *gtk.Widget = switch (state) {
@@ -402,8 +425,36 @@ pub const FirmwarePage = extern struct {
             .Loaded => p.content_page.as(gtk.Widget),
             .Fail => p.error_page.as(gtk.Widget),
             .Empty => p.empty_page.as(gtk.Widget),
+            .Installing => p.installing_page.as(gtk.Widget),
         };
         gtk.Stack.setVisibleChild(p.page_stack, child);
+    }
+
+    /// Rebuild the mid-install view after a remap without any daemon calls:
+    /// device/release come from the consent-time snapshot, progress from the
+    /// last marshaled worker update and the daemon property signals.
+    fn show_install_view(self: *Self) void {
+        const p = self.priv();
+        const state = p.install orelse return;
+        var buf: [512]u8 = undefined;
+        const name = std.fmt.bufPrintSentinel(&buf, "{s}", .{state.device.name}, 0) catch "";
+        gtk.Label.setLabel(p.installing_device_label, name);
+        const versions = std.fmt.bufPrintSentinel(&buf, "{s} → {s}", .{ state.device.version, state.release.version }, 0) catch "";
+        gtk.Label.setLabel(p.installing_version_label, versions);
+        set_state(self, .Installing);
+        gtk.Widget.setVisible(p.progress_box.as(gtk.Widget), 1);
+        if (p.install_flash_started) {
+            update_flash_progress(self);
+        } else if (p.download_pct > 0) {
+            const text = std.fmt.bufPrintSentinel(&buf, "{s} {d}%", .{ translations._("Downloading…"), p.download_pct }, 0) catch translations._("Downloading…");
+            gtk.Label.setLabel(p.progress_label, text);
+            gtk.ProgressBar.setFraction(p.progress_bar, @as(f64, @floatFromInt(p.download_pct)) / 100.0);
+        } else {
+            gtk.Label.setLabel(p.progress_label, translations._("Downloading…"));
+            gtk.ProgressBar.setFraction(p.progress_bar, 0);
+            gtk.ProgressBar.pulse(p.progress_bar);
+        }
+        update_busy_ui(self);
     }
 
     /// `gio.ListModel.getItem` is typed `?*anyopaque`; every item here is a
@@ -842,7 +893,7 @@ pub const FirmwarePage = extern struct {
         const p = self.priv();
         p.props = props;
         if (!p.loaded) return;
-        if (p.install != null) update_flash_progress(self);
+        if (p.install != null and p.install_flash_started) update_flash_progress(self);
         update_busy_ui(self);
         // Problem text interpolates the system battery values.
         if (p.selected_id) |id| {
@@ -1009,6 +1060,8 @@ pub const FirmwarePage = extern struct {
             return;
         };
         p.install = state;
+        p.install_flash_started = false;
+        p.download_pct = 0;
         update_busy_ui(self);
         showInstallDialog(self);
     }
@@ -1352,13 +1405,16 @@ pub const FirmwarePage = extern struct {
         defer page.as(gobject.Object).unref();
         const p = page.priv();
         const state = result.state;
+        // The installing view survives unmap/remap, which bumps the generation
+        // away from the snapshot; it must still reload when the result lands.
+        const install_view = p.state == .Installing;
         p.install = null;
         hide_progress(page);
         update_busy_ui(page);
 
         if (result.outcome.failure_text) |text| {
             log.warn("Firmware install failed: {s}", .{text});
-            if (result.generation == p.generation and p.loaded and p.deferred_reload) start_load(page);
+            if (p.loaded and (install_view or (result.generation == p.generation and p.deferred_reload))) start_load(page);
             p.deferred_reload = false;
             freeInstallState(state);
             if (!p.loaded) p.backend.unsubscribeSignals();
@@ -1379,7 +1435,7 @@ pub const FirmwarePage = extern struct {
             }
         }
         freeInstallState(state);
-        if (result.generation == p.generation and p.loaded) {
+        if (p.loaded and (result.generation == p.generation or install_view)) {
             // Post-install refresh of badges, versions and release lists.
             start_load(page);
         } else if (!p.loaded) {
@@ -1601,14 +1657,14 @@ pub const FirmwarePage = extern struct {
         gtk.Label.setLabel(p.progress_label, models.statusText(p.props.status));
     }
 
-    const DownloadProgress = struct { page: *Self, generation: u64, received: u64, total: u64 };
+    const DownloadProgress = struct { page: *Self, install: ?*InstallState, received: u64, total: u64 };
 
     /// Worker-thread callback from the counting writer; marshals to the main
     /// loop (throttling already happened in the download service).
     fn on_download_progress_worker(ctx: ?*anyopaque, received: u64, total: u64) void {
         const page: *Self = @ptrCast(@alignCast(ctx.?));
         const progress = c_alloc.create(DownloadProgress) catch return;
-        progress.* = .{ .page = page, .generation = page.priv().generation, .received = received, .total = total };
+        progress.* = .{ .page = page, .install = page.priv().install, .received = received, .total = total };
         _ = glib.idleAdd(&on_download_progress, progress);
     }
 
@@ -1617,9 +1673,12 @@ pub const FirmwarePage = extern struct {
         defer c_alloc.destroy(progress);
         const page = progress.page;
         const p = page.priv();
-        if (progress.generation != p.generation or p.install == null) return 0;
+        // Identity, not generation: unmap/remap mid-install bumps the
+        // generation but the same install keeps receiving progress.
+        if (p.install == null or p.install != progress.install) return 0;
         if (progress.total > 0) {
-            const pct = @min(100, progress.received * 100 / progress.total);
+            const pct: u32 = @intCast(@min(100, progress.received * 100 / progress.total));
+            p.download_pct = pct;
             var buf: [96]u8 = undefined;
             const text = std.fmt.bufPrintSentinel(&buf, "{s} {d}%", .{ translations._("Downloading…"), pct }, 0) catch translations._("Downloading…");
             gtk.Label.setLabel(p.progress_label, text);
@@ -1631,12 +1690,12 @@ pub const FirmwarePage = extern struct {
         return 0;
     }
 
-    const FlashCtx = struct { page: *Self, generation: u64 };
+    const FlashCtx = struct { page: *Self, install: ?*InstallState };
 
     fn on_flash_start_worker(ctx: ?*anyopaque) void {
         const page: *Self = @ptrCast(@alignCast(ctx.?));
         const flash = c_alloc.create(FlashCtx) catch return;
-        flash.* = .{ .page = page, .generation = page.priv().generation };
+        flash.* = .{ .page = page, .install = page.priv().install };
         _ = glib.idleAdd(&on_flash_start, flash);
     }
 
@@ -1645,7 +1704,8 @@ pub const FirmwarePage = extern struct {
         defer c_alloc.destroy(flash);
         const page = flash.page;
         const p = page.priv();
-        if (flash.generation != p.generation or p.install == null) return 0;
+        if (p.install == null or p.install != flash.install) return 0;
+        p.install_flash_started = true;
         gtk.Label.setLabel(p.progress_label, translations._("Installing firmware…"));
         gtk.ProgressBar.setFraction(p.progress_bar, 0);
         gtk.ProgressBar.pulse(p.progress_bar);
@@ -2047,6 +2107,10 @@ pub const FirmwarePage = extern struct {
         .{ "empty_page", @offsetOf(Private, "empty_page") },
         .{ "error_page", @offsetOf(Private, "error_page") },
         .{ "error_label", @offsetOf(Private, "error_label") },
+        .{ "installing_page", @offsetOf(Private, "installing_page") },
+        .{ "installing_spinner", @offsetOf(Private, "installing_spinner") },
+        .{ "installing_device_label", @offsetOf(Private, "installing_device_label") },
+        .{ "installing_version_label", @offsetOf(Private, "installing_version_label") },
     };
 
     pub const Class = extern struct {
@@ -2695,4 +2759,158 @@ test "firmware beginInstall guards problems, blocked releases and busy state" {
     FirmwarePage.beginInstall(page, device_obj, upgrade);
     try testing.expect(p.install == null);
     try testing.expectEqual(@as(usize, 0), p.dialog_queue.items.len);
+}
+
+test "firmware remap mid-install renders the installing view without a load" {
+    try gtk_test.requireDisplay();
+    const page = FirmwarePage.new();
+    _ = page.as(gobject.Object).refSink();
+    defer page.as(gobject.Object).unref();
+    const p = page.priv();
+    var fake = fwupd.FakeBackend{};
+    p.backend = fake.backend();
+    p.generation = 5;
+    p.loaded = true;
+    p.state = .Loaded;
+
+    const state = try c_alloc.create(FirmwarePage.InstallState);
+    state.* = .{
+        .arena = std.heap.ArenaAllocator.init(testing.allocator),
+        .device = .{ .device_id = "dev1", .name = "Webcam", .version = "1.2.2" },
+        .release = .{ .version = "1.2.4" },
+        .options = .{},
+        .generation = 5,
+    };
+    p.install = state;
+    defer {
+        p.install = null;
+        FirmwarePage.freeInstallState(state);
+        p.loaded = false;
+        FirmwarePage.clear_data(page);
+    }
+
+    page.onUnmap();
+    try testing.expect(!p.loaded);
+    try testing.expectEqual(@as(u64, 6), p.generation);
+
+    // The daemon would block a load behind the running install; the remap
+    // must render from the snapshot instead of starting one.
+    page.onMap();
+    try testing.expect(p.loaded);
+    try testing.expect(!p.loading);
+    try testing.expectEqual(FirmwarePage.PageState.Installing, p.state);
+    try testing.expectEqual(@as(u64, 6), p.generation);
+    try testing.expectEqualStrings("Webcam", std.mem.span(gtk.Label.getLabel(p.installing_device_label)));
+    try testing.expectEqualStrings("1.2.2 → 1.2.4", std.mem.span(gtk.Label.getLabel(p.installing_version_label)));
+    try testing.expectEqual(@as(c_int, 1), gtk.Widget.getVisible(p.progress_box.as(gtk.Widget)));
+    try testing.expectEqual(@as(c_int, 0), gtk.Widget.getSensitive(p.refresh_button.as(gtk.Widget)));
+}
+
+test "firmware install progress applies after remap and drops for stale installs" {
+    try gtk_test.requireDisplay();
+    const page = FirmwarePage.new();
+    _ = page.as(gobject.Object).refSink();
+    defer page.as(gobject.Object).unref();
+    const p = page.priv();
+    var fake = fwupd.FakeBackend{};
+    p.backend = fake.backend();
+    p.generation = 9;
+    p.loaded = true;
+
+    const state = try c_alloc.create(FirmwarePage.InstallState);
+    state.* = .{
+        .arena = std.heap.ArenaAllocator.init(testing.allocator),
+        .device = .{ .device_id = "dev1" },
+        .release = .{ .version = "1.1" },
+        .options = .{},
+        .generation = 5, // stale vs the page: identity must carry the update
+    };
+    p.install = state;
+    defer {
+        p.install = null;
+        FirmwarePage.freeInstallState(state);
+        p.loaded = false;
+        FirmwarePage.clear_data(page);
+    }
+
+    const progress = try c_alloc.create(FirmwarePage.DownloadProgress);
+    progress.* = .{ .page = page, .install = state, .received = 50, .total = 100 };
+    try testing.expectEqual(@as(c_int, 0), FirmwarePage.on_download_progress(progress));
+    try testing.expectEqual(@as(u32, 50), p.download_pct);
+    try testing.expectApproxEqAbs(@as(f64, 0.5), gtk.ProgressBar.getFraction(p.progress_bar), 0.001);
+
+    const flash = try c_alloc.create(FirmwarePage.FlashCtx);
+    flash.* = .{ .page = page, .install = state };
+    try testing.expectEqual(@as(c_int, 0), FirmwarePage.on_flash_start(flash));
+    try testing.expect(p.install_flash_started);
+
+    // Flash fraction then follows the daemon property signals.
+    FirmwarePage.sig_properties_changed(page, .{ .status = .device_write, .percentage_full = 40 });
+    try testing.expectApproxEqAbs(@as(f64, 0.4), gtk.ProgressBar.getFraction(p.progress_bar), 0.001);
+
+    // Once the install is gone, marshaled updates for it are dropped.
+    p.install = null;
+    const stale = try c_alloc.create(FirmwarePage.DownloadProgress);
+    stale.* = .{ .page = page, .install = state, .received = 90, .total = 100 };
+    try testing.expectEqual(@as(c_int, 0), FirmwarePage.on_download_progress(stale));
+    try testing.expectEqual(@as(u32, 50), p.download_pct);
+}
+
+test "firmware install completion reloads from the installing view despite a stale generation" {
+    try gtk_test.requireDisplay();
+    const page = FirmwarePage.new();
+    _ = page.as(gobject.Object).refSink();
+    defer page.as(gobject.Object).unref();
+    const p = page.priv();
+    var fake = fwupd.FakeBackend{
+        .devices = &.{.{ .device_id = "dev1", .name = "Device", .flags = enums.DeviceFlags.updatable }},
+    };
+    p.backend = fake.backend();
+    p.generation = 7;
+    p.loaded = true;
+    p.state = .Installing;
+    p.dialog_active = true;
+    defer {
+        p.dialog_active = false;
+        FirmwarePage.clearDialogQueue(page);
+        p.generation += 1;
+        p.loaded = false;
+        FirmwarePage.setSelectedId(page, null);
+        FirmwarePage.clear_data(page);
+    }
+
+    const state = try c_alloc.create(FirmwarePage.InstallState);
+    state.* = .{
+        .arena = std.heap.ArenaAllocator.init(testing.allocator),
+        .device = .{ .device_id = "dev1", .flags = enums.DeviceFlags.updatable },
+        .release = .{ .version = "1.1" },
+        .options = .{},
+        .generation = 6, // unmap bumped the page generation past the snapshot
+    };
+    p.install = state;
+    const result = try c_alloc.create(FirmwarePage.InstallResult);
+    result.* = .{
+        .page = page,
+        .state = state,
+        .generation = 6,
+        .outcome = .{ .fresh_device = .{ .device_id = "dev1", .flags = enums.DeviceFlags.updatable } },
+    };
+    // The handler drops the worker's page ref; balance the direct call.
+    _ = page.as(gobject.Object).ref();
+    try testing.expectEqual(@as(c_int, 0), FirmwarePage.on_install_complete(result));
+    try testing.expect(p.install == null);
+    try testing.expect(p.loading);
+    try testing.expectEqual(FirmwarePage.PageState.Loading, p.state);
+
+    // Drain the fake-backed reload (and its scroll-settle idle) while the
+    // page is still alive so nothing outlives it.
+    var spins: usize = 0;
+    while (p.loading and spins < 5000) : (spins += 1) {
+        _ = glib.MainContext.default().iteration(0);
+        const ts = std.c.timespec{ .sec = 0, .nsec = std.time.ns_per_ms };
+        _ = std.c.nanosleep(&ts, null);
+    }
+    try testing.expect(!p.loading);
+    try testing.expectEqual(FirmwarePage.PageState.Loaded, p.state);
+    for (0..10) |_| _ = glib.MainContext.default().iteration(0);
 }

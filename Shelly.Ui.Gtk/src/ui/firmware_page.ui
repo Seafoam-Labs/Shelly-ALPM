@@ -151,6 +151,38 @@
           </object>
         </child>
         <child>
+          <!-- Remap mid-install: the daemon queues method calls behind the
+               running install, so this view renders from the install snapshot
+               and live signals instead of loading devices. -->
+          <object class="GtkBox" id="installing_page">
+            <property name="orientation">vertical</property>
+            <property name="spacing">12</property>
+            <property name="halign">center</property>
+            <property name="valign">center</property>
+            <child>
+              <object class="GtkSpinner" id="installing_spinner">
+                <property name="width-request">32</property>
+                <property name="height-request">32</property>
+              </object>
+            </child>
+            <child>
+              <object class="GtkLabel">
+                <property name="label" translatable="yes">Installing firmware…</property>
+              </object>
+            </child>
+            <child>
+              <object class="GtkLabel" id="installing_device_label">
+                <style><class name="dim-label"/></style>
+              </object>
+            </child>
+            <child>
+              <object class="GtkLabel" id="installing_version_label">
+                <style><class name="dim-label"/></style>
+              </object>
+            </child>
+          </object>
+        </child>
+        <child>
           <object class="GtkBox" id="content_page">
             <property name="orientation">horizontal</property>
             <property name="spacing">12</property>
