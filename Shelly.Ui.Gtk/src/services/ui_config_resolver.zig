@@ -782,3 +782,39 @@ test "invalid TerminalForUpdate values fall back to the default" {
     const cfg = try svc.get();
     try testing.expectEqualStrings("", cfg.TerminalForUpdate);
 }
+
+test "FirmwareEnabled defaults to false and round-trips through save and load" {
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    try seedSettings(&tmp, "{}");
+
+    var svc = makeService(&tmp);
+    defer svc.deinit();
+    try svc.load();
+
+    const loaded = try svc.get();
+    try testing.expect(!loaded.FirmwareEnabled);
+
+    try svc.updateField(.FirmwareEnabled, true);
+
+    var reloaded = makeService(&tmp);
+    defer reloaded.deinit();
+    try reloaded.load();
+    const cfg = try reloaded.get();
+    try testing.expect(cfg.FirmwareEnabled);
+}
+
+test "invalid FirmwareEnabled values fall back to the default" {
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    try seedSettings(&tmp, "{\"FirmwareEnabled\":\"yes\"}");
+
+    var svc = makeService(&tmp);
+    defer svc.deinit();
+    try svc.load();
+
+    const cfg = try svc.get();
+    try testing.expect(!cfg.FirmwareEnabled);
+}

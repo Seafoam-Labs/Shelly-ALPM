@@ -35,6 +35,7 @@ pub const WelcomePage = extern struct {
         window: *ShellyWindow,
         flatpak: bool,
         appimage: bool,
+        fwupd: bool,
         started_transaction: bool = false,
         stage: enum {
             dependencies,
@@ -53,6 +54,7 @@ pub const WelcomePage = extern struct {
         source_aur: *gtk.CheckButton,
         source_flatpak: *gtk.CheckButton,
         source_appimage: *gtk.CheckButton,
+        source_fwupd: *gtk.CheckButton,
         source_recommended: *gtk.CheckButton,
         tray_enabled: *gtk.Switch,
         nav_sidebar: *gtk.CheckButton,
@@ -107,6 +109,9 @@ pub const WelcomePage = extern struct {
 
         if (!features.builtWithBuiltinAur) {
             gtk.Widget.setVisible(p.source_aur.as(gtk.Widget), 0);
+        }
+        if (!features.builtWithFwupd) {
+            gtk.Widget.setVisible(p.source_fwupd.as(gtk.Widget), 0);
         }
 
         _ = gobject.Object.signals.notify.connect(
@@ -272,12 +277,14 @@ pub const WelcomePage = extern struct {
 
         const flatpak_selected = gtk.CheckButton.getActive(p.source_flatpak) != 0;
         const appimage_selected = gtk.CheckButton.getActive(p.source_appimage) != 0;
+        const fwupd_selected = gtk.CheckButton.getActive(p.source_fwupd) != 0;
 
         var updated = cfg.*;
         updated.AurEnabled = features.builtWithAtollOnly or gtk.CheckButton.getActive(p.source_aur) != 0;
         updated.AurWarningConfirmed = updated.AurEnabled;
         updated.FlatPackEnabled = false;
         updated.AppImageEnabled = false;
+        updated.FirmwareEnabled = false;
         updated.RecommendedEnabled = gtk.CheckButton.getActive(p.source_recommended) != 0;
         updated.NavMode = if (gtk.CheckButton.getActive(p.nav_topbar) != 0) NavMode.topbar else NavMode.sidebar;
         updated.TrayEnabled = gtk.Switch.getActive(p.tray_enabled) != 0;
@@ -296,19 +303,19 @@ pub const WelcomePage = extern struct {
 
         if (win) |w| {
             w.applyConfig();
-            if (flatpak_selected or appimage_selected) {
-                startSupportInstall(w, flatpak_selected, appimage_selected);
+            if (flatpak_selected or appimage_selected or fwupd_selected) {
+                startSupportInstall(w, flatpak_selected, appimage_selected, fwupd_selected);
             } else {
                 w.hideLockout();
             }
         }
     }
 
-    fn startSupportInstall(window: *ShellyWindow, flatpak: bool, appimage: bool) void {
-        var selected_buffer: [2][]const u8 = undefined;
-        const selected = support_packages.selectedDependencies(&selected_buffer, flatpak, appimage);
+    fn startSupportInstall(window: *ShellyWindow, flatpak: bool, appimage: bool, fwupd: bool) void {
+        var selected_buffer: [3][]const u8 = undefined;
+        const selected = support_packages.selectedDependencies(&selected_buffer, flatpak, appimage, fwupd);
 
-        var package_buffer: [2][]const u8 = undefined;
+        var package_buffer: [3][]const u8 = undefined;
         const packages = support_packages.missingPackages(
             std.heap.c_allocator,
             runtime.io,
@@ -324,6 +331,7 @@ pub const WelcomePage = extern struct {
             .window = window,
             .flatpak = flatpak,
             .appimage = appimage,
+            .fwupd = fwupd,
         };
 
         if (packages.len == 0) {
@@ -340,7 +348,7 @@ pub const WelcomePage = extern struct {
 
         ctx.started_transaction = true;
         window.startTransaction(.{
-            .title = supportInstallTitle(flatpak, appimage),
+            .title = supportInstallTitle(flatpak, appimage, fwupd),
             .argv = argv,
             .packages = packages,
             .privileged = true,
@@ -403,7 +411,7 @@ pub const WelcomePage = extern struct {
 
         ctx.started_transaction = true;
         ctx.window.startTransaction(.{
-            .title = supportInstallTitle(true, false),
+            .title = supportInstallTitle(true, false, false),
             .argv = argv,
             .packages = packages,
             .privileged = true,
@@ -422,6 +430,7 @@ pub const WelcomePage = extern struct {
         var updated = cfg.*;
         if (ctx.flatpak) updated.FlatPackEnabled = true;
         if (ctx.appimage) updated.AppImageEnabled = true;
+        if (ctx.fwupd) updated.FirmwareEnabled = true;
         svc.set(updated) catch |err| {
             std.log.err("Support packages were installed, but the installed support could not be enabled. {0s}\n\nTechnical details: {1s}", .{ diagnostics.cause(err), @errorName(err) });
             return;
@@ -433,11 +442,19 @@ pub const WelcomePage = extern struct {
         ctx.window.applyConfig();
     }
 
-    fn supportInstallTitle(flatpak: bool, appimage: bool) [:0]const u8 {
+    fn supportInstallTitle(flatpak: bool, appimage: bool, fwupd: bool) [:0]const u8 {
+        if (flatpak and appimage and fwupd)
+            return translations._("Installing Flatpak, AppImage and Firmware support");
         if (flatpak and appimage)
             return translations._("Installing Flatpak and AppImage support");
+        if (flatpak and fwupd)
+            return translations._("Installing Flatpak and Firmware support");
+        if (appimage and fwupd)
+            return translations._("Installing AppImage and Firmware support");
         if (flatpak)
             return translations._("Installing Flatpak support");
+        if (fwupd)
+            return translations._("Installing Firmware support");
         return translations._("Installing AppImage support");
     }
 
@@ -473,6 +490,7 @@ pub const WelcomePage = extern struct {
         .{ "source_aur", @offsetOf(Private, "source_aur") },
         .{ "source_flatpak", @offsetOf(Private, "source_flatpak") },
         .{ "source_appimage", @offsetOf(Private, "source_appimage") },
+        .{ "source_fwupd", @offsetOf(Private, "source_fwupd") },
         .{ "source_recommended", @offsetOf(Private, "source_recommended") },
         .{ "tray_enabled", @offsetOf(Private, "tray_enabled") },
         .{ "nav_sidebar", @offsetOf(Private, "nav_sidebar") },

@@ -17,6 +17,7 @@ pub const builtWithBuiltinAur = options.aur_backend == .aur or options.aur_backe
 pub const builtWithRecommend = !options.exclude_recommend;
 pub const builtWithAppImage = !options.exclude_appimage;
 pub const builtWithShellySearch = !options.exclude_shelly_search;
+pub const builtWithFwupd = !options.exclude_fwupd;
 
 pub const aur_source_name: [:0]const u8 = if (builtWithAtollOnly) "Atoll" else "AUR";
 
@@ -28,5 +29,12 @@ pub fn builtWith(tab: ShellyTabs) bool {
         .flatpak => builtWithFlatpak,
         .app_image => builtWithAppImage,
         .shelly_search => builtWithShellySearch,
+        .firmware => builtWithFwupd,
     };
+}
+
+test "firmware tab gating follows the exclude-fwupd build option" {
+    const std = @import("std");
+    try std.testing.expectEqual(builtWithFwupd, builtWith(.firmware));
+    try std.testing.expectEqual(!options.exclude_fwupd, builtWith(.firmware));
 }

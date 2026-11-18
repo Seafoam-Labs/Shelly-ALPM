@@ -139,6 +139,7 @@ package_shelly() {
       'zsh: Zsh shell completions'
       'libstarfish: dependency viewer for arch packages'
       'shelly-flatpak-backend: Flatpak package management support'
+      'fwupd: Firmware page for device firmware updates'
       'util-linux: isolate fresh-root provisioning for --isolated builds'
       'fuse2: run AppImages that require FUSE 2'
   )

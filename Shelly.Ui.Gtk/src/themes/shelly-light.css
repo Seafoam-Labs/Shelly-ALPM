@@ -151,6 +151,16 @@
 .shelly-root columnview {
   background: transparent;
 }
+/* ColumnView carries .view, which the stock base paints opaque, and its
+   header buttons get their own stock fill; let the page show through. */
+.shelly-root columnview.view,
+.shelly-root treeview.view,
+.shelly-root columnview.view > header > button,
+.shelly-root treeview.view > header > button {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
 .shelly-root listbox row {
   padding: 14px 20px;
 }
