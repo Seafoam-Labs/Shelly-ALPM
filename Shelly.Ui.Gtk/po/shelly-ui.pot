@@ -684,6 +684,12 @@ msgstr ""
 msgid "Enable Atoll Powered AUR"
 msgstr ""
 
+msgid "Always Recheck AppImage Updates on Upgrade All"
+msgstr ""
+
+msgid "When off, Upgrade All runs only when the AppImage page shows updates."
+msgstr ""
+
 msgid "AppImage Install Path"
 msgstr ""
 
@@ -1056,6 +1062,9 @@ msgid "Only.AppImage files can be installed"
 msgstr ""
 
 msgid "Installing AppImage"
+msgstr ""
+
+msgid "Could not read the AppImage update setting."
 msgstr ""
 
 msgid "No AppImages need to be upgraded"

@@ -54,6 +54,7 @@ pub const ShellyConfig = struct {
     AurEnabled: bool = false,
     AurWarningConfirmed: bool = false,
     AtollAurEnabled: bool = false,
+    AppImageUpgradeAllRecheck: bool = false,
     AppImageEnabled: bool = false,
     FlatPackEnabled: bool = false,
     RecommendedEnabled: bool = true,
