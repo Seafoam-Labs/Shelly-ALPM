@@ -76,8 +76,18 @@ pub fn draw(ctx: vxfw.DrawContext, context: commands.Context, status: ?[]const u
         used += shortcut.width;
     }
     var main: vxfw.RichText = .{ .text = spans.items, .softwrap = false, .overflow = .ellipsis };
+    if (spans.items.len > 0) {
+        const last = &spans.items[spans.items.len - 1];
+        const trimmed = std.mem.trimEnd(u8, last.text, " ");
+        used -= last.text.len - trimmed.len;
+        last.text = trimmed;
+    }
+    const width: u16 = @intCast(@min(used, main_width));
     const children = try ctx.arena.alloc(vxfw.SubSurface, 1);
-    children[0] = .{ .origin = .{ .row = 0, .col = 0 }, .surface = try main.draw(ctx.withConstraints(.{}, .{ .width = main_width, .height = 1 })) };
+    children[0] = .{
+        .origin = .{ .row = 0, .col = @intCast((main_width - width) / 2) },
+        .surface = try main.draw(ctx.withConstraints(.{}, .{ .width = width, .height = 1 })),
+    };
     return .{ .size = size, .widget = main.widget(), .buffer = &.{}, .children = children };
 }
 
