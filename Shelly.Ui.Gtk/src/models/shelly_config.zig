@@ -45,6 +45,14 @@ pub const DayOfWeek = enum(u8) {
     saturday = 6,
 };
 
+/// a resized or hidden table column; `Width` -1 keeps the natural width.
+pub const TableColumn = struct {
+    Table: []const u8 = "",
+    Column: []const u8 = "",
+    Width: i32 = -1,
+    Hidden: bool = false,
+};
+
 pub const ShellyConfig = struct {
     // General
     Culture: []const u8 = "",
@@ -98,6 +106,8 @@ pub const ShellyConfig = struct {
 
     // Search Page
     SearchShowDetailPane: bool = false,
+
+    TableColumns: []const TableColumn = &.{},
 
     // Tray
     TrayEnabled: bool = false,

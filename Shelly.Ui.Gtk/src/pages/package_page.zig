@@ -20,6 +20,7 @@ const ShellyConfig = @import("../models/shelly_config.zig").ShellyConfig;
 const ViewType = @import("../models/shelly_config.zig").ViewType;
 const RecommendCategory = @import("../models/recommendation.zig").RecommendCategory;
 const sorters = @import("../helpers/sorters.zig");
+const table_columns = @import("../helpers/table_columns.zig");
 const recommendations = @import("../services/recommendations.zig");
 const translations = @import("../helpers/translations.zig");
 const a11y = @import("../helpers/a11y.zig");
@@ -152,6 +153,15 @@ pub const PackagePage = extern struct {
         gtk.SingleSelection.setCanUnselect(p.selection, 1);
 
         gtk.ColumnView.setModel(p.column_view, p.selection.as(gtk.SelectionModel));
+        // install date follows "installed only", so the page shows and hides it.
+        table_columns.attach(p.column_view, "packages", &.{
+            .{ .key = "select", .column = p.check_column, .hideable = false, .resizable = false },
+            .{ .key = "name", .column = p.name_column, .hideable = false },
+            .{ .key = "version", .column = p.version_column },
+            .{ .key = "size", .column = p.size_column },
+            .{ .key = "repository", .column = p.repository_column },
+            .{ .key = "install-date", .column = p.install_date_column, .hideable = false },
+        });
         gtk.GridView.setModel(p.grid_view, p.selection.as(gtk.SelectionModel));
 
         gtk.SortListModel.setSorter(sort_model, gtk.ColumnView.getSorter(p.column_view));

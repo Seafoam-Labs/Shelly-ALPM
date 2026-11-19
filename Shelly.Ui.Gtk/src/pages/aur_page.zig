@@ -17,6 +17,7 @@ const AurPackageDetail = @import("aur_package_detail.zig").PackageDetail;
 const translations = @import("../helpers/translations.zig");
 const a11y = @import("../helpers/a11y.zig");
 const sorters = @import("../helpers/sorters.zig");
+const table_columns = @import("../helpers/table_columns.zig");
 
 pub const AurPage = extern struct {
     parent_instance: Parent,
@@ -116,6 +117,13 @@ pub const AurPage = extern struct {
         gtk.SingleSelection.setCanUnselect(p.selection, 1);
 
         gtk.ColumnView.setModel(p.package_grid, p.selection.as(gtk.SelectionModel));
+        table_columns.attach(p.package_grid, "aur", &.{
+            .{ .key = "select", .column = p.check_column, .hideable = false, .resizable = false },
+            .{ .key = "name", .column = p.name_column, .hideable = false },
+            .{ .key = "votes", .column = p.votes_column },
+            .{ .key = "popularity", .column = p.popularity_column },
+            .{ .key = "version", .column = p.version_column },
+        });
 
         gtk.SortListModel.setSorter(sort_model, gtk.ColumnView.getSorter(p.package_grid));
 
