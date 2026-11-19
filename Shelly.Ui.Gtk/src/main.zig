@@ -9,7 +9,6 @@ const glib = bindings.glib;
 const gobject = bindings.gobject;
 const ShellyWindow = @import("shelly_window.zig").ShellyWindow;
 const runtime = @import("services/runtime.zig");
-const theme = @import("services/theme.zig");
 const translations = @import("helpers/translations.zig");
 const deep_link = @import("helpers/deep_link.zig");
 const tray_service = @import("services/tray_service.zig");
@@ -214,8 +213,6 @@ fn activate(app: *gtk.Application, _: ?*anyopaque) callconv(.c) void {
     }
 
     if (features.builtWithBackgroundServices) tryStartTray(runtime.io, std.heap.c_allocator);
-
-    theme.setupGnomeThemePreference();
 
     const window = ShellyWindow.new(app);
     window.refreshTheme();

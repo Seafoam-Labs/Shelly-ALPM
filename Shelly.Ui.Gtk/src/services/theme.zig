@@ -1,9 +1,8 @@
-//! Applies Shelly's built-in Pearl-style theme, or falls back to the system
-//! GTK theme.
+//! Applies Shelly's built-in Pearl-style theme, optionally with the desktop's
+//! colors.
 //!
-//! While the built-in theme is active it must render exactly as designed, so
-//! the desktop GTK theme is taken out of the picture entirely instead of
-//! being layered under:
+//! It must render exactly as designed, so the desktop GTK theme is taken out
+//! of the picture entirely instead of being layered under:
 //!  - `gtk-theme-name` is pinned to the blank theme embedded in libgtk
 //!    ("Empty", since GTK 4.0), so GTK's own theme slot loads nothing from
 //!    the desktop selection;
@@ -14,14 +13,8 @@
 //! If neither embedded base can be found the pin is dropped and the previous
 //! layering behavior applies, logged as a warning.
 //!
-//! The built-in theme itself lives in two palette stylesheets (dark/light).
-//! Each palette defines the `@shelly_*` color roles and imports the shared
-//! `shelly-components.css`, which maps the GTK named colors consumed by
-//! `style.css` onto those roles and adds component rules scoped under the
-//! `shelly-root` window class, so removing
-//! the providers and the class restores the legacy system-theme rendering
-//! exactly. `@define-color` is provider-global (not selector-scoped), hence
-//! one sheet per variant and a provider reload when the variant changes.
+//! Each palette imports `shelly-components.css`. `@define-color` is
+//! provider-global, so the provider reloads when the variant changes.
 //!
 //! Mirrors Pearl's appearance observer: root class + swappable provider, plus
 //! a live watcher for the desktop dark/light preference.
@@ -76,8 +69,7 @@ const empty_pin: [:0]const u8 = "Empty";
 /// Above USER: desktops may install system-wide GTK overrides at USER
 /// priority (e.g. Pearl's matugen Material palette in ~/.config/gtk-4.0),
 /// which would otherwise repaint the built-in theme's surfaces with the
-/// desktop's fixed dark palette. System mode removes this provider, so the
-/// desktop override applies again there.
+/// desktop's fixed dark palette. System colors load in a provider above it.
 const themed_priority = gtk.STYLE_PROVIDER_PRIORITY_USER + 1;
 
 var provider: ?*gtk.CssProvider = null;
@@ -88,8 +80,6 @@ var base_media_driven: bool = true;
 var base_provider: ?*gtk.CssProvider = null;
 var base_added: bool = false;
 var pin_name: ?[:0]const u8 = null;
-var pin_applied: bool = false;
-var dark_hint_applied: bool = false;
 var headerbar: ?*gtk.HeaderBar = null;
 var watched_window: ?*gtk.Window = null;
 var current_mode: ThemeMode = .shelly;
@@ -106,7 +96,10 @@ var desktop_monitor: ?*gio.FileMonitor = null;
 var desktop_refresh_source: c_uint = 0;
 var portal_connection: ?*gio.DBusConnection = null;
 var portal_accent: ?desktop_palette.Rgb = null;
-var portal_accent_read: bool = false;
+var portal_dark: ?bool = null;
+var portal_read: bool = false;
+var hint_dark: ?bool = null;
+var hint_changing: bool = false;
 
 /// Reads the persisted configuration and applies it to `win`.
 pub fn apply(win: *gtk.Window) void {
@@ -136,7 +129,7 @@ pub fn applyWith(win: *gtk.Window, mode: ThemeMode, variant: ThemeVariant) void 
     const dark = if (mode == .system) blk: {
         const result = buildDesktopPalette();
         desktop_css = result.css;
-        break :blk result.dark orelse desktopPrefersDark();
+        break :blk result.dark orelse systemPrefersDark();
     } else resolveDark(variant);
     resolved_dark = dark;
 
@@ -163,14 +156,9 @@ pub fn applyWith(win: *gtk.Window, mode: ThemeMode, variant: ThemeVariant) void 
     applyDesktopCss(display, desktop_css);
     gtk.Widget.addCssClass(widget, "shelly-root");
     gtk.Window.setTitlebar(win, ensureHeaderBar().as(gtk.Widget));
-    setScopedVisible(widget, true);
     setDarkHint(dark);
     ensureWatchers();
     if (mode == .system) ensureDesktopWatchers();
-}
-
-pub fn isThemed() bool {
-    return true;
 }
 
 const DesktopResult = struct {
@@ -205,7 +193,8 @@ fn buildDesktopPalette() DesktopResult {
     }
 
     var rejection: desktop_palette.Rejection = .none;
-    const palette = desktop_palette.build(arena, &defines, readPortalAccent(), desktopPrefersDark(), &rejection) catch {
+    const prefers_dark = systemPrefersDark();
+    const palette = desktop_palette.build(arena, &defines, portal_accent, prefers_dark, &rejection) catch {
         return .{ .css = null, .dark = null };
     };
     switch (rejection) {
@@ -248,20 +237,22 @@ fn portalBus() ?*gio.DBusConnection {
     return conn;
 }
 
-/// Later changes arrive through SettingChanged.
-fn readPortalAccent() ?desktop_palette.Rgb {
-    if (portal_accent_read) return portal_accent;
-    portal_accent_read = true;
-    const conn = portalBus() orelse return null;
-    const params = glib.Variant.new("(ss)", "org.freedesktop.appearance", "accent-color");
-    const reply_type = glib.VariantType.new("(v)");
+/// Reads the portal accent and color scheme once; later changes arrive
+/// through SettingChanged.
+fn readPortal() void {
+    if (portal_read) return;
+    portal_read = true;
+    const conn = portalBus() orelse return;
+    const namespaces = [_:null]?[*:0]const u8{"org.freedesktop.appearance"};
+    const params = glib.Variant.new("(^as)", &namespaces);
+    const reply_type = glib.VariantType.new("(a{sa{sv}})");
     defer reply_type.free();
     var err: ?*glib.Error = null;
     const result = conn.callSync(
         "org.freedesktop.portal.Desktop",
         "/org/freedesktop/portal/desktop",
         "org.freedesktop.portal.Settings",
-        "ReadOne",
+        "ReadAll",
         params,
         reply_type,
         .{},
@@ -271,16 +262,41 @@ fn readPortalAccent() ?desktop_palette.Rgb {
     );
     if (err) |e| {
         glib.Error.free(e);
-        return null;
+        return;
     }
-    const res = result orelse return null;
+    const res = result orelse return;
     defer res.unref();
-    const boxed = res.getChildValue(0);
-    defer boxed.unref();
-    const value = boxed.getVariant();
-    defer value.unref();
-    portal_accent = accentFromVariant(value);
-    return portal_accent;
+    const all = res.getChildValue(0);
+    defer all.unref();
+    for (0..all.nChildren()) |idx| {
+        const entry = all.getChildValue(idx);
+        defer entry.unref();
+        const name = entry.getChildValue(0);
+        defer name.unref();
+        if (!std.mem.eql(u8, std.mem.span(name.getString(null)), "org.freedesktop.appearance")) continue;
+        const settings = entry.getChildValue(1);
+        defer settings.unref();
+        const vd = glib.VariantDict.new(settings);
+        defer vd.unref();
+        if (vd.lookupValue("accent-color", null)) |value| {
+            defer value.unref();
+            portal_accent = accentFromVariant(value);
+        }
+        if (vd.lookupValue("color-scheme", null)) |value| {
+            defer value.unref();
+            portal_dark = schemeFromVariant(value);
+        }
+    }
+}
+
+/// The portal sends 1 for dark, 2 for light, and 0 for no preference.
+fn schemeFromVariant(value: *glib.Variant) ?bool {
+    if (!std.mem.eql(u8, std.mem.span(value.getTypeString()), "u")) return null;
+    return switch (value.getUint32()) {
+        1 => true,
+        2 => false,
+        else => null,
+    };
 }
 
 /// The portal sends `(ddd)` in 0..1; values outside that range mean unset.
@@ -350,13 +366,15 @@ fn onPortalSettingChanged(
     if (!std.mem.eql(u8, std.mem.span(params.getTypeString()), "(ssv)")) return;
     const key = params.getChildValue(1);
     defer key.unref();
-    if (!std.mem.eql(u8, std.mem.span(key.getString(null)), "accent-color")) return;
+    const name = std.mem.span(key.getString(null));
+    const is_accent = std.mem.eql(u8, name, "accent-color");
+    if (!is_accent and !std.mem.eql(u8, name, "color-scheme")) return;
+    readPortal();
     const boxed = params.getChildValue(2);
     defer boxed.unref();
     const value = boxed.getVariant();
     defer value.unref();
-    portal_accent = accentFromVariant(value);
-    portal_accent_read = true;
+    if (is_accent) portal_accent = accentFromVariant(value) else portal_dark = schemeFromVariant(value);
     scheduleDesktopRefresh();
 }
 
@@ -464,41 +482,11 @@ fn setThemeName(name: [*:0]const u8) void {
 /// Points `gtk-theme-name` at the embedded blank theme while the built-in
 /// theme is active. Once set by the application GtkSettings shields the
 /// property from further settings-backend pushes, which keeps the pin stable
-/// when the desktop re-applies its theme; that is also why leaving Shelly
-/// mode must go through `gtk_settings_reset_property` rather than writing a
-/// value back — resetting hands the property to the settings backends again,
-/// so GTK mode immediately follows the user's current theme and later
-/// changes to it.
+/// when the desktop re-applies its theme.
 fn applyThemePin() void {
     const pin = pin_name orelse return;
-    if (themeNameIs(pin)) {
-        pin_applied = true;
-        return;
-    }
+    if (themeNameIs(pin)) return;
     setThemeName(pin);
-    pin_applied = true;
-}
-
-fn restoreThemeName() void {
-    if (!pin_applied) return;
-    pin_applied = false;
-    if (gtk.Settings.getDefault()) |gtk_settings| {
-        gtk.Settings.resetProperty(gtk_settings, "gtk-theme-name");
-    }
-}
-
-/// Like the theme-name pin, the color-scheme property is shielded from the
-/// settings backends once Shelly mode sets it. Reset it when returning to the
-/// desktop theme so system mode follows the desktop dark/light preference
-/// instead of the value Shelly last pinned. The stored variant is a Shelly-mode
-/// preference and is deliberately not applied in system mode.
-fn restoreColorScheme() void {
-    if (!dark_hint_applied) return;
-    dark_hint_applied = false;
-    if (gtk.Settings.getDefault()) |gtk_settings| {
-        const property: [:0]const u8 = if (hasInterfaceColorScheme()) "gtk-interface-color-scheme" else "gtk-application-prefer-dark-theme";
-        gtk.Settings.resetProperty(gtk_settings, property);
-    }
 }
 
 fn loadSheet(prov: *gtk.CssProvider, dark: bool) void {
@@ -508,10 +496,8 @@ fn loadSheet(prov: *gtk.CssProvider, dark: bool) void {
 fn ensureHeaderBar() *gtk.HeaderBar {
     if (headerbar) |bar| return bar;
     const bar = gtk.HeaderBar.new();
-    // Own a reference: the window sinks the floating ref while the bar is the
-    // titlebar and drops it again in system mode (setTitlebar(null)); without
-    // this ref the cached bar would be finalized and switching back to the
-    // built-in theme would re-attach freed memory.
+    // Keep a ref: each theme apply calls setTitlebar, which drops the
+    // window's ref to the current titlebar first.
     _ = bar.as(gobject.Object).ref();
     gtk.Widget.addCssClass(bar.as(gtk.Widget), "shelly-headerbar");
 
@@ -573,6 +559,17 @@ fn desktopPrefersDark() bool {
             if (scheme == @backingInt(gtk.InterfaceColorScheme.light)) return false;
         }
     }
+    return legacyPrefersDark();
+}
+
+/// System colors pin the scheme too, so read the desktop value from the
+/// portal instead of gtk-interface-color-scheme.
+fn systemPrefersDark() bool {
+    readPortal();
+    return portal_dark orelse legacyPrefersDark();
+}
+
+fn legacyPrefersDark() bool {
     if (gnomeInterfaceSettings()) |settings| {
         const scheme = settings.getString("color-scheme");
         return std.mem.eql(u8, std.mem.span(scheme), "prefer-dark");
@@ -597,9 +594,13 @@ fn gnomeInterfaceSettings() ?*gio.Settings {
 }
 
 fn setDarkHint(dark: bool) void {
+    if (hint_dark == dark) return;
     const gtk_settings = gtk.Settings.getDefault() orelse return;
     const obj = gtk_settings.as(gobject.Object);
-    dark_hint_applied = true;
+    hint_dark = dark;
+    // GTK notifies on every set; ignore our own notify.
+    hint_changing = true;
+    defer hint_changing = false;
     if (hasInterfaceColorScheme()) {
         var value = std.mem.zeroes(gobject.Value);
         _ = value.init(gobject.typeFromName("GtkInterfaceColorScheme"));
@@ -611,19 +612,6 @@ fn setDarkHint(dark: bool) void {
     _ = value.init(gobject.typeFromName("gboolean"));
     value.setBoolean(@intFromBool(dark));
     obj.setProperty("gtk-application-prefer-dark-theme", &value);
-}
-
-/// Shows/hides the widgets that only exist for the built-in theme (added page
-/// headers and sidebar group labels) so system mode keeps the legacy layout.
-fn setScopedVisible(root: *gtk.Widget, visible: bool) void {
-    if (gtk.Widget.hasCssClass(root, "page-head-added") != 0 or gtk.Widget.hasCssClass(root, "nav-group") != 0) {
-        gtk.Widget.setVisible(root, @intFromBool(visible));
-    }
-
-    var child = gtk.Widget.getFirstChild(root);
-    while (child) |c| : (child = gtk.Widget.getNextSibling(c)) {
-        setScopedVisible(c, visible);
-    }
 }
 
 fn ensureWatchers() void {
@@ -661,6 +649,7 @@ fn onGnomeSchemeChanged(_: *gio.Settings, _: [*:0]const u8, _: *c_int) callconv(
 }
 
 fn onPreferDarkNotify(_: *gobject.Object, _: *gobject.ParamSpec, _: *c_int) callconv(.c) void {
+    if (hint_changing) return;
     refreshFollowSystem();
 }
 
@@ -684,39 +673,4 @@ fn refreshFollowSystem() void {
     resolved_dark = dark;
     loadSheet(ensureProvider(), dark);
     if (base_added) loadBaseSheet(base_provider.?, dark);
-}
-
-/// Mirrors the desktop's dark preference into GTK at startup. Moved verbatim
-/// from main.zig so system mode keeps the historical behavior.
-pub fn setupGnomeThemePreference() void {
-    const desktop = runtime.environ_map.get("XDG_CURRENT_DESKTOP") orelse return;
-
-    if (!std.mem.containsAtLeast(u8, desktop, 1, "GNOME")) {
-        return;
-    }
-
-    const settings = gio.Settings.new("org.gnome.desktop.interface");
-
-    const scheme = settings.getString("color-scheme");
-
-    const prefer_dark = std.mem.eql(u8, std.mem.span(scheme), "prefer-dark");
-
-    if (prefer_dark) {
-        const gtk_settings = gtk.Settings.getDefault() orelse {
-            std.debug.print("Could not read the desktop theme settings. Shelly will use the available theme defaults.\n", .{});
-            return;
-        };
-        const base_object = @as(*gobject.Object, @ptrCast(@alignCast(gtk_settings)));
-        var value = std.mem.zeroes(gobject.Value);
-        const bool_type = gobject.typeFromName("gboolean");
-        _ = value.init(bool_type);
-        value.setBoolean(1);
-        base_object.setProperty("gtk-application-prefer-dark-theme", &value);
-    }
-
-    _ = glib.setenv(
-        "GTK_APPLICATION_PREFER_DARK_THEME",
-        if (prefer_dark) "1" else "0",
-        1,
-    );
 }

@@ -1342,7 +1342,7 @@ const ThemeModeEntry = struct {
 
 const theme_mode_entries = [_]ThemeModeEntry{
     .{ .label = "Shelly", .value = .shelly },
-    .{ .label = "System GTK", .value = .system },
+    .{ .label = "System colors", .value = .system },
 };
 
 const ThemeVariantEntry = struct {
@@ -1429,7 +1429,7 @@ fn populateDropdowns(p: *ShellySettingsPage.Private) void {
     inline for (theme_mode_entries, 0..) |_, index| {
         const label = switch (index) {
             0 => translations._("Shelly"),
-            1 => translations._("System GTK"),
+            1 => translations._("System colors"),
             else => translations._("Shelly"),
         };
         gtk.StringList.append(theme_mode_strings, label);
@@ -1865,7 +1865,7 @@ fn applyTrayVisibility(p: *ShellySettingsPage.Private) void {
     gtk.Widget.setVisible(p.symbolic_tray_box.as(gtk.Widget), @intFromBool(enabled));
 }
 
-/// System GTK follows the desktop theme, so the color variant row is only
+/// System colors follow the desktop, so the color variant row is only
 /// shown for the built-in theme. The stored variant is left untouched.
 fn applyThemeVariantVisibility(p: *ShellySettingsPage.Private) void {
     const idx = gtk.DropDown.getSelected(p.theme_mode_drop);

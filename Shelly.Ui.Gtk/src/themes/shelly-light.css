@@ -3,9 +3,7 @@
  * (pearl/src/theme/material/palette.json), geometry from
  * pearl/resources/settings-layout.css.
  *
- * This palette defines only the @shelly_* color roles. The GTK name
- * mappings and component rules live in shelly-components.css, imported
- * below, and are scoped under .shelly-root so system mode never sees them.
+ * Rules live in shelly-components.css.
  */
 
 @import url("resource:///com/shellyorg/shelly/themes/shelly-components.css");
