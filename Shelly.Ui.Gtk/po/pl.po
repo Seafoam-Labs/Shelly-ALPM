@@ -2,8 +2,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Polish (Shelly-ALPM)\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-11-13 22:42-0500\n"
-"PO-Revision-Date: 2026-11-14 11:53+0000\n"
+"POT-Creation-Date: 2026-11-14 01:29-0300\n"
+"PO-Revision-Date: 2026-11-18 11:50+0000\n"
 "Last-Translator: juliazero <juliazero2@gmail.com>\n"
 "Language-Team: Polish\n"
 "Language: pl\n"
@@ -724,6 +724,16 @@ msgstr "Włącz wyszukiwarkę Shelly"
 msgid "Enable Atoll Powered AUR"
 msgstr "Używaj Atoll do obsługi AUR"
 
+msgid "Always Recheck AppImage Updates on Upgrade All"
+msgstr ""
+"Zawsze sprawdzaj ponownie aktualizacje AppImage podczas aktualizowania "
+"wszystkiego"
+
+msgid "When off, Upgrade All runs only when the AppImage page shows updates."
+msgstr ""
+"Gdy ta opcja jest wyłączona, funkcja „Aktualizuj wszystko” uruchamia się "
+"tylko wtedy, gdy na stronie AppImage są dostępne aktualizacje."
+
 msgid "AppImage Install Path"
 msgstr "Ścieżka instalacji AppImage"
 
@@ -1122,6 +1132,9 @@ msgstr "Można zainstalować tylko pliki AppImage"
 
 msgid "Installing AppImage"
 msgstr "Instalowanie AppImage"
+
+msgid "Could not read the AppImage update setting."
+msgstr "Nie udało się odczytać ustawienia aktualizacji AppImage."
 
 msgid "No AppImages need to be upgraded"
 msgstr "Żaden pakiet AppImage nie wymaga aktualizacji"

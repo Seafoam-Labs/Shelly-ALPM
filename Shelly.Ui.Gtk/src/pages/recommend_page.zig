@@ -26,7 +26,6 @@ pub const RecommendPage = extern struct {
     const resource_path = "/com/shellyorg/shelly/ui/recommend_page.ui";
 
     const Private = struct {
-        header_box: *gtk.Box,
         refresh_button: *gtk.Button,
         recommend_stack: *gtk.Stack,
         loading_page: *gtk.Box,
@@ -645,7 +644,6 @@ pub const RecommendPage = extern struct {
     }
 
     const template_children = .{
-        .{ "header_box", @offsetOf(Private, "header_box") },
         .{ "refresh_button", @offsetOf(Private, "refresh_button") },
         .{ "recommend_stack", @offsetOf(Private, "recommend_stack") },
         .{ "loading_page", @offsetOf(Private, "loading_page") },

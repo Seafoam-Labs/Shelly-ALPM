@@ -2,7 +2,7 @@
 # Maintainer: Caroline Snyder <hirpeng@gmail.com>
 pkgbase=shelly
 pkgname=('shelly' 'shelly-flatpak-backend')
-pkgver=3.3.1
+pkgver=3.4.0
 pkgrel=1
 arch=('x86_64' 'aarch64')
 url="https://github.com/Seafoam-Labs/Shelly-ALPM"
@@ -139,6 +139,7 @@ package_shelly() {
       'zsh: Zsh shell completions'
       'libstarfish: dependency viewer for arch packages'
       'shelly-flatpak-backend: Flatpak package management support'
+      'fwupd: Firmware page for device firmware updates'
       'util-linux: isolate fresh-root provisioning for --isolated builds'
       'fuse2: run AppImages that require FUSE 2'
   )

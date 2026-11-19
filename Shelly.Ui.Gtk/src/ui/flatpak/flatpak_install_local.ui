@@ -42,6 +42,9 @@
         </child>
         <child>
           <object class="GtkFrame">
+            <style>
+              <class name="inner-card"/>
+            </style>
             <child>
               <object class="GtkBox">
                 <property name="orientation">vertical</property>

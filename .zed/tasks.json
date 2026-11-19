@@ -22,9 +22,16 @@
     "allow_concurrent_runs": false,
   },
   {
+    // Devario dev build: mirrors build.sh (RLPM-only, devario paths, local Flatpak backend).
     "label": "CLI Build",
-    "command": "zig build -Doptimize=Debug",
-    "args": [],
+    "command": "zig",
+    "args": [
+      "build",
+      "-Doptimize=Debug",
+      "-Dlibalpm=false",
+      "-Dpath-profile=devario",
+      "-Dflatpak-backend-path=$ZED_WORKTREE_ROOT/Shelly.Flatpak.Backend/zig-out/lib/libshelly-flatpak-backend.so.1",
+    ],
     "reveal": "always",
     "reveal_target": "dock",
     "hide": "never",

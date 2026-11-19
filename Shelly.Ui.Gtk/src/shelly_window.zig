@@ -21,6 +21,7 @@ const aur_icon_name: [:0]const u8 = if (features.builtWithAtollOnly) "atoll-shar
 const aur_title: [:0]const u8 = features.aur_source_name;
 const ShellySearchPage = if (features.builtWithShellySearch) @import("pages/search_page.zig").ShellySearchPage else void;
 const UpdatePage = @import("pages/update_page.zig").UpdatePage;
+const FirmwarePage = if (features.builtWithFwupd) @import("pages/firmware_page.zig").FirmwarePage else void;
 const RecommendPage = if (features.builtWithRecommend) @import("pages/recommend_page.zig").RecommendPage else void;
 const WelcomePage = @import("pages/welcome.zig").WelcomePage;
 const SupportPage = @import("pages/support.zig");
@@ -145,6 +146,7 @@ pub const ShellyWindow = extern struct {
         setNavEnabled(self, "flatpak", cfg.FlatPackEnabled);
         setNavEnabled(self, "appimage", cfg.AppImageEnabled);
         setNavEnabled(self, "search", cfg.ShellySearchEnabled);
+        setNavEnabled(self, "firmware", cfg.FirmwareEnabled);
 
         self.changeNav(cfg.NavMode);
 
@@ -380,6 +382,7 @@ pub const ShellyWindow = extern struct {
         if (features.builtWithShellySearch) add_nav_button(self, items, stack, true, "search", ShellySearchPage.icon_name, translations._(ShellySearchPage.title));
         add_nav_group(self, items, translations._("SYSTEM"));
         add_nav_button(self, items, stack, true, "update", UpdatePage.icon_name, translations._(UpdatePage.title));
+        if (features.builtWithFwupd) add_nav_button(self, items, stack, true, "firmware", FirmwarePage.icon_name, translations._(FirmwarePage.title));
         add_nav_button(self, items, stack, true, "utilities", UtilitiesPage.icon_name, translations._(UtilitiesPage.title));
         add_nav_button(self, items, stack, true, "settings", SettingsPage.icon_name, translations._(SettingsPage.title));
 
@@ -394,7 +397,10 @@ pub const ShellyWindow = extern struct {
     fn add_nav_group(self: *ShellyWindow, parent: *gtk.Box, text: [:0]const u8) void {
         const label = gtk.Label.new(text);
         gtk.Widget.addCssClass(label.as(gtk.Widget), "nav-group");
-        gtk.Widget.setHalign(label.as(gtk.Widget), .start);
+        // Fill the rail so the themed sheet's section underline spans the
+        // group; the text itself stays left-aligned.
+        gtk.Widget.setHalign(label.as(gtk.Widget), .fill);
+        gtk.Label.setXalign(label, 0);
         gtk.Box.append(parent, label.as(gtk.Widget));
         self.private().nav_groups.append(std.heap.c_allocator, label) catch unreachable;
     }
@@ -423,6 +429,7 @@ pub const ShellyWindow = extern struct {
         gtk.Box.append(bar, left_spacer.as(gtk.Widget));
 
         const items = gtk.Box.new(.horizontal, 0);
+        gtk.Widget.addCssClass(items.as(gtk.Widget), "nav-segment");
         gtk.Box.append(bar, items.as(gtk.Widget));
 
         if (features.builtWithRecommend) add_nav_button(self, items, stack, false, "recommend", RecommendPage.icon_name, translations._(RecommendPage.title));
@@ -432,6 +439,7 @@ pub const ShellyWindow = extern struct {
         if (features.builtWithAppImage) add_nav_button(self, items, stack, false, "appimage", AppImagePage.icon_name, translations._(AppImagePage.title));
         if (features.builtWithShellySearch) add_nav_button(self, items, stack, false, "search", ShellySearchPage.icon_name, translations._(ShellySearchPage.title));
         add_nav_button(self, items, stack, false, "update", UpdatePage.icon_name, translations._(UpdatePage.title));
+        if (features.builtWithFwupd) add_nav_button(self, items, stack, false, "firmware", FirmwarePage.icon_name, translations._(FirmwarePage.title));
         add_nav_button(self, items, stack, false, "utilities", UtilitiesPage.icon_name, translations._(UtilitiesPage.title));
         add_nav_button(self, items, stack, false, "settings", SettingsPage.icon_name, translations._(SettingsPage.title));
 
@@ -589,6 +597,7 @@ pub const ShellyWindow = extern struct {
             .recommend => "recommend",
             .update => "update",
             .shelly_search => "search",
+            .firmware => "firmware",
         };
     }
 
@@ -653,6 +662,12 @@ pub const ShellyWindow = extern struct {
         const up = UpdatePage.new();
         const up_page = gtk.Stack.addTitled(stack, up.as(gtk.Widget), "update", translations._("Update"));
         gtk.StackPage.setIconName(up_page, UpdatePage.icon_name);
+
+        if (features.builtWithFwupd) {
+            const fw = FirmwarePage.new();
+            const fw_page = gtk.Stack.addTitled(stack, fw.as(gtk.Widget), "firmware", translations._(FirmwarePage.title));
+            gtk.StackPage.setIconName(fw_page, FirmwarePage.icon_name);
+        }
 
         const sp = SettingsPage.new();
         const sp_page = gtk.Stack.addTitled(stack, sp.as(gtk.Widget), "settings", translations._("Settings"));
@@ -834,6 +849,7 @@ pub const ShellyWindow = extern struct {
     pub fn navigateTo(self: *ShellyWindow, target: deep_link.PageTarget) bool {
         return switch (target) {
             .updates => self.showTopLevelPage("update"),
+            .firmware => self.showTopLevelPage("firmware"),
 
             .flatpak_install => blk: {
                 if (features.builtWithFlatpak) {

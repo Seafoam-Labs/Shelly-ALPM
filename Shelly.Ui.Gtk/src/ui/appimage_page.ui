@@ -12,37 +12,6 @@
     <property name="hexpand">true</property>
     <property name="vexpand">true</property>
     <child>
-      <object class="GtkBox">
-        <property name="orientation">vertical</property>
-        <style>
-          <class name="page-head"/>
-          <class name="page-head-added"/>
-        </style>
-        <child>
-          <object class="GtkLabel">
-            <property name="label" translatable="yes">AppImage</property>
-            <property name="xalign">0</property>
-            <property name="accessible-role">heading</property>
-            <accessibility>
-              <property name="level">1</property>
-            </accessibility>
-            <style>
-              <class name="page-heading"/>
-            </style>
-          </object>
-        </child>
-        <child>
-          <object class="GtkLabel">
-            <property name="label" translatable="yes">Install and integrate AppImage bundles.</property>
-            <property name="xalign">0</property>
-            <style>
-              <class name="page-subtitle"/>
-            </style>
-          </object>
-        </child>
-      </object>
-    </child>
-    <child>
       <object class="GtkOverlay" id="AppImageOverlay">
         <property name="hexpand">true</property>
         <property name="vexpand">true</property>
@@ -56,7 +25,6 @@
                 <property name="orientation">vertical</property>
                 <property name="hexpand">true</property>
                 <property name="vexpand">true</property>
-                <property name="margin-bottom">10</property>
                 <child>
                   <object class="GtkBox">
                     <property name="orientation">vertical</property>
@@ -64,11 +32,10 @@
                       <object class="GtkBox">
                         <property name="orientation">horizontal</property>
                         <property name="halign">fill</property>
-                        <property name="margin-bottom">10</property>
-                        <property name="margin-top">10</property>
-                        <property name="margin-start">10</property>
-                        <property name="margin-end">10</property>
                         <property name="spacing">5</property>
+                        <style>
+                          <class name="toolbar-card"/>
+                        </style>
                         <child>
                           <object class="GtkSearchEntry" id="AppImageSearchEntry">
                             <property name="placeholder-text" translatable="yes">Search...</property>
@@ -175,6 +142,9 @@
                     </child>
                     <child>
                       <object class="GtkScrolledWindow" id="AppImageListWindow">
+                        <style>
+                          <class name="page-body"/>
+                        </style>
                         <property name="vexpand">true</property>
                         <property name="hscrollbar-policy">never</property>
                         <child>

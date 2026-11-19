@@ -2195,17 +2195,32 @@ pub const Manager = struct {
             });
             break :blk &standalone_operation.?;
         };
-        const package_builds = try self.allocator.alloc(PkgbuildInfo, requested_names.len);
+        // Historical (pinned, --no-overwrite)
+        // builds keep the requested subset so assembling unrequested members
+        // cannot collide with existing archives.
+        var member_names: ?pkgbuild_parser.PackageNames = null;
+        defer if (member_names) |*names| names.deinit(self.allocator);
+        const build_names: []const []const u8 = if (historical)
+            requested_names
+        else blk: {
+            member_names = try (pkgbuild_parser.PkgbuildParser{
+                .allocator = self.allocator,
+                .io = self.io(),
+                .package_carch = self.shellybuild_config.build.carch,
+            }).package_names_content(prepared.new_pkgbuild);
+            break :blk member_names.?.items;
+        };
+        const package_builds = try self.allocator.alloc(PkgbuildInfo, build_names.len);
         var parsed_count: usize = 0;
         defer {
             for (package_builds[0..parsed_count]) |*package_build| package_build.deinit(self.allocator);
             self.allocator.free(package_builds);
         }
-        for (requested_names, package_builds) |requested_name, *package_build| {
+        for (build_names, package_builds) |member_name, *package_build| {
             package_build.* = try (pkgbuild_parser.PkgbuildParser{
                 .allocator = self.allocator,
                 .io = self.io(),
-                .selected_package_name = requested_name,
+                .selected_package_name = member_name,
                 .package_carch = self.shellybuild_config.build.carch,
             }).parser_content(prepared.new_pkgbuild, prepared.cache_path);
             parsed_count += 1;
@@ -2246,11 +2261,12 @@ pub const Manager = struct {
             package_builds,
             active_context,
             self.shellybuild_config.*,
-            requested_names,
+            build_names,
             .{
                 .run_check = !self.no_check,
                 .overwrite = !historical,
                 .clean_after_success = !historical,
+                .build_all_members = !historical,
                 .skip_source_pgp_verification = false,
                 .sign = self.sign,
                 .sign_key = self.sign_key,
@@ -2269,9 +2285,38 @@ pub const Manager = struct {
             self.io(),
         );
         defer package_build.deinit();
-        const artifacts = try package_build.runWithOperation(operation);
+        const built_artifacts = try package_build.runWithOperation(operation);
         standalone_completion = .success;
-        return artifacts;
+        return try self.selectRequestedArtifacts(built_artifacts, requested_names);
+    }
+
+    /// Narrows a full split build's output to the transaction's requested
+    /// members. Unrequested archives remain on disk as build byproducts,
+    fn selectRequestedArtifacts(
+        self: *Self,
+        artifacts: []package_builder.BuildArtifact,
+        requested_names: []const []const u8,
+    ) ![]package_builder.BuildArtifact {
+        defer self.allocator.free(artifacts);
+        var count: usize = 0;
+        for (artifacts) |artifact| {
+            if (containsConst(requested_names, artifact.package_name)) count += 1;
+        }
+        const selected = try self.allocator.alloc(package_builder.BuildArtifact, count);
+        var filled: usize = 0;
+        errdefer {
+            for (selected[0..filled]) |artifact| artifact.deinit(self.allocator);
+            self.allocator.free(selected);
+        }
+        for (artifacts) |artifact| {
+            if (containsConst(requested_names, artifact.package_name)) {
+                selected[filled] = artifact;
+                filled += 1;
+            } else {
+                artifact.deinit(self.allocator);
+            }
+        }
+        return selected;
     }
 
     fn buildPreparedPackageWithCommand(
@@ -3543,8 +3588,13 @@ fn appendShellyBuildArguments(
         digest_hex,
         "--no-confirm",
     });
-    for (requested_names) |requested_name|
-        try arguments.appendSlice(allocator, &.{ "--package", requested_name });
+    // Non-historical builds package every split member (makepkg semantics)
+    // and select the requested artifacts afterwards; only historical subset
+    // builds bind the child to the requested members.
+    if (historical) {
+        for (requested_names) |requested_name|
+            try arguments.appendSlice(allocator, &.{ "--package", requested_name });
+    }
     try arguments.append(allocator, if (no_check) "--no-check" else "--check");
     try arguments.append(allocator, if (sign) "--sign" else "--nosign");
     if (sign_key) |key|
@@ -3696,10 +3746,6 @@ test "coordinator child build arguments bind review package set and policies" {
         "--review-digest",
         digest,
         "--no-confirm",
-        "--package",
-        "demo",
-        "--package",
-        "demo-docs",
         "--check",
         "--sign",
         "--key",
@@ -3709,6 +3755,9 @@ test "coordinator child build arguments bind review package set and policies" {
     try std.testing.expectEqual(expected_upgrade.len, upgrade.items.len);
     for (expected_upgrade, upgrade.items) |wanted, actual|
         try std.testing.expectEqualStrings(wanted, actual);
+    // Non-historical builds package every split member; selection happens
+    // after the build, so the child is not bound to a subset.
+    try std.testing.expect(!containsConst(upgrade.items, "--package"));
 
     var historical: std.ArrayList([]const u8) = .empty;
     defer historical.deinit(std.testing.allocator);
@@ -3726,6 +3775,9 @@ test "coordinator child build arguments bind review package set and policies" {
     );
     try std.testing.expect(containsConst(historical.items, "--no-overwrite"));
     try std.testing.expect(containsConst(historical.items, "--keep-workdirs"));
+    // Historical subset builds still bind the child to the requested member.
+    try std.testing.expect(containsConst(historical.items, "--package"));
+    try std.testing.expect(containsConst(historical.items, "demo"));
     try std.testing.expect(containsConst(historical.items, "--nosign"));
     try std.testing.expect(!containsConst(historical.items, "--check"));
     try std.testing.expect(!containsConst(historical.items, "--sign"));
@@ -5683,6 +5735,72 @@ test "prepared non-chroot split package builds use the custom builder" {
     try std.testing.expect(std.mem.endsWith(u8, artifacts[1].path, "demo-docs-1-1-any.pkg.tar.zst"));
     try std.Io.Dir.cwd().access(io, artifacts[0].path, .{});
     try std.Io.Dir.cwd().access(io, artifacts[1].path, .{});
+}
+
+test "non-historical split builds run every member and return only requested artifacts" {
+    const allocator = std.testing.allocator;
+    const io = std.testing.io;
+    var paths = try createAurManagerFixturePaths(allocator, io);
+    defer paths.deinit(allocator);
+
+    // demo-cli stages files into $srcdir/root; demo-docs depends on that side
+    // effect (mirrors lib32-gstreamer). Requesting only demo-docs must still
+    // run demo-cli's package function first, in pkgname order.
+    const remote = try std.fs.path.join(allocator, &.{ paths.remote_root, "demo-suite.git" });
+    defer allocator.free(remote);
+    try std.Io.Dir.cwd().createDirPath(io, remote);
+    const pkgbuild_path = try std.fs.path.join(allocator, &.{ remote, "PKGBUILD" });
+    defer allocator.free(pkgbuild_path);
+    try writeFixtureFile(io, pkgbuild_path,
+        \\pkgname=(demo-cli demo-docs)
+        \\pkgver=1
+        \\pkgrel=1
+        \\arch=('any')
+        \\package_demo-cli() {
+        \\  mkdir -p "$srcdir/root/usr"
+        \\  printf 'cli\n' > "$srcdir/root/usr/cli.txt"
+        \\  install -Dm644 "$srcdir/root/usr/cli.txt" "$pkgdir/usr/cli.txt"
+        \\}
+        \\package_demo-docs() {
+        \\  cd root
+        \\  install -Dm644 usr/cli.txt "$pkgdir/usr/docs.txt"
+        \\}
+        \\
+    , false);
+    const srcinfo_path = try std.fs.path.join(allocator, &.{ remote, ".SRCINFO" });
+    defer allocator.free(srcinfo_path);
+    try writeFixtureFile(io, srcinfo_path, "pkgbase = demo-suite\n\tpkgver = 1\n\tpkgrel = 1\n\tarch = any\npkgname = demo-cli\npkgname = demo-docs\n", false);
+    try runFixtureCommand(allocator, io, &.{ "git", "init" }, remote);
+    try runFixtureCommand(allocator, io, &.{ "git", "config", "user.email", "shelly-tests@example.invalid" }, remote);
+    try runFixtureCommand(allocator, io, &.{ "git", "config", "user.name", "Shelly Tests" }, remote);
+    try runFixtureCommand(allocator, io, &.{ "git", "add", "PKGBUILD", ".SRCINFO" }, remote);
+    try runFixtureCommand(allocator, io, &.{ "git", "commit", "-m", "fixture" }, remote);
+
+    var manager = try initFixtureAurManager(allocator, &paths, paths.remote_root);
+    defer manager.deinit();
+    _ = try manager.cachePkgbase("demo-cli", "demo-suite");
+    _ = try manager.cachePkgbase("demo-docs", "demo-suite");
+    const Approval = struct {
+        fn answer(_: ?*anyopaque, _: PkgbuildDiffRequest) bool {
+            return true;
+        }
+    };
+    manager.setPkgbuildApprovalHandler(.{ .function = Approval.answer });
+
+    var prepared = try manager.preparePackageForBuild("demo-docs", null);
+    defer prepared.deinit(allocator);
+    const artifacts = try manager.buildPreparedPackage(&prepared, &.{"demo-docs"}, false);
+    defer package_builder.deinitArtifacts(allocator, artifacts);
+
+    // Only the requested member is returned for installation...
+    try std.testing.expectEqual(@as(usize, 1), artifacts.len);
+    try std.testing.expectEqualStrings("demo-docs", artifacts[0].package_name);
+    try std.testing.expect(std.mem.endsWith(u8, artifacts[0].path, "demo-docs-1-1-any.pkg.tar.zst"));
+    // ...but the unrequested member was still packaged, so its staging side
+    // effect ran and demo-docs could cd into $srcdir/root.
+    const cli_archive = try std.fs.path.join(allocator, &.{ prepared.cache_path, "demo-cli-1-1-any.pkg.tar.zst" });
+    defer allocator.free(cli_archive);
+    try std.Io.Dir.cwd().access(io, cli_archive, .{});
 }
 
 test "review digest covers exact local source contents and missing sources fail closed" {

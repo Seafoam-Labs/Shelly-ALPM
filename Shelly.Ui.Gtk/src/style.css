@@ -262,6 +262,22 @@
   background-color: alpha(@theme_fg_color, 0.04);
   border-radius: 10px;
 }
+/* The Firmware detail pane holds plain labels, so unlike the Updates card
+   (whose children carry their own insets) it needs padding of its own. */
+.firmware-detail {
+  padding: 16px 20px;
+}
+/* adw-gtk3 ships no .warning text rule, so pin the badge hue ourselves. */
+/* round the row paints to match the inset card. */
+.firmware-list > row {
+  border-radius: 10px;
+}
+.firmware-list {
+  margin-right: 6px;
+}
+.firmware-list .warning {
+  color: @warning_color;
+}
 .updates-card-title {
   font-weight: 600;
   padding: 14px 16px 4px;

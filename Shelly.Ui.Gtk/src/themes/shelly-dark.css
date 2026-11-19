@@ -22,6 +22,9 @@
 @define-color accent_bg_color #d0bcff;
 @define-color accent_fg_color #381e72;
 @define-color accent_color #d0bcff;
+/* Hairlines for otherwise borderless button variants. */
+@define-color button_border_color alpha(#e6e0e9, 0.10);
+@define-color button_border_hover_color alpha(#e6e0e9, 0.16);
 
 /* libadwaita-style names used by adw-gtk3 and friends; without these the
    theme resolves labels/views/cards against the desktop palette. */
@@ -65,13 +68,24 @@
 .shelly-root {
   background: @theme_bg_color;
   border-radius: 16px;
-  border: 1px solid #8fd4da;
   font-family: "Inter", "Cantarell", "Segoe UI", system-ui, sans-serif;
   font-size: 14px;
 }
 /* Plain labels inherit; pin them so desktop themes cannot dim row titles. */
 .shelly-root label {
   color: @theme_fg_color;
+}
+/* fixed text tones instead of opacity dimming. */
+.shelly-root .dim-label {
+  color: #8f899b;
+  opacity: 1;
+}
+.shelly-root .cell-meta,
+.shelly-root columnview .dim-label {
+  color: #b3adbe;
+}
+.shelly-root .cell-meta {
+  font-feature-settings: "tnum";
 }
 .shelly-root link,
 .shelly-root link label,
@@ -111,12 +125,14 @@
   border-right: 1px solid alpha(#e6e0e9, 0.07);
 }
 .shelly-root .nav-topbar {
-  background: #121017;
+  background: @theme_bg_color;
   padding: 6px 12px;
   border-bottom: 1px solid alpha(#e6e0e9, 0.07);
 }
 .shelly-root .nav-group {
   color: #8f899b;
+  border-bottom: 1px solid alpha(#e6e0e9, 0.08);
+  padding-bottom: 6px;
 }
 
 /* Page headers */
@@ -138,21 +154,95 @@
 .shelly-root .page-body {
   margin: 0 30px 24px;
 }
-.shelly-root listbox {
+/* Views carry the base sheet's neutral view background; let the Pearl
+   window surface show through instead. */
+.shelly-root list,
+.shelly-root gridview,
+.shelly-root listview,
+.shelly-root columnview {
   background: transparent;
 }
-.shelly-root listbox row {
-  padding: 14px 20px;
+/* ColumnView carries .view, which the stock base paints opaque, and its
+   header buttons get their own stock fill; let the page show through. */
+.shelly-root columnview.view,
+.shelly-root treeview.view,
+.shelly-root columnview.view > header > button,
+.shelly-root treeview.view > header > button {
+  background: transparent;
+  border: none;
+  box-shadow: none;
 }
-.shelly-root listbox row:not(:first-child) {
-  border-top: 1px solid alpha(#e6e0e9, 0.08);
-}
-.shelly-root .toolbar-card {
-  margin: 0 30px 18px;
-  padding: 14px 16px;
+.shelly-root list.boxed-list {
   background: #232029;
   border-radius: 16px;
 }
+.shelly-root list row:not(:first-child) {
+  border-top: 1px solid alpha(#e6e0e9, 0.08);
+}
+.shelly-root .toolbar-card,
+.shelly-root .table-card,
+.shelly-root .flatpak-card {
+  background: #232029;
+  border-radius: 16px;
+}
+.shelly-root .toolbar-card {
+  margin: 14px 30px 22px;
+  padding: 14px 16px;
+}
+.shelly-root .toolbar-card entry,
+.shelly-root .toolbar-card dropdown > button {
+  min-height: 34px;
+}
+.shelly-root .toolbar-card dropdown > button {
+  border-radius: 999px;
+}
+.shelly-root .table-card {
+  margin: 0 30px 24px;
+}
+/* the flatpak overlays carry the stock .background class. */
+.shelly-root .flatpak-card {
+  border: none;
+}
+.shelly-root .flatpak-card list.boxed-list,
+.shelly-root .flatpak-card .inner-card {
+  background: #2b2930;
+  border: none;
+  border-radius: 16px;
+}
+.shelly-root .flatpak-card .flatpak-content.background {
+  background: #232029;
+}
+.shelly-root .flatpak-nav {
+  background: transparent;
+}
+.shelly-root .flatpak-nav > row {
+  padding: 7px 10px;
+  border: none;
+  border-radius: 10px;
+}
+.shelly-root .flatpak-nav > row:hover:not(:selected) {
+  background: alpha(#e6e0e9, 0.06);
+}
+.shelly-root .table-card columnview > header > button:first-child,
+.shelly-root .table-card columnview > listview > row > cell:first-child {
+  padding-left: 16px;
+}
+.shelly-root menubutton.options-menu > button {
+  min-width: 20px;
+  padding: 0 4px;
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+.shelly-root menubutton.options-menu > button:hover,
+.shelly-root menubutton.options-menu > button:checked {
+  background: alpha(#e6e0e9, 0.08);
+}
+.shelly-root menubutton.icon-button > button {
+  min-width: 34px;
+  padding: 0;
+}
+.shelly-root .card,
 .shelly-root .pkg-card,
 .shelly-root .utility-row,
 .shelly-root .settings-card {
@@ -180,7 +270,7 @@
 }
 .shelly-root stackswitcher button:checked {
   background: #4f378b;
-  border-color: transparent;
+  border-color: alpha(#eaddff, 0.2);
 }
 .shelly-root stackswitcher button:checked label {
   color: #eaddff;
@@ -205,17 +295,22 @@
 .shelly-root button:hover {
   background: #3a3740;
 }
+/* Hairlines on borderless variants ride as inset box-shadow rings: a real
+   border would grow content-sized buttons (GTK min-* excludes border). */
 .shelly-root button.flat {
   background: transparent;
   border: none;
 }
-.shelly-root button.flat:hover {
+.shelly-root button.flat:hover,
+.shelly-root button.flat:checked {
   background: alpha(#e6e0e9, 0.06);
+  box-shadow: inset 0 0 0 1px @button_border_hover_color;
 }
 .shelly-root button.suggested-action {
   background: #d0bcff;
   color: #381e72;
   border: none;
+  box-shadow: inset 0 0 0 1px alpha(#381e72, 0.25);
 }
 /* The .shelly-root label pin overrides the button's inherited color, so
    restate the accent foreground on the label/image themselves. */
@@ -225,12 +320,15 @@
 }
 .shelly-root button.suggested-action:hover {
   background: #eaddff;
+  box-shadow: inset 0 0 0 1px alpha(#381e72, 0.33);
 }
 .shelly-root button.suggested-action:active {
   background: #bda6ee;
+  box-shadow: inset 0 0 0 1px alpha(#381e72, 0.33);
 }
 .shelly-root button.suggested-action:disabled {
   background: alpha(#d0bcff, 0.12);
+  box-shadow: inset 0 0 0 1px alpha(#e6e0e9, 0.05);
 }
 .shelly-root button.suggested-action:disabled label,
 .shelly-root button.suggested-action:disabled image {
@@ -240,6 +338,48 @@
   background: alpha(@error_color, 0.15);
   color: @error_color;
   border: none;
+  box-shadow: inset 0 0 0 1px alpha(@error_color, 0.35);
+}
+.shelly-root button.destructive-action:hover {
+  box-shadow: inset 0 0 0 1px alpha(@error_color, 0.5);
+}
+.shelly-root .linked > button,
+.shelly-root .linked > menubutton > button,
+.shelly-root .linked > dropdown > button {
+  border-radius: 0;
+}
+.shelly-root .linked > button:first-child,
+.shelly-root .linked > menubutton:first-child > button,
+.shelly-root .linked > dropdown:first-child > button {
+  border-radius: 999px 0 0 999px;
+}
+.shelly-root .linked > button:last-child,
+.shelly-root .linked > menubutton:last-child > button,
+.shelly-root .linked > dropdown:last-child > button {
+  border-radius: 0 999px 999px 0;
+}
+/* the search source filter is narrowed: tint its funnel icon. */
+.shelly-root menubutton.filter-active > button image {
+  color: #d0bcff;
+}
+.shelly-root .linked > button:not(:first-child),
+.shelly-root .linked > menubutton:not(:first-child) > button,
+.shelly-root .linked > dropdown:not(:first-child) > button {
+  border-left-width: 0;
+}
+.shelly-root .linked.search-filter > entry {
+  border-radius: 10px 0 0 10px;
+}
+.shelly-root .linked.search-filter > dropdown:last-child > button,
+.shelly-root .linked.search-filter > menubutton:last-child > button {
+  border-radius: 0 10px 10px 0;
+}
+.shelly-root .linked > button:checked {
+  background: #4f378b;
+}
+.shelly-root .linked > button:checked label,
+.shelly-root .linked > button:checked image {
+  color: #eaddff;
 }
 .shelly-root headerbar button.titlebutton,
 .shelly-root headerbar windowcontrols button {
@@ -250,10 +390,35 @@
   background: #2b2930;
   color: #e6e0e9;
   border: none;
+  box-shadow: inset 0 0 0 1px @button_border_color;
 }
 .shelly-root headerbar button.titlebutton:hover,
 .shelly-root headerbar windowcontrols button:hover {
   background: #3a3740;
+  box-shadow: inset 0 0 0 1px @button_border_hover_color;
+}
+
+/* Column headers: a flat strip with a hairline underneath. */
+.shelly-root columnview > header {
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid alpha(#e6e0e9, 0.12);
+  border-radius: 0;
+}
+.shelly-root columnview > header > button {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 0 6px;
+  min-height: 34px;
+}
+.shelly-root columnview > header > button label {
+  color: #b3adbe;
+  font-weight: 600;
+}
+.shelly-root columnview > header > button:hover {
+  background: alpha(#e6e0e9, 0.04);
 }
 
 /* Navigation */
@@ -264,15 +429,18 @@
   margin: 2px 0;
   background: transparent;
   border: none;
+  box-shadow: inset 0 0 0 1px @button_border_color;
   color: #e6e0e9;
 }
 .shelly-root .nav-btn:hover {
   background: alpha(#e6e0e9, 0.06);
+  box-shadow: inset 0 0 0 1px @button_border_hover_color;
 }
 /* button.nav-selected outranks button.flat, which the nav buttons carry. */
 .shelly-root button.nav-selected,
 .shelly-root button.nav-selected:hover {
   background: #4f378b;
+  box-shadow: inset 0 0 0 1px alpha(#eaddff, 0.18);
 }
 .shelly-root .nav-selected label {
   color: #eaddff;
@@ -280,6 +448,26 @@
 }
 .shelly-root .nav-selected image {
   color: #eaddff;
+}
+
+.shelly-root .nav-segment {
+  background: #121017;
+  border: 1px solid #49454e;
+  border-radius: 999px;
+  padding: 0;
+}
+.shelly-root .nav-segment > button.nav-btn {
+  margin: 0;
+  min-height: 34px;
+  padding: 0 16px;
+  border-radius: 0;
+  box-shadow: none;
+}
+.shelly-root .nav-segment > button.nav-btn:first-child {
+  border-radius: 999px 0 0 999px;
+}
+.shelly-root .nav-segment > button.nav-btn:last-child {
+  border-radius: 0 999px 999px 0;
 }
 
 /* Entries, dropdowns, popovers */
@@ -319,6 +507,10 @@
 }
 .shelly-root popover > contents button:hover {
   background: alpha(#e6e0e9, 0.08);
+  box-shadow: inset 0 0 0 1px @button_border_hover_color;
+}
+.shelly-root popover > contents button:checked {
+  box-shadow: inset 0 0 0 1px @button_border_hover_color;
 }
 .shelly-root spinbutton {
   background: #141218;
@@ -371,14 +563,18 @@
   color: #381e72;
 }
 
-/* Scrollbars, separators, misc. The trough is a visible pill rail; the
-   accent thumb rides inside it with 2px of rail showing on each side. */
+/* Scrollbars, separators, misc. */
+.shelly-root scrollbar {
+  background: transparent;
+  border: none;
+  padding: 0;
+}
 .shelly-root scrollbar trough {
   background: alpha(#e6e0e9, 0.08);
   border: none;
   border-radius: 999px;
-  min-width: 10px;
-  min-height: 10px;
+  min-width: 6px;
+  min-height: 6px;
   margin: 2px;
 }
 .shelly-root scrollbar slider {
@@ -387,7 +583,7 @@
   border-radius: 999px;
   min-width: 6px;
   min-height: 6px;
-  margin: 2px;
+  margin: 0;
 }
 .shelly-root scrollbar slider:hover {
   background: alpha(#d0bcff, 0.7);
@@ -403,7 +599,7 @@
 .shelly-root scrollbar.overlay-indicator:not(.dragging):not(.hovering) slider {
   min-width: 6px;
   min-height: 6px;
-  margin: 2px;
+  margin: 0;
   background: alpha(#d0bcff, 0.35);
 }
 .shelly-root separator {
@@ -427,6 +623,38 @@
 .shelly-root flowboxchild:focus-visible {
   outline: 2px solid #d0bcff;
   outline-offset: -3px;
+  border-radius: 12px;
+}
+/* List/grid selection: the base sheet hardcodes its own blue on these
+   nodes (and the flowbox above never selects), so restate the Pearl
+   selection tokens for the views the pages actually use. */
+.shelly-root gridview > child:selected,
+.shelly-root listview > row:selected,
+.shelly-root columnview > listview > row:selected,
+.shelly-root .flatpak-nav > row:selected {
+  background: alpha(#4f378b, 0.6);
+  color: #eaddff;
+}
+.shelly-root gridview > child:selected {
+  border-radius: 12px;
+}
+/* Let the selection tint above show through the card surface. */
+.shelly-root gridview > child:selected .card {
+  background: transparent;
+}
+.shelly-root gridview > child:selected:hover,
+.shelly-root listview > row:selected:hover,
+.shelly-root columnview > listview > row:selected:hover,
+.shelly-root .flatpak-nav > row:selected:hover {
+  background: alpha(#4f378b, 0.8);
+}
+.shelly-root gridview > child:focus-visible,
+.shelly-root listview > row:focus-visible,
+.shelly-root columnview > listview > row:focus-visible {
+  outline: 2px solid #d0bcff;
+  outline-offset: -3px;
+}
+.shelly-root gridview > child:focus-visible {
   border-radius: 12px;
 }
 .shelly-root textview text,
@@ -474,9 +702,13 @@
   padding: 6px 14px;
   min-height: 30px;
 }
+.shelly-root .chip:hover {
+  box-shadow: inset 0 0 0 1px @button_border_hover_color;
+}
 .shelly-root .chip:checked {
   background: #4f378b;
   color: #eaddff;
+  box-shadow: inset 0 0 0 1px alpha(#eaddff, 0.2);
 }
 .shelly-root .updates-card {
   background: #232029;
