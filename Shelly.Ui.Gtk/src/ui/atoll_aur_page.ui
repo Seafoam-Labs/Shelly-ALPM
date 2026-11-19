@@ -11,39 +11,7 @@
     <property name="orientation">vertical</property>
     <property name="hexpand">true</property>
     <property name="vexpand">true</property>
-    <property name="margin-bottom">10</property>
 
-    <child>
-      <object class="GtkBox">
-        <property name="orientation">vertical</property>
-        <style>
-          <class name="page-head"/>
-          <class name="page-head-added"/>
-        </style>
-        <child>
-          <object class="GtkLabel">
-            <property name="label" translatable="yes">AUR</property>
-            <property name="xalign">0</property>
-            <property name="accessible-role">heading</property>
-            <accessibility>
-              <property name="level">1</property>
-            </accessibility>
-            <style>
-              <class name="page-heading"/>
-            </style>
-          </object>
-        </child>
-        <child>
-          <object class="GtkLabel">
-            <property name="label" translatable="yes">Build and install packages from the Arch User Repository.</property>
-            <property name="xalign">0</property>
-            <style>
-              <class name="page-subtitle"/>
-            </style>
-          </object>
-        </child>
-      </object>
-    </child>
     <child>
       <object class="GtkBox">
         <property name="halign">fill</property>
@@ -74,6 +42,17 @@
           </object>
         </child>
         <child>
+          <object class="GtkMenuButton" id="options_menu">
+            <property name="has-frame">false</property>
+            <style>
+              <class name="options-menu"/>
+            </style>
+            <property name="icon-name">view-more-symbolic</property>
+            <property name="tooltip-text" translatable="yes">Additional Options</property>
+            <property name="popover">options_popover</property>
+          </object>
+        </child>
+        <child>
           <object class="GtkDropDown" id="search_by_selection">
             <property name="tooltip-text" translatable="yes">Search By</property>
             <property name="expression">
@@ -98,38 +77,37 @@
             <property name="valign">center</property>
             <property name="margin-end">5</property>
             <child>
-              <object class="GtkButton" id="prev_page_button">
-                <property name="icon-name">go-previous-symbolic</property>
-                <property name="tooltip-text" translatable="yes">Previous page</property>
-                <property name="sensitive">false</property>
-                <signal name="clicked" handler="on_prev_page" swapped="true"/>
-              </object>
-            </child>
-            <child>
               <object class="GtkLabel" id="page_label">
                 <property name="label" translatable="yes">Page 1 of 1</property>
                 <style><class name="dim-label"/></style>
               </object>
             </child>
             <child>
-              <object class="GtkButton" id="next_page_button">
-                <property name="icon-name">go-next-symbolic</property>
-                <property name="tooltip-text" translatable="yes">Next page</property>
-                <property name="sensitive">false</property>
-                <signal name="clicked" handler="on_next_page" swapped="true"/>
+              <object class="GtkBox">
+                <style><class name="linked"/></style>
+                <child>
+                  <object class="GtkButton" id="prev_page_button">
+                    <property name="icon-name">go-previous-symbolic</property>
+                    <property name="tooltip-text" translatable="yes">Previous page</property>
+                    <property name="sensitive">false</property>
+                    <signal name="clicked" handler="on_prev_page" swapped="true"/>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkButton" id="next_page_button">
+                    <property name="icon-name">go-next-symbolic</property>
+                    <property name="tooltip-text" translatable="yes">Next page</property>
+                    <property name="sensitive">false</property>
+                    <signal name="clicked" handler="on_next_page" swapped="true"/>
+                  </object>
+                </child>
               </object>
             </child>
           </object>
         </child>
         <child>
-          <object class="GtkMenuButton" id="options_menu">
-            <property name="icon-name">view-more-symbolic</property>
-            <property name="tooltip-text" translatable="yes">Additional Options</property>
-            <property name="popover">options_popover</property>
-          </object>
-        </child>
-        <child>
           <object class="GtkButton" id="install_button">
+            <property name="visible">false</property>
             <property name="label" translatable="yes">Install Selected</property>
             <property name="sensitive">false</property>
             <signal name="clicked" handler="on_install_clicked" swapped="true"/>
@@ -141,6 +119,10 @@
 
     <child>
       <object class="GtkBox" id="views_and_detail_hbox">
+        <property name="overflow">hidden</property>
+        <style>
+          <class name="table-card"/>
+        </style>
         <property name="hexpand">true</property>
         <property name="orientation">horizontal</property>
         <property name="vexpand">true</property>

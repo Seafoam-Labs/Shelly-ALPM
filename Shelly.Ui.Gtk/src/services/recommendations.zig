@@ -139,7 +139,7 @@ fn writeCache(io: std.Io, path: []const u8, timestamp: i64, raw_payload: []const
         std.Io.Dir.cwd().createDirPath(io, directory) catch {};
     }
 
-    var buffer: std.Io.Writer.Allocating = .init(std.heap.page_allocator);
+    var buffer: std.Io.Writer.Allocating = .init(std.heap.c_allocator);
     defer buffer.deinit();
 
     buffer.writer.print("{{\"timestamp\":{d},\"categories\":", .{timestamp}) catch return;

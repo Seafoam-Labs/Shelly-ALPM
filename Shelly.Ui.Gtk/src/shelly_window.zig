@@ -429,6 +429,7 @@ pub const ShellyWindow = extern struct {
         gtk.Box.append(bar, left_spacer.as(gtk.Widget));
 
         const items = gtk.Box.new(.horizontal, 0);
+        gtk.Widget.addCssClass(items.as(gtk.Widget), "nav-segment");
         gtk.Box.append(bar, items.as(gtk.Widget));
 
         if (features.builtWithRecommend) add_nav_button(self, items, stack, false, "recommend", RecommendPage.icon_name, translations._(RecommendPage.title));
