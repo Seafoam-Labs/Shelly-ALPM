@@ -874,6 +874,9 @@
                               <object class="GtkBox">
                                 <property name="orientation">horizontal</property>
                                 <property name="spacing">12</property>
+                                <style>
+                                  <class name="settings-form-row"/>
+                                </style>
                                 <child>
                                   <object class="GtkBox">
                                     <property name="orientation">vertical</property>
