@@ -236,18 +236,22 @@ fn loadBaseSheet(prov: *gtk.CssProvider, dark: bool) void {
     gtk.CssProvider.loadFromResource(prov, chosen.resource);
 }
 
-fn currentThemeName() ?[*:0]const u8 {
-    const gtk_settings = gtk.Settings.getDefault() orelse return null;
+fn themeNameIs(name: [*:0]const u8) bool {
+    const gtk_settings = gtk.Settings.getDefault() orelse return false;
     var value = std.mem.zeroes(gobject.Value);
     _ = value.init(gobject.typeFromName("gchararray"));
+    // The GValue owns a strdup'd copy of the property string.
+    defer value.unset();
     gtk_settings.as(gobject.Object).getProperty("gtk-theme-name", &value);
-    return value.getString();
+    const current = value.getString() orelse return false;
+    return std.mem.eql(u8, std.mem.span(current), std.mem.span(name));
 }
 
 fn setThemeName(name: [*:0]const u8) void {
     const gtk_settings = gtk.Settings.getDefault() orelse return;
     var value = std.mem.zeroes(gobject.Value);
     _ = value.init(gobject.typeFromName("gchararray"));
+    defer value.unset();
     value.setString(name);
     gtk_settings.as(gobject.Object).setProperty("gtk-theme-name", &value);
 }
@@ -262,11 +266,9 @@ fn setThemeName(name: [*:0]const u8) void {
 /// changes to it.
 fn applyThemePin() void {
     const pin = pin_name orelse return;
-    if (currentThemeName()) |name| {
-        if (std.mem.eql(u8, std.mem.span(name), pin)) {
-            pin_applied = true;
-            return;
-        }
+    if (themeNameIs(pin)) {
+        pin_applied = true;
+        return;
     }
     setThemeName(pin);
     pin_applied = true;
