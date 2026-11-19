@@ -238,6 +238,12 @@ pub fn build(b: *std.Build) void {
     const test_step = b.step("test", "Run all tests");
     test_step.dependOn(&b.addRunArtifact(root_tests).step);
     test_step.dependOn(&b.addRunArtifact(exe_tests).step);
+
+    // No addPassthruArgs here: the test runner rejects unknown arguments
+    // (filtering is compile-time only, via -Dtest-filter).
+    const valgrind_test_cmd = addValgrindCommand(b, target, exe_tests, "valgrind-test-%p.log", valgrind_extra_args.items);
+    const valgrind_test_step = b.step("valgrind-test", "Run the test suite under Valgrind (memcheck)");
+    valgrind_test_step.dependOn(&valgrind_test_cmd.step);
 }
 
 fn addValgrindCommand(

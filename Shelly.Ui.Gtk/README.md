@@ -67,3 +67,23 @@ Plain `zig build`, `run` and `test` with the native target are unaffected.
   `Parent PID:` that differs from the file-name PID (equal ⇒ child process).
 - The logs contain a flood of harmless `DWARF2 reader` warnings; filter them
   with `grep -v 'DWARF2 reader'` (`-q` does not suppress them under memcheck).
+
+### Running the tests under Valgrind
+
+```bash
+GSK_RENDERER=cairo zig build valgrind-test -Dcpu=x86_64_v3   # -Dcpu only needed on AVX-512 hosts
+```
+
+Runs the test suite (the libc+GTK-linked test binary) under memcheck with the
+same gate as the app step; logs land in `valgrind-test-<pid>.log`. The cairo
+renderer avoids Vulkan driver probing noise in the widget tests. Limits:
+
+- Memcheck only sees `c_allocator` traffic. Most tests use
+  `std.testing.allocator` (a SafeAllocator, invisible to memcheck), so Zig's
+  own leak check under plain `zig build test` stays the primary detector.
+- Coverage is deterministic, but GTK-init noise depends on display presence;
+  widget tests skip themselves when no display is available.
+- Tests spin up local HTTP servers; the memcheck slowdown can cause timeout
+  flakes. Keep the default Debug optimize level.
+- Test filtering is compile-time only (`-Dtest-filter=...`); the test binary
+  rejects runtime `--test-filter` arguments, so the step passes no app args.
