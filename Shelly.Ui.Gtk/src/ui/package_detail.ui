@@ -80,7 +80,7 @@
                     <property name="hexpand">true</property>
                     <property name="tooltip-text" translatable="yes">Package actions</property>
                     <property name="menu-model">package_actions_menu</property>
-                    <style><class name="flat"/></style>
+                    <style><class name="flat"/><class name="icon-button"/></style>
                   </object>
                 </child>
               </object>

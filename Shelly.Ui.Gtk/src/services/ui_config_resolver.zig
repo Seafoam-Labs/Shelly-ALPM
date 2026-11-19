@@ -285,6 +285,18 @@ fn coerceValue(
             .slice => coerceSlice(T, p.child, allocator, v),
             else => null,
         },
+        .@"struct" => |info| switch (v) {
+            .object => |o| blk: {
+                var out: T = .{};
+                inline for (info.field_names, info.field_types) |name, FieldType| {
+                    if (o.get(name)) |field_value| {
+                        @field(out, name) = coerceValue(FieldType, allocator, field_value) orelse break :blk null;
+                    }
+                }
+                break :blk out;
+            },
+            else => null,
+        },
         else => null,
     };
 }
@@ -308,10 +320,17 @@ fn coerceSlice(
     };
 
     const items = allocator.alloc(Child, arr.items.len) catch return null;
-    for (arr.items, 0..) |elem, i| {
-        items[i] = coerceValue(Child, allocator, elem) orelse return null;
+    var len: usize = 0;
+    for (arr.items) |elem| {
+        if (coerceValue(Child, allocator, elem)) |item| {
+            items[len] = item;
+            len += 1;
+        } else if (@typeInfo(Child) != .@"struct") {
+            return null;
+        }
+        // a bad record is skipped so the other records still load.
     }
-    return items;
+    return items[0..len];
 }
 
 const testing = std.testing;
@@ -528,6 +547,44 @@ test "ignores unknown fields when loading" {
 
     const cfg = try svc.get();
     try testing.expectEqual(false, cfg.NewInstall);
+}
+
+test "loads table column records" {
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    try seedSettings(&tmp,
+        \\{"TableColumns":[{"Table":"packages","Column":"size","Width":120,"Hidden":true}]}
+    );
+
+    var svc = makeService(&tmp);
+    defer svc.deinit();
+    try svc.load();
+
+    const cfg = try svc.get();
+    try testing.expectEqual(@as(usize, 1), cfg.TableColumns.len);
+    try testing.expectEqualStrings("packages", cfg.TableColumns[0].Table);
+    try testing.expectEqualStrings("size", cfg.TableColumns[0].Column);
+    try testing.expectEqual(@as(i32, 120), cfg.TableColumns[0].Width);
+    try testing.expectEqual(true, cfg.TableColumns[0].Hidden);
+}
+
+test "skips a bad table column record and keeps the rest" {
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    try seedSettings(&tmp,
+        \\{"TableColumns":[{"Table":"aur","Column":"votes","Width":"wide"},{"Table":"packages","Column":"size","Width":120}]}
+    );
+
+    var svc = makeService(&tmp);
+    defer svc.deinit();
+    try svc.load();
+
+    const cfg = try svc.get();
+    try testing.expectEqual(@as(usize, 1), cfg.TableColumns.len);
+    try testing.expectEqualStrings("packages", cfg.TableColumns[0].Table);
+    try testing.expectEqual(@as(i32, 120), cfg.TableColumns[0].Width);
 }
 
 test "load falls back to defaults for malformed JSON" {

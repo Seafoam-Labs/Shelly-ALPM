@@ -17,6 +17,7 @@ const AurPackageDetail = @import("aur_package_detail.zig").PackageDetail;
 const translations = @import("../helpers/translations.zig");
 const a11y = @import("../helpers/a11y.zig");
 const sorters = @import("../helpers/sorters.zig");
+const table_columns = @import("../helpers/table_columns.zig");
 
 pub const AurPage = extern struct {
     parent_instance: Parent,
@@ -116,6 +117,13 @@ pub const AurPage = extern struct {
         gtk.SingleSelection.setCanUnselect(p.selection, 1);
 
         gtk.ColumnView.setModel(p.package_grid, p.selection.as(gtk.SelectionModel));
+        table_columns.attach(p.package_grid, "aur", &.{
+            .{ .key = "select", .column = p.check_column, .hideable = false, .resizable = false },
+            .{ .key = "name", .column = p.name_column, .hideable = false },
+            .{ .key = "votes", .column = p.votes_column },
+            .{ .key = "popularity", .column = p.popularity_column },
+            .{ .key = "version", .column = p.version_column },
+        });
 
         gtk.SortListModel.setSorter(sort_model, gtk.ColumnView.getSorter(p.package_grid));
 
@@ -231,6 +239,7 @@ pub const AurPage = extern struct {
             fn setup(_: *gtk.SignalListItemFactory, item: *gobject.Object, _: ?*anyopaque) callconv(.c) void {
                 const cell = gobject.ext.cast(gtk.ColumnViewCell, item) orelse return;
                 const label = gtk.Label.new("");
+                gtk.Widget.addCssClass(label.as(gtk.Widget), "cell-meta");
                 gtk.Widget.setHalign(label.as(gtk.Widget), halign);
                 gtk.Label.setEllipsize(label, .end);
                 gtk.ColumnViewCell.setChild(cell, label.as(gtk.Widget));
@@ -277,6 +286,7 @@ pub const AurPage = extern struct {
             fn setup(_: *gtk.SignalListItemFactory, item: *gobject.Object, _: ?*anyopaque) callconv(.c) void {
                 const cell = gobject.ext.cast(gtk.ColumnViewCell, item) orelse return;
                 const label = gtk.Label.new("");
+                gtk.Widget.addCssClass(label.as(gtk.Widget), "cell-meta");
                 gtk.Widget.setHalign(label.as(gtk.Widget), .start);
                 gtk.ColumnViewCell.setChild(cell, label.as(gtk.Widget));
             }
@@ -486,14 +496,13 @@ pub const AurPage = extern struct {
         const btn = p.install_button.as(gtk.Widget);
 
         gtk.Widget.removeCssClass(btn, "suggested-action");
+        gtk.Widget.setVisible(btn, @intFromBool(count > 0));
         gtk.Widget.removeCssClass(btn, "destructive-action");
 
         var buf: [64]u8 = undefined;
-        if (count == 0) {
-            gtk.Button.setLabel(p.install_button, if (p.installed_mode) translations._("Remove Selected") else translations._("Install Selected"));
-            gtk.Widget.setSensitive(btn, 0);
-            gtk.Widget.setTooltipText(btn, translations._("Select one or more packages"));
-        } else if (p.installed_mode) {
+        // the button is hidden with nothing selected.
+        if (count == 0) return;
+        if (p.installed_mode) {
             gtk.Button.setLabel(
                 p.install_button,
                 std.fmt.bufPrintSentinel(&buf, "{s} {d} {s}", .{ translations._("Remove"), count, translations._("Package(s)") }, 0) catch translations._("Remove Selected"),

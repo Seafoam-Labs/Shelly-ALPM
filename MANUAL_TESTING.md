@@ -707,8 +707,8 @@ Document any known issues that are being tracked:
   chips, checked stack switcher, popover rows) carry a 1px hairline in both variants that
   strengthens on hover/checked; button sizes match the previous build and System GTK mode
   renders unchanged.
-- [ ] List-view column headers render as one pill bar with hairline dividers between columns
-  (not a pill per column) in both variants; per-column hover tint keeps the rounded ends.
+- [ ] List-view column headers render as one flat strip with a hairline underneath (not a pill
+  per column) in both variants, and each title sits over its column's values.
 - [ ] At 200% scale / large text, headings, cards and the settings rows do not clip.
 - [ ] On a desktop that installs a fixed dark GTK override at user priority (e.g. Pearl's
   matugen palette), the light variant still shows dark-on-light row labels and surfaces;
