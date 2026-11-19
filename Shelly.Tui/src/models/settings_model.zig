@@ -38,6 +38,7 @@ pub const State = struct {
     settings_draft: Settings = .{},
     settings_store: ?settings_service.Store = null,
     settings_failure: ?anyerror = null,
+    save_notice_until: ?std.Io.Timestamp = null,
     settings_selected: usize = 0,
     header_open: bool = false,
     header_selected: usize = 0,
@@ -107,6 +108,7 @@ pub fn loadSettings(self: *Model, io: std.Io, env: *const std.process.Environ.Ma
 }
 
 pub fn applySettings(self: *Model, saved: Settings) void {
+    self.settings_state.save_notice_until = null;
     const atoll_changed = self.settings_state.settings.atoll_aur_enabled != saved.atoll_aur_enabled;
     const sources_changed = self.settings_state.settings.appimage_enabled != saved.appimage_enabled or atoll_changed or self.settings_state.settings.aur_enabled != saved.aur_enabled or self.settings_state.settings.flatpak_enabled != saved.flatpak_enabled;
     if (atoll_changed or self.settings_state.settings.aur_enabled != saved.aur_enabled) {
@@ -230,8 +232,24 @@ pub fn saveSettings(self: *Model, ctx: *vxfw.EventContext) !void {
     }
     applySettings(self, saved);
     syncSettingsFile(self, runtime.io);
+    if (self.settings_state.settings_failure == null) {
+        const duration_ms = 3000;
+        self.settings_state.save_notice_until = std.Io.Timestamp.now(ctx.io, .awake).addDuration(.fromMilliseconds(duration_ms));
+        var timer = self.widget();
+        timer.eventHandler = expireSaveNotice;
+        try ctx.tick(duration_ms, timer);
+    }
     if (saved.flatpak_enabled and !self.flatpak_state.flatpak_checked) try flatpak_model.startFlatpakProbe(self, ctx);
     try self.focusActiveTab(ctx);
+}
+
+fn expireSaveNotice(ptr: *anyopaque, ctx: *vxfw.EventContext, event: vxfw.Event) anyerror!void {
+    if (event != .tick) return;
+    const self: *Model = @ptrCast(@alignCast(ptr));
+    const deadline = self.settings_state.save_notice_until orelse return;
+    if (std.Io.Timestamp.now(ctx.io, .awake).nanoseconds < deadline.nanoseconds) return;
+    self.settings_state.save_notice_until = null;
+    ctx.redraw = true;
 }
 
 pub fn reloadSettings(self: *Model, ctx: *vxfw.EventContext) !void {
@@ -353,7 +371,7 @@ fn pollSettingsFile(self: *Model, ctx: *vxfw.EventContext) !void {
 }
 
 pub fn settingsView(self: *Model) settings_view.View {
-    return .{ .list_percent = self.list_percent, .help = if (self.help_open) &self.help_panel else null, .userdata = self, .on_action = onSettingsAction, .header_open = self.settings_state.header_open, .header_selected = self.settings_state.header_selected, .keybindings_open = self.settings_state.keybindings_open, .binding_selected = self.settings_state.keybinding_selected, .capturing = self.settings_state.keybinding_capture, .binding_error = self.settings_state.keybinding_error, .settings = self.settings_state.settings_draft, .dirty = hasChanges(self), .selected = self.settings_state.settings_selected, .path = if (self.settings_state.settings_store) |store| store.path else "Settings could not be initialized", .failure = self.settings_state.settings_failure, .flatpak_checked = self.flatpak_state.flatpak_checked, .flatpak_available = self.flatpak_state.flatpak_available, .checking = self.flatpak_state.flatpak_probe_job != null, .busy = self.operation_state.install_job != null };
+    return .{ .list_percent = self.list_percent, .help = if (self.help_open) &self.help_panel else null, .userdata = self, .on_action = onSettingsAction, .header_open = self.settings_state.header_open, .header_selected = self.settings_state.header_selected, .keybindings_open = self.settings_state.keybindings_open, .binding_selected = self.settings_state.keybinding_selected, .capturing = self.settings_state.keybinding_capture, .binding_error = self.settings_state.keybinding_error, .settings = self.settings_state.settings_draft, .dirty = hasChanges(self), .show_save_notice = self.settings_state.save_notice_until != null and self.settings_state.settings_failure == null, .selected = self.settings_state.settings_selected, .path = if (self.settings_state.settings_store) |store| store.path else "Settings could not be initialized", .failure = self.settings_state.settings_failure, .flatpak_checked = self.flatpak_state.flatpak_checked, .flatpak_available = self.flatpak_state.flatpak_available, .checking = self.flatpak_state.flatpak_probe_job != null, .busy = self.operation_state.install_job != null };
 }
 
 fn onSettingsAction(ptr: *anyopaque, ctx: *vxfw.EventContext, action: settings_view.Action) anyerror!void {
@@ -569,6 +587,12 @@ test "settings drafts apply only after explicit save and survive failed saves" {
     try std.testing.expect(hasChanges(model));
     try std.testing.expect(!(try model.settings_state.settings_store.?.load(io)).aur_enabled);
     try saveSettings(model, &ctx);
+    try std.testing.expect(settingsView(model).show_save_notice);
+    try expireSaveNotice(model, &ctx, .tick);
+    try std.testing.expect(settingsView(model).show_save_notice);
+    model.settings_state.save_notice_until = std.Io.Timestamp.now(io, .awake);
+    try expireSaveNotice(model, &ctx, .tick);
+    try std.testing.expect(!settingsView(model).show_save_notice);
     try std.testing.expect(model.settings_state.settings.aur_enabled);
     try std.testing.expect(!hasChanges(model));
     const restarted = try Model.init(allocator);

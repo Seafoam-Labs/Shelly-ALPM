@@ -24,6 +24,7 @@ pub const View = struct {
     capturing: bool = false,
     binding_error: ?anyerror = null,
     dirty: bool = false,
+    show_save_notice: bool = false,
     selected: usize,
     path: []const u8,
     failure: ?anyerror,
@@ -38,11 +39,13 @@ pub const View = struct {
         const body = try ctx.arena.create(View);
         body.* = self;
         const content: vxfw.Widget = .{ .userdata = body, .drawFn = drawBody };
-        const labels = [_]Border.BorderLabel{.{ .text = if (self.keybindings_open) try self.bindingHeader(ctx.arena) else if (self.dirty) "Settings · Unsaved changes" else "Settings", .alignment = .top_left }};
+        const labels = [_]Border.BorderLabel{.{ .text = if (self.keybindings_open) try self.bindingHeader(ctx.arena) else "Settings", .alignment = .top_left }};
         var border: Border = .{ .child = content, .labels = &labels, .style = styles.emphasis };
-        const height = size.height -| 2;
+        const show_notice = (self.dirty or self.show_save_notice) and size.width > 0 and size.height >= 5;
+        const notice_height: u16 = @intFromBool(show_notice);
+        const height = size.height -| (2 + notice_height);
         try children.append(ctx.arena, .{
-            .origin = .{ .row = 1, .col = 0 },
+            .origin = .{ .row = @intCast(1 + notice_height), .col = 0 },
             .surface = if (size.width >= 80 and height >= 10)
                 try content.draw(ctx.withConstraints(.{}, .{ .width = size.width, .height = height }))
             else if (size.width >= 2 and height >= 2)
@@ -50,6 +53,11 @@ pub const View = struct {
             else
                 try content.draw(ctx.withConstraints(.{}, .{ .width = size.width, .height = height })),
         });
+        if (show_notice) {
+            const text = if (self.dirty) "Unsaved changes" else "Settings saved";
+            const width: u16 = @intCast(@min(size.width, ctx.stringWidth(text)));
+            try body.appendRow(ctx.withConstraints(.{}, .{ .width = width, .height = 1 }), children, 1, (size.width - width) / 2, .{ .text = text, .emphasis = true });
+        }
     }
 
     fn backendStatus(self: View) []const u8 {
@@ -136,7 +144,7 @@ pub const View = struct {
                 try children.append(ctx.arena, .{ .origin = .{ .row = 0, .col = @intCast(left_width) }, .surface = try help.draw(ctx.withConstraints(.{}, .{ .width = width, .height = pane_height })) });
                 continue;
             };
-            const labels = [_]Border.BorderLabel{.{ .text = if (!right) (if (self.dirty) "Settings · Unsaved changes" else "Settings") else if (self.keybindings_open or self.previewSelection() == preferences.keybindings_index) try self.bindingHeader(ctx.arena) else if (self.header_open or self.previewSelection() == preferences.header_index) "Icons" else "Details", .alignment = .top_left }};
+            const labels = [_]Border.BorderLabel{.{ .text = if (!right) "Settings" else if (self.keybindings_open or self.previewSelection() == preferences.keybindings_index) try self.bindingHeader(ctx.arena) else if (self.header_open or self.previewSelection() == preferences.header_index) "Icons" else "Details", .alignment = .top_left }};
             var border: Border = .{ .child = .{ .userdata = pane, .drawFn = drawBody }, .labels = &labels, .style = styles.emphasis };
             const width = if (right) size.width - left_width else left_width;
             try children.append(ctx.arena, .{ .origin = .{ .row = 0, .col = if (right) @intCast(left_width) else 0 }, .surface = try border.draw(ctx.withConstraints(.{ .width = width, .height = pane_height }, .{ .width = width, .height = pane_height })) });
@@ -173,7 +181,7 @@ pub const View = struct {
     }
 
     fn bindingHeader(self: *const View, arena: Allocator) Allocator.Error![]const u8 {
-        return std.fmt.allocPrint(arena, "Keybindings · {d}/{d}{s}", .{ keybindings_view.displayPosition(self.binding_selected) + 1, keybindings_view.row_count, if (self.capturing) " · Press a replacement key" else if (self.dirty) " · Unsaved changes" else "" });
+        return std.fmt.allocPrint(arena, "Keybindings · {d}/{d}{s}", .{ keybindings_view.displayPosition(self.binding_selected) + 1, keybindings_view.row_count, if (self.capturing) " · Press a replacement key" else "" });
     }
 
     fn previewSelection(self: *const View) usize {
