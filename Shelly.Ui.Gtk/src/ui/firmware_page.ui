@@ -199,9 +199,11 @@
                   <!-- Inset viewport: row hover/selection paints stay square,
                        so they must not reach the card's rounded corners. -->
                   <object class="GtkScrolledWindow">
-                    <property name="width-request">320</property>
+                    <property name="width-request">400</property>
                     <property name="vexpand">true</property>
                     <property name="hscrollbar-policy">never</property>
+                    <!-- a classic scrollbar keeps the row badges clear. -->
+                    <property name="overlay-scrolling">false</property>
                     <property name="margin-start">8</property>
                     <property name="margin-end">8</property>
                     <property name="margin-top">8</property>
@@ -447,6 +449,7 @@
                       <object class="GtkScrolledWindow" id="release_scroll">
                         <property name="vexpand">true</property>
                         <property name="hscrollbar-policy">never</property>
+                        <property name="overlay-scrolling">false</property>
                         <property name="min-content-height">160</property>
                         <child>
                           <object class="GtkListView" id="release_list">
