@@ -14,9 +14,11 @@
 //! If neither embedded base can be found the pin is dropped and the previous
 //! layering behavior applies, logged as a warning.
 //!
-//! The built-in theme itself lives in two resource stylesheets (dark/light).
-//! Each sheet redefines the GTK named colors consumed by `style.css` and adds
-//! component rules scoped under the `shelly-root` window class, so removing
+//! The built-in theme itself lives in two palette stylesheets (dark/light).
+//! Each palette defines the `@shelly_*` color roles and imports the shared
+//! `shelly-components.css`, which maps the GTK named colors consumed by
+//! `style.css` onto those roles and adds component rules scoped under the
+//! `shelly-root` window class, so removing
 //! the providers and the class restores the legacy system-theme rendering
 //! exactly. `@define-color` is provider-global (not selector-scoped), hence
 //! one sheet per variant and a provider reload when the variant changes.

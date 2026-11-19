@@ -241,7 +241,7 @@
 /* --------------------------------------------------------------------
    Updates / transaction redesign (docs/updates-redesign).
    Colors stay @theme_*-driven so system mode renders natively; Pearl
-   geometry for these classes lives in themes/shelly-{dark,light}.css.
+   geometry for these classes lives in themes/shelly-components.css.
    -------------------------------------------------------------------- */
 
 /* Source filter chips (GtkToggleButton) on the Updates page. */
