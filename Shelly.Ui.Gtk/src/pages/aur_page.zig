@@ -17,6 +17,7 @@ const AurPackageDetail = @import("aur_package_detail.zig").PackageDetail;
 const translations = @import("../helpers/translations.zig");
 const a11y = @import("../helpers/a11y.zig");
 const sorters = @import("../helpers/sorters.zig");
+const installed = @import("../helpers/installed.zig");
 
 pub const AurPage = extern struct {
     parent_instance: Parent,
@@ -73,6 +74,8 @@ pub const AurPage = extern struct {
         generation: u64,
         index: usize = 0,
         failed: bool = false,
+        installed_names: []const []const u8 = &.{},
+        all_installed: bool = false,
     };
 
     pub const getGObjectType = gobject.ext.defineClass(Self, .{
@@ -615,10 +618,28 @@ pub const AurPage = extern struct {
             },
         };
 
-        post_result(page, parsed.value, arena_ptr, generation);
+        post_result(page, parsed.value, arena_ptr, generation, if (mode == .installed) &.{} else fetchInstalledNames(alloc, cli), mode == .installed);
     }
 
-    fn post_result(page: *Self, packages: []AurPackage, arena: *std.heap.ArenaAllocator, generation: u64) void {
+    fn fetchInstalledNames(alloc: std.mem.Allocator, cli: ShellyCli) []const []const u8 {
+        const parsed = cli.list_aur_installed() catch |err| {
+            std.debug.print("Could not load the installed AUR-package list. {0s}\n\nTechnical details: {1s}\n", .{ diagnostics.cause(err), @errorName(err) });
+            return &.{};
+        };
+        defer parsed.deinit();
+        var names: std.ArrayListUnmanaged([:0]const u8) = .empty;
+        installed.appendAurInstalledNames(alloc, parsed.value, &names) catch {};
+        return names.items;
+    }
+
+    fn post_result(
+        page: *Self,
+        packages: []AurPackage,
+        arena: *std.heap.ArenaAllocator,
+        generation: u64,
+        installed_names: []const []const u8,
+        all_installed: bool,
+    ) void {
         const result = std.heap.c_allocator.create(LoadResult) catch {
             arena.deinit();
             std.heap.c_allocator.destroy(arena);
@@ -629,6 +650,8 @@ pub const AurPage = extern struct {
             .packages = packages,
             .arena = arena,
             .generation = generation,
+            .installed_names = installed_names,
+            .all_installed = all_installed,
         };
         _ = glib.idleAdd(&onLoadComplete, result);
     }
@@ -686,6 +709,7 @@ pub const AurPage = extern struct {
         var i: usize = 0;
         for (result.packages[result.index..end]) |d| {
             const pkg = AurPackageObject.new(d) catch continue;
+            pkg.setInstalled(result.all_installed or installed.aurInstalledContains(result.installed_names, d.Name));
             batch[i] = pkg.as(gobject.Object);
             i += 1;
         }

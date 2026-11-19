@@ -24,6 +24,7 @@ const runtime = @import("../services/runtime.zig");
 const translations = @import("../helpers/translations.zig");
 const a11y = @import("../helpers/a11y.zig");
 const sorters = @import("../helpers/sorters.zig");
+const installed = @import("../helpers/installed.zig");
 
 pub const ShellySearchPage = extern struct {
     parent_instance: Parent,
@@ -34,6 +35,18 @@ pub const ShellySearchPage = extern struct {
     pub const title: [:0]const u8 = "Shelly Search";
     pub const icon_name: [:0]const u8 = "system-search-symbolic";
     const resource_path = "/com/shellyorg/shelly/ui/search_page.ui";
+
+    const InstalledCache = struct {
+        mutex: glib.Mutex = .{ .f_p = null },
+        loaded: bool = false,
+        aur_names: std.ArrayListUnmanaged([:0]const u8) = .empty,
+        flatpak_ids: std.ArrayListUnmanaged([:0]const u8) = .empty,
+    };
+
+    const InstalledSnapshot = struct {
+        aur_names: []const []const u8 = &.{},
+        flatpak_ids: []const []const u8 = &.{},
+    };
 
     const Private = struct {
         list_store: *gio.ListStore,
@@ -56,7 +69,10 @@ pub const ShellySearchPage = extern struct {
         aur_toggle: *gtk.ToggleButton,
         flatpak_toggle: *gtk.ToggleButton,
         show_detail_pane_check: *gtk.CheckButton,
+        installed_only_check: *gtk.CheckButton,
         source_filter: *gtk.CustomFilter,
+        installed_filter: *gtk.CustomFilter,
+        installed_model: *gtk.FilterListModel,
         detail_revealer: *gtk.Revealer,
         detail_stack: *gtk.Stack,
         standard_detail: *StandardPackageDetail,
@@ -66,6 +82,8 @@ pub const ShellySearchPage = extern struct {
         loaded: bool,
         applying_config: bool,
         show_detail_pane: bool,
+        installed_only: bool,
+        installed_cache: InstalledCache,
         install_running: bool,
         last_query: [256]u8,
         last_query_len: usize,
@@ -122,6 +140,8 @@ pub const ShellySearchPage = extern struct {
         p.loaded = false;
         p.applying_config = false;
         p.show_detail_pane = false;
+        p.installed_only = false;
+        p.installed_cache = .{};
         p.install_running = false;
         p.generation = 0;
         p.last_query_len = 0;
@@ -142,7 +162,10 @@ pub const ShellySearchPage = extern struct {
         p.source_filter = gtk.CustomFilter.new(&source_filter_match, self, null);
         const filter_model = gtk.FilterListModel.new(p.list_store.as(gio.ListModel), p.source_filter.as(gtk.Filter));
 
-        const sort_model = gtk.SortListModel.new(filter_model.as(gio.ListModel), null);
+        p.installed_filter = gtk.CustomFilter.new(&installed_filter_match, self, null);
+        p.installed_model = gtk.FilterListModel.new(filter_model.as(gio.ListModel), p.installed_filter.as(gtk.Filter));
+
+        const sort_model = gtk.SortListModel.new(p.installed_model.as(gio.ListModel), null);
 
         p.selection = gtk.SingleSelection.new(sort_model.as(gio.ListModel));
         gtk.SingleSelection.setAutoselect(p.selection, 0);
@@ -205,6 +228,7 @@ pub const ShellySearchPage = extern struct {
         p.check_map.deinit(std.heap.c_allocator);
         self.drainPendingInstalls();
         p.pending_installs.deinit(std.heap.c_allocator);
+        clearInstalledCache(&p.installed_cache);
         gtk.Widget.disposeTemplate(self.as(gtk.Widget), getGObjectType());
         Class.parent.as(gobject.Object.Class).f_dispose.?(self.as(gobject.Object));
     }
@@ -551,6 +575,15 @@ pub const ShellySearchPage = extern struct {
 
         self.applyOptionsFromConfig();
         self.update_selection_ui();
+        self.prefetchInstalled();
+
+        // Unmapping clears the grid but keeps the query in the entry, so a
+        // return to the page re-runs the search it still shows.
+        if (p.last_query_len > 0) {
+            self.start_load(sources, .search);
+        } else if (p.installed_only) {
+            self.start_load(sources, .installed);
+        }
         // The page is the focus stop, so a page switch lands on its group name
         // and Tab reaches the search entry from there.
         _ = a11y.focusFirst(self.as(gtk.Widget));
@@ -587,7 +620,7 @@ pub const ShellySearchPage = extern struct {
         const p = self.priv();
         gtk.Filter.changed(p.source_filter.as(gtk.Filter), .different);
 
-        // Results stay loaded; explain the grid if every source is filtered out.
+        // Results stay loaded; explain the grid when nothing is visible.
         if (gio.ListModel.getNItems(p.list_store.as(gio.ListModel)) == 0) return;
         const any_enabled =
             gtk.ToggleButton.getActive(p.standard_toggle) != 0 or
@@ -599,9 +632,128 @@ pub const ShellySearchPage = extern struct {
                 translations._("No sources selected"),
                 translations._("Enable at least one source filter above."),
             );
+        } else if (gio.ListModel.getNItems(p.installed_model.as(gio.ListModel)) == 0) {
+            self.set_state(.empty);
         } else {
             self.set_state(.results);
         }
+    }
+
+    fn installed_filter_match(item: *gobject.Object, data: ?*anyopaque) callconv(.c) c_int {
+        const self: *Self = @ptrCast(@alignCast(data.?));
+        if (!self.priv().installed_only) return 1;
+        const pkg = gobject.ext.cast(SearchResultObject, item) orelse return 0;
+        return @intFromBool(pkg.isInstalled());
+    }
+
+    fn on_installed_only_toggled(self: *Self) callconv(.c) void {
+        const p = self.priv();
+        p.installed_only = gtk.CheckButton.getActive(p.installed_only_check) != 0;
+        gtk.Filter.changed(p.installed_filter.as(gtk.Filter), .different);
+        if (!p.loaded) return;
+
+        // Without a query, Installed Only lists every installed package from
+        // the enabled sources, like the AUR and package tabs do.
+        if (p.last_query_len == 0) {
+            if (p.installed_only) {
+                self.start_load(enabledSources(), .installed);
+            } else {
+                p.generation += 1;
+                gio.ListStore.removeAll(p.list_store);
+                self.update_selection_ui();
+                self.reset_source_labels();
+                self.set_state(.prompt);
+            }
+            return;
+        }
+
+        if (gio.ListModel.getNItems(p.list_store.as(gio.ListModel)) == 0) return;
+        if (p.installed_only and gio.ListModel.getNItems(p.installed_model.as(gio.ListModel)) == 0) {
+            self.set_state(.empty);
+        } else {
+            self.set_state(.results);
+        }
+    }
+
+    fn clearInstalledCache(cache: *InstalledCache) void {
+        glib.Mutex.lock(&cache.mutex);
+        defer glib.Mutex.unlock(&cache.mutex);
+        freeInstalledCacheLocked(cache);
+        cache.loaded = false;
+    }
+
+    fn freeInstalledCacheLocked(cache: *InstalledCache) void {
+        for (cache.aur_names.items) |name| std.heap.c_allocator.free(name);
+        cache.aur_names.deinit(std.heap.c_allocator);
+        cache.aur_names = .empty;
+        for (cache.flatpak_ids.items) |id| std.heap.c_allocator.free(id);
+        cache.flatpak_ids.deinit(std.heap.c_allocator);
+        cache.flatpak_ids = .empty;
+    }
+
+    fn prefetchInstalled(self: *Self) void {
+        const thread = std.Thread.spawn(.{}, installed_worker, .{self}) catch return;
+        thread.detach();
+    }
+
+    fn installed_worker(page: *Self) void {
+        ensureInstalledLoaded(page);
+    }
+
+    /// Fetches both installed lists once per cache epoch and keeps them for
+    /// later searches; `clearInstalledCache` starts a new epoch after installs.
+    fn ensureInstalledLoaded(page: *Self) void {
+        const cache = &page.priv().installed_cache;
+        glib.Mutex.lock(&cache.mutex);
+        defer glib.Mutex.unlock(&cache.mutex);
+        if (cache.loaded) return;
+
+        var threaded: std.Io.Threaded = .init(std.heap.c_allocator, .{});
+        defer threaded.deinit();
+        const cli = ShellyCli{ .allocator = std.heap.c_allocator, .io = threaded.io() };
+
+        var aur_names: std.ArrayListUnmanaged([:0]const u8) = .empty;
+        var loaded_any = false;
+        if (cli.list_aur_installed()) |parsed| {
+            defer parsed.deinit();
+            installed.appendAurInstalledNames(std.heap.c_allocator, parsed.value, &aur_names) catch {};
+            loaded_any = true;
+        } else |err| {
+            std.debug.print("Could not load the installed AUR-package list. {0s}\n\nTechnical details: {1s}\n", .{ diagnostics.cause(err), @errorName(err) });
+        }
+
+        var flatpak_ids: std.ArrayListUnmanaged([:0]const u8) = .empty;
+        if (cli.getInstalledFlatpaks()) |parsed| {
+            defer parsed.deinit();
+            installed.appendFlatpakInstalledIds(std.heap.c_allocator, parsed.value, &flatpak_ids) catch {};
+            loaded_any = true;
+        } else |err| {
+            std.debug.print("Could not load the installed Flatpak list. {0s}\n\nTechnical details: {1s}\n", .{ diagnostics.cause(err), @errorName(err) });
+        }
+
+        freeInstalledCacheLocked(cache);
+        cache.aur_names = aur_names;
+        cache.flatpak_ids = flatpak_ids;
+        // Both lists failing is not a loaded epoch: a later load retries.
+        cache.loaded = loaded_any;
+    }
+
+    fn installedSnapshot(page: *Self, alloc: std.mem.Allocator) InstalledSnapshot {
+        const cache = &page.priv().installed_cache;
+        glib.Mutex.lock(&cache.mutex);
+        defer glib.Mutex.unlock(&cache.mutex);
+        return .{
+            .aur_names = dupeNames(alloc, cache.aur_names.items) catch &.{},
+            .flatpak_ids = dupeNames(alloc, cache.flatpak_ids.items) catch &.{},
+        };
+    }
+
+    fn dupeNames(alloc: std.mem.Allocator, names: []const [:0]const u8) ![]const []const u8 {
+        const copy = try alloc.alloc([]const u8, names.len);
+        for (names, 0..) |name, i| {
+            copy[i] = try alloc.dupeSentinel(u8, name, 0);
+        }
+        return copy;
     }
 
     fn applyOptionsFromConfig(self: *Self) void {
@@ -640,6 +792,8 @@ pub const ShellySearchPage = extern struct {
         flatpak: bool = false,
     };
 
+    const LoadMode = enum { search, installed };
+
     fn enabledSources() Sources {
         var sources = Sources{};
         if (runtime.config) |svc| {
@@ -651,7 +805,7 @@ pub const ShellySearchPage = extern struct {
         return sources;
     }
 
-    fn start_load(self: *Self, sources: Sources) void {
+    fn start_load(self: *Self, sources: Sources, mode: LoadMode) void {
         const p = self.priv();
         p.generation += 1;
         gio.ListStore.removeAll(p.list_store);
@@ -659,17 +813,23 @@ pub const ShellySearchPage = extern struct {
         self.reset_source_labels();
         self.set_state(.loading);
 
-        const thread = std.Thread.spawn(.{}, load_worker, .{ self, p.generation, sources }) catch {
+        const thread = std.Thread.spawn(.{}, load_worker, .{ self, p.generation, sources, mode }) catch {
             self.set_state(.err);
             return;
         };
         thread.detach();
     }
 
-    fn load_worker(page: *Self, generation: u64, sources: Sources) void {
+    fn load_worker(page: *Self, generation: u64, sources: Sources, mode: LoadMode) void {
         const p = page.priv();
         const query_buf: *[256]u8 = &p.last_query;
         const query_len = p.last_query_len;
+
+        ensureInstalledLoaded(page);
+
+        var slot_arena = std.heap.ArenaAllocator.init(std.heap.c_allocator);
+        defer slot_arena.deinit();
+        const installed_sets = installedSnapshot(page, slot_arena.allocator());
 
         var slots = [3]SourceSlot{ .{}, .{}, .{} };
         slots[0].enabled = sources.standard;
@@ -681,7 +841,7 @@ pub const ShellySearchPage = extern struct {
 
         for (0..3) |i| {
             if (!slots[i].enabled) continue;
-            threads[i] = std.Thread.spawn(.{}, source_worker, .{ &slots[i], query_buf, query_len, tags[i] }) catch null;
+            threads[i] = std.Thread.spawn(.{}, source_worker, .{ &slots[i], query_buf, query_len, tags[i], installed_sets, mode }) catch null;
         }
         for (threads) |maybe_thread| {
             if (maybe_thread) |thread| thread.join();
@@ -722,7 +882,14 @@ pub const ShellySearchPage = extern struct {
         post_result(page, merged.items, arena_ptr, generation);
     }
 
-    fn source_worker(slot: *SourceSlot, query_buf: *[256]u8, query_len: usize, source: Source) void {
+    fn source_worker(
+        slot: *SourceSlot,
+        query_buf: *[256]u8,
+        query_len: usize,
+        source: Source,
+        installed_sets: InstalledSnapshot,
+        mode: LoadMode,
+    ) void {
         const query: []const u8 = query_buf[0..query_len];
 
         const arena_ptr = std.heap.c_allocator.create(std.heap.ArenaAllocator) catch return;
@@ -738,22 +905,50 @@ pub const ShellySearchPage = extern struct {
 
         switch (source) {
             .standard => {
-                const parsed = cli.search_standard(query) catch |err| {
-                    std.debug.print("Could not search standard repositories. {0s}\n\nTechnical details: {1s}\n", .{ diagnostics.cause(err), @errorName(err) });
-                    return;
-                };
-                deduplicateStandardResults(alloc, parsed.value, &items) catch |err| {
-                    std.debug.print(
-                        "Could not deduplicate search results: {s}\n",
-                        .{@errorName(err)},
-                    );
-                };
+                if (mode == .installed) {
+                    const parsed = cli.get_installed_packages() catch |err| {
+                        std.debug.print("Could not load the installed package list. {0s}\n\nTechnical details: {1s}\n", .{ diagnostics.cause(err), @errorName(err) });
+                        return;
+                    };
+                    for (parsed.value) |pkg| {
+                        // `-Ls` lists the whole local database, foreign (AUR)
+                        // packages included. They belong to the AUR source, so
+                        // they would otherwise appear twice or mislabelled.
+                        if (installed.aurInstalledContains(installed_sets.aur_names, pkg.Name)) continue;
+                        items.append(alloc, .{
+                            .source = .standard,
+                            .name = alloc.dupeSentinel(u8, pkg.Name, 0) catch continue,
+                            .install_target = alloc.dupeSentinel(u8, pkg.Name, 0) catch continue,
+                            .version = alloc.dupeSentinel(u8, pkg.Version, 0) catch continue,
+                            .description = alloc.dupeSentinel(u8, pkg.Description, 0) catch continue,
+                            .repository = alloc.dupeSentinel(u8, pkg.Repository, 0) catch continue,
+                            .installed = true,
+                        }) catch continue;
+                    }
+                } else {
+                    const parsed = cli.search_standard(query) catch |err| {
+                        std.debug.print("Could not search standard repositories. {0s}\n\nTechnical details: {1s}\n", .{ diagnostics.cause(err), @errorName(err) });
+                        return;
+                    };
+                    deduplicateStandardResults(alloc, parsed.value, &items) catch |err| {
+                        std.debug.print(
+                            "Could not deduplicate search results: {s}\n",
+                            .{@errorName(err)},
+                        );
+                    };
+                }
             },
             .aur => {
-                const parsed = cli.search_aur(query) catch |err| {
-                    std.debug.print("Could not search the AUR. {0s}\n\nTechnical details: {1s}\n", .{ diagnostics.cause(err), @errorName(err) });
-                    return;
-                };
+                const parsed = if (mode == .installed)
+                    cli.list_aur_installed() catch |err| {
+                        std.debug.print("Could not load the installed AUR-package list. {0s}\n\nTechnical details: {1s}\n", .{ diagnostics.cause(err), @errorName(err) });
+                        return;
+                    }
+                else
+                    cli.search_aur(query) catch |err| {
+                        std.debug.print("Could not search the AUR. {0s}\n\nTechnical details: {1s}\n", .{ diagnostics.cause(err), @errorName(err) });
+                        return;
+                    };
                 for (parsed.value) |pkg| {
                     items.append(alloc, .{
                         .source = .aur,
@@ -763,26 +958,55 @@ pub const ShellySearchPage = extern struct {
                         .description = if (pkg.Description) |value| alloc.dupeSentinel(u8, value, 0) catch "" else "",
                         .repository = alloc.dupeSentinel(u8, features.aur_source_name, 0) catch continue,
                         .out_of_date = pkg.OutOfDate != null,
+                        .installed = mode == .installed or installed.aurInstalledContains(installed_sets.aur_names, pkg.Name),
                         .aur = pkg,
                     }) catch continue;
                 }
             },
             .flatpak => {
-                const parsed = cli.search_flatpak(query) catch |err| {
-                    std.debug.print("Could not search Flatpak remotes. {0s}\n\nTechnical details: {1s}\n", .{ diagnostics.cause(err), @errorName(err) });
-                    return;
-                };
-                for (parsed.value.hits) |hit| {
-                    const display = if (hit.name.len > 0) hit.name else hit.id;
-                    items.append(alloc, .{
-                        .source = .flatpak,
-                        .name = alloc.dupeSentinel(u8, display, 0) catch continue,
-                        .install_target = alloc.dupeSentinel(u8, hit.id, 0) catch continue,
-                        .description = alloc.dupeSentinel(u8, hit.summary, 0) catch continue,
-                        .repository = alloc.dupeSentinel(u8, hit.remote, 0) catch continue,
-                        .verified = hit.verification_verified,
-                        .flatpak = hit,
-                    }) catch continue;
+                if (mode == .installed) {
+                    const parsed = cli.getInstalledFlatpaks() catch |err| {
+                        std.debug.print("Could not load the installed Flatpak list. {0s}\n\nTechnical details: {1s}\n", .{ diagnostics.cause(err), @errorName(err) });
+                        return;
+                    };
+                    for (parsed.value) |flatpak| {
+                        const display = if (flatpak.Name.len > 0) flatpak.Name else flatpak.Id;
+                        const name_z = alloc.dupeSentinel(u8, display, 0) catch continue;
+                        items.append(alloc, .{
+                            .source = .flatpak,
+                            .name = name_z,
+                            .install_target = alloc.dupeSentinel(u8, flatpak.Id, 0) catch continue,
+                            .version = alloc.dupeSentinel(u8, flatpak.Version, 0) catch continue,
+                            .description = "",
+                            .repository = alloc.dupeSentinel(u8, flatpak.Remote, 0) catch continue,
+                            .installed = true,
+                            .flatpak = .{
+                                .name = name_z,
+                                .id = alloc.dupeSentinel(u8, flatpak.Id, 0) catch continue,
+                                .app_id = alloc.dupeSentinel(u8, flatpak.Id, 0) catch continue,
+                                .remote = alloc.dupeSentinel(u8, flatpak.Remote, 0) catch continue,
+                                .installed_size = flatpak.InstalledSize,
+                            },
+                        }) catch continue;
+                    }
+                } else {
+                    const parsed = cli.search_flatpak(query) catch |err| {
+                        std.debug.print("Could not search Flatpak remotes. {0s}\n\nTechnical details: {1s}\n", .{ diagnostics.cause(err), @errorName(err) });
+                        return;
+                    };
+                    for (parsed.value.hits) |hit| {
+                        const display = if (hit.name.len > 0) hit.name else hit.id;
+                        items.append(alloc, .{
+                            .source = .flatpak,
+                            .name = alloc.dupeSentinel(u8, display, 0) catch continue,
+                            .install_target = alloc.dupeSentinel(u8, hit.id, 0) catch continue,
+                            .description = alloc.dupeSentinel(u8, hit.summary, 0) catch continue,
+                            .repository = alloc.dupeSentinel(u8, hit.remote, 0) catch continue,
+                            .verified = hit.verification_verified,
+                            .installed = installed.flatpakInstalledContains(installed_sets.flatpak_ids, hit.id),
+                            .flatpak = hit,
+                        }) catch continue;
+                    }
                 }
             },
         }
@@ -877,7 +1101,11 @@ pub const ShellySearchPage = extern struct {
         result.index = end;
         if (result.index < result.items.len) return 1;
 
-        page.set_state(.results);
+        if (p.installed_only and gio.ListModel.getNItems(p.installed_model.as(gio.ListModel)) == 0) {
+            page.set_state(.empty);
+        } else {
+            page.set_state(.results);
+        }
         page.update_selection_ui();
 
         var standard_count: u32 = 0;
@@ -907,6 +1135,10 @@ pub const ShellySearchPage = extern struct {
         const text = self.search_text();
         if (text.len == 0) {
             p.last_query_len = 0;
+            if (p.installed_only) {
+                self.start_load(enabledSources(), .installed);
+                return;
+            }
             gio.ListStore.removeAll(p.list_store);
             self.update_selection_ui();
             self.reset_source_labels();
@@ -918,7 +1150,28 @@ pub const ShellySearchPage = extern struct {
         @memcpy(p.last_query[0..len], text[0..len]);
         p.last_query_len = len;
 
-        self.start_load(enabledSources());
+        self.start_load(enabledSources(), .search);
+    }
+
+    /// The clear button empties the entry without activating it, so drop the
+    /// old results and return to the prompt once the text is gone.
+    fn on_search_changed(self: *Self) callconv(.c) void {
+        const p = self.priv();
+        if (!p.loaded) return;
+        if (self.search_text().len != 0) return;
+        if (p.last_query_len == 0) return;
+        p.last_query_len = 0;
+
+        if (p.installed_only) {
+            self.start_load(enabledSources(), .installed);
+            return;
+        }
+
+        p.generation += 1;
+        gio.ListStore.removeAll(p.list_store);
+        self.update_selection_ui();
+        self.reset_source_labels();
+        self.set_state(.prompt);
     }
 
     fn on_install_clicked(self: *Self) callconv(.c) void {
@@ -1026,8 +1279,11 @@ pub const ShellySearchPage = extern struct {
         if (p.pending_installs.items.len == 0) {
             p.install_running = false;
             self.clear_selection();
+            clearInstalledCache(&p.installed_cache);
             if (p.last_query_len > 0) {
-                self.start_load(enabledSources());
+                self.start_load(enabledSources(), .search);
+            } else if (p.installed_only) {
+                self.start_load(enabledSources(), .installed);
             }
             return;
         }
@@ -1113,14 +1369,17 @@ pub const ShellySearchPage = extern struct {
         .{ "aur_toggle", @offsetOf(Private, "aur_toggle") },
         .{ "flatpak_toggle", @offsetOf(Private, "flatpak_toggle") },
         .{ "show_detail_pane_check", @offsetOf(Private, "show_detail_pane_check") },
+        .{ "installed_only_check", @offsetOf(Private, "installed_only_check") },
         .{ "detail_revealer", @offsetOf(Private, "detail_revealer") },
         .{ "detail_stack", @offsetOf(Private, "detail_stack") },
     };
 
     const template_callbacks = .{
         .{ "on_search_activate", &on_search_activate },
+        .{ "on_search_changed", &on_search_changed },
         .{ "on_install_clicked", &on_install_clicked },
         .{ "on_detail_pane", &on_detail_pane },
+        .{ "on_installed_only_toggled", &on_installed_only_toggled },
     };
 
     pub const Class = extern struct {
