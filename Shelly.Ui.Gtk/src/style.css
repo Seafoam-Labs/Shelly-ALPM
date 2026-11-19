@@ -268,6 +268,13 @@
   padding: 16px 20px;
 }
 /* adw-gtk3 ships no .warning text rule, so pin the badge hue ourselves. */
+/* round the row paints to match the inset card. */
+.firmware-list > row {
+  border-radius: 10px;
+}
+.firmware-list {
+  margin-right: 6px;
+}
 .firmware-list .warning {
   color: @warning_color;
 }

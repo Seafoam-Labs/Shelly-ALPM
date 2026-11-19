@@ -173,6 +173,11 @@
   background: #232029;
   border-radius: 16px;
 }
+/* the flatpak overlays carry the stock .background class; use the page
+   background instead of its gray. */
+.shelly-root .flatpak-content.background {
+  background: @theme_bg_color;
+}
 .shelly-root .card,
 .shelly-root .pkg-card,
 .shelly-root .utility-row,
@@ -503,7 +508,8 @@
    selection tokens for the views the pages actually use. */
 .shelly-root gridview > child:selected,
 .shelly-root listview > row:selected,
-.shelly-root columnview > listview > row:selected {
+.shelly-root columnview > listview > row:selected,
+.shelly-root .flatpak-nav > row:selected {
   background: alpha(#4f378b, 0.6);
   color: #eaddff;
 }
@@ -516,7 +522,8 @@
 }
 .shelly-root gridview > child:selected:hover,
 .shelly-root listview > row:selected:hover,
-.shelly-root columnview > listview > row:selected:hover {
+.shelly-root columnview > listview > row:selected:hover,
+.shelly-root .flatpak-nav > row:selected:hover {
   background: alpha(#4f378b, 0.8);
 }
 .shelly-root gridview > child:focus-visible,
