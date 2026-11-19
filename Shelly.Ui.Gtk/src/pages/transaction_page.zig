@@ -1892,6 +1892,8 @@ test "transaction events keep successful rows when an AUR package fails" {
     // The window paints the surface; the stock .background class here would
     // cover the themed page with the desktop theme's window color.
     try std.testing.expectEqual(@as(c_int, 0), gtk.Widget.hasCssClass(page.as(gtk.Widget), "background"));
+    // it needs its own fill over the translucent lockout scrim.
+    try std.testing.expectEqual(@as(c_int, 1), gtk.Widget.hasCssClass(page.as(gtk.Widget), "transaction-page"));
     const arena = try std.heap.c_allocator.create(std.heap.ArenaAllocator);
     arena.* = std.heap.ArenaAllocator.init(std.heap.c_allocator);
     page.priv().arena = arena;
