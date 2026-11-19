@@ -203,6 +203,7 @@ pub fn toggleSetting(self: *Model, ctx: *vxfw.EventContext) !void {
         @import("settings.zig").appimage_index => draft.appimage_enabled = !draft.appimage_enabled,
         @import("settings.zig").atoll_index => draft.atoll_aur_enabled = !draft.atoll_aur_enabled,
         screenshots_index => draft.show_flatpak_screenshots = !draft.show_flatpak_screenshots,
+        preferences.footer_shortcuts_index => draft.show_footer_shortcuts = !draft.show_footer_shortcuts,
         else => unreachable,
     }
 }
@@ -1011,7 +1012,7 @@ test "Help and footer show loaded editable bindings" {
     const help_text = try model.help_panel.text(allocator);
     try std.testing.expect(std.mem.indexOf(u8, help_text, "F2: Open/close help") != null);
     try std.testing.expect(std.mem.indexOf(u8, help_text, "F3: Install/reinstall") != null);
-    const footer = try footer_view.draw(.{ .arena = allocator, .min = .{}, .max = .{ .width = 160, .height = 1 }, .cell_size = .{ .width = 10, .height = 20 } }, model.commandContext(), null);
+    const footer = try footer_view.draw(.{ .arena = allocator, .min = .{}, .max = .{ .width = 160, .height = 1 }, .cell_size = .{ .width = 10, .height = 20 } }, model.commandContext(), null, true);
     var text: std.ArrayList(u8) = .empty;
     for (footer.children) |child| for (child.surface.buffer) |cell| try text.appendSlice(allocator, cell.char.grapheme);
     try std.testing.expect(std.mem.indexOf(u8, text.items, "F3 Install") != null);

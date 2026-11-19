@@ -38,6 +38,9 @@ pub fn draw(self: *Model, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
         };
     }
 
+    const footer_status = if (self.help_open) null else self.footerStatus();
+    const show_shortcuts = self.settings_state.settings.show_footer_shortcuts;
+    const footer_height: u16 = @intFromBool(show_shortcuts or footer_status != null);
     var children: std.ArrayList(vxfw.SubSurface) = .empty;
 
     const reviewing = self.overlay != null and self.overlay.? == .pkgbuild and self.operation_state.operation_question != null;
@@ -53,14 +56,14 @@ pub fn draw(self: *Model, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
         if (panel_review) {
             panel_height = @max(preferred_height, max.height / 2);
             if (max.height < navigation_height + panel_height + 5) {
-                panel_height = max.height -| (navigation_height + 1);
+                panel_height = max.height -| (navigation_height + footer_height);
                 show_browsing = false;
             }
         } else if (max.height >= navigation_height + preferred_height + 5) {
             panel_height = preferred_height;
         } else {
             navigation_height = if (max.height >= 11) 3 else 1;
-            panel_height = max.height -| (navigation_height + 1);
+            panel_height = max.height -| (navigation_height + footer_height);
             show_browsing = false;
         }
     }
@@ -104,7 +107,8 @@ pub fn draw(self: *Model, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
     });
 
     const content_start = children.items.len;
-    const content_ctx = ctx.withConstraints(.{}, .{ .width = max.width, .height = max.height - content_offset - panel_height });
+    // Page layouts reserve one footer row in their height calculations.
+    const content_ctx = ctx.withConstraints(.{}, .{ .width = max.width, .height = (max.height - content_offset - panel_height) +| (1 - footer_height) });
     const content_size = content_ctx.max.size();
     const pane_width = if (max.width >= 64) max.width - split_layout.listWidth(max.width, self.list_percent) else max.width;
     self.flatpak_state.screenshot_layout_available = split_layout.imagesFit(pane_width -| 2, content_size.height -| 4);
@@ -131,7 +135,7 @@ pub fn draw(self: *Model, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
     for (children.items[content_start..]) |*child| child.origin.row += @intCast(content_offset);
     if (panel_height > 0) if (prompt) |active_prompt| {
         try children.append(arena, .{
-            .origin = .{ .row = @intCast(max.height - panel_height - 1), .col = 0 },
+            .origin = .{ .row = @intCast(max.height - panel_height - footer_height), .col = 0 },
             .surface = if (panel_review and !self.help_open)
                 try operation_model.pkgbuildView(self).drawInPane(ctx.withConstraints(.{}, .{ .width = max.width, .height = panel_height }))
             else
@@ -145,20 +149,22 @@ pub fn draw(self: *Model, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
     if (panel_height > 0 and choosing_flatpak) {
         const choice = self.overlay.?.flatpak_install;
         try children.append(arena, .{
-            .origin = .{ .row = @intCast(max.height - panel_height - 1), .col = 0 },
+            .origin = .{ .row = @intCast(max.height - panel_height - footer_height), .col = 0 },
             .surface = try flatpak_view.drawInstallChoices(ctx.withConstraints(.{}, .{ .width = max.width, .height = panel_height }), choice.app, choice.selected),
         });
     }
 
-    var footer_context = self.commandContext();
-    if (self.help_open) {
-        footer_context.mode = .help;
-        footer_context.selected_count = 0;
+    if (footer_height > 0) {
+        var footer_context = self.commandContext();
+        if (self.help_open) {
+            footer_context.mode = .help;
+            footer_context.selected_count = 0;
+        }
+        try children.append(arena, .{
+            .origin = .{ .row = max.height - 1, .col = 0 },
+            .surface = try footer_view.draw(ctx.withConstraints(.{}, .{ .width = max.width, .height = 1 }), footer_context, footer_status, show_shortcuts),
+        });
     }
-    try children.append(arena, .{
-        .origin = .{ .row = max.height - 1, .col = 0 },
-        .surface = try footer_view.draw(ctx.withConstraints(.{}, .{ .width = max.width, .height = 1 }), footer_context, if (self.help_open) null else self.footerStatus()),
-    });
 
     // Modal overlay on top of everything
     if (!self.help_open) if (self.overlay) |overlay| {

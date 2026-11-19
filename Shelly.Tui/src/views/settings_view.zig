@@ -85,9 +85,9 @@ pub const View = struct {
 
         var rows: std.ArrayList(Row) = .empty;
         const form = [_]struct { heading: ?[]const u8 = null, control: ?usize = null }{
-            .{ .heading = "Package sources" }, .{ .control = 0 },                              .{ .control = 1 },                        .{ .control = preferences.appimage_index },    .{ .control = preferences.atoll_index },
-            .{ .heading = "" },                .{ .heading = "Appearance and accessibility" }, .{ .control = preferences.header_index }, .{ .control = preferences.screenshots_index }, .{ .heading = "" },
-            .{ .heading = "Keyboard" },        .{ .control = preferences.keybindings_index },
+            .{ .heading = "Package sources" }, .{ .control = 0 },                              .{ .control = 1 },                             .{ .control = preferences.appimage_index },    .{ .control = preferences.atoll_index },
+            .{ .heading = "" },                .{ .heading = "Appearance and accessibility" }, .{ .control = preferences.header_index },      .{ .control = preferences.screenshots_index }, .{ .control = preferences.footer_shortcuts_index },
+            .{ .heading = "" },                .{ .heading = "Keyboard" },                     .{ .control = preferences.keybindings_index },
         };
         var selected_line: usize = 0;
         for (form) |item| {
@@ -200,14 +200,18 @@ pub const View = struct {
             1 => self.settings.flatpak_enabled,
             preferences.appimage_index => self.settings.appimage_enabled,
             preferences.atoll_index => self.settings.atoll_aur_enabled,
-            else => self.settings.show_flatpak_screenshots,
+            preferences.screenshots_index => self.settings.show_flatpak_screenshots,
+            preferences.footer_shortcuts_index => self.settings.show_footer_shortcuts,
+            else => unreachable,
         };
         const title = switch (index) {
             0 => "Enable AUR",
             1 => "Enable Flatpak",
             preferences.appimage_index => "Enable AppImage",
             preferences.atoll_index => "Use Atoll-backed AUR",
-            else => "Show Flatpak screenshots",
+            preferences.screenshots_index => "Show Flatpak screenshots",
+            preferences.footer_shortcuts_index => "Show footer shortcuts",
+            else => unreachable,
         };
         return std.fmt.allocPrint(arena, "[{s}] {s}", .{ if (enabled) "x" else " ", title });
     }
@@ -224,6 +228,7 @@ pub const View = struct {
             preferences.appimage_index => "Show installed AppImages and their metadata.",
             preferences.atoll_index => "Use Shelly's shared AUR mirror and scan Atoll PKGBUILD previews.",
             preferences.header_index => "Choose text-only, Nerd Font, or ASCII icons for page headers and the AppImage browser.",
+            preferences.footer_shortcuts_index => "Show keyboard shortcuts at the bottom of each page.",
             preferences.screenshots_index => "Show images in Flatpak details when the terminal supports them.",
             preferences.keybindings_index => "Configure shortcuts without changing navigation or authentication input.",
             preferences.save_index => "Save and apply all pending preferences and keybinding edits.",

@@ -12,11 +12,11 @@ const Shortcut = struct {
 };
 
 /// Render current key labels rather than embedding shortcuts in status strings.
-pub fn draw(ctx: vxfw.DrawContext, context: commands.Context, status: ?[]const u8) Allocator.Error!vxfw.Surface {
+pub fn draw(ctx: vxfw.DrawContext, context: commands.Context, status: ?[]const u8, show_shortcuts: bool) Allocator.Error!vxfw.Surface {
     const size = ctx.max.size();
     const main_width = size.width;
     var shortcuts: std.ArrayList(Shortcut) = .empty;
-    for (try commands.entries(ctx.arena, context)) |entry| {
+    for (if (show_shortcuts) try commands.entries(ctx.arena, context) else &.{}) |entry| {
         // Resizing stays discoverable in help without crowding the footer.
         if (entry.id == .narrow_view or entry.id == .widen_view) continue;
         if ((entry.id == .mark and context.mode != .answers) or (context.mode == .search and (entry.id == .install or entry.id == .remove))) continue;
@@ -40,7 +40,7 @@ pub fn draw(ctx: vxfw.DrawContext, context: commands.Context, status: ?[]const u
             .width = ctx.stringWidth(key) + ctx.stringWidth(description),
         });
     }
-    if (!context.quit_blocked and !context.settings_capture and !context.appimage_path) {
+    if (show_shortcuts and !context.quit_blocked and !context.settings_capture and !context.appimage_path) {
         const quit_key = try commands.label(ctx.arena, .quit);
         try shortcuts.append(ctx.arena, .{
             .key = quit_key,
@@ -89,7 +89,7 @@ test "footer reflects operation context and live wrapping state" {
         .{ .mode = .running, .quit_blocked = true },
     };
     for (contexts, [_][]const u8{ "Unwrap", "Wrap", "Run", "Toggle", "Approve", "Quit", "" }) |context, expected| {
-        const surface = try draw(.{ .arena = arena.allocator(), .min = .{}, .max = .{ .width = 140, .height = 1 }, .cell_size = .{ .width = 10, .height = 20 } }, context, null);
+        const surface = try draw(.{ .arena = arena.allocator(), .min = .{}, .max = .{ .width = 140, .height = 1 }, .cell_size = .{ .width = 10, .height = 20 } }, context, null, true);
         var text: std.ArrayList(u8) = .empty;
         for (surface.children) |child| for (child.surface.buffer) |cell| try text.appendSlice(arena.allocator(), cell.char.grapheme);
         if (expected.len > 0) try std.testing.expect(std.mem.indexOf(u8, text.items, expected) != null);
@@ -107,7 +107,7 @@ test "footer keeps a status notice visible when shortcuts crowd the line" {
         .min = .{},
         .max = .{ .width = 80, .height = 1 },
         .cell_size = .{ .width = 10, .height = 20 },
-    }, .{ .mode = .search }, "The system is locked by another operation");
+    }, .{ .mode = .search }, "The system is locked by another operation", true);
     var text: std.ArrayList(u8) = .empty;
     for (surface.children) |child| for (child.surface.buffer) |cell| try text.appendSlice(arena.allocator(), cell.char.grapheme);
     try std.testing.expect(std.mem.indexOf(u8, text.items, "locked by another operation") != null);
@@ -128,7 +128,7 @@ const FooterTest = struct {
             .min = .{},
             .max = .{ .width = @intCast(width), .height = 1 },
             .cell_size = .{ .width = 10, .height = 20 },
-        }, context, status);
+        }, context, status, true);
     }
     fn check_bounds(surface: vxfw.Surface, width: usize) void {
         const surface_width: usize = @intCast(surface.size.width);

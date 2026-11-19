@@ -632,7 +632,7 @@ test "help and footer update live bindings without reopening help" {
     try std.testing.expect(packages_model.packageMarked(model, "example"));
     var context = model.commandContext();
     context.selected_count = 0;
-    const footer = try footer_view.draw(.{ .arena = arena.allocator(), .min = .{}, .max = .{ .width = 100, .height = 1 }, .cell_size = .{ .width = 10, .height = 20 } }, context, null);
+    const footer = try footer_view.draw(.{ .arena = arena.allocator(), .min = .{}, .max = .{ .width = 100, .height = 1 }, .cell_size = .{ .width = 10, .height = 20 } }, context, null, true);
     var main: std.ArrayList(u8) = .empty;
     for (footer.children[0].surface.buffer) |cell| try main.appendSlice(arena.allocator(), cell.char.grapheme);
     try std.testing.expect(std.mem.indexOf(u8, main.items, "V Select") != null);
