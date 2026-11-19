@@ -1,4 +1,5 @@
 const std = @import("std");
+const styles = @import("styles.zig");
 const Border = @import("border.zig");
 const help_view = @import("help_view.zig");
 const vaxis = @import("vaxis");
@@ -78,7 +79,7 @@ pub const View = struct {
                 .text = if (self.installed_only) "Installed packages" else "Packages",
                 .alignment = .top_left,
             }};
-            const content = if (message != null) label.widget() else self.list_view.widget();
+            const content: vxfw.Widget = if (message != null) label.widget() else .{ .userdata = self.list_view, .drawFn = drawPackageTable };
             var border: Border = .{
                 .child = content,
                 .labels = &labels,
@@ -136,6 +137,44 @@ pub const View = struct {
     }
 };
 
+const marker_width = 2;
+const selected_width: u16 = "Selected".len;
+const minimum_table_width = 30;
+
+fn repositoryColumn(width: u16) u16 {
+    const available = width - selected_width;
+    return available - @max(11, available / 3);
+}
+
+fn drawPackageTable(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
+    const list: *vxfw.ListView = @ptrCast(@alignCast(ptr));
+    const size = ctx.max.size();
+    const gutter: u16 = if (list.draw_cursor) 2 else 0;
+    const width = size.width -| gutter;
+    if (width < minimum_table_width or size.height < 2) return list.draw(ctx);
+
+    const repo = repositoryColumn(width);
+    const header = try vxfw.Surface.init(ctx.arena, .{ .userdata = ptr, .drawFn = drawPackageTable }, .{ .width = size.width, .height = 1 });
+    @memset(header.buffer, .{});
+    try drawColumn(ctx, header.buffer, gutter + marker_width, repo - marker_width, "Packages", styles.emphasis);
+    try drawColumn(ctx, header.buffer, gutter + repo, width - selected_width - repo, "Repository", styles.emphasis);
+    try drawColumn(ctx, header.buffer, size.width - selected_width, selected_width, "Selected", styles.emphasis);
+    const children = try ctx.arena.alloc(vxfw.SubSurface, 2);
+    children[0] = .{ .origin = .{ .row = 0, .col = 0 }, .surface = header };
+    children[1] = .{
+        .origin = .{ .row = 1, .col = 0 },
+        .surface = try list.draw(ctx.withConstraints(.{}, .{ .width = size.width, .height = size.height - 1 })),
+    };
+    return .{ .size = size, .widget = header.widget, .buffer = &.{}, .children = children };
+}
+
+fn drawColumn(ctx: vxfw.DrawContext, buffer: []vaxis.Cell, col: u16, width: u16, value: []const u8, style: vaxis.Style) Allocator.Error!void {
+    if (width == 0 or value.len == 0) return;
+    var label: vxfw.Text = .{ .text = value, .style = style, .softwrap = false, .overflow = .ellipsis };
+    const surface = try label.draw(ctx.withConstraints(.{}, .{ .width = width, .height = 1 }));
+    @memcpy(buffer[col..][0..surface.buffer.len], surface.buffer);
+}
+
 pub fn drawPackageRow(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
     return drawRow(ptr, ctx, false);
 }
@@ -148,28 +187,26 @@ fn drawRow(ptr: *anyopaque, ctx: vxfw.DrawContext, selected: bool) Allocator.Err
     const pkg: *const Package = @ptrCast(@alignCast(ptr));
     const arena = ctx.arena;
 
-    var spans: std.ArrayList(vxfw.RichText.TextSpan) = .empty;
-    try spans.append(arena, .{ .text = if (selected) "[x] " else "[ ] ", .style = .{ .bold = selected } });
-    if (pkg.Installed) {
-        try spans.append(arena, .{ .text = "● ", .style = .{ .fg = .{ .index = 2 } } });
-    } else {
-        try spans.append(arena, .{ .text = "  " });
-    }
-    try spans.append(arena, .{ .text = try diagnostics.sanitizeAlloc(arena, pkg.Name), .style = .{ .bold = true } });
-
-    const rich = try arena.create(vxfw.RichText);
-    rich.* = .{
-        .text = spans.items,
-        .softwrap = false,
-        .overflow = .ellipsis,
-    };
-    // ListView allows horizontal overflow. Constrain rows to its viewport
-    // so long package names are ellipsized instead of extending off screen.
     const width = ctx.max.width orelse ctx.min.width;
-    return rich.draw(ctx.withConstraints(
-        .{ .width = width, .height = 0 },
-        .{ .width = width, .height = 1 },
-    ));
+    const table = width >= minimum_table_width;
+    const checkbox_col = if (table) width - selected_width else width -| 3;
+    const name = try diagnostics.sanitizeAlloc(arena, pkg.Name);
+    const repository = try diagnostics.sanitizeAlloc(arena, pkg.Repository);
+    const widget: vxfw.Widget = .{ .userdata = ptr, .drawFn = if (selected) drawMarkedPackageRow else drawPackageRow };
+    const surface = try vxfw.Surface.init(arena, widget, .{ .width = width, .height = 1 });
+    @memset(surface.buffer, .{});
+    if (pkg.Installed)
+        try drawColumn(ctx, surface.buffer, 0, @min(marker_width, checkbox_col), "●", .{ .fg = .{ .index = 2 } });
+    if (table) {
+        const repo = repositoryColumn(width);
+        try drawColumn(ctx, surface.buffer, marker_width, repo - marker_width - 1, name, styles.emphasis);
+        try drawColumn(ctx, surface.buffer, repo, checkbox_col - repo - 1, repository, styles.secondary);
+    } else {
+        const summary = if (repository.len == 0) name else try std.fmt.allocPrint(arena, "{s} · {s}", .{ name, repository });
+        try drawColumn(ctx, surface.buffer, marker_width, checkbox_col -| (marker_width + 1), summary, styles.emphasis);
+    }
+    try drawColumn(ctx, surface.buffer, checkbox_col, @min(3, width - checkbox_col), if (selected) "[x]" else "[ ]", .{ .bold = selected });
+    return surface;
 }
 
 pub fn drawSelectedRow(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
@@ -338,24 +375,25 @@ test "selection checkbox is independent of the installed indicator" {
     const ctx: vxfw.DrawContext = .{ .arena = arena.allocator(), .min = .{}, .max = .{ .width = 40, .height = 1 }, .cell_size = .{ .width = 10, .height = 20 } };
     const marked = try drawMarkedPackageRow(&pkg, ctx);
     const unmarked = try drawPackageRow(&pkg, ctx);
-    try std.testing.expectEqualStrings("x", marked.buffer[1].char.grapheme);
-    try std.testing.expectEqualStrings(" ", unmarked.buffer[1].char.grapheme);
-    try std.testing.expectEqualStrings("●", marked.buffer[4].char.grapheme);
-    try std.testing.expectEqualStrings("●", unmarked.buffer[4].char.grapheme);
+    try std.testing.expectEqualStrings("x", marked.buffer[40 - selected_width + 1].char.grapheme);
+    try std.testing.expectEqualStrings(" ", unmarked.buffer[40 - selected_width + 1].char.grapheme);
+    try std.testing.expectEqualStrings("●", marked.buffer[0].char.grapheme);
+    try std.testing.expectEqualStrings("●", unmarked.buffer[0].char.grapheme);
 }
 
-test "package row names escape terminal control bytes without changing identity" {
+test "package rows show repository and escape terminal control bytes without changing identity" {
     vxfw.DrawContext.init(.unicode);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const name = "demo\x1b[31m\r\x7f";
-    var pkg: Package = .{ .Name = name };
+    var pkg: Package = .{ .Name = name, .Repository = "extra" };
     const ctx: vxfw.DrawContext = .{ .arena = arena.allocator(), .min = .{}, .max = .{ .width = 80, .height = 1 }, .cell_size = .{ .width = 10, .height = 20 } };
     inline for (.{ drawPackageRow, drawMarkedPackageRow }) |draw| {
         const surface = try draw(&pkg, ctx);
         var text: std.ArrayList(u8) = .empty;
         for (surface.buffer) |cell| try text.appendSlice(arena.allocator(), cell.char.grapheme);
         try std.testing.expect(std.mem.indexOf(u8, text.items, "demo\\x1b[31m\\x0d\\x7f") != null);
+        try std.testing.expectEqualStrings("e", surface.buffer[repositoryColumn(80)].char.grapheme);
         try std.testing.expect(std.mem.indexOfAny(u8, text.items, "\x1b\r\x7f") == null);
         try std.testing.expectEqualStrings(name, pkg.Name);
     }

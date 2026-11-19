@@ -554,6 +554,9 @@ test "packages split details follow selection and remain within the page on resi
                 if (child.surface.widget.eql(model.packages_state.list_view.widget())) list_on_left = true;
                 for (child.surface.children) |nested| {
                     if (nested.surface.widget.eql(model.packages_state.list_view.widget())) list_on_left = true;
+                    for (nested.surface.children) |table_child| {
+                        if (table_child.surface.widget.eql(model.packages_state.list_view.widget())) list_on_left = true;
+                    }
                 }
             }
         }
