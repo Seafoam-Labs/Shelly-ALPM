@@ -11,7 +11,9 @@
 #
 # To run Shelly under Valgrind:
 #
-#   zig build valgrind -Dcpu=x86_64_v3
+#   zig build valgrind
+#
+# (On AVX-512 hosts the step refuses the target; rerun with -Dcpu=x86_64_v3.)
 #
 # or manually:
 #
