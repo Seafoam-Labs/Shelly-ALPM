@@ -87,3 +87,30 @@ renderer avoids Vulkan driver probing noise in the widget tests. Limits:
   flakes. Keep the default Debug optimize level.
 - Test filtering is compile-time only (`-Dtest-filter=...`); the test binary
   rejects runtime `--test-filter` arguments, so the step passes no app args.
+
+### Suppression-file audit
+
+`valgrind/glib-gtk.supp` is a superset of Ghostty's `valgrind.supp`. Keep it
+honest with the tools in `valgrind/`:
+
+```bash
+# which entries fired in a -s run (see above)
+sh valgrind/vgsupp.sh valgrind/glib-gtk.supp valgrind-<pid>.log
+# frame-sequence diff against upstream Ghostty (plain diff is useless:
+# entries are renamed and tails generalized)
+python3 valgrind/supp-diff.py /path/to/ghostty/valgrind.supp valgrind/glib-gtk.supp
+# loss-record splitter/grouper for historical verbose logs
+python3 valgrind/vgparse.py <pid-or-logfile>
+```
+
+Audit rules:
+
+- "Never fired" ≠ dead: coverage equals the visited pages, and entries like
+  Fcitx, i965 or VMware Graphics Driver can only fire on other hosts/inputs.
+- Empty name lines are silently dropped by valgrind (no parse warning,
+  nothing suppressed) — keep a real name on every stanza.
+- Scrutinize the three generalized stanzas (`GTK CSS Node State`, both
+  `GDK Drag and Drop` entries) first in false-suppression reviews; they are
+  broader than upstream.
+- Re-add upstream's `Zig std DEFLATE unused Huffman code` stanza only if
+  Shelly ever *encodes* deflate/gzip (today it only decodes).
