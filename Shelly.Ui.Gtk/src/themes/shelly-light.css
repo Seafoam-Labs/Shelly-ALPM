@@ -144,7 +144,7 @@
 }
 /* Views carry the base sheet's neutral view background; let the Pearl
    window surface show through instead. */
-.shelly-root listbox,
+.shelly-root list,
 .shelly-root gridview,
 .shelly-root listview,
 .shelly-root columnview {
@@ -160,10 +160,14 @@
   border: none;
   box-shadow: none;
 }
-.shelly-root listbox row {
+.shelly-root list.boxed-list {
+  background: #f9f5fc;
+  border-radius: 16px;
+}
+.shelly-root list row {
   padding: 14px 20px;
 }
-.shelly-root listbox row:not(:first-child) {
+.shelly-root list row:not(:first-child) {
   border-top: 1px solid alpha(#1d1b20, 0.08);
 }
 .shelly-root .toolbar-card {
