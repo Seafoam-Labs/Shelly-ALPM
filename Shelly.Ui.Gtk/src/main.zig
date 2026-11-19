@@ -234,6 +234,7 @@ fn tryStartTray(io: std.Io, alloc: std.mem.Allocator) void {
 test {
     _ = @import("services/icon_resolver.zig");
     _ = @import("services/ui_config_resolver.zig");
+    _ = @import("services/desktop_palette.zig");
     _ = @import("services/shelly_cli.zig");
     _ = @import("services/tray_service.zig");
     _ = @import("helpers/a11y.zig");

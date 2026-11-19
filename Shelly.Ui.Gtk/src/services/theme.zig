@@ -36,6 +36,7 @@ const gobject = bindings.gobject;
 const runtime = @import("runtime.zig");
 const translations = @import("../helpers/translations.zig");
 const config_model = @import("../models/shelly_config.zig");
+const desktop_palette = @import("desktop_palette.zig");
 
 pub const ThemeMode = config_model.ThemeMode;
 pub const ThemeVariant = config_model.ThemeVariant;
@@ -98,6 +99,15 @@ var gnome_settings: ?*gio.Settings = null;
 var watchers_started: bool = false;
 var watch_dummy: c_int = 0;
 
+const desktop_priority = themed_priority + 1;
+var desktop_provider: ?*gtk.CssProvider = null;
+var desktop_added: bool = false;
+var desktop_monitor: ?*gio.FileMonitor = null;
+var desktop_refresh_source: c_uint = 0;
+var portal_connection: ?*gio.DBusConnection = null;
+var portal_accent: ?desktop_palette.Rgb = null;
+var portal_accent_read: bool = false;
+
 /// Reads the persisted configuration and applies it to `win`.
 pub fn apply(win: *gtk.Window) void {
     var mode: ThemeMode = .shelly;
@@ -120,55 +130,248 @@ pub fn applyWith(win: *gtk.Window, mode: ThemeMode, variant: ThemeVariant) void 
 
     const display = gdk.Display.getDefault() orelse return;
     const widget = win.as(gtk.Widget);
-    const dark = resolveDark(variant);
+
+    var desktop_css: ?[:0]u8 = null;
+    defer if (desktop_css) |css| std.heap.c_allocator.free(css);
+    const dark = if (mode == .system) blk: {
+        const result = buildDesktopPalette();
+        desktop_css = result.css;
+        break :blk result.dark orelse desktopPrefersDark();
+    } else resolveDark(variant);
     resolved_dark = dark;
 
-    if (mode == .shelly) {
-        resolveBaseTheme();
-        applyThemePin();
-        if (base != null) {
-            const base_prov = ensureBaseProvider();
-            loadBaseSheet(base_prov, dark);
-            if (!base_added) {
-                gtk.StyleContext.addProviderForDisplay(
-                    display,
-                    base_prov.as(gtk.StyleProvider),
-                    gtk.STYLE_PROVIDER_PRIORITY_THEME,
-                );
-                base_added = true;
-            }
+    resolveBaseTheme();
+    applyThemePin();
+    if (base != null) {
+        const base_prov = ensureBaseProvider();
+        loadBaseSheet(base_prov, dark);
+        if (!base_added) {
+            gtk.StyleContext.addProviderForDisplay(
+                display,
+                base_prov.as(gtk.StyleProvider),
+                gtk.STYLE_PROVIDER_PRIORITY_THEME,
+            );
+            base_added = true;
         }
-        const prov = ensureProvider();
-        loadSheet(prov, dark);
-        if (!provider_added) {
-            gtk.StyleContext.addProviderForDisplay(display, prov.as(gtk.StyleProvider), themed_priority);
-            provider_added = true;
-        }
-        gtk.Widget.addCssClass(widget, "shelly-root");
-        gtk.Window.setTitlebar(win, ensureHeaderBar().as(gtk.Widget));
-        setScopedVisible(widget, true);
-        setDarkHint(dark);
-    } else {
-        if (provider_added) {
-            gtk.StyleContext.removeProviderForDisplay(display, provider.?.as(gtk.StyleProvider));
-            provider_added = false;
-        }
-        if (base_added) {
-            gtk.StyleContext.removeProviderForDisplay(display, base_provider.?.as(gtk.StyleProvider));
-            base_added = false;
-        }
-        restoreThemeName();
-        restoreColorScheme();
-        gtk.Widget.removeCssClass(widget, "shelly-root");
-        gtk.Window.setTitlebar(win, null);
-        setScopedVisible(widget, false);
-        setupGnomeThemePreference();
     }
+    const prov = ensureProvider();
+    loadSheet(prov, dark);
+    if (!provider_added) {
+        gtk.StyleContext.addProviderForDisplay(display, prov.as(gtk.StyleProvider), themed_priority);
+        provider_added = true;
+    }
+    applyDesktopCss(display, desktop_css);
+    gtk.Widget.addCssClass(widget, "shelly-root");
+    gtk.Window.setTitlebar(win, ensureHeaderBar().as(gtk.Widget));
+    setScopedVisible(widget, true);
+    setDarkHint(dark);
     ensureWatchers();
+    if (mode == .system) ensureDesktopWatchers();
 }
 
 pub fn isThemed() bool {
-    return current_mode == .shelly;
+    return true;
+}
+
+const DesktopResult = struct {
+    /// Owned by `std.heap.c_allocator`.
+    css: ?[:0]u8,
+    dark: ?bool,
+};
+
+fn userGtkCssPath(buf: []u8) ?[]const u8 {
+    const config_dir = std.mem.span(glib.getUserConfigDir());
+    return std.fmt.bufPrint(buf, "{s}/gtk-4.0/gtk.css", .{config_dir}) catch null;
+}
+
+fn readFile(arena: std.mem.Allocator, path: []const u8) ?[]const u8 {
+    const path_z = arena.dupeSentinel(u8, path, 0) catch return null;
+    var contents: [*]u8 = undefined;
+    var len: usize = 0;
+    if (glib.fileGetContents(path_z, &contents, &len, null) == 0) return null;
+    defer glib.free(contents);
+    return arena.dupe(u8, contents[0..len]) catch null;
+}
+
+fn buildDesktopPalette() DesktopResult {
+    var arena_state = std.heap.ArenaAllocator.init(std.heap.c_allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+
+    var defines: desktop_palette.Defines = .empty;
+    var path_buf: [std.fs.max_path_bytes]u8 = undefined;
+    if (userGtkCssPath(&path_buf)) |path| {
+        desktop_palette.collectFile(arena, &defines, path, &readFile, 0) catch {};
+    }
+
+    var rejection: desktop_palette.Rejection = .none;
+    const palette = desktop_palette.build(arena, &defines, readPortalAccent(), desktopPrefersDark(), &rejection) catch {
+        return .{ .css = null, .dark = null };
+    };
+    switch (rejection) {
+        .none => {},
+        .missing => std.log.info("System colors: the desktop GTK 4 stylesheet defines no background and text colors; using the Shelly palette.", .{}),
+        .low_contrast => std.log.warn("System colors: the desktop text and background colors are too close to read; using the Shelly palette.", .{}),
+    }
+    if (palette.css.len == 0) return .{ .css = null, .dark = palette.dark };
+    const css = std.heap.c_allocator.dupeSentinel(u8, palette.css, 0) catch return .{ .css = null, .dark = palette.dark };
+    return .{ .css = css, .dark = palette.dark };
+}
+
+fn applyDesktopCss(display: *gdk.Display, css: ?[:0]u8) void {
+    if (css) |text| {
+        const prov = desktop_provider orelse blk: {
+            const created = gtk.CssProvider.new();
+            desktop_provider = created;
+            break :blk created;
+        };
+        gtk.CssProvider.loadFromString(prov, text.ptr);
+        if (!desktop_added) {
+            gtk.StyleContext.addProviderForDisplay(display, prov.as(gtk.StyleProvider), desktop_priority);
+            desktop_added = true;
+        }
+    } else if (desktop_added) {
+        gtk.StyleContext.removeProviderForDisplay(display, desktop_provider.?.as(gtk.StyleProvider));
+        desktop_added = false;
+    }
+}
+
+fn portalBus() ?*gio.DBusConnection {
+    if (portal_connection) |conn| return conn;
+    var err: ?*glib.Error = null;
+    const conn = gio.busGetSync(.session, null, &err);
+    if (err) |e| {
+        glib.Error.free(e);
+        return null;
+    }
+    portal_connection = conn;
+    return conn;
+}
+
+/// Later changes arrive through SettingChanged.
+fn readPortalAccent() ?desktop_palette.Rgb {
+    if (portal_accent_read) return portal_accent;
+    portal_accent_read = true;
+    const conn = portalBus() orelse return null;
+    const params = glib.Variant.new("(ss)", "org.freedesktop.appearance", "accent-color");
+    const reply_type = glib.VariantType.new("(v)");
+    defer reply_type.free();
+    var err: ?*glib.Error = null;
+    const result = conn.callSync(
+        "org.freedesktop.portal.Desktop",
+        "/org/freedesktop/portal/desktop",
+        "org.freedesktop.portal.Settings",
+        "ReadOne",
+        params,
+        reply_type,
+        .{},
+        500,
+        null,
+        &err,
+    );
+    if (err) |e| {
+        glib.Error.free(e);
+        return null;
+    }
+    const res = result orelse return null;
+    defer res.unref();
+    const boxed = res.getChildValue(0);
+    defer boxed.unref();
+    const value = boxed.getVariant();
+    defer value.unref();
+    portal_accent = accentFromVariant(value);
+    return portal_accent;
+}
+
+/// The portal sends `(ddd)` in 0..1; values outside that range mean unset.
+fn accentFromVariant(value: *glib.Variant) ?desktop_palette.Rgb {
+    if (!std.mem.eql(u8, std.mem.span(value.getTypeString()), "(ddd)")) return null;
+    var channels: [3]f64 = undefined;
+    for (&channels, 0..) |*ch, idx| {
+        const child = value.getChildValue(idx);
+        defer child.unref();
+        ch.* = child.getDouble();
+        if (ch.* < 0 or ch.* > 1) return null;
+    }
+    return .{ .r = channels[0], .g = channels[1], .b = channels[2] };
+}
+
+/// Watches the folder because Plasma rewrites `colors.css`.
+fn ensureDesktopWatchers() void {
+    if (desktop_monitor == null) {
+        const config_dir = std.mem.span(glib.getUserConfigDir());
+        var buf: [std.fs.max_path_bytes]u8 = undefined;
+        if (std.fmt.bufPrintSentinel(&buf, "{s}/gtk-4.0", .{config_dir}, 0)) |dir| {
+            const file = gio.File.newForPath(dir.ptr);
+            defer file.as(gobject.Object).unref();
+            var err: ?*glib.Error = null;
+            if (gio.File.monitorDirectory(file, .{}, null, &err)) |monitor| {
+                desktop_monitor = monitor;
+                _ = gio.FileMonitor.signals.changed.connect(monitor, *c_int, &onDesktopFilesChanged, &watch_dummy, .{});
+            }
+            if (err) |e| glib.Error.free(e);
+        } else |_| {}
+    }
+    if (portal_connection == null) _ = portalBus();
+    if (portal_connection) |conn| {
+        const subscribed = struct {
+            var done = false;
+        };
+        if (!subscribed.done) {
+            subscribed.done = true;
+            _ = conn.signalSubscribe(
+                "org.freedesktop.portal.Desktop",
+                "org.freedesktop.portal.Settings",
+                "SettingChanged",
+                "/org/freedesktop/portal/desktop",
+                "org.freedesktop.appearance",
+                .{},
+                &onPortalSettingChanged,
+                null,
+                null,
+            );
+        }
+    }
+}
+
+fn onDesktopFilesChanged(_: *gio.FileMonitor, _: *gio.File, _: ?*gio.File, _: gio.FileMonitorEvent, _: *c_int) callconv(.c) void {
+    scheduleDesktopRefresh();
+}
+
+fn onPortalSettingChanged(
+    _: *gio.DBusConnection,
+    _: ?[*:0]const u8,
+    _: [*:0]const u8,
+    _: [*:0]const u8,
+    _: [*:0]const u8,
+    params: *glib.Variant,
+    _: ?*anyopaque,
+) callconv(.c) void {
+    if (!std.mem.eql(u8, std.mem.span(params.getTypeString()), "(ssv)")) return;
+    const key = params.getChildValue(1);
+    defer key.unref();
+    if (!std.mem.eql(u8, std.mem.span(key.getString(null)), "accent-color")) return;
+    const boxed = params.getChildValue(2);
+    defer boxed.unref();
+    const value = boxed.getVariant();
+    defer value.unref();
+    portal_accent = accentFromVariant(value);
+    portal_accent_read = true;
+    scheduleDesktopRefresh();
+}
+
+/// Palette tools write several files at once.
+fn scheduleDesktopRefresh() void {
+    if (desktop_refresh_source != 0) return;
+    desktop_refresh_source = glib.timeoutAdd(100, &onDesktopRefresh, null);
+}
+
+fn onDesktopRefresh(_: ?*anyopaque) callconv(.c) c_int {
+    desktop_refresh_source = 0;
+    if (current_mode != .system) return 0;
+    const win = watched_window orelse return 0;
+    applyWith(win, current_mode, current_variant);
+    return 0;
 }
 
 fn ensureProvider() *gtk.CssProvider {
@@ -466,12 +669,15 @@ fn onPreferDarkNotify(_: *gobject.Object, _: *gobject.ParamSpec, _: *c_int) call
 /// other channels (e.g. xsettings broadcasts) may still deliver updates
 /// while the built-in theme is active; re-assert the pin for those.
 fn onThemeNameNotify(_: *gobject.Object, _: *gobject.ParamSpec, _: *c_int) callconv(.c) void {
-    if (current_mode != .shelly) return;
     applyThemePin();
 }
 
 fn refreshFollowSystem() void {
-    if (current_mode != .shelly or current_variant != .follow_system) return;
+    if (current_mode == .system) {
+        scheduleDesktopRefresh();
+        return;
+    }
+    if (current_variant != .follow_system) return;
     if (watched_window == null) return;
     const dark = desktopPrefersDark();
     if (dark == resolved_dark) return;
