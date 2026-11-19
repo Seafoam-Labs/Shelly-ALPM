@@ -199,17 +199,17 @@ test "footer selection summary scales down with the available width" {
         .selected_count = 2,
         .selected_installed = 1,
     };
-    const full = try FooterTest.draw_footer(arena.allocator(), context, null, 120);
+    const full = try FooterTest.draw_footer(arena.allocator(), context, null, 144);
     const full_text = try FooterTest.visible_text(arena.allocator(), full);
     try std.testing.expect(std.mem.indexOf(u8, full_text, " · ") != null);
     try std.testing.expect(std.mem.indexOf(u8, full_text, "available") != null);
 
-    const brief = try FooterTest.draw_footer(arena.allocator(), context, null, 91);
+    const brief = try FooterTest.draw_footer(arena.allocator(), context, null, 115);
     const brief_text = try FooterTest.visible_text(arena.allocator(), brief);
     try std.testing.expect(std.mem.indexOf(u8, brief_text, "selected") != null);
     try std.testing.expect(std.mem.indexOf(u8, brief_text, "available") == null);
 
-    const omitted = try FooterTest.draw_footer(arena.allocator(), context, null, 65);
+    const omitted = try FooterTest.draw_footer(arena.allocator(), context, null, 89);
     const omitted_text = try FooterTest.visible_text(arena.allocator(), omitted);
     try std.testing.expect(std.mem.indexOf(u8, omitted_text, "selected") == null);
 }

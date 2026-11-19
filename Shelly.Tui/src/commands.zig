@@ -31,6 +31,7 @@ pub const Id = enum {
     cancel,
     refresh,
     refresh_list,
+    sync_packages,
     save_settings,
     filter,
     upgrade_all,
@@ -80,6 +81,7 @@ pub const Bindings = struct {
     cancel: vaxis.Key = .{ .codepoint = 'q', .mods = .{ .ctrl = true } },
     refresh: vaxis.Key = .{ .codepoint = 'r' },
     save_settings: vaxis.Key = .{ .codepoint = 's', .mods = .{ .ctrl = true } },
+    sync_packages: vaxis.Key = .{ .codepoint = 's', .mods = .{ .alt = true } },
     refresh_list: vaxis.Key = .{ .codepoint = 'r', .mods = .{ .ctrl = true } },
     filter: vaxis.Key = .{ .codepoint = 'l', .mods = .{ .ctrl = true } },
     upgrade_all: vaxis.Key = .{ .codepoint = 'g' },
@@ -395,6 +397,8 @@ pub fn entries(arena: std.mem.Allocator, context: Context) std.mem.Allocator.Err
     if (context.screenshot_retry) try add(arena, &list, .refresh_list, "Retry image", "Retry loading the Flatpak screenshot");
     switch (context.mode) {
         .search, .packages => {
+            try add(arena, &list, .refresh_list, "Refresh", "Reload available and installed packages");
+            try add(arena, &list, .sync_packages, "Sync", "Synchronize package databases and reload the list");
             if (context.mode == .packages and context.selected_count > 0)
                 try add(arena, &list, .clear_selection, "Clear", "Clear all package selections, including entries hidden by filters");
             if (context.mode == .search) {

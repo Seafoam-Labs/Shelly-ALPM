@@ -37,6 +37,8 @@ pub const View = struct {
             if (self.include_aur)
                 if (self.include_flatpak) "System packages, AUR, and system/user Flatpaks. PKGBUILDs require review." else "System packages and AUR. Flatpak disabled or unavailable. PKGBUILDs require review."
             else if (self.include_flatpak) "System packages and system/user Flatpaks. AUR excluded." else "Full system upgrade. AUR and Flatpak excluded."
+        else if (self.action == .sync)
+            "Refreshes metadata from the configured system repositories."
         else if (self.backend == .appimage and self.action == .upgrade)
             "Updates all configured AppImages with available updates as your user. Application configuration is kept."
         else if (self.backend == .flatpak)

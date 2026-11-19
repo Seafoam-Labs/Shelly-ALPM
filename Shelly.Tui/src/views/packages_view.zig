@@ -75,14 +75,9 @@ pub const View = struct {
             else
                 null;
             var label: vxfw.Text = .{ .text = message orelse "" };
-            const labels = [_]Border.BorderLabel{.{
-                .text = if (self.installed_only) "Installed packages" else "Packages",
-                .alignment = .top_left,
-            }};
             const content: vxfw.Widget = if (message != null) label.widget() else .{ .userdata = self.list_view, .drawFn = drawPackageTable };
             var border: Border = .{
                 .child = content,
-                .labels = &labels,
                 .focused = self.list_active and !self.details_active,
             };
             try children.append(arena, .{

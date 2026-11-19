@@ -314,6 +314,24 @@ pub fn handleKey(self: *Model, ctx: *vxfw.EventContext, key: vaxis.Key, global_c
         ctx.consumeAndRedraw();
         return true;
     }
+    if (commands.refreshesList(key) or commands.matches(key, .sync_packages)) {
+        if (self.operation_state.install_job == null) {
+            if (commands.refreshesList(key)) {
+                if (!self.packages_state.loading) try reloadPackages(self, ctx);
+            } else {
+                const prompt = try self.gpa.create(operation_model.SudoPrompt);
+                errdefer self.gpa.destroy(prompt);
+                prompt.* = .{
+                    .name = try self.gpa.dupe(u8, "package databases"),
+                    .backend = .standard,
+                    .action = .sync,
+                };
+                self.overlay = .{ .sudo = prompt };
+            }
+        }
+        ctx.consumeAndRedraw();
+        return true;
+    }
     if (!global_command) {
         if (self.packages_state.package_list_active) {
             if (commands.matches(key, .clear_selection)) {

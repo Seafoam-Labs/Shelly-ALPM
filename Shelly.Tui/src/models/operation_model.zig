@@ -683,7 +683,7 @@ pub fn pollInstall(self: *Model) !bool {
         self.updates_state.refresh_updates_after_operation = true;
         if (self.settings_state.settings.aur_enabled) self.aur_state.refresh_aur_after_operation = true;
     }
-    if (package_batch) {
+    if (package_batch or job.request.action == .sync) {
         self.updates_state.refresh_after_upgrade = true;
         self.updates_state.refresh_updates_after_operation = true;
     }

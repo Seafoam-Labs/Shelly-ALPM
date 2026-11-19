@@ -11,7 +11,7 @@ pub const editable = [_]commands.Id{
     .upgrade_appimage,      .upgrade_aur,       .upgrade_flatpak,     .categories,
     .previous_catalog_page, .next_catalog_page, .previous_screenshot, .next_screenshot,
     .clear_selection,       .configure_updates, .toggle_wrap,         .narrow_view,
-    .widen_view,            .toggle_hidden,
+    .widen_view,            .toggle_hidden,     .sync_packages,
 };
 
 fn indexOf(id: commands.Id) ?usize {
@@ -111,7 +111,8 @@ fn scope(id: commands.Id) u16 {
         .install, .remove => lists | details | appimages,
         .preview => aur_list | aur_details,
         .refresh => updates | settings | preview,
-        .refresh_list => aur_list | flatpak_list | searches | flatpak_details | appimages,
+        .refresh_list => lists | searches | flatpak_details | appimages,
+        .sync_packages => package_lists | searches,
         .filter => lists | searches,
         .upgrade_all, .upgrade_system, .upgrade_aur, .upgrade_flatpak, .upgrade_appimage => updates,
         .categories => flatpak_list | flatpak_details | searches,

@@ -14,12 +14,14 @@ pub const Action = enum {
     install,
     remove,
     upgrade,
+    sync,
 
     pub fn verb(self: Action) []const u8 {
         return switch (self) {
             .install => "Install",
             .remove => "Remove",
             .upgrade => "Upgrade",
+            .sync => "Sync",
         };
     }
 
@@ -28,6 +30,7 @@ pub const Action = enum {
             .install => "Installed",
             .remove => "Removed",
             .upgrade => "Upgraded",
+            .sync => "Synchronized",
         };
     }
 };
@@ -457,7 +460,8 @@ fn elevated(request: OperationRequest) bool {
 
 fn operationArgv(alloc: std.mem.Allocator, request: OperationRequest) ![][]const u8 {
     const package_backend = std.mem.eql(u8, request.backend, "standard") or std.mem.eql(u8, request.backend, "aur");
-    if (request.targets.len > 0 and (!package_backend or request.action == .upgrade))
+    if (request.action == .sync and !std.mem.eql(u8, request.backend, "standard")) return error.UnsupportedSyncBackend;
+    if (request.targets.len > 0 and (!package_backend or request.action == .upgrade or request.action == .sync))
         return error.UnsupportedBatchAction;
     if (std.mem.eql(u8, request.backend, "all") and request.action != .upgrade) return error.UnsupportedCombinedAction;
     const keep_dependencies = request.action == .remove and std.mem.eql(u8, request.backend, "standard");
@@ -473,7 +477,7 @@ fn operationArgv(alloc: std.mem.Allocator, request: OperationRequest) ![][]const
         try argv.append(alloc, request.sudo_bin);
     }
     try argv.appendSlice(alloc, &.{ request.shelly_bin, @tagName(request.action), request.backend });
-    if (request.action != .upgrade) {
+    if (request.action == .install or request.action == .remove) {
         if (request.targets.len > 0) try argv.appendSlice(alloc, request.targets) else try argv.append(alloc, request.name);
     }
     if (isFlatpak(request) and request.action == .install) {
@@ -490,7 +494,7 @@ fn operationArgv(alloc: std.mem.Allocator, request: OperationRequest) ![][]const
         if (!request.include_aur) try argv.append(alloc, "--no-aur");
         if (!request.include_flatpak) try argv.append(alloc, "--no-flatpak");
     }
-    if (!interactive(request)) try argv.append(alloc, "--no-confirm");
+    if (request.action != .sync and !interactive(request)) try argv.append(alloc, "--no-confirm");
     try argv.append(alloc, "--ui-mode");
     if (keep_dependencies) try argv.append(alloc, "--no-cascade");
     return argv.toOwnedSlice(alloc);
@@ -657,7 +661,7 @@ fn runInstall(io: std.Io, alloc: std.mem.Allocator, request: OperationRequest, o
         result.declined = op.user_declined;
         if (op.expected_answer != null) stream.failed = true;
     }
-    const missing_completion = (request.action == .upgrade or interactive(request)) and (!stream.transaction_done or stream.transaction_depth != 0);
+    const missing_completion = (request.action == .upgrade or request.action == .sync or interactive(request)) and (!stream.transaction_done or stream.transaction_depth != 0);
     if (term != .exited or term.exited != 0 or read_failed or stream.failed or stream.transaction_cancelled or missing_completion or result.declined) {
         const detail = if (stream.transaction_cancelled)
             "The operation was cancelled. Refresh package state before retrying."
@@ -1507,6 +1511,24 @@ test "settings disable AUR and Flatpak in combined upgrade arguments" {
         try std.testing.expect(!std.mem.eql(u8, arg, "--no-repo"));
     }
     try std.testing.expect(aur and flatpak and appimage);
+}
+
+test "native sync runs elevated without package operands" {
+    const allocator = std.testing.allocator;
+    var env: std.process.Environ.Map = .init(allocator);
+    defer env.deinit();
+    const argv = try operationArgv(allocator, .{
+        .action = .sync,
+        .shelly_bin = "shelly",
+        .sudo_bin = "sudo",
+        .environ_map = &env,
+        .name = "package databases",
+        .backend = "standard",
+    });
+    defer allocator.free(argv);
+    const expected = [_][]const u8{ "sudo", "shelly", "sync", "standard", "--ui-mode" };
+    try std.testing.expectEqual(expected.len, argv.len);
+    for (expected, argv) |want, actual| try std.testing.expectEqualStrings(want, actual);
 }
 
 test "native batch operands stay separate in a single install or removal command" {

@@ -12,7 +12,7 @@ pub const row_count = keybindings.editable.len;
 const Section = struct { name: []const u8, ids: []const commands.Id };
 const sections = [_]Section{
     .{ .name = "General", .ids = &.{ .quit, .help, .next_tab, .previous_tab, .refresh, .narrow_view, .widen_view } },
-    .{ .name = "Packages", .ids = &.{ .install, .remove, .refresh_list, .filter, .clear_selection } },
+    .{ .name = "Packages", .ids = &.{ .install, .remove, .refresh_list, .sync_packages, .filter, .clear_selection } },
     .{ .name = "Updates", .ids = &.{ .upgrade_all, .upgrade_system, .upgrade_aur, .upgrade_flatpak, .upgrade_appimage } },
     .{ .name = "AUR catalog", .ids = &.{ .previous_catalog_page, .next_catalog_page } },
     .{ .name = "Flatpak details", .ids = &.{ .categories, .previous_screenshot, .next_screenshot } },
@@ -166,6 +166,7 @@ fn title(id: commands.Id) []const u8 {
         .previous_screenshot => "Previous screenshot",
         .next_screenshot => "Next screenshot",
         .clear_selection => "Clear selections",
+        .sync_packages => "Sync package databases",
         .toggle_wrap => "Toggle source wrapping",
         .narrow_view => "Narrow left panel",
         .widen_view => "Widen left panel",
