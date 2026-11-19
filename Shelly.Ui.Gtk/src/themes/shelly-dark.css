@@ -68,7 +68,6 @@
 .shelly-root {
   background: @theme_bg_color;
   border-radius: 16px;
-  border: 1px solid #8fd4da;
   font-family: "Inter", "Cantarell", "Segoe UI", system-ui, sans-serif;
   font-size: 14px;
 }
