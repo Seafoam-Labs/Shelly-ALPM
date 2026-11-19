@@ -1152,6 +1152,52 @@
 }
 
 #--------------------------------------------------------------------
+# Shelly-specific suppressions
+#--------------------------------------------------------------------
+
+# GDK's Wayland backend drops a proxy created while constructing a window
+# surface (96 B per realized window). The leak is entirely inside GDK; the
+# test suite destroys its windows mid-run, which turns it into a definite
+# loss record. Remove once GTK fixes the surface teardown.
+{
+   gdk-wayland-surface-constructed-proxy
+   Memcheck:Leak
+   match-leak-kinds: definite
+   fun:calloc
+   fun:proxy_create
+   fun:wl_proxy_marshal_array_flags
+   fun:wl_proxy_marshal_flags
+   fun:gdk_wayland_surface_constructed
+   ...
+}
+
+# Zig's stack probe reads a word one page below the stack pointer before
+# growing a large frame (`test %esp,-0x1000(%rsp)`); memcheck flags the read
+# because it happens below SP. The probe is inlined, so the error is
+# attributed to the function itself — here Shelly.Http's fetch, whose ~12 KiB
+# frame needs probing. This also hides genuine 4-byte invalid reads in
+# fetch's own code; re-audit this entry if that function changes.
+{
+   zig-stack-probe-http-fetch
+   Memcheck:Addr4
+   fun:http_client.fetch
+}
+
+# Zig's std.Io.Threaded passes futex words that live on thread stacks: one
+# sits in a partially uninitialized frame (padding bytes), another is woken
+# cross-thread below that thread's stack pointer. Both are syscall-parameter
+# artifacts of the stdlib threading design, not Shelly code.
+{
+   zig-io-threaded-futex-stack
+   Memcheck:Param
+   futex(futex)
+   fun:os.linux.x86_64.syscall3
+   fun:os.linux.futex_3arg
+   fun:Io.Threaded.Thread.futexWake
+   ...
+}
+
+#--------------------------------------------------------------------
 # GLib official suppressions (from GLib upstream glib.supp, LGPL)
 #--------------------------------------------------------------------
 
