@@ -2292,7 +2292,6 @@ pub const Manager = struct {
 
     /// Narrows a full split build's output to the transaction's requested
     /// members. Unrequested archives remain on disk as build byproducts,
-    /// mirroring makepkg: every member is packaged, only selected ones install.
     fn selectRequestedArtifacts(
         self: *Self,
         artifacts: []package_builder.BuildArtifact,
