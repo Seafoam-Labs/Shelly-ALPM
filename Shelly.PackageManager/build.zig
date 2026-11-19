@@ -894,6 +894,7 @@ pub fn build(b: *std.Build) void {
             "VCS checks retry and baseline transiently failed sources",
             "helper cache identity recognizes installed split-package members",
             "prepared non-chroot split package builds use the custom builder",
+            "non-historical split builds run every member and return only requested artifacts",
             "all requested PKGBUILDs are reviewed before the first build",
             "AUR upgrades skip declined reviews",
             "AUR package failures are emitted after all builds and fail the operation",
