@@ -164,9 +164,6 @@
   background: #f9f5fc;
   border-radius: 16px;
 }
-.shelly-root list row {
-  padding: 14px 20px;
-}
 .shelly-root list row:not(:first-child) {
   border-top: 1px solid alpha(#1d1b20, 0.08);
 }
