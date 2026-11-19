@@ -52,6 +52,7 @@ pub const Model = struct {
     notice: []const u8 = "",
     quit_blocked_notice: bool = false,
     help_open: bool = false,
+    help_button: ?struct { col: u16, width: u16, height: u16 } = null,
     help_panel: help_view.Panel = .{},
 
     packages_state: packages_model.State,
@@ -232,6 +233,15 @@ pub const Model = struct {
             },
             .mouse => {
                 if (self.settings_state.keybinding_capture) return ctx.consumeEvent();
+                if (self.help_button) |button| {
+                    if (event.mouse.row >= 0 and event.mouse.row < @as(i17, button.height) and
+                        event.mouse.col >= @as(i17, button.col) and event.mouse.col < @as(i17, button.col) + @as(i17, button.width) and
+                        event.mouse.button == .left and event.mouse.type == .press)
+                    {
+                        self.help_open = !self.help_open;
+                        return ctx.consumeAndRedraw();
+                    }
+                }
                 if (self.help_open) {
                     try self.help_panel.scroll.handleEvent(ctx, event);
                     return ctx.consumeAndRedraw();
@@ -627,8 +637,18 @@ test "help and footer update live bindings without reopening help" {
     for (footer.children[0].surface.buffer) |cell| try main.appendSlice(arena.allocator(), cell.char.grapheme);
     try std.testing.expect(std.mem.indexOf(u8, main.items, "V Select") != null);
     var help: std.ArrayList(u8) = .empty;
-    for (footer.children[1].surface.buffer) |cell| try help.appendSlice(arena.allocator(), cell.char.grapheme);
+    const surface = try model.widget().draw(.{ .arena = arena.allocator(), .min = .{}, .max = .{ .width = 100, .height = 24 }, .cell_size = .{ .width = 10, .height = 20 } });
+    const hint = surface.children[0].surface.children[1];
+    const tabs: *const tab_bar_view.TabBar = @ptrCast(@alignCast(surface.children[0].surface.children[0].surface.widget.userdata));
+    try std.testing.expectEqual(@as(i17, tabs.right_edge) + 1, hint.origin.col);
+    try std.testing.expectEqual(@as(u16, 3), hint.surface.size.height);
+    for (hint.surface.children[0].surface.buffer) |cell| try help.appendSlice(arena.allocator(), cell.char.grapheme);
     try std.testing.expectEqualStrings("F2 Help", help.items);
+    const click: vxfw.Event = .{ .mouse = .{ .row = @intCast(hint.origin.row), .col = @intCast(hint.origin.col), .button = .left, .type = .press, .mods = .{} } };
+    try Model.typeErasedCaptureHandler(model, &events, click);
+    try std.testing.expect(model.help_open);
+    try Model.typeErasedCaptureHandler(model, &events, click);
+    try std.testing.expect(!model.help_open);
 }
 
 test "panel resizing is shared bounded and preserves settings navigation" {

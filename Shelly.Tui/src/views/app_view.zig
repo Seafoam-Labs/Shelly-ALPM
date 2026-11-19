@@ -18,10 +18,15 @@ const flatpak_view = @import("flatpak_view.zig");
 const footer_view = @import("footer_view.zig");
 const split_layout = @import("split_layout.zig");
 
+fn drawNavigation(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
+    return .{ .size = ctx.max.size(), .widget = .{ .userdata = ptr, .drawFn = drawNavigation }, .buffer = &.{}, .children = &.{} };
+}
+
 pub fn draw(self: *Model, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
     const arena = ctx.arena;
     const max = ctx.max.size();
     self.viewport_width = max.width;
+    self.help_button = null;
 
     // Need room for the tab bar, at least one content row and the status bar
     if (max.width == 0 or max.height < 4) {
@@ -68,12 +73,34 @@ pub fn draw(self: *Model, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
 
     // Navigation occupies its own rows above every page.
     const tab_bar = try self.drawTabBar(arena);
+    const command_context = self.commandContext();
+    const framed_help = navigation_height == 3;
+    const help_label = if (command_context.settings_capture or command_context.appimage_path) "" else try std.fmt.allocPrint(arena, "{s}{s} {s}{s}", .{ if (framed_help) "" else "[", try @import("../commands.zig").label(arena, .help), if (self.help_open) "Back" else "Help", if (framed_help) "" else "]" });
+    const desired_help_width = ctx.stringWidth(help_label) + @as(u16, if (framed_help) 2 else 0);
+    const help_width: u16 = if (help_label.len > 0 and desired_help_width + 2 <= max.width) @intCast(desired_help_width) else 0;
+    const navigation = try arena.alloc(vxfw.SubSurface, if (help_width > 0) 2 else 1);
+    navigation[0] = .{
+        .origin = .{ .row = 0, .col = 0 },
+        .surface = try tab_bar.draw(ctx.withConstraints(.{}, .{ .width = max.width - help_width - @intFromBool(help_width > 0), .height = navigation_height })),
+    };
+    if (help_width > 0) {
+        const bar: *const @import("tab_bar.zig").TabBar = @ptrCast(@alignCast(tab_bar.userdata));
+        const col = bar.right_edge + 1;
+        self.help_button = .{ .col = col, .width = help_width, .height = navigation_height };
+        const help = try arena.create(vxfw.Text);
+        help.* = .{ .text = help_label, .softwrap = false, .style = @import("styles.zig").emphasis };
+        const border = try arena.create(@import("border.zig"));
+        border.* = .{ .child = help.widget() };
+        const bounds: vxfw.Size = .{ .width = help_width, .height = navigation_height };
+        const help_ctx = ctx.withConstraints(bounds, .{ .width = bounds.width, .height = bounds.height });
+        navigation[1] = .{
+            .origin = .{ .row = 0, .col = @intCast(col) },
+            .surface = if (framed_help) try border.draw(help_ctx) else try help.draw(help_ctx),
+        };
+    }
     try children.append(arena, .{
         .origin = .{ .row = 0, .col = 0 },
-        .surface = try tab_bar.draw(ctx.withConstraints(
-            ctx.min,
-            .{ .width = max.width, .height = navigation_height },
-        )),
+        .surface = .{ .size = .{ .width = max.width, .height = navigation_height }, .widget = .{ .userdata = self, .drawFn = drawNavigation }, .buffer = &.{}, .children = navigation },
     });
 
     const content_start = children.items.len;

@@ -970,7 +970,7 @@ test "PKGBUILD shortcuts appear only in the contextual footer" {
     var footer: std.ArrayList(u8) = .empty;
     for (surface.children) |child| try Text.append(arena.allocator(), if (child.origin.row == 23) &footer else &body, child.surface);
     try std.testing.expect(std.mem.indexOf(u8, body.items, "pkgname") != null);
-    for ([_][]const u8{ "Retry", "Unwrap", "F1 Help" }) |hint| {
+    for ([_][]const u8{ "Retry", "Unwrap" }) |hint| {
         try std.testing.expectEqual(@as(usize, 1), std.mem.count(u8, footer.items, hint));
         try std.testing.expect(std.mem.indexOf(u8, body.items, hint) == null);
     }

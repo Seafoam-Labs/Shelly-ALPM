@@ -1014,7 +1014,6 @@ test "Help and footer show loaded editable bindings" {
     const footer = try footer_view.draw(.{ .arena = allocator, .min = .{}, .max = .{ .width = 160, .height = 1 }, .cell_size = .{ .width = 10, .height = 20 } }, model.commandContext(), null);
     var text: std.ArrayList(u8) = .empty;
     for (footer.children) |child| for (child.surface.buffer) |cell| try text.appendSlice(allocator, cell.char.grapheme);
-    try std.testing.expect(std.mem.indexOf(u8, text.items, "F2 Help") != null);
     try std.testing.expect(std.mem.indexOf(u8, text.items, "F3 Install") != null);
 }
 
