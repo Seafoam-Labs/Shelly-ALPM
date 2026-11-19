@@ -152,6 +152,7 @@ pub fn build(b: *std.Build) void {
     gresource.addFileInput(b.path("src/themes/shelly-dark.css"));
     gresource.addFileInput(b.path("src/themes/shelly-light.css"));
     gresource.addFileInput(b.path("src/assets/icons/flatpak-symbolic.svg"));
+    gresource.addFileInput(b.path("src/assets/icons/funnel-symbolic.svg"));
     gresource.addFileInput(b.path("src/assets/icons/arch-symbolic.svg"));
     gresource.addFileInput(b.path("src/assets/icons/atoll-shark-symbolic.svg"));
     gresource.addFileInput(b.path("src/assets/icons/update-symbolic.svg"));

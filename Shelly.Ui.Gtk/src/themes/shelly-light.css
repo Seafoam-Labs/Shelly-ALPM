@@ -75,6 +75,18 @@
 .shelly-root label {
   color: @theme_fg_color;
 }
+/* fixed text tones instead of opacity dimming. */
+.shelly-root .dim-label {
+  color: #7a7582;
+  opacity: 1;
+}
+.shelly-root .cell-meta,
+.shelly-root columnview .dim-label {
+  color: #5f5b66;
+}
+.shelly-root .cell-meta {
+  font-feature-settings: "tnum";
+}
 .shelly-root link,
 .shelly-root link label,
 .shelly-root button.link label {
@@ -113,7 +125,7 @@
   border-right: 1px solid alpha(#1d1b20, 0.08);
 }
 .shelly-root .nav-topbar {
-  background: #fbf9ff;
+  background: @theme_bg_color;
   padding: 6px 12px;
   border-bottom: 1px solid alpha(#1d1b20, 0.08);
 }
@@ -167,16 +179,48 @@
 .shelly-root list row:not(:first-child) {
   border-top: 1px solid alpha(#1d1b20, 0.08);
 }
-.shelly-root .toolbar-card {
-  margin: 0 30px 18px;
-  padding: 14px 16px;
+.shelly-root .toolbar-card,
+.shelly-root .table-card {
   background: #f9f5fc;
   border-radius: 16px;
+}
+.shelly-root .toolbar-card {
+  margin: 14px 30px 22px;
+  padding: 14px 16px;
+}
+.shelly-root .toolbar-card entry,
+.shelly-root .toolbar-card dropdown > button {
+  min-height: 34px;
+}
+.shelly-root .toolbar-card dropdown > button {
+  border-radius: 999px;
+}
+.shelly-root .table-card {
+  margin: 0 30px 24px;
 }
 /* the flatpak overlays carry the stock .background class; use the page
    background instead of its gray. */
 .shelly-root .flatpak-content.background {
   background: @theme_bg_color;
+}
+.shelly-root .table-card columnview > header > button:first-child,
+.shelly-root .table-card columnview > listview > row > cell:first-child {
+  padding-left: 16px;
+}
+.shelly-root menubutton.options-menu > button {
+  min-width: 20px;
+  padding: 0 4px;
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+.shelly-root menubutton.options-menu > button:hover,
+.shelly-root menubutton.options-menu > button:checked {
+  background: alpha(#1d1b20, 0.06);
+}
+.shelly-root menubutton.icon-button > button {
+  min-width: 34px;
+  padding: 0;
 }
 .shelly-root .card,
 .shelly-root .pkg-card,
@@ -279,6 +323,44 @@
 .shelly-root button.destructive-action:hover {
   box-shadow: inset 0 0 0 1px alpha(@error_color, 0.5);
 }
+.shelly-root .linked > button,
+.shelly-root .linked > menubutton > button,
+.shelly-root .linked > dropdown > button {
+  border-radius: 0;
+}
+.shelly-root .linked > button:first-child,
+.shelly-root .linked > menubutton:first-child > button,
+.shelly-root .linked > dropdown:first-child > button {
+  border-radius: 999px 0 0 999px;
+}
+.shelly-root .linked > button:last-child,
+.shelly-root .linked > menubutton:last-child > button,
+.shelly-root .linked > dropdown:last-child > button {
+  border-radius: 0 999px 999px 0;
+}
+/* the search source filter is narrowed: tint its funnel icon. */
+.shelly-root menubutton.filter-active > button image {
+  color: #6750a4;
+}
+.shelly-root .linked > button:not(:first-child),
+.shelly-root .linked > menubutton:not(:first-child) > button,
+.shelly-root .linked > dropdown:not(:first-child) > button {
+  border-left-width: 0;
+}
+.shelly-root .linked.search-filter > entry {
+  border-radius: 10px 0 0 10px;
+}
+.shelly-root .linked.search-filter > dropdown:last-child > button,
+.shelly-root .linked.search-filter > menubutton:last-child > button {
+  border-radius: 0 10px 10px 0;
+}
+.shelly-root .linked > button:checked {
+  background: #eaddff;
+}
+.shelly-root .linked > button:checked label,
+.shelly-root .linked > button:checked image {
+  color: #21005d;
+}
 .shelly-root headerbar button.titlebutton,
 .shelly-root headerbar windowcontrols button {
   border-radius: 50%;
@@ -296,31 +378,27 @@
   box-shadow: inset 0 0 0 1px @button_border_hover_color;
 }
 
-/* Column headers: one pill bar with hairline dividers between columns
-   instead of a pill per column title. */
+/* Column headers: a flat strip with a hairline underneath. */
 .shelly-root columnview > header {
-  background: #fdfbff;
-  border: 1px solid #d5cfe0;
-  border-radius: 999px;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid alpha(#1d1b20, 0.12);
+  border-radius: 0;
 }
 .shelly-root columnview > header > button {
   background: transparent;
   border: none;
   border-radius: 0;
   box-shadow: none;
-  padding: 0 12px;
+  padding: 0 6px;
+  min-height: 34px;
 }
-.shelly-root columnview > header > button + button {
-  border-left: 1px solid alpha(#1d1b20, 0.1);
-}
-.shelly-root columnview > header > button:first-child {
-  border-radius: 999px 0 0 999px;
-}
-.shelly-root columnview > header > button:last-child {
-  border-radius: 0 999px 999px 0;
+.shelly-root columnview > header > button label {
+  color: #625b71;
+  font-weight: 600;
 }
 .shelly-root columnview > header > button:hover {
-  background: alpha(#1d1b20, 0.05);
+  background: alpha(#1d1b20, 0.04);
 }
 
 /* Navigation */
@@ -350,6 +428,26 @@
 }
 .shelly-root .nav-selected image {
   color: #21005d;
+}
+
+.shelly-root .nav-segment {
+  background: #fbf9ff;
+  border: 1px solid #d5cfe0;
+  border-radius: 999px;
+  padding: 0;
+}
+.shelly-root .nav-segment > button.nav-btn {
+  margin: 0;
+  min-height: 34px;
+  padding: 0 16px;
+  border-radius: 0;
+  box-shadow: none;
+}
+.shelly-root .nav-segment > button.nav-btn:first-child {
+  border-radius: 999px 0 0 999px;
+}
+.shelly-root .nav-segment > button.nav-btn:last-child {
+  border-radius: 0 999px 999px 0;
 }
 
 /* Entries, dropdowns, popovers */
@@ -445,14 +543,18 @@
   color: #ffffff;
 }
 
-/* Scrollbars, separators, misc. The trough is a visible pill rail; the
-   accent thumb rides inside it with 2px of rail showing on each side. */
+/* Scrollbars, separators, misc. */
+.shelly-root scrollbar {
+  background: transparent;
+  border: none;
+  padding: 0;
+}
 .shelly-root scrollbar trough {
   background: alpha(#1d1b20, 0.08);
   border: none;
   border-radius: 999px;
-  min-width: 10px;
-  min-height: 10px;
+  min-width: 6px;
+  min-height: 6px;
   margin: 2px;
 }
 .shelly-root scrollbar slider {
@@ -461,7 +563,7 @@
   border-radius: 999px;
   min-width: 6px;
   min-height: 6px;
-  margin: 2px;
+  margin: 0;
 }
 .shelly-root scrollbar slider:hover {
   background: alpha(#6750a4, 0.75);
@@ -477,7 +579,7 @@
 .shelly-root scrollbar.overlay-indicator:not(.dragging):not(.hovering) slider {
   min-width: 6px;
   min-height: 6px;
-  margin: 2px;
+  margin: 0;
   background: alpha(#6750a4, 0.4);
 }
 .shelly-root separator {

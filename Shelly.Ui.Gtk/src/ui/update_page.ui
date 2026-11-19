@@ -19,20 +19,6 @@
           <class name="page-head"/>
         </style>
         <child>
-          <object class="GtkLabel">
-            <property name="label" translatable="yes">Updates</property>
-            <property name="xalign">0</property>
-            <property name="accessible-role">heading</property>
-            <accessibility>
-              <property name="level">1</property>
-            </accessibility>
-            <style>
-              <class name="title-2"/>
-              <class name="page-heading"/>
-            </style>
-          </object>
-        </child>
-        <child>
           <object class="GtkLabel" id="selected_label">
             <property name="label" translatable="yes">7 of 7 updates included</property>
             <property name="xalign">0</property>

@@ -55,6 +55,7 @@ pub const ShellySearchPage = extern struct {
         standard_toggle: *gtk.ToggleButton,
         aur_toggle: *gtk.ToggleButton,
         flatpak_toggle: *gtk.ToggleButton,
+        source_filter_button: *gtk.MenuButton,
         show_detail_pane_check: *gtk.CheckButton,
         source_filter: *gtk.CustomFilter,
         detail_revealer: *gtk.Revealer,
@@ -299,6 +300,7 @@ pub const ShellySearchPage = extern struct {
             fn setup(_: *gtk.SignalListItemFactory, item: *gobject.Object, _: ?*anyopaque) callconv(.c) void {
                 const cell = gobject.ext.cast(gtk.ColumnViewCell, item) orelse return;
                 const label = gtk.Label.new("");
+                gtk.Widget.addCssClass(label.as(gtk.Widget), "cell-meta");
                 gtk.Widget.setHalign(label.as(gtk.Widget), halign);
                 gtk.Label.setEllipsize(label, .end);
                 gtk.ColumnViewCell.setChild(cell, label.as(gtk.Widget));
@@ -528,6 +530,24 @@ pub const ShellySearchPage = extern struct {
         gtk.Button.setLabel(p.flatpak_toggle.as(gtk.Button), std.fmt.bufPrintSentinel(&buf, "{s} \u{00b7} {d}", .{ translations._("Flatpak"), flatpak_count }, 0) catch translations._("Flatpak"));
     }
 
+    /// marks the source filter button while an offered source is turned off,
+    /// since the toggles are out of sight in its popover.
+    fn update_filter_indicator(self: *Self) void {
+        const p = self.priv();
+        var filtered = false;
+        inline for (.{ p.standard_toggle, p.aur_toggle, p.flatpak_toggle }) |toggle| {
+            if (gtk.Widget.getVisible(toggle.as(gtk.Widget)) != 0 and gtk.ToggleButton.getActive(toggle) == 0) filtered = true;
+        }
+        const button = p.source_filter_button.as(gtk.Widget);
+        if (filtered) {
+            gtk.Widget.addCssClass(button, "filter-active");
+            gtk.Widget.setTooltipText(button, translations._("Search Sources (some sources hidden)"));
+        } else {
+            gtk.Widget.removeCssClass(button, "filter-active");
+            gtk.Widget.setTooltipText(button, translations._("Search Sources"));
+        }
+    }
+
     fn reset_source_labels(self: *Self) void {
         const p = self.priv();
         gtk.Button.setLabel(p.standard_toggle.as(gtk.Button), translations._("Standard"));
@@ -548,6 +568,7 @@ pub const ShellySearchPage = extern struct {
         gtk.ToggleButton.setActive(p.aur_toggle, @intFromBool(sources.aur));
         gtk.Widget.setVisible(p.flatpak_toggle.as(gtk.Widget), @intFromBool(sources.flatpak));
         gtk.ToggleButton.setActive(p.flatpak_toggle, @intFromBool(sources.flatpak));
+        self.update_filter_indicator();
 
         self.applyOptionsFromConfig();
         self.update_selection_ui();
@@ -586,6 +607,7 @@ pub const ShellySearchPage = extern struct {
     fn on_source_filter_toggled(_: *gtk.ToggleButton, self: *Self) callconv(.c) void {
         const p = self.priv();
         gtk.Filter.changed(p.source_filter.as(gtk.Filter), .different);
+        self.update_filter_indicator();
 
         // Results stay loaded; explain the grid if every source is filtered out.
         if (gio.ListModel.getNItems(p.list_store.as(gio.ListModel)) == 0) return;
@@ -1112,6 +1134,7 @@ pub const ShellySearchPage = extern struct {
         .{ "standard_toggle", @offsetOf(Private, "standard_toggle") },
         .{ "aur_toggle", @offsetOf(Private, "aur_toggle") },
         .{ "flatpak_toggle", @offsetOf(Private, "flatpak_toggle") },
+        .{ "source_filter_button", @offsetOf(Private, "source_filter_button") },
         .{ "show_detail_pane_check", @offsetOf(Private, "show_detail_pane_check") },
         .{ "detail_revealer", @offsetOf(Private, "detail_revealer") },
         .{ "detail_stack", @offsetOf(Private, "detail_stack") },

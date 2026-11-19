@@ -11,39 +11,7 @@
     <property name="orientation">vertical</property>
     <property name="hexpand">true</property>
     <property name="vexpand">true</property>
-    <property name="margin-bottom">10</property>
 
-    <child>
-      <object class="GtkBox">
-        <property name="orientation">vertical</property>
-        <style>
-          <class name="page-head"/>
-          <class name="page-head-added"/>
-        </style>
-        <child>
-          <object class="GtkLabel">
-            <property name="label" translatable="yes">Search</property>
-            <property name="xalign">0</property>
-            <property name="accessible-role">heading</property>
-            <accessibility>
-              <property name="level">1</property>
-            </accessibility>
-            <style>
-              <class name="page-heading"/>
-            </style>
-          </object>
-        </child>
-        <child>
-          <object class="GtkLabel">
-            <property name="label" translatable="yes">Search across every enabled backend.</property>
-            <property name="xalign">0</property>
-            <style>
-              <class name="page-subtitle"/>
-            </style>
-          </object>
-        </child>
-      </object>
-    </child>
     <child>
       <object class="GtkBox">
         <property name="halign">fill</property>
@@ -52,63 +20,55 @@
           <class name="toolbar-card"/>
         </style>
         <child>
-          <object class="GtkSearchEntry" id="search_entry">
-            <property name="placeholder-text" translatable="yes">Search standard repositories, AUR and Flatpak</property>
-            <property name="width-request">200</property>
-            <signal name="activate" handler="on_search_activate" swapped="true"/>
-            <style><class name="spaced-search"/></style>
-            <child>
-                <object class="GtkShortcutController">
-                    <property name="scope">managed</property>
-                    <child>
-                        <object class="GtkShortcut">
-                            <property name="trigger">&lt;Control&gt;f</property>
-                            <property name="action">action(search.focus)</property>
-                        </object>
-                    </child>
-                </object>
-            </child>
-            <accessibility>
-              <property name="label" translatable="yes">Search standard repositories, AUR and Flatpak</property>
-            </accessibility>
-          </object>
-        </child>
-        <child>
           <object class="GtkBox">
-            <property name="valign">center</property>
-            <property name="spacing">8</property>
+            <style>
+              <class name="linked"/>
+              <class name="search-filter"/>
+            </style>
             <child>
-              <object class="GtkToggleButton" id="standard_toggle">
-                <property name="label" translatable="yes">Standard</property>
-                <property name="active">true</property>
-                <property name="tooltip-text" translatable="yes">Show results from the configured ALPM sync databases</property>
+              <object class="GtkSearchEntry" id="search_entry">
+                <property name="placeholder-text" translatable="yes">Search standard repositories, AUR and Flatpak</property>
+                <property name="width-request">200</property>
+                <signal name="activate" handler="on_search_activate" swapped="true"/>
+                <style><class name="spaced-search"/></style>
+                <child>
+                    <object class="GtkShortcutController">
+                        <property name="scope">managed</property>
+                        <child>
+                            <object class="GtkShortcut">
+                                <property name="trigger">&lt;Control&gt;f</property>
+                                <property name="action">action(search.focus)</property>
+                            </object>
+                        </child>
+                    </object>
+                </child>
+                <accessibility>
+                  <property name="label" translatable="yes">Search standard repositories, AUR and Flatpak</property>
+                </accessibility>
               </object>
             </child>
             <child>
-              <object class="GtkToggleButton" id="aur_toggle">
-                <property name="label" translatable="yes">AUR</property>
-                <property name="active">true</property>
-                <property name="tooltip-text" translatable="yes">Show results from the Arch User Repository</property>
-              </object>
-            </child>
-            <child>
-              <object class="GtkToggleButton" id="flatpak_toggle">
-                <property name="label" translatable="yes">Flatpak</property>
-                <property name="active">true</property>
-                <property name="tooltip-text" translatable="yes">Show results from the configured Flatpak remotes</property>
+              <object class="GtkMenuButton" id="source_filter_button">
+                <property name="icon-name">funnel-symbolic</property>
+                <property name="tooltip-text" translatable="yes">Search Sources</property>
+                <property name="popover">source_filter_popover</property>
               </object>
             </child>
           </object>
-        </child>
-        <child>
-          <object class="GtkBox"><property name="hexpand">true</property></object>
         </child>
         <child>
           <object class="GtkMenuButton" id="options_menu">
+            <property name="has-frame">false</property>
+            <style>
+              <class name="options-menu"/>
+            </style>
             <property name="icon-name">view-more-symbolic</property>
             <property name="tooltip-text" translatable="yes">Additional Options</property>
             <property name="popover">options_popover</property>
           </object>
+        </child>
+        <child>
+          <object class="GtkBox"><property name="hexpand">true</property></object>
         </child>
         <child>
           <object class="GtkButton" id="install_button">
@@ -123,6 +83,10 @@
 
     <child>
       <object class="GtkBox" id="views_and_results_hbox">
+        <property name="overflow">hidden</property>
+        <style>
+          <class name="table-card"/>
+        </style>
         <property name="hexpand">true</property>
         <property name="orientation">horizontal</property>
         <property name="vexpand">true</property>
@@ -236,6 +200,34 @@
     </child>
   </template>
 
+  <object class="GtkPopover" id="source_filter_popover">
+    <property name="child">
+      <object class="GtkBox">
+        <style><class name="linked"/></style>
+        <child>
+          <object class="GtkToggleButton" id="standard_toggle">
+            <property name="label" translatable="yes">Standard</property>
+            <property name="active">true</property>
+            <property name="tooltip-text" translatable="yes">Show results from the configured ALPM sync databases</property>
+          </object>
+        </child>
+        <child>
+          <object class="GtkToggleButton" id="aur_toggle">
+            <property name="label" translatable="yes">AUR</property>
+            <property name="active">true</property>
+            <property name="tooltip-text" translatable="yes">Show results from the Arch User Repository</property>
+          </object>
+        </child>
+        <child>
+          <object class="GtkToggleButton" id="flatpak_toggle">
+            <property name="label" translatable="yes">Flatpak</property>
+            <property name="active">true</property>
+            <property name="tooltip-text" translatable="yes">Show results from the configured Flatpak remotes</property>
+          </object>
+        </child>
+      </object>
+    </property>
+  </object>
   <object class="GtkPopover" id="options_popover">
     <property name="child">
       <object class="GtkBox">
