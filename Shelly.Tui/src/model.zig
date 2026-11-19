@@ -159,8 +159,8 @@ pub const Model = struct {
                 }
                 if (!self.help_open and operation_model.operationPrompt(self) == null and self.operation_state.review_prompt == null and (self.active == .packages or self.active == .aur or self.active == .flatpak or self.active == .appimage or self.active == .settings) and (self.overlay == null or self.overlay.? == .package or self.overlay.? == .aur or self.overlay.? == .flatpak)) {
                     if (commands.matches(key, .narrow_view) or commands.matches(key, .widen_view)) {
-                        const next_percent = @import("views/split_layout.zig").resize(self.viewport_width, self.list_percent, commands.matches(key, .widen_view)) orelse return ctx.consumeEvent();
-                        self.list_percent = next_percent;
+                        const percent = if (self.active == .aur) &self.aur_state.list_percent else &self.list_percent;
+                        percent.* = @import("views/split_layout.zig").resize(self.viewport_width, percent.*, commands.matches(key, .widen_view)) orelse return ctx.consumeEvent();
                         return ctx.consumeAndRedraw();
                     }
                 }
@@ -651,12 +651,17 @@ test "help and footer update live bindings without reopening help" {
     try std.testing.expect(!model.help_open);
 }
 
-test "panel resizing is shared bounded and preserves settings navigation" {
+test "panel resizing keeps AUR independent, respects bounds, and preserves settings navigation" {
     const model = try Model.init(std.testing.allocator);
     defer model.deinit();
     var events: vxfw.EventContext = .{ .io = std.testing.io, .alloc = std.testing.allocator, .cmds = .empty };
     defer events.cmds.deinit(std.testing.allocator);
-    for ([_]Tab{ .packages, .aur, .flatpak }) |tab| {
+    model.active = .aur;
+    try std.testing.expectEqual(@as(u8, 30), aur_model.aurView(model).list_percent);
+    try model.captureEvent(&events, .{ .key_press = commands.bindings.widen_view });
+    try std.testing.expectEqual(@as(u8, 35), aur_model.aurView(model).list_percent);
+    try std.testing.expectEqual(@as(u8, 40), model.list_percent);
+    for ([_]Tab{ .packages, .flatpak }) |tab| {
         model.active = tab;
         model.list_percent = 40;
         try model.captureEvent(&events, .{ .key_press = commands.bindings.widen_view });

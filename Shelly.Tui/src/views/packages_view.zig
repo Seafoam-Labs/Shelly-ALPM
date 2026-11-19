@@ -1,4 +1,5 @@
 const std = @import("std");
+const drawColumn = @import("list_table.zig").drawColumn;
 const styles = @import("styles.zig");
 const Border = @import("border.zig");
 const help_view = @import("help_view.zig");
@@ -161,13 +162,6 @@ fn drawPackageTable(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw
         .surface = try list.draw(ctx.withConstraints(.{}, .{ .width = size.width, .height = size.height - 1 })),
     };
     return .{ .size = size, .widget = header.widget, .buffer = &.{}, .children = children };
-}
-
-fn drawColumn(ctx: vxfw.DrawContext, buffer: []vaxis.Cell, col: u16, width: u16, value: []const u8, style: vaxis.Style) Allocator.Error!void {
-    if (width == 0 or value.len == 0) return;
-    var label: vxfw.Text = .{ .text = value, .style = style, .softwrap = false, .overflow = .ellipsis };
-    const surface = try label.draw(ctx.withConstraints(.{}, .{ .width = width, .height = 1 }));
-    @memcpy(buffer[col..][0..surface.buffer.len], surface.buffer);
 }
 
 pub fn drawPackageRow(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
