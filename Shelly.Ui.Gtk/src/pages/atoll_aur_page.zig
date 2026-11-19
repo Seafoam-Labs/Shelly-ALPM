@@ -514,14 +514,13 @@ pub const AtollAurPage = extern struct {
         const btn = p.install_button.as(gtk.Widget);
 
         gtk.Widget.removeCssClass(btn, "suggested-action");
+        gtk.Widget.setVisible(btn, @intFromBool(count > 0));
         gtk.Widget.removeCssClass(btn, "destructive-action");
 
         var buf: [64]u8 = undefined;
-        if (count == 0) {
-            gtk.Button.setLabel(p.install_button, if (p.installed_mode) translations._("Remove Selected") else translations._("Install Selected"));
-            gtk.Widget.setSensitive(btn, 0);
-            gtk.Widget.setTooltipText(btn, translations._("Select one or more packages"));
-        } else if (p.installed_mode) {
+        // the button is hidden with nothing selected.
+        if (count == 0) return;
+        if (p.installed_mode) {
             gtk.Button.setLabel(
                 p.install_button,
                 std.fmt.bufPrintSentinel(&buf, "{s} {d} {s}", .{ translations._("Remove"), count, translations._("Package(s)") }, 0) catch translations._("Remove Selected"),

@@ -150,6 +150,7 @@
                                 </child>
                                 <child>
                                     <object class="GtkBox">
+                                        <property name="visible">false</property>
                                         <style>
                                             <class name="linked"/>
                                         </style>

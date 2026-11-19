@@ -72,6 +72,7 @@
         </child>
         <child>
           <object class="GtkButton" id="install_button">
+            <property name="visible">false</property>
             <property name="label" translatable="yes">Install Selected</property>
             <property name="sensitive">false</property>
             <signal name="clicked" handler="on_install_clicked" swapped="true"/>

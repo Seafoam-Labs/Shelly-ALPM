@@ -1061,14 +1061,13 @@ pub const PackagePage = extern struct {
         gtk.Label.setLabel(p.cart_label, std.fmt.bufPrintSentinel(&cart_buf, "{d} {s}", .{ total, translations._("Selected") }, 0) catch translations._("0 Selected"));
 
         const btn = p.install_button.as(gtk.Widget);
+        gtk.Widget.setVisible(btn, @intFromBool(total > 0));
         gtk.Widget.removeCssClass(btn, "suggested-action");
         gtk.Widget.removeCssClass(btn, "destructive-action");
 
-        if (total == 0) {
-            gtk.Button.setLabel(p.install_button, translations._("Install Selected"));
-            gtk.Widget.setSensitive(btn, 0);
-            gtk.Widget.setTooltipText(btn, null);
-        } else if (install_count > 0 and remove_count > 0) {
+        // the button is hidden with nothing selected.
+        if (total == 0) return;
+        if (install_count > 0 and remove_count > 0) {
             gtk.Button.setLabel(p.install_button, translations._("Mixed selection"));
             gtk.Widget.setSensitive(btn, 0);
             gtk.Widget.setTooltipText(btn, translations._("Select only installed packages to remove, or only available ones to install."));

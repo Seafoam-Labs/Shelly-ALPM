@@ -338,7 +338,6 @@ pub const UpdatePage = extern struct {
 
         switch (state) {
             .Loading => {
-                gtk.Label.setLabel(p.selected_label, translations._("Checking for updates…"));
                 gtk.Label.setLabel(p.download_label, "");
                 gtk.Spinner.start(p.loading_spinner);
                 gtk.Stack.setVisibleChild(p.updates_stack, p.loading_page.as(gtk.Widget));
@@ -362,7 +361,6 @@ pub const UpdatePage = extern struct {
             },
             .Fail => {
                 gtk.Label.setLabel(p.error_label, translations._("Could not check for updates."));
-                gtk.Label.setLabel(p.selected_label, translations._("Could not check for updates."));
                 gtk.Label.setLabel(p.download_label, "");
                 gtk.Spinner.stop(p.loading_spinner);
                 gtk.Stack.setVisibleChild(p.updates_stack, p.error_page.as(gtk.Widget));
@@ -370,12 +368,16 @@ pub const UpdatePage = extern struct {
                 gtk.Widget.setSensitive(p.upgrade_button.as(gtk.Widget), 0);
             },
             .NoUpdates => {
-                gtk.Label.setLabel(p.selected_label, translations._("Your system is up to date"));
                 gtk.Label.setLabel(p.download_label, "");
                 gtk.Stack.setVisibleChild(p.updates_stack, p.empty_page.as(gtk.Widget));
                 gtk.Widget.setSensitive(p.refresh_button.as(gtk.Widget), 1);
                 gtk.Widget.setSensitive(p.upgrade_button.as(gtk.Widget), 0);
             },
+        }
+        // the summary header only shows loaded updates; the stack pages
+        // explain the other states.
+        if (gtk.Widget.getParent(p.selected_label.as(gtk.Widget))) |head| {
+            gtk.Widget.setVisible(head, @intFromBool(state == .Loaded));
         }
         self.update_source_labels();
     }

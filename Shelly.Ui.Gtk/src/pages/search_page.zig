@@ -501,14 +501,12 @@ pub const ShellySearchPage = extern struct {
         const btn = p.install_button.as(gtk.Widget);
 
         gtk.Widget.removeCssClass(btn, "suggested-action");
+        gtk.Widget.setVisible(btn, @intFromBool(count > 0));
 
         if (count == 0 or p.install_running) {
             gtk.Button.setLabel(p.install_button, translations._("Install Selected"));
             gtk.Widget.setSensitive(btn, 0);
-            gtk.Widget.setTooltipText(
-                btn,
-                if (p.install_running) translations._("Installation in progress") else translations._("Select one or more packages"),
-            );
+            gtk.Widget.setTooltipText(btn, translations._("Installation in progress"));
             return;
         }
 
