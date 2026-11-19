@@ -62,6 +62,7 @@ pub const ShellySearchPage = extern struct {
         aur_toggle: *gtk.ToggleButton,
         flatpak_toggle: *gtk.ToggleButton,
         source_filter_button: *gtk.MenuButton,
+        search_by_selection: *gtk.DropDown,
         show_detail_pane_check: *gtk.CheckButton,
         source_filter: *gtk.CustomFilter,
         detail_revealer: *gtk.Revealer,
@@ -88,6 +89,20 @@ pub const ShellySearchPage = extern struct {
         items: []SearchResult = &.{},
         arena: ?*std.heap.ArenaAllocator = null,
     };
+
+    /// The AUR search order offered by Atoll. The order is the dropdown's
+    /// index, so `searchByAt` is the only place that maps one to the other.
+    const search_by_options = [_]struct { by: AtollApiService.By, label: [:0]const u8 }{
+        .{ .by = .relevance, .label = "Best Match" },
+        .{ .by = .name, .label = "Name" },
+        .{ .by = .provides, .label = "Provides" },
+        .{ .by = .words, .label = "Words" },
+    };
+
+    pub fn searchByAt(index: usize) AtollApiService.By {
+        if (index >= search_by_options.len) return .relevance;
+        return search_by_options[index].by;
+    }
 
     const LoadResult = struct {
         page: *Self,
@@ -174,6 +189,15 @@ pub const ShellySearchPage = extern struct {
         _ = gtk.ToggleButton.signals.toggled.connect(p.standard_toggle, *Self, &on_source_filter_toggled, self, .{});
         _ = gtk.ToggleButton.signals.toggled.connect(p.aur_toggle, *Self, &on_source_filter_toggled, self, .{});
         _ = gtk.ToggleButton.signals.toggled.connect(p.flatpak_toggle, *Self, &on_source_filter_toggled, self, .{});
+
+        const by_list = gtk.StringList.new(null);
+        for (search_by_options) |item| {
+            gtk.StringList.append(by_list, translations._(item.label));
+        }
+        gtk.DropDown.setModel(p.search_by_selection, by_list.as(gio.ListModel));
+        by_list.as(gobject.Object).unref();
+        gtk.DropDown.setSelected(p.search_by_selection, 0);
+        _ = gobject.Object.signals.notify.connect(p.search_by_selection.as(gobject.Object), *Self, &on_search_by_notify, self, .{ .detail = "selected" });
 
         const standard_detail = StandardPackageDetail.new();
         p.standard_detail = standard_detail;
@@ -632,6 +656,9 @@ pub const ShellySearchPage = extern struct {
         // Disabled sources are neither queried nor offered in the filter.
         gtk.Widget.setVisible(p.aur_toggle.as(gtk.Widget), @intFromBool(sources.aur));
         gtk.ToggleButton.setActive(p.aur_toggle, @intFromBool(sources.aur));
+        // Only the AUR source has an ordering to pick, so the selector is dead
+        // when the AUR source is off even if Atoll itself is active.
+        gtk.Widget.setVisible(p.search_by_selection.as(gtk.Widget), @intFromBool(sources.atoll and sources.aur));
         gtk.Widget.setVisible(p.flatpak_toggle.as(gtk.Widget), @intFromBool(sources.flatpak));
         gtk.ToggleButton.setActive(p.flatpak_toggle, @intFromBool(sources.flatpak));
         self.update_filter_indicator();
@@ -727,6 +754,7 @@ pub const ShellySearchPage = extern struct {
         aur: bool = false,
         flatpak: bool = false,
         atoll: bool = false,
+        search_by: AtollApiService.By = .relevance,
     };
 
     /// Atoll replaces the AUR backend, so the worker is told which one runs
@@ -753,8 +781,10 @@ pub const ShellySearchPage = extern struct {
         return sources;
     }
 
-    fn start_load(self: *Self, sources: Sources) void {
+    fn start_load(self: *Self, sources_in: Sources) void {
         const p = self.priv();
+        var sources = sources_in;
+        sources.search_by = self.selectedBy();
         p.generation += 1;
         gio.ListStore.removeAll(p.list_store);
         self.refreshAurText(sources.atoll);
@@ -784,7 +814,7 @@ pub const ShellySearchPage = extern struct {
 
         for (0..3) |i| {
             if (!slots[i].enabled) continue;
-            threads[i] = std.Thread.spawn(.{}, source_worker, .{ &slots[i], query_buf, query_len, tags[i], sources.atoll }) catch null;
+            threads[i] = std.Thread.spawn(.{}, source_worker, .{ &slots[i], query_buf, query_len, tags[i], sources.atoll, sources.search_by }) catch null;
         }
         for (threads) |maybe_thread| {
             if (maybe_thread) |thread| thread.join();
@@ -825,7 +855,7 @@ pub const ShellySearchPage = extern struct {
         post_result(page, merged.items, arena_ptr, generation);
     }
 
-    fn source_worker(slot: *SourceSlot, query_buf: *[256]u8, query_len: usize, source: Source, use_atoll: bool) void {
+    fn source_worker(slot: *SourceSlot, query_buf: *[256]u8, query_len: usize, source: Source, use_atoll: bool, search_by: AtollApiService.By) void {
         const query: []const u8 = query_buf[0..query_len];
 
         const arena_ptr = std.heap.c_allocator.create(std.heap.ArenaAllocator) catch return;
@@ -857,7 +887,7 @@ pub const ShellySearchPage = extern struct {
                 if (use_atoll) {
                     var atoll = AtollApiService.init(alloc, threaded.io());
                     defer atoll.deinit();
-                    const packages = atoll.search(query, .relevance) catch |err| {
+                    const packages = atoll.search(query, search_by) catch |err| {
                         std.debug.print("Could not search Atoll. {0s}\n\nTechnical details: {1s}\n", .{ diagnostics.cause(err), @errorName(err) });
                         return;
                     };
@@ -1042,6 +1072,17 @@ pub const ShellySearchPage = extern struct {
         @memcpy(p.last_query[0..len], text[0..len]);
         p.last_query_len = len;
 
+        self.start_load(enabledSources());
+    }
+
+    fn selectedBy(self: *Self) AtollApiService.By {
+        const idx = gtk.DropDown.getSelected(self.priv().search_by_selection);
+        return searchByAt(idx);
+    }
+
+    fn on_search_by_notify(_: *gobject.Object, _: *gobject.ParamSpec, self: *Self) callconv(.c) void {
+        const p = self.priv();
+        if (p.last_query_len == 0) return;
         self.start_load(enabledSources());
     }
 
@@ -1237,6 +1278,7 @@ pub const ShellySearchPage = extern struct {
         .{ "aur_toggle", @offsetOf(Private, "aur_toggle") },
         .{ "flatpak_toggle", @offsetOf(Private, "flatpak_toggle") },
         .{ "source_filter_button", @offsetOf(Private, "source_filter_button") },
+        .{ "search_by_selection", @offsetOf(Private, "search_by_selection") },
         .{ "show_detail_pane_check", @offsetOf(Private, "show_detail_pane_check") },
         .{ "detail_revealer", @offsetOf(Private, "detail_revealer") },
         .{ "detail_stack", @offsetOf(Private, "detail_stack") },
@@ -1487,4 +1529,12 @@ test "deduplicateStandardResults handles empty package slice" {
     var items: std.ArrayListUnmanaged(SearchResult) = .empty;
     try ShellySearchPage.deduplicateStandardResults(alloc, &.{}, &items);
     try std.testing.expectEqual(@as(usize, 0), items.items.len);
+}
+
+test "searchByAt maps dropdown index to Atoll search order" {
+    try std.testing.expectEqual(AtollApiService.By.relevance, ShellySearchPage.searchByAt(0));
+    try std.testing.expectEqual(AtollApiService.By.name, ShellySearchPage.searchByAt(1));
+    try std.testing.expectEqual(AtollApiService.By.provides, ShellySearchPage.searchByAt(2));
+    try std.testing.expectEqual(AtollApiService.By.words, ShellySearchPage.searchByAt(3));
+    try std.testing.expectEqual(AtollApiService.By.relevance, ShellySearchPage.searchByAt(99));
 }

@@ -57,6 +57,19 @@
           </object>
         </child>
         <child>
+          <object class="GtkDropDown" id="search_by_selection">
+            <property name="visible">false</property>
+            <property name="valign">center</property>
+            <property name="tooltip-text" translatable="yes">Search By</property>
+            <property name="expression">
+              <lookup name='string' type="GtkStringObject"></lookup>
+            </property>
+            <accessibility>
+              <property name="label" translatable="yes">Search By</property>
+            </accessibility>
+          </object>
+        </child>
+        <child>
           <object class="GtkMenuButton" id="options_menu">
             <property name="has-frame">false</property>
             <style>
