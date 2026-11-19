@@ -1,4 +1,4 @@
-const drawColumn = @import("list_table.zig").drawColumn;
+const drawColumn = @import("packages_view.zig").drawColumn;
 const styles = @import("styles.zig");
 const std = @import("std");
 const vaxis = @import("vaxis");

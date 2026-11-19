@@ -32,6 +32,8 @@ pub const Id = enum {
     refresh,
     refresh_list,
     sync_packages,
+    sort_package_name,
+    sort_package_repository,
     save_settings,
     filter,
     upgrade_all,
@@ -81,6 +83,8 @@ pub const Bindings = struct {
     cancel: vaxis.Key = .{ .codepoint = 'q', .mods = .{ .ctrl = true } },
     refresh: vaxis.Key = .{ .codepoint = 'r' },
     save_settings: vaxis.Key = .{ .codepoint = 's', .mods = .{ .ctrl = true } },
+    sort_package_name: vaxis.Key = .{ .codepoint = 'n', .mods = .{ .alt = true } },
+    sort_package_repository: vaxis.Key = .{ .codepoint = 'o', .mods = .{ .alt = true } },
     sync_packages: vaxis.Key = .{ .codepoint = 's', .mods = .{ .alt = true } },
     refresh_list: vaxis.Key = .{ .codepoint = 'r', .mods = .{ .ctrl = true } },
     filter: vaxis.Key = .{ .codepoint = 'l', .mods = .{ .ctrl = true } },
@@ -399,6 +403,8 @@ pub fn entries(arena: std.mem.Allocator, context: Context) std.mem.Allocator.Err
         .search, .packages => {
             try add(arena, &list, .refresh_list, "Refresh", "Reload available and installed packages");
             try add(arena, &list, .sync_packages, "Sync", "Synchronize package databases and reload the list");
+            try add(arena, &list, .sort_package_name, "Sort by name", "Sort by package name or reverse the name order");
+            try add(arena, &list, .sort_package_repository, "Sort by repository", "Sort by repository or reverse the repository order");
             if (context.mode == .packages and context.selected_count > 0)
                 try add(arena, &list, .clear_selection, "Clear", "Clear all package selections, including entries hidden by filters");
             if (context.mode == .search) {

@@ -18,7 +18,10 @@ pub fn draw(ctx: vxfw.DrawContext, context: commands.Context, status: ?[]const u
     var shortcuts: std.ArrayList(Shortcut) = .empty;
     for (if (show_shortcuts) try commands.entries(ctx.arena, context) else &.{}) |entry| {
         // Resizing stays discoverable in help without crowding the footer.
-        if (entry.id == .narrow_view or entry.id == .widen_view) continue;
+        switch (entry.id) {
+            .narrow_view, .widen_view, .sort_package_name, .sort_package_repository => continue,
+            else => {},
+        }
         if ((entry.id == .mark and context.mode != .answers) or (context.mode == .search and (entry.id == .install or entry.id == .remove))) continue;
         if (entry.id == .next) continue;
         if (context.mode == .settings and (entry.id == .save_settings or entry.id == .refresh)) continue;

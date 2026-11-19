@@ -1,11 +1,12 @@
 const std = @import("std");
-const drawColumn = @import("list_table.zig").drawColumn;
 const styles = @import("styles.zig");
 const Border = @import("border.zig");
 const help_view = @import("help_view.zig");
 const vaxis = @import("vaxis");
 const vxfw = vaxis.vxfw;
 const Allocator = std.mem.Allocator;
+const Model = @import("../model.zig").Model;
+const packages_model = @import("../models/packages_model.zig");
 const Package = @import("../models/packages.zig").Package;
 const appendDetailList = @import("detail_format.zig").appendDetailList;
 const diagnostics = @import("diagnostics");
@@ -15,9 +16,9 @@ const formatSize = @import("detail_format.zig").formatSize;
 /// Query execution and user-action handling remain in Model.
 pub const View = struct {
     list_percent: u8 = 40,
+    model: *Model,
     installed_only: bool = false,
     text_field: *vxfw.TextField,
-    list_view: *vxfw.ListView,
     details_scroll: *vxfw.ScrollView,
     help: ?*help_view.Panel = null,
     selected: ?*const Package,
@@ -76,7 +77,7 @@ pub const View = struct {
             else
                 null;
             var label: vxfw.Text = .{ .text = message orelse "" };
-            const content: vxfw.Widget = if (message != null) label.widget() else .{ .userdata = self.list_view, .drawFn = drawPackageTable };
+            const content: vxfw.Widget = if (message != null) label.widget() else .{ .userdata = self.model, .drawFn = drawPackageTable };
             var border: Border = .{
                 .child = content,
                 .focused = self.list_active and !self.details_active,
@@ -142,26 +143,62 @@ fn repositoryColumn(width: u16) u16 {
     return available - @max(11, available / 3);
 }
 
+const SortHeader = struct {
+    model: *Model,
+    gutter: u16,
+    repository: u16,
+    selected: u16,
+
+    fn draw(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
+        const self: *SortHeader = @ptrCast(@alignCast(ptr));
+        const header = try vxfw.Surface.init(ctx.arena, .{ .userdata = self, .drawFn = draw, .eventHandler = handleEvent }, ctx.max.size());
+        @memset(header.buffer, .{});
+        const sort = self.model.packages_state.sort;
+        const name_label = if (sort != null and sort.?.column == .name) (if (sort.?.descending) "Packages↓" else "Packages↑") else "Packages";
+        const repo_label = if (sort != null and sort.?.column == .repository) (if (sort.?.descending) "Repository↓" else "Repository↑") else "Repository";
+        const name_start = self.gutter + marker_width;
+        try drawColumn(ctx, header.buffer, name_start, self.repository - name_start, name_label, styles.emphasis);
+        try drawColumn(ctx, header.buffer, self.repository, self.selected - self.repository, repo_label, styles.emphasis);
+        try drawColumn(ctx, header.buffer, self.selected, selected_width, "Selected", styles.emphasis);
+        return header;
+    }
+
+    fn handleEvent(ptr: *anyopaque, ctx: *vxfw.EventContext, event: vxfw.Event) anyerror!void {
+        const header: *SortHeader = @ptrCast(@alignCast(ptr));
+        if (event != .mouse or header.model.help_open) return;
+        const mouse = event.mouse;
+        if (mouse.button != .left or mouse.type != .press or mouse.col < 0 or mouse.col >= header.selected) return;
+        packages_model.sortBy(header.model, if (mouse.col < header.repository) .name else .repository);
+        ctx.consumeAndRedraw();
+    }
+};
+
 fn drawPackageTable(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
-    const list: *vxfw.ListView = @ptrCast(@alignCast(ptr));
+    const model: *Model = @ptrCast(@alignCast(ptr));
+    const list = &model.packages_state.list_view;
     const size = ctx.max.size();
     const gutter: u16 = if (list.draw_cursor) 2 else 0;
     const width = size.width -| gutter;
     if (width < minimum_table_width or size.height < 2) return list.draw(ctx);
 
     const repo = repositoryColumn(width);
-    const header = try vxfw.Surface.init(ctx.arena, .{ .userdata = ptr, .drawFn = drawPackageTable }, .{ .width = size.width, .height = 1 });
-    @memset(header.buffer, .{});
-    try drawColumn(ctx, header.buffer, gutter + marker_width, repo - marker_width, "Packages", styles.emphasis);
-    try drawColumn(ctx, header.buffer, gutter + repo, width - selected_width - repo, "Repository", styles.emphasis);
-    try drawColumn(ctx, header.buffer, size.width - selected_width, selected_width, "Selected", styles.emphasis);
+    const hit = try ctx.arena.create(SortHeader);
+    hit.* = .{ .model = model, .gutter = gutter, .repository = gutter + repo, .selected = size.width - selected_width };
+    const header = try SortHeader.draw(hit, ctx.withConstraints(.{}, .{ .width = size.width, .height = 1 }));
     const children = try ctx.arena.alloc(vxfw.SubSurface, 2);
     children[0] = .{ .origin = .{ .row = 0, .col = 0 }, .surface = header };
     children[1] = .{
         .origin = .{ .row = 1, .col = 0 },
         .surface = try list.draw(ctx.withConstraints(.{}, .{ .width = size.width, .height = size.height - 1 })),
     };
-    return .{ .size = size, .widget = header.widget, .buffer = &.{}, .children = children };
+    return .{ .size = size, .widget = .{ .userdata = ptr, .drawFn = drawPackageTable }, .buffer = &.{}, .children = children };
+}
+
+pub fn drawColumn(ctx: vxfw.DrawContext, buffer: []vaxis.Cell, col: u16, width: u16, value: []const u8, style: vaxis.Style) Allocator.Error!void {
+    if (width == 0 or value.len == 0) return;
+    var label: vxfw.Text = .{ .text = value, .style = style, .softwrap = false, .overflow = .ellipsis };
+    const surface = try label.draw(ctx.withConstraints(.{}, .{ .width = width, .height = 1 }));
+    @memcpy(buffer[col..][0..surface.buffer.len], surface.buffer);
 }
 
 pub fn drawPackageRow(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
