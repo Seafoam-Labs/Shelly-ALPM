@@ -180,7 +180,8 @@
   border-top: 1px solid alpha(#e6e0e9, 0.08);
 }
 .shelly-root .toolbar-card,
-.shelly-root .table-card {
+.shelly-root .table-card,
+.shelly-root .flatpak-card {
   background: #232029;
   border-radius: 16px;
 }
@@ -198,10 +199,29 @@
 .shelly-root .table-card {
   margin: 0 30px 24px;
 }
-/* the flatpak overlays carry the stock .background class; use the page
-   background instead of its gray. */
-.shelly-root .flatpak-content.background {
-  background: @theme_bg_color;
+/* the flatpak overlays carry the stock .background class. */
+.shelly-root .flatpak-card {
+  border: none;
+}
+.shelly-root .flatpak-card list.boxed-list,
+.shelly-root .flatpak-card .inner-card {
+  background: #2b2930;
+  border: none;
+  border-radius: 16px;
+}
+.shelly-root .flatpak-card .flatpak-content.background {
+  background: #232029;
+}
+.shelly-root .flatpak-nav {
+  background: transparent;
+}
+.shelly-root .flatpak-nav > row {
+  padding: 7px 10px;
+  border: none;
+  border-radius: 10px;
+}
+.shelly-root .flatpak-nav > row:hover:not(:selected) {
+  background: alpha(#e6e0e9, 0.06);
 }
 .shelly-root .table-card columnview > header > button:first-child,
 .shelly-root .table-card columnview > listview > row > cell:first-child {
