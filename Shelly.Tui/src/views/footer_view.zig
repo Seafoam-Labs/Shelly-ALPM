@@ -48,27 +48,11 @@ pub fn draw(ctx: vxfw.DrawContext, context: commands.Context, status: ?[]const u
             .width = ctx.stringWidth(quit_key) + ctx.stringWidth(" Quit"),
         });
     }
-    var shortcut_width: usize = 0;
-    for (shortcuts.items) |shortcut| shortcut_width += shortcut.width;
-
-    // Notices take priority over shortcuts. Selection summaries use leftover space.
-    var summary: []const u8 = "";
-    if (status) |notice| {
-        if (notice.len > 0) summary = notice;
-    }
-    if (summary.len == 0 and context.selected_count > 0) {
-        const full_summary = try std.fmt.allocPrint(ctx.arena, "{d} selected · {d} installed · {d} available  ", .{ context.selected_count, context.selected_installed, context.selected_count - context.selected_installed });
-        if (ctx.stringWidth(full_summary) + shortcut_width <= main_width) {
-            summary = full_summary;
-        } else {
-            const brief_summary = try std.fmt.allocPrint(ctx.arena, "{d} selected  ", .{context.selected_count});
-            if (ctx.stringWidth(brief_summary) + shortcut_width <= main_width) summary = brief_summary;
-        }
-    }
+    const notice = status orelse "";
 
     var spans: std.ArrayList(vxfw.RichText.TextSpan) = .empty;
-    if (summary.len > 0) try spans.append(ctx.arena, .{ .text = summary, .style = styles.secondary });
-    var used: usize = ctx.stringWidth(summary);
+    if (notice.len > 0) try spans.append(ctx.arena, .{ .text = notice, .style = styles.secondary });
+    var used: usize = ctx.stringWidth(notice);
     for (shortcuts.items) |shortcut| {
         if (used + shortcut.width > main_width) continue;
         try spans.append(ctx.arena, .{ .text = shortcut.key, .style = styles.emphasis });
@@ -163,57 +147,6 @@ const FooterTest = struct {
     }
 };
 
-test "footer selection summary never displaces shortcuts that fit unselected" {
-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena.deinit();
-    const allocator = arena.allocator();
-    const baseline_context: commands.Context = .{ .mode = .details, .installable = true, .removable = true };
-    var selected_context = baseline_context;
-    selected_context.selected_count = 2;
-    selected_context.selected_installed = 1;
-    for ([_]usize{ 32, 48, 70, 100 }) |width| {
-        const baseline = try FooterTest.visible_text(allocator, try FooterTest.draw_footer(allocator, baseline_context, null, width));
-        const selected = try FooterTest.visible_text(allocator, try FooterTest.draw_footer(allocator, selected_context, null, width));
-        const actions = [_]struct { id: commands.Id, description: []const u8 }{
-            .{ .id = .install, .description = "Install" },
-            .{ .id = .remove, .description = "Remove" },
-            .{ .id = .close, .description = "Back" },
-            .{ .id = .quit, .description = "Quit" },
-        };
-        for (actions) |action| {
-            const shortcut = try std.fmt.allocPrint(allocator, "{s} {s}", .{ try commands.label(allocator, action.id), action.description });
-            if (std.mem.indexOf(u8, baseline, shortcut) != null)
-                try std.testing.expect(std.mem.indexOf(u8, selected, shortcut) != null);
-            if (action.id == .install or action.id == .remove)
-                try std.testing.expect(std.mem.indexOf(u8, baseline, shortcut) != null);
-        }
-    }
-}
-
-test "footer selection summary scales down with the available width" {
-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena.deinit();
-
-    const context = commands.Context{
-        .mode = .search,
-        .selected_count = 2,
-        .selected_installed = 1,
-    };
-    const full = try FooterTest.draw_footer(arena.allocator(), context, null, 144);
-    const full_text = try FooterTest.visible_text(arena.allocator(), full);
-    try std.testing.expect(std.mem.indexOf(u8, full_text, " · ") != null);
-    try std.testing.expect(std.mem.indexOf(u8, full_text, "available") != null);
-
-    const brief = try FooterTest.draw_footer(arena.allocator(), context, null, 115);
-    const brief_text = try FooterTest.visible_text(arena.allocator(), brief);
-    try std.testing.expect(std.mem.indexOf(u8, brief_text, "selected") != null);
-    try std.testing.expect(std.mem.indexOf(u8, brief_text, "available") == null);
-
-    const omitted = try FooterTest.draw_footer(arena.allocator(), context, null, 89);
-    const omitted_text = try FooterTest.visible_text(arena.allocator(), omitted);
-    try std.testing.expect(std.mem.indexOf(u8, omitted_text, "selected") == null);
-}
-
 test "footer renders safely at zero and tiny widths" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
@@ -261,7 +194,7 @@ test "footer treats an empty status like a missing status" {
                 try FooterTest.visible_text(allocator, empty),
             );
             if (count > 0 and width == 120)
-                try std.testing.expect(std.mem.indexOf(u8, try FooterTest.visible_text(allocator, empty), "2 selected") != null);
+                try std.testing.expect(std.mem.indexOf(u8, try FooterTest.visible_text(allocator, empty), "2 selected") == null);
         }
     }
 }
