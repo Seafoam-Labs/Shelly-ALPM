@@ -327,7 +327,7 @@
                           <object class="GtkLabel" id="no_results_label">
                             <property name="label" translatable="yes">No matching packages found</property>
                             <style>
-                              <class name="title-4"/>
+                              <class name="title-3"/>
                             </style>
                           </object>
                         </child>

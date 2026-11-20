@@ -245,7 +245,7 @@ pub const ShellySearchPage = extern struct {
             },
             .prompt => self.show_placeholder("system-search-symbolic", translations._("Search everywhere"), translations._("Search standard repositories, the AUR and Flatpak at once. Type a name to begin.")),
             .empty => self.show_placeholder("edit-find-symbolic", translations._("No packages found"), translations._("Try a shorter or more general keyword.")),
-            .err => self.show_placeholder("dialog-error-symbolic", translations._("Could not search the selected sources."), translations._("Check your connection and try again.")),
+            .err => self.show_placeholder("dialog-error-symbolic", translations._("Could not search the selected sources"), translations._("Check your connection and try again.")),
         }
     }
 
@@ -1072,7 +1072,7 @@ pub const ShellySearchPage = extern struct {
         const step_title: [:0]const u8 = switch (next.source) {
             .standard => translations._("Installing packages"),
             .aur => translations._("Installing AUR packages"),
-            .flatpak => translations._("Installing flatpak"),
+            .flatpak => translations._("Installing Flatpak"),
         };
         const privileged = next.source != .flatpak;
 

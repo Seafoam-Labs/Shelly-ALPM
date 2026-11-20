@@ -79,7 +79,7 @@ msgid "Warnings"
 msgstr "Warnhinweise"
 
 msgid ""
-"These commands fetch and execute code outside of shelly and libalpm's "
+"These commands fetch and execute code outside of Shelly and libalpm's "
 "control. Review them before continuing."
 msgstr ""
 "Diese Befehle rufen Code ab und führen ihn aus, der außerhalb der Kontrolle "
@@ -278,7 +278,7 @@ msgstr "Detailbereich auf der rechten Seite ausblenden"
 msgid "Information"
 msgstr "Information"
 
-msgid "Preview Pkgbuild"
+msgid "Preview PKGBUILD"
 msgstr "PKGBUILD-Vorschau"
 
 msgid "Search the AUR"
@@ -527,12 +527,12 @@ msgstr ""
 msgid "Install all selected packages in one transaction"
 msgstr ""
 
-msgid "Loading Recommended Packages..."
+#, fuzzy
+msgid "Loading recommendations…"
 msgstr "Empfohlene Pakete laden..."
 
-msgid ""
-"No recommendations found. Please check your internet connection and try "
-"again."
+#, fuzzy
+msgid "Check your internet connection and try again."
 msgstr ""
 "Es wurden keine Empfehlungen gefunden. Bitte überprüfe deine "
 "Internetverbindung und versuche es erneut."
@@ -611,7 +611,7 @@ msgstr "Wochenplan verwenden"
 msgid "Run Tray as cron"
 msgstr "Tray als Cron-Job ausführen"
 
-msgid "Tray update with ui"
+msgid "Tray update with UI"
 msgstr "Tray-Aktualisierung mit Benutzeroberfläche"
 
 msgid "Update terminal"
@@ -673,7 +673,7 @@ msgid "Use Symbolic Tray Icon"
 msgstr "Symbolisches Taskleisten-Symbol verwenden"
 
 msgid ""
-"If enabled, Shelly will use a symbolic svg icon instead of the default image "
+"If enabled, Shelly will use a symbolic SVG icon instead of the default image "
 "one."
 msgstr ""
 "Wenn diese Option aktiviert ist, verwendet Shelly ein symbolisches SVG-"
@@ -806,7 +806,7 @@ msgid "Remove db.lck"
 msgstr "Entfernt db.lock"
 
 msgid ""
-"Removes the db.lck file if it was left behind by an interrupted alpm process."
+"Removes the db.lck file if it was left behind by an interrupted ALPM process."
 msgstr ""
 "Entfernt die Datei db.lck, falls diese von einem unterbrochenen alpm-Prozess "
 "zurückgelassen wurde."
@@ -1260,7 +1260,7 @@ msgstr ""
 "Nicht unterstützter Dateityp. Wähle eine .flatpak- oder .flatpakref-Datei "
 "aus."
 
-msgid "Installing local flatpak"
+msgid "Installing local Flatpak"
 msgstr "Lokales Flatpak installieren"
 
 msgid "Could not install the selected packages."
@@ -1278,7 +1278,7 @@ msgstr "Verifiziert"
 msgid "Show less"
 msgstr "Weniger anzeigen"
 
-msgid "Installing flatpak"
+msgid "Installing Flatpak"
 msgstr "Flatpak installieren"
 
 msgid "Remove this Flatpak?"
@@ -1296,7 +1296,7 @@ msgstr "Berechtigungen"
 msgid "Available Addons"
 msgstr "Flatpak-Addons verfügbar"
 
-msgid "Installing flatpak addon"
+msgid "Installing Flatpak addon"
 msgstr "Flatpak-Addon installieren"
 
 msgid "Unknown developer"
@@ -1562,8 +1562,8 @@ msgstr ""
 "Durchsuche gleichzeitig die Standard-Repositorys, das AUR und Flatpak. Gib "
 "einen Namen ein, um zu beginnen."
 
-msgid "Could not search the selected sources."
-msgstr "Die ausgewählten Quellen konnten nicht durchsucht werden."
+msgid "Could not search the selected sources"
+msgstr "Die ausgewählten Quellen konnten nicht durchsucht werden"
 
 msgid "Installation in progress"
 msgstr "Installation läuft"
@@ -1941,3 +1941,12 @@ msgstr "Seitenleiste aufklappen"
 
 msgid "Collapse sidebar"
 msgstr "Seitenleiste einklappen"
+
+msgid "No recommendations found"
+msgstr ""
+
+msgid "System-wide"
+msgstr ""
+
+msgid "Current user"
+msgstr ""

@@ -82,7 +82,7 @@ msgid "Warnings"
 msgstr "Figyelmeztetések"
 
 msgid ""
-"These commands fetch and execute code outside of shelly and libalpm's "
+"These commands fetch and execute code outside of Shelly and libalpm's "
 "control. Review them before continuing."
 msgstr ""
 "Ezek a parancsok a Shelly és a libalpm felügyeletén kívül eső kódot töltenek "
@@ -276,7 +276,7 @@ msgstr "A jobb oldali részletek panel elrejtése"
 msgid "Information"
 msgstr "Információ"
 
-msgid "Preview Pkgbuild"
+msgid "Preview PKGBUILD"
 msgstr "PKGBUILD előnézete"
 
 msgid "Search the AUR"
@@ -518,12 +518,12 @@ msgstr "Az összes ajánlott csomag kijelölésének megszüntetése"
 msgid "Install all selected packages in one transaction"
 msgstr "Az összes kijelölt csomag telepítése egyetlen műveletben"
 
-msgid "Loading Recommended Packages..."
+#, fuzzy
+msgid "Loading recommendations…"
 msgstr "Ajánlott csomagok betöltése..."
 
-msgid ""
-"No recommendations found. Please check your internet connection and try "
-"again."
+#, fuzzy
+msgid "Check your internet connection and try again."
 msgstr ""
 "Nem találhatók ajánlások. Ellenőrizze az internetkapcsolatot, majd próbálja "
 "újra."
@@ -592,7 +592,7 @@ msgstr "Heti ütemezés használata"
 msgid "Run Tray as cron"
 msgstr "A tálcaikon futtatása cron-feladatként"
 
-msgid "Tray update with ui"
+msgid "Tray update with UI"
 msgstr "Tálcaikon frissítése grafikus felülettel"
 
 msgid "Tray Check Interval (Hours)"
@@ -645,7 +645,7 @@ msgid "Use Symbolic Tray Icon"
 msgstr "Jelkép tálcaikon használata"
 
 msgid ""
-"If enabled, Shelly will use a symbolic svg icon instead of the default image "
+"If enabled, Shelly will use a symbolic SVG icon instead of the default image "
 "one."
 msgstr ""
 "Ha engedélyezve van, a Shelly egy szimbolikus svg ikont fog használni az "
@@ -760,7 +760,7 @@ msgid "Remove db.lck"
 msgstr "A db.lck eltávolítása"
 
 msgid ""
-"Removes the db.lck file if it was left behind by an interrupted alpm process."
+"Removes the db.lck file if it was left behind by an interrupted ALPM process."
 msgstr ""
 "Eltávolítja a db.lck fájlt, ha azt egy megszakadt alpm-folyamat hagyta hátra."
 
@@ -1228,7 +1228,7 @@ msgstr ""
 "Nem támogatott fájltípus. Válasszon egy .flatpak vagy .flatpakref "
 "kiterjesztésű fájlt."
 
-msgid "Installing local flatpak"
+msgid "Installing local Flatpak"
 msgstr "Helyi Flatpak-csomag telepítése"
 
 msgid "Could not install the selected packages."
@@ -1246,7 +1246,7 @@ msgstr "Ellenőrzött"
 msgid "Show less"
 msgstr "Kevesebb megjelenítése"
 
-msgid "Installing flatpak"
+msgid "Installing Flatpak"
 msgstr "Flatpak telepítése"
 
 msgid "Remove this Flatpak?"
@@ -1264,7 +1264,7 @@ msgstr "Jogosultságok"
 msgid "Available Addons"
 msgstr "Elérhető kiegészítők"
 
-msgid "Installing flatpak addon"
+msgid "Installing Flatpak addon"
 msgstr "Flatpak-bővítmény telepítése"
 
 msgid "Unknown developer"
@@ -1535,8 +1535,8 @@ msgstr ""
 "Keresés a hivatalos tárolókban, az AUR-ban és a Flatpakben egyszerre. Írjon "
 "be egy nevet a kezdéshez."
 
-msgid "Could not search the selected sources."
-msgstr "Nem sikerült keresni a kiválasztott forrásokban."
+msgid "Could not search the selected sources"
+msgstr "Nem sikerült keresni a kiválasztott forrásokban"
 
 msgid "Installation in progress"
 msgstr "Telepítés folyamatban"
@@ -1866,3 +1866,12 @@ msgstr "Oldalsáv kibontása"
 
 msgid "Collapse sidebar"
 msgstr "Oldalsáv összecsukása"
+
+msgid "No recommendations found"
+msgstr ""
+
+msgid "System-wide"
+msgstr ""
+
+msgid "Current user"
+msgstr ""

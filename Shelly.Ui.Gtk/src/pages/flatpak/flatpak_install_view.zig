@@ -387,7 +387,7 @@ pub const FlatpakInstallView = extern struct {
 
         if (support.getWindow(ShellyWindow, self)) |win| {
             win.startTransaction(.{
-                .title = translations._("Installing flatpak"),
+                .title = translations._("Installing Flatpak"),
                 .argv = argv,
                 .packages = names.items,
                 .on_complete = &onTransactionComplete,
@@ -547,7 +547,7 @@ pub const FlatpakInstallView = extern struct {
 
         if (support.getWindow(ShellyWindow, self)) |win| {
             win.startTransaction(.{
-                .title = translations._("Installing flatpak addon"),
+                .title = translations._("Installing Flatpak addon"),
                 .argv = argv,
                 .packages = names.items,
                 .on_complete = &onAddonTransactionComplete,

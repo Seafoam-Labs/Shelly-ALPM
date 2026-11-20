@@ -76,7 +76,7 @@ msgid "Warnings"
 msgstr ""
 
 msgid ""
-"These commands fetch and execute code outside of shelly and libalpm's "
+"These commands fetch and execute code outside of Shelly and libalpm's "
 "control. Review them before continuing."
 msgstr ""
 
@@ -260,7 +260,7 @@ msgstr ""
 msgid "Information"
 msgstr ""
 
-msgid "Preview Pkgbuild"
+msgid "Preview PKGBUILD"
 msgstr ""
 
 msgid "Search the AUR"
@@ -502,12 +502,10 @@ msgstr ""
 msgid "Install all selected packages in one transaction"
 msgstr ""
 
-msgid "Loading Recommended Packages..."
+msgid "Loading recommendations…"
 msgstr ""
 
-msgid ""
-"No recommendations found. Please check your internet connection and try "
-"again."
+msgid "Check your internet connection and try again."
 msgstr ""
 
 msgid "Shelly Search"
@@ -581,7 +579,7 @@ msgstr ""
 msgid "Run Tray as cron"
 msgstr ""
 
-msgid "Tray update with ui"
+msgid "Tray update with UI"
 msgstr ""
 
 msgid "Update terminal"
@@ -641,7 +639,7 @@ msgid "Use Symbolic Tray Icon"
 msgstr ""
 
 msgid ""
-"If enabled, Shelly will use a symbolic svg icon instead of the default image "
+"If enabled, Shelly will use a symbolic SVG icon instead of the default image "
 "one."
 msgstr ""
 
@@ -778,7 +776,7 @@ msgid "Remove db.lck"
 msgstr ""
 
 msgid ""
-"Removes the db.lck file if it was left behind by an interrupted alpm process."
+"Removes the db.lck file if it was left behind by an interrupted ALPM process."
 msgstr ""
 
 msgid "Fix Permissions"
@@ -1213,7 +1211,7 @@ msgstr ""
 msgid "Unsupported file type. Choose a.flatpak or.flatpakref file."
 msgstr ""
 
-msgid "Installing local flatpak"
+msgid "Installing local Flatpak"
 msgstr ""
 
 msgid "Could not install the selected packages."
@@ -1231,7 +1229,7 @@ msgstr ""
 msgid "Show less"
 msgstr ""
 
-msgid "Installing flatpak"
+msgid "Installing Flatpak"
 msgstr ""
 
 msgid "Remove this Flatpak?"
@@ -1249,7 +1247,7 @@ msgstr ""
 msgid "Available Addons"
 msgstr ""
 
-msgid "Installing flatpak addon"
+msgid "Installing Flatpak addon"
 msgstr ""
 
 msgid "Unknown developer"
@@ -1505,7 +1503,7 @@ msgid ""
 "begin."
 msgstr ""
 
-msgid "Could not search the selected sources."
+msgid "Could not search the selected sources"
 msgstr ""
 
 msgid "Installation in progress"
@@ -1873,4 +1871,13 @@ msgid "Expand sidebar"
 msgstr ""
 
 msgid "Collapse sidebar"
+msgstr ""
+
+msgid "No recommendations found"
+msgstr ""
+
+msgid "System-wide"
+msgstr ""
+
+msgid "Current user"
 msgstr ""

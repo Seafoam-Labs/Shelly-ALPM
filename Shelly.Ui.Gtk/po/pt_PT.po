@@ -81,7 +81,7 @@ msgid "Warnings"
 msgstr "Avisos"
 
 msgid ""
-"These commands fetch and execute code outside of shelly and libalpm's "
+"These commands fetch and execute code outside of Shelly and libalpm's "
 "control. Review them before continuing."
 msgstr ""
 "Estes comandos obtêm e executam código fora do controlo do shelly e do "
@@ -281,7 +281,7 @@ msgstr "Ocultar o painel de detalhes à direita"
 msgid "Information"
 msgstr "Informação"
 
-msgid "Preview Pkgbuild"
+msgid "Preview PKGBUILD"
 msgstr "Pré-visualizar Pkgbuild"
 
 msgid "Search the AUR"
@@ -528,12 +528,12 @@ msgstr "Desmarcar todos os pacotes recomendados"
 msgid "Install all selected packages in one transaction"
 msgstr "Instalar todas os pacotes selecionados numa transação"
 
-msgid "Loading Recommended Packages..."
+#, fuzzy
+msgid "Loading recommendations…"
 msgstr "A carregar Pacotes Recomendados..."
 
-msgid ""
-"No recommendations found. Please check your internet connection and try "
-"again."
+#, fuzzy
+msgid "Check your internet connection and try again."
 msgstr ""
 "Nenhuma recomendação encontrada. Por favor, verifique a sua ligação à "
 "internet e tente novamente."
@@ -612,7 +612,7 @@ msgstr "Utilizar agendamento semanal"
 msgid "Run Tray as cron"
 msgstr "Executar Área de Notificação como cron"
 
-msgid "Tray update with ui"
+msgid "Tray update with UI"
 msgstr "Atualização da Área de Notificação com interface"
 
 msgid "Update terminal"
@@ -674,7 +674,7 @@ msgid "Use Symbolic Tray Icon"
 msgstr "Utilizar Ícone Simbólico na Área de Notificação"
 
 msgid ""
-"If enabled, Shelly will use a symbolic svg icon instead of the default image "
+"If enabled, Shelly will use a symbolic SVG icon instead of the default image "
 "one."
 msgstr ""
 "Se ativado, o Shelly utilizará um ícone svg simbólico em vez da imagem "
@@ -807,7 +807,7 @@ msgid "Remove db.lck"
 msgstr "Remover db.lck"
 
 msgid ""
-"Removes the db.lck file if it was left behind by an interrupted alpm process."
+"Removes the db.lck file if it was left behind by an interrupted ALPM process."
 msgstr ""
 "Remove o ficheiro db.lck caso tenha sido deixado por um processo alpm "
 "interrompido."
@@ -1271,7 +1271,7 @@ msgid "Unsupported file type. Choose a.flatpak or.flatpakref file."
 msgstr ""
 "Tipo de ficheiro não suportado. Escolha um ficheiro .flatpak ou .flatpakref."
 
-msgid "Installing local flatpak"
+msgid "Installing local Flatpak"
 msgstr "A instalar flatpak local"
 
 msgid "Could not install the selected packages."
@@ -1289,7 +1289,7 @@ msgstr "Verificado"
 msgid "Show less"
 msgstr "Mostrar menos"
 
-msgid "Installing flatpak"
+msgid "Installing Flatpak"
 msgstr "A instalar flatpak"
 
 msgid "Remove this Flatpak?"
@@ -1307,7 +1307,7 @@ msgstr "Permissões"
 msgid "Available Addons"
 msgstr "Suplementos Disponíveis"
 
-msgid "Installing flatpak addon"
+msgid "Installing Flatpak addon"
 msgstr "A instalar suplemento flatpak"
 
 msgid "Unknown developer"
@@ -1573,8 +1573,8 @@ msgstr ""
 "Procure nos repositórios padrão, no AUR e no Flatpak em simultâneo. Escreva "
 "um nome para começar."
 
-msgid "Could not search the selected sources."
-msgstr "Não foi possível pesquisar nas fontes selecionadas."
+msgid "Could not search the selected sources"
+msgstr "Não foi possível pesquisar nas fontes selecionadas"
 
 msgid "Installation in progress"
 msgstr "Instalação em curso"
@@ -1952,3 +1952,12 @@ msgstr "Expandir barra lateral"
 
 msgid "Collapse sidebar"
 msgstr "Colapsar barra lateral"
+
+msgid "No recommendations found"
+msgstr ""
+
+msgid "System-wide"
+msgstr ""
+
+msgid "Current user"
+msgstr ""

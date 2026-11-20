@@ -79,7 +79,7 @@ msgid "Warnings"
 msgstr "Xəbərdarlıqlar"
 
 msgid ""
-"These commands fetch and execute code outside of shelly and libalpm's "
+"These commands fetch and execute code outside of Shelly and libalpm's "
 "control. Review them before continuing."
 msgstr ""
 "Bu əmrlər shelly tətbiqinin və libalpm kitabxanasının nəzarətindən kənarda "
@@ -276,7 +276,7 @@ msgstr "Sağdakı təfərrüat panelini gizlət"
 msgid "Information"
 msgstr "Məlumat"
 
-msgid "Preview Pkgbuild"
+msgid "Preview PKGBUILD"
 msgstr "PKGBUILD önbaxışını göstər"
 
 msgid "Search the AUR"
@@ -524,12 +524,12 @@ msgstr ""
 msgid "Install all selected packages in one transaction"
 msgstr ""
 
-msgid "Loading Recommended Packages..."
+#, fuzzy
+msgid "Loading recommendations…"
 msgstr "Tövsiyə olunan paketlər yüklənir..."
 
-msgid ""
-"No recommendations found. Please check your internet connection and try "
-"again."
+#, fuzzy
+msgid "Check your internet connection and try again."
 msgstr ""
 "Tövsiyələr tapılmadı. İnternetə qoşulmanızı yoxlayıb yenidən cəhd edin."
 
@@ -606,7 +606,7 @@ msgstr "Həftəlik cədvəldən istifadə et"
 msgid "Run Tray as cron"
 msgstr "Sistem treyini cron tapşırığı kimi işə sal"
 
-msgid "Tray update with ui"
+msgid "Tray update with UI"
 msgstr "Sistem treyindən interfeys vasitəsilə yeniləmə"
 
 msgid "Update terminal"
@@ -668,7 +668,7 @@ msgid "Use Symbolic Tray Icon"
 msgstr "Simvolik sistem treyi nişanından istifadə et"
 
 msgid ""
-"If enabled, Shelly will use a symbolic svg icon instead of the default image "
+"If enabled, Shelly will use a symbolic SVG icon instead of the default image "
 "one."
 msgstr ""
 "Aktivləşdirildikdə Shelly standart şəkil nişanının əvəzinə simvolik SVG "
@@ -801,7 +801,7 @@ msgid "Remove db.lck"
 msgstr "db.lck faylını sil"
 
 msgid ""
-"Removes the db.lck file if it was left behind by an interrupted alpm process."
+"Removes the db.lck file if it was left behind by an interrupted ALPM process."
 msgstr "Yarımçıq qalmış alpm prosesindən sonra qalan db.lck faylını silir."
 
 msgid "Fix Permissions"
@@ -1247,7 +1247,7 @@ msgstr "Flatpak faylları"
 msgid "Unsupported file type. Choose a.flatpak or.flatpakref file."
 msgstr ""
 
-msgid "Installing local flatpak"
+msgid "Installing local Flatpak"
 msgstr "Yerli Flatpak quraşdırılır"
 
 msgid "Could not install the selected packages."
@@ -1265,7 +1265,7 @@ msgstr "Doğrulanıb"
 msgid "Show less"
 msgstr "Daha az göstər"
 
-msgid "Installing flatpak"
+msgid "Installing Flatpak"
 msgstr "Flatpak quraşdırılır"
 
 msgid "Remove this Flatpak?"
@@ -1283,7 +1283,7 @@ msgstr "İcazələr"
 msgid "Available Addons"
 msgstr "Mövcud əlavələr"
 
-msgid "Installing flatpak addon"
+msgid "Installing Flatpak addon"
 msgstr "Flatpak əlavəsi quraşdırılır"
 
 msgid "Unknown developer"
@@ -1543,7 +1543,7 @@ msgstr ""
 "Standart anbarlarda, AUR və Flatpak mənbələrində eyni anda axtarış aparın. "
 "Başlamaq üçün ad yazın."
 
-msgid "Could not search the selected sources."
+msgid "Could not search the selected sources"
 msgstr ""
 
 msgid "Installation in progress"
@@ -1917,4 +1917,13 @@ msgid "Expand sidebar"
 msgstr ""
 
 msgid "Collapse sidebar"
+msgstr ""
+
+msgid "No recommendations found"
+msgstr ""
+
+msgid "System-wide"
+msgstr ""
+
+msgid "Current user"
 msgstr ""

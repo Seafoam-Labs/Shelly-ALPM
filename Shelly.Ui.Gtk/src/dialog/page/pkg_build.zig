@@ -114,16 +114,16 @@ pub const PkgbuildReviewDialog = extern struct {
             defer glib.free(escaped);
 
             var markup_buffer: [4096]u8 = undefined;
-            var hex_buffer: [8]u8 = undefined;
-            const markup = if (diff_status(parsed.color orelse "")) |status|
-                std.fmt.bufPrintSentinel(&markup_buffer, "<tt><span foreground=\"{s}\">{s}</span></tt>", .{ theme.roleColor(diff_view.as(gtk.Widget), status, &hex_buffer), escaped }, 0) catch null
-            else
-                std.fmt.bufPrintSentinel(&markup_buffer, "<tt>{s}</tt>", .{escaped}, 0) catch null;
+            const line_start = gtk.TextIter.getOffset(&diff_iter);
+            const markup = std.fmt.bufPrintSentinel(&markup_buffer, "<tt>{s}</tt>", .{escaped}, 0) catch null;
 
             if (markup) |m| {
                 gtk.TextBuffer.insertMarkup(diff_buffer, &diff_iter, m, -1);
             } else {
                 gtk.TextBuffer.insert(diff_buffer, &diff_iter, raw, @intCast(raw.len));
+            }
+            if (diff_status(parsed.color orelse "")) |status| {
+                theme.applyRoleTag(diff_view, status, line_start, &diff_iter);
             }
         }
         gtk.Box.append(p.diff_box, diff_view.as(gtk.Widget));
@@ -225,9 +225,8 @@ pub const PkgbuildReviewDialog = extern struct {
             defer glib.free(escaped_hook);
 
             var title_buffer: [512]u8 = undefined;
-            var hex_buffer: [8]u8 = undefined;
-            const severity_color = theme.roleColor(view.as(gtk.Widget), if (std.mem.eql(u8, warning.severity, "Critical")) .@"error" else .warning, &hex_buffer);
-            const title_markup = std.fmt.bufPrintSentinel(&title_buffer, "<span weight=\"semibold\" foreground=\"{s}\">{s} {s} {s}</span>", .{ severity_color, escaped_tool, used_in, escaped_hook }, 0) catch null;
+            const title_start = gtk.TextIter.getOffset(&iter);
+            const title_markup = std.fmt.bufPrintSentinel(&title_buffer, "<span weight=\"semibold\">{s} {s} {s}</span>", .{ escaped_tool, used_in, escaped_hook }, 0) catch null;
 
             if (title_markup) |markup| {
                 gtk.TextBuffer.insertMarkup(buffer, &iter, markup, -1);
@@ -238,6 +237,7 @@ pub const PkgbuildReviewDialog = extern struct {
                 gtk.TextBuffer.insert(buffer, &iter, " ", 1);
                 gtk.TextBuffer.insert(buffer, &iter, warning.hook, @intCast(warning.hook.len));
             }
+            theme.applyRoleTag(view, if (std.mem.eql(u8, warning.severity, "Critical")) .@"error" else .warning, title_start, &iter);
 
             if (warning.message.len > 0) {
                 gtk.TextBuffer.insert(buffer, &iter, "\n", 1);
