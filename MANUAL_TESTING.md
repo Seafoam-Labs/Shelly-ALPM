@@ -732,8 +732,10 @@ Document any known issues that are being tracked:
 - [ ] System colors with no user GTK 4 colors: Shelly keeps the Shelly palette for the
   desktop's dark or light preference, using the portal accent color when the desktop
   sets one.
+- [ ] System colors with a user `gtk.css` that sets only `accent_bg_color`: Shelly keeps the
+  Shelly palette and uses that accent instead of the portal accent.
 - [ ] System colors with unreadable desktop colors (text and background too close): Shelly
-  keeps the Shelly palette and logs a warning.
+  keeps the Shelly palette for the desktop's dark or light preference and logs a warning.
 
 ## Updates page redesign (docs/updates-redesign)
 

@@ -271,7 +271,9 @@ pub fn build(
                 full = false;
             }
         }
-        if (bg_rgb) |c| dark = c.luminance() < 0.18;
+        if (full) {
+            if (bg_rgb) |c| dark = c.luminance() < 0.18;
+        }
     } else {
         rejection.* = .missing;
     }
@@ -304,7 +306,8 @@ pub fn build(
         try w.role("shelly_divider_strong", "mix(@shelly_bg, @shelly_fg, 0.16)");
     }
 
-    var accent_value: ?[]const u8 = if (full) try first(arena, defines, &sources.accent) else null;
+    // The accent stands alone: a stylesheet may set only the accent.
+    var accent_value: ?[]const u8 = try first(arena, defines, &sources.accent);
     if (accent_value == null) {
         if (accent) |c| accent_value = try std.fmt.allocPrint(arena, "rgb({d},{d},{d})", .{
             channel(c.r), channel(c.g), channel(c.b),
@@ -312,7 +315,7 @@ pub fn build(
     }
     if (accent_value) |value| {
         try w.role("shelly_accent", value);
-        const accent_fg = if (full) try first(arena, defines, &sources.accent_fg) else null;
+        const accent_fg = try first(arena, defines, &sources.accent_fg);
         try w.role("shelly_accent_fg", accent_fg orelse (if (is_dark) "mix(@shelly_accent, black, 0.75)" else "#ffffff"));
         try w.role("shelly_accent_hover", if (is_dark) "mix(@shelly_accent, white, 0.25)" else "mix(@shelly_accent, white, 0.15)");
         try w.role("shelly_accent_active", if (is_dark) "mix(@shelly_accent, black, 0.10)" else "mix(@shelly_accent, black, 0.15)");
@@ -439,6 +442,37 @@ test "rejects unreadable text and falls back to the portal accent" {
     try std.testing.expectEqual(Rejection.low_contrast, rejection);
     try std.testing.expect(std.mem.indexOf(u8, p.css, "@define-color shelly_bg ") == null);
     try std.testing.expect(std.mem.indexOf(u8, p.css, "@define-color shelly_accent rgb(255,0,0);") != null);
+}
+
+test "a rejected palette leaves dark or light to the desktop" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+    var defines: Defines = .empty;
+    try collectText(arena, &defines,
+        \\@define-color window_bg_color #222222;
+        \\@define-color window_fg_color #2a2a2a;
+    , "/cfg", &noRead, 0);
+    var rejection: Rejection = undefined;
+    const p = try build(arena, &defines, null, false, &rejection);
+    try std.testing.expectEqual(Rejection.low_contrast, rejection);
+    try std.testing.expect(p.dark == null);
+}
+
+test "a stylesheet accent applies without background and text colors" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+    var defines: Defines = .empty;
+    try collectText(arena, &defines,
+        \\@define-color accent_bg_color #e01b24;
+    , "/cfg", &noRead, 0);
+    var rejection: Rejection = undefined;
+    const p = try build(arena, &defines, .{ .r = 0, .g = 0, .b = 1 }, false, &rejection);
+    try std.testing.expect(!p.full);
+    try std.testing.expectEqual(Rejection.missing, rejection);
+    try std.testing.expect(std.mem.indexOf(u8, p.css, "@define-color shelly_bg ") == null);
+    try std.testing.expect(std.mem.indexOf(u8, p.css, "@define-color shelly_accent #e01b24;") != null);
 }
 
 test "no desktop colors and no accent yields an empty palette" {
