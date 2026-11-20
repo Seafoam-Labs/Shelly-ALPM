@@ -18,9 +18,9 @@
             <property name="orientation">vertical</property>
             <property name="margin-start">30</property>
             <property name="margin-end">30</property>
-            <property name="margin-top">14</property>
+            <property name="margin-top">16</property>
             <property name="margin-bottom">24</property>
-            <property name="spacing">15</property>
+            <property name="spacing">16</property>
             <child>
               <object class="GtkBox">
                 <property name="orientation">vertical</property>

@@ -341,7 +341,7 @@ pub const PackagePage = extern struct {
                 var buf: [512]u8 = undefined;
                 const escaped = glib.markupEscapeText(pkg.getName(), -1);
                 defer glib.free(escaped);
-                const markup = std.fmt.bufPrintSentinel(&buf, "<b>{s}</b>", .{escaped}, 0) catch pkg.getName();
+                const markup = std.fmt.bufPrintSentinel(&buf, "<span weight=\"semibold\">{s}</span>", .{escaped}, 0) catch pkg.getName();
                 gtk.Label.setMarkup(label, markup);
                 gtk.Label.setLabel(desc_label, pkg.getDescription());
                 gtk.Widget.setVisible(installed_w, @intFromBool(pkg.isInstalled()));
@@ -517,10 +517,10 @@ pub const PackagePage = extern struct {
                 gtk.Widget.setSizeRequest(frame.as(gtk.Widget), 300, -1);
                 gtk.Widget.setHexpand(frame.as(gtk.Widget), 0);
                 gtk.Widget.setHalign(frame.as(gtk.Widget), .fill);
-                gtk.Widget.setMarginStart(frame.as(gtk.Widget), 3);
-                gtk.Widget.setMarginEnd(frame.as(gtk.Widget), 3);
-                gtk.Widget.setMarginTop(frame.as(gtk.Widget), 3);
-                gtk.Widget.setMarginBottom(frame.as(gtk.Widget), 3);
+                gtk.Widget.setMarginStart(frame.as(gtk.Widget), 4);
+                gtk.Widget.setMarginEnd(frame.as(gtk.Widget), 4);
+                gtk.Widget.setMarginTop(frame.as(gtk.Widget), 4);
+                gtk.Widget.setMarginBottom(frame.as(gtk.Widget), 4);
                 gtk.Widget.addCssClass(frame.as(gtk.Widget), "card");
 
                 gtk.ListItem.setChild(list_item, frame.as(gtk.Widget));
@@ -561,7 +561,7 @@ pub const PackagePage = extern struct {
                     }
                 }
                 var name_buf: [256]u8 = undefined;
-                const markup = std.fmt.bufPrintSentinel(&name_buf, "<b>{s}</b>", .{pkg.getName()}, 0) catch pkg.getName();
+                const markup = std.fmt.bufPrintSentinel(&name_buf, "<span weight=\"semibold\">{s}</span>", .{pkg.getName()}, 0) catch pkg.getName();
                 gtk.Label.setMarkup(title_label, markup);
                 gtk.Widget.setVisible(installed_check, @intFromBool(pkg.isInstalled()));
                 gtk.Label.setLabel(desc_label, pkg.getDescription());

@@ -320,7 +320,7 @@ pub const FlatpakInstallView = extern struct {
                 var markup_buffer: [512]u8 = undefined;
                 const escaped = glib.markupEscapeText(object.getName(), -1);
                 defer glib.free(escaped);
-                const markup = std.fmt.bufPrintSentinel(&markup_buffer, "<b>{s}</b>", .{escaped}, 0) catch object.getName();
+                const markup = std.fmt.bufPrintSentinel(&markup_buffer, "<span weight=\"semibold\">{s}</span>", .{escaped}, 0) catch object.getName();
                 gtk.Label.setMarkup(name_label, markup);
                 gtk.Label.setLabel(summary_label, object.getSummary());
 

@@ -5,6 +5,7 @@ const glib = bindings.glib;
 const gobject = bindings.gobject;
 const support = @import("../../pages/support.zig");
 const translations = @import("../../helpers/translations.zig");
+const theme = @import("../../services/theme.zig");
 
 pub const PkgbuildReviewDialog = extern struct {
     parent_instance: Parent,
@@ -113,8 +114,9 @@ pub const PkgbuildReviewDialog = extern struct {
             defer glib.free(escaped);
 
             var markup_buffer: [4096]u8 = undefined;
-            const markup = if (pango_color(parsed.color orelse "")) |hex|
-                std.fmt.bufPrintSentinel(&markup_buffer, "<tt><span foreground=\"{s}\">{s}</span></tt>", .{ hex, escaped }, 0) catch null
+            var hex_buffer: [8]u8 = undefined;
+            const markup = if (diff_status(parsed.color orelse "")) |status|
+                std.fmt.bufPrintSentinel(&markup_buffer, "<tt><span foreground=\"{s}\">{s}</span></tt>", .{ theme.roleColor(diff_view.as(gtk.Widget), status, &hex_buffer), escaped }, 0) catch null
             else
                 std.fmt.bufPrintSentinel(&markup_buffer, "<tt>{s}</tt>", .{escaped}, 0) catch null;
 
@@ -223,8 +225,9 @@ pub const PkgbuildReviewDialog = extern struct {
             defer glib.free(escaped_hook);
 
             var title_buffer: [512]u8 = undefined;
-            const severity_color = if (std.mem.eql(u8, warning.severity, "Critical")) "#c01c28" else "#e5a50a";
-            const title_markup = std.fmt.bufPrintSentinel(&title_buffer, "<b><span foreground=\"{s}\">{s} {s} {s}</span></b>", .{ severity_color, escaped_tool, used_in, escaped_hook }, 0) catch null;
+            var hex_buffer: [8]u8 = undefined;
+            const severity_color = theme.roleColor(view.as(gtk.Widget), if (std.mem.eql(u8, warning.severity, "Critical")) .@"error" else .warning, &hex_buffer);
+            const title_markup = std.fmt.bufPrintSentinel(&title_buffer, "<span weight=\"semibold\" foreground=\"{s}\">{s} {s} {s}</span>", .{ severity_color, escaped_tool, used_in, escaped_hook }, 0) catch null;
 
             if (title_markup) |markup| {
                 gtk.TextBuffer.insertMarkup(buffer, &iter, markup, -1);
@@ -270,11 +273,10 @@ pub const PkgbuildReviewDialog = extern struct {
         return .{ .color = tag, .text = text };
     }
 
-    fn pango_color(tag: []const u8) ?[:0]const u8 {
-        if (std.mem.eql(u8, tag, "green")) return "#26a269";
-        if (std.mem.eql(u8, tag, "red")) return "#c01c28";
-        if (std.mem.eql(u8, tag, "yellow")) return "#e5a50a";
-        if (std.mem.eql(u8, tag, "white")) return null;
+    fn diff_status(tag: []const u8) ?theme.Role {
+        if (std.mem.eql(u8, tag, "green")) return .success;
+        if (std.mem.eql(u8, tag, "red")) return .@"error";
+        if (std.mem.eql(u8, tag, "yellow")) return .warning;
         return null;
     }
 

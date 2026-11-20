@@ -15,7 +15,7 @@
     <child>
       <object class="GtkBox">
         <property name="halign">fill</property>
-        <property name="spacing">5</property>
+        <property name="spacing">6</property>
         <style>
           <class name="toolbar-card"/>
         </style>
@@ -75,7 +75,7 @@
             <property name="orientation">horizontal</property>
             <property name="spacing">6</property>
             <property name="valign">center</property>
-            <property name="margin-end">5</property>
+            <property name="margin-end">6</property>
             <child>
               <object class="GtkLabel" id="page_label">
                 <property name="label" translatable="yes">Page 1 of 1</property>

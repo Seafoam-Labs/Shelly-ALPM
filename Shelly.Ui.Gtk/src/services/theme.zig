@@ -159,6 +159,7 @@ pub fn applyWith(win: *gtk.Window, mode: ThemeMode, variant: ThemeVariant) void 
     setDarkHint(dark);
     ensureWatchers();
     if (mode == .system) ensureDesktopWatchers();
+    notifyChanged();
 }
 
 const DesktopResult = struct {
@@ -501,7 +502,7 @@ fn ensureHeaderBar() *gtk.HeaderBar {
     _ = bar.as(gobject.Object).ref();
     gtk.Widget.addCssClass(bar.as(gtk.Widget), "shelly-headerbar");
 
-    const brand = gtk.Box.new(.horizontal, 9);
+    const brand = gtk.Box.new(.horizontal, 8);
     gtk.Widget.addCssClass(brand.as(gtk.Widget), "shelly-brand");
     // Pack at start (not setTitleWidget, which GtkHeaderBar centers) so the
     // brand sits left like Pearl's titlebar; valign keeps the dot circular
@@ -673,4 +674,57 @@ fn refreshFollowSystem() void {
     resolved_dark = dark;
     loadSheet(ensureProvider(), dark);
     if (base_added) loadBaseSheet(base_provider.?, dark);
+    notifyChanged();
+}
+
+const ChangeHook = struct {
+    func: *const fn (?*anyopaque) void,
+    data: ?*anyopaque,
+};
+
+var change_hooks: std.ArrayListUnmanaged(ChangeHook) = .empty;
+
+/// Calls `func(data)` after each palette change, so colors copied out of
+/// CSS with `roleColor` can be refreshed.
+pub fn addChangeHook(func: *const fn (?*anyopaque) void, data: ?*anyopaque) void {
+    change_hooks.append(std.heap.c_allocator, .{ .func = func, .data = data }) catch {};
+}
+
+pub fn removeChangeHook(func: *const fn (?*anyopaque) void, data: ?*anyopaque) void {
+    for (change_hooks.items, 0..) |hook, index| {
+        if (hook.func == func and hook.data == data) {
+            _ = change_hooks.swapRemove(index);
+            return;
+        }
+    }
+}
+
+fn notifyChanged() void {
+    for (change_hooks.items) |hook| hook.func(hook.data);
+}
+
+pub const Role = enum { text, muted, accent, success, warning, @"error", surface };
+
+/// Hex color for `role`, for Pango markup and text tags, which cannot use
+/// CSS colors.
+pub fn roleColor(widget: *gtk.Widget, role: Role, buf: *[8]u8) [:0]const u8 {
+    const class: [:0]const u8 = switch (role) {
+        .text => "role-text",
+        .muted => "role-muted",
+        .accent => "role-accent",
+        .success => "status-success",
+        .warning => "status-warning",
+        .@"error" => "status-error",
+        .surface => "role-surface",
+    };
+    const had_class = gtk.Widget.hasCssClass(widget, class) != 0;
+    if (!had_class) gtk.Widget.addCssClass(widget, class);
+    var rgba: gdk.RGBA = undefined;
+    gtk.Widget.getColor(widget, &rgba);
+    if (!had_class) gtk.Widget.removeCssClass(widget, class);
+    return std.fmt.bufPrintSentinel(buf, "#{x:0>2}{x:0>2}{x:0>2}", .{ channel(rgba.f_red), channel(rgba.f_green), channel(rgba.f_blue) }, 0) catch "#808080";
+}
+
+fn channel(value: f32) u8 {
+    return @intFromFloat(@round(std.math.clamp(value, 0, 1) * 255));
 }

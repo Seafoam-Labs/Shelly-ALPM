@@ -7,6 +7,7 @@ const gobject = bindings.gobject;
 const support = @import("support.zig");
 const a11y = @import("../helpers/a11y.zig");
 const ansi = @import("../helpers/ansi.zig");
+const theme = @import("../services/theme.zig");
 const ShellyOperation = @import("../services/shelly_operation.zig").ShellyOperation;
 const Event = @import("../services/shelly_operation.zig").Event;
 const ShellyWindow = @import("../shelly_window.zig").ShellyWindow;
@@ -156,6 +157,84 @@ const OverallState = struct {
     last_time_us: i64 = 0,
 };
 
+const AnsiTag = struct {
+    tag: *gtk.TextTag,
+    attrs: ansi.Attrs,
+};
+
+const RolePalette = [@typeInfo(theme.Role).@"enum".field_names.len]ansi.Rgb;
+
+const AnsiColors = struct {
+    fg: ?ansi.Rgb,
+    bg: ?ansi.Rgb,
+};
+
+/// Tag colors for `attrs` under the theme `roles`. The 16 base colors
+/// follow the theme roles as text; backgrounds keep their raw value
+/// because the roles are tuned for text. Reverse video swaps against the
+/// theme text and surface, and dim blends toward the surface.
+fn resolveAnsiColors(attrs: ansi.Attrs, roles: *const RolePalette) AnsiColors {
+    var fg: ?ansi.Rgb = if (attrs.fg) |color| roleTextColor(color, roles) else null;
+    var bg: ?ansi.Rgb = attrs.bg;
+    if (attrs.inverse) {
+        const previous_fg = fg;
+        fg = bg orelse roles[@backingInt(theme.Role.surface)];
+        bg = previous_fg orelse roles[@backingInt(theme.Role.text)];
+    }
+    if (attrs.dim) {
+        fg = mix(
+            fg orelse roles[@backingInt(theme.Role.text)],
+            bg orelse roles[@backingInt(theme.Role.surface)],
+            0.4,
+        );
+    }
+    return .{ .fg = fg, .bg = bg };
+}
+
+fn roleTextColor(color: ansi.Rgb, roles: *const RolePalette) ansi.Rgb {
+    for (ansi.palette16, 0..) |entry, index| {
+        if (std.meta.eql(entry, color)) {
+            const role: theme.Role = switch (index % 8) {
+                0 => .muted,
+                1 => .@"error",
+                2 => .success,
+                3 => .warning,
+                7 => .text,
+                else => .accent,
+            };
+            return roles[@backingInt(role)];
+        }
+    }
+    return color;
+}
+
+fn hexColor(color: ansi.Rgb, buf: *[8]u8) [:0]const u8 {
+    return std.fmt.bufPrintSentinel(buf, "#{x:0>2}{x:0>2}{x:0>2}", .{ color.r, color.g, color.b }, 0) catch unreachable;
+}
+
+fn parseHex(hex: []const u8) ansi.Rgb {
+    if (hex.len != 7) return .{ .r = 0x80, .g = 0x80, .b = 0x80 };
+    return .{
+        .r = std.fmt.parseInt(u8, hex[1..3], 16) catch 0x80,
+        .g = std.fmt.parseInt(u8, hex[3..5], 16) catch 0x80,
+        .b = std.fmt.parseInt(u8, hex[5..7], 16) catch 0x80,
+    };
+}
+
+/// `amount` of `to` blended into `from`.
+fn mix(from: ansi.Rgb, to: ansi.Rgb, amount: f32) ansi.Rgb {
+    const blend = struct {
+        fn channel(a: u8, b: u8, t: f32) u8 {
+            return @intFromFloat(@round(@as(f32, @floatFromInt(a)) * (1 - t) + @as(f32, @floatFromInt(b)) * t));
+        }
+    };
+    return .{
+        .r = blend.channel(from.r, to.r, amount),
+        .g = blend.channel(from.g, to.g, amount),
+        .b = blend.channel(from.b, to.b, amount),
+    };
+}
+
 /// Packs an optional ANSI color into a tag-name-safe integer; the value
 /// above the 24-bit color range marks "unset" without colliding with black.
 fn rgbValue(color: ?ansi.Rgb) u32 {
@@ -197,7 +276,10 @@ pub const TransactionPage = extern struct {
         on_complete_ctx: ?*anyopaque,
         operation: ?*ShellyOperation,
         progress_lines: std.StringHashMapUnmanaged(ProgressLine),
-        ansi_tags: std.StringHashMapUnmanaged(*gtk.TextTag),
+        ansi_tags: std.StringHashMapUnmanaged(AnsiTag),
+        /// Theme colors for terminal text, read once per palette.
+        role_rgb: RolePalette,
+        role_rgb_ready: bool,
         finished: bool,
         failure_message: ?[]const u8,
         privileged: bool,
@@ -243,6 +325,8 @@ pub const TransactionPage = extern struct {
         p.overall_pulse = 0;
         p.progress_lines = .empty;
         p.ansi_tags = .empty;
+        p.role_rgb_ready = false;
+        theme.addChangeHook(&onThemeChanged, self);
         a11y.setName(p.overall_bar.as(gtk.Widget), translations._("Overall progress"));
     }
 
@@ -1329,69 +1413,77 @@ pub const TransactionPage = extern struct {
     }
 
     /// Lazily creates and caches a GtkTextTag matching the ANSI
-    /// attributes. Terminal semantics resolve here: reverse video swaps
-    /// colors against terminal defaults, dim halves the foreground, and
-    /// hidden text renders struck out. Non-SGR sequences were already
+    /// attributes. Tags are keyed by the raw attributes because their
+    /// colors depend on the theme; `applyAnsiColors` resolves them and
+    /// runs again after a palette change. Non-SGR sequences were already
     /// dropped by the parser; full terminal emulation stays out of scope.
     fn ansiTag(self: *Self, buffer: *gtk.TextBuffer, attrs: ansi.Attrs) ?*gtk.TextTag {
         const p = self.priv();
-        var fg = attrs.fg;
-        var bg = attrs.bg;
-        if (attrs.dim) {
-            if (fg) |color| {
-                fg = ansi.Rgb{ .r = color.r / 2, .g = color.g / 2, .b = color.b / 2 };
-            } else {
-                fg = ansi.Rgb{ .r = 0x92, .g = 0x92, .b = 0x92 };
-            }
-        }
-        if (attrs.inverse) {
-            const previous_fg = fg;
-            const previous_bg = bg;
-            fg = previous_bg orelse ansi.Rgb{ .r = 0xe5, .g = 0xe5, .b = 0xe5 };
-            bg = previous_fg orelse ansi.Rgb{ .r = 0x2d, .g = 0x2d, .b = 0x2d };
-        }
-        const strike = attrs.hidden;
-        if (fg == null and bg == null and !attrs.bold and !attrs.italic and !attrs.underline and !strike) return null;
+        if (attrs.isEmpty()) return null;
 
         var name_buf: [48]u8 = undefined;
-        const name = std.fmt.bufPrintSentinel(&name_buf, "ansi-{x}-{x}-{d}{d}{d}{d}", .{
-            rgbValue(fg),
-            rgbValue(bg),
+        const name = std.fmt.bufPrintSentinel(&name_buf, "ansi-{x}-{x}-{d}{d}{d}{d}{d}{d}", .{
+            rgbValue(attrs.fg),
+            rgbValue(attrs.bg),
             @intFromBool(attrs.bold),
             @intFromBool(attrs.italic),
             @intFromBool(attrs.underline),
-            @intFromBool(strike),
+            @intFromBool(attrs.hidden),
+            @intFromBool(attrs.dim),
+            @intFromBool(attrs.inverse),
         }, 0) catch return null;
 
-        if (p.ansi_tags.get(name)) |tag| return tag;
+        if (p.ansi_tags.get(name)) |entry| return entry.tag;
 
         const table = gtk.TextBuffer.getTagTable(buffer);
         if (gtk.TextTagTable.lookup(table, name)) |existing| {
-            cacheTerminalTag(self, name, existing);
+            cacheTerminalTag(self, name, .{ .tag = existing, .attrs = attrs });
             return existing;
         }
 
         const tag = gtk.TextBuffer.createTag(buffer, name, null);
-        if (fg) |color| {
-            var hex: [8:0]u8 = undefined;
-            const value = std.fmt.bufPrintSentinel(&hex, "#{x:0>2}{x:0>2}{x:0>2}", .{ color.r, color.g, color.b }, 0) catch null;
-            if (value) |v| setTagString(tag, "foreground", v);
-        }
-        if (bg) |color| {
-            var hex: [8:0]u8 = undefined;
-            const value = std.fmt.bufPrintSentinel(&hex, "#{x:0>2}{x:0>2}{x:0>2}", .{ color.r, color.g, color.b }, 0) catch null;
-            if (value) |v| setTagString(tag, "background", v);
-        }
-        if (attrs.bold) setTagInt(tag, "weight", 700);
+        if (attrs.bold) setTagInt(tag, "weight", 600);
         if (attrs.italic) setTagInt(tag, "style", 2);
         if (attrs.underline) setTagInt(tag, "underline", 1);
-        if (strike) setTagInt(tag, "strikethrough", 1);
+        // Hidden text renders struck out.
+        if (attrs.hidden) setTagInt(tag, "strikethrough", 1);
+        self.applyAnsiColors(tag, attrs);
 
-        cacheTerminalTag(self, name, tag);
+        cacheTerminalTag(self, name, .{ .tag = tag, .attrs = attrs });
         return tag;
     }
 
-    fn cacheTerminalTag(self: *Self, name: [:0]const u8, tag: *gtk.TextTag) void {
+    fn applyAnsiColors(self: *Self, tag: *gtk.TextTag, attrs: ansi.Attrs) void {
+        const colors = resolveAnsiColors(attrs, self.rolePalette());
+        var hex: [8]u8 = undefined;
+        if (colors.fg) |color| setTagString(tag, "foreground", hexColor(color, &hex));
+        if (colors.bg) |color| setTagString(tag, "background", hexColor(color, &hex));
+    }
+
+    /// Reads every role at once: each read toggles a class on the
+    /// terminal view, which restyles its whole buffer.
+    fn rolePalette(self: *Self) *const RolePalette {
+        const p = self.priv();
+        if (!p.role_rgb_ready) {
+            const view = p.terminal_view.as(gtk.Widget);
+            for (&p.role_rgb, 0..) |*slot, index| {
+                var hex: [8]u8 = undefined;
+                slot.* = parseHex(theme.roleColor(view, @fromBackingInt(@intCast(index)), &hex));
+            }
+            p.role_rgb_ready = true;
+        }
+        return &p.role_rgb;
+    }
+
+    fn onThemeChanged(data: ?*anyopaque) void {
+        const self: *Self = @ptrCast(@alignCast(data.?));
+        const p = self.priv();
+        p.role_rgb_ready = false;
+        var entries = p.ansi_tags.valueIterator();
+        while (entries.next()) |entry| self.applyAnsiColors(entry.tag, entry.attrs);
+    }
+
+    fn cacheTerminalTag(self: *Self, name: [:0]const u8, tag: AnsiTag) void {
         const p = self.priv();
         const owned = std.heap.c_allocator.dupeSentinel(u8, name, 0) catch return;
         p.ansi_tags.put(std.heap.c_allocator, owned, tag) catch {
@@ -1838,9 +1930,16 @@ pub const TransactionPage = extern struct {
             gtk.Widget.Class.bindTemplateCallbackFull(wc, "on_terminal_toggle", @ptrCast(&on_terminal_toggle));
             gtk.Widget.Class.bindTemplateCallbackFull(wc, "on_close", @ptrCast(&on_close));
             gtk.Widget.Class.bindTemplateCallbackFull(wc, "on_key_pressed", @ptrCast(&on_key_pressed));
+            gobject.Object.virtual_methods.dispose.implement(class, &dispose);
             gobject.Object.virtual_methods.finalize.implement(class, &finalize);
         }
     };
+
+    fn dispose(self: *Self) callconv(.c) void {
+        theme.removeChangeHook(&onThemeChanged, self);
+        const parent_class: *gobject.Object.Class = @ptrCast(Class.parent);
+        gobject.Object.virtual_methods.dispose.call(parent_class, self.as(gobject.Object));
+    }
 
     fn finalize(self: *Self) callconv(.c) void {
         const p = self.priv();
@@ -2123,6 +2222,27 @@ test "terminal output deduplicates styled lines by their visible text" {
     try std.testing.expect(!TransactionPage.rememberTerminalLine(arena.allocator(), &lines, plain.text));
 }
 
+test "terminal colors keep raw backgrounds and theme-aware reverse video" {
+    var roles: RolePalette = undefined;
+    for (&roles, 0..) |*slot, index| slot.* = .{ .r = @intCast(index), .g = 0, .b = 0 };
+    const text = roles[@backingInt(theme.Role.text)];
+    const surface = roles[@backingInt(theme.Role.surface)];
+
+    // Base foregrounds follow the theme; backgrounds stay raw.
+    const red_on_white = resolveAnsiColors(.{ .fg = ansi.palette16[1], .bg = ansi.palette16[7] }, &roles);
+    try std.testing.expectEqual(roles[@backingInt(theme.Role.@"error")], red_on_white.fg.?);
+    try std.testing.expectEqual(ansi.palette16[7], red_on_white.bg.?);
+
+    // Reverse video without colors uses the theme pair, never a fixed gray.
+    const inverse = resolveAnsiColors(.{ .inverse = true }, &roles);
+    try std.testing.expectEqual(surface, inverse.fg.?);
+    try std.testing.expectEqual(text, inverse.bg.?);
+
+    // Dim blends the themed color toward the surface.
+    const dim_red = resolveAnsiColors(.{ .fg = ansi.palette16[1], .dim = true }, &roles);
+    try std.testing.expectEqual(mix(roles[@backingInt(theme.Role.@"error")], surface, 0.4), dim_red.fg.?);
+}
+
 test "terminal renders styled console output as tagged text without escape bytes" {
     try @import("../helpers/gtk_test.zig").requireDisplay();
     const page = TransactionPage.new();
@@ -2148,7 +2268,7 @@ test "terminal renders styled console output as tagged text without escape bytes
 
     // Offset 1 lands inside the bold-red run; offset 8 lands after the reset.
     const table = gtk.TextBuffer.getTagTable(buffer);
-    const red_tag = gtk.TextTagTable.lookup(table, "ansi-cd0000-1000000-1000").?;
+    const red_tag = gtk.TextTagTable.lookup(table, "ansi-cd0000-1000000-100000").?;
     var colored: gtk.TextIter = undefined;
     gtk.TextBuffer.getIterAtOffset(buffer, &colored, 1);
     try std.testing.expect(gtk.TextIter.hasTag(&colored, red_tag) != 0);

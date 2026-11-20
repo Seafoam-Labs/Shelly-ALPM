@@ -32,7 +32,7 @@
                       <object class="GtkBox">
                         <property name="orientation">horizontal</property>
                         <property name="halign">fill</property>
-                        <property name="spacing">5</property>
+                        <property name="spacing">6</property>
                         <style>
                           <class name="toolbar-card"/>
                         </style>
@@ -165,7 +165,7 @@
                             <child>
                               <object class="GtkBox" id="DropZone">
                                 <property name="orientation">vertical</property>
-                                <property name="spacing">25</property>
+                                <property name="spacing">24</property>
                                 <property name="valign">center</property>
                                 <property name="vexpand">true</property>
                                 <property name="halign">center</property>
@@ -226,7 +226,7 @@
                         <property name="width-request">600</property>
                         <child>
                           <object class="GtkBox">
-                            <property name="spacing">18</property>
+                            <property name="spacing">16</property>
                             <child>
                               <object class="GtkButton" id="BackToListButton">
                                 <property name="icon-name">go-previous-symbolic</property>

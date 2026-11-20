@@ -1,6 +1,7 @@
 const std = @import("std");
 const diagnostics = @import("diagnostics");
 const translations = @import("../../helpers/translations.zig");
+const theme = @import("../../services/theme.zig");
 const bindings = @import("Shelly_Ui_Gtk");
 const gtk = bindings.gtk;
 const gio = bindings.gio;
@@ -440,8 +441,9 @@ pub const PkgbuildReviewDialog = extern struct {
             defer glib.free(escaped_hook);
 
             var title_buffer: [512]u8 = undefined;
-            const severity_color = if (std.mem.eql(u8, warning.severity, "Critical")) "#c01c28" else "#e5a50a";
-            const title_markup = std.fmt.bufPrintSentinel(&title_buffer, "<b><span foreground=\"{s}\">{s} {s} {s}</span></b>", .{ severity_color, escaped_tool, used_in, escaped_hook }, 0) catch null;
+            var hex_buffer: [8]u8 = undefined;
+            const severity_color = theme.roleColor(view.as(gtk.Widget), if (std.mem.eql(u8, warning.severity, "Critical")) .@"error" else .warning, &hex_buffer);
+            const title_markup = std.fmt.bufPrintSentinel(&title_buffer, "<span weight=\"semibold\" foreground=\"{s}\">{s} {s} {s}</span>", .{ severity_color, escaped_tool, used_in, escaped_hook }, 0) catch null;
 
             if (title_markup) |markup| {
                 gtk.TextBuffer.insertMarkup(buffer, &iter, markup, -1);

@@ -54,6 +54,18 @@
 @define-color overview_fg_color @shelly_fg;
 @define-color shade_color alpha(@shelly_fg, 0.08);
 @define-color scrollbar_outline_color @shelly_root_bg;
+@define-color error_color @shelly_error;
+@define-color error_bg_color @shelly_error;
+@define-color error_fg_color @shelly_bg;
+@define-color destructive_color @shelly_error;
+@define-color destructive_bg_color @shelly_error;
+@define-color destructive_fg_color @shelly_bg;
+@define-color warning_color @shelly_warning;
+@define-color warning_bg_color @shelly_warning;
+@define-color warning_fg_color @shelly_bg;
+@define-color success_color @shelly_success;
+@define-color success_bg_color @shelly_success;
+@define-color success_fg_color @shelly_bg;
 
 
 /* Window chrome. The proportional stack matches the approved mockup even
@@ -66,7 +78,7 @@
 }
 /* Plain labels inherit; pin them so desktop themes cannot dim row titles. */
 .shelly-root label {
-  color: @theme_fg_color;
+  color: @shelly_fg;
 }
 /* fixed text tones instead of opacity dimming. */
 .shelly-root .dim-label {
@@ -83,7 +95,7 @@
 .shelly-root link,
 .shelly-root link label,
 .shelly-root button.link label {
-  color: @accent_color;
+  color: @shelly_accent;
 }
 .shelly-root headerbar {
   background: @shelly_header_bg;
@@ -106,7 +118,7 @@
   box-shadow: 0 0 0 3px alpha(@shelly_accent, 0.22);
 }
 .shelly-brand-label {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   color: @shelly_fg;
 }
@@ -118,13 +130,13 @@
   border-right: 1px solid @shelly_hairline;
 }
 .shelly-root .nav-topbar {
-  background: @theme_bg_color;
+  background: @shelly_bg;
   padding: 6px 12px;
   border-bottom: 1px solid @shelly_hairline;
 }
 .shelly-root .nav-group {
   color: @shelly_muted_fg;
-  border-bottom: 1px solid alpha(@shelly_fg, 0.08);
+  border-bottom: 1px solid @shelly_hairline;
   padding-bottom: 6px;
 }
 
@@ -133,10 +145,45 @@
   padding: 24px 30px 16px;
 }
 .shelly-root .page-heading {
-  font-size: 2em;
+  font-size: 28px;
   font-weight: 500;
   letter-spacing: -0.6px;
   color: @shelly_fg;
+}
+/* GTK's stock text classes default to weights 700 and 800. */
+.shelly-root .title-1 {
+  font-size: 28px;
+  font-weight: 500;
+  letter-spacing: -0.6px;
+}
+.shelly-root .title-2 {
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.3px;
+}
+.shelly-root .title-3 {
+  font-size: 18px;
+  font-weight: 600;
+}
+.shelly-root .title-4 {
+  font-size: 16px;
+  font-weight: 600;
+}
+.shelly-root .heading {
+  font-size: 14px;
+  font-weight: 600;
+}
+.shelly-root .body {
+  font-size: 14px;
+  font-weight: 400;
+}
+.shelly-root .caption {
+  font-size: 12px;
+  font-weight: 400;
+}
+.shelly-root .caption-heading {
+  font-size: 12px;
+  font-weight: 600;
 }
 .shelly-root .page-subtitle {
   color: @shelly_secondary_fg;
@@ -170,7 +217,7 @@
   border-radius: 16px;
 }
 .shelly-root list row:not(:first-child) {
-  border-top: 1px solid alpha(@shelly_fg, 0.08);
+  border-top: 1px solid @shelly_hairline;
 }
 .shelly-root .toolbar-card,
 .shelly-root .table-card,
@@ -211,7 +258,7 @@
 .shelly-root .flatpak-nav > row {
   padding: 7px 10px;
   border: none;
-  border-radius: 10px;
+  border-radius: 12px;
 }
 .shelly-root .flatpak-nav > row:hover:not(:selected) {
   background: @shelly_hover_bg;
@@ -259,7 +306,7 @@
   margin-bottom: 0;
 }
 .shelly-root .settings-form-row:not(:first-child) {
-  border-top: 1px solid alpha(@shelly_fg, 0.08);
+  border-top: 1px solid @shelly_hairline;
 }
 .shelly-root stackswitcher button:checked {
   background: @shelly_selected_bg;
@@ -270,7 +317,7 @@
   font-weight: 600;
 }
 .shelly-root .settings-footer {
-  border-top: 1px solid alpha(@shelly_fg, 0.1);
+  border-top: 1px solid @shelly_hairline;
   padding: 12px 24px;
   background: @shelly_root_bg;
 }
@@ -320,8 +367,8 @@
   box-shadow: inset 0 0 0 1px @shelly_accent_ring_strong;
 }
 .shelly-root button.suggested-action:disabled {
-  background: alpha(@shelly_accent, 0.12);
-  box-shadow: inset 0 0 0 1px alpha(@shelly_fg, 0.05);
+  background: @shelly_accent_tint_bg;
+  box-shadow: inset 0 0 0 1px @shelly_hairline;
 }
 .shelly-root button.suggested-action:disabled label,
 .shelly-root button.suggested-action:disabled image {
@@ -329,12 +376,12 @@
 }
 .shelly-root button.destructive-action {
   background: @shelly_destructive_bg;
-  color: @error_color;
+  color: @shelly_error;
   border: none;
-  box-shadow: inset 0 0 0 1px alpha(@error_color, 0.35);
+  box-shadow: inset 0 0 0 1px alpha(@shelly_error, 0.35);
 }
 .shelly-root button.destructive-action:hover {
-  box-shadow: inset 0 0 0 1px alpha(@error_color, 0.5);
+  box-shadow: inset 0 0 0 1px alpha(@shelly_error, 0.5);
 }
 .shelly-root .linked > button,
 .shelly-root .linked > menubutton > button,
@@ -361,11 +408,16 @@
   border-left-width: 0;
 }
 .shelly-root .linked.search-filter > entry {
-  border-radius: 10px 0 0 10px;
+  border-radius: 999px 0 0 999px;
 }
 .shelly-root .linked.search-filter > dropdown:last-child > button,
 .shelly-root .linked.search-filter > menubutton:last-child > button {
-  border-radius: 0 10px 10px 0;
+  border-radius: 0 999px 999px 0;
+  background: @shelly_view_bg;
+}
+.shelly-root .linked.search-filter > dropdown:last-child > button:hover,
+.shelly-root .linked.search-filter > menubutton:last-child > button:hover {
+  background: mix(@shelly_view_bg, @shelly_fg, 0.06);
 }
 .shelly-root .linked > button:checked {
   background: @shelly_selected_bg;
@@ -395,7 +447,7 @@
 .shelly-root columnview > header {
   background: transparent;
   border: none;
-  border-bottom: 1px solid alpha(@shelly_fg, 0.12);
+  border-bottom: 1px solid @shelly_divider;
   border-radius: 0;
 }
 .shelly-root columnview > header > button {
@@ -411,12 +463,12 @@
   font-weight: 600;
 }
 .shelly-root columnview > header > button:hover {
-  background: alpha(@shelly_fg, 0.04);
+  background: @shelly_hover_bg;
 }
 
 /* Navigation */
 .shelly-root .nav-btn {
-  border-radius: 11px;
+  border-radius: 12px;
   min-height: 44px;
   padding: 0 12px;
   margin: 2px 0;
@@ -469,7 +521,7 @@
 .shelly-root searchentry entry {
   background: @shelly_view_bg;
   border: 1px solid @shelly_border;
-  border-radius: 10px;
+  border-radius: 999px;
   min-height: 36px;
   color: @shelly_fg;
   box-shadow: none;
@@ -481,7 +533,7 @@
 .shelly-root dropdown > button {
   background: @shelly_control_bg;
   border: 1px solid @shelly_border;
-  border-radius: 10px;
+  border-radius: 999px;
   min-height: 36px;
   color: @shelly_fg;
 }
@@ -508,7 +560,7 @@
 .shelly-root spinbutton {
   background: @shelly_view_bg;
   border: 1px solid @shelly_border;
-  border-radius: 10px;
+  border-radius: 999px;
   color: @shelly_fg;
 }
 .shelly-root spinbutton button {
@@ -541,7 +593,7 @@
 }
 .shelly-root checkbutton check,
 .shelly-root checkbutton radio {
-  border-radius: 5px;
+  border-radius: 6px;
   border: 2px solid @shelly_muted_fg;
   background: transparent;
   box-shadow: none;
@@ -563,7 +615,7 @@
   padding: 0;
 }
 .shelly-root scrollbar trough {
-  background: alpha(@shelly_fg, 0.08);
+  background: @shelly_tint_bg;
   border: none;
   border-radius: 999px;
   min-width: 6px;
@@ -587,7 +639,7 @@
 /* Stock themes collapse idle overlay scrollbars to a hairline; keep the
    rail geometry so the track stays legible. */
 .shelly-root scrollbar.overlay-indicator:not(.dragging):not(.hovering) trough {
-  background: alpha(@shelly_fg, 0.06);
+  background: @shelly_tint_bg;
 }
 .shelly-root scrollbar.overlay-indicator:not(.dragging):not(.hovering) slider {
   min-width: 6px;
@@ -596,7 +648,7 @@
   background: @shelly_overlay_slider;
 }
 .shelly-root separator {
-  background: alpha(@shelly_fg, 0.1);
+  background: @shelly_hairline;
 }
 .shelly-root .pill {
   background: @shelly_tint_bg;
@@ -607,7 +659,7 @@
   border-radius: 999px;
 }
 .shelly-root .spec-row {
-  border-bottom: 1px solid alpha(@shelly_fg, 0.08);
+  border-bottom: 1px solid @shelly_hairline;
 }
 .shelly-root flowboxchild:selected {
   background: @shelly_selected_soft_bg;
@@ -673,7 +725,7 @@
 }
 .shelly-root .drop-zone.drag-hover {
   border-color: @shelly_accent;
-  background: alpha(@shelly_accent, 0.1);
+  background: @shelly_accent_tint_bg;
 }
 
 /* Focus */
@@ -731,7 +783,7 @@
   font-size: 16px;
 }
 .shelly-root .overall-pct {
-  font-size: 26px;
+  font-size: 28px;
   letter-spacing: -0.5px;
   color: @shelly_accent;
 }
@@ -748,18 +800,18 @@
   color: @shelly_selected_fg;
 }
 .shelly-root .phase-chip.done {
-  background: alpha(@success_color, 0.14);
-  color: @success_color;
+  background: @shelly_success_tint_bg;
+  color: @shelly_success;
 }
 .shelly-root .phase-chip.err {
-  background: alpha(@error_color, 0.14);
-  color: @error_color;
+  background: @shelly_destructive_bg;
+  color: @shelly_error;
 }
 
 .shelly-root progressbar trough {
   min-height: 12px;
   border-radius: 999px;
-  background: alpha(@shelly_fg, 0.09);
+  background: @shelly_tint_bg;
   border: none;
   box-shadow: none;
 }
@@ -775,9 +827,9 @@
 .shelly-root .bar-thin progress {
   min-height: 4px;
 }
-.shelly-root .overall-card.overall-ok progressbar progress { background: @success_color; }
-.shelly-root .overall-card.overall-err progressbar progress { background: @error_color; }
-.shelly-root .overall-card.overall-warn progressbar progress { background: @warning_color; }
+.shelly-root .overall-card.overall-ok progressbar progress { background: @shelly_success; }
+.shelly-root .overall-card.overall-err progressbar progress { background: @shelly_error; }
+.shelly-root .overall-card.overall-warn progressbar progress { background: @shelly_warning; }
 
 .shelly-root .urow {
   padding: 8px 20px;
@@ -786,7 +838,7 @@
   border-bottom: 1px solid @shelly_hairline;
 }
 .shelly-root .urow-icon {
-  background: alpha(@shelly_accent, 0.14);
+  background: @shelly_accent_tint_bg;
   color: @shelly_accent;
   border-radius: 8px;
 }
@@ -798,3 +850,104 @@
   font-size: 11px;
   padding: 3px 10px;
 }
+
+/* tabs match the stackswitcher pills. */
+.shelly-root notebook,
+.shelly-root notebook > stack {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+.shelly-root notebook > header {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  padding: 0 0 8px;
+}
+.shelly-root notebook > header > tabs > tab {
+  min-height: 0;
+  margin: 0 2px;
+  padding: 6px 14px;
+  border: none;
+  border-radius: 999px;
+  box-shadow: none;
+}
+.shelly-root notebook > header > tabs > tab label {
+  color: @shelly_secondary_fg;
+}
+.shelly-root notebook > header > tabs > tab:hover {
+  background: @shelly_hover_bg;
+}
+.shelly-root notebook > header > tabs > tab:checked {
+  background: @shelly_selected_bg;
+}
+.shelly-root notebook > header > tabs > tab:checked label {
+  color: @shelly_selected_fg;
+  font-weight: 600;
+}
+
+.shelly-root frame {
+  background: @shelly_card_bg;
+  border: none;
+  border-radius: 16px;
+}
+.shelly-root .code-card {
+  background: @shelly_card_bg;
+  border-radius: 16px;
+}
+.shelly-root frame > scrolledwindow,
+.shelly-root frame textview,
+.shelly-root .code-card textview {
+  background: transparent;
+}
+.shelly-root frame textview,
+.shelly-root .code-card textview {
+  padding: 12px 14px;
+}
+
+/* tooltips are separate surfaces outside .shelly-root. */
+tooltip {
+  background: @shelly_card_bg;
+  color: @shelly_fg;
+  border: 1px solid @shelly_hairline;
+  border-radius: 12px;
+  box-shadow: none;
+  padding: 6px 10px;
+}
+
+/* the base sheet hardcodes its blue in rules the color names cannot reach. */
+.shelly-root * {
+  outline-color: alpha(@shelly_accent, 0.7);
+}
+.shelly-root selection {
+  background-color: alpha(@shelly_accent, 0.35);
+  color: @shelly_fg;
+}
+.shelly-root .view:selected,
+.shelly-root textview > text:selected {
+  background-color: @shelly_selected_bg;
+  color: @shelly_selected_fg;
+}
+.shelly-root scale > trough > highlight,
+.shelly-root levelbar > trough > block:not(.empty) {
+  background-color: @shelly_accent;
+  border-color: @shelly_accent;
+}
+.shelly-root calendar > grid > label.day-number:checked {
+  background-color: @shelly_accent;
+  color: @shelly_accent_fg;
+}
+
+/* unscoped so theme.roleColor works on widgets outside a window. */
+.status-success { color: @shelly_success; }
+.status-warning { color: @shelly_warning; }
+.status-error { color: @shelly_error; }
+.role-text { color: @shelly_fg; }
+.role-muted { color: @shelly_muted_fg; }
+.role-accent { color: @shelly_accent; }
+/* the view background, read as a color for terminal text tags. */
+.role-surface { color: @shelly_view_bg; }
+/* the label color pin above beats GTK's status classes. */
+.shelly-root label.success { color: @shelly_success; }
+.shelly-root label.warning { color: @shelly_warning; }
+.shelly-root label.error { color: @shelly_error; }

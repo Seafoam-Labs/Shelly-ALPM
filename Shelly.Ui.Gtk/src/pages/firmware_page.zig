@@ -1407,8 +1407,8 @@ pub const FirmwarePage = extern struct {
             .confirm => {
                 const name = escapeMarkup(alloc, state.device.name);
                 const version = escapeMarkup(alloc, state.release.version);
-                const name_bold = alloc.print("<b>{s}</b>", .{name}) catch name;
-                const version_bold = alloc.print("<b>{s}</b>", .{version}) catch version;
+                const name_bold = alloc.print("<span weight=\"semibold\">{s}</span>", .{name}) catch name;
+                const version_bold = alloc.print("<span weight=\"semibold\">{s}</span>", .{version}) catch version;
                 const template: []const u8 = switch (classification) {
                     .upgrade => translations._("Update {s} to version {s}?"),
                     .downgrade => translations._("Downgrade {s} to version {s}?"),
