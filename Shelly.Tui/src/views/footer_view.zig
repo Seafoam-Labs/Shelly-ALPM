@@ -51,13 +51,19 @@ pub fn draw(ctx: vxfw.DrawContext, context: commands.Context, status: ?[]const u
             .width = ctx.stringWidth(quit_key) + ctx.stringWidth(" Quit"),
         });
     }
-    const notice = status orelse "";
+    const notice = std.mem.trimEnd(u8, status orelse "", " ");
 
     var spans: std.ArrayList(vxfw.RichText.TextSpan) = .empty;
     if (notice.len > 0) try spans.append(ctx.arena, .{ .text = notice, .style = styles.secondary });
     var used: usize = ctx.stringWidth(notice);
+    var separate_notice = notice.len > 0;
     for (shortcuts.items) |shortcut| {
-        if (used + shortcut.width > main_width) continue;
+        if (used + @intFromBool(separate_notice) + shortcut.width > main_width) continue;
+        if (separate_notice) {
+            try spans.append(ctx.arena, .{ .text = " " });
+            used += 1;
+            separate_notice = false;
+        }
         try spans.append(ctx.arena, .{ .text = shortcut.key, .style = styles.emphasis });
         try spans.append(ctx.arena, .{ .text = shortcut.description, .style = styles.secondary });
         used += shortcut.width;
