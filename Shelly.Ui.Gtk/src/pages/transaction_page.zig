@@ -2349,4 +2349,3 @@ test "overall card freezes on failure and keeps completed rows" {
     try std.testing.expect(gtk.Widget.hasCssClass(p.phase_install.as(gtk.Widget), "err") != 0);
     try std.testing.expectEqualStrings("Failed", std.mem.span(gtk.Label.getLabel(p.overall_title)));
 }
-

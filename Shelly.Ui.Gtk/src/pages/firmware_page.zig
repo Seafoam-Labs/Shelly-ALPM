@@ -2852,9 +2852,14 @@ test "firmware detail link follows fetched releases and hides on reset" {
     lvfs_releases[0] = .{ .version = "1.1", .remote_id = "lvfs", .appstream_id = "com.lenovo.ThinkPadR2LET.firmware", .trust_flags = enums.TrustFlags.is_upgrade };
     const lvfs_result = try c_alloc.create(FirmwarePage.DetailResult);
     lvfs_result.* = .{
-        .page = page, .arena = lvfs_arena, .generation = 7, .token = 3,
-        .device_id = try c_alloc.dupe(u8, "dev1"), .device_version = try c_alloc.dupe(u8, "1.0"),
-        .releases = lvfs_releases, .failure = null,
+        .page = page,
+        .arena = lvfs_arena,
+        .generation = 7,
+        .token = 3,
+        .device_id = try c_alloc.dupe(u8, "dev1"),
+        .device_version = try c_alloc.dupe(u8, "1.0"),
+        .releases = lvfs_releases,
+        .failure = null,
     };
     try testing.expectEqual(@as(c_int, 0), FirmwarePage.on_detail_complete(lvfs_result));
     try testing.expectEqual(@as(c_int, 1), gtk.Widget.getVisible(p.detail_link.as(gtk.Widget)));
@@ -2870,9 +2875,14 @@ test "firmware detail link follows fetched releases and hides on reset" {
     local_releases[0] = .{ .version = "1.2", .remote_id = "local", .appstream_id = "org.local.fw" };
     const local_result = try c_alloc.create(FirmwarePage.DetailResult);
     local_result.* = .{
-        .page = page, .arena = local_arena, .generation = 7, .token = 3,
-        .device_id = try c_alloc.dupe(u8, "dev1"), .device_version = try c_alloc.dupe(u8, "1.0"),
-        .releases = local_releases, .failure = null,
+        .page = page,
+        .arena = local_arena,
+        .generation = 7,
+        .token = 3,
+        .device_id = try c_alloc.dupe(u8, "dev1"),
+        .device_version = try c_alloc.dupe(u8, "1.0"),
+        .releases = local_releases,
+        .failure = null,
     };
     try testing.expectEqual(@as(c_int, 0), FirmwarePage.on_detail_complete(local_result));
     try testing.expectEqual(@as(c_int, 0), gtk.Widget.getVisible(p.detail_link.as(gtk.Widget)));
@@ -2886,9 +2896,14 @@ test "firmware detail link follows fetched releases and hides on reset" {
     fail_arena.* = std.heap.ArenaAllocator.init(testing.allocator);
     const fail_result = try c_alloc.create(FirmwarePage.DetailResult);
     fail_result.* = .{
-        .page = page, .arena = fail_arena, .generation = 7, .token = 3,
-        .device_id = try c_alloc.dupe(u8, "dev1"), .device_version = try c_alloc.dupe(u8, "1.0"),
-        .releases = null, .failure = .{ .kind = .internal, .message = "" },
+        .page = page,
+        .arena = fail_arena,
+        .generation = 7,
+        .token = 3,
+        .device_id = try c_alloc.dupe(u8, "dev1"),
+        .device_version = try c_alloc.dupe(u8, "1.0"),
+        .releases = null,
+        .failure = .{ .kind = .internal, .message = "" },
     };
     try testing.expectEqual(@as(c_int, 0), FirmwarePage.on_detail_complete(fail_result));
     try testing.expectEqual(@as(c_int, 0), gtk.Widget.getVisible(p.detail_link.as(gtk.Widget)));
