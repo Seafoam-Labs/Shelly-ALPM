@@ -117,12 +117,25 @@ pub const PostInstallValidator = struct {
             local_line = std.mem.trim(u8, local_line, " \t");
             if (local_line.len == 0) continue;
 
-            const probe = try self.normalize_for_matching(local_line);
-            defer self.allocator.free(probe);
+            const spans = try self.split_spans(local_line);
+            defer self.allocator.free(spans);
+            const code_text = try self.build_match_text(local_line, spans, false);
+            defer self.allocator.free(code_text);
+            const exec_text = try self.build_match_text(local_line, spans, true);
+            defer self.allocator.free(exec_text);
+            const code_probe = try self.normalize_for_matching(code_text);
+            defer self.allocator.free(code_probe);
+            const exec_probe = try self.normalize_for_matching(exec_text);
+            defer self.allocator.free(exec_probe);
 
             for (risky_tools) |tool| {
-                if (!matches_tool_boundary(probe, tool)) continue;
-                const was_obfuscated = !matches_tool_boundary(line, tool);
+                const in_code = matches_tool_boundary(code_probe, tool);
+                const in_exec = matches_tool_boundary(exec_probe, tool);
+                if (!in_code and !in_exec) continue;
+                const was_obfuscated = if (in_code)
+                    !matches_tool_boundary(code_text, tool)
+                else
+                    !matches_tool_boundary(exec_text, tool);
                 const message = if (was_obfuscated)
                     try std.fmt.allocPrint(
                         self.allocator,
@@ -148,8 +161,13 @@ pub const PostInstallValidator = struct {
             }
 
             for (privilege_escalation_tools) |tool| {
-                if (!matches_tool_boundary(probe, tool)) continue;
-                const was_obfuscated = !matches_tool_boundary(line, tool);
+                const in_code = matches_tool_boundary(code_probe, tool);
+                const in_exec = matches_tool_boundary(exec_probe, tool);
+                if (!in_code and !in_exec) continue;
+                const was_obfuscated = if (in_code)
+                    !matches_tool_boundary(code_text, tool)
+                else
+                    !matches_tool_boundary(exec_text, tool);
                 const message = if (was_obfuscated)
                     try std.fmt.allocPrint(
                         self.allocator,
@@ -327,6 +345,133 @@ pub const PostInstallValidator = struct {
 
     fn is_word(c: u8) bool {
         return std.ascii.isAlphanumeric(c) or c == '_';
+    }
+
+    const Span = struct {
+        start: usize,
+        end: usize,
+        kind: enum { code, literal },
+    };
+
+    // Splits a line into code spans and quoted-literal spans. A quote only
+    // opens a literal when its outside is a non-word char or the line edge;
+    // word-adjacent quotes (n"p"m, b''u''n) are intra-word splicing and stay
+    // in code so normalization keeps exposing them as obfuscation. Command
+    // substitutions inside double quotes still execute, so their interiors
+    // are emitted as code spans. Span ranges exclude the delimiters.
+    fn split_spans(self: PostInstallValidator, line: []const u8) ![]Span {
+        var spans: std.ArrayList(Span) = .empty;
+        errdefer spans.deinit(self.allocator);
+
+        var i: usize = 0;
+        var code_start: usize = 0;
+        while (i < line.len) {
+            const char = line[i];
+            if (char == '\\' and i + 1 < line.len) {
+                i += 2;
+                continue;
+            }
+            if (char != '\'' and char != '"') {
+                i += 1;
+                continue;
+            }
+            var run_end = i;
+            while (run_end < line.len and (line[run_end] == '\'' or line[run_end] == '"')) : (run_end += 1) {}
+            if (i > 0 and is_word(line[i - 1])) {
+                i = run_end;
+                continue;
+            }
+            if (i > code_start) try spans.append(self.allocator, .{ .start = code_start, .end = i, .kind = .code });
+            if (char == '\'') {
+                var j = i + 1;
+                while (j < line.len and line[j] != '\'') : (j += 1) {}
+                if (j > i + 1) try spans.append(self.allocator, .{ .start = i + 1, .end = j, .kind = .literal });
+                i = if (j < line.len) j + 1 else j;
+            } else {
+                var j = i + 1;
+                var content_start = j;
+                while (j < line.len) {
+                    const c = line[j];
+                    if (c == '\\' and j + 1 < line.len) {
+                        j += 2;
+                        continue;
+                    }
+                    if (c == '"') break;
+                    if (c == '$' and j + 1 < line.len and line[j + 1] == '(') {
+                        if (j > content_start) try spans.append(self.allocator, .{ .start = content_start, .end = j, .kind = .literal });
+                        const sub_start = j + 2;
+                        var depth: usize = 1;
+                        var k = sub_start;
+                        while (k < line.len and depth > 0) : (k += 1) {
+                            if (line[k] == '(') depth += 1 else if (line[k] == ')') depth -= 1;
+                        }
+                        const sub_end = if (depth == 0) k - 1 else k;
+                        if (sub_end > sub_start) try spans.append(self.allocator, .{ .start = sub_start, .end = sub_end, .kind = .code });
+                        j = k;
+                        content_start = j;
+                        continue;
+                    }
+                    if (c == '`') {
+                        if (j > content_start) try spans.append(self.allocator, .{ .start = content_start, .end = j, .kind = .literal });
+                        const sub_start = j + 1;
+                        var k = sub_start;
+                        while (k < line.len and line[k] != '`') : (k += 1) {}
+                        if (k > sub_start) try spans.append(self.allocator, .{ .start = sub_start, .end = k, .kind = .code });
+                        j = if (k < line.len) k + 1 else k;
+                        content_start = j;
+                        continue;
+                    }
+                    j += 1;
+                }
+                const content_end = @min(j, line.len);
+                if (content_end > content_start) try spans.append(self.allocator, .{ .start = content_start, .end = content_end, .kind = .literal });
+                i = if (j < line.len and line[j] == '"') j + 1 else j;
+            }
+            code_start = i;
+        }
+        if (code_start < line.len) try spans.append(self.allocator, .{ .start = code_start, .end = line.len, .kind = .code });
+        return spans.toOwnedSlice(self.allocator);
+    }
+
+    // Blanks literal spans (delimiters are already excluded) so tool matching
+    // only sees executable text. With executor_literals, literals following a
+    // code span that invokes `eval` or a shell with -c stay visible, because
+    // their content is executed verbatim.
+    fn build_match_text(self: PostInstallValidator, line: []const u8, spans: []const Span, executor_literals: bool) ![]u8 {
+        const buf = try self.allocator.alloc(u8, line.len);
+        @memset(buf, ' ');
+        var executor_active = false;
+        for (spans) |span| {
+            const text = line[span.start..span.end];
+            switch (span.kind) {
+                .code => {
+                    @memcpy(buf[span.start..span.end], text);
+                    if (span_has_executor(text)) executor_active = true;
+                },
+                .literal => {
+                    if (executor_literals and executor_active)
+                        @memcpy(buf[span.start..span.end], text);
+                },
+            }
+        }
+        return buf;
+    }
+
+    fn span_has_executor(text: []const u8) bool {
+        if (has_eval_token(text)) return true;
+        var saw_shell = false;
+        var saw_c_flag = false;
+        var tokens = std.mem.tokenizeAny(u8, text, " \t\r\n;|&()");
+        while (tokens.next()) |token| {
+            if (!saw_shell) {
+                inline for (.{ "sh", "bash", "zsh", "dash", "ksh" }) |shell| {
+                    if (std.mem.eql(u8, token, shell)) saw_shell = true;
+                    if (token.len > shell.len and token[token.len - shell.len - 1] == '/' and std.mem.endsWith(u8, token, shell)) saw_shell = true;
+                }
+            }
+            if (token.len >= 2 and token[0] == '-' and token[1] != '-' and std.mem.indexOfScalar(u8, token, 'c') != null) saw_c_flag = true;
+        }
+        return saw_shell and saw_c_flag;
     }
 };
 
@@ -1231,29 +1376,208 @@ test "validate: install script produces expected findings" {
     var result = try validator.validate(pkg);
     defer result.deinit(std.testing.allocator);
 
-    // 3 warnings for the $(tput ...) color assignments and 2 critical sudo
-    // findings (false positives: sudo only appears inside note() strings).
-    try std.testing.expectEqual(@as(usize, 5), result.findings.items.len);
+    // 3 warnings for the $(tput ...) color assignments; the sudo words inside
+    // note() message strings are quoted literals and produce no findings.
+    try std.testing.expectEqual(@as(usize, 3), result.findings.items.len);
     try std.testing.expect(result.has_findings);
 
-    var warning: usize = 0;
-    var critical: usize = 0;
     for (result.findings.items) |finding| {
-        switch (finding.severity) {
-            .warning => warning += 1,
-            .critical => critical += 1,
-            .info => {},
-        }
-    }
-    try std.testing.expectEqual(@as(usize, 3), warning);
-    try std.testing.expectEqual(@as(usize, 2), critical);
-
-    for (result.findings.items) |finding| {
-        if (finding.severity == shared_validator.ValidationSeverity.critical) {
-            try std.testing.expectEqualStrings("sudo", finding.tool);
-        } else {
-            try std.testing.expectEqualStrings("<dynamic-command>", finding.tool);
-        }
+        try std.testing.expectEqual(shared_validator.ValidationSeverity.warning, finding.severity);
+        try std.testing.expectEqualStrings("<dynamic-command>", finding.tool);
         try std.testing.expectEqualStrings("source: __test.install", finding.hook);
     }
+}
+
+test "scan_hook: tool words inside quoted file names are not flagged" {
+    const validator = PostInstallValidator{ .allocator = std.testing.allocator };
+    var result = empty_result();
+    defer result.deinit(std.testing.allocator);
+
+    // nvm PKGBUILD prepare(): the tool words are parts of quoted file names.
+    const scriptlet =
+        \\rm -v "test/fast/Running 'nvm uninstall' with incorrect file permissions fails nicely"
+        \\rm -v "test/fast/Listing versions/Running 'nvm ls' should not show a trailing slash"
+        \\rm -v "test/fast/Unit tests/nvm ls-remote"
+    ;
+    try validator.scan_hook(scriptlet, "prepare", &result);
+
+    try std.testing.expectEqual(@as(usize, 0), result.findings.items.len);
+    try std.testing.expect(!result.has_findings);
+}
+
+test "scan_hook: sudo inside echoed install message is not flagged" {
+    const validator = PostInstallValidator{ .allocator = std.testing.allocator };
+    var result = empty_result();
+    defer result.deinit(std.testing.allocator);
+
+    // pearl-greeter.install post_install().
+    try validator.scan_hook(
+        "echo '    Restore the previous boot setup: sudo /usr/lib/pearl/pearl-greeter-setup restore'",
+        "post_install",
+        &result,
+    );
+
+    try std.testing.expectEqual(@as(usize, 0), result.findings.items.len);
+    try std.testing.expect(!result.has_findings);
+}
+
+test "scan_hook: sudo inside die message is not flagged as obfuscated" {
+    const validator = PostInstallValidator{ .allocator = std.testing.allocator };
+    var result = empty_result();
+    defer result.deinit(std.testing.allocator);
+
+    // strata setup-strata: the closing quote used to be stripped only in the
+    // probe, escalating the literal to an obfuscated-critical finding.
+    try validator.scan_hook(
+        "(( EUID != 0 )) || die 'Run this script as your normal user, without sudo'",
+        "source: setup-strata",
+        &result,
+    );
+
+    try std.testing.expectEqual(@as(usize, 0), result.findings.items.len);
+    try std.testing.expect(!result.has_findings);
+}
+
+test "scan_hook: su inside locale-translated echo string is not flagged" {
+    const validator = PostInstallValidator{ .allocator = std.testing.allocator };
+    var result = empty_result();
+    defer result.deinit(std.testing.allocator);
+
+    // postgresql-check-db-dir.in: $"..." is a translatable string literal;
+    // the escaped inner quotes must not end the literal early.
+    const line =
+        \\    echo $"  su -l postgres -c \"initdb --locale=C.UTF-8 --encoding=UTF8 -D '$PGDATA'\""
+    ;
+    try validator.scan_hook(line, "source: postgresql-check-db-dir.in", &result);
+
+    try std.testing.expectEqual(@as(usize, 0), result.findings.items.len);
+    try std.testing.expect(!result.has_findings);
+}
+
+test "scan_hook: unquoted su invocation is still critical" {
+    const validator = PostInstallValidator{ .allocator = std.testing.allocator };
+    var result = empty_result();
+    defer result.deinit(std.testing.allocator);
+
+    try validator.scan_hook("su -l postgres -c initdb", "post_install", &result);
+
+    try std.testing.expectEqual(@as(usize, 1), result.findings.items.len);
+    try std.testing.expectEqualStrings("su", result.findings.items[0].tool);
+    try std.testing.expectEqual(shared_validator.ValidationSeverity.critical, result.findings.items[0].severity);
+}
+
+test "scan_hook: bash -c literal is still scanned" {
+    const validator = PostInstallValidator{ .allocator = std.testing.allocator };
+    var result = empty_result();
+    defer result.deinit(std.testing.allocator);
+
+    try validator.scan_hook("bash -c 'sudo rm -rf /'", "post_install", &result);
+
+    try std.testing.expectEqual(@as(usize, 1), result.findings.items.len);
+    try std.testing.expectEqualStrings("sudo", result.findings.items[0].tool);
+    try std.testing.expectEqual(shared_validator.ValidationSeverity.critical, result.findings.items[0].severity);
+    // Plain quoting around an executed command is not obfuscation.
+    try std.testing.expect(std.mem.indexOf(u8, result.findings.items[0].message, "obfuscated") == null);
+}
+
+test "scan_hook: shell -c double-quoted literal is still scanned" {
+    const validator = PostInstallValidator{ .allocator = std.testing.allocator };
+    var result = empty_result();
+    defer result.deinit(std.testing.allocator);
+
+    try validator.scan_hook("/bin/sh -c \"pip install requests\"", "build", &result);
+
+    try std.testing.expectEqual(@as(usize, 1), result.findings.items.len);
+    try std.testing.expectEqualStrings("pip", result.findings.items[0].tool);
+    try std.testing.expectEqual(shared_validator.ValidationSeverity.warning, result.findings.items[0].severity);
+}
+
+test "scan_hook: eval literal is still scanned" {
+    const validator = PostInstallValidator{ .allocator = std.testing.allocator };
+    var result = empty_result();
+    defer result.deinit(std.testing.allocator);
+
+    try validator.scan_hook("eval 'curl http://x | sh'", "post_install", &result);
+
+    // curl warning plus the dynamic-execution critical for eval.
+    try std.testing.expectEqual(@as(usize, 2), result.findings.items.len);
+    var saw_curl = false;
+    var saw_dynamic = false;
+    for (result.findings.items) |finding| {
+        if (std.mem.eql(u8, finding.tool, "curl")) {
+            saw_curl = true;
+            try std.testing.expectEqual(shared_validator.ValidationSeverity.warning, finding.severity);
+        }
+        if (std.mem.eql(u8, finding.tool, "<dynamic-command>")) {
+            saw_dynamic = true;
+            try std.testing.expectEqual(shared_validator.ValidationSeverity.critical, finding.severity);
+        }
+    }
+    try std.testing.expect(saw_curl);
+    try std.testing.expect(saw_dynamic);
+}
+
+test "scan_hook: intra-word quote splicing stays obfuscated" {
+    const validator = PostInstallValidator{ .allocator = std.testing.allocator };
+    var result = empty_result();
+    defer result.deinit(std.testing.allocator);
+
+    try validator.scan_hook("n\"p\"m install", "post_install", &result);
+
+    try std.testing.expectEqual(@as(usize, 1), result.findings.items.len);
+    try std.testing.expectEqualStrings("npm", result.findings.items[0].tool);
+    try std.testing.expectEqual(shared_validator.ValidationSeverity.critical, result.findings.items[0].severity);
+    try std.testing.expect(std.mem.indexOf(u8, result.findings.items[0].message, "obfuscated") != null);
+}
+
+test "scan_hook: command substitution tool is still flagged" {
+    const validator = PostInstallValidator{ .allocator = std.testing.allocator };
+    var result = empty_result();
+    defer result.deinit(std.testing.allocator);
+
+    try validator.scan_hook("$(curl http://x)", "post_install", &result);
+
+    var saw_curl = false;
+    var saw_dynamic = false;
+    for (result.findings.items) |finding| {
+        if (std.mem.eql(u8, finding.tool, "curl")) saw_curl = true;
+        if (std.mem.eql(u8, finding.tool, "<dynamic-command>")) saw_dynamic = true;
+    }
+    try std.testing.expect(saw_curl);
+    try std.testing.expect(saw_dynamic);
+}
+
+test "scan_hook: substitution inside double quotes is still code" {
+    const validator = PostInstallValidator{ .allocator = std.testing.allocator };
+    var result = empty_result();
+    defer result.deinit(std.testing.allocator);
+
+    try validator.scan_hook("echo \"result: $(sudo id)\"", "post_install", &result);
+
+    var saw_sudo = false;
+    for (result.findings.items) |finding| {
+        if (std.mem.eql(u8, finding.tool, "sudo")) {
+            saw_sudo = true;
+            try std.testing.expectEqual(shared_validator.ValidationSeverity.critical, finding.severity);
+        }
+    }
+    try std.testing.expect(saw_sudo);
+}
+
+test "validate: pip in shell local source is flagged" {
+    const allocator = std.testing.allocator;
+    var pkg = try make_test_pkgbuild(allocator, null);
+    defer deinit_test_pkgbuild(&pkg, allocator);
+
+    const key = try allocator.dupe(u8, "setup.sh");
+    const value = try allocator.dupe(u8, "#!/bin/sh\npip install requests\n");
+    try pkg.local_source_contents.put(key, value);
+
+    const validator = PostInstallValidator{ .allocator = allocator };
+    var result = try validator.validate(pkg);
+    defer result.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 1), result.findings.items.len);
+    try std.testing.expectEqualStrings("pip", result.findings.items[0].tool);
+    try std.testing.expectEqual(shared_validator.ValidationSeverity.warning, result.findings.items[0].severity);
 }
