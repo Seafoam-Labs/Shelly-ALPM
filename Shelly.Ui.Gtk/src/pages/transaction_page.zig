@@ -353,7 +353,9 @@ pub const TransactionPage = extern struct {
         while (gtk.Widget.getFirstChild(p.rows_box.as(gtk.Widget))) |c| {
             gtk.Box.remove(p.rows_box, c);
         }
-        p.rows.clearRetainingCapacity();
+        // The map's backing memory lives in the arena freed below; drop it
+        // entirely instead of retaining dangling capacity.
+        p.rows = .empty;
         p.terminal_lines = .empty;
         self.resetOverallUI();
 
@@ -1836,14 +1838,22 @@ pub const TransactionPage = extern struct {
             gtk.Widget.Class.bindTemplateCallbackFull(wc, "on_terminal_toggle", @ptrCast(&on_terminal_toggle));
             gtk.Widget.Class.bindTemplateCallbackFull(wc, "on_close", @ptrCast(&on_close));
             gtk.Widget.Class.bindTemplateCallbackFull(wc, "on_key_pressed", @ptrCast(&on_key_pressed));
+            gobject.Object.virtual_methods.finalize.implement(class, &finalize);
         }
     };
 
     fn finalize(self: *Self) callconv(.c) void {
         const p = self.priv();
         stopOverallPulse(self);
+        // Template children are already disposed at this point: detach the
+        // row timers without the widget sync stopRowPulse would do.
         var rows = p.rows.valueIterator();
-        while (rows.next()) |row| stopRowPulse(row.*);
+        while (rows.next()) |row| {
+            if (row.*.pulse_source != 0) {
+                _ = glib.Source.remove(row.*.pulse_source);
+                row.*.pulse_source = 0;
+            }
+        }
         if (p.operation) |op| {
             op.cancel();
             if (op.reader) |t| t.join();
@@ -1856,6 +1866,12 @@ pub const TransactionPage = extern struct {
             std.heap.c_allocator.destroy(a);
             p.arena = null;
         }
+        var tag_keys = p.ansi_tags.keyIterator();
+        while (tag_keys.next()) |key| {
+            const z: [*:0]const u8 = @ptrCast(key.ptr);
+            std.heap.c_allocator.free(@constCast(std.mem.span(z)));
+        }
+        p.ansi_tags.deinit(std.heap.c_allocator);
 
         const parent_class: *gobject.Object.Class = @ptrCast(Class.parent);
         gobject.Object.virtual_methods.finalize.call(parent_class, self.as(gobject.Object));
@@ -1892,6 +1908,8 @@ test "transaction events keep successful rows when an AUR package fails" {
     // The window paints the surface; the stock .background class here would
     // cover the themed page with the desktop theme's window color.
     try std.testing.expectEqual(@as(c_int, 0), gtk.Widget.hasCssClass(page.as(gtk.Widget), "background"));
+    // it needs its own fill over the translucent lockout scrim.
+    try std.testing.expectEqual(@as(c_int, 1), gtk.Widget.hasCssClass(page.as(gtk.Widget), "transaction-page"));
     const arena = try std.heap.c_allocator.create(std.heap.ArenaAllocator);
     arena.* = std.heap.ArenaAllocator.init(std.heap.c_allocator);
     page.priv().arena = arena;

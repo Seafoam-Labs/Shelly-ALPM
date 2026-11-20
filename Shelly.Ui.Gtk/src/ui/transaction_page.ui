@@ -4,6 +4,9 @@
     <property name="orientation">vertical</property>
     <property name="hexpand">true</property>
     <property name="vexpand">true</property>
+    <style>
+      <class name="transaction-page"/>
+    </style>
     <child>
       <object class="GtkOverlay" id="root_overlay">
         <property name="hexpand">true</property>

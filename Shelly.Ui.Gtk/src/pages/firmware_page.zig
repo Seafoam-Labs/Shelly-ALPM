@@ -448,7 +448,18 @@ pub const FirmwarePage = extern struct {
         return 0;
     }
 
-    const ScrollCtx = struct { page: *Self, generation: u64 };
+    const ScrollCtx = struct {
+        page: *Self,
+        generation: u64,
+
+        /// Runs when the idle source is destroyed, whether it fired or was
+        /// removed, so the page reference and the context always pair up.
+        fn destroy(data: ?*anyopaque) callconv(.c) void {
+            const ctx: *ScrollCtx = @ptrCast(@alignCast(data.?));
+            ctx.page.as(gobject.Object).unref();
+            c_alloc.destroy(ctx);
+        }
+    };
 
     /// The ListView anchors its scroll to the row that was on top when the
     /// sort model reorders, which can leave a fresh load scrolled past the
@@ -456,12 +467,14 @@ pub const FirmwarePage = extern struct {
     fn queue_scroll_settle(page: *Self) void {
         const ctx = c_alloc.create(ScrollCtx) catch return;
         ctx.* = .{ .page = page, .generation = page.priv().generation };
-        _ = glib.idleAdd(&on_scroll_settle, ctx);
+        // The idle can fire after the last external reference is gone; hold
+        // one so the callback never touches a finalized page.
+        _ = page.as(gobject.Object).ref();
+        _ = glib.idleAddFull(glib.PRIORITY_DEFAULT_IDLE, &on_scroll_settle, ctx, &ScrollCtx.destroy);
     }
 
     fn on_scroll_settle(data: ?*anyopaque) callconv(.c) c_int {
         const ctx: *ScrollCtx = @ptrCast(@alignCast(data.?));
-        defer c_alloc.destroy(ctx);
         const page = ctx.page;
         const p = page.priv();
         if (ctx.generation != p.generation or !p.loaded) return 0;
