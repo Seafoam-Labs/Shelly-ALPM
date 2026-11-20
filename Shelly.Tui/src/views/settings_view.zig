@@ -77,11 +77,11 @@ pub const View = struct {
         const col = (size.width - width) / 2;
         const line_ctx = ctx.withConstraints(.{}, .{ .width = width, .height = 1 });
         var children: std.ArrayList(vxfw.SubSurface) = .empty;
-        const path_height: u16 = if (self.pane == .full and size.height >= 14) 1 else 0;
+        const path_height: u16 = if (size.height >= 4) 1 else 0;
         const description_height: u16 = if (self.pane == .controls) 0 else if (size.height >= 10) 2 else if (size.height >= 6) 1 else 0;
         const error_height: u16 = if (self.pane == .full and size.height >= 4 and (self.failure != null or self.busy)) 1 else 0;
-        const description_row = size.height - path_height - error_height - description_height;
-        const form_height = description_row;
+        const description_row = size.height - error_height - description_height;
+        const form_height = description_row -| path_height;
 
         var rows: std.ArrayList(Row) = .empty;
         const form = [_]struct { heading: ?[]const u8 = null, control: ?usize = null }{
@@ -118,21 +118,20 @@ pub const View = struct {
         const visible = @min(rows.items.len, form_height);
         const first = @min(selected_line -| (visible / 2), rows.items.len - visible);
         for (rows.items[first .. first + visible], 0..) |item, offset|
-            try self.appendRow(line_ctx, &children, @intCast(offset), col, item);
+            try self.appendRow(line_ctx, &children, @intCast(offset + path_height), col, item);
 
         if (description_height > 0) {
             var detail_text: vxfw.Text = .{ .text = try self.description(ctx.arena), .softwrap = true, .overflow = .ellipsis, .width_basis = .parent, .style = styles.secondary };
             try children.append(ctx.arena, .{ .origin = .{ .row = @intCast(description_row), .col = @intCast(col) }, .surface = try detail_text.draw(ctx.withConstraints(.{}, .{ .width = width, .height = description_height })) });
         }
-        if (error_height > 0) try self.appendRow(line_ctx, &children, size.height - path_height - 1, col, .{ .text = if (self.busy) "Settings are locked while an operation is running." else try std.fmt.allocPrint(ctx.arena, "Settings error: {s}", .{@errorName(self.failure.?)}), .emphasis = true });
-        if (path_height > 0) try self.appendPath(ctx, &children, size.height - 1);
+        if (error_height > 0) try self.appendRow(line_ctx, &children, size.height - 1, col, .{ .text = if (self.busy) "Settings are locked while an operation is running." else try std.fmt.allocPrint(ctx.arena, "Settings error: {s}", .{@errorName(self.failure.?)}), .emphasis = true });
+        if (path_height > 0) try self.appendPath(ctx, &children, 0);
         return .{ .size = size, .widget = widget, .buffer = &.{}, .children = children.items };
     }
 
     fn drawSplit(self: *const View, ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
         const size = ctx.max.size();
-        const path_height: u16 = if (size.height >= 14) 1 else 0;
-        const pane_height = size.height - path_height;
+        const pane_height = size.height;
         const left_width = @import("split_layout.zig").listWidth(size.width, self.list_percent);
         var children: std.ArrayList(vxfw.SubSurface) = .empty;
         for ([_]bool{ false, true }) |right| {
@@ -149,14 +148,13 @@ pub const View = struct {
             const width = if (right) size.width - left_width else left_width;
             try children.append(ctx.arena, .{ .origin = .{ .row = 0, .col = if (right) @intCast(left_width) else 0 }, .surface = try border.draw(ctx.withConstraints(.{ .width = width, .height = pane_height }, .{ .width = width, .height = pane_height })) });
         }
-        if (path_height > 0) try self.appendPath(ctx, &children, size.height - 1);
         return .{ .size = size, .widget = .{ .userdata = ptr, .drawFn = drawBody }, .buffer = &.{}, .children = children.items };
     }
 
     fn appendPath(self: *const View, ctx: vxfw.DrawContext, children: *std.ArrayList(vxfw.SubSurface), row: u16) Allocator.Error!void {
-        const text = try std.fmt.allocPrint(ctx.arena, "File: {f}", .{diagnostics.safe(self.path)});
+        const text = try std.fmt.allocPrint(ctx.arena, "Config: {f}", .{diagnostics.safe(self.path)});
         const width: u16 = @intCast(@min(ctx.max.size().width, ctx.stringWidth(text)));
-        try self.appendRow(ctx.withConstraints(.{}, .{ .width = width, .height = 1 }), children, row, (ctx.max.size().width - width) / 2, .{ .text = text });
+        try self.appendRow(ctx.withConstraints(.{}, .{ .width = width, .height = 1 }), children, row, 0, .{ .text = text });
     }
 
     fn drawDetails(self: *const View, ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
