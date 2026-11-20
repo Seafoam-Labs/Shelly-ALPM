@@ -26,7 +26,7 @@ pub const View = struct {
     refresh_pending: bool = false,
 
     fn confirmation(self: View, arena: Allocator) Allocator.Error![]const u8 {
-        if (self.backend == .standard and self.action == .remove) {
+        if ((self.backend == .standard or self.backend == .aur) and self.action == .remove) {
             return std.fmt.allocPrint(arena, "[{s}] Remove unused dependencies", .{
                 if (self.remove_unused_dependencies) "x" else " ",
             });

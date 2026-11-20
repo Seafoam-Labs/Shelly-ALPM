@@ -444,7 +444,7 @@ pub const OperationResult = struct {
 };
 
 fn interactive(request: OperationRequest) bool {
-    return (request.action == .remove and request.remove_unused_dependencies and std.mem.eql(u8, request.backend, "standard")) or
+    return (request.action == .remove and request.remove_unused_dependencies and (std.mem.eql(u8, request.backend, "standard") or std.mem.eql(u8, request.backend, "aur"))) or
         (std.mem.eql(u8, request.backend, "aur") and request.action != .remove) or isFlatpak(request) or combined(request);
 }
 
@@ -499,6 +499,7 @@ fn operationArgv(alloc: std.mem.Allocator, request: OperationRequest) ![][]const
     if (request.action != .sync and !interactive(request)) try argv.append(alloc, "--no-confirm");
     try argv.append(alloc, "--ui-mode");
     if (native_removal) try argv.append(alloc, if (request.remove_unused_dependencies) "--cascade" else "--no-cascade");
+    if (request.action == .remove and std.mem.eql(u8, request.backend, "aur") and request.remove_unused_dependencies) try argv.append(alloc, "--cascade");
     return argv.toOwnedSlice(alloc);
 }
 

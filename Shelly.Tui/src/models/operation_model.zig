@@ -430,7 +430,7 @@ pub fn openPackageBatchPrompt(self: *Model, action: shelly_operation.Action, bac
         defer self.gpa.free(note);
         try review.appendSlice(self.gpa, note);
     }
-    if (action == .remove and backend != .standard) try review.appendSlice(self.gpa, "Unused dependencies and configuration will be kept.\n");
+    if (action == .remove and backend != .standard and backend != .aur) try review.appendSlice(self.gpa, "Unused dependencies and configuration will be kept.\n");
     const prompt = try self.gpa.create(SudoPrompt);
     prompt.* = .{ .name = "", .backend = backend, .action = action };
     errdefer prompt.deinit(self.gpa);
@@ -585,7 +585,7 @@ pub fn handleSudoKey(self: *Model, prompt: *SudoPrompt, ctx: *vxfw.EventContext,
             return ctx.consumeAndRedraw();
         }
     };
-    if (prompt.state == .entering and prompt.backend == .standard and prompt.action == .remove and commands.matches(key, .mark)) {
+    if (prompt.state == .entering and (prompt.backend == .standard or prompt.backend == .aur) and prompt.action == .remove and commands.matches(key, .mark)) {
         prompt.remove_unused_dependencies = !prompt.remove_unused_dependencies;
         return ctx.consumeAndRedraw();
     }
