@@ -47,6 +47,15 @@ pub const StandardPackage = struct {
     installed_size: i64 = 0,
     required_by: []const []const u8 = &.{},
     optional_for: []const []const u8 = &.{},
+    installed: bool = false,
+    installed_from: ?[]const u8 = null,
+    installed_from_inferred: bool = false,
+    available_from: []const RepositoryVersion = &.{},
+};
+
+pub const RepositoryVersion = struct {
+    repository: []const u8,
+    version: []const u8,
 };
 
 const LocalPackage = struct {
@@ -332,22 +341,27 @@ fn runStandard(
     if (available) {
         const values = try manager.get_available_packages();
         defer PackageManager.Manager.OwnedPackage.deinitSlice(context.allocator, values);
+        // repositories may share a name, so keep one entry per repository.
         var seen = std.StringHashMap(void).init(context.allocator);
         defer seen.deinit();
         for (values) |value| {
             const name = value.name() orelse continue;
-            if (seen.contains(name)) continue;
-            try seen.put(name, {});
+            const key = try std.fmt.allocPrint(context.allocator, "{s}/{s}", .{ value.repository() orelse "", name });
+            if (seen.contains(key)) continue;
+            try seen.put(key, {});
             if (!show_hidden and ignoredPackage(manager, name)) continue;
             try packages.append(context.allocator, try copyStandardPackage(context.allocator, value));
         }
     }
 
+    if (installed and available) try inferInstalledFrom(context.allocator, packages.items);
+
     if (detail and !group) {
-        const wanted = query orelse return error.NoPackageSpecified;
+        const wanted = splitQualifiedName(query orelse return error.NoPackageSpecified);
         for (packages.items) |package| {
             var pkg = package;
-            if (std.ascii.eqlIgnoreCase(package.name, wanted)) {
+            if (matchesQualifiedName(package, wanted)) {
+                pkg.available_from = try availableFrom(context.allocator, packages.items, package.name);
                 pkg.required_by = try manager.get_required_packages(package.name, package.repository);
                 pkg.optional_depends_installed = try optionalDependencyInstalledStates(
                     context.allocator,
@@ -447,9 +461,7 @@ fn scoredStandardLessThan(_: void, left: ScoredStandard, right: ScoredStandard) 
     if (left.score != right.score) return left.score > right.score;
     const name_order = orderIgnoreCase(left.package.name, right.package.name);
     if (name_order != .eq) return name_order == .lt;
-    const left_local = std.mem.eql(u8, left.package.repository, "local");
-    const right_local = std.mem.eql(u8, right.package.repository, "local");
-    if (left_local != right_local) return left_local;
+    if (left.package.installed != right.package.installed) return left.package.installed;
     return orderIgnoreCase(left.package.repository, right.package.repository) == .lt;
 }
 
@@ -619,7 +631,13 @@ fn renderStandard(
     result: StandardResult,
 ) !void {
     if (optionEnabled(invocation, "--names-only") and !invocation.globals.ui_mode and !invocation.globals.json) {
-        for (result.packages) |package| try context.stdout.print("{s}\n", .{package.name});
+        // repository copies share a name; print it once.
+        var printed = std.StringHashMap(void).init(context.allocator);
+        defer printed.deinit();
+        for (result.packages) |package| {
+            if ((try printed.getOrPut(package.name)).found_existing) continue;
+            try context.stdout.print("{s}\n", .{package.name});
+        }
         for (result.local_packages) |package| try context.stdout.print("{s}\n", .{package.name});
         return;
     }
@@ -686,10 +704,11 @@ fn renderStandard(
                 try context.stdout.writeByte('\n');
             }
             if (result.packages.len > 0) {
+                const mixed = mixesInstalledAndRepository(result.packages);
                 var rows: std.ArrayList([]const []const u8) = .empty;
                 for (result.packages) |package| try rows.append(context.allocator, try row(context.allocator, &.{
                     package.name,
-                    package.repository,
+                    try tableRepository(context.allocator, package, mixed),
                     package.version,
                     try formatSize(context.allocator, size_display, nonNegative(package.installed_size)),
                     truncate(package.description, 50),
@@ -997,6 +1016,18 @@ fn writeStandardPackageJsonWith(json: *std.json.Stringify, package: StandardPack
     try field(json, "Conflicts", package.conflicts);
     try field(json, "PackageFile", null);
     try field(json, "InstallReason", package.install_reason);
+    try field(json, "Installed", package.installed);
+    try field(json, "InstalledFrom", package.installed_from);
+    try field(json, "InstalledFromInferred", package.installed_from_inferred);
+    try json.objectField("AvailableFrom");
+    try json.beginArray();
+    for (package.available_from) |entry| {
+        try json.beginObject();
+        try field(json, "Repository", entry.repository);
+        try field(json, "Version", entry.version);
+        try json.endObject();
+    }
+    try json.endArray();
     try json.objectField("InstallDate");
     if (package.install_date) |seconds| {
         var buffer: [32]u8 = undefined;
@@ -1151,14 +1182,111 @@ fn copyStandardPackage(
         .depends = try copySentinelStrings(allocator, package.depends()),
         .optional_depends = try copySentinelStrings(allocator, package.optional_depends()),
         .conflicts = try copySentinelStrings(allocator, package.conflicts()),
-        .install_reason = if (std.mem.eql(u8, repository, "local")) @tagName(package.install_reason()) else "Not Installed",
+        .install_reason = if (package.installed()) @tagName(package.install_reason()) else "Not Installed",
         .install_date = package.install_date(),
         .build_date = package.build_date(),
         .download_size = package.download_size(),
         .installed_size = package.install_size(),
         .required_by = try copySentinelStrings(allocator, package.required_by()),
         .optional_for = try copySentinelStrings(allocator, package.optional_for()),
+        .installed = package.installed(),
+        .installed_from = if (package.installed_from()) |value| try allocator.dupe(u8, value) else null,
     };
+}
+
+const QualifiedName = struct {
+    repository: ?[]const u8,
+    name: []const u8,
+};
+
+/// a bare name matches every repository.
+fn splitQualifiedName(value: []const u8) QualifiedName {
+    const slash = std.mem.indexOfScalar(u8, value, '/') orelse return .{ .repository = null, .name = value };
+    if (slash == 0 or slash + 1 >= value.len) return .{ .repository = null, .name = value };
+    return .{ .repository = value[0..slash], .name = value[slash + 1 ..] };
+}
+
+/// an installed record matches only its known origin, so with none the
+/// repository's own record answers.
+fn matchesQualifiedName(package: StandardPackage, wanted: QualifiedName) bool {
+    if (!std.ascii.eqlIgnoreCase(package.name, wanted.name)) return false;
+    const repository = wanted.repository orelse return true;
+    if (!package.installed) return std.mem.eql(u8, package.repository, repository);
+    const origin = package.installed_from orelse return false;
+    return std.mem.eql(u8, origin, repository);
+}
+
+/// fills a missing origin when exactly one repository has the same name and
+/// version. only for callers that already loaded repository packages.
+fn inferInstalledFrom(allocator: std.mem.Allocator, packages: []StandardPackage) !void {
+    var origins = std.StringHashMap(InstalledOrigin).init(allocator);
+    defer origins.deinit();
+    for (packages) |package| {
+        if (!package.installed or package.installed_from != null) continue;
+        try origins.put(package.name, .{ .recorded = null, .version = package.version });
+    }
+    for (packages) |package| {
+        if (package.installed) continue;
+        const entry = origins.getPtr(package.name) orelse continue;
+        entry.noteCopy(package.repository, package.version);
+    }
+    for (packages) |*package| {
+        if (!package.installed or package.installed_from != null) continue;
+        const entry = origins.get(package.name) orelse continue;
+        package.installed_from = entry.inferred orelse continue;
+        package.installed_from_inferred = true;
+    }
+}
+
+/// an unrecorded origin is inferred when exactly one repository has the
+/// installed version.
+pub const InstalledOrigin = struct {
+    recorded: ?[]const u8,
+    version: []const u8,
+    inferred: ?[]const u8 = null,
+    version_matches: usize = 0,
+
+    pub fn noteCopy(self: *InstalledOrigin, repository: []const u8, version: []const u8) void {
+        if (self.recorded != null or self.version.len == 0 or !std.mem.eql(u8, version, self.version)) return;
+        self.version_matches += 1;
+        self.inferred = if (self.version_matches == 1) repository else null;
+    }
+
+    pub fn origin(self: InstalledOrigin) ?[]const u8 {
+        return self.recorded orelse self.inferred;
+    }
+};
+
+/// in configured repository order.
+fn availableFrom(allocator: std.mem.Allocator, packages: []const StandardPackage, name: []const u8) ![]const RepositoryVersion {
+    var entries: std.ArrayList(RepositoryVersion) = .empty;
+    for (packages) |package| {
+        if (package.installed or !std.ascii.eqlIgnoreCase(package.name, name)) continue;
+        try entries.append(allocator, .{ .repository = package.repository, .version = package.version });
+    }
+    return entries.toOwnedSlice(allocator);
+}
+
+/// installed packages show their origin instead of `local`.
+pub fn displayRepository(package: StandardPackage) []const u8 {
+    if (!package.installed) return package.repository;
+    return package.installed_from orelse package.repository;
+}
+
+fn mixesInstalledAndRepository(packages: []const StandardPackage) bool {
+    var installed = false;
+    var repository = false;
+    for (packages) |package| {
+        if (package.installed) installed = true else repository = true;
+    }
+    return installed and repository;
+}
+
+/// marks installed rows listed beside repository rows.
+fn tableRepository(allocator: std.mem.Allocator, package: StandardPackage, mixed: bool) ![]const u8 {
+    const repository = displayRepository(package);
+    if (!mixed or !package.installed or std.mem.eql(u8, repository, "local")) return repository;
+    return std.fmt.allocPrint(allocator, "{s} (installed)", .{repository});
 }
 
 fn optionalDependencyInstalledStates(
@@ -1502,6 +1630,7 @@ test "default standard search renders package tables and JSON for both command f
             return .{ .standard = .{
                 .packages = &.{
                     .{ .name = "discord", .repository = "extra", .version = "1", .description = "Chat" },
+                    .{ .name = "discord", .repository = "cachyos", .version = "1", .description = "Chat" },
                     .{ .name = "webcord", .repository = "extra", .version = "2", .description = "Client" },
                 },
                 .requested_packages = true,
@@ -1525,16 +1654,16 @@ test "default standard search renders package tables and JSON for both command f
         if (outcome.dispatch.globals.json) {
             const parsed = try std.json.parseFromSlice(std.json.Value, tc.arena.allocator(), rendered, .{});
             defer parsed.deinit();
-            try std.testing.expectEqual(@as(usize, 2), parsed.value.array.items.len);
+            try std.testing.expectEqual(@as(usize, 3), parsed.value.array.items.len);
             try std.testing.expectEqualStrings("discord", parsed.value.array.items[0].object.get("Name").?.string);
-            try std.testing.expectEqualStrings("webcord", parsed.value.array.items[1].object.get("Name").?.string);
+            try std.testing.expectEqualStrings("webcord", parsed.value.array.items[2].object.get("Name").?.string);
         } else if (optionEnabled(&outcome.dispatch, "--names-only")) {
             try std.testing.expectEqualStrings("discord\nwebcord\n", rendered);
         } else {
             try std.testing.expect(std.mem.indexOf(u8, rendered, "│ Name") != null);
             try std.testing.expect(std.mem.indexOf(u8, rendered, "Repository") != null);
             try std.testing.expect(std.mem.indexOf(u8, rendered, "discord").? < std.mem.indexOf(u8, rendered, "webcord").?);
-            try std.testing.expect(std.mem.indexOf(u8, rendered, "Total: 2 packages") != null);
+            try std.testing.expect(std.mem.indexOf(u8, rendered, "Total: 3 packages") != null);
         }
     }
 }
@@ -1971,11 +2100,103 @@ test "AUR preview scan renders findings in JSON and plain text without changing 
     try std.testing.expect(std.mem.indexOf(u8, text, "Related files") == null);
 }
 
-test "scoredStandardLessThan prioritizes local repository when scores and names match" {
+test "table marks installed rows only when they sit beside repository rows" {
+    const allocator = std.testing.allocator;
+    const installed: StandardPackage = .{ .name = "foo", .repository = "local", .version = "1-1", .installed = true, .installed_from = "extra" };
+    const unknown: StandardPackage = .{ .name = "bar", .repository = "local", .version = "1-1", .installed = true };
+    const available: StandardPackage = .{ .name = "foo", .repository = "extra", .version = "1-1" };
+    try std.testing.expect(mixesInstalledAndRepository(&.{ installed, available }));
+    try std.testing.expect(!mixesInstalledAndRepository(&.{ installed, unknown }));
+    try std.testing.expect(!mixesInstalledAndRepository(&.{available}));
+
+    const marked = try tableRepository(allocator, installed, true);
+    defer allocator.free(marked);
+    try std.testing.expectEqualStrings("extra (installed)", marked);
+    try std.testing.expectEqualStrings("extra", try tableRepository(allocator, installed, false));
+    try std.testing.expectEqualStrings("extra", try tableRepository(allocator, available, true));
+    try std.testing.expectEqualStrings("local", try tableRepository(allocator, unknown, true));
+}
+
+test "qualified names select an installed record by origin and a repository record by repository" {
+    const installed: StandardPackage = .{ .name = "foo", .repository = "local", .version = "1-1", .installed = true, .installed_from = "second" };
+    const first: StandardPackage = .{ .name = "foo", .repository = "first", .version = "1-1" };
+    const second: StandardPackage = .{ .name = "foo", .repository = "second", .version = "1-1" };
+    try std.testing.expect(matchesQualifiedName(installed, splitQualifiedName("foo")));
+    try std.testing.expect(matchesQualifiedName(installed, splitQualifiedName("second/foo")));
+    try std.testing.expect(!matchesQualifiedName(installed, splitQualifiedName("first/foo")));
+    try std.testing.expect(matchesQualifiedName(first, splitQualifiedName("first/foo")));
+    try std.testing.expect(!matchesQualifiedName(first, splitQualifiedName("second/foo")));
+    try std.testing.expect(!matchesQualifiedName(first, splitQualifiedName("first/bar")));
+    // with no known origin, `repo/name` goes to the repository record.
+    var unknown = installed;
+    unknown.installed_from = null;
+    try std.testing.expect(matchesQualifiedName(unknown, splitQualifiedName("foo")));
+    try std.testing.expect(!matchesQualifiedName(unknown, splitQualifiedName("second/foo")));
+    try std.testing.expect(matchesQualifiedName(second, splitQualifiedName("second/foo")));
+    try std.testing.expect(splitQualifiedName("/foo").repository == null);
+
+    const copies = try availableFrom(std.testing.allocator, &.{ installed, first, second }, "foo");
+    defer std.testing.allocator.free(copies);
+    try std.testing.expectEqual(@as(usize, 2), copies.len);
+    try std.testing.expectEqualStrings("first", copies[0].repository);
+    try std.testing.expectEqualStrings("second", copies[1].repository);
+
+    try std.testing.expectEqualStrings("second", displayRepository(installed));
+    try std.testing.expectEqualStrings("local", displayRepository(unknown));
+    try std.testing.expectEqualStrings("first", displayRepository(first));
+}
+
+test "inferInstalledFrom fills only unrecorded origins with a single matching repository" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var packages = [_]StandardPackage{
+        .{ .name = "single", .repository = "local", .version = "1-1", .installed = true },
+        .{ .name = "single", .repository = "extra", .version = "1-1" },
+        .{ .name = "single", .repository = "cachyos", .version = "1-1.1" },
+        .{ .name = "twice", .repository = "local", .version = "2-1", .installed = true },
+        .{ .name = "twice", .repository = "core", .version = "2-1" },
+        .{ .name = "twice", .repository = "extra", .version = "2-1" },
+        .{ .name = "recorded", .repository = "local", .version = "3-1", .installed = true, .installed_from = "core" },
+        .{ .name = "recorded", .repository = "extra", .version = "3-1" },
+        .{ .name = "foreign", .repository = "local", .version = "4-1", .installed = true },
+    };
+    try inferInstalledFrom(arena.allocator(), &packages);
+    try std.testing.expectEqualStrings("extra", packages[0].installed_from.?);
+    try std.testing.expect(packages[0].installed_from_inferred);
+    try std.testing.expect(packages[3].installed_from == null);
+    try std.testing.expectEqualStrings("core", packages[6].installed_from.?);
+    try std.testing.expect(!packages[6].installed_from_inferred);
+    try std.testing.expect(packages[8].installed_from == null);
+}
+
+test "standard package JSON reports installed origin and repository copies" {
+    var json_output = std.Io.Writer.Allocating.init(std.testing.allocator);
+    defer json_output.deinit();
+    try writeStandardPackageJson(&json_output.writer, .{
+        .name = "foo",
+        .repository = "local",
+        .version = "1-1",
+        .installed = true,
+        .installed_from = "second",
+        .installed_from_inferred = true,
+        .available_from = &.{.{ .repository = "second", .version = "1-1" }},
+    });
+    const rendered = json_output.writer.buffered();
+    inline for (.{
+        "\"Repository\":\"local\"",
+        "\"Installed\":true",
+        "\"InstalledFrom\":\"second\"",
+        "\"InstalledFromInferred\":true",
+        "\"AvailableFrom\":[{\"Repository\":\"second\",\"Version\":\"1-1\"}]",
+    }) |needle| try std.testing.expect(std.mem.indexOf(u8, rendered, needle) != null);
+}
+
+test "scoredStandardLessThan prioritizes the installed package when scores and names match" {
     const local_pkg: StandardPackage = .{
         .name = "plasma5support",
         .repository = "local",
         .version = "6.8.0-1",
+        .installed = true,
     };
     const sync_pkg_a: StandardPackage = .{
         .name = "plasma5support",
