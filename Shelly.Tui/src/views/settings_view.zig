@@ -27,6 +27,7 @@ pub const View = struct {
     show_save_notice: bool = false,
     selected: usize,
     path: []const u8,
+    home: ?[]const u8 = null,
     failure: ?anyerror,
     flatpak_checked: bool,
     flatpak_available: bool,
@@ -152,7 +153,33 @@ pub const View = struct {
     }
 
     fn appendPath(self: *const View, ctx: vxfw.DrawContext, children: *std.ArrayList(vxfw.SubSurface), row: u16) Allocator.Error!void {
-        const text = try std.fmt.allocPrint(ctx.arena, "Config: {f}", .{diagnostics.safe(self.path)});
+        const prefix = "Config: ";
+        const available = ctx.max.size().width -| prefix.len;
+        var path: []const u8 = try std.fmt.allocPrint(ctx.arena, "{f}", .{diagnostics.safe(self.path)});
+        if (ctx.stringWidth(path) > available) {
+            if (self.home) |home| {
+                const base = std.mem.trimEnd(u8, home, "/");
+                if (std.fs.path.isAbsolute(home) and std.mem.startsWith(u8, self.path, base) and
+                    self.path.len > base.len and self.path[base.len] == '/')
+                {
+                    path = try std.fmt.allocPrint(ctx.arena, "~{f}", .{diagnostics.safe(self.path[base.len..])});
+                }
+            }
+        }
+        var remaining = ctx.stringWidth(path);
+        if (remaining > available) {
+            const budget = available -| ctx.stringWidth("…");
+            var start: usize = 0;
+            var iter = ctx.graphemeIterator(path);
+            while (iter.next()) |grapheme| {
+                const bytes = grapheme.bytes(path);
+                start += bytes.len;
+                remaining -= ctx.stringWidth(bytes);
+                if (remaining <= budget) break;
+            }
+            path = try std.mem.concat(ctx.arena, u8, &.{ "…", path[start..] });
+        }
+        const text = try std.mem.concat(ctx.arena, u8, &.{ prefix, path });
         const width: u16 = @intCast(@min(ctx.max.size().width, ctx.stringWidth(text)));
         try self.appendRow(ctx.withConstraints(.{}, .{ .width = width, .height = 1 }), children, row, 0, .{ .text = text });
     }
