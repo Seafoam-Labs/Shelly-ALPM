@@ -110,7 +110,7 @@ pub fn draw(self: *Model, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
     // Page layouts reserve one footer row in their height calculations.
     const content_ctx = ctx.withConstraints(.{}, .{ .width = max.width, .height = (max.height - content_offset - panel_height) +| (1 - footer_height) });
     const content_size = content_ctx.max.size();
-    const pane_width = if (max.width >= 64) max.width - split_layout.listWidth(max.width, self.list_percent) else max.width;
+    const pane_width = if (max.width >= 64) max.width - split_layout.listWidth(max.width, self.list_percent.flatpak) else max.width;
     self.flatpak_state.screenshot_layout_available = split_layout.imagesFit(pane_width -| 2, content_size.height -| 4);
     self.help_panel.context = self.commandContext();
     if (show_browsing and self.help_open and self.active != .packages and self.active != .aur and self.active != .flatpak and self.active != .appimage and self.active != .settings) {
@@ -295,7 +295,7 @@ test "package pages tolerate tiny terminals and repeated minimum splits" {
         model.active = tab;
         for ([_]vxfw.Size{ .{ .width = 1, .height = 4 }, .{ .width = 2, .height = 8 }, .{ .width = 27, .height = 5 }, .{ .width = 63, .height = 12 }, .{ .width = 64, .height = 24 }, .{ .width = 80, .height = 24 } }) |size| {
             for ([_]u8{ 0, 20, 40, 80, 255 }) |percent| {
-                model.list_percent = percent;
+                model.activeListPercent().* = percent;
                 var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                 defer arena.deinit();
                 const surface = try model.widget().draw(.{ .arena = arena.allocator(), .min = .{}, .max = .{ .width = size.width, .height = size.height }, .cell_size = .{ .width = 10, .height = 20 } });

@@ -47,7 +47,6 @@ pub const State = struct {
     aur_thread: ?std.Thread = null,
     aur_filtered: std.ArrayList(*const AurPackage) = .empty,
     longest_name: u16 = 0,
-    list_percent: u8 = 30,
     refresh_aur_after_operation: bool = false,
     aur_list: vxfw.ListView,
     aur_preview_button: vxfw.Button,
@@ -437,7 +436,7 @@ pub fn aurView(self: *Model) aur_view.View {
         self.aur_state.aur_details_cursor = self.aur_state.aur_list.cursor;
     }
     return .{
-        .list_percent = self.aur_state.list_percent,
+        .list_percent = self.list_percent.aur,
         .aur_field = &self.aur_state.aur_field,
         .selected = selectedAur(self),
         .details_scroll = &self.aur_state.aur_details_scroll,

@@ -372,7 +372,28 @@ fn pollSettingsFile(self: *Model, ctx: *vxfw.EventContext) !void {
 }
 
 pub fn settingsView(self: *Model) settings_view.View {
-    return .{ .list_percent = self.list_percent, .help = if (self.help_open) &self.help_panel else null, .userdata = self, .on_action = onSettingsAction, .header_open = self.settings_state.header_open, .header_selected = self.settings_state.header_selected, .keybindings_open = self.settings_state.keybindings_open, .binding_selected = self.settings_state.keybinding_selected, .capturing = self.settings_state.keybinding_capture, .binding_error = self.settings_state.keybinding_error, .settings = self.settings_state.settings_draft, .dirty = hasChanges(self), .show_save_notice = self.settings_state.save_notice_until != null and self.settings_state.settings_failure == null, .selected = self.settings_state.settings_selected, .home = if (self.settings_state.cli_environment) |env| env.get("HOME") else null, .path = if (self.settings_state.settings_store) |store| store.path else "Settings could not be initialized", .failure = self.settings_state.settings_failure, .flatpak_checked = self.flatpak_state.flatpak_checked, .flatpak_available = self.flatpak_state.flatpak_available, .checking = self.flatpak_state.flatpak_probe_job != null, .busy = self.operation_state.install_job != null };
+    return .{ 
+        .list_percent = self.list_percent.settings, 
+        .help = if (self.help_open) &self.help_panel else null, 
+        .userdata = self, 
+        .on_action = onSettingsAction, 
+        .header_open = self.settings_state.header_open, 
+        .header_selected = self.settings_state.header_selected, 
+        .keybindings_open = self.settings_state.keybindings_open, 
+        .binding_selected = self.settings_state.keybinding_selected, 
+        .capturing = self.settings_state.keybinding_capture, 
+        .binding_error = self.settings_state.keybinding_error, 
+        .settings = self.settings_state.settings_draft, 
+        .dirty = hasChanges(self), 
+        .show_save_notice = self.settings_state.save_notice_until != null and self.settings_state.settings_failure == null, 
+        .selected = self.settings_state.settings_selected, 
+        .home = if (self.settings_state.cli_environment) |env| env.get("HOME") else null, 
+        .path = if (self.settings_state.settings_store) |store| store.path else "Settings could not be initialized", 
+        .failure = self.settings_state.settings_failure, 
+        .flatpak_checked = self.flatpak_state.flatpak_checked, 
+        .flatpak_available = self.flatpak_state.flatpak_available, 
+        .checking = self.flatpak_state.flatpak_probe_job != null, 
+        .busy = self.operation_state.install_job != null };
 }
 
 fn onSettingsAction(ptr: *anyopaque, ctx: *vxfw.EventContext, action: settings_view.Action) anyerror!void {

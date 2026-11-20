@@ -40,7 +40,7 @@ pub const Overlay = union(enum) {
 
 pub const Model = struct {
     gpa: Allocator,
-    list_percent: u8 = 40,
+    list_percent: std.enums.EnumFieldStruct(Tab, u8, 40) = .{ .aur = 30 },
     viewport_width: ?u16 = null,
 
     active: Tab = .packages,
@@ -159,7 +159,7 @@ pub const Model = struct {
                 }
                 if (!self.help_open and operation_model.operationPrompt(self) == null and self.operation_state.review_prompt == null and (self.active == .packages or self.active == .aur or self.active == .flatpak or self.active == .appimage or self.active == .settings) and (self.overlay == null or self.overlay.? == .package or self.overlay.? == .aur or self.overlay.? == .flatpak)) {
                     if (commands.matches(key, .narrow_view) or commands.matches(key, .widen_view)) {
-                        const percent = if (self.active == .aur) &self.aur_state.list_percent else &self.list_percent;
+                        const percent = self.activeListPercent();
                         percent.* = @import("views/split_layout.zig").resize(self.viewport_width, percent.*, commands.matches(key, .widen_view)) orelse return ctx.consumeEvent();
                         return ctx.consumeAndRedraw();
                     }
@@ -342,6 +342,12 @@ pub const Model = struct {
             .flatpak => self.settings_state.settings.flatpak_enabled,
             .appimage => self.settings_state.settings.appimage_enabled,
             else => true,
+        };
+    }
+
+    pub fn activeListPercent(self: *Model) *u8 {
+        return switch (self.active) {
+            inline else => |tab| &@field(self.list_percent, @tagName(tab)),
         };
     }
 
@@ -651,7 +657,7 @@ test "help and footer update live bindings without reopening help" {
     try std.testing.expect(!model.help_open);
 }
 
-test "panel resizing keeps AUR independent, respects bounds, and preserves settings navigation" {
+test "panel resizing keeps pages independent, respects bounds, and preserves settings navigation" {
     const model = try Model.init(std.testing.allocator);
     defer model.deinit();
     var events: vxfw.EventContext = .{ .io = std.testing.io, .alloc = std.testing.allocator, .cmds = .empty };
@@ -660,23 +666,23 @@ test "panel resizing keeps AUR independent, respects bounds, and preserves setti
     try std.testing.expectEqual(@as(u8, 30), aur_model.aurView(model).list_percent);
     try model.captureEvent(&events, .{ .key_press = commands.bindings.widen_view });
     try std.testing.expectEqual(@as(u8, 35), aur_model.aurView(model).list_percent);
-    try std.testing.expectEqual(@as(u8, 40), model.list_percent);
-    for ([_]Tab{ .packages, .flatpak }) |tab| {
+    try std.testing.expectEqual(@as(u8, 40), model.list_percent.packages);
+    for ([_]Tab{ .packages, .appimage, .flatpak }) |tab| {
         model.active = tab;
-        model.list_percent = 40;
+        try std.testing.expectEqual(@as(u8, 40), model.activeListPercent().*);
         try model.captureEvent(&events, .{ .key_press = commands.bindings.widen_view });
-        try std.testing.expectEqual(@as(u8, 45), model.list_percent);
+        try std.testing.expectEqual(@as(u8, 45), model.activeListPercent().*);
         try model.captureEvent(&events, .{ .key_press = commands.bindings.narrow_view });
-        try std.testing.expectEqual(@as(u8, 40), model.list_percent);
+        try std.testing.expectEqual(@as(u8, 40), model.activeListPercent().*);
     }
     for (0..100) |_| try model.captureEvent(&events, .{ .key_press = commands.bindings.widen_view });
-    try std.testing.expectEqual(@as(u8, 80), model.list_percent);
+    try std.testing.expectEqual(@as(u8, 80), model.activeListPercent().*);
     for (0..100) |_| try model.captureEvent(&events, .{ .key_press = commands.bindings.narrow_view });
-    try std.testing.expectEqual(@as(u8, 20), model.list_percent);
+    try std.testing.expectEqual(@as(u8, 20), model.activeListPercent().*);
     model.active = .settings;
     const selected = model.settings_state.settings_selected;
     try model.captureEvent(&events, .{ .key_press = commands.bindings.widen_view });
-    try std.testing.expectEqual(@as(u8, 25), model.list_percent);
+    try std.testing.expectEqual(@as(u8, 45), model.activeListPercent().*);
     try std.testing.expectEqual(selected, model.settings_state.settings_selected);
 }
 
