@@ -389,8 +389,12 @@ pub const Root = struct {
     /// coordinator, so a soname the guest lacks (the vendored libarchive-shelly
     /// library, for example) must come from the host's resolved closure. Copies
     /// land in usr/lib, matching the packaged layout, so the guest loader
-    /// resolves them without environment changes. validateRuntime remains the
-    /// authoritative check after staging.
+    /// resolves them without environment changes.
+    ///
+    /// Staging repeats until a guest pass stages nothing new: while a private
+    /// DSO is "not found", ldd cannot enumerate its dependencies, so each staged
+    /// library can reveal further missing sonames that only the next pass can
+    /// see. validateRuntime remains the authoritative check after staging.
     pub fn stageRuntimeLibraries(
         self: *Root,
         environ: std.process.Environ,
@@ -414,21 +418,43 @@ pub const Root = struct {
         );
         try operation.checkCancelled();
 
-        var guest_capture: RuntimeCapture = .{ .operation = operation, .allocator = self.allocator };
-        defer guest_capture.deinit();
-        _ = try PackageManager.process_runner.runStreamingWithEnvironmentOperation(
-            self.allocator,
-            self.io,
-            environ,
-            &.{ "/usr/bin/chroot", self.root_path, "/usr/bin/env", "LC_ALL=C", "/usr/bin/ldd", guest_executable },
-            null,
-            null,
-            .{ .function = RuntimeCapture.line, .data = &guest_capture },
-            operation,
-        );
-        try operation.checkCancelled();
+        var staged: std.ArrayList([]const u8) = .empty;
+        defer {
+            for (staged.items) |name| self.allocator.free(name);
+            staged.deinit(self.allocator);
+        }
+        while (true) {
+            var guest_capture: RuntimeCapture = .{ .operation = operation, .allocator = self.allocator };
+            defer guest_capture.deinit();
+            _ = try PackageManager.process_runner.runStreamingWithEnvironmentOperation(
+                self.allocator,
+                self.io,
+                environ,
+                &.{ "/usr/bin/chroot", self.root_path, "/usr/bin/env", "LC_ALL=C", "/usr/bin/ldd", guest_executable },
+                null,
+                null,
+                .{ .function = RuntimeCapture.line, .data = &guest_capture },
+                operation,
+            );
+            try operation.checkCancelled();
+            if (!try self.stageMissingRuntimePass(&host_capture, &guest_capture, &staged, operation)) break;
+        }
+    }
 
+    /// Copies one pass of guest-missing sonames that the host closure resolves
+    /// and that have not been staged yet, returning whether anything new was
+    /// staged. A false result ends the staging loop; sonames the host cannot
+    /// resolve stay missing for validateRuntime to report.
+    fn stageMissingRuntimePass(
+        self: *Root,
+        host_capture: *const RuntimeCapture,
+        guest_capture: *const RuntimeCapture,
+        staged: *std.ArrayList([]const u8),
+        operation: *const PackageManager.Operation,
+    ) !bool {
+        var progressed = false;
         for (guest_capture.missing_names.items) |name| {
+            if (containsArgument(staged.items, name)) continue;
             const host_path = host_capture.resolvedPath(name) orelse continue;
             const relative = try std.fmt.allocPrint(self.allocator, "usr/lib/{s}", .{name});
             defer self.allocator.free(relative);
@@ -436,6 +462,10 @@ pub const Root = struct {
             defer self.allocator.free(destination);
             try std.Io.Dir.copyFile(.cwd(), host_path, .cwd(), destination, self.io, .{});
             try std.Io.Dir.cwd().setFilePermissions(self.io, destination, .fromMode(0o755), .{});
+            const owned = try self.allocator.dupe(u8, name);
+            errdefer self.allocator.free(owned);
+            try staged.append(self.allocator, owned);
+            progressed = true;
             const message = try std.fmt.allocPrint(
                 self.allocator,
                 "Staged private runtime library {s} from the host closure",
@@ -444,6 +474,7 @@ pub const Root = struct {
             defer self.allocator.free(message);
             operation.status(.information, message, "build.isolation.runtime", null);
         }
+        return progressed;
     }
 
     pub fn stageSourcePgpKeys(self: *Root, contents: []const u8) !void {
@@ -973,6 +1004,74 @@ test "runtime capture collects missing sonames and host resolutions for staging"
     try std.testing.expectEqualStrings("libarchive-shelly.so.13", capture.missing_names.items[1]);
     try std.testing.expectEqualStrings("/usr/lib/libarchive-shelly.so.13", capture.resolvedPath("libarchive-shelly.so.13").?);
     try std.testing.expect(capture.resolvedPath("libprivate.so.1") == null);
+}
+
+test "runtime staging covers transitive private dependencies across passes" {
+    const allocator = std.testing.allocator;
+    const io = std.testing.io;
+    var temporary = std.testing.tmpDir(.{});
+    defer temporary.cleanup();
+    const parent = try temporary.dir.realPathFileAlloc(io, ".", allocator);
+    defer allocator.free(parent);
+    var root = try permissionTestRoot(parent);
+    defer root.deinit();
+
+    var context = PackageManager.OperationContext.init(allocator, io);
+    defer context.deinit();
+    var operation = context.begin(.{ .backend = .aur, .kind = .build, .subject = "fixture" });
+    defer operation.finish(.failed);
+
+    // Host closure: a private DSO plus its own transitive dependency.
+    try temporary.dir.writeFile(io, .{ .sub_path = "libarchive-shelly.so.13", .data = "vendored archive\n" });
+    try temporary.dir.writeFile(io, .{ .sub_path = "libb2.so.1", .data = "blake2\n" });
+    const archive_host = try temporary.dir.realPathFileAlloc(io, "libarchive-shelly.so.13", allocator);
+    defer allocator.free(archive_host);
+    const b2_host = try temporary.dir.realPathFileAlloc(io, "libb2.so.1", allocator);
+    defer allocator.free(b2_host);
+    var host: RuntimeCapture = .{ .operation = &operation, .allocator = allocator };
+    defer host.deinit();
+    host.record(.{ .name = "libarchive-shelly.so.13", .target = archive_host });
+    host.record(.{ .name = "libb2.so.1", .target = b2_host });
+
+    const lib_path = try root.rootJoin("usr/lib");
+    defer allocator.free(lib_path);
+    try std.Io.Dir.cwd().createDirPath(io, lib_path);
+    var guest_lib = try std.Io.Dir.cwd().openDir(io, lib_path, .{});
+    defer guest_lib.close(io);
+
+    var staged: std.ArrayList([]const u8) = .empty;
+    defer {
+        for (staged.items) |name| allocator.free(name);
+        staged.deinit(allocator);
+    }
+
+    // Pass 1: only the private DSO is visible; ldd cannot enumerate its
+    // dependencies while the library itself is missing.
+    var first: RuntimeCapture = .{ .operation = &operation, .allocator = allocator };
+    defer first.deinit();
+    first.record(parseRuntimeEntry("\tlibarchive-shelly.so.13 => not found").?);
+    try std.testing.expect(try root.stageMissingRuntimePass(&host, &first, &staged, &operation));
+    try expectStagedInput(guest_lib, "libarchive-shelly.so.13", "vendored archive\n", 0o755);
+
+    // Pass 2: the staged DSO exposes its dependency. Already-staged names are
+    // skipped even if a later ldd pass still reports them missing.
+    try guest_lib.writeFile(io, .{ .sub_path = "libarchive-shelly.so.13", .data = "sentinel\n" });
+    var second: RuntimeCapture = .{ .operation = &operation, .allocator = allocator };
+    defer second.deinit();
+    second.record(parseRuntimeEntry("\tlibarchive-shelly.so.13 => not found").?);
+    second.record(parseRuntimeEntry("\tlibb2.so.1 => not found").?);
+    try std.testing.expect(try root.stageMissingRuntimePass(&host, &second, &staged, &operation));
+    try expectStagedInput(guest_lib, "libb2.so.1", "blake2\n", 0o755);
+    try expectStagedInput(guest_lib, "libarchive-shelly.so.13", "sentinel\n", 0o755);
+
+    // Pass 3: nothing newly resolvable remains, so the loop terminates even
+    // though an unresolvable soname is still missing; validateRuntime reports it.
+    var third: RuntimeCapture = .{ .operation = &operation, .allocator = allocator };
+    defer third.deinit();
+    third.record(parseRuntimeEntry("\tlibb2.so.1 => not found").?);
+    third.record(parseRuntimeEntry("\tlibghost.so.1 => not found").?);
+    try std.testing.expect(!try root.stageMissingRuntimePass(&host, &third, &staged, &operation));
+    try std.testing.expectEqual(@as(usize, 2), staged.items.len);
 }
 
 test "operation paths are restricted to random children of the managed parent" {
