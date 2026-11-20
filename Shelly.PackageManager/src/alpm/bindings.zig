@@ -210,6 +210,21 @@ pub const libalpm = struct {
             return .{ .ptr = db };
         }
 
+        pub fn installed(self: Package) bool {
+            return alpm.alpm_pkg_get_origin(self.ptr) == alpm.ALPM_PKG_FROM_LOCALDB;
+        }
+
+        /// CachyOS's pacman records the install repository; Arch's does not.
+        pub const records_installed_repository = @hasDecl(alpm, "alpm_pkg_get_installed_db");
+
+        /// installed packages only.
+        pub fn recorded_installed_repository(self: Package) ?[:0]const u8 {
+            if (comptime !records_installed_repository) return null;
+            if (!self.installed()) return null;
+            const value = str(alpm.alpm_pkg_get_installed_db(self.ptr)) orelse return null;
+            return if (value.len == 0) null else value;
+        }
+
         pub fn replaces(self: Package) ListIterator(Dependency, Dependency.from) {
             return .{ .node = alpm.alpm_pkg_get_replaces(self.ptr) };
         }
@@ -365,8 +380,14 @@ pub const libalpm = struct {
                 try allocator.alloc([:0]u8, 0);
             errdefer freeStrings(allocator, optional_for_value);
 
+            const installed = package.installed();
+            const installed_from_value = try dupeOptional(allocator, package.recorded_installed_repository());
+            errdefer if (installed_from_value) |value| allocator.free(value);
+
             const architecture_value = try dupeOptional(allocator, str(alpm.alpm_pkg_get_arch(package.ptr)));
             return .{
+                .installed_value = installed,
+                .installed_from_value = installed_from_value,
                 .architecture_value = architecture_value,
                 .name_value = name_value,
                 .base_value = base_value,
