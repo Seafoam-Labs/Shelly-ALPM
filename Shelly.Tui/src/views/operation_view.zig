@@ -27,8 +27,13 @@ pub const View = struct {
 
     fn confirmation(self: View, arena: Allocator) Allocator.Error![]const u8 {
         if ((self.backend == .standard or self.backend == .aur) and self.action == .remove) {
-            return std.fmt.allocPrint(arena, "[{s}] Remove unused dependencies", .{
+            const targets = if (self.review.len > 0)
+                std.mem.trim(u8, self.review, "\r\n")
+            else
+                try std.fmt.allocPrint(arena, "Remove: {f}", .{diagnostics.safe(self.name)});
+            return std.fmt.allocPrint(arena, "[{s}] Remove unused dependencies\n{s}", .{
                 if (self.remove_unused_dependencies) "x" else " ",
+                targets,
             });
         }
         if (self.review.len > 0) return std.mem.trim(u8, self.review, "\r\n");
