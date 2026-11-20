@@ -5,9 +5,10 @@ pub const appimage_index: usize = 2;
 pub const atoll_index: usize = 3;
 pub const header_index: usize = 4;
 pub const screenshots_index: usize = 5;
-pub const keybindings_index: usize = 6;
-pub const save_index: usize = 7;
-pub const discard_index: usize = 8;
+pub const footer_shortcuts_index: usize = 6;
+pub const keybindings_index: usize = 7;
+pub const save_index: usize = 8;
+pub const discard_index: usize = 9;
 
 pub fn aurUrl(atoll: bool) []const u8 {
     return if (atoll) "https://atoll.seafoam-labs.org" else "https://aur.archlinux.org";
@@ -41,9 +42,10 @@ pub const Settings = struct {
     appimage_enabled: bool = false,
     header_icons: HeaderIcons = .none,
     show_flatpak_screenshots: bool = true,
+    show_footer_shortcuts: bool = true,
 
     pub fn eql(self: Settings, other: Settings) bool {
-        return self.appimage_enabled == other.appimage_enabled and self.keybindings.eql(other.keybindings) and self.atoll_aur_enabled == other.atoll_aur_enabled and self.aur_enabled == other.aur_enabled and self.flatpak_enabled == other.flatpak_enabled and self.header_icons == other.header_icons and self.show_flatpak_screenshots == other.show_flatpak_screenshots;
+        return self.appimage_enabled == other.appimage_enabled and self.keybindings.eql(other.keybindings) and self.atoll_aur_enabled == other.atoll_aur_enabled and self.aur_enabled == other.aur_enabled and self.flatpak_enabled == other.flatpak_enabled and self.header_icons == other.header_icons and self.show_flatpak_screenshots == other.show_flatpak_screenshots and self.show_footer_shortcuts == other.show_footer_shortcuts;
     }
 };
 

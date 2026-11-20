@@ -31,6 +31,9 @@ pub const Id = enum {
     cancel,
     refresh,
     refresh_list,
+    sync_packages,
+    sort_package_name,
+    sort_package_repository,
     save_settings,
     filter,
     upgrade_all,
@@ -80,6 +83,9 @@ pub const Bindings = struct {
     cancel: vaxis.Key = .{ .codepoint = 'q', .mods = .{ .ctrl = true } },
     refresh: vaxis.Key = .{ .codepoint = 'r' },
     save_settings: vaxis.Key = .{ .codepoint = 's', .mods = .{ .ctrl = true } },
+    sort_package_name: vaxis.Key = .{ .codepoint = 'n', .mods = .{ .alt = true } },
+    sort_package_repository: vaxis.Key = .{ .codepoint = 'o', .mods = .{ .alt = true } },
+    sync_packages: vaxis.Key = .{ .codepoint = 's', .mods = .{ .alt = true } },
     refresh_list: vaxis.Key = .{ .codepoint = 'r', .mods = .{ .ctrl = true } },
     filter: vaxis.Key = .{ .codepoint = 'l', .mods = .{ .ctrl = true } },
     upgrade_all: vaxis.Key = .{ .codepoint = 'g' },
@@ -318,6 +324,7 @@ pub fn scrollsOperation(key: vaxis.Key) bool {
 
 pub const Mode = enum { appimage, search, packages, details, aur, flatpak, updates, settings, authentication, confirmation, running, result, review, preview_document, answers, choice, help };
 pub const Context = struct {
+    removal_confirmation: bool = false,
     appimage_source: bool = false,
     appimage_configure_selected: bool = false,
     appimage_path: bool = false,
@@ -395,6 +402,10 @@ pub fn entries(arena: std.mem.Allocator, context: Context) std.mem.Allocator.Err
     if (context.screenshot_retry) try add(arena, &list, .refresh_list, "Retry image", "Retry loading the Flatpak screenshot");
     switch (context.mode) {
         .search, .packages => {
+            try add(arena, &list, .refresh_list, "Refresh", "Reload available and installed packages");
+            try add(arena, &list, .sync_packages, "Sync", "Synchronize package databases and reload the list");
+            try add(arena, &list, .sort_package_name, "Sort by name", "Sort by package name or reverse the name order");
+            try add(arena, &list, .sort_package_repository, "Sort by repository", "Sort by repository or reverse the repository order");
             if (context.mode == .packages and context.selected_count > 0)
                 try add(arena, &list, .clear_selection, "Clear", "Clear all package selections, including entries hidden by filters");
             if (context.mode == .search) {
@@ -497,6 +508,7 @@ pub fn entries(arena: std.mem.Allocator, context: Context) std.mem.Allocator.Err
             }
         },
         .authentication, .confirmation => {
+            if (context.removal_confirmation) try add(arena, &list, .mark, "Toggle", "Toggle removal of unused dependencies");
             try add(arena, &list, .confirm, "Run", "Confirm and run the operation");
             try add(arena, &list, .cancel, "Back", "Dismiss confirmation without starting the operation");
             if (context.mode == .confirmation) try add(arena, &list, .close, "Back", "Dismiss confirmation without starting the operation");

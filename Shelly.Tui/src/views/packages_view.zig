@@ -1,9 +1,12 @@
 const std = @import("std");
+const styles = @import("styles.zig");
 const Border = @import("border.zig");
 const help_view = @import("help_view.zig");
 const vaxis = @import("vaxis");
 const vxfw = vaxis.vxfw;
 const Allocator = std.mem.Allocator;
+const Model = @import("../model.zig").Model;
+const packages_model = @import("../models/packages_model.zig");
 const Package = @import("../models/packages.zig").Package;
 const appendDetailList = @import("detail_format.zig").appendDetailList;
 const diagnostics = @import("diagnostics");
@@ -13,9 +16,9 @@ const formatSize = @import("detail_format.zig").formatSize;
 /// Query execution and user-action handling remain in Model.
 pub const View = struct {
     list_percent: u8 = 40,
+    model: *Model,
     installed_only: bool = false,
     text_field: *vxfw.TextField,
-    list_view: *vxfw.ListView,
     details_scroll: *vxfw.ScrollView,
     help: ?*help_view.Panel = null,
     selected: ?*const Package,
@@ -74,14 +77,9 @@ pub const View = struct {
             else
                 null;
             var label: vxfw.Text = .{ .text = message orelse "" };
-            const labels = [_]Border.BorderLabel{.{
-                .text = if (self.installed_only) "Installed packages" else "Packages",
-                .alignment = .top_left,
-            }};
-            const content = if (message != null) label.widget() else self.list_view.widget();
+            const content: vxfw.Widget = if (message != null) label.widget() else .{ .userdata = self.model, .drawFn = drawPackageTable };
             var border: Border = .{
                 .child = content,
-                .labels = &labels,
                 .focused = self.list_active and !self.details_active,
             };
             try children.append(arena, .{
@@ -136,6 +134,73 @@ pub const View = struct {
     }
 };
 
+const marker_width = 2;
+const selected_width: u16 = "Selected".len;
+const minimum_table_width = 30;
+
+fn repositoryColumn(width: u16) u16 {
+    const available = width - selected_width;
+    return available - @max(11, available / 3);
+}
+
+const SortHeader = struct {
+    model: *Model,
+    gutter: u16,
+    repository: u16,
+    selected: u16,
+
+    fn draw(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
+        const self: *SortHeader = @ptrCast(@alignCast(ptr));
+        const header = try vxfw.Surface.init(ctx.arena, .{ .userdata = self, .drawFn = draw, .eventHandler = handleEvent }, ctx.max.size());
+        @memset(header.buffer, .{});
+        const sort = self.model.packages_state.sort;
+        const name_label = if (sort != null and sort.?.column == .name) (if (sort.?.descending) "Packages↓" else "Packages↑") else "Packages";
+        const repo_label = if (sort != null and sort.?.column == .repository) (if (sort.?.descending) "Repository↓" else "Repository↑") else "Repository";
+        const name_start = self.gutter + marker_width;
+        try drawColumn(ctx, header.buffer, name_start, self.repository - name_start, name_label, styles.emphasis);
+        try drawColumn(ctx, header.buffer, self.repository, self.selected - self.repository, repo_label, styles.emphasis);
+        try drawColumn(ctx, header.buffer, self.selected, selected_width, "Selected", styles.emphasis);
+        return header;
+    }
+
+    fn handleEvent(ptr: *anyopaque, ctx: *vxfw.EventContext, event: vxfw.Event) anyerror!void {
+        const header: *SortHeader = @ptrCast(@alignCast(ptr));
+        if (event != .mouse or header.model.help_open) return;
+        const mouse = event.mouse;
+        if (mouse.button != .left or mouse.type != .press or mouse.col < 0 or mouse.col >= header.selected) return;
+        packages_model.sortBy(header.model, if (mouse.col < header.repository) .name else .repository);
+        ctx.consumeAndRedraw();
+    }
+};
+
+fn drawPackageTable(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
+    const model: *Model = @ptrCast(@alignCast(ptr));
+    const list = &model.packages_state.list_view;
+    const size = ctx.max.size();
+    const gutter: u16 = if (list.draw_cursor) 2 else 0;
+    const width = size.width -| gutter;
+    if (width < minimum_table_width or size.height < 2) return list.draw(ctx);
+
+    const repo = repositoryColumn(width);
+    const hit = try ctx.arena.create(SortHeader);
+    hit.* = .{ .model = model, .gutter = gutter, .repository = gutter + repo, .selected = size.width - selected_width };
+    const header = try SortHeader.draw(hit, ctx.withConstraints(.{}, .{ .width = size.width, .height = 1 }));
+    const children = try ctx.arena.alloc(vxfw.SubSurface, 2);
+    children[0] = .{ .origin = .{ .row = 0, .col = 0 }, .surface = header };
+    children[1] = .{
+        .origin = .{ .row = 1, .col = 0 },
+        .surface = try list.draw(ctx.withConstraints(.{}, .{ .width = size.width, .height = size.height - 1 })),
+    };
+    return .{ .size = size, .widget = .{ .userdata = ptr, .drawFn = drawPackageTable }, .buffer = &.{}, .children = children };
+}
+
+pub fn drawColumn(ctx: vxfw.DrawContext, buffer: []vaxis.Cell, col: u16, width: u16, value: []const u8, style: vaxis.Style) Allocator.Error!void {
+    if (width == 0 or value.len == 0) return;
+    var label: vxfw.Text = .{ .text = value, .style = style, .softwrap = false, .overflow = .ellipsis };
+    const surface = try label.draw(ctx.withConstraints(.{}, .{ .width = width, .height = 1 }));
+    @memcpy(buffer[col..][0..surface.buffer.len], surface.buffer);
+}
+
 pub fn drawPackageRow(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
     return drawRow(ptr, ctx, false);
 }
@@ -148,28 +213,26 @@ fn drawRow(ptr: *anyopaque, ctx: vxfw.DrawContext, selected: bool) Allocator.Err
     const pkg: *const Package = @ptrCast(@alignCast(ptr));
     const arena = ctx.arena;
 
-    var spans: std.ArrayList(vxfw.RichText.TextSpan) = .empty;
-    try spans.append(arena, .{ .text = if (selected) "[x] " else "[ ] ", .style = .{ .bold = selected } });
-    if (pkg.Installed) {
-        try spans.append(arena, .{ .text = "● ", .style = .{ .fg = .{ .index = 2 } } });
-    } else {
-        try spans.append(arena, .{ .text = "  " });
-    }
-    try spans.append(arena, .{ .text = try diagnostics.sanitizeAlloc(arena, pkg.Name), .style = .{ .bold = true } });
-
-    const rich = try arena.create(vxfw.RichText);
-    rich.* = .{
-        .text = spans.items,
-        .softwrap = false,
-        .overflow = .ellipsis,
-    };
-    // ListView allows horizontal overflow. Constrain rows to its viewport
-    // so long package names are ellipsized instead of extending off screen.
     const width = ctx.max.width orelse ctx.min.width;
-    return rich.draw(ctx.withConstraints(
-        .{ .width = width, .height = 0 },
-        .{ .width = width, .height = 1 },
-    ));
+    const table = width >= minimum_table_width;
+    const checkbox_col = if (table) width - selected_width else width -| 3;
+    const name = try diagnostics.sanitizeAlloc(arena, pkg.Name);
+    const repository = try diagnostics.sanitizeAlloc(arena, pkg.Repository);
+    const widget: vxfw.Widget = .{ .userdata = ptr, .drawFn = if (selected) drawMarkedPackageRow else drawPackageRow };
+    const surface = try vxfw.Surface.init(arena, widget, .{ .width = width, .height = 1 });
+    @memset(surface.buffer, .{});
+    if (pkg.Installed)
+        try drawColumn(ctx, surface.buffer, 0, @min(marker_width, checkbox_col), "●", .{ .fg = .{ .index = 2 } });
+    if (table) {
+        const repo = repositoryColumn(width);
+        try drawColumn(ctx, surface.buffer, marker_width, repo - marker_width - 1, name, styles.emphasis);
+        try drawColumn(ctx, surface.buffer, repo, checkbox_col - repo - 1, repository, styles.secondary);
+    } else {
+        const summary = if (repository.len == 0) name else try std.fmt.allocPrint(arena, "{s} · {s}", .{ name, repository });
+        try drawColumn(ctx, surface.buffer, marker_width, checkbox_col -| (marker_width + 1), summary, styles.emphasis);
+    }
+    try drawColumn(ctx, surface.buffer, checkbox_col, @min(3, width - checkbox_col), if (selected) "[x]" else "[ ]", .{ .bold = selected });
+    return surface;
 }
 
 pub fn drawSelectedRow(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
@@ -338,24 +401,25 @@ test "selection checkbox is independent of the installed indicator" {
     const ctx: vxfw.DrawContext = .{ .arena = arena.allocator(), .min = .{}, .max = .{ .width = 40, .height = 1 }, .cell_size = .{ .width = 10, .height = 20 } };
     const marked = try drawMarkedPackageRow(&pkg, ctx);
     const unmarked = try drawPackageRow(&pkg, ctx);
-    try std.testing.expectEqualStrings("x", marked.buffer[1].char.grapheme);
-    try std.testing.expectEqualStrings(" ", unmarked.buffer[1].char.grapheme);
-    try std.testing.expectEqualStrings("●", marked.buffer[4].char.grapheme);
-    try std.testing.expectEqualStrings("●", unmarked.buffer[4].char.grapheme);
+    try std.testing.expectEqualStrings("x", marked.buffer[40 - selected_width + 1].char.grapheme);
+    try std.testing.expectEqualStrings(" ", unmarked.buffer[40 - selected_width + 1].char.grapheme);
+    try std.testing.expectEqualStrings("●", marked.buffer[0].char.grapheme);
+    try std.testing.expectEqualStrings("●", unmarked.buffer[0].char.grapheme);
 }
 
-test "package row names escape terminal control bytes without changing identity" {
+test "package rows show repository and escape terminal control bytes without changing identity" {
     vxfw.DrawContext.init(.unicode);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const name = "demo\x1b[31m\r\x7f";
-    var pkg: Package = .{ .Name = name };
+    var pkg: Package = .{ .Name = name, .Repository = "extra" };
     const ctx: vxfw.DrawContext = .{ .arena = arena.allocator(), .min = .{}, .max = .{ .width = 80, .height = 1 }, .cell_size = .{ .width = 10, .height = 20 } };
     inline for (.{ drawPackageRow, drawMarkedPackageRow }) |draw| {
         const surface = try draw(&pkg, ctx);
         var text: std.ArrayList(u8) = .empty;
         for (surface.buffer) |cell| try text.appendSlice(arena.allocator(), cell.char.grapheme);
         try std.testing.expect(std.mem.indexOf(u8, text.items, "demo\\x1b[31m\\x0d\\x7f") != null);
+        try std.testing.expectEqualStrings("e", surface.buffer[repositoryColumn(80)].char.grapheme);
         try std.testing.expect(std.mem.indexOfAny(u8, text.items, "\x1b\r\x7f") == null);
         try std.testing.expectEqualStrings(name, pkg.Name);
     }
