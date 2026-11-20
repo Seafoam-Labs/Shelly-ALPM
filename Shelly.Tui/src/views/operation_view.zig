@@ -31,8 +31,9 @@ pub const View = struct {
                 std.mem.trim(u8, self.review, "\r\n")
             else
                 try std.fmt.allocPrint(arena, "Remove: {f}", .{diagnostics.safe(self.name)});
-            return std.fmt.allocPrint(arena, "[{s}] Remove unused dependencies\n{s}", .{
+            return std.fmt.allocPrint(arena, "[{s}] Remove unused dependencies{s}\n{s}", .{
                 if (self.remove_unused_dependencies) "x" else " ",
+                if (self.remove_unused_dependencies) " (skips .pacsave backups)" else "",
                 targets,
             });
         }
