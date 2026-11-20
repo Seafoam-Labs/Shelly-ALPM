@@ -1115,6 +1115,10 @@ fn owned(a: std.mem.Allocator, package: *const rlpm.Package) !types.OwnedPackage
     };
     // Restoring repository value to be "local" to fix a current bug. Will be reworking  old response was package.installed_database
     result.repository_value = try a.dupeSentinel(u8, if (package.origin == .local) "local" else package.database_name, 0);
+    result.installed_value = package.origin == .local;
+    if (package.origin == .local) if (package.installed_database) |database| if (database.len > 0) {
+        result.installed_from_value = try a.dupeSentinel(u8, database, 0);
+    };
     result.download_size_value = @intCast(package.download_size orelse package.compressed_size orelse 0);
     result.install_size_value = @intCast(package.installed_size orelse 0);
     result.build_date_value = package.build_date orelse 0;
