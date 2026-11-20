@@ -8,8 +8,7 @@ pub const NavMode = enum(u8) {
     topbar = 1,
 };
 
-/// Which paint the UI uses: the built-in Pearl-style theme or the desktop's
-/// GTK theme. `system` reproduces the pre-theme rendering exactly.
+/// GTK theme colors. `system` takes the desktop's GTK 4 colors.
 pub const ThemeMode = enum(u8) {
     shelly = 0,
     system = 1,

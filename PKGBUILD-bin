@@ -2,7 +2,7 @@
 # Maintainer: Caroline Snyder <hirpeng@gmail.com>
 pkgbase=shelly-bin
 pkgname=('shelly-bin' 'shelly-flatpak-backend-bin')
-pkgver=3.4.0
+pkgver=3.4.1
 pkgrel=1
 arch=('x86_64')
 url="https://github.com/Seafoam-Labs/Shelly-ALPM"
@@ -29,8 +29,8 @@ source=(
     'shelly-flatpak-integrate'
 )
 
-sha256sums=('51743b80f4c00cf9f6c0f2267e68bcb5ce3c252b267271d4f6f352b17510827d'
-            '98d317f419559ef99f396634a30522f54f3643eef380212c8fa550d5b71a9d42'
+sha256sums=('9b2f0a9ef97ab695f072735109ae813aab44f374ae34ecd9ac8e8ca0a44756cd'
+            '8c6899b77ef45d094d18b6b42273263dcc4dee43ae5b6b9ca685fb0d48d45c84'
             'cfec9274ece30407404b3c41187c465c68f1a6017394ac31c0be937d06f8a850'
             '27eb0cf269296254f45c68c88a27b0e43817bb6107db8e7edb87ea030730bf25'
             '4126da205e91a3ba3b15453c2aeade92f67e16e3386a52aae32fbd3f2e4af9cc'
