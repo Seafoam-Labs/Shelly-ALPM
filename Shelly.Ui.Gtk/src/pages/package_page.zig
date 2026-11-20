@@ -63,6 +63,7 @@ pub const PackagePage = extern struct {
         grid_view_button: *gtk.ToggleButton,
         list_view_button: *gtk.ToggleButton,
         install_button: *gtk.Button,
+        selection_actions: *gtk.Box,
         cart_items_box: *gtk.Box,
         cart_label: *gtk.Label,
         upgrade_check: *gtk.CheckButton,
@@ -971,6 +972,7 @@ pub const PackagePage = extern struct {
         .{ "grouping_selection", @offsetOf(Private, "grouping_selection") },
         .{ "detail_revealer", @offsetOf(Private, "detail_revealer") },
         .{ "install_button", @offsetOf(Private, "install_button") },
+        .{ "selection_actions", @offsetOf(Private, "selection_actions") },
         .{ "cart_label", @offsetOf(Private, "cart_label") },
         .{ "cart_items_box", @offsetOf(Private, "cart_items_box") },
         .{ "upgrade_check", @offsetOf(Private, "upgrade_check") },
@@ -1071,11 +1073,11 @@ pub const PackagePage = extern struct {
         gtk.Label.setLabel(p.cart_label, std.fmt.bufPrintSentinel(&cart_buf, "{d} {s}", .{ total, translations._("Selected") }, 0) catch translations._("0 Selected"));
 
         const btn = p.install_button.as(gtk.Widget);
-        gtk.Widget.setVisible(btn, @intFromBool(total > 0));
+        gtk.Widget.setVisible(p.selection_actions.as(gtk.Widget), @intFromBool(total > 0));
         gtk.Widget.removeCssClass(btn, "suggested-action");
         gtk.Widget.removeCssClass(btn, "destructive-action");
 
-        // the button is hidden with nothing selected.
+        // the selection actions are hidden with nothing selected.
         if (total == 0) return;
         if (install_count > 0 and remove_count > 0) {
             gtk.Button.setLabel(p.install_button, translations._("Mixed selection"));

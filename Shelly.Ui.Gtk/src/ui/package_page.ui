@@ -149,7 +149,7 @@
                                     </object>
                                 </child>
                                 <child>
-                                    <object class="GtkBox">
+                                    <object class="GtkBox" id="selection_actions">
                                         <property name="visible">false</property>
                                         <style>
                                             <class name="linked"/>
