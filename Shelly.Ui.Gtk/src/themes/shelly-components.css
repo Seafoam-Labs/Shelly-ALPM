@@ -494,6 +494,34 @@
 .shelly-root .nav-selected image {
   color: @shelly_selected_fg;
 }
+/* Project links: bare icons under the nav; only hover shows a tile. */
+.shelly-root .project-links-footer {
+  padding-top: 14px;
+  border-top: 1px solid @shelly_hairline;
+}
+.shelly-root .project-links > button.link {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  border-radius: 12px;
+  background: transparent;
+  box-shadow: none;
+  color: @shelly_secondary_fg;
+}
+.shelly-root .project-links > button.link:hover {
+  background: @shelly_hover_bg;
+  color: @shelly_fg;
+}
+.shelly-root .project-links > button.link:active {
+  background: @shelly_control_hover_bg;
+}
+.shelly-root .project-links > button.link:focus-visible {
+  outline: 2px solid @shelly_accent;
+  outline-offset: -2px;
+}
+.shelly-root .project-links > button.link image {
+  color: inherit;
+}
 
 .shelly-root .nav-segment {
   background: @shelly_header_bg;
