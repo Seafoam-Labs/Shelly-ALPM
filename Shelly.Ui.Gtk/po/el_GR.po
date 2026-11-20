@@ -1907,3 +1907,6 @@ msgstr ""
 
 msgid "Current user"
 msgstr ""
+
+msgid "Atoll package update"
+msgstr ""
