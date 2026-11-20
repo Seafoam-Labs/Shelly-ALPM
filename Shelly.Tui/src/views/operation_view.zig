@@ -18,6 +18,7 @@ pub const View = struct {
     include_appimage: bool = false,
     target: ?operation.FlatpakTarget = null,
     action: operation.Action = .install,
+    remove_unused_dependencies: bool = false,
     state: enum { entering, running, succeeded, failed, declined },
     review: []const u8 = "",
     detail: []const u8 = "",
@@ -25,6 +26,11 @@ pub const View = struct {
     refresh_pending: bool = false,
 
     fn confirmation(self: View, arena: Allocator) Allocator.Error![]const u8 {
+        if (self.backend == .standard and self.action == .remove) {
+            return std.fmt.allocPrint(arena, "[{s}] Remove unused dependencies", .{
+                if (self.remove_unused_dependencies) "x" else " ",
+            });
+        }
         if (self.review.len > 0) return std.mem.trim(u8, self.review, "\r\n");
         const target = if (self.target) |value|
             try std.fmt.allocPrint(arena, "\nScope: {s}\nRemote: {f}\nBranch: {f}\nArchitecture: {f}", .{

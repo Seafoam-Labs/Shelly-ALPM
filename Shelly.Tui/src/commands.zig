@@ -324,6 +324,7 @@ pub fn scrollsOperation(key: vaxis.Key) bool {
 
 pub const Mode = enum { appimage, search, packages, details, aur, flatpak, updates, settings, authentication, confirmation, running, result, review, preview_document, answers, choice, help };
 pub const Context = struct {
+    removal_confirmation: bool = false,
     appimage_source: bool = false,
     appimage_configure_selected: bool = false,
     appimage_path: bool = false,
@@ -507,6 +508,7 @@ pub fn entries(arena: std.mem.Allocator, context: Context) std.mem.Allocator.Err
             }
         },
         .authentication, .confirmation => {
+            if (context.removal_confirmation) try add(arena, &list, .mark, "Toggle", "Toggle removal of unused dependencies");
             try add(arena, &list, .confirm, "Run", "Confirm and run the operation");
             try add(arena, &list, .cancel, "Back", "Dismiss confirmation without starting the operation");
             if (context.mode == .confirmation) try add(arena, &list, .close, "Back", "Dismiss confirmation without starting the operation");

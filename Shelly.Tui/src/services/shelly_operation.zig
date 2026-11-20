@@ -68,6 +68,7 @@ pub fn flatpakNeedsElevation(action: Action, target: ?FlatpakTarget) bool {
 
 pub const OperationRequest = struct {
     action: Action = .install,
+    remove_unused_dependencies: bool = false,
     sudo_bin: []const u8 = "sudo",
     shelly_bin: []const u8,
     environ_map: *const std.process.Environ.Map,
@@ -443,7 +444,8 @@ pub const OperationResult = struct {
 };
 
 fn interactive(request: OperationRequest) bool {
-    return (std.mem.eql(u8, request.backend, "aur") and request.action != .remove) or isFlatpak(request) or combined(request);
+    return (request.action == .remove and request.remove_unused_dependencies and std.mem.eql(u8, request.backend, "standard")) or
+        (std.mem.eql(u8, request.backend, "aur") and request.action != .remove) or isFlatpak(request) or combined(request);
 }
 
 fn combined(request: OperationRequest) bool {
@@ -464,7 +466,7 @@ fn operationArgv(alloc: std.mem.Allocator, request: OperationRequest) ![][]const
     if (request.targets.len > 0 and (!package_backend or request.action == .upgrade or request.action == .sync))
         return error.UnsupportedBatchAction;
     if (std.mem.eql(u8, request.backend, "all") and request.action != .upgrade) return error.UnsupportedCombinedAction;
-    const keep_dependencies = request.action == .remove and std.mem.eql(u8, request.backend, "standard");
+    const native_removal = request.action == .remove and std.mem.eql(u8, request.backend, "standard");
     if (request.action == .upgrade and !std.mem.eql(u8, request.backend, "standard") and !std.mem.eql(u8, request.backend, "aur") and !isFlatpak(request) and !std.mem.eql(u8, request.backend, "appimage") and !combined(request))
         return error.UnsupportedUpgradeSource;
     if (isFlatpak(request) and request.action != .upgrade) {
@@ -496,7 +498,7 @@ fn operationArgv(alloc: std.mem.Allocator, request: OperationRequest) ![][]const
     }
     if (request.action != .sync and !interactive(request)) try argv.append(alloc, "--no-confirm");
     try argv.append(alloc, "--ui-mode");
-    if (keep_dependencies) try argv.append(alloc, "--no-cascade");
+    if (native_removal) try argv.append(alloc, if (request.remove_unused_dependencies) "--cascade" else "--no-cascade");
     return argv.toOwnedSlice(alloc);
 }
 
@@ -1551,6 +1553,24 @@ test "native batch operands stay separate in a single install or removal command
         try std.testing.expectEqualStrings("--no-confirm", argv[6]);
         if (action == .remove) try std.testing.expectEqualStrings("--no-cascade", argv[argv.len - 1]);
     }
+}
+
+test "native dependency cleanup requests transaction review" {
+    const allocator = std.testing.allocator;
+    var env: std.process.Environ.Map = .init(allocator);
+    defer env.deinit();
+    const argv = try operationArgv(allocator, .{
+        .action = .remove,
+        .shelly_bin = "shelly",
+        .environ_map = &env,
+        .name = "editor",
+        .backend = "standard",
+        .remove_unused_dependencies = true,
+    });
+    defer allocator.free(argv);
+    const expected = [_][]const u8{ "sudo", "shelly", "remove", "standard", "editor", "--ui-mode", "--cascade" };
+    try std.testing.expectEqual(expected.len, argv.len);
+    for (expected, argv) |want, actual| try std.testing.expectEqualStrings(want, actual);
 }
 
 test "AUR batch install retains separate operands and interactive review" {
