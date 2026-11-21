@@ -8,6 +8,7 @@ const Allocator = std.mem.Allocator;
 const Model = @import("../model.zig").Model;
 const packages_model = @import("../models/packages_model.zig");
 const Package = @import("../models/packages.zig").Package;
+const Selection = @import("../models/packages.zig").Selection;
 const appendDetailList = @import("detail_format.zig").appendDetailList;
 const diagnostics = @import("diagnostics");
 const formatSize = @import("detail_format.zig").formatSize;
@@ -236,14 +237,23 @@ fn drawRow(ptr: *anyopaque, ctx: vxfw.DrawContext, selected: bool) Allocator.Err
 }
 
 pub fn drawSelectedRow(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
-    const name_ptr: *const []const u8 = @ptrCast(@alignCast(ptr));
-    const name = name_ptr.*;
+    const selection: *const Selection = @ptrCast(@alignCast(ptr));
     const arena = ctx.arena;
+    const name = if (selection.repository.len == 0 or std.mem.eql(u8, selection.repository, "local"))
+        selection.name
+    else
+        try std.fmt.allocPrint(arena, "{s}/{s}", .{ selection.repository, selection.name });
     var spans: std.ArrayList(vxfw.RichText.TextSpan) = .empty;
     try spans.append(arena, .{ .text = try diagnostics.sanitizeAlloc(arena, name) });
     const rich = try arena.create(vxfw.RichText);
     rich.* = .{ .text = spans.items, .softwrap = false, .overflow = .ellipsis };
     return rich.draw(ctx);
+}
+
+fn installedFromText(arena: Allocator, pkg: *const Package) Allocator.Error![]const u8 {
+    const origin = pkg.InstalledFrom orelse return "Unknown";
+    if (!pkg.InstalledFromInferred) return origin;
+    return std.fmt.allocPrint(arena, "{s} (inferred)", .{origin});
 }
 
 pub fn detailsText(arena: Allocator, pkg: *const Package) Allocator.Error![]const u8 {
@@ -255,6 +265,7 @@ pub fn detailsText(arena: Allocator, pkg: *const Package) Allocator.Error![]cons
     try lines.append(arena, try std.fmt.allocPrint(arena, "Version: {s}", .{pkg.Version}));
     try lines.append(arena, try std.fmt.allocPrint(arena, "Repository: {s}", .{pkg.Repository}));
     try lines.append(arena, try std.fmt.allocPrint(arena, "Installed: {s}", .{if (pkg.Installed) "Yes" else "No"}));
+    if (pkg.Installed) try lines.append(arena, try std.fmt.allocPrint(arena, "Installed from: {s}", .{try installedFromText(arena, pkg)}));
     try appendDetailList(arena, &lines, "Licenses: ", pkg.Licenses);
     try appendDetailList(arena, &lines, "Groups: ", pkg.Groups);
     if (pkg.Url) |url| {
@@ -301,6 +312,7 @@ pub fn drawDetails(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.
         .{ .label = "Repository", .value = pkg.Repository },
         .{ .label = "Installed", .value = if (pkg.Installed) "Yes" else "No" },
     });
+    if (pkg.Installed) try fields.append(arena, .{ .label = "Installed from", .value = try installedFromText(arena, pkg) });
     if (pkg.Licenses.len > 0) try fields.append(arena, .{ .label = "Licenses", .value = try std.mem.join(arena, ", ", pkg.Licenses) });
     if (pkg.Groups.len > 0) try fields.append(arena, .{ .label = "Groups", .value = try std.mem.join(arena, ", ", pkg.Groups) });
     if (pkg.Url) |url| try fields.append(arena, .{ .label = "URL", .value = url, .preserve_url = true });
@@ -429,11 +441,21 @@ test "selected package names escape terminal control bytes" {
     vxfw.DrawContext.init(.unicode);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    var name: []const u8 = "demo\x1b[31m\r\x7f";
-    const surface = try drawSelectedRow(@ptrCast(&name), .{ .arena = arena.allocator(), .min = .{}, .max = .{ .width = 80, .height = 1 }, .cell_size = .{ .width = 10, .height = 20 } });
+    var selection: Selection = .{ .name = "demo\x1b[31m\r\x7f" };
+    const surface = try drawSelectedRow(@ptrCast(&selection), .{ .arena = arena.allocator(), .min = .{}, .max = .{ .width = 80, .height = 1 }, .cell_size = .{ .width = 10, .height = 20 } });
     var text: std.ArrayList(u8) = .empty;
     for (surface.buffer) |cell| try text.appendSlice(arena.allocator(), cell.char.grapheme);
     try std.testing.expect(std.mem.indexOf(u8, text.items, "demo\\x1b[31m\\x0d\\x7f") != null);
     try std.testing.expect(std.mem.indexOfAny(u8, text.items, "\x1b\r\x7f") == null);
-    try std.testing.expectEqualStrings("demo\x1b[31m\r\x7f", name);
+    try std.testing.expectEqualStrings("demo\x1b[31m\r\x7f", selection.name);
+}
+
+test "details mark an installed origin guessed from the version" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var pkg: Package = .{ .Name = "foo", .Repository = "extra", .Installed = true, .InstalledFrom = "extra", .InstalledFromInferred = true };
+    try std.testing.expect(std.mem.indexOf(u8, try detailsText(arena.allocator(), &pkg), "Installed from: extra (inferred)") != null);
+    pkg.InstalledFromInferred = false;
+    const recorded = try detailsText(arena.allocator(), &pkg);
+    try std.testing.expect(std.mem.indexOf(u8, recorded, "Installed from: extra\n") != null or std.mem.endsWith(u8, recorded, "Installed from: extra"));
 }
