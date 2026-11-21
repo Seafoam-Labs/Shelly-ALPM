@@ -18,6 +18,7 @@ const runtime = @import("../services/runtime.zig");
 const c_string = @import("../helpers/c_string.zig");
 const ShellyConfig = @import("../models/shelly_config.zig").ShellyConfig;
 const LocalArchivePackage = @import("../models/shelly_config.zig").LocalArchivePackage;
+const withoutLocalArchivePackages = @import("../models/shelly_config.zig").withoutLocalArchivePackages;
 const ViewType = @import("../models/shelly_config.zig").ViewType;
 const RecommendCategory = @import("../models/recommendation.zig").RecommendCategory;
 const sorters = @import("../helpers/sorters.zig");
@@ -88,6 +89,7 @@ pub const PackagePage = extern struct {
         show_foreign_only: bool,
         show_local_archives_only: bool,
         pending_local_archive_packages: []const LocalArchivePackage = &.{},
+        pending_local_archive_removals: []const []const u8 = &.{},
         show_detail_pane: bool,
 
         check_map_grid: std.AutoHashMapUnmanaged(*PackageObject, *gtk.CheckButton),
@@ -1425,11 +1427,21 @@ pub const PackagePage = extern struct {
         }
 
         if (support.getWindow(ShellyWindow, self)) |win| {
+            freePendingLocalArchiveRemovals(p);
+            var pending: std.ArrayListUnmanaged([]const u8) = .empty;
+            errdefer {
+                for (pending.items) |name| std.heap.c_allocator.free(name);
+                pending.deinit(std.heap.c_allocator);
+            }
+            for (names.items) |name| {
+                pending.append(std.heap.c_allocator, std.heap.c_allocator.dupe(u8, name) catch return) catch return;
+            }
+            p.pending_local_archive_removals = pending.toOwnedSlice(std.heap.c_allocator) catch return;
             win.startTransaction(.{
                 .title = translations._("Removing packages"),
                 .argv = argv.items,
                 .packages = names.items,
-                .on_complete = &on_transaction_complete,
+                .on_complete = &on_remove_complete,
                 .privileged = true,
                 .ctx = self,
             });
@@ -1484,7 +1496,20 @@ pub const PackagePage = extern struct {
         }
 
         persistPendingLocalArchives(p);
+        finishPackageTransaction(self);
+    }
 
+    fn on_remove_complete(ctx: *anyopaque, success: bool) void {
+        const self: *PackagePage = @ptrCast(@alignCast(ctx));
+        const p = self.priv();
+        defer freePendingLocalArchiveRemovals(p);
+
+        if (success) removeTrackedLocalArchives(p.pending_local_archive_removals);
+        if (success) finishPackageTransaction(self);
+    }
+
+    fn finishPackageTransaction(self: *Self) void {
+        const p = self.priv();
         const model = p.list_store.as(gio.ListModel);
         const n = gio.ListModel.getNItems(model);
         var i: u32 = 0;
@@ -1496,6 +1521,24 @@ pub const PackagePage = extern struct {
 
         self.update_selection_ui();
         self.reload();
+    }
+
+    fn freePendingLocalArchiveRemovals(p: *Private) void {
+        for (p.pending_local_archive_removals) |name| std.heap.c_allocator.free(name);
+        if (p.pending_local_archive_removals.len > 0) std.heap.c_allocator.free(p.pending_local_archive_removals);
+        p.pending_local_archive_removals = &.{};
+    }
+
+    fn removeTrackedLocalArchives(names: []const []const u8) void {
+        const resolver = runtime.config orelse return;
+        const current = resolver.get() catch return;
+        const remaining = withoutLocalArchivePackages(
+            std.heap.c_allocator,
+            current.LocalArchivePackages,
+            names,
+        ) catch return;
+        defer std.heap.c_allocator.free(remaining);
+        updateConfigField(.LocalArchivePackages, remaining);
     }
 
     fn freePendingLocalArchives(packages: []const LocalArchivePackage) void {
