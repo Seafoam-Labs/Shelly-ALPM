@@ -18,9 +18,9 @@
             <property name="orientation">vertical</property>
             <property name="margin-start">30</property>
             <property name="margin-end">30</property>
-            <property name="margin-top">14</property>
+            <property name="margin-top">16</property>
             <property name="margin-bottom">24</property>
-            <property name="spacing">15</property>
+            <property name="spacing">16</property>
             <child>
               <object class="GtkStackSwitcher">
                 <property name="stack">settings_stack</property>
@@ -303,7 +303,7 @@
                                     </style>
                                     <child>
                                       <object class="GtkLabel">
-                                        <property name="label" translatable="yes">Tray update with ui</property>
+                                        <property name="label" translatable="yes">Tray update with UI</property>
                                         <property name="halign">start</property>
                                         <property name="hexpand">true</property>
                                       </object>
@@ -312,7 +312,7 @@
                                       <object class="GtkSwitch" id="use_ui">
                                         <property name="halign">end</property>
                                         <accessibility>
-                                          <property name="label" translatable="yes">Tray update with ui</property>
+                                          <property name="label" translatable="yes">Tray update with UI</property>
                                         </accessibility>
                                       </object>
                                     </child>
@@ -555,7 +555,7 @@
                                 <child>
                                   <object class="GtkLabel">
                                     <property name="label" translatable="yes">Use Symbolic Tray Icon</property>
-                                    <property name="tooltip-text" translatable="yes">If enabled, Shelly will use a symbolic svg icon instead of the default image one.</property>
+                                    <property name="tooltip-text" translatable="yes">If enabled, Shelly will use a symbolic SVG icon instead of the default image one.</property>
                                     <property name="halign">start</property>
                                     <property name="hexpand">true</property>
                                   </object>

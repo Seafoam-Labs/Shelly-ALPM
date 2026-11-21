@@ -125,7 +125,7 @@ pub const IconDownloadService = struct {
                 return aw.toOwnedSlice();
             },
             else => {
-                std.debug.print("Could not download application icons from {0f}: the server returned HTTP {1d}.\n", .{ diagnostics.safe(url), @intFromEnum(result.status) });
+                std.debug.print("Could not download application icons from {0f}: the server returned HTTP {1d}.\n", .{ diagnostics.safe(url), @backingInt(result.status) });
                 return error.HttpError;
             },
         }

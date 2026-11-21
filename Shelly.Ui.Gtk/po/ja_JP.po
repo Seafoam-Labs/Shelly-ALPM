@@ -82,7 +82,7 @@ msgid "Warnings"
 msgstr "警告"
 
 msgid ""
-"These commands fetch and execute code outside of shelly and libalpm's "
+"These commands fetch and execute code outside of Shelly and libalpm's "
 "control. Review them before continuing."
 msgstr ""
 "これらのコマンドは、Shelly と libalpm の制御外でコードを取得して実行します。"
@@ -278,7 +278,7 @@ msgstr "右側の詳細ペインを隠す"
 msgid "Information"
 msgstr "情報"
 
-msgid "Preview Pkgbuild"
+msgid "Preview PKGBUILD"
 msgstr "PKGBUILD をプレビュー"
 
 msgid "Search the AUR"
@@ -526,12 +526,12 @@ msgstr ""
 msgid "Install all selected packages in one transaction"
 msgstr ""
 
-msgid "Loading Recommended Packages..."
+#, fuzzy
+msgid "Loading recommendations…"
 msgstr "おすすめパッケージを読み込み中..."
 
-msgid ""
-"No recommendations found. Please check your internet connection and try "
-"again."
+#, fuzzy
+msgid "Check your internet connection and try again."
 msgstr ""
 "おすすめが見つかりませんでした。インターネット接続を確認して、もう一度お試し"
 "ください。"
@@ -609,7 +609,7 @@ msgstr "週間スケジュールを使用する"
 msgid "Run Tray as cron"
 msgstr "トレイを cron として実行"
 
-msgid "Tray update with ui"
+msgid "Tray update with UI"
 msgstr "トレイを UI 付きでアップデート"
 
 msgid "Update terminal"
@@ -671,7 +671,7 @@ msgid "Use Symbolic Tray Icon"
 msgstr "シンボリックトレイアイコンを使用する"
 
 msgid ""
-"If enabled, Shelly will use a symbolic svg icon instead of the default image "
+"If enabled, Shelly will use a symbolic SVG icon instead of the default image "
 "one."
 msgstr ""
 "有効にすると、Shelly はデフォルトの画像アイコンの代わりに、シンボリック SVG "
@@ -804,7 +804,7 @@ msgid "Remove db.lck"
 msgstr "db.lck を削除"
 
 msgid ""
-"Removes the db.lck file if it was left behind by an interrupted alpm process."
+"Removes the db.lck file if it was left behind by an interrupted ALPM process."
 msgstr "中断された ALPM プロセスによって残された db.lck ファイルを削除します。"
 
 msgid "Fix Permissions"
@@ -1250,7 +1250,7 @@ msgstr "Flatpak ファイル"
 msgid "Unsupported file type. Choose a.flatpak or.flatpakref file."
 msgstr ""
 
-msgid "Installing local flatpak"
+msgid "Installing local Flatpak"
 msgstr "ローカル Flatpak をインストール中"
 
 msgid "Could not install the selected packages."
@@ -1268,7 +1268,7 @@ msgstr "認証済み"
 msgid "Show less"
 msgstr "少なく表示"
 
-msgid "Installing flatpak"
+msgid "Installing Flatpak"
 msgstr "Flatpak をインストール中"
 
 msgid "Remove this Flatpak?"
@@ -1286,7 +1286,7 @@ msgstr "権限"
 msgid "Available Addons"
 msgstr "利用可能なアドオン"
 
-msgid "Installing flatpak addon"
+msgid "Installing Flatpak addon"
 msgstr "Flatpak アドオンをインストール中"
 
 msgid "Unknown developer"
@@ -1546,7 +1546,7 @@ msgstr ""
 "標準リポジトリ、AUR、Flatpak を一度に検索します。名前を入力して開始してくださ"
 "い。"
 
-msgid "Could not search the selected sources."
+msgid "Could not search the selected sources"
 msgstr ""
 
 msgid "Installation in progress"
@@ -1920,4 +1920,16 @@ msgid "Expand sidebar"
 msgstr ""
 
 msgid "Collapse sidebar"
+msgstr ""
+
+msgid "No recommendations found"
+msgstr ""
+
+msgid "System-wide"
+msgstr ""
+
+msgid "Current user"
+msgstr ""
+
+msgid "Atoll package update"
 msgstr ""

@@ -84,9 +84,9 @@
             </child>
             <child>
               <object class="GtkLabel">
-                <property name="label" translatable="yes">Loading Recommended Packages...</property>
+                <property name="label" translatable="yes">Loading recommendations…</property>
                 <style>
-                  <class name="title-4"/>
+                  <class name="title-3"/>
                 </style>
               </object>
             </child>
@@ -123,16 +123,28 @@
               <object class="GtkImage">
                 <property name="accessible-role">presentation</property>
                 <property name="icon-name">search-none-symbolic</property>
-                <property name="pixel-size">64</property>
+                <property name="pixel-size">48</property>
+                <style>
+                  <class name="dim-label"/>
+                </style>
               </object>
             </child>
             <child>
               <object class="GtkLabel">
-                <property name="label" translatable="yes">No recommendations found. Please check your internet connection and try again.</property>
+                <property name="label" translatable="yes">No recommendations found</property>
+                <style>
+                  <class name="title-3"/>
+                </style>
+              </object>
+            </child>
+            <child>
+              <object class="GtkLabel">
+                <property name="label" translatable="yes">Check your internet connection and try again.</property>
                 <property name="wrap">true</property>
                 <property name="justify">center</property>
+                <property name="max-width-chars">40</property>
                 <style>
-                  <class name="title-2"/>
+                  <class name="dim-label"/>
                 </style>
               </object>
             </child>

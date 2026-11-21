@@ -388,7 +388,7 @@ pub const AtollAurPage = extern struct {
                 const desc_label = gobject.ext.cast(gtk.Label, desc_w) orelse return;
 
                 var buf: [256]u8 = undefined;
-                const markup = std.fmt.bufPrintSentinel(&buf, "<b>{s}</b>", .{pkg.getName()}, 0) catch pkg.getName();
+                const markup = std.fmt.bufPrintSentinel(&buf, "<span weight=\"semibold\">{s}</span>", .{pkg.getName()}, 0) catch pkg.getName();
                 gtk.Label.setMarkup(name_label, markup);
                 gtk.Widget.setVisible(ood_w, @intFromBool(pkg.isOutOfDate()));
                 gtk.Widget.setVisible(installed_w, @intFromBool(pkg.isInstalled()));

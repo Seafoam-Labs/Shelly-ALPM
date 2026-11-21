@@ -13,6 +13,9 @@
     <file alias="software-update-available-symbolic.svg" preprocess="xml-stripblanks">assets/icons/software-update-available-symbolic.svg</file>
     <file alias="firmware-symbolic.svg" preprocess="xml-stripblanks">assets/icons/firmware-symbolic.svg</file>
     <file alias="checkmark-small-symbolic.svg" preprocess="xml-stripblanks">assets/icons/checkmark-small-symbolic.svg</file>
+    <file alias="github-symbolic.svg" preprocess="xml-stripblanks">assets/icons/github-symbolic.svg</file>
+    <file alias="community-symbolic.svg" preprocess="xml-stripblanks">assets/icons/community-symbolic.svg</file>
+    <file alias="heart-symbolic.svg" preprocess="xml-stripblanks">assets/icons/heart-symbolic.svg</file>
   </gresource>
   <gresource prefix="/com/shellyorg/shelly">
     <file>ui/main_window.ui</file>

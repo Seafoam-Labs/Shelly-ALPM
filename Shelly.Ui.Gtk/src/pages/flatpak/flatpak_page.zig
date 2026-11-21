@@ -160,7 +160,6 @@ pub const FlatpakPage = extern struct {
         _ = gtk.Stack.addNamed(p.main_content_stack, local.as(gtk.Widget), "local");
     }
 
-
     fn onSectionToggled(button: *gtk.ToggleButton, self: *Self) callconv(.c) void {
         if (gtk.ToggleButton.getActive(button) == 0) return;
         const p = self.priv();
@@ -174,7 +173,7 @@ pub const FlatpakPage = extern struct {
         const raw = gobject.Object.getData(row.as(gobject.Object), "category-index");
         if (raw == null) return;
         const index = @intFromPtr(raw) - 1;
-        const category: Category = @enumFromInt(index);
+        const category: Category = @fromBackingInt(@intCast(index));
 
         const header_text: ?[:0]const u8 = switch (category) {
             .@"All Applications" => translations._("Discover"),
@@ -205,7 +204,7 @@ pub const FlatpakPage = extern struct {
 
             std.debug.print("index: {d}\n", .{index});
 
-            const app: Category = @enumFromInt(index);
+            const app: Category = @fromBackingInt(@intCast(index));
             const p = self.priv();
             p.install_view.applyCategory(app);
         }
@@ -234,7 +233,7 @@ pub const FlatpakPage = extern struct {
 
         for (std.enums.values(Category)) |app| {
             const row = gtk.ListBoxRow.new();
-            const enum_num: usize = @intFromEnum(app);
+            const enum_num: usize = @backingInt(app);
             gobject.Object.setData(
                 row.as(gobject.Object),
                 "category-index",

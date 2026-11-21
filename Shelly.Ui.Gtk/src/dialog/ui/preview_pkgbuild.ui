@@ -4,6 +4,9 @@
   <template class="ShellyPkgbuildPreviewDialog" parent="GtkWindow">
     <property name="title" translatable="yes">Review PKGBUILD</property>
     <property name="modal">true</property>
+    <style>
+      <class name="shelly-root"/>
+    </style>
     <property name="resizable">true</property>
     <property name="default-width">720</property>
     <property name="default-height">560</property>
@@ -39,6 +42,9 @@
                     <property name="hexpand">true</property>
                     <child>
                       <object class="GtkScrolledWindow">
+                        <style>
+                          <class name="code-card"/>
+                        </style>
                         <property name="hscrollbar-policy">automatic</property>
                         <property name="vscrollbar-policy">automatic</property>
                         <property name="vexpand">true</property>
@@ -79,6 +85,9 @@
                 <property name="tab-label" translatable="yes">Warnings</property>
                 <property name="child">
                   <object class="GtkScrolledWindow" id="warnings_page">
+                    <style>
+                      <class name="code-card"/>
+                    </style>
                     <property name="hscrollbar-policy">automatic</property>
                     <property name="vscrollbar-policy">automatic</property>
                     <property name="vexpand">true</property>
@@ -93,7 +102,7 @@
                         <property name="margin-bottom">8</property>
                         <child>
                           <object class="GtkLabel" id="warnings_subtitle">
-                            <property name="label" translatable="yes">These commands fetch and execute code outside of shelly and libalpm's control. Review them before continuing.</property>
+                            <property name="label" translatable="yes">These commands fetch and execute code outside of Shelly and libalpm's control. Review them before continuing.</property>
                             <property name="xalign">0</property>
                             <property name="wrap">true</property>
                             <style>
@@ -119,6 +128,9 @@
                 <property name="tab-label" translatable="yes">Source Files</property>
                 <property name="child">
                   <object class="GtkScrolledWindow" id="sources_page">
+                    <style>
+                      <class name="code-card"/>
+                    </style>
                     <property name="hscrollbar-policy">automatic</property>
                     <property name="vscrollbar-policy">automatic</property>
                     <property name="vexpand">true</property>
