@@ -76,9 +76,8 @@
   font-family: "Inter", "Cantarell", "Segoe UI", system-ui, sans-serif;
   font-size: 14px;
 }
-/* With the system title bar the compositor owns the frame and its corners;
-   rounding the surface here would leave notches under its title bar. */
-.shelly-root.system-titlebar:not(.csd) {
+/* Compositor-framed windows: the compositor rounds the corners. */
+.shelly-root:not(.csd) {
   border-radius: 0;
 }
 /* Plain labels inherit; pin them so desktop themes cannot dim row titles. */

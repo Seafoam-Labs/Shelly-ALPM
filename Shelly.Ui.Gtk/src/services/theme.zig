@@ -181,7 +181,6 @@ fn applyTitlebar(win: *gtk.Window) void {
     // GTK falls back to its default header bar, which follows the desktop's
     // button layout.
     gtk.Window.setTitlebar(win, if (enabled) null else ensureHeaderBar().as(gtk.Widget));
-    if (enabled) gtk.Widget.addCssClass(win.as(gtk.Widget), "system-titlebar");
 }
 
 const DesktopResult = struct {

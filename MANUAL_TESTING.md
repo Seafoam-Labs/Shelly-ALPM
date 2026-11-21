@@ -722,8 +722,9 @@ Document any known issues that are being tracked:
   without decorations or a bar plugin shows none); on GNOME GTK's default header bar appears
   with the desktop's button layout. Toggling the switch leaves the open window unchanged,
   switching it off and restarting brings the brand headerbar back, and changing Theme or
-  Color variant leaves the choice in place. The PKGBUILD review and preview windows keep
-  their rounded corners with the setting off.
+  Color variant leaves the choice in place. On KDE Plasma or Hyprland the main window with
+  the setting on, and the PKGBUILD review and preview windows always, show only the
+  compositor's corner rounding, with no second rounding inside it.
 - [ ] Neither mode loads the desktop GTK theme's widget styles: set any third-party,
   dark-only or high-contrast GTK theme (user or system priority) and the built-in design
   still renders exactly as authored. Shelly mode shows no foreign colors in any widget.
