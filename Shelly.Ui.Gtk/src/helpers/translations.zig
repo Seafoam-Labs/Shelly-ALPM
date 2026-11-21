@@ -3,6 +3,8 @@ const std = @import("std");
 pub const domain = "shelly-ui";
 pub const locale_dir = "/usr/share/locale";
 
+extern fn getenv(name: [*:0]const u8) ?[*:0]const u8;
+
 const LC_ALL: c_int = 6;
 
 extern fn setlocale(category: c_int, locale: [*:0]const u8) ?[*:0]const u8;
@@ -24,7 +26,8 @@ pub fn initWithLocale(override_locale: ?[:0]const u8) bool {
         _ = setenv("LANGUAGE", loc.ptr, 1);
     }
 
-    const directory_ok = bindtextdomain(domain, locale_dir) != null;
+    const locale_directory = getenv("SHELLY_LOCALE_DIR") orelse locale_dir;
+    const directory_ok = bindtextdomain(domain, locale_directory) != null;
     const codeset_ok = bind_textdomain_codeset(domain, "UTF-8") != null;
     const domain_ok = textdomain(domain) != null;
     return directory_ok and codeset_ok and domain_ok;
