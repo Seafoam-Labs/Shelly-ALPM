@@ -548,31 +548,31 @@ msgid ""
 msgstr ""
 
 msgid "Settings"
-msgstr ""
+msgstr "Inställningar"
 
 msgid "Make Shelly feel at home on your desktop."
 msgstr ""
 
 msgid "General"
-msgstr ""
+msgstr "Allmänt"
 
 msgid "Enable AUR"
-msgstr ""
+msgstr "Aktivera AUR"
 
 msgid "Language"
-msgstr ""
+msgstr "Språk"
 
 msgid "Enable Flatpak"
-msgstr ""
+msgstr "Aktivera Flatpak"
 
 msgid "Enable Recommended"
 msgstr ""
 
 msgid "Enable AppImage"
-msgstr ""
+msgstr "Aktivera AppImage"
 
 msgid "Enable Tray Icon"
-msgstr ""
+msgstr "Aktivera systemfältsikon"
 
 msgid "Add Tray To Auto Start"
 msgstr ""
@@ -599,28 +599,28 @@ msgid "Tray Check Interval (Hours)"
 msgstr ""
 
 msgid "Weekly Schedule"
-msgstr ""
+msgstr "Veckoschema"
 
 msgid "Sun"
-msgstr ""
+msgstr "Sön"
 
 msgid "Mon"
-msgstr ""
+msgstr "Mån"
 
 msgid "Tue"
-msgstr ""
+msgstr "Tis"
 
 msgid "Wed"
-msgstr ""
+msgstr "Ons"
 
 msgid "Thu"
-msgstr ""
+msgstr "Tor"
 
 msgid "Fri"
-msgstr ""
+msgstr "Fre"
 
 msgid "Sat"
-msgstr ""
+msgstr "Lör"
 
 msgid "Update Time (24h):"
 msgstr ""
@@ -629,7 +629,7 @@ msgid ":"
 msgstr ""
 
 msgid "Look & Feel"
-msgstr ""
+msgstr "Utseende"
 
 msgid "Icons Enabled"
 msgstr ""
