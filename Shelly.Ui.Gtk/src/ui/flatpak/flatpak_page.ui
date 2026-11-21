@@ -12,34 +12,120 @@
     <property name="hexpand">true</property>
     <property name="vexpand">true</property>
     <child>
-      <object class="GtkBox">
-        <property name="orientation">vertical</property>
+      <object class="GtkCenterBox">
         <style>
-          <class name="page-head"/>
-          <class name="page-head-added"/>
+          <class name="toolbar-card"/>
         </style>
-        <child>
-          <object class="GtkLabel">
-            <property name="label" translatable="yes">Flatpak</property>
-            <property name="xalign">0</property>
-            <property name="accessible-role">heading</property>
+        <property name="start-widget">
+          <object class="GtkSearchEntry" id="search_entry">
+            <property name="placeholder-text" translatable="yes">Search packages...</property>
+            <property name="width-request">220</property>
+            <style>
+              <class name="spaced-search"/>
+            </style>
+            <child>
+                <object class="GtkShortcutController">
+                    <property name="scope">managed</property>
+                    <child>
+                        <object class="GtkShortcut">
+                            <property name="trigger">&lt;Control&gt;f</property>
+                            <property name="action">action(search.focus)</property>
+                        </object>
+                    </child>
+                </object>
+            </child>
             <accessibility>
-              <property name="level">1</property>
+              <property name="label" translatable="yes">Search packages...</property>
             </accessibility>
-            <style>
-              <class name="page-heading"/>
-            </style>
           </object>
-        </child>
-        <child>
-          <object class="GtkLabel">
-            <property name="label" translatable="yes">Manage Flatpak applications and remotes.</property>
-            <property name="xalign">0</property>
+        </property>
+        <property name="center-widget">
+          <object class="GtkBox">
             <style>
-              <class name="page-subtitle"/>
+              <class name="linked"/>
             </style>
+            <child>
+              <object class="GtkToggleButton" id="nav_install_button">
+                <property name="active">true</property>
+                <child>
+                  <object class="GtkBox">
+                    <property name="spacing">6</property>
+                    <child>
+                      <object class="GtkImage">
+                        <property name="icon-name">system-software-install-symbolic</property>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkLabel">
+                        <property name="label" translatable="yes">Install</property>
+                      </object>
+                    </child>
+                  </object>
+                </child>
+              </object>
+            </child>
+            <child>
+              <object class="GtkToggleButton" id="nav_remove_button">
+                <property name="group">nav_install_button</property>
+                <child>
+                  <object class="GtkBox">
+                    <property name="spacing">6</property>
+                    <child>
+                      <object class="GtkImage">
+                        <property name="icon-name">applications-system-symbolic</property>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkLabel">
+                        <property name="label" translatable="yes">Manage</property>
+                      </object>
+                    </child>
+                  </object>
+                </child>
+              </object>
+            </child>
+            <child>
+              <object class="GtkToggleButton" id="nav_remotes_button">
+                <property name="group">nav_install_button</property>
+                <child>
+                  <object class="GtkBox">
+                    <property name="spacing">6</property>
+                    <child>
+                      <object class="GtkImage">
+                        <property name="icon-name">preferences-system-symbolic</property>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkLabel">
+                        <property name="label" translatable="yes">Manage Remote Refs</property>
+                      </object>
+                    </child>
+                  </object>
+                </child>
+              </object>
+            </child>
+            <child>
+              <object class="GtkToggleButton" id="nav_local_button">
+                <property name="group">nav_install_button</property>
+                <child>
+                  <object class="GtkBox">
+                    <property name="spacing">6</property>
+                    <child>
+                      <object class="GtkImage">
+                        <property name="icon-name">document-open-symbolic</property>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkLabel">
+                        <property name="label" translatable="yes">Install Local</property>
+                      </object>
+                    </child>
+                  </object>
+                </child>
+              </object>
+            </child>
           </object>
-        </child>
+        </property>
       </object>
     </child>
     <child>
@@ -47,181 +133,26 @@
         <property name="orientation">horizontal</property>
         <property name="vexpand">true</property>
         <property name="hexpand">true</property>
-          <property name="margin-start">2</property>
-        <property name="margin-end">9</property>
-        <property name="margin-bottom">9</property>
+        <property name="margin-start">30</property>
+        <property name="margin-end">30</property>
+        <property name="margin-bottom">24</property>
         <child>
-          <object class="GtkFrame">
-            <property name="margin-end">5</property>
-            <property name="margin-top">5</property>
+          <object class="GtkFrame" id="category_sidebar">
+            <property name="margin-end">12</property>
+            <property name="overflow">hidden</property>
+            <style>
+              <class name="flatpak-card"/>
+            </style>
             <child>
               <object class="GtkBox">
                 <property name="orientation">vertical</property>
-                <property name="spacing">5</property>
-                <property name="margin-start">5</property>
-                <property name="margin-end">5</property>
-                <property name="margin-top">5</property>
-                <property name="margin-bottom">5</property>
+                <property name="spacing">6</property>
+                <property name="margin-start">6</property>
+                <property name="margin-end">6</property>
+                <property name="margin-top">6</property>
+                <property name="margin-bottom">6</property>
                 <property name="hexpand">false</property>
                 <property name="width-request">120</property>
-                <child>
-                  <object class="GtkBox">
-                    <property name="orientation">horizontal</property>
-                    <property name="spacing">5</property>
-                    <property name="margin-bottom">4</property>
-                    <child>
-                      <object class="GtkSearchEntry" id="search_entry">
-                        <property name="placeholder-text" translatable="yes">Search packages...</property>
-                        <property name="width-request">220</property>
-                        <style>
-                          <class name="spaced-search"/>
-                        </style>
-                        <child>
-                            <object class="GtkShortcutController">
-                                <property name="scope">managed</property>
-                                <child>
-                                    <object class="GtkShortcut">
-                                        <property name="trigger">&lt;Control&gt;f</property>
-                                        <property name="action">action(search.focus)</property>
-                                    </object>
-                                </child>
-                            </object>
-                        </child>
-                        <accessibility>
-                          <property name="label" translatable="yes">Search packages...</property>
-                        </accessibility>
-                      </object>
-                    </child>
-                  </object>
-                </child>
-                <child>
-                  <object class="GtkLabel">
-                    <property name="label" translatable="yes">Browse</property>
-                    <property name="halign">start</property>
-                    <property name="margin-start">6</property>
-
-                    <style>
-                      <class name="dim-label"/>
-                      <class name="caption-heading"/>
-                    </style>
-                  </object>
-                </child>
-                <child>
-                  <object class="GtkListBox" id="section_nav_list">
-                    <style>
-                      <class name="flatpak-nav"/>
-                    </style>
-                    <property name="selection-mode">single</property>
-                    <property name="width-request">160</property>
-
-                    <child>
-                      <object class="GtkListBoxRow" id="nav_install_row">
-
-                        <child>
-                          <object class="GtkBox">
-                            <property name="orientation">horizontal</property>
-                            <property name="spacing">10</property>
-                            <property name="margin-start">6</property>
-                            <property name="margin-top">2</property>
-                            <property name="margin-bottom">2</property>
-                            <child>
-                              <object class="GtkImage">
-                                <property name="accessible-role">presentation</property>
-                                <property name="icon-name">system-software-install-symbolic</property>
-                                <property name="pixel-size">16</property>
-                              </object>
-                            </child>
-                            <child>
-                              <object class="GtkLabel">
-                                <property name="label" translatable="yes">Install</property>
-                                <property name="halign">start</property>
-                              </object>
-                            </child>
-                          </object>
-                        </child>
-                      </object>
-                    </child>
-                    <child>
-                      <object class="GtkListBoxRow" id="nav_remove_row">
-
-                        <child>
-                          <object class="GtkBox">
-                            <property name="orientation">horizontal</property>
-                            <property name="spacing">10</property>
-                            <property name="margin-start">6</property>
-                            <property name="margin-top">2</property>
-                            <property name="margin-bottom">2</property>
-                            <child>
-                              <object class="GtkImage">
-                                <property name="accessible-role">presentation</property>
-                                <property name="icon-name">applications-system-symbolic</property>
-                                <property name="pixel-size">16</property>
-                              </object>
-                            </child>
-                            <child>
-                              <object class="GtkLabel">
-                                <property name="label" translatable="yes">Manage</property>
-                                <property name="halign">start</property>
-                              </object>
-                            </child>
-                          </object>
-                        </child>
-                      </object>
-                    </child>
-                    <child>
-                      <object class="GtkListBoxRow" id="nav_remote_row">
-                        <child>
-                          <object class="GtkBox">
-                            <property name="orientation">horizontal</property>
-                            <property name="spacing">10</property>
-                            <property name="margin-start">6</property>
-                            <property name="margin-top">2</property>
-                            <property name="margin-bottom">2</property>
-                            <child>
-                              <object class="GtkImage">
-                                <property name="accessible-role">presentation</property>
-                                <property name="icon-name">preferences-system-symbolic</property>
-                                <property name="pixel-size">16</property>
-                              </object>
-                            </child>
-                            <child>
-                              <object class="GtkLabel">
-                                <property name="label" translatable="yes">Manage Remote Refs</property>
-                                <property name="halign">start</property>
-                              </object>
-                            </child>
-                          </object>
-                        </child>
-                      </object>
-                    </child>
-                    <child>
-                      <object class="GtkListBoxRow" id="nav_install_local">
-                        <child>
-                          <object class="GtkBox">
-                            <property name="orientation">horizontal</property>
-                            <property name="spacing">10</property>
-                            <property name="margin-start">6</property>
-                            <property name="margin-top">2</property>
-                            <property name="margin-bottom">2</property>
-                            <child>
-                              <object class="GtkImage">
-                                <property name="accessible-role">presentation</property>
-                                <property name="icon-name">document-open-symbolic</property>
-                                <property name="pixel-size">16</property>
-                              </object>
-                            </child>
-                            <child>
-                              <object class="GtkLabel">
-                                <property name="label" translatable="yes">Install Local</property>
-                                <property name="halign">start</property>
-                              </object>
-                            </child>
-                          </object>
-                        </child>
-                      </object>
-                    </child>
-                  </object>
-                </child>
                 <child>
                   <object class="GtkScrolledWindow" id="category_sidebar_scroll">
                     <property name="overlay-scrolling">true</property>
@@ -247,17 +178,20 @@
         </child>
         <child>
           <object class="GtkFrame">
-            <property name="margin-top">5</property>
             <property name="hexpand">true</property>
+            <property name="overflow">hidden</property>
+            <style>
+              <class name="flatpak-card"/>
+            </style>
             <property name="vexpand">true</property>
             <child>
               <object class="GtkStack" id="main_content_stack">
                 <property name="vexpand">true</property>
                 <property name="hexpand">true</property>
-                <property name="margin-start">5</property>
-                <property name="margin-end">5</property>
-                <property name="margin-top">5</property>
-                <property name="margin-bottom">5</property>
+                <property name="margin-start">6</property>
+                <property name="margin-end">6</property>
+                <property name="margin-top">6</property>
+                <property name="margin-bottom">6</property>
               </object>
             </child>
           </object>

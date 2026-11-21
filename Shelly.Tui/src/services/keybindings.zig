@@ -5,13 +5,14 @@ const commands = @import("../commands.zig");
 const Allocator = std.mem.Allocator;
 
 pub const editable = [_]commands.Id{
-    .quit,                  .help,              .next_tab,            .previous_tab,
-    .install,               .remove,            .preview,             .refresh,
-    .refresh_list,          .filter,            .upgrade_all,         .upgrade_system,
-    .upgrade_appimage,      .upgrade_aur,       .upgrade_flatpak,     .categories,
-    .previous_catalog_page, .next_catalog_page, .previous_screenshot, .next_screenshot,
-    .clear_selection,       .configure_updates, .toggle_wrap,         .narrow_view,
-    .widen_view,            .toggle_hidden,
+    .quit,                    .help,              .next_tab,            .previous_tab,
+    .install,                 .remove,            .preview,             .refresh,
+    .refresh_list,            .filter,            .upgrade_all,         .upgrade_system,
+    .upgrade_appimage,        .upgrade_aur,       .upgrade_flatpak,     .categories,
+    .previous_catalog_page,   .next_catalog_page, .previous_screenshot, .next_screenshot,
+    .clear_selection,         .configure_updates, .toggle_wrap,         .narrow_view,
+    .widen_view,              .toggle_hidden,     .sync_packages,       .sort_package_name,
+    .sort_package_repository,
 };
 
 fn indexOf(id: commands.Id) ?usize {
@@ -49,6 +50,7 @@ pub const Config = struct {
     }
 
     pub fn validate(self: Config) !void {
+        @setEvalBranchQuota(2000);
         const defaults: commands.Bindings = .{};
         for (editable, 0..) |id, index| {
             const key = self.get(id);
@@ -111,7 +113,8 @@ fn scope(id: commands.Id) u16 {
         .install, .remove => lists | details | appimages,
         .preview => aur_list | aur_details,
         .refresh => updates | settings | preview,
-        .refresh_list => aur_list | flatpak_list | searches | flatpak_details | appimages,
+        .refresh_list => lists | searches | flatpak_details | appimages,
+        .sync_packages, .sort_package_name, .sort_package_repository => package_lists | searches,
         .filter => lists | searches,
         .upgrade_all, .upgrade_system, .upgrade_aur, .upgrade_flatpak, .upgrade_appimage => updates,
         .categories => flatpak_list | flatpak_details | searches,

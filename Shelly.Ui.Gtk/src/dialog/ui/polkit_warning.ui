@@ -10,7 +10,7 @@
       <object class="GtkFrame">
         <property name="halign">center</property>
         <property name="valign">center</property>
-        <property name="width-request">420</property>
+        <property name="width-request">440</property>
         <style>
           <class name="lockout-card"/>
         </style>

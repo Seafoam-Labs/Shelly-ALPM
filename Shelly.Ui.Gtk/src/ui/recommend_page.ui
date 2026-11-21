@@ -11,64 +11,13 @@
     <property name="orientation">vertical</property>
     <property name="hexpand">true</property>
     <property name="vexpand">true</property>
-    <property name="margin-top">10</property>
-    <property name="margin-bottom">10</property>
-    <property name="margin-start">10</property>
-    <property name="margin-end">10</property>
-    <child>
-      <object class="GtkBox" id="header_box">
-        <property name="orientation">horizontal</property>
-        <property name="margin-top">4</property>
-        <property name="margin-bottom">4</property>
-        <child>
-          <object class="GtkBox">
-            <property name="orientation">vertical</property>
-            <child>
-              <object class="GtkLabel">
-                <property name="label" translatable="yes">Recommended Packages</property>
-                <property name="hexpand">true</property>
-                <property name="accessible-role">heading</property>
-                <accessibility>
-                  <property name="level">2</property>
-                </accessibility>
-                <style>
-                  <class name="title-2"/>
-                  <class name="page-heading"/>
-                </style>
-              </object>
-            </child>
-            <child>
-              <object class="GtkLabel">
-                <property name="label" translatable="yes">Curated suggestions from Seafoam Labs</property>
-                <property name="hexpand">true</property>
-                <style>
-                  <class name="dim-label"/>
-                  <class name="page-subtitle"/>
-                </style>
-              </object>
-            </child>
-          </object>
-        </child>
-        <child>
-          <object class="GtkButton" id="refresh_button">
-            <property name="icon-name">view-refresh-symbolic</property>
-            <property name="tooltip-text" translatable="yes">Refresh the recommended packages list from the network</property>
-            <property name="sensitive">false</property>
-            <property name="halign">center</property>
-            <property name="valign">center</property>
-            <style>
-              <class name="flat"/>
-            </style>
-            <signal name="clicked" handler="on_refresh_clicked" swapped="true"/>
-          </object>
-        </child>
-      </object>
-    </child>
     <child>
       <object class="GtkBox" id="action_bar">
         <property name="orientation">horizontal</property>
         <property name="spacing">8</property>
-        <property name="margin-top">8</property>
+        <style>
+          <class name="toolbar-card"/>
+        </style>
         <child>
           <object class="GtkLabel" id="selected_label">
             <property name="label" translatable="yes">0 Selected</property>
@@ -89,6 +38,18 @@
             <style>
               <class name="flat"/>
             </style>
+          </object>
+        </child>
+        <child>
+          <object class="GtkButton" id="refresh_button">
+            <property name="icon-name">view-refresh-symbolic</property>
+            <property name="tooltip-text" translatable="yes">Refresh the recommended packages list from the network</property>
+            <property name="sensitive">false</property>
+            <property name="valign">center</property>
+            <style>
+              <class name="flat"/>
+            </style>
+            <signal name="clicked" handler="on_refresh_clicked" swapped="true"/>
           </object>
         </child>
         <child>
@@ -123,9 +84,9 @@
             </child>
             <child>
               <object class="GtkLabel">
-                <property name="label" translatable="yes">Loading Recommended Packages...</property>
+                <property name="label" translatable="yes">Loading recommendations…</property>
                 <style>
-                  <class name="title-4"/>
+                  <class name="title-3"/>
                 </style>
               </object>
             </child>
@@ -134,13 +95,16 @@
         <child>
           <object class="GtkScrolledWindow" id="list_page">
             <property name="overlay-scrolling">false</property>
+            <style>
+              <class name="page-body"/>
+            </style>
             <property name="vexpand">true</property>
             <property name="hexpand">true</property>
             <property name="hscrollbar-policy">never</property>
             <child>
               <object class="GtkBox" id="content_box">
                 <property name="orientation">vertical</property>
-                <property name="spacing">10</property>
+                <property name="spacing">24</property>
                 <property name="margin-start">1</property>
                 <property name="margin-end">1</property>
                 <property name="margin-top">1</property>
@@ -159,16 +123,28 @@
               <object class="GtkImage">
                 <property name="accessible-role">presentation</property>
                 <property name="icon-name">search-none-symbolic</property>
-                <property name="pixel-size">64</property>
+                <property name="pixel-size">48</property>
+                <style>
+                  <class name="dim-label"/>
+                </style>
               </object>
             </child>
             <child>
               <object class="GtkLabel">
-                <property name="label" translatable="yes">No recommendations found. Please check your internet connection and try again.</property>
+                <property name="label" translatable="yes">No recommendations found</property>
+                <style>
+                  <class name="title-3"/>
+                </style>
+              </object>
+            </child>
+            <child>
+              <object class="GtkLabel">
+                <property name="label" translatable="yes">Check your internet connection and try again.</property>
                 <property name="wrap">true</property>
                 <property name="justify">center</property>
+                <property name="max-width-chars">40</property>
                 <style>
-                  <class name="title-2"/>
+                  <class name="dim-label"/>
                 </style>
               </object>
             </child>

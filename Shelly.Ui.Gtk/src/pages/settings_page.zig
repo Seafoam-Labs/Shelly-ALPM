@@ -60,6 +60,7 @@ pub const ShellySettingsPage = extern struct {
         flatpak_switch: *gtk.Switch,
         recommended_switch: *gtk.Switch,
         appimage_switch: *gtk.Switch,
+        fwupd_switch: *gtk.Switch,
         tray_switch: *gtk.Switch,
         tray_auto_switch: *gtk.Switch,
         tray_auto_switch_box: *gtk.Box,
@@ -260,6 +261,13 @@ pub const ShellySettingsPage = extern struct {
             p.appimage_switch.as(gobject.Object),
             *Self,
             &onAppImageNotify,
+            self,
+            .{ .detail = "active" },
+        );
+        _ = gobject.Object.signals.notify.connect(
+            p.fwupd_switch.as(gobject.Object),
+            *Self,
+            &onFwupdNotify,
             self,
             .{ .detail = "active" },
         );
@@ -464,6 +472,7 @@ pub const ShellySettingsPage = extern struct {
             updated.AurEnabled != cfg.AurEnabled or
             updated.FlatPackEnabled != cfg.FlatPackEnabled or
             updated.AppImageEnabled != cfg.AppImageEnabled or
+            updated.FirmwareEnabled != cfg.FirmwareEnabled or
             updated.ShellySearchEnabled != cfg.ShellySearchEnabled or
             !std.mem.eql(u8, updated.Culture, cfg.Culture);
 
@@ -519,6 +528,10 @@ pub const ShellySettingsPage = extern struct {
 
     fn onAppImageNotify(_: *gobject.Object, _: *gobject.ParamSpec, self: *Self) callconv(.c) void {
         self.onSupportNotify(.appimage);
+    }
+
+    fn onFwupdNotify(_: *gobject.Object, _: *gobject.ParamSpec, self: *Self) callconv(.c) void {
+        self.onSupportNotify(.fwupd);
     }
 
     fn onSupportNotify(self: *Self, feature: SupportFeature) void {
@@ -664,6 +677,7 @@ pub const ShellySettingsPage = extern struct {
         const save_result = switch (feature) {
             .flatpak => persistFeatureEnabled(.FlatPackEnabled, true),
             .appimage => persistFeatureEnabled(.AppImageEnabled, true),
+            .fwupd => persistFeatureEnabled(.FirmwareEnabled, true),
         };
         save_result catch {
             self.restoreSupportSwitch(feature, false);
@@ -697,6 +711,7 @@ pub const ShellySettingsPage = extern struct {
         return switch (feature) {
             .flatpak => p.flatpak_switch,
             .appimage => p.appimage_switch,
+            .fwupd => p.fwupd_switch,
         };
     }
 
@@ -704,6 +719,7 @@ pub const ShellySettingsPage = extern struct {
         return switch (feature) {
             .flatpak => cfg.FlatPackEnabled,
             .appimage => cfg.AppImageEnabled,
+            .fwupd => cfg.FirmwareEnabled,
         };
     }
 
@@ -715,6 +731,7 @@ pub const ShellySettingsPage = extern struct {
         return switch (feature) {
             .flatpak => translations._("Installing Flatpak support"),
             .appimage => translations._("Installing AppImage support"),
+            .fwupd => translations._("Installing Firmware support"),
         };
     }
 
@@ -722,6 +739,7 @@ pub const ShellySettingsPage = extern struct {
         return switch (feature) {
             .flatpak => translations._("Could not start installing Flatpak support."),
             .appimage => translations._("Could not start installing AppImage support."),
+            .fwupd => translations._("Could not start installing Firmware support."),
         };
     }
 
@@ -729,6 +747,7 @@ pub const ShellySettingsPage = extern struct {
         return switch (feature) {
             .flatpak => translations._("Could not install Flatpak support."),
             .appimage => translations._("Could not install AppImage support."),
+            .fwupd => translations._("Could not install Firmware support."),
         };
     }
 
@@ -736,6 +755,7 @@ pub const ShellySettingsPage = extern struct {
         return switch (feature) {
             .flatpak => translations._("Flatpak support enabled"),
             .appimage => translations._("AppImage support enabled"),
+            .fwupd => translations._("Firmware support enabled"),
         };
     }
 
@@ -1192,6 +1212,7 @@ pub const ShellySettingsPage = extern struct {
         .{ "flatpak_switch", @offsetOf(Private, "flatpak_switch") },
         .{ "recommended_switch", @offsetOf(Private, "recommended_switch") },
         .{ "appimage_switch", @offsetOf(Private, "appimage_switch") },
+        .{ "fwupd_switch", @offsetOf(Private, "fwupd_switch") },
         .{ "tray_switch", @offsetOf(Private, "tray_switch") },
         .{ "tray_auto_switch", @offsetOf(Private, "tray_auto_switch") },
         .{ "tray_auto_switch_box", @offsetOf(Private, "tray_auto_switch_box") },
@@ -1279,6 +1300,7 @@ const PageFilter = struct {
     flatpak: bool = false,
     app_image: bool = false,
     shelly_search: bool = false,
+    firmware: bool = false,
 
     fn fromConfig(cfg: *const ShellyConfig) PageFilter {
         return .{
@@ -1287,6 +1309,7 @@ const PageFilter = struct {
             .flatpak = cfg.FlatPackEnabled,
             .app_image = cfg.AppImageEnabled,
             .shelly_search = cfg.ShellySearchEnabled,
+            .firmware = cfg.FirmwareEnabled,
         };
     }
 };
@@ -1299,6 +1322,7 @@ const default_page_entries = [_]DefaultPageEntry{
     .{ .label = "AppImage", .value = .app_image },
     .{ .label = "Shelly Search", .value = .shelly_search },
     .{ .label = "Update", .value = .update },
+    .{ .label = "Firmware", .value = .firmware },
 };
 
 const NavModeEntry = struct {
@@ -1318,7 +1342,7 @@ const ThemeModeEntry = struct {
 
 const theme_mode_entries = [_]ThemeModeEntry{
     .{ .label = "Shelly", .value = .shelly },
-    .{ .label = "System GTK", .value = .system },
+    .{ .label = "System colors", .value = .system },
 };
 
 const ThemeVariantEntry = struct {
@@ -1405,7 +1429,7 @@ fn populateDropdowns(p: *ShellySettingsPage.Private) void {
     inline for (theme_mode_entries, 0..) |_, index| {
         const label = switch (index) {
             0 => translations._("Shelly"),
-            1 => translations._("System GTK"),
+            1 => translations._("System colors"),
             else => translations._("Shelly"),
         };
         gtk.StringList.append(theme_mode_strings, label);
@@ -1518,6 +1542,7 @@ fn hideUnbuiltRows(p: *ShellySettingsPage.Private) void {
         hideSettingsRow(p.appimage_upgrade_all_recheck_switch);
     }
     if (!features.builtWithShellySearch) hideSettingsRow(p.shelly_search_switch);
+    if (!features.builtWithFwupd) hideSettingsRow(p.fwupd_switch);
 }
 
 fn isPageEntryEnabled(entry: DefaultPageEntry, filter: PageFilter) bool {
@@ -1531,6 +1556,7 @@ fn isPageEntryEnabled(entry: DefaultPageEntry, filter: PageFilter) bool {
         .app_image => filter.app_image,
         .shelly_search => filter.shelly_search,
         .update => true,
+        .firmware => filter.firmware,
     };
 }
 
@@ -1543,6 +1569,7 @@ fn pageEntryLabel(entry: DefaultPageEntry) [:0]const u8 {
         .app_image => translations._("AppImage"),
         .shelly_search => translations._("Shelly Search"),
         .update => translations._("Update"),
+        .firmware => translations._("Firmware"),
     };
 }
 
@@ -1600,6 +1627,7 @@ fn applyConfig(p: *ShellySettingsPage.Private, cfg: *ShellyConfig) void {
     setSwitch(p.flatpak_switch, cfg.FlatPackEnabled);
     setSwitch(p.recommended_switch, cfg.RecommendedEnabled);
     setSwitch(p.appimage_switch, cfg.AppImageEnabled);
+    setSwitch(p.fwupd_switch, cfg.FirmwareEnabled);
     setSwitch(p.tray_switch, cfg.TrayEnabled);
     setSwitch(p.tray_auto_switch, cfg.TrayAutoStart);
     setSwitch(p.daily_schedule, cfg.UseWeeklySchedule);
@@ -1683,6 +1711,7 @@ fn collectIntoConfig(p: *ShellySettingsPage.Private, allocator: std.mem.Allocato
     cfg.FlatPackEnabled = getSwitch(p.flatpak_switch);
     cfg.RecommendedEnabled = getSwitch(p.recommended_switch);
     cfg.AppImageEnabled = getSwitch(p.appimage_switch);
+    cfg.FirmwareEnabled = getSwitch(p.fwupd_switch);
     cfg.TrayEnabled = getSwitch(p.tray_switch);
     cfg.TrayAutoStart = getSwitch(p.tray_auto_switch);
     cfg.UseWeeklySchedule = getSwitch(p.daily_schedule);
@@ -1776,6 +1805,38 @@ test "AppImage support installs fuse2" {
     );
 }
 
+test "Firmware support installs fwupd without a backend stage" {
+    const packages = support_packages.dependenciesForFeature(.fwupd);
+    try std.testing.expectEqualSlices(
+        []const u8,
+        &.{"fwupd"},
+        packages,
+    );
+
+    const argv = try ShellyCommands.install(std.testing.allocator, packages);
+    defer std.testing.allocator.free(argv);
+    try std.testing.expectEqualSlices(
+        []const u8,
+        &.{ "install", "standard", "fwupd" },
+        argv,
+    );
+}
+
+test "Firmware is a selectable default page only while enabled" {
+    if (!features.builtWithFwupd) return error.SkipZigTest;
+
+    const entry = DefaultPageEntry{ .label = "Firmware", .value = .firmware };
+    const disabled = PageFilter{};
+    const enabled = PageFilter{ .firmware = true };
+
+    try std.testing.expect(!isPageEntryEnabled(entry, disabled));
+    try std.testing.expect(isPageEntryEnabled(entry, enabled));
+
+    const idx = defaultPageIndex(.firmware, enabled);
+    try std.testing.expectEqual(@as(?ShellyTabs, .firmware), pageEntryValue(idx, enabled));
+    try std.testing.expectEqualStrings("Firmware", pageEntryLabel(entry));
+}
+
 fn applyScheduleVisibility(p: *ShellySettingsPage.Private) void {
     const tray_enabled = gtk.Switch.getActive(p.tray_switch) != 0;
     if (!tray_enabled) {
@@ -1804,7 +1865,7 @@ fn applyTrayVisibility(p: *ShellySettingsPage.Private) void {
     gtk.Widget.setVisible(p.symbolic_tray_box.as(gtk.Widget), @intFromBool(enabled));
 }
 
-/// System GTK follows the desktop theme, so the color variant row is only
+/// System colors follow the desktop, so the color variant row is only
 /// shown for the built-in theme. The stored variant is left untouched.
 fn applyThemeVariantVisibility(p: *ShellySettingsPage.Private) void {
     const idx = gtk.DropDown.getSelected(p.theme_mode_drop);

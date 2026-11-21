@@ -11,7 +11,7 @@ pkgname=(
   'shelly-notify-git'
   'shelly-notify-none-git'
 )
-pkgver=3.3.1
+pkgver=3.4.1
 pkgrel=1
 arch=('x86_64' 'aarch64')
 url='https://github.com/Seafoam-Labs/Shelly-ALPM'
@@ -181,6 +181,7 @@ package_shelly-git() {
   )
   optdepends=(
     'fuse2: run AppImages that require FUSE 2'
+    'fwupd: Firmware page for device firmware updates'
     'libstarfish: dependency viewer for arch packages'
   )
   provides=("shelly=${pkgver}")

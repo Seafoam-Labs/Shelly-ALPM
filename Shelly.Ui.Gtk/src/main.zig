@@ -9,7 +9,6 @@ const glib = bindings.glib;
 const gobject = bindings.gobject;
 const ShellyWindow = @import("shelly_window.zig").ShellyWindow;
 const runtime = @import("services/runtime.zig");
-const theme = @import("services/theme.zig");
 const translations = @import("helpers/translations.zig");
 const deep_link = @import("helpers/deep_link.zig");
 const tray_service = @import("services/tray_service.zig");
@@ -215,8 +214,6 @@ fn activate(app: *gtk.Application, _: ?*anyopaque) callconv(.c) void {
 
     if (features.builtWithBackgroundServices) tryStartTray(runtime.io, std.heap.c_allocator);
 
-    theme.setupGnomeThemePreference();
-
     const window = ShellyWindow.new(app);
     window.refreshTheme();
     dispatchPendingNavigation(window);
@@ -234,6 +231,8 @@ fn tryStartTray(io: std.Io, alloc: std.mem.Allocator) void {
 test {
     _ = @import("services/icon_resolver.zig");
     _ = @import("services/ui_config_resolver.zig");
+    _ = @import("services/desktop_palette.zig");
+    _ = @import("services/theme.zig");
     _ = @import("services/shelly_cli.zig");
     _ = @import("services/tray_service.zig");
     _ = @import("helpers/a11y.zig");
@@ -253,4 +252,13 @@ test {
     _ = @import("models/search_result.zig");
     _ = @import("g_objects/search_result_object.zig");
     _ = @import("pages/transaction_page.zig");
+    _ = @import("services/fwupd_enums.zig");
+    _ = @import("models/fwupd.zig");
+    _ = @import("services/fwupd.zig");
+    _ = @import("services/fwupd_download.zig");
+    _ = @import("services/dbus.zig");
+    _ = @import("dialog/page/yn_dialog.zig");
+    _ = @import("g_objects/firmware_device_object.zig");
+    _ = @import("g_objects/firmware_release_object.zig");
+    _ = @import("pages/firmware_page.zig");
 }

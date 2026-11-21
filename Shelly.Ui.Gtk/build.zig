@@ -66,6 +66,15 @@ pub fn build(b: *std.Build) void {
         ) orelse false,
     );
     options.addOption(
+        bool,
+        "exclude_fwupd",
+        b.option(
+            bool,
+            "exclude-fwupd",
+            "Compile out the Firmware page and its settings row",
+        ) orelse false,
+    );
+    options.addOption(
         AurBackend,
         "aur_backend",
         b.option(
@@ -140,9 +149,11 @@ pub fn build(b: *std.Build) void {
     gresource.addFileArg(b.path("src/gresource.xml"));
 
     gresource.addFileInput(b.path("src/style.css"));
+    gresource.addFileInput(b.path("src/themes/shelly-components.css"));
     gresource.addFileInput(b.path("src/themes/shelly-dark.css"));
     gresource.addFileInput(b.path("src/themes/shelly-light.css"));
     gresource.addFileInput(b.path("src/assets/icons/flatpak-symbolic.svg"));
+    gresource.addFileInput(b.path("src/assets/icons/funnel-symbolic.svg"));
     gresource.addFileInput(b.path("src/assets/icons/arch-symbolic.svg"));
     gresource.addFileInput(b.path("src/assets/icons/atoll-shark-symbolic.svg"));
     gresource.addFileInput(b.path("src/assets/icons/update-symbolic.svg"));
@@ -151,6 +162,7 @@ pub fn build(b: *std.Build) void {
     gresource.addFileInput(b.path("src/assets/icons/settings-symbolic.svg"));
     gresource.addFileInput(b.path("src/assets/icons/application-x-executable-symbolic.svg"));
     gresource.addFileInput(b.path("src/assets/icons/software-update-available-symbolic.svg"));
+    gresource.addFileInput(b.path("src/assets/icons/firmware-symbolic.svg"));
     gresource.addFileInput(b.path("src/assets/icons/checkmark-small-symbolic.svg"));
     gresource.addFileInput(b.path("src/ui/main_window.ui"));
     gresource.addFileInput(b.path("src/ui/settings_page.ui"));
@@ -162,6 +174,7 @@ pub fn build(b: *std.Build) void {
     gresource.addFileInput(b.path("src/ui/search_page.ui"));
     gresource.addFileInput(b.path("src/ui/package_page.ui"));
     gresource.addFileInput(b.path("src/ui/update_page.ui"));
+    gresource.addFileInput(b.path("src/ui/firmware_page.ui"));
     gresource.addFileInput(b.path("src/dialog/ui/yn.ui"));
     gresource.addFileInput(b.path("src/dialog/ui/flatpak_remove.ui"));
     gresource.addFileInput(b.path("src/dialog/ui/multiselect.ui"));
@@ -197,18 +210,24 @@ pub fn build(b: *std.Build) void {
     const run_step = b.step("run", "Run the app");
     run_step.dependOn(&run_cmd.step);
 
-    const valgrind_cmd = b.addSystemCommand(&.{"valgrind"});
-    valgrind_cmd.addArgs(&.{
-        "--tool=memcheck",
-        "--leak-check=full",
-        "--show-leak-kinds=definite,indirect",
-        "--track-origins=yes",
-        "--num-callers=50",
-        "--error-exitcode=42",
-        "--log-file=valgrind-%p.log",
-    });
-    valgrind_cmd.addPrefixedFileArg("--suppressions=", b.path("valgrind/glib-gtk.supp"));
-    valgrind_cmd.addArtifactArg(exe);
+    const valgrind_extra = b.option(
+        []const u8,
+        "valgrind-args",
+        "Extra valgrind flags, whitespace-separated (e.g. \"-s\" or \"--show-leak-kinds=all\")",
+    ) orelse "";
+    // Whitespace splitting only, no shell quoting: fine for flags, not for
+    // values containing spaces.
+    var valgrind_extra_args: std.ArrayList([]const u8) = .empty;
+    var extra_it = std.mem.tokenizeScalar(u8, valgrind_extra, ' ');
+    while (extra_it.next()) |arg| valgrind_extra_args.append(b.allocator, arg) catch @panic("OOM");
+
+    if (optimize == .debug) {
+        // Frame pointers give more Zig frames file:line in valgrind stacks.
+        // Debug only, so packaging builds (safe/small) are untouched.
+        exe.root_module.omit_frame_pointer = false;
+    }
+
+    const valgrind_cmd = addValgrindCommand(b, target, exe, "valgrind-%p.log", valgrind_extra_args.items);
     valgrind_cmd.addPassthruArgs();
 
     const valgrind_step = b.step("valgrind", "Run the app under Valgrind (memcheck) to check for memory leaks");
@@ -221,4 +240,44 @@ pub fn build(b: *std.Build) void {
     const test_step = b.step("test", "Run all tests");
     test_step.dependOn(&b.addRunArtifact(root_tests).step);
     test_step.dependOn(&b.addRunArtifact(exe_tests).step);
+
+    // No addPassthruArgs here: the test runner rejects unknown arguments
+    // (filtering is compile-time only, via -Dtest-filter).
+    const valgrind_test_cmd = addValgrindCommand(b, target, exe_tests, "valgrind-test-%p.log", valgrind_extra_args.items);
+    const valgrind_test_step = b.step("valgrind-test", "Run the test suite under Valgrind (memcheck)");
+    valgrind_test_step.dependOn(&valgrind_test_cmd.step);
+}
+
+fn addValgrindCommand(
+    b: *std.Build,
+    target: std.Build.ResolvedTarget,
+    artifact: *std.Build.Step.Compile,
+    log_file: []const u8,
+    extra_args: []const []const u8,
+) *std.Build.Step.Run {
+    const cmd = b.addSystemCommand(&.{"valgrind"});
+    cmd.addArgs(&.{
+        "--tool=memcheck",
+        "--leak-check=full",
+        "--show-leak-kinds=definite,possible", // memcheck default; indirect only on deep dives
+        "--errors-for-leak-kinds=definite", // the gate: definite leaks only
+        "--track-origins=yes",
+        "--num-callers=50",
+        "--gen-suppressions=all",
+        "--error-exitcode=42",
+    });
+    cmd.addArg(b.fmt("--log-file={s}", .{log_file}));
+    cmd.addPrefixedFileArg("--suppressions=", b.path("valgrind/glib-gtk.supp"));
+    cmd.addArgs(extra_args);
+    cmd.addArtifactArg(artifact);
+    if (target.result.cpu.has(.x86, .avx512f)) {
+        // Valgrind 3.25.1 has no EVEX decoder; AVX-512 codegen in compiler_rt
+        // SIGILLs under memcheck. Attached to the valgrind command only, so
+        // plain build/run/test with the native target are unaffected.
+        const fail = b.addFail(
+            "valgrind cannot decode AVX-512 (EVEX): rerun with -Dcpu=x86_64_v3 or lower",
+        );
+        cmd.step.dependOn(&fail.step);
+    }
+    return cmd;
 }

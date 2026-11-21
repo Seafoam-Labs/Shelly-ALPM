@@ -18,6 +18,7 @@ pub const View = struct {
     include_appimage: bool = false,
     target: ?operation.FlatpakTarget = null,
     action: operation.Action = .install,
+    remove_unused_dependencies: bool = false,
     state: enum { entering, running, succeeded, failed, declined },
     review: []const u8 = "",
     detail: []const u8 = "",
@@ -25,6 +26,17 @@ pub const View = struct {
     refresh_pending: bool = false,
 
     fn confirmation(self: View, arena: Allocator) Allocator.Error![]const u8 {
+        if ((self.backend == .standard or self.backend == .aur) and self.action == .remove) {
+            const targets = if (self.review.len > 0)
+                std.mem.trim(u8, self.review, "\r\n")
+            else
+                try std.fmt.allocPrint(arena, "Remove: {f}", .{diagnostics.safe(self.name)});
+            return std.fmt.allocPrint(arena, "[{s}] Remove unused dependencies{s}\n{s}", .{
+                if (self.remove_unused_dependencies) "x" else " ",
+                if (self.remove_unused_dependencies) " (skips .pacsave backups)" else "",
+                targets,
+            });
+        }
         if (self.review.len > 0) return std.mem.trim(u8, self.review, "\r\n");
         const target = if (self.target) |value|
             try std.fmt.allocPrint(arena, "\nScope: {s}\nRemote: {f}\nBranch: {f}\nArchitecture: {f}", .{
@@ -37,6 +49,8 @@ pub const View = struct {
             if (self.include_aur)
                 if (self.include_flatpak) "System packages, AUR, and system/user Flatpaks. PKGBUILDs require review." else "System packages and AUR. Flatpak disabled or unavailable. PKGBUILDs require review."
             else if (self.include_flatpak) "System packages and system/user Flatpaks. AUR excluded." else "Full system upgrade. AUR and Flatpak excluded."
+        else if (self.action == .sync)
+            "Refreshes metadata from the configured system repositories."
         else if (self.backend == .appimage and self.action == .upgrade)
             "Updates all configured AppImages with available updates as your user. Application configuration is kept."
         else if (self.backend == .flatpak)

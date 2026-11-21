@@ -40,7 +40,7 @@ pub const Overlay = union(enum) {
 
 pub const Model = struct {
     gpa: Allocator,
-    list_percent: u8 = 40,
+    list_percent: std.enums.EnumFieldStruct(Tab, u8, 40) = .{ .aur = 30 },
     viewport_width: ?u16 = null,
 
     active: Tab = .packages,
@@ -52,6 +52,7 @@ pub const Model = struct {
     notice: []const u8 = "",
     quit_blocked_notice: bool = false,
     help_open: bool = false,
+    help_button: ?struct { col: u16, width: u16, height: u16 } = null,
     help_panel: help_view.Panel = .{},
 
     packages_state: packages_model.State,
@@ -158,8 +159,8 @@ pub const Model = struct {
                 }
                 if (!self.help_open and operation_model.operationPrompt(self) == null and self.operation_state.review_prompt == null and (self.active == .packages or self.active == .aur or self.active == .flatpak or self.active == .appimage or self.active == .settings) and (self.overlay == null or self.overlay.? == .package or self.overlay.? == .aur or self.overlay.? == .flatpak)) {
                     if (commands.matches(key, .narrow_view) or commands.matches(key, .widen_view)) {
-                        const next_percent = @import("views/split_layout.zig").resize(self.viewport_width, self.list_percent, commands.matches(key, .widen_view)) orelse return ctx.consumeEvent();
-                        self.list_percent = next_percent;
+                        const percent = self.activeListPercent();
+                        percent.* = @import("views/split_layout.zig").resize(self.viewport_width, percent.*, commands.matches(key, .widen_view)) orelse return ctx.consumeEvent();
                         return ctx.consumeAndRedraw();
                     }
                 }
@@ -232,6 +233,15 @@ pub const Model = struct {
             },
             .mouse => {
                 if (self.settings_state.keybinding_capture) return ctx.consumeEvent();
+                if (self.help_button) |button| {
+                    if (event.mouse.row >= 0 and event.mouse.row < @as(i17, button.height) and
+                        event.mouse.col >= @as(i17, button.col) and event.mouse.col < @as(i17, button.col) + @as(i17, button.width) and
+                        event.mouse.button == .left and event.mouse.type == .press)
+                    {
+                        self.help_open = !self.help_open;
+                        return ctx.consumeAndRedraw();
+                    }
+                }
                 if (self.help_open) {
                     try self.help_panel.scroll.handleEvent(ctx, event);
                     return ctx.consumeAndRedraw();
@@ -332,6 +342,12 @@ pub const Model = struct {
             .flatpak => self.settings_state.settings.flatpak_enabled,
             .appimage => self.settings_state.settings.appimage_enabled,
             else => true,
+        };
+    }
+
+    pub fn activeListPercent(self: *Model) *u8 {
+        return switch (self.active) {
+            inline else => |tab| &@field(self.list_percent, @tagName(tab)),
         };
     }
 
@@ -622,36 +638,51 @@ test "help and footer update live bindings without reopening help" {
     try std.testing.expect(packages_model.packageMarked(model, "example"));
     var context = model.commandContext();
     context.selected_count = 0;
-    const footer = try footer_view.draw(.{ .arena = arena.allocator(), .min = .{}, .max = .{ .width = 100, .height = 1 }, .cell_size = .{ .width = 10, .height = 20 } }, context, null);
+    const footer = try footer_view.draw(.{ .arena = arena.allocator(), .min = .{}, .max = .{ .width = 100, .height = 1 }, .cell_size = .{ .width = 10, .height = 20 } }, context, null, true);
     var main: std.ArrayList(u8) = .empty;
     for (footer.children[0].surface.buffer) |cell| try main.appendSlice(arena.allocator(), cell.char.grapheme);
     try std.testing.expect(std.mem.indexOf(u8, main.items, "V Select") != null);
     var help: std.ArrayList(u8) = .empty;
-    for (footer.children[1].surface.buffer) |cell| try help.appendSlice(arena.allocator(), cell.char.grapheme);
+    const surface = try model.widget().draw(.{ .arena = arena.allocator(), .min = .{}, .max = .{ .width = 100, .height = 24 }, .cell_size = .{ .width = 10, .height = 20 } });
+    const hint = surface.children[0].surface.children[1];
+    const tabs: *const tab_bar_view.TabBar = @ptrCast(@alignCast(surface.children[0].surface.children[0].surface.widget.userdata));
+    try std.testing.expectEqual(@as(i17, tabs.right_edge) + 1, hint.origin.col);
+    try std.testing.expectEqual(@as(u16, 3), hint.surface.size.height);
+    for (hint.surface.children[0].surface.buffer) |cell| try help.appendSlice(arena.allocator(), cell.char.grapheme);
     try std.testing.expectEqualStrings("F2 Help", help.items);
+    const click: vxfw.Event = .{ .mouse = .{ .row = @intCast(hint.origin.row), .col = @intCast(hint.origin.col), .button = .left, .type = .press, .mods = .{} } };
+    try Model.typeErasedCaptureHandler(model, &events, click);
+    try std.testing.expect(model.help_open);
+    try Model.typeErasedCaptureHandler(model, &events, click);
+    try std.testing.expect(!model.help_open);
 }
 
-test "panel resizing is shared bounded and preserves settings navigation" {
+test "panel resizing keeps pages independent, respects bounds, and preserves settings navigation" {
     const model = try Model.init(std.testing.allocator);
     defer model.deinit();
     var events: vxfw.EventContext = .{ .io = std.testing.io, .alloc = std.testing.allocator, .cmds = .empty };
     defer events.cmds.deinit(std.testing.allocator);
-    for ([_]Tab{ .packages, .aur, .flatpak }) |tab| {
+    model.active = .aur;
+    try std.testing.expectEqual(@as(u8, 30), aur_model.aurView(model).list_percent);
+    try model.captureEvent(&events, .{ .key_press = commands.bindings.widen_view });
+    try std.testing.expectEqual(@as(u8, 35), aur_model.aurView(model).list_percent);
+    try std.testing.expectEqual(@as(u8, 40), model.list_percent.packages);
+    for ([_]Tab{ .packages, .appimage, .flatpak }) |tab| {
         model.active = tab;
-        model.list_percent = 40;
+        try std.testing.expectEqual(@as(u8, 40), model.activeListPercent().*);
         try model.captureEvent(&events, .{ .key_press = commands.bindings.widen_view });
-        try std.testing.expectEqual(@as(u8, 45), model.list_percent);
+        try std.testing.expectEqual(@as(u8, 45), model.activeListPercent().*);
         try model.captureEvent(&events, .{ .key_press = commands.bindings.narrow_view });
-        try std.testing.expectEqual(@as(u8, 40), model.list_percent);
+        try std.testing.expectEqual(@as(u8, 40), model.activeListPercent().*);
     }
     for (0..100) |_| try model.captureEvent(&events, .{ .key_press = commands.bindings.widen_view });
-    try std.testing.expectEqual(@as(u8, 80), model.list_percent);
+    try std.testing.expectEqual(@as(u8, 80), model.activeListPercent().*);
     for (0..100) |_| try model.captureEvent(&events, .{ .key_press = commands.bindings.narrow_view });
-    try std.testing.expectEqual(@as(u8, 20), model.list_percent);
+    try std.testing.expectEqual(@as(u8, 20), model.activeListPercent().*);
     model.active = .settings;
     const selected = model.settings_state.settings_selected;
     try model.captureEvent(&events, .{ .key_press = commands.bindings.widen_view });
-    try std.testing.expectEqual(@as(u8, 25), model.list_percent);
+    try std.testing.expectEqual(@as(u8, 45), model.activeListPercent().*);
     try std.testing.expectEqual(selected, model.settings_state.settings_selected);
 }
 

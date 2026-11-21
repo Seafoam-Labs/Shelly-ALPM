@@ -66,6 +66,7 @@ pub const SudoPrompt = struct {
     panel: operation_view.Panel = .{},
     backend: OperationBackend,
     action: shelly_operation.Action = .install,
+    remove_unused_dependencies: bool = false,
     elevated: bool = true,
     include_flatpak: bool = true,
     include_aur: bool = true,
@@ -101,6 +102,7 @@ pub const SudoPrompt = struct {
             .target = self.flatpak_target,
             .review = self.review_text,
             .action = self.action,
+            .remove_unused_dependencies = self.remove_unused_dependencies,
             .detail = self.detail,
             .progress = self.progress,
             .state = switch (self.state) {
@@ -428,7 +430,7 @@ pub fn openPackageBatchPrompt(self: *Model, action: shelly_operation.Action, bac
         defer self.gpa.free(note);
         try review.appendSlice(self.gpa, note);
     }
-    if (action == .remove) try review.appendSlice(self.gpa, "Unused dependencies and configuration will be kept.\n");
+    if (action == .remove and backend != .standard and backend != .aur) try review.appendSlice(self.gpa, "Unused dependencies and configuration will be kept.\n");
     const prompt = try self.gpa.create(SudoPrompt);
     prompt.* = .{ .name = "", .backend = backend, .action = action };
     errdefer prompt.deinit(self.gpa);
@@ -583,6 +585,10 @@ pub fn handleSudoKey(self: *Model, prompt: *SudoPrompt, ctx: *vxfw.EventContext,
             return ctx.consumeAndRedraw();
         }
     };
+    if (prompt.state == .entering and (prompt.backend == .standard or prompt.backend == .aur) and prompt.action == .remove and commands.matches(key, .mark)) {
+        prompt.remove_unused_dependencies = !prompt.remove_unused_dependencies;
+        return ctx.consumeAndRedraw();
+    }
     switch (try prompt.panel.handleKey(promptView(self, prompt), ctx, key)) {
         .none => {},
         .close => closeOverlay(self),
@@ -624,6 +630,7 @@ pub fn startElevatedInstall(self: *Model, ctx: *vxfw.EventContext, prompt: *Sudo
         .name = prompt.name,
         .targets = prompt.targets,
         .action = prompt.action,
+        .remove_unused_dependencies = prompt.remove_unused_dependencies,
         .backend = @tagName(prompt.backend),
         .flatpak = prompt.flatpak_target,
         .include_flatpak = prompt.include_flatpak,
@@ -683,7 +690,7 @@ pub fn pollInstall(self: *Model) !bool {
         self.updates_state.refresh_updates_after_operation = true;
         if (self.settings_state.settings.aur_enabled) self.aur_state.refresh_aur_after_operation = true;
     }
-    if (package_batch) {
+    if (package_batch or job.request.action == .sync) {
         self.updates_state.refresh_after_upgrade = true;
         self.updates_state.refresh_updates_after_operation = true;
     }

@@ -20,6 +20,7 @@ const ShellyConfig = @import("../models/shelly_config.zig").ShellyConfig;
 const ViewType = @import("../models/shelly_config.zig").ViewType;
 const RecommendCategory = @import("../models/recommendation.zig").RecommendCategory;
 const sorters = @import("../helpers/sorters.zig");
+const table_columns = @import("../helpers/table_columns.zig");
 const recommendations = @import("../services/recommendations.zig");
 const translations = @import("../helpers/translations.zig");
 const a11y = @import("../helpers/a11y.zig");
@@ -62,6 +63,7 @@ pub const PackagePage = extern struct {
         grid_view_button: *gtk.ToggleButton,
         list_view_button: *gtk.ToggleButton,
         install_button: *gtk.Button,
+        selection_actions: *gtk.Box,
         cart_items_box: *gtk.Box,
         cart_label: *gtk.Label,
         upgrade_check: *gtk.CheckButton,
@@ -152,6 +154,15 @@ pub const PackagePage = extern struct {
         gtk.SingleSelection.setCanUnselect(p.selection, 1);
 
         gtk.ColumnView.setModel(p.column_view, p.selection.as(gtk.SelectionModel));
+        // install date follows "installed only", so the page shows and hides it.
+        table_columns.attach(p.column_view, "packages", &.{
+            .{ .key = "select", .column = p.check_column, .hideable = false, .resizable = false },
+            .{ .key = "name", .column = p.name_column, .hideable = false },
+            .{ .key = "version", .column = p.version_column },
+            .{ .key = "size", .column = p.size_column },
+            .{ .key = "repository", .column = p.repository_column },
+            .{ .key = "install-date", .column = p.install_date_column, .hideable = false },
+        });
         gtk.GridView.setModel(p.grid_view, p.selection.as(gtk.SelectionModel));
 
         gtk.SortListModel.setSorter(sort_model, gtk.ColumnView.getSorter(p.column_view));
@@ -224,6 +235,7 @@ pub const PackagePage = extern struct {
     fn install_date_setup(_: *gtk.SignalListItemFactory, item: *gobject.Object, _: ?*anyopaque) callconv(.c) void {
         const cell = gobject.ext.cast(gtk.ColumnViewCell, item) orelse return;
         const label = gtk.Label.new("");
+        gtk.Widget.addCssClass(label.as(gtk.Widget), "cell-meta");
         gtk.Widget.setHalign(label.as(gtk.Widget), gtk.Align.start);
         gtk.Label.setEllipsize(label, .end);
         gtk.ColumnViewCell.setChild(cell, label.as(gtk.Widget));
@@ -243,6 +255,7 @@ pub const PackagePage = extern struct {
             fn setup(_: *gtk.SignalListItemFactory, item: *gobject.Object, _: ?*anyopaque) callconv(.c) void {
                 const cell = gobject.ext.cast(gtk.ColumnViewCell, item) orelse return;
                 const label = gtk.Label.new("");
+                gtk.Widget.addCssClass(label.as(gtk.Widget), "cell-meta");
                 gtk.Widget.setHalign(label.as(gtk.Widget), halign);
                 gtk.Label.setEllipsize(label, .end);
                 gtk.ColumnViewCell.setChild(cell, label.as(gtk.Widget));
@@ -328,7 +341,7 @@ pub const PackagePage = extern struct {
                 var buf: [512]u8 = undefined;
                 const escaped = glib.markupEscapeText(pkg.getName(), -1);
                 defer glib.free(escaped);
-                const markup = std.fmt.bufPrintSentinel(&buf, "<b>{s}</b>", .{escaped}, 0) catch pkg.getName();
+                const markup = std.fmt.bufPrintSentinel(&buf, "<span weight=\"semibold\">{s}</span>", .{escaped}, 0) catch pkg.getName();
                 gtk.Label.setMarkup(label, markup);
                 gtk.Label.setLabel(desc_label, pkg.getDescription());
                 gtk.Widget.setVisible(installed_w, @intFromBool(pkg.isInstalled()));
@@ -399,6 +412,7 @@ pub const PackagePage = extern struct {
     fn size_setup(_: *gtk.SignalListItemFactory, item: *gobject.Object, _: ?*anyopaque) callconv(.c) void {
         const cell = gobject.ext.cast(gtk.ColumnViewCell, item) orelse return;
         const label = gtk.Label.new("");
+        gtk.Widget.addCssClass(label.as(gtk.Widget), "cell-meta");
         gtk.Widget.setHalign(label.as(gtk.Widget), gtk.Align.start);
         gtk.Label.setEllipsize(label, .end);
         gtk.ColumnViewCell.setChild(cell, label.as(gtk.Widget));
@@ -503,10 +517,10 @@ pub const PackagePage = extern struct {
                 gtk.Widget.setSizeRequest(frame.as(gtk.Widget), 300, -1);
                 gtk.Widget.setHexpand(frame.as(gtk.Widget), 0);
                 gtk.Widget.setHalign(frame.as(gtk.Widget), .fill);
-                gtk.Widget.setMarginStart(frame.as(gtk.Widget), 3);
-                gtk.Widget.setMarginEnd(frame.as(gtk.Widget), 3);
-                gtk.Widget.setMarginTop(frame.as(gtk.Widget), 3);
-                gtk.Widget.setMarginBottom(frame.as(gtk.Widget), 3);
+                gtk.Widget.setMarginStart(frame.as(gtk.Widget), 4);
+                gtk.Widget.setMarginEnd(frame.as(gtk.Widget), 4);
+                gtk.Widget.setMarginTop(frame.as(gtk.Widget), 4);
+                gtk.Widget.setMarginBottom(frame.as(gtk.Widget), 4);
                 gtk.Widget.addCssClass(frame.as(gtk.Widget), "card");
 
                 gtk.ListItem.setChild(list_item, frame.as(gtk.Widget));
@@ -547,7 +561,7 @@ pub const PackagePage = extern struct {
                     }
                 }
                 var name_buf: [256]u8 = undefined;
-                const markup = std.fmt.bufPrintSentinel(&name_buf, "<b>{s}</b>", .{pkg.getName()}, 0) catch pkg.getName();
+                const markup = std.fmt.bufPrintSentinel(&name_buf, "<span weight=\"semibold\">{s}</span>", .{pkg.getName()}, 0) catch pkg.getName();
                 gtk.Label.setMarkup(title_label, markup);
                 gtk.Widget.setVisible(installed_check, @intFromBool(pkg.isInstalled()));
                 gtk.Label.setLabel(desc_label, pkg.getDescription());
@@ -958,6 +972,7 @@ pub const PackagePage = extern struct {
         .{ "grouping_selection", @offsetOf(Private, "grouping_selection") },
         .{ "detail_revealer", @offsetOf(Private, "detail_revealer") },
         .{ "install_button", @offsetOf(Private, "install_button") },
+        .{ "selection_actions", @offsetOf(Private, "selection_actions") },
         .{ "cart_label", @offsetOf(Private, "cart_label") },
         .{ "cart_items_box", @offsetOf(Private, "cart_items_box") },
         .{ "upgrade_check", @offsetOf(Private, "upgrade_check") },
@@ -1058,14 +1073,13 @@ pub const PackagePage = extern struct {
         gtk.Label.setLabel(p.cart_label, std.fmt.bufPrintSentinel(&cart_buf, "{d} {s}", .{ total, translations._("Selected") }, 0) catch translations._("0 Selected"));
 
         const btn = p.install_button.as(gtk.Widget);
+        gtk.Widget.setVisible(p.selection_actions.as(gtk.Widget), @intFromBool(total > 0));
         gtk.Widget.removeCssClass(btn, "suggested-action");
         gtk.Widget.removeCssClass(btn, "destructive-action");
 
-        if (total == 0) {
-            gtk.Button.setLabel(p.install_button, translations._("Install Selected"));
-            gtk.Widget.setSensitive(btn, 0);
-            gtk.Widget.setTooltipText(btn, null);
-        } else if (install_count > 0 and remove_count > 0) {
+        // the selection actions are hidden with nothing selected.
+        if (total == 0) return;
+        if (install_count > 0 and remove_count > 0) {
             gtk.Button.setLabel(p.install_button, translations._("Mixed selection"));
             gtk.Widget.setSensitive(btn, 0);
             gtk.Widget.setTooltipText(btn, translations._("Select only installed packages to remove, or only available ones to install."));

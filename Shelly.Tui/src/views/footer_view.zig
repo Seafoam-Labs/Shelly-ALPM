@@ -12,16 +12,17 @@ const Shortcut = struct {
 };
 
 /// Render current key labels rather than embedding shortcuts in status strings.
-pub fn draw(ctx: vxfw.DrawContext, context: commands.Context, status: ?[]const u8) Allocator.Error!vxfw.Surface {
+pub fn draw(ctx: vxfw.DrawContext, context: commands.Context, status: ?[]const u8, show_shortcuts: bool) Allocator.Error!vxfw.Surface {
     const size = ctx.max.size();
-    const help_label = if (context.settings_capture or context.appimage_path) "" else try std.fmt.allocPrint(ctx.arena, "{s} {s}", .{ try commands.label(ctx.arena, .help), if (context.mode == .help) "Back" else "Help" });
-    const help_width: u16 = @intCast(@min(size.width, ctx.stringWidth(help_label)));
-    const main_width = size.width -| (help_width + @as(u16, if (help_width > 0) 2 else 0));
+    const main_width = size.width;
     var shortcuts: std.ArrayList(Shortcut) = .empty;
-    for (try commands.entries(ctx.arena, context)) |entry| {
+    for (if (show_shortcuts) try commands.entries(ctx.arena, context) else &.{}) |entry| {
         // Resizing stays discoverable in help without crowding the footer.
-        if (entry.id == .narrow_view or entry.id == .widen_view) continue;
-        if ((entry.id == .mark and context.mode != .answers) or (context.mode == .search and (entry.id == .install or entry.id == .remove))) continue;
+        switch (entry.id) {
+            .narrow_view, .widen_view, .sort_package_name, .sort_package_repository => continue,
+            else => {},
+        }
+        if ((entry.id == .mark and context.mode != .answers and !context.removal_confirmation) or (context.mode == .search and (entry.id == .install or entry.id == .remove))) continue;
         if (entry.id == .next) continue;
         if (context.mode == .settings and (entry.id == .save_settings or entry.id == .refresh)) continue;
         // Keep alternative bindings in help instead of repeating actions.
@@ -42,7 +43,7 @@ pub fn draw(ctx: vxfw.DrawContext, context: commands.Context, status: ?[]const u
             .width = ctx.stringWidth(key) + ctx.stringWidth(description),
         });
     }
-    if (!context.quit_blocked and !context.settings_capture and !context.appimage_path) {
+    if (show_shortcuts and !context.quit_blocked and !context.settings_capture and !context.appimage_path) {
         const quit_key = try commands.label(ctx.arena, .quit);
         try shortcuts.append(ctx.arena, .{
             .key = quit_key,
@@ -50,39 +51,37 @@ pub fn draw(ctx: vxfw.DrawContext, context: commands.Context, status: ?[]const u
             .width = ctx.stringWidth(quit_key) + ctx.stringWidth(" Quit"),
         });
     }
-    var shortcut_width: usize = 0;
-    for (shortcuts.items) |shortcut| shortcut_width += shortcut.width;
-
-    // Notices take priority over shortcuts. Selection summaries use leftover space.
-    var summary: []const u8 = "";
-    if (status) |notice| {
-        if (notice.len > 0) summary = notice;
-    }
-    if (summary.len == 0 and context.selected_count > 0) {
-        const full_summary = try std.fmt.allocPrint(ctx.arena, "{d} selected · {d} installed · {d} available  ", .{ context.selected_count, context.selected_installed, context.selected_count - context.selected_installed });
-        if (ctx.stringWidth(full_summary) + shortcut_width <= main_width) {
-            summary = full_summary;
-        } else {
-            const brief_summary = try std.fmt.allocPrint(ctx.arena, "{d} selected  ", .{context.selected_count});
-            if (ctx.stringWidth(brief_summary) + shortcut_width <= main_width) summary = brief_summary;
-        }
-    }
+    const notice = std.mem.trimEnd(u8, status orelse "", " ");
 
     var spans: std.ArrayList(vxfw.RichText.TextSpan) = .empty;
-    if (summary.len > 0) try spans.append(ctx.arena, .{ .text = summary, .style = styles.secondary });
-    var used: usize = ctx.stringWidth(summary);
+    if (notice.len > 0) try spans.append(ctx.arena, .{ .text = notice, .style = styles.secondary });
+    var used: usize = ctx.stringWidth(notice);
+    var separate_notice = notice.len > 0;
     for (shortcuts.items) |shortcut| {
-        if (used + shortcut.width > main_width) continue;
+        if (used + @intFromBool(separate_notice) + shortcut.width > main_width) continue;
+        if (separate_notice) {
+            try spans.append(ctx.arena, .{ .text = " " });
+            used += 1;
+            separate_notice = false;
+        }
         try spans.append(ctx.arena, .{ .text = shortcut.key, .style = styles.emphasis });
         try spans.append(ctx.arena, .{ .text = shortcut.description, .style = styles.secondary });
         used += shortcut.width;
     }
     var main: vxfw.RichText = .{ .text = spans.items, .softwrap = false, .overflow = .ellipsis };
-    var help: vxfw.Text = .{ .text = help_label, .softwrap = false, .style = styles.emphasis };
-    const children = try ctx.arena.alloc(vxfw.SubSurface, 2);
-    children[0] = .{ .origin = .{ .row = 0, .col = 0 }, .surface = try main.draw(ctx.withConstraints(.{}, .{ .width = main_width, .height = 1 })) };
-    children[1] = .{ .origin = .{ .row = 0, .col = @intCast(size.width - help_width) }, .surface = try help.draw(ctx.withConstraints(.{}, .{ .width = help_width, .height = 1 })) };
-    return .{ .size = size, .widget = help.widget(), .buffer = &.{}, .children = children };
+    if (spans.items.len > 0) {
+        const last = &spans.items[spans.items.len - 1];
+        const trimmed = std.mem.trimEnd(u8, last.text, " ");
+        used -= last.text.len - trimmed.len;
+        last.text = trimmed;
+    }
+    const width: u16 = @intCast(@min(used, main_width));
+    const children = try ctx.arena.alloc(vxfw.SubSurface, 1);
+    children[0] = .{
+        .origin = .{ .row = 0, .col = @intCast((main_width - width) / 2) },
+        .surface = try main.draw(ctx.withConstraints(.{}, .{ .width = width, .height = 1 })),
+    };
+    return .{ .size = size, .widget = main.widget(), .buffer = &.{}, .children = children };
 }
 
 test "footer reflects operation context and live wrapping state" {
@@ -98,12 +97,11 @@ test "footer reflects operation context and live wrapping state" {
         .{ .mode = .running },
         .{ .mode = .running, .quit_blocked = true },
     };
-    for (contexts, [_][]const u8{ "Unwrap", "Wrap", "Run", "Toggle", "Approve", "Quit", "Help" }) |context, expected| {
-        const surface = try draw(.{ .arena = arena.allocator(), .min = .{}, .max = .{ .width = 140, .height = 1 }, .cell_size = .{ .width = 10, .height = 20 } }, context, null);
+    for (contexts, [_][]const u8{ "Unwrap", "Wrap", "Run", "Toggle", "Approve", "Quit", "" }) |context, expected| {
+        const surface = try draw(.{ .arena = arena.allocator(), .min = .{}, .max = .{ .width = 140, .height = 1 }, .cell_size = .{ .width = 10, .height = 20 } }, context, null, true);
         var text: std.ArrayList(u8) = .empty;
         for (surface.children) |child| for (child.surface.buffer) |cell| try text.appendSlice(arena.allocator(), cell.char.grapheme);
-        try std.testing.expect(std.mem.indexOf(u8, text.items, expected) != null);
-        try std.testing.expect(std.mem.indexOf(u8, text.items, "F1 Help") != null);
+        if (expected.len > 0) try std.testing.expect(std.mem.indexOf(u8, text.items, expected) != null);
         if (context.quit_blocked) try std.testing.expect(std.mem.indexOf(u8, text.items, "Quit") == null);
         if (context.mode == .review) try std.testing.expectEqual(@as(usize, 1), std.mem.count(u8, text.items, "Decline"));
     }
@@ -118,11 +116,10 @@ test "footer keeps a status notice visible when shortcuts crowd the line" {
         .min = .{},
         .max = .{ .width = 80, .height = 1 },
         .cell_size = .{ .width = 10, .height = 20 },
-    }, .{ .mode = .search }, "The system is locked by another operation");
+    }, .{ .mode = .search }, "The system is locked by another operation", true);
     var text: std.ArrayList(u8) = .empty;
     for (surface.children) |child| for (child.surface.buffer) |cell| try text.appendSlice(arena.allocator(), cell.char.grapheme);
     try std.testing.expect(std.mem.indexOf(u8, text.items, "locked by another operation") != null);
-    try std.testing.expect(std.mem.indexOf(u8, text.items, "F1 Help") != null);
 }
 
 const FooterTest = struct {
@@ -140,7 +137,7 @@ const FooterTest = struct {
             .min = .{},
             .max = .{ .width = @intCast(width), .height = 1 },
             .cell_size = .{ .width = 10, .height = 20 },
-        }, context, status);
+        }, context, status, true);
     }
     fn check_bounds(surface: vxfw.Surface, width: usize) void {
         const surface_width: usize = @intCast(surface.size.width);
@@ -158,58 +155,6 @@ const FooterTest = struct {
         }
     }
 };
-
-test "footer selection summary never displaces shortcuts that fit unselected" {
-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena.deinit();
-    const allocator = arena.allocator();
-    const baseline_context: commands.Context = .{ .mode = .details, .installable = true, .removable = true };
-    var selected_context = baseline_context;
-    selected_context.selected_count = 2;
-    selected_context.selected_installed = 1;
-    for ([_]usize{ 32, 48, 70, 100 }) |width| {
-        const baseline = try FooterTest.visible_text(allocator, try FooterTest.draw_footer(allocator, baseline_context, null, width));
-        const selected = try FooterTest.visible_text(allocator, try FooterTest.draw_footer(allocator, selected_context, null, width));
-        const actions = [_]struct { id: commands.Id, description: []const u8 }{
-            .{ .id = .install, .description = "Install" },
-            .{ .id = .remove, .description = "Remove" },
-            .{ .id = .close, .description = "Back" },
-            .{ .id = .quit, .description = "Quit" },
-        };
-        for (actions) |action| {
-            const shortcut = try std.fmt.allocPrint(allocator, "{s} {s}", .{ try commands.label(allocator, action.id), action.description });
-            if (std.mem.indexOf(u8, baseline, shortcut) != null)
-                try std.testing.expect(std.mem.indexOf(u8, selected, shortcut) != null);
-            if (action.id == .install or action.id == .remove)
-                try std.testing.expect(std.mem.indexOf(u8, baseline, shortcut) != null);
-        }
-        try std.testing.expect(std.mem.indexOf(u8, selected, "F1 Help") != null);
-    }
-}
-
-test "footer selection summary scales down with the available width" {
-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena.deinit();
-
-    const context = commands.Context{
-        .mode = .search,
-        .selected_count = 2,
-        .selected_installed = 1,
-    };
-    const full = try FooterTest.draw_footer(arena.allocator(), context, null, 120);
-    const full_text = try FooterTest.visible_text(arena.allocator(), full);
-    try std.testing.expect(std.mem.indexOf(u8, full_text, " · ") != null);
-    try std.testing.expect(std.mem.indexOf(u8, full_text, "available") != null);
-
-    const brief = try FooterTest.draw_footer(arena.allocator(), context, null, 100);
-    const brief_text = try FooterTest.visible_text(arena.allocator(), brief);
-    try std.testing.expect(std.mem.indexOf(u8, brief_text, "selected") != null);
-    try std.testing.expect(std.mem.indexOf(u8, brief_text, "available") == null);
-
-    const omitted = try FooterTest.draw_footer(arena.allocator(), context, null, 74);
-    const omitted_text = try FooterTest.visible_text(arena.allocator(), omitted);
-    try std.testing.expect(std.mem.indexOf(u8, omitted_text, "selected") == null);
-}
 
 test "footer renders safely at zero and tiny widths" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
@@ -238,7 +183,6 @@ test "footer status notice survives when shortcuts would consume the full width"
     const surface = try FooterTest.draw_footer(arena.allocator(), context, "The system is locked by another operation", 70);
     const text = try FooterTest.visible_text(arena.allocator(), surface);
     try std.testing.expect(std.mem.indexOf(u8, text, "locked by another operation") != null);
-    try std.testing.expect(std.mem.indexOf(u8, text, "F1 Help") != null);
 }
 
 test "footer treats an empty status like a missing status" {
@@ -259,7 +203,7 @@ test "footer treats an empty status like a missing status" {
                 try FooterTest.visible_text(allocator, empty),
             );
             if (count > 0 and width == 120)
-                try std.testing.expect(std.mem.indexOf(u8, try FooterTest.visible_text(allocator, empty), "2 selected") != null);
+                try std.testing.expect(std.mem.indexOf(u8, try FooterTest.visible_text(allocator, empty), "2 selected") == null);
         }
     }
 }

@@ -674,18 +674,18 @@ Document any known issues that are being tracked:
 - [ ] With a config lacking `ThemeMode` (or `ThemeMode: shelly`), the window opens with the
   built-in theme: rounded window with outline, brand headerbar with circular window buttons,
   accent-filled selection pill, card toolbars, large page headings.
-- [ ] Settings → Look & Feel → Theme = "System GTK" switches live to the desktop GTK theme with
-  the default titlebar; added page headings and sidebar group labels disappear and the legacy
-  spacing returns. Switching back to "Shelly" restores the built-in look without a restart.
+- [ ] Settings → Look & Feel → Theme = "System colors" keeps the built-in design (brand
+  headerbar, page headings, sidebar group labels, spacing) and switches live to the desktop's
+  GTK 4 colors. Switching back to "Shelly" restores the Shelly palette without a restart.
 - [ ] Color variant Dark/Light applies live in Shelly mode; "Follow system" tracks the
   desktop dark preference (flip the desktop color scheme while Shelly is open and verify the
   sheet swaps without a restart).
-- [ ] The Color variant row hides while Theme = "System GTK" and returns on switching back to
-  "Shelly" with the previous selection intact; the row is already hidden on first open when the
-  config has `ThemeMode: system`. System GTK follows the desktop dark/light preference regardless
-  of the stored variant: Shelly(Dark) → System GTK on a light desktop renders light (no hidden
-  override), and switching back to Shelly restores Dark.
-- [ ] The Shelly color variant persists between reboots: set Shelly + Dark, switch to System GTK,
+- [ ] The Color variant row hides while Theme = "System colors" and returns on switching back
+  to "Shelly" with the previous selection intact; the row is already hidden on first open when
+  the config has `ThemeMode: system`. System colors take dark or light from the desktop colors
+  regardless of the stored variant: Shelly(Dark) → System colors on a light desktop renders
+  light, and switching back to Shelly restores Dark.
+- [ ] The Shelly color variant persists between reboots: set Shelly + Dark, switch to System colors,
   restart Shelly (it still follows the desktop), then switch back to Shelly and Dark is restored;
   the config's `ThemeVariant` is unchanged by the mode round-trip.
 - [ ] Collapse the sidebar with the chevron: group labels hide while collapsed and return when
@@ -700,28 +700,47 @@ Document any known issues that are being tracked:
   fall back to the defaults without crashing.
 - [ ] Keyboard-only focus shows the 2px accent outline on buttons, entries and switches in the
   built-in theme; screen reader names for nav buttons and window controls are unchanged.
+- [ ] Selected cards/rows in the Package grid and list, AUR, search and Flatpak views use the
+  Pearl selection tint and accent focus outline in both variants (no base-theme blue selection
+  fill or focus ring); hovering a selected card/row keeps the tint.
+- [ ] Otherwise borderless buttons (flat, suggested/destructive, window controls, nav pills,
+  chips, checked stack switcher, popover rows) carry a 1px hairline in both variants that
+  strengthens on hover/checked; button sizes match the previous build.
+- [ ] List-view column headers render as one flat strip with a hairline underneath (not a pill
+  per column) in both variants, and each title sits over its column's values.
 - [ ] At 200% scale / large text, headings, cards and the settings rows do not clip.
 - [ ] On a desktop that installs a fixed dark GTK override at user priority (e.g. Pearl's
   matugen palette), the light variant still shows dark-on-light row labels and surfaces;
-  switching to System GTK restores the desktop override.
+  switching to System colors applies that palette's colors to the built-in design.
 - [ ] With the desktop set to dark, `Follow system` opens dark without touching gsettings
   (portal-driven `gtk-interface-color-scheme` on GTK >= 4.23).
-- [ ] Round-trip Theme Shelly → System GTK → Shelly several times (also with dialogs or
+- [ ] Round-trip Theme Shelly → System colors → Shelly several times (also with dialogs or
   popovers open): no crash, and the brand headerbar with circular window controls returns
   each time (headerbar is kept alive across titlebar swaps).
-- [ ] Shelly mode never consults the desktop GTK theme: set any third-party, dark-only or
-  high-contrast GTK theme (user or system priority) and the built-in theme still renders
-  exactly as designed for the selected variant, with no foreign colors leaking into any
-  widget.
-- [ ] With the desktop `gtk-theme` changed externally while Shelly is open, Shelly mode
-  keeps its pinned look; switching to System GTK immediately follows the new desktop
-  theme (the restore path re-enables backend tracking), and switching back re-pins the
-  built-in theme.
+- [ ] Neither mode loads the desktop GTK theme's widget styles: set any third-party,
+  dark-only or high-contrast GTK theme (user or system priority) and the built-in design
+  still renders exactly as authored. Shelly mode shows no foreign colors in any widget.
+- [ ] With the desktop `gtk-theme` changed externally while Shelly is open, both modes keep
+  the pinned built-in design.
+- [ ] System colors on Plasma: with Breeze or another Plasma color scheme applied, Shelly
+  keeps its design and uses the scheme's window, text, view, header and selection colors
+  (read from `~/.config/gtk-4.0/colors.css`). Changing the Plasma color scheme while Shelly
+  is open updates Shelly within a second.
+- [ ] System colors with a palette generator (matugen, Noctalia, or similar) that writes
+  libadwaita names to `~/.config/gtk-4.0/`: Shelly uses those colors, including the accent,
+  and follows regenerated palettes live.
+- [ ] System colors with no user GTK 4 colors: Shelly keeps the Shelly palette for the
+  desktop's dark or light preference, using the portal accent color when the desktop
+  sets one.
+- [ ] System colors with a user `gtk.css` that sets only `accent_bg_color`: Shelly keeps the
+  Shelly palette and uses that accent instead of the portal accent.
+- [ ] System colors with unreadable desktop colors (text and background too close): Shelly
+  keeps the Shelly palette for the desktop's dark or light preference and logs a warning.
 
 ## Updates page redesign (docs/updates-redesign)
 
-- [ ] Updates page opens with the Pearl page heading ("Updates") and subtitle; in
-  System GTK mode the heading renders with native title paint and the same layout.
+- [ ] Updates page opens with the Pearl page heading ("Updates") and subtitle; with
+  System colors the heading keeps the same layout in the desktop's colors.
 - [ ] Source filters render as chips with per-source counts; toggling a chip filters
   the list and recomputes "N of M updates included", the total download size and the
   Upgrade button label ("Upgrade All" vs "Upgrade Selected (n)").
@@ -755,9 +774,8 @@ Document any known issues that are being tracked:
   unfinished rows read Cancelled/Not processed as before.
 - [ ] Flatpak-only and AppImage transactions drive the overall bar through their
   aggregate percentage rows without per-package byte data.
-- [ ] System GTK mode: overall card, chips, compact rows and pills render with native
-  theme colors and modest radii (no Pearl geometry); dark and light desktop themes
-  both stay legible.
+- [ ] System colors: overall card, chips, compact rows and pills keep the Pearl geometry
+  in the desktop's colors; dark and light desktop palettes both stay legible.
 - [ ] Screen reader: the overall bar announces "Overall progress" with value changes;
   per-row bars keep their package-name accessible names and status descriptions.
 - [ ] At 200% scale / large text the overall card meta wraps and compact rows ellipsize
@@ -766,3 +784,58 @@ Document any known issues that are being tracked:
   own update check), the Updates page reload recovers via retry instead of showing
   "Could not check for updates."; a genuinely broken check (e.g. missing CLI) still
   shows the error page without retry delays.
+
+## Firmware page (#763)
+
+Requires `fwupd` (installed on demand by the enablement flow; never a hard
+dependency). Safe install testing uses the fwupd test plugin; set it up once
+via `docs/fwupd-emulation-testing.md` (fake Integrated Webcam, local cabinets,
+`[test]` knobs). Never flash real hardware you cannot afford to brick, and
+click "Restart later" unless the session is sacrificial.
+
+- [ ] Welcome screen: the Firmware checkbox installs fwupd through the normal
+  privileged transaction (no-op when already installed) and reveals the
+  Firmware nav entry; Settings "Enable Firmware" toggles the page on/off
+  (packages stay installed when toggled off).
+- [ ] `shelly-ui --page firmware` navigates on a cold start and on a running
+  instance; a disabled or excluded build logs the friendly unavailable-page
+  warning instead.
+- [ ] Device list shows updatable devices with upgrade badges and
+  upgrades-first order; selecting a device shows versions (current/minimum/
+  latest), vendor, flags, GUIDs and the release list with Update / Downgrade /
+  Reinstall buttons per classification; blocked releases are disabled with a
+  reason.
+- [ ] Upgrade on the fake webcam: confirm dialog names the device and version,
+  warns the device will be unavailable, shows download size and estimated
+  install time; progress shows "Downloading… x%" for remote payloads, then the
+  daemon flash percentage with status text; a mid-write DeviceRequest appears
+  as an OK-only dialog; the reboot prompt offers Restart now / Restart later
+  and "later" leaves the system untouched.
+- [ ] Downgrade wording and `allow-older` path: downgrades challenge polkit
+  even for trusted payloads; cancelling the authentication dialog shows the
+  friendly "Failed to get authentication" note and changes nothing. Signed
+  upgrades from an active local session install without a polkit prompt.
+- [ ] Reinstall wording for the current version; the LVFS release exercises the
+  HTTPS download, checksum verification and cache reuse under
+  `~/.cache/shelly/fwupd/<host>/`; a cached valid payload is reused without a
+  download.
+- [ ] Cancelling the confirm dialog aborts before any download; navigating away
+  mid-download does not crash or block the page when returning.
+- [ ] Check Again refreshes metadata (manual presses bypass the 24 h throttle
+  and always re-check devices); with a fresh catalog the refresh is fast
+  (signature skip). Backdate `~/.cache/shelly/fwupd/last_refresh` by >24 h and
+  reload to see the stale-metadata banner; a successful refresh clears it.
+- [ ] Transient daemon: `fwupdmgr quit` (or the daemon's idle exit) shows
+  "The firmware service stopped. Use Check Again to reconnect." while the last
+  list stays browsable; Check Again re-activates the daemon, reloads and hides
+  the banner. The button must remain clickable while the banner is up.
+- [ ] Battery banner appears when the daemon reports BatteryLevel below
+  BatteryThreshold and tracks property changes live; devices with Problems
+  show the reason text and disabled install buttons. (Live low-battery spoof
+  needs root; the decision logic is unit-tested.)
+- [ ] FDE gate (device with AFFECTS_FDE) and branch warning (alternate branch)
+  appear before install; the FDE confirm stays disabled until the recovery-key
+  checkbox is ticked. Only exercisable with emulation or real hardware that
+  sets those flags.
+- [ ] `-Dexclude-fwupd=true` builds without the Firmware page, settings row and
+  deep-link target; default builds are unaffected.

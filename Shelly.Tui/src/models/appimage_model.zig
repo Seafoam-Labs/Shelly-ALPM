@@ -316,7 +316,7 @@ pub fn appImageView(self: *Model) AppImageView.View {
         state.details_scroll.scroll = .{};
         state.details_cursor = @as(u32, @intCast(state.cursor));
     }
-    return .{ .state = state, .list_percent = self.list_percent, .help = if (self.help_open) &self.help_panel else null };
+    return .{ .state = state, .list_percent = self.list_percent.appimage, .help = if (self.help_open) &self.help_panel else null };
 }
 
 fn syncSelection(state: *State) void {
