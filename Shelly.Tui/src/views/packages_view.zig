@@ -180,7 +180,7 @@ fn drawPackageTable(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw
     const size = ctx.max.size();
     const gutter: u16 = if (list.draw_cursor) 2 else 0;
     const width = size.width -| gutter;
-    if (width < minimum_table_width or size.height < 2) return list.draw(ctx);
+    if (width < minimum_table_width or size.height < 2) return drawPackageList(model, ctx);
 
     const repo = repositoryColumn(width);
     const hit = try ctx.arena.create(SortHeader);
@@ -190,9 +190,42 @@ fn drawPackageTable(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw
     children[0] = .{ .origin = .{ .row = 0, .col = 0 }, .surface = header };
     children[1] = .{
         .origin = .{ .row = 1, .col = 0 },
-        .surface = try list.draw(ctx.withConstraints(.{}, .{ .width = size.width, .height = size.height - 1 })),
+        .surface = try drawPackageList(model, ctx.withConstraints(.{}, .{ .width = size.width, .height = size.height - 1 })),
     };
     return .{ .size = size, .widget = .{ .userdata = ptr, .drawFn = drawPackageTable }, .buffer = &.{}, .children = children };
+}
+
+// Package rows are one terminal line high. Snapshot the identities after
+// ListView lays them out, since scrolling and resizing can change its top item.
+const VisibleRows = struct {
+    model: *Model,
+    packages: []const *const Package,
+
+    fn draw(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
+        const rows: *VisibleRows = @ptrCast(@alignCast(ptr));
+        return drawPackageList(rows.model, ctx);
+    }
+
+    fn click(ptr: *anyopaque, ctx: *vxfw.EventContext, event: vxfw.Event) anyerror!void {
+        const rows: *VisibleRows = @ptrCast(@alignCast(ptr));
+        if (event != .mouse or !commands.Mouse.primaryPress(event.mouse) or event.mouse.row < 0) return;
+        const index: usize = @intCast(event.mouse.row);
+        if (index < rows.packages.len)
+            try commands.Mouse.selectPackageRow(rows.model, ctx, rows.packages[index]);
+    }
+};
+
+fn drawPackageList(model: *Model, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
+    const state = &model.packages_state;
+    const list = try state.list_view.draw(ctx);
+    const items = state.filtered.items;
+    const top = @min(state.list_view.scroll.top, items.len);
+    const visible = items[top..][0..@min(items.len - top, list.size.height)];
+    const rows = try ctx.arena.create(VisibleRows);
+    rows.* = .{ .model = model, .packages = try ctx.arena.dupe(*const Package, visible) };
+    const children = try ctx.arena.alloc(vxfw.SubSurface, 1);
+    children[0] = .{ .origin = .{ .row = 0, .col = 0 }, .surface = list };
+    return .{ .size = list.size, .children = children, .buffer = &.{}, .widget = .{ .userdata = rows, .drawFn = VisibleRows.draw, .eventHandler = VisibleRows.click } };
 }
 
 pub fn drawColumn(ctx: vxfw.DrawContext, buffer: []vaxis.Cell, col: u16, width: u16, value: []const u8, style: vaxis.Style) Allocator.Error!void {
@@ -437,4 +470,32 @@ test "selected package names escape terminal control bytes" {
     try std.testing.expect(std.mem.indexOf(u8, text.items, "demo\\x1b[31m\\x0d\\x7f") != null);
     try std.testing.expect(std.mem.indexOfAny(u8, text.items, "\x1b\r\x7f") == null);
     try std.testing.expectEqualStrings("demo\x1b[31m\r\x7f", name);
+}
+
+test "clicking a scrolled package row selects it and Down continues from it" {
+    vxfw.DrawContext.init(.unicode);
+    const model = try Model.init(std.testing.allocator);
+    defer model.deinit();
+    var packages = [_]Package{ .{ .Name = "a" }, .{ .Name = "b" }, .{ .Name = "c" }, .{ .Name = "d" } };
+    const state = &model.packages_state;
+    state.packages = &packages;
+    try packages_model.rebuildFilter(model);
+    state.list_view.scroll.top = 1;
+    state.list_view.scroll.wants_cursor = false;
+
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const surface = try drawPackageList(model, .{ .arena = arena.allocator(), .min = .{}, .max = .{ .width = 30, .height = 2 }, .cell_size = .{ .width = 10, .height = 20 } });
+    var ctx: vxfw.EventContext = .{ .io = std.testing.io, .alloc = arena.allocator(), .cmds = .empty };
+    const click: vxfw.Event = .{ .mouse = .{ .row = 1, .col = 0, .button = .left, .type = .press, .mods = .{} } };
+    model.overlay = .{ .package = &packages[0] };
+    try surface.widget.handleEvent(&ctx, click);
+    try std.testing.expectEqual(@as(u32, 0), state.list_view.cursor);
+    model.overlay = null;
+    try surface.widget.handleEvent(&ctx, click);
+    try std.testing.expectEqual(&packages[2], packages_model.selectedPackage(model).?);
+    try std.testing.expect(state.package_list_active);
+    try std.testing.expectEqual(@as(usize, 0), state.selected_packages.items.len);
+    _ = try packages_model.handleKey(model, &ctx, .{ .codepoint = vaxis.Key.down }, false);
+    try std.testing.expectEqual(&packages[3], packages_model.selectedPackage(model).?);
 }

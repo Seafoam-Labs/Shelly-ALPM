@@ -328,6 +328,16 @@ pub fn buildPackageDetails(ptr: *const anyopaque, idx: usize, _: usize) ?vxfw.Wi
     return .{ .userdata = @constCast(pkg), .drawFn = packages_view.drawDetails };
 }
 
+pub fn selectPackageRow(self: *Model, ctx: *vxfw.EventContext, package: *const Package) !void {
+    if (self.active != .packages or self.help_open or self.overlay != null) return;
+    const state = &self.packages_state;
+    const index = std.mem.indexOfScalar(*const Package, state.filtered.items, package) orelse return;
+    state.list_view.cursor = @intCast(index);
+    state.package_list_active = true;
+    try ctx.requestFocus(state.text_field.widget());
+    ctx.consumeAndRedraw();
+}
+
 pub fn buildRow(ptr: *const anyopaque, idx: usize, _: usize) ?vxfw.Widget {
     const self: *const Model = @ptrCast(@alignCast(ptr));
     if (idx >= self.packages_state.filtered.items.len) return null;
@@ -600,6 +610,14 @@ test "installed package filters combine local text and installed state" {
     try std.testing.expectEqual(@as(usize, 2), model.packages_state.filtered.items.len);
 }
 
+fn containsWidget(surface: vxfw.Surface, widget: vxfw.Widget) bool {
+    if (surface.widget.eql(widget)) return true;
+    for (surface.children) |child| {
+        if (containsWidget(child.surface, widget)) return true;
+    }
+    return false;
+}
+
 test "packages split details follow selection and remain within the page on resize" {
     vxfw.DrawContext.init(.unicode);
     const model = try Model.init(std.testing.allocator);
@@ -643,15 +661,8 @@ test "packages split details follow selection and remain within the page on resi
                 try std.testing.expectEqual(size.height - 2, child.surface.size.height);
             }
             const content_row: i17 = if (size.width >= 2 and size.height >= 8) 4 else 2;
-            if (child.origin.row == content_row) {
-                if (child.surface.widget.eql(model.packages_state.list_view.widget())) list_on_left = true;
-                for (child.surface.children) |nested| {
-                    if (nested.surface.widget.eql(model.packages_state.list_view.widget())) list_on_left = true;
-                    for (nested.surface.children) |table_child| {
-                        if (table_child.surface.widget.eql(model.packages_state.list_view.widget())) list_on_left = true;
-                    }
-                }
-            }
+            if (child.origin.row == content_row and containsWidget(child.surface, model.packages_state.list_view.widget()))
+                list_on_left = true;
         }
         try std.testing.expectEqual(size.width >= 64, details_on_right);
         try std.testing.expectEqual(size.width >= 64, list_on_left);

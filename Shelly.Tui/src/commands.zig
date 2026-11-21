@@ -23,6 +23,7 @@ pub const Mouse = struct {
     pub const activateSetting = @import("models/settings_model.zig").onSettingsAction;
     pub const selectTab = @import("model.zig").Model.onTabSelected;
     pub const toggleHelp = @import("model.zig").Model.toggleHelpFromMouse;
+    pub const selectPackageRow = @import("models/packages_model.zig").selectPackageRow;
     pub const sortPackages = @import("models/packages_model.zig").sortBy;
     pub const navigateReview = @import("models/operation_model.zig").handleReviewMouse;
     pub const scrollUpdates = @import("models/updates_model.zig").handleScrollEvent;
