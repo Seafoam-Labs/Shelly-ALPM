@@ -33,6 +33,7 @@ const desktop_palette = @import("desktop_palette.zig");
 
 pub const ThemeMode = config_model.ThemeMode;
 pub const ThemeVariant = config_model.ThemeVariant;
+pub const OperationLogFontSize = config_model.OperationLogFontSize;
 
 const dark_resource = "/com/shellyorg/shelly/themes/shelly-dark.css";
 const light_resource = "/com/shellyorg/shelly/themes/shelly-light.css";
@@ -90,8 +91,11 @@ var watchers_started: bool = false;
 var watch_dummy: c_int = 0;
 
 const desktop_priority = themed_priority + 1;
+const operation_log_font_size_priority = desktop_priority + 1;
 var desktop_provider: ?*gtk.CssProvider = null;
 var desktop_added: bool = false;
+var operation_log_font_size_provider: ?*gtk.CssProvider = null;
+var operation_log_font_size_provider_added: bool = false;
 var desktop_monitor: ?*gio.FileMonitor = null;
 var desktop_refresh_source: c_uint = 0;
 var portal_connection: ?*gio.DBusConnection = null;
@@ -112,6 +116,26 @@ pub fn apply(win: *gtk.Window) void {
         } else |_| {}
     }
     applyWith(win, mode, variant);
+}
+
+pub fn applyOperationLogFontSize(display: *gdk.Display, size: OperationLogFontSize) void {
+    const prov = operation_log_font_size_provider orelse blk: {
+        const created = gtk.CssProvider.new();
+        operation_log_font_size_provider = created;
+        break :blk created;
+    };
+    const css = switch (size) {
+        .px_14 => ".shelly-root .terminal-output { font-size: 14px; }",
+        .px_16 => ".shelly-root .terminal-output { font-size: 16px; }",
+        .px_18 => ".shelly-root .terminal-output { font-size: 18px; }",
+        .px_20 => ".shelly-root .terminal-output { font-size: 20px; }",
+        .px_24 => ".shelly-root .terminal-output { font-size: 24px; }",
+    };
+    gtk.CssProvider.loadFromString(prov, css.ptr);
+    if (!operation_log_font_size_provider_added) {
+        gtk.StyleContext.addProviderForDisplay(display, prov.as(gtk.StyleProvider), operation_log_font_size_priority);
+        operation_log_font_size_provider_added = true;
+    }
 }
 
 /// Applies an explicit mode/variant (used by Settings for live preview before
