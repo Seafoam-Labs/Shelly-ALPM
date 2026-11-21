@@ -183,6 +183,7 @@ pub fn applyWith(win: *gtk.Window, mode: ThemeMode, variant: ThemeVariant) void 
     setDarkHint(dark);
     ensureWatchers();
     if (mode == .system) ensureDesktopWatchers();
+    notifyChanged();
 }
 
 const DesktopResult = struct {
@@ -525,7 +526,7 @@ fn ensureHeaderBar() *gtk.HeaderBar {
     _ = bar.as(gobject.Object).ref();
     gtk.Widget.addCssClass(bar.as(gtk.Widget), "shelly-headerbar");
 
-    const brand = gtk.Box.new(.horizontal, 9);
+    const brand = gtk.Box.new(.horizontal, 8);
     gtk.Widget.addCssClass(brand.as(gtk.Widget), "shelly-brand");
     // Pack at start (not setTitleWidget, which GtkHeaderBar centers) so the
     // brand sits left like Pearl's titlebar; valign keeps the dot circular
@@ -697,4 +698,142 @@ fn refreshFollowSystem() void {
     resolved_dark = dark;
     loadSheet(ensureProvider(), dark);
     if (base_added) loadBaseSheet(base_provider.?, dark);
+    notifyChanged();
+}
+
+const ChangeHook = struct {
+    func: *const fn (?*anyopaque) void,
+    data: ?*anyopaque,
+};
+
+var change_hooks: std.ArrayListUnmanaged(ChangeHook) = .empty;
+
+/// Calls `func(data)` after each palette change, so colors copied out of
+/// CSS with `roleColor` can be refreshed.
+pub fn addChangeHook(func: *const fn (?*anyopaque) void, data: ?*anyopaque) void {
+    change_hooks.append(std.heap.c_allocator, .{ .func = func, .data = data }) catch {};
+}
+
+pub fn removeChangeHook(func: *const fn (?*anyopaque) void, data: ?*anyopaque) void {
+    for (change_hooks.items, 0..) |hook, index| {
+        if (hook.func == func and hook.data == data) {
+            _ = change_hooks.swapRemove(index);
+            return;
+        }
+    }
+}
+
+fn notifyChanged() void {
+    for (change_hooks.items) |hook| hook.func(hook.data);
+}
+
+pub const Role = enum { text, muted, accent, success, warning, @"error", surface };
+
+/// Hex color for `role`, for Pango markup and text tags, which cannot use
+/// CSS colors.
+pub fn roleColor(widget: *gtk.Widget, role: Role, buf: *[8]u8) [:0]const u8 {
+    const class: [:0]const u8 = switch (role) {
+        .text => "role-text",
+        .muted => "role-muted",
+        .accent => "role-accent",
+        .success => "status-success",
+        .warning => "status-warning",
+        .@"error" => "status-error",
+        .surface => "role-surface",
+    };
+    const had_class = gtk.Widget.hasCssClass(widget, class) != 0;
+    if (!had_class) gtk.Widget.addCssClass(widget, class);
+    var rgba: gdk.RGBA = undefined;
+    gtk.Widget.getColor(widget, &rgba);
+    if (!had_class) gtk.Widget.removeCssClass(widget, class);
+    return std.fmt.bufPrintSentinel(buf, "#{x:0>2}{x:0>2}{x:0>2}", .{ channel(rgba.f_red), channel(rgba.f_green), channel(rgba.f_blue) }, 0) catch "#808080";
+}
+
+/// Text tag in `view`'s buffer colored with `role`. Unlike a color baked
+/// into markup, it is recolored after each palette change while `view`
+/// lives.
+pub fn roleTag(view: *gtk.TextView, role: Role) *gtk.TextTag {
+    const buffer = gtk.TextView.getBuffer(view);
+    const table = gtk.TextBuffer.getTagTable(buffer);
+    if (gtk.TextTagTable.lookup(table, roleTagName(role))) |tag| return tag;
+    if (!hasRoleTags(table)) {
+        addChangeHook(&refreshRoleTags, view);
+        _ = gtk.Widget.signals.destroy.connect(view.as(gtk.Widget), *gtk.TextView, &onRoleTagViewDestroy, view, .{});
+    }
+    const tag = gtk.TextBuffer.createTag(buffer, roleTagName(role), null);
+    colorRoleTag(view, tag, role);
+    return tag;
+}
+
+/// Applies `roleTag` from `start_offset` to `end`.
+pub fn applyRoleTag(view: *gtk.TextView, role: Role, start_offset: c_int, end: *const gtk.TextIter) void {
+    const buffer = gtk.TextView.getBuffer(view);
+    var start: gtk.TextIter = undefined;
+    gtk.TextBuffer.getIterAtOffset(buffer, &start, start_offset);
+    gtk.TextBuffer.applyTag(buffer, roleTag(view, role), &start, end);
+}
+
+fn roleTagName(role: Role) [:0]const u8 {
+    return switch (role) {
+        inline else => |tag| "shelly-role-" ++ @tagName(tag),
+    };
+}
+
+fn hasRoleTags(table: *gtk.TextTagTable) bool {
+    inline for (@typeInfo(Role).@"enum".field_names) |name| {
+        if (gtk.TextTagTable.lookup(table, "shelly-role-" ++ name) != null) return true;
+    }
+    return false;
+}
+
+fn colorRoleTag(view: *gtk.TextView, tag: *gtk.TextTag, role: Role) void {
+    var hex: [8]u8 = undefined;
+    var value = gobject.ext.Value.newFrom(@as(?[*:0]const u8, roleColor(view.as(gtk.Widget), role, &hex).ptr));
+    defer value.unset();
+    gobject.Object.setProperty(tag.as(gobject.Object), "foreground", &value);
+}
+
+fn refreshRoleTags(data: ?*anyopaque) void {
+    const view: *gtk.TextView = @ptrCast(@alignCast(data.?));
+    const table = gtk.TextBuffer.getTagTable(gtk.TextView.getBuffer(view));
+    inline for (@typeInfo(Role).@"enum".field_names) |name| {
+        if (gtk.TextTagTable.lookup(table, "shelly-role-" ++ name)) |tag| {
+            colorRoleTag(view, tag, @field(Role, name));
+        }
+    }
+}
+
+fn onRoleTagViewDestroy(_: *gtk.Widget, view: *gtk.TextView) callconv(.c) void {
+    removeChangeHook(&refreshRoleTags, view);
+}
+
+fn channel(value: f32) u8 {
+    return @intFromFloat(@round(std.math.clamp(value, 0, 1) * 255));
+}
+
+test "role tags color text and drop their theme hook with the view" {
+    try @import("../helpers/gtk_test.zig").requireDisplay();
+    const hooks_before = change_hooks.items.len;
+    const view = gtk.TextView.new();
+    _ = view.as(gobject.Object).refSink();
+    const buffer = gtk.TextView.getBuffer(view);
+    var iter: gtk.TextIter = undefined;
+    gtk.TextBuffer.getEndIter(buffer, &iter);
+    gtk.TextBuffer.insert(buffer, &iter, "warning", -1);
+    applyRoleTag(view, .warning, 0, &iter);
+    applyRoleTag(view, .@"error", 0, &iter);
+
+    const table = gtk.TextBuffer.getTagTable(buffer);
+    const tag = gtk.TextTagTable.lookup(table, "shelly-role-warning").?;
+    var start: gtk.TextIter = undefined;
+    gtk.TextBuffer.getStartIter(buffer, &start);
+    try std.testing.expect(gtk.TextIter.hasTag(&start, tag) != 0);
+    // One hook per view, however many roles it uses.
+    try std.testing.expectEqual(hooks_before + 1, change_hooks.items.len);
+
+    refreshRoleTags(view);
+    gtk.Widget.unrealize(view.as(gtk.Widget));
+    view.as(gobject.Object).runDispose();
+    try std.testing.expectEqual(hooks_before, change_hooks.items.len);
+    view.as(gobject.Object).unref();
 }

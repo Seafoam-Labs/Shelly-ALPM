@@ -95,6 +95,7 @@ pub const TabBar = struct {
     rich: vxfw.RichText,
     first_visible: usize = 0,
     start_col: i16 = 0,
+    right_edge: u16 = 0,
     label_row: i16 = 0,
     label_widths: []const u16 = &.{},
 
@@ -154,6 +155,7 @@ pub const TabBar = struct {
         self.label_widths = label_widths;
         const island_width: u16 = @intCast(total + padding);
         const island_col = (size.width - island_width) / 2;
+        self.right_edge = island_col + island_width;
         self.start_col = @intCast(island_col + padding / 2);
         self.label_row = if (size.height >= 3) 1 else 0;
         const surface = try vxfw.Surface.init(ctx.arena, self.widget(), size);

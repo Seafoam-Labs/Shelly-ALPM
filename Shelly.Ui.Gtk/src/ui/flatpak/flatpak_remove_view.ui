@@ -7,14 +7,14 @@
     <property name="vexpand">true</property>
     <child>
       <object class="GtkBox">
-        <property name="margin-end">9</property>
+        <property name="margin-end">8</property>
         <property name="orientation">vertical</property>
         <property name="hexpand">true</property>
         <property name="vexpand">true</property>
         <child>
           <object class="GtkBox">
             <property name="orientation">horizontal</property>
-            <property name="spacing">5</property>
+            <property name="spacing">6</property>
             <property name="margin-bottom">10</property>
             <property name="margin-top">10</property>
             <property name="margin-start">10</property>

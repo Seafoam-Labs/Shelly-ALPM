@@ -78,7 +78,7 @@ msgid "Warnings"
 msgstr "Cảnh báo"
 
 msgid ""
-"These commands fetch and execute code outside of shelly and libalpm's "
+"These commands fetch and execute code outside of Shelly and libalpm's "
 "control. Review them before continuing."
 msgstr ""
 "Các lệnh này tải về và thực thi mã nằm ngoài tầm kiểm soát của shelly và "
@@ -275,7 +275,7 @@ msgstr "Ẩn khung chi tiết ở bên phải"
 msgid "Information"
 msgstr "Thông tin"
 
-msgid "Preview Pkgbuild"
+msgid "Preview PKGBUILD"
 msgstr "Xem trước PKGBUILD"
 
 msgid "Search the AUR"
@@ -521,12 +521,12 @@ msgstr ""
 msgid "Install all selected packages in one transaction"
 msgstr ""
 
-msgid "Loading Recommended Packages..."
+#, fuzzy
+msgid "Loading recommendations…"
 msgstr "Đang tải gói được đề xuất..."
 
-msgid ""
-"No recommendations found. Please check your internet connection and try "
-"again."
+#, fuzzy
+msgid "Check your internet connection and try again."
 msgstr ""
 "Không tìm thấy đề xuất nào. Vui lòng kiểm tra kết nối Internet rồi thử lại."
 
@@ -603,7 +603,7 @@ msgstr "Dùng lịch hằng tuần"
 msgid "Run Tray as cron"
 msgstr "Chạy khay hệ thống dưới dạng cron"
 
-msgid "Tray update with ui"
+msgid "Tray update with UI"
 msgstr "Khay hệ thống cập nhật qua giao diện"
 
 msgid "Update terminal"
@@ -665,7 +665,7 @@ msgid "Use Symbolic Tray Icon"
 msgstr "Dùng biểu tượng khay dạng ký hiệu"
 
 msgid ""
-"If enabled, Shelly will use a symbolic svg icon instead of the default image "
+"If enabled, Shelly will use a symbolic SVG icon instead of the default image "
 "one."
 msgstr ""
 "Nếu bật, Shelly sẽ dùng biểu tượng svg dạng ký hiệu thay cho biểu tượng ảnh "
@@ -798,7 +798,7 @@ msgid "Remove db.lck"
 msgstr "Xóa db.lck"
 
 msgid ""
-"Removes the db.lck file if it was left behind by an interrupted alpm process."
+"Removes the db.lck file if it was left behind by an interrupted ALPM process."
 msgstr ""
 "Xóa tệp db.lck nếu tệp này còn sót lại do một tiến trình alpm bị gián đoạn."
 
@@ -1245,7 +1245,7 @@ msgstr "Tệp Flatpak"
 msgid "Unsupported file type. Choose a.flatpak or.flatpakref file."
 msgstr "Loại tệp không được hỗ trợ. Hãy chọn tệp .flatpak hoặc .flatpakref."
 
-msgid "Installing local flatpak"
+msgid "Installing local Flatpak"
 msgstr "Đang cài đặt flatpak cục bộ"
 
 msgid "Could not install the selected packages."
@@ -1263,7 +1263,7 @@ msgstr "Đã xác minh"
 msgid "Show less"
 msgstr "Thu gọn"
 
-msgid "Installing flatpak"
+msgid "Installing Flatpak"
 msgstr "Đang cài đặt flatpak"
 
 msgid "Remove this Flatpak?"
@@ -1281,7 +1281,7 @@ msgstr "Quyền"
 msgid "Available Addons"
 msgstr "Tiện ích bổ sung hiện có"
 
-msgid "Installing flatpak addon"
+msgid "Installing Flatpak addon"
 msgstr "Đang cài đặt tiện ích bổ sung flatpak"
 
 msgid "Unknown developer"
@@ -1543,8 +1543,8 @@ msgstr ""
 "Tìm kiếm đồng thời trong kho tiêu chuẩn, AUR và Flatpak. Hãy nhập tên để bắt "
 "đầu."
 
-msgid "Could not search the selected sources."
-msgstr "Không thể tìm kiếm trong các nguồn đã chọn."
+msgid "Could not search the selected sources"
+msgstr "Không thể tìm kiếm trong các nguồn đã chọn"
 
 msgid "Installation in progress"
 msgstr "Đang cài đặt"
@@ -1922,3 +1922,15 @@ msgstr "Mở rộng thanh bên"
 
 msgid "Collapse sidebar"
 msgstr "Thu gọn thanh bên"
+
+msgid "No recommendations found"
+msgstr ""
+
+msgid "System-wide"
+msgstr ""
+
+msgid "Current user"
+msgstr ""
+
+msgid "Atoll package update"
+msgstr ""

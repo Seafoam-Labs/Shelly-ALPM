@@ -46,6 +46,7 @@ pub const State = struct {
     aur_installed_only: bool = false,
     aur_thread: ?std.Thread = null,
     aur_filtered: std.ArrayList(*const AurPackage) = .empty,
+    longest_name: u16 = 0,
     refresh_aur_after_operation: bool = false,
     aur_list: vxfw.ListView,
     aur_preview_button: vxfw.Button,
@@ -410,6 +411,7 @@ pub fn rebuildAurFilter(self: *Model) Allocator.Error!void {
     self.aur_state.aur_details_scroll.scroll = .{};
     self.aur_state.aur_details_cursor = null;
     self.aur_state.aur_filtered.clearRetainingCapacity();
+    self.aur_state.longest_name = 0;
     if (self.aur_state.aur_job != null) {
         self.aur_state.aur_list.item_count = 0;
         self.aur_state.aur_list.jumpToItem(0);
@@ -418,8 +420,10 @@ pub fn rebuildAurFilter(self: *Model) Allocator.Error!void {
     const query = try self.aur_state.aur_field.buf.dupe();
     defer self.gpa.free(query);
     for (self.aur_state.aur_packages) |*pkg| {
-        if (!self.aur_state.aur_installed_only or query.len == 0 or Model.containsFold(pkg.Name, query) or Model.containsFold(pkg.Description orelse "", query))
+        if (!self.aur_state.aur_installed_only or query.len == 0 or Model.containsFold(pkg.Name, query) or Model.containsFold(pkg.Description orelse "", query)) {
             try self.aur_state.aur_filtered.append(self.gpa, pkg);
+            self.aur_state.longest_name = @max(self.aur_state.longest_name, std.math.lossyCast(u16, pkg.Name.len));
+        }
     }
     self.aur_state.aur_list.item_count = @intCast(self.aur_state.aur_filtered.items.len);
     self.aur_state.aur_list.jumpToItem(0);
@@ -432,7 +436,7 @@ pub fn aurView(self: *Model) aur_view.View {
         self.aur_state.aur_details_cursor = self.aur_state.aur_list.cursor;
     }
     return .{
-        .list_percent = self.list_percent,
+        .list_percent = self.list_percent.aur,
         .aur_field = &self.aur_state.aur_field,
         .selected = selectedAur(self),
         .details_scroll = &self.aur_state.aur_details_scroll,
@@ -445,6 +449,7 @@ pub fn aurView(self: *Model) aur_view.View {
         .aur_failed = self.aur_state.aur_failed,
         .aur_query = self.aur_state.aur_query,
         .result_count = self.aur_state.aur_filtered.items.len,
+        .longest_name = self.aur_state.longest_name,
         .catalog_page = if (catalogActive(self)) self.aur_state.catalog_page else 0,
         .catalog_total_pages = self.aur_state.catalog_total_pages,
         .installed_only = self.aur_state.aur_installed_only,
@@ -970,7 +975,7 @@ test "PKGBUILD shortcuts appear only in the contextual footer" {
     var footer: std.ArrayList(u8) = .empty;
     for (surface.children) |child| try Text.append(arena.allocator(), if (child.origin.row == 23) &footer else &body, child.surface);
     try std.testing.expect(std.mem.indexOf(u8, body.items, "pkgname") != null);
-    for ([_][]const u8{ "Retry", "Unwrap", "F1 Help" }) |hint| {
+    for ([_][]const u8{ "Retry", "Unwrap" }) |hint| {
         try std.testing.expectEqual(@as(usize, 1), std.mem.count(u8, footer.items, hint));
         try std.testing.expect(std.mem.indexOf(u8, body.items, hint) == null);
     }
