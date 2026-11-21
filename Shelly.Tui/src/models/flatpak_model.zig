@@ -85,9 +85,9 @@ pub const FlatpakJob = struct {
 pub fn init(gpa: Allocator, model: *Model) State {
     return .{
         .flatpak_details_scroll = .{ .item_count = 1, .children = .{ .builder = .{ .userdata = model, .buildFn = buildFlatpakDetails } } },
-        .screenshot_previous = .{ .label = " < ", .userdata = model, .onClick = onPreviousScreenshot, .style = screenshotButtonStyle },
-        .screenshot_next = .{ .label = " > ", .userdata = model, .onClick = onNextScreenshot, .style = screenshotButtonStyle },
-        .flatpak_category_button = .{ .label = "All categories ▾", .userdata = model, .onClick = onFlatpakCategoryClick, .style = .{
+        .screenshot_previous = .{ .label = " < ", .userdata = model, .onClick = commands.Mouse.previousScreenshot, .style = screenshotButtonStyle },
+        .screenshot_next = .{ .label = " > ", .userdata = model, .onClick = commands.Mouse.nextScreenshot, .style = screenshotButtonStyle },
+        .flatpak_category_button = .{ .label = "All categories ▾", .userdata = model, .onClick = commands.Mouse.toggleCategories, .style = .{
             .default = styles.secondary,
             .hover = styles.emphasis,
             .focus = styles.emphasis,
@@ -474,7 +474,7 @@ pub fn chooseFlatpakCategory(self: *Model, name: []const u8) !void {
 
 pub fn rebuildFlatpakCategories(self: *Model) !void {
     self.flatpak_state.flatpak_categories.clearRetainingCapacity();
-    try self.flatpak_state.flatpak_categories.append(self.gpa, .{ .name = "", .userdata = self, .onSelect = onFlatpakCategorySelected });
+    try self.flatpak_state.flatpak_categories.append(self.gpa, .{ .name = "", .userdata = self, .onSelect = commands.Mouse.selectCategory });
     var names: std.StringHashMapUnmanaged(void) = .empty;
     defer names.deinit(self.gpa);
     if (self.flatpak_state.flatpak_catalog) |catalog| for (catalog.value) |app| {
@@ -482,7 +482,7 @@ pub fn rebuildFlatpakCategories(self: *Model) !void {
             if (name.len == 0) continue;
             const entry = try names.getOrPut(self.gpa, name);
             if (entry.found_existing) continue;
-            try self.flatpak_state.flatpak_categories.append(self.gpa, .{ .name = name, .userdata = self, .onSelect = onFlatpakCategorySelected });
+            try self.flatpak_state.flatpak_categories.append(self.gpa, .{ .name = name, .userdata = self, .onSelect = commands.Mouse.selectCategory });
         }
     };
     std.mem.sort(flatpak_view.CategoryOption, self.flatpak_state.flatpak_categories.items[1..], {}, struct {

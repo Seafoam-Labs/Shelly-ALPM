@@ -1,4 +1,5 @@
 //! Tab labels, centered layout, and mouse hit testing. Navigation policy belongs to the caller.
+const commands = @import("../commands.zig");
 const std = @import("std");
 const vaxis = @import("vaxis");
 const vxfw = vaxis.vxfw;
@@ -194,7 +195,7 @@ pub const TabBar = struct {
         switch (event) {
             // Mouse coordinates arrive local to this surface
             .mouse => |mouse| {
-                if (mouse.button != .left or mouse.type != .press) return;
+                if (!commands.Mouse.primaryPress(mouse)) return;
                 if (mouse.row != self.label_row or mouse.col < self.start_col) return;
                 var col = self.start_col;
                 for (self.label_widths, 0..) |label_width, i| {

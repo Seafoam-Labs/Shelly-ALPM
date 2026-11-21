@@ -376,7 +376,7 @@ pub fn settingsView(self: *Model) settings_view.View {
         .list_percent = self.list_percent.settings,
         .help = if (self.help_open) &self.help_panel else null,
         .userdata = self,
-        .on_action = onSettingsAction,
+        .on_action = commands.Mouse.activateSetting,
         .header_open = self.settings_state.header_open,
         .header_selected = self.settings_state.header_selected,
         .keybindings_open = self.settings_state.keybindings_open,
@@ -397,7 +397,7 @@ pub fn settingsView(self: *Model) settings_view.View {
     };
 }
 
-fn onSettingsAction(ptr: *anyopaque, ctx: *vxfw.EventContext, action: settings_view.Action) anyerror!void {
+pub fn onSettingsAction(ptr: *anyopaque, ctx: *vxfw.EventContext, action: settings_view.Action) anyerror!void {
     const self: *Model = @ptrCast(@alignCast(ptr));
     if (self.operation_state.install_job != null) return;
     switch (action) {

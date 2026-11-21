@@ -1,3 +1,4 @@
+const commands = @import("../commands.zig");
 const std = @import("std");
 const styles = @import("styles.zig");
 const Border = @import("border.zig");
@@ -167,8 +168,8 @@ const SortHeader = struct {
         const header: *SortHeader = @ptrCast(@alignCast(ptr));
         if (event != .mouse or header.model.help_open) return;
         const mouse = event.mouse;
-        if (mouse.button != .left or mouse.type != .press or mouse.col < 0 or mouse.col >= header.selected) return;
-        packages_model.sortBy(header.model, if (mouse.col < header.repository) .name else .repository);
+        if (!commands.Mouse.primaryPress(mouse) or mouse.col < 0 or mouse.col >= header.selected) return;
+        commands.Mouse.sortPackages(header.model, if (mouse.col < header.repository) .name else .repository);
         ctx.consumeAndRedraw();
     }
 };

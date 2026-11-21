@@ -236,18 +236,17 @@ pub const Model = struct {
                 if (self.help_button) |button| {
                     if (event.mouse.row >= 0 and event.mouse.row < @as(i17, button.height) and
                         event.mouse.col >= @as(i17, button.col) and event.mouse.col < @as(i17, button.col) + @as(i17, button.width) and
-                        event.mouse.button == .left and event.mouse.type == .press)
+                        commands.Mouse.primaryPress(event.mouse))
                     {
-                        self.help_open = !self.help_open;
-                        return ctx.consumeAndRedraw();
+                        return commands.Mouse.toggleHelp(self, ctx);
                     }
                 }
                 if (self.help_open) {
-                    try self.help_panel.scroll.handleEvent(ctx, event);
+                    try commands.Mouse.scrollHelp(self, ctx, event);
                     return ctx.consumeAndRedraw();
                 }
                 if (self.active == .aur and self.overlay != null and self.overlay.? == .pkgbuild and self.operation_state.operation_question == null) {
-                    try operation_model.handleReviewMouse(self, ctx, event);
+                    try commands.Mouse.navigateReview(self, ctx, event);
                     return ctx.consumeAndRedraw();
                 }
             },
@@ -321,11 +320,11 @@ pub const Model = struct {
             .mouse => {
                 if (self.overlay) |overlay| {
                     if (overlay == .pkgbuild and self.operation_state.pkgbuild_document != null and !operation_model.pkgbuildView(self).loading) {
-                        return operation_model.handleReviewMouse(self, ctx, event);
+                        return commands.Mouse.navigateReview(self, ctx, event);
                     }
                 }
                 if (self.active == .upgrade and self.overlay == null)
-                    return updates_model.handleScrollEvent(self, ctx, event);
+                    return commands.Mouse.scrollUpdates(self, ctx, event);
             },
             else => {},
         }
@@ -442,11 +441,16 @@ pub const Model = struct {
             .active = self.active,
             .header_icons = self.settings_state.settings.header_icons,
             .userdata = self,
-            .on_select = onTabSelected,
+            .on_select = commands.Mouse.selectTab,
         });
     }
 
-    fn onTabSelected(ptr: *anyopaque, ctx: *vxfw.EventContext, tab: Tab) anyerror!void {
+    pub fn toggleHelpFromMouse(self: *Model, ctx: *vxfw.EventContext) void {
+        self.help_open = !self.help_open;
+        ctx.consumeAndRedraw();
+    }
+
+    pub fn onTabSelected(ptr: *anyopaque, ctx: *vxfw.EventContext, tab: Tab) anyerror!void {
         const self: *Model = @ptrCast(@alignCast(ptr));
         try self.setTab(tab, ctx);
     }

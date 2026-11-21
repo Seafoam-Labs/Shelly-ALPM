@@ -17,7 +17,7 @@ const LoadState = struct {
 pub const State = struct {
     source_draft: ?*SourceDraft = null,
     source_open: bool = false,
-    source_button: vxfw.Button = .{ .label = " Configure update source ", .onClick = onConfigureClick },
+    source_button: vxfw.Button = .{ .label = " Configure update source ", .onClick = commands.Mouse.configureSource },
     install_form: ?*Form = null,
     install_closing: ?*Form = null,
     refresh_after_operation: bool = false,
@@ -608,6 +608,11 @@ fn choosePath(form: *Form) !void {
     if (validating) form.generation += 1;
 }
 
+pub fn activateInstallPath(form: *Form, index: usize) !void {
+    form.editing_path = false;
+    try selectInstallPath(form, index);
+}
+
 pub fn selectInstallPath(form: *Form, index: usize) !void {
     const completion = form.completion orelse return;
     if (index >= completion.candidates.len) return;
@@ -616,7 +621,7 @@ pub fn selectInstallPath(form: *Form, index: usize) !void {
     try choosePath(form);
 }
 
-fn moveInstallSelection(form: *Form, down: bool) !void {
+pub fn moveInstallSelection(form: *Form, down: bool) !void {
     const completion = form.completion orelse return;
     const count = completion.candidates.len;
     if (count == 0) return;
@@ -699,8 +704,8 @@ pub fn captureInstall(self: *Model, ctx: *vxfw.EventContext, event: vxfw.Event) 
             edited = true;
         },
         .mouse => |mouse| {
-            if (mouse.button != .wheel_up and mouse.button != .wheel_down) return false;
-            try moveInstallSelection(form, mouse.button == .wheel_down);
+            const down = commands.Mouse.wheelDown(mouse) orelse return false;
+            try commands.Mouse.movePath(form, down);
         },
         else => return false,
     }
@@ -1161,6 +1166,17 @@ fn openSource(self: *Model, ctx: *vxfw.EventContext) !void {
     ctx.consumeAndRedraw();
 }
 
+pub fn activateSourceControl(draft: *SourceDraft, ctx: *vxfw.EventContext, control: usize) !void {
+    if (control == 1 and draft.update_type == .None) return;
+    draft.selected = control;
+    if (control != 1) {
+        _ = try captureSource(draft.owner, ctx, .{ .key_press = commands.bindings.confirm });
+    } else {
+        try ctx.requestFocus(draft.owner.widget());
+        ctx.consumeAndRedraw();
+    }
+}
+
 pub fn captureSource(self: *Model, ctx: *vxfw.EventContext, event: vxfw.Event) !bool {
     if (!self.appimage_state.source_open or self.help_open) return false;
     const draft = self.appimage_state.source_draft.?;
@@ -1273,7 +1289,7 @@ test "update source form owns its draft, validates input and preserves failed sa
     try std.testing.expect(!model.updates_state.updates_checked);
 }
 
-fn onConfigureClick(ptr: ?*anyopaque, ctx: *vxfw.EventContext) !void {
+pub fn onConfigureClick(ptr: ?*anyopaque, ctx: *vxfw.EventContext) !void {
     const self: *Model = @ptrCast(@alignCast(ptr orelse return));
     try openSource(self, ctx);
 }

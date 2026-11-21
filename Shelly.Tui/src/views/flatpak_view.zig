@@ -1,4 +1,5 @@
 const styles = @import("styles.zig");
+const commands = @import("../commands.zig");
 const std = @import("std");
 const Border = @import("border.zig");
 const diagnostics = @import("diagnostics");
@@ -273,7 +274,7 @@ pub const CategoryOption = struct {
         return surface;
     }
     fn event(ptr: *anyopaque, ctx: *vxfw.EventContext, value: vxfw.Event) anyerror!void {
-        if (value != .mouse or value.mouse.type != .press or value.mouse.button != .left) return;
+        if (value != .mouse or !commands.Mouse.primaryPress(value.mouse)) return;
         const self: *const CategoryOption = @ptrCast(@alignCast(ptr));
         try self.onSelect(self.userdata, ctx, self.name);
         return ctx.consumeAndRedraw();

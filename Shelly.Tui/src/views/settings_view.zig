@@ -1,5 +1,6 @@
 const keybindings_view = @import("keybindings_view.zig");
 const styles = @import("styles.zig");
+const commands = @import("../commands.zig");
 const std = @import("std");
 const vaxis = @import("vaxis");
 const vxfw = vaxis.vxfw;
@@ -9,7 +10,7 @@ const Settings = preferences.Settings;
 const diagnostics = @import("diagnostics");
 const Allocator = std.mem.Allocator;
 
-pub const Action = union(enum) { control: usize, header: usize };
+pub const Action = commands.Mouse.SettingsTarget;
 
 pub const View = struct {
     settings: Settings,
@@ -286,7 +287,7 @@ const Control = struct {
         const self: *Control = @ptrCast(@alignCast(ptr));
         if (event != .mouse or self.view.busy) return;
         const mouse = event.mouse;
-        if (mouse.button != .left or mouse.type != .press) return;
+        if (!commands.Mouse.primaryPress(mouse)) return;
         const action = self.row.action orelse return;
         const callback = self.view.on_action orelse return;
         try callback(self.view.userdata orelse return, ctx, action);

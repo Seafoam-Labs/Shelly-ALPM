@@ -2,6 +2,41 @@ const vaxis = @import("vaxis");
 
 const std = @import("std");
 
+// Application mouse operations.
+pub const Mouse = struct {
+    pub fn primaryPress(mouse: vaxis.Mouse) bool {
+        return mouse.button == .left and mouse.type == .press;
+    }
+    pub fn wheelDown(mouse: vaxis.Mouse) ?bool {
+        return switch (mouse.button) {
+            .wheel_up => false,
+            .wheel_down => true,
+            else => null,
+        };
+    }
+
+    pub fn scrollHelp(model: *@import("model.zig").Model, ctx: *vaxis.vxfw.EventContext, event: vaxis.vxfw.Event) !void {
+        try model.help_panel.scroll.handleEvent(ctx, event);
+    }
+
+    pub const SettingsTarget = union(enum) { control: usize, header: usize };
+    pub const activateSetting = @import("models/settings_model.zig").onSettingsAction;
+    pub const selectTab = @import("model.zig").Model.onTabSelected;
+    pub const toggleHelp = @import("model.zig").Model.toggleHelpFromMouse;
+    pub const sortPackages = @import("models/packages_model.zig").sortBy;
+    pub const navigateReview = @import("models/operation_model.zig").handleReviewMouse;
+    pub const scrollUpdates = @import("models/updates_model.zig").handleScrollEvent;
+    pub const configureSource = @import("models/appimage_model.zig").onConfigureClick;
+    pub const selectPath = @import("models/appimage_model.zig").activateInstallPath;
+    pub const activateSourceControl = @import("models/appimage_model.zig").activateSourceControl;
+    pub const movePath = @import("models/appimage_model.zig").moveInstallSelection;
+    pub const previewPkgbuild = @import("models/aur_model.zig").onAurPreviewClick;
+    pub const previousScreenshot = @import("models/flatpak_model.zig").onPreviousScreenshot;
+    pub const nextScreenshot = @import("models/flatpak_model.zig").onNextScreenshot;
+    pub const toggleCategories = @import("models/flatpak_model.zig").onFlatpakCategoryClick;
+    pub const selectCategory = @import("models/flatpak_model.zig").onFlatpakCategorySelected;
+};
+
 pub const Id = enum {
     quit,
     interrupt,

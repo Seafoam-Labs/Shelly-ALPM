@@ -1,4 +1,5 @@
 const styles = @import("styles.zig");
+const commands = @import("../commands.zig");
 const std = @import("std");
 const Border = @import("border.zig");
 const diagnostics = @import("diagnostics");
@@ -247,9 +248,8 @@ const PathRow = struct {
     }
     fn event(ptr: *anyopaque, ctx: *vxfw.EventContext, input: vxfw.Event) !void {
         const self: *PathRow = @ptrCast(@alignCast(ptr));
-        if (input == .mouse and input.mouse.button == .left and input.mouse.type == .press) {
-            self.form.editing_path = false;
-            try @import("../models/appimage_model.zig").selectInstallPath(self.form, self.index);
+        if (input == .mouse and commands.Mouse.primaryPress(input.mouse)) {
+            try commands.Mouse.selectPath(self.form, self.index);
             ctx.consumeAndRedraw();
         }
     }
@@ -344,20 +344,13 @@ const SourceEditor = struct {
 
     fn event(ptr: *anyopaque, ctx: *vxfw.EventContext, input: vxfw.Event) !void {
         const self: *SourceEditor = @ptrCast(@alignCast(ptr));
-        if (input != .mouse or input.mouse.button != .left or input.mouse.type != .press or input.mouse.row < 0) return;
+        if (input != .mouse or !commands.Mouse.primaryPress(input.mouse) or input.mouse.row < 0) return;
         const draft = self.draft.?;
         if (draft.save_job != null) return;
         const row: usize = @intCast(input.mouse.row);
         if (row >= self.controls.len) return;
         const control = self.controls[row] orelse return;
-        if (control == 1 and draft.update_type == .None) return;
-        draft.selected = control;
-        if (control != 1) {
-            _ = try @import("../models/appimage_model.zig").captureSource(draft.owner, ctx, .{ .key_press = @import("../commands.zig").bindings.confirm });
-        } else {
-            try ctx.requestFocus(draft.owner.widget());
-            ctx.consumeAndRedraw();
-        }
+        try commands.Mouse.activateSourceControl(draft, ctx, control);
     }
 
     fn draw(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
