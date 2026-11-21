@@ -415,6 +415,14 @@
                     </object>
                 </child>
                 <child>
+                    <object class="GtkCheckButton" id="foreign_only_check">
+                        <property name="label" translatable="yes">Foreign Packages Only</property>
+                        <property name="tooltip-text" translatable="yes">Show only installed packages that are not present in any configured repository</property>
+                        <property name="visible">false</property>
+                        <signal name="toggled" handler="on_foreign_only_toggled"/>
+                    </object>
+                </child>
+                <child>
                     <object class="GtkCheckButton" id="show_hidden_check">
                         <property name="label" translatable="yes">Show Hidden</property>
                         <property name="tooltip-text" translatable="yes">Show packages in the IgnorePkg list from pacman.conf</property>
