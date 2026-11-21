@@ -1719,172 +1719,172 @@ msgid "Downloading"
 msgstr "Hämtar"
 
 msgid "Packaging"
-msgstr ""
+msgstr "Paketerar"
 
 msgid "Installing"
-msgstr ""
+msgstr "Installerar"
 
 msgid "Upgrading"
-msgstr ""
+msgstr "Uppgraderar"
 
 msgid "Downgrading"
-msgstr ""
+msgstr "Nedgraderar"
 
 msgid "Reinstalling"
-msgstr ""
+msgstr "Installerar på nytt"
 
 msgid "Removing"
-msgstr ""
+msgstr "Tar bort"
 
 msgid "Checking keyring"
-msgstr ""
+msgstr "Kontrollerar nyckelring"
 
 msgid "Checking integrity"
-msgstr ""
+msgstr "Kontrollerar integritet"
 
 msgid "Loading packages"
-msgstr ""
+msgstr "Läser in paket"
 
 msgid "Checking conflicts"
-msgstr ""
+msgstr "Kontrollerar konflikter"
 
 msgid "Checking disk space"
-msgstr ""
+msgstr "Kontrollerar diskutrymme"
 
 msgid "Preparing transaction"
-msgstr ""
+msgstr "Förbereder transaktion"
 
 msgid "Downloading packages"
-msgstr ""
+msgstr "Hämtar paket"
 
 msgid "about"
-msgstr ""
+msgstr "ungefär"
 
 msgid "s left"
-msgstr ""
+msgstr " s kvar"
 
 msgid "packages downloaded"
-msgstr ""
+msgstr "paket hämtade"
 
 msgid "packages processed"
-msgstr ""
+msgstr "paket bearbetade"
 
 msgid "Completed"
-msgstr ""
+msgstr "Slutförd"
 
 msgid "Transaction Completed"
-msgstr ""
+msgstr "Transaktionen är slutförd"
 
 msgid "Operation failed"
-msgstr ""
+msgstr "Åtgärden misslyckades"
 
 msgid "Operation cancelled"
-msgstr ""
+msgstr "Åtgärden avbröts"
 
 msgid "Finished"
-msgstr ""
+msgstr "Klar"
 
 msgid "exit"
-msgstr ""
+msgstr "avsluta"
 
 msgid "Operation cancelled."
-msgstr ""
+msgstr "Åtgärden avbröts."
 
 msgid "All operations finished successfully."
-msgstr ""
+msgstr "Alla åtgärder slutfördes."
 
 msgid ""
 "Permission to manage packages was not granted. Try again and approve the "
 "authorization request to continue."
-msgstr ""
+msgstr "Behörighet att hantera paket beviljades inte. Försök igen och godkänn behörighetsbegäran för att fortsätta."
 
 msgid ""
 "{package_one}-{version_one} conflicts with {package_two}-{version_two}. "
 "Remove {package_to_remove}?"
-msgstr ""
+msgstr "{package_one}-{version_one} står i konflikt med {package_two}-{version_two}. Ta bort {package_to_remove}?"
 
 msgid "Would you like to remove extra cache entries?"
-msgstr ""
+msgstr "Vill du ta bort extra cacheposter?"
 
 msgid "System package update"
-msgstr ""
+msgstr "Uppdatering av systempaket"
 
 msgid "AUR package update"
-msgstr ""
+msgstr "Uppdatering av AUR-paket"
 
 msgid "Include this update"
-msgstr ""
+msgstr "Inkludera denna uppdatering"
 
 msgid "Update this package"
-msgstr ""
+msgstr "Uppdatera detta paket"
 
 msgid "updates included"
-msgstr ""
+msgstr "uppdateringar ingår"
 
 msgid "Updates included"
-msgstr ""
+msgstr "Uppdateringar ingår"
 
 msgid "No download required"
-msgstr ""
+msgstr "Ingen hämtning krävs"
 
 msgid "Total download:"
-msgstr ""
+msgstr "Total hämtning:"
 
 msgid "Upgrade Selected"
-msgstr ""
+msgstr "Uppgradera valda"
 
 msgid "Upgrading packages"
-msgstr ""
+msgstr "Uppgraderar paket"
 
 msgid "Refreshing package databases"
-msgstr ""
+msgstr "Uppdaterar paketdatabaser"
 
 msgid "Removing stale database lock"
-msgstr ""
+msgstr "Tar bort föråldrat databaslås"
 
 msgid "Fixing permissions"
-msgstr ""
+msgstr "Rättar behörigheter"
 
 msgid "Purifying packages"
-msgstr ""
+msgstr "Rensar paket"
 
 msgid "Cleaning package cache"
-msgstr ""
+msgstr "Rensar paketcache"
 
 msgid "Welcome"
-msgstr ""
+msgstr "Välkommen"
 
 msgid "Enable Recommended?"
-msgstr ""
+msgstr "Aktivera rekommenderade paket?"
 
 msgid ""
 "Recommended shows curated package suggestions based on your installed "
 "software. Package data is fetched from external sources."
-msgstr ""
+msgstr "Rekommenderade paket visar utvalda paketförslag utifrån dina installerade program. Paketdata hämtas från externa källor."
 
 msgid "Installing Flatpak and AppImage support"
-msgstr ""
+msgstr "Installerar Flatpak- och AppImage-stöd"
 
 msgid "BROWSE"
-msgstr ""
+msgstr "BLÄDDRA"
 
 msgid "SYSTEM"
-msgstr ""
+msgstr "SYSTEM"
 
 msgid "Expand sidebar"
-msgstr ""
+msgstr "Expandera sidofältet"
 
 msgid "Collapse sidebar"
-msgstr ""
+msgstr "Fäll ihop sidofältet"
 
 msgid "No recommendations found"
-msgstr ""
+msgstr "Inga rekommendationer hittades"
 
 msgid "System-wide"
-msgstr ""
+msgstr "Systemomfattande"
 
 msgid "Current user"
-msgstr ""
+msgstr "Aktuell användare"
 
 msgid "Atoll package update"
-msgstr ""
+msgstr "Uppdatering av Atoll-paket"
