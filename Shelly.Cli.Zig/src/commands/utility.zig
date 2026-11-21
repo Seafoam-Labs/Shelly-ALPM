@@ -22,6 +22,7 @@ const Operation = union(enum) {
     docs,
     completions: completions.Shell,
     pacfiles,
+    archive_info,
 };
 
 const Selection = union(enum) {
@@ -78,7 +79,49 @@ fn execute(
         .docs => generateDocs(context),
         .completions => |shell| generateCompletions(context, shell),
         .pacfiles => pacfiles.run(context, invocation),
+        .archive_info => inspectArchiveInfo(context, invocation),
     };
+}
+
+const ArchivePackageInfo = struct {
+    Name: []const u8,
+    Version: []const u8,
+};
+
+fn inspectArchiveInfo(
+    context: *runtime.RuntimeContext,
+    invocation: *const parser.Invocation,
+) !u8 {
+    var paths: std.ArrayList([]const u8) = .empty;
+    for (invocation.options) |option| {
+        if (!std.mem.eql(u8, option.name, "--archive-info")) continue;
+        const path_value = option.value orelse continue;
+        try paths.append(context.allocator, path_value);
+    }
+    if (paths.items.len == 0) {
+        try context.stderr.writeAll("--archive-info requires at least one package archive path.\\n");
+        return 1;
+    }
+
+    var packages: std.ArrayList(ArchivePackageInfo) = .empty;
+    for (paths.items) |path_value| {
+        var info = PackageManager.repo.pkginfo.readFromPackage(context.allocator, path_value) catch |err| {
+            try context.stderr.print("Could not read Arch package metadata from {s}: {s}\\n", .{ path_value, @errorName(err) });
+            return 1;
+        };
+        try packages.append(context.allocator, .{
+            .Name = try context.allocator.dupe(u8, info.pkgname),
+            .Version = try context.allocator.dupe(u8, info.pkgver),
+        });
+        info.deinit(context.allocator);
+    }
+
+    var payload = std.Io.Writer.Allocating.init(context.allocator);
+    defer payload.deinit();
+    var json: std.json.Stringify = .{ .writer = &payload.writer };
+    try json.write(packages.items);
+    try output.writeFrame(context, payload.writer.buffered());
+    return 0;
 }
 
 fn generateDocs(context: *runtime.RuntimeContext) !u8 {
@@ -107,6 +150,8 @@ fn selectOperation(invocation: *const parser.Invocation) Selection {
                 if (completions.Shell.parse(value)) |shell| .{ .completions = shell } else null
             else
                 null
+        else if (std.mem.eql(u8, option.name, "--archive-info"))
+            .archive_info
         else if (std.mem.eql(u8, option.name, "--pacfiles"))
             .pacfiles
         else if (isPacfileOption(option.name))
@@ -141,7 +186,7 @@ fn isPacfileOption(name: []const u8) bool {
 
 fn writeSelectionError(context: *runtime.RuntimeContext, selection: Selection) !u8 {
     const message = switch (selection) {
-        .missing => "No utility operation selected. Use --fix-permissions, --repair-db, --docs, --completions <shell>, or --pacfiles.",
+        .missing => "No utility operation selected. Use --fix-permissions, --repair-db, --docs, --completions <shell>, --archive-info <archive>, or --pacfiles.",
         .conflicting => "Utility operations are mutually exclusive; select exactly one.",
         .operation => unreachable,
     };
