@@ -1195,7 +1195,7 @@ pub const Manager = struct {
                 const owned_name = try self.allocator.dupe(u8, package_name);
                 failures.append(self.allocator, .{
                     .package_name = owned_name,
-                    .reason = "The build for the requested package produced no matching package archive in the build output directory. Check the package() output and expected package names in the build details.",
+                    .reason = "The build for the requested package produced no matching package archive. Check the package() output and expected package names in the build details.",
                 }) catch |err| {
                     self.allocator.free(owned_name);
                     return err;
@@ -1578,7 +1578,7 @@ pub const Manager = struct {
         defer package_builder.deinitArtifacts(self.allocator, artifacts);
         self.raisePackageProgress(.aur_build_done, package_name, 1, 1, "");
         if (artifacts.len == 0) {
-            self.raisePackageProgress(.aur_package_failed, package_name, 1, 1, "The build for the requested package produced no matching package archive in the build output directory. Check the package() output and expected package names in the build details.");
+            self.raisePackageProgress(.aur_package_failed, package_name, 1, 1, "The build for the requested package produced no matching package archive. Check the package() output and expected package names in the build details.");
             return error.NoBuiltPackages;
         }
         self.raisePackageProgress(.aur_install_start, package_name, 1, 1, "");
@@ -1706,7 +1706,7 @@ pub const Manager = struct {
         defer package_builder.deinitArtifacts(self.allocator, artifacts);
         self.raisePackageProgress(.aur_build_done, dependency.package_name, 1, 1, "");
         if (artifacts.len == 0) {
-            self.raisePackageProgress(.aur_package_failed, dependency.package_name, 1, 1, "The build for the requested package produced no matching package archive in the build output directory. Check the package() output and expected package names in the build details.");
+            self.raisePackageProgress(.aur_package_failed, dependency.package_name, 1, 1, "The build for the requested package produced no matching package archive. Check the package() output and expected package names in the build details.");
             return error.NoBuiltPackages;
         }
         self.raisePackageProgress(.aur_install_start, dependency.package_name, 1, 1, "Installing AUR dependency");
