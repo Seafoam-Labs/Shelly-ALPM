@@ -2985,6 +2985,12 @@ pub const Manager = struct {
             }
         } else |_| {}
 
+        // remove only this pkgbase's old builds. downloaded or tracked
+        // .pkg.tar.* sources stay in the cache.
+        const srcinfo_path = try std.fs.path.join(self.allocator, &.{ cache_path, ".SRCINFO" });
+        defer self.allocator.free(srcinfo_path);
+        var info = srcinfo.parseFile(self.allocator, self.io(), srcinfo_path) catch return;
+        defer info.deinit(self.allocator);
         var directory = std.Io.Dir.cwd().openDir(self.io(), cache_path, .{ .iterate = true }) catch return;
         defer directory.close(self.io());
         var iterator = directory.iterate();
@@ -2994,7 +3000,11 @@ pub const Manager = struct {
             stale_paths.deinit(self.allocator);
         }
         while (try iterator.next(self.io())) |entry| {
-            if (entry.kind != .file or !builder.isPackageArchiveArtifact(entry.name)) continue;
+            if (entry.kind != .file) continue;
+            const built = for (info.package_names) |name| {
+                if (builder.isBuiltPackageFileFor(entry.name, name)) break true;
+            } else false;
+            if (!built) continue;
             try stale_paths.append(self.allocator, try std.fs.path.join(self.allocator, &.{ cache_path, entry.name }));
         }
         for (stale_paths.items) |path| {
@@ -4377,6 +4387,44 @@ test "AUR isolated builds execute the coordinator and propagate failure without 
     defer dependencies.aur.deinit(allocator);
     try dependencies.aur.append(allocator, .{ .prepared = prepared, .role = .build });
     try std.testing.expectError(error.IsolatedAurDependencyUnsupported, manager.installCollection(&dependencies));
+}
+
+test "AUR build preparation removes old builds but keeps package sources" {
+    const allocator = std.testing.allocator;
+    const io = std.testing.io;
+    var paths = try createAurManagerFixturePaths(allocator, io);
+    defer paths.deinit(allocator);
+    try createAurFixtureRepository(allocator, io, paths.remote_root, "demo", null);
+    var manager = try initFixtureAurManager(allocator, &paths, paths.remote_root);
+    defer manager.deinit();
+    _ = try manager.cachePkgbase("demo", "demo");
+    const Approval = struct {
+        fn answer(_: ?*anyopaque, _: PkgbuildDiffRequest) bool {
+            return true;
+        }
+    };
+    manager.setPkgbuildApprovalHandler(.{ .function = Approval.answer });
+    var prepared = try manager.preparePackageForBuild("demo", null);
+    defer prepared.deinit(allocator);
+    const cache_path = prepared.cache_path;
+    const kept = [_][]const u8{ "demo-1.pkg.tar.zst", "other-1-1-any.pkg.tar.zst" };
+    const removed = [_][]const u8{ "demo-1-1-any.pkg.tar.zst", "demo-1-1-any.pkg.tar.zst.sig" };
+    for (kept ++ removed) |name| {
+        const path = try std.fs.path.join(allocator, &.{ cache_path, name });
+        defer allocator.free(path);
+        try writeFixtureFile(io, path, "", false);
+    }
+    try manager.prepareBuildDirectory(cache_path);
+    for (kept) |name| {
+        const path = try std.fs.path.join(allocator, &.{ cache_path, name });
+        defer allocator.free(path);
+        try std.Io.Dir.cwd().access(io, path, .{});
+    }
+    for (removed) |name| {
+        const path = try std.fs.path.join(allocator, &.{ cache_path, name });
+        defer allocator.free(path);
+        try std.testing.expectError(error.FileNotFound, std.Io.Dir.cwd().access(io, path, .{}));
+    }
 }
 
 test "AUR command builds install only reported artifacts, not downloaded package sources" {
