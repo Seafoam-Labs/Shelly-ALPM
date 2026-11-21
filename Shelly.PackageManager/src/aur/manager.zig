@@ -2348,6 +2348,16 @@ pub const Manager = struct {
         // standalone build destination redirect the coordinator's exports.
         if (self.use_isolated)
             try arguments.appendSlice(self.allocator, &.{ "--package-destination", prepared.cache_path });
+        // sources share the cache, so ask the child what it built.
+        var report_directory: ?[]u8 = null;
+        defer if (report_directory) |directory| self.removeArtifactReportDirectory(directory);
+        var report_path: ?[]u8 = null;
+        defer if (report_path) |path| self.allocator.free(path);
+        if (!self.use_isolated) {
+            report_directory = try self.createArtifactReportDirectory();
+            report_path = try std.fs.path.join(self.allocator, &.{ report_directory.?, "artifacts" });
+            try arguments.appendSlice(self.allocator, &.{ "--artifact-report", report_path.? });
+        }
 
         // The isolated child is a privileged coordinator. It drops privileges
         // for review and runs lifecycle functions only in the guest.
@@ -2378,9 +2388,34 @@ pub const Manager = struct {
         );
         if (exit_code != 0) return error.BuildFailed;
 
+        if (report_path) |path| {
+            // the folder is the user's, so read as them: a planted symlink
+            // gets only their access and a fifo times out instead of hanging.
+            var report = try self.runAsInvokingUser(&.{ "cat", "--", path }, null, 30);
+            defer report.deinit(self.allocator);
+            if (report.exit_code != 0) return error.InvalidArtifactReport;
+            return artifactsFromReport(self.allocator, report.stdout, requested_names);
+        }
         const paths = try self.selectBuiltPackageFiles(prepared.cache_path, requested_names);
         defer builder.deinitPaths(self.allocator, paths);
         return artifactsFromPaths(self.allocator, paths, requested_names);
+    }
+
+    /// user-owned so the unprivileged build child can write the report.
+    fn createArtifactReportDirectory(self: *Self) ![]u8 {
+        var result = try self.runAsInvokingUser(&.{ "mktemp", "-d", "-p", "/tmp", artifact_report_prefix["/tmp/".len..] ++ "XXXXXXXXXX" }, null, null);
+        defer result.deinit(self.allocator);
+        if (result.exit_code != 0) return error.CallerOperationFailed;
+        const directory = std.mem.trim(u8, result.stdout, " \t\r\n");
+        // rm -rf runs on this path later, so accept only mktemp's own folder.
+        if (!isArtifactReportDirectory(directory)) return error.CallerOperationFailed;
+        return self.allocator.dupe(u8, directory);
+    }
+
+    fn removeArtifactReportDirectory(self: *Self, directory: []u8) void {
+        defer self.allocator.free(directory);
+        var result = self.runAsInvokingUser(&.{ "rm", "-rf", "--", directory }, null, null) catch return;
+        result.deinit(self.allocator);
     }
 
     fn ensureSourcePgpKeys(
@@ -3681,6 +3716,46 @@ fn artifactsFromPaths(
     return artifacts;
 }
 
+/// parses the build child's `name \t path` lines and keeps requested members.
+const artifact_report_prefix = "/tmp/shelly-aur-artifacts.";
+
+fn isArtifactReportDirectory(path: []const u8) bool {
+    if (!std.mem.startsWith(u8, path, artifact_report_prefix)) return false;
+    const suffix = path[artifact_report_prefix.len..];
+    if (suffix.len != 10) return false;
+    for (suffix) |char| if (!std.ascii.isAlphanumeric(char)) return false;
+    return true;
+}
+
+fn artifactsFromReport(
+    allocator: std.mem.Allocator,
+    contents: []const u8,
+    requested_names: []const []const u8,
+) ![]package_builder.BuildArtifact {
+    var artifacts: std.ArrayList(package_builder.BuildArtifact) = .empty;
+    errdefer {
+        for (artifacts.items) |artifact| artifact.deinit(allocator);
+        artifacts.deinit(allocator);
+    }
+    var lines = std.mem.splitScalar(u8, contents, '\n');
+    while (lines.next()) |line| {
+        if (line.len == 0) continue;
+        const separator = std.mem.indexOfScalar(u8, line, '\t') orelse return error.InvalidArtifactReport;
+        const package_name = line[0..separator];
+        const path = line[separator + 1 ..];
+        if (package_name.len == 0 or !std.fs.path.isAbsolute(path)) return error.InvalidArtifactReport;
+        // the user-run build can rewrite the report.
+        if (!builder.isBuiltPackageFileFor(std.fs.path.basename(path), package_name)) return error.InvalidArtifactReport;
+        if (!containsConst(requested_names, package_name)) continue;
+        const owned_path = try allocator.dupeSentinel(u8, path, 0);
+        errdefer allocator.free(owned_path);
+        const owned_name = try allocator.dupe(u8, package_name);
+        errdefer allocator.free(owned_name);
+        try artifacts.append(allocator, .{ .path = owned_path, .package_name = owned_name });
+    }
+    return artifacts.toOwnedSlice(allocator);
+}
+
 fn packageNameForArtifact(path: []const u8, requested_names: []const []const u8) ?[]const u8 {
     const file_name = std.fs.path.basename(path);
     var match: ?[]const u8 = null;
@@ -4297,6 +4372,81 @@ test "AUR isolated builds execute the coordinator and propagate failure without 
     defer dependencies.aur.deinit(allocator);
     try dependencies.aur.append(allocator, .{ .prepared = prepared, .role = .build });
     try std.testing.expectError(error.IsolatedAurDependencyUnsupported, manager.installCollection(&dependencies));
+}
+
+test "AUR command builds install only reported artifacts, not downloaded package sources" {
+    // non-isolated command builds run the child as the invoking user, which
+    // root without one (as in CI containers) does not have.
+    if (std.c.geteuid() == 0) return error.SkipZigTest;
+    const allocator = std.testing.allocator;
+    const io = std.testing.io;
+    var paths = try createAurManagerFixturePaths(allocator, io);
+    defer paths.deinit(allocator);
+    try createAurFixtureRepository(allocator, io, paths.remote_root, "demo", null);
+    var manager = try initFixtureAurManager(allocator, &paths, paths.remote_root);
+    defer manager.deinit();
+    _ = try manager.cachePkgbase("demo", "demo");
+    const Approval = struct {
+        fn answer(_: ?*anyopaque, _: PkgbuildDiffRequest) bool {
+            return true;
+        }
+    };
+    manager.setPkgbuildApprovalHandler(.{ .function = Approval.answer });
+    var prepared = try manager.preparePackageForBuild("demo", null);
+    defer prepared.deinit(allocator);
+    const command_path = try std.fs.path.join(allocator, &.{ paths.root, "fake-build-child" });
+    defer allocator.free(command_path);
+    try writeFixtureFile(io, command_path,
+        \\#!/bin/sh
+        \\set -eu
+        \\report=
+        \\while [ $# -gt 0 ]; do
+        \\  if [ "$1" = --artifact-report ]; then report=$2; fi
+        \\  shift
+        \\done
+        \\: > demo-1-linux-x86_64.pkg.tar.zst
+        \\: > demo-1-1-any.pkg.tar.zst
+        \\dirname "$report" > report.dir
+        \\printf 'demo\t%s/demo-1-1-any.pkg.tar.zst\ndemo-docs\t%s/demo-docs-1-1-any.pkg.tar.zst\n' "$(pwd)" "$(pwd)" > "$report"
+        \\
+    , true);
+    manager.build_command = try allocator.dupe(u8, command_path);
+    const artifacts = try manager.buildPreparedPackage(&prepared, &.{"demo"}, false);
+    defer package_builder.deinitArtifacts(allocator, artifacts);
+    try std.testing.expectEqual(@as(usize, 1), artifacts.len);
+    try std.testing.expectEqualStrings("demo", artifacts[0].package_name);
+    try std.testing.expect(std.mem.endsWith(u8, artifacts[0].path, "/demo-1-1-any.pkg.tar.zst"));
+
+    const report_dir_path = try std.fs.path.join(allocator, &.{ prepared.cache_path, "report.dir" });
+    defer allocator.free(report_dir_path);
+    const report_dir = try std.Io.Dir.cwd().readFileAlloc(io, report_dir_path, allocator, .limited(4096));
+    defer allocator.free(report_dir);
+    try std.testing.expect(report_dir.len > 1);
+    try std.testing.expectError(error.FileNotFound, std.Io.Dir.cwd().access(io, std.mem.trimEnd(u8, report_dir, "\n"), .{}));
+}
+
+test "AUR artifact report folders accept only mktemp's folder" {
+    try std.testing.expect(isArtifactReportDirectory("/tmp/shelly-aur-artifacts.aB3dE5gH7j"));
+    try std.testing.expect(!isArtifactReportDirectory("/"));
+    try std.testing.expect(!isArtifactReportDirectory("/home/demo"));
+    try std.testing.expect(!isArtifactReportDirectory("/tmp/shelly-aur-artifacts."));
+    try std.testing.expect(!isArtifactReportDirectory("/tmp/shelly-aur-artifacts.aB3dE5gH7"));
+    try std.testing.expect(!isArtifactReportDirectory("/tmp/shelly-aur-artifacts.aB3dE5gH7jk"));
+    try std.testing.expect(!isArtifactReportDirectory("/tmp/shelly-aur-artifacts./../../hom"));
+    try std.testing.expect(!isArtifactReportDirectory("/tmp/shelly-aur-artifacts.aB3dE5gH7j/x"));
+}
+
+test "AUR artifact reports keep requested members and reject malformed lines" {
+    const allocator = std.testing.allocator;
+    const artifacts = try artifactsFromReport(allocator, "demo\t/cache/demo-1-1-any.pkg.tar.zst\ndemo-docs\t/cache/demo-docs-1-1-any.pkg.tar.zst\n", &.{"demo-docs"});
+    defer package_builder.deinitArtifacts(allocator, artifacts);
+    try std.testing.expectEqual(@as(usize, 1), artifacts.len);
+    try std.testing.expectEqualStrings("demo-docs", artifacts[0].package_name);
+    try std.testing.expectEqualStrings("/cache/demo-docs-1-1-any.pkg.tar.zst", artifacts[0].path);
+    try std.testing.expectError(error.InvalidArtifactReport, artifactsFromReport(allocator, "demo /cache/demo.pkg.tar.zst\n", &.{"demo"}));
+    try std.testing.expectError(error.InvalidArtifactReport, artifactsFromReport(allocator, "demo\tdemo.pkg.tar.zst\n", &.{"demo"}));
+    try std.testing.expectError(error.InvalidArtifactReport, artifactsFromReport(allocator, "demo\t/var/cache/pacman/pkg/sudo-1.9-1-x86_64.pkg.tar.zst\n", &.{"demo"}));
+    try std.testing.expectError(error.InvalidArtifactReport, artifactsFromReport(allocator, "demo\t/cache/demo-1.pkg.tar.zst\n", &.{"demo"}));
 }
 
 test "AUR isolated dependencies never enter the host transaction" {
