@@ -698,7 +698,7 @@ fn runAur(
         return error.MultipleDependencyTargets;
     const executable = try std.process.executablePathAlloc(context.io, context.allocator);
     defer context.allocator.free(executable);
-    const build_command = std.mem.trimEnd(u8, executable, " (deleted)");
+    const build_command = elevation.liveExecutablePath(executable);
     const aur_base = try aur_url.resolveFor(context, invocation);
     const manager = try PackageManager.AurManager.init(context.allocator, context.environ, .{
         .config_path = context.config_path,
