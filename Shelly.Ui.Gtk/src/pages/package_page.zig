@@ -1428,15 +1428,7 @@ pub const PackagePage = extern struct {
 
         if (support.getWindow(ShellyWindow, self)) |win| {
             freePendingLocalArchiveRemovals(p);
-            var pending: std.ArrayListUnmanaged([]const u8) = .empty;
-            errdefer {
-                for (pending.items) |name| std.heap.c_allocator.free(name);
-                pending.deinit(std.heap.c_allocator);
-            }
-            for (names.items) |name| {
-                pending.append(std.heap.c_allocator, std.heap.c_allocator.dupe(u8, name) catch return) catch return;
-            }
-            p.pending_local_archive_removals = pending.toOwnedSlice(std.heap.c_allocator) catch return;
+            p.pending_local_archive_removals = duplicatePackageNames(names.items) catch return;
             win.startTransaction(.{
                 .title = translations._("Removing packages"),
                 .argv = argv.items,
@@ -1521,6 +1513,22 @@ pub const PackagePage = extern struct {
 
         self.update_selection_ui();
         self.reload();
+    }
+
+    fn duplicatePackageNames(names: []const []const u8) ![]const []const u8 {
+        var copied: std.ArrayListUnmanaged([]const u8) = .empty;
+        errdefer {
+            for (copied.items) |name| std.heap.c_allocator.free(name);
+            copied.deinit(std.heap.c_allocator);
+        }
+        for (names) |name| {
+            const copy = try std.heap.c_allocator.dupe(u8, name);
+            copied.append(std.heap.c_allocator, copy) catch |err| {
+                std.heap.c_allocator.free(copy);
+                return err;
+            };
+        }
+        return copied.toOwnedSlice(std.heap.c_allocator);
     }
 
     fn freePendingLocalArchiveRemovals(p: *Private) void {
