@@ -360,13 +360,13 @@ msgid "Install Local"
 msgstr ""
 
 msgid "Delete Selected Remote"
-msgstr ""
+msgstr "Ta bort vald fjärrkälla"
 
 msgid "Add Remote"
 msgstr "Lägg till fjärrkälla"
 
 msgid "Add New Flatpak Remote"
-msgstr ""
+msgstr "Lägg till ny Flatpak-fjärrkälla"
 
 msgid "Add"
 msgstr "Lägg till"
@@ -384,91 +384,91 @@ msgid "e.g., https://flathub.org/repo/flathub.flatpakrepo"
 msgstr ""
 
 msgid "Scope"
-msgstr ""
+msgstr "Omfattning"
 
 msgid "Show Runtimes"
-msgstr ""
+msgstr "Visa körtidsmiljöer"
 
 msgid "Flatpak Repair"
-msgstr ""
+msgstr "Reparera Flatpak"
 
 msgid "Repairs Flatpak Installation (Experimental)"
 msgstr ""
 
 msgid "About"
-msgstr ""
+msgstr "Om"
 
 msgid "Shelly"
 msgstr ""
 
 msgid "Install Optional Deps"
-msgstr ""
+msgstr "Installera valfria beroenden"
 
 msgid "Reinstall"
-msgstr ""
+msgstr "Installera om"
 
 msgid "Add Ignore"
-msgstr ""
+msgstr "Lägg till i undantag"
 
 msgid "Add Hold"
-msgstr ""
+msgstr "Lås version"
 
 msgid "Make Explicit"
-msgstr ""
+msgstr "Markera som uttryckligt installerat"
 
 msgid "Mark Dependency"
-msgstr ""
+msgstr "Markera som beroende"
 
 msgid "Package actions"
-msgstr ""
+msgstr "Paketåtgärder"
 
 msgid "Package"
-msgstr ""
+msgstr "Paket"
 
 msgid "Packages"
-msgstr ""
+msgstr "Paket"
 
 msgid "Install and manage software on your system."
-msgstr ""
+msgstr "Installera och hantera programvara på systemet."
 
 msgid "Package Group Filter"
 msgstr ""
 
 msgid "Selected Packages"
-msgstr ""
+msgstr "Valda paket"
 
 msgid "0 Selected"
 msgstr ""
 
 msgid "Grid View"
-msgstr ""
+msgstr "Rutnätsvy"
 
 msgid "List View"
-msgstr ""
+msgstr "Listvy"
 
 msgid "Size"
-msgstr ""
+msgstr "Storlek"
 
 msgid "Repository"
-msgstr ""
+msgstr "Förråd"
 
 msgid "Install Date"
-msgstr ""
+msgstr "Installationsdatum"
 
 msgid "No matching packages found"
-msgstr ""
+msgstr "Inga matchande paket hittades"
 
 msgid "Had an issue loading your packages. Check if you have a db lock."
 msgstr ""
 
 msgid "Perform Upgrade"
-msgstr ""
+msgstr "Utför uppgradering"
 
 msgid "Perform a full system upgrade with install (-u)"
 msgstr ""
 
 msgid "Show Hidden"
-msgstr ""
+msgstr "Visa dolda"
 
 msgid "Show packages in the IgnorePkg list from pacman.conf"
 msgstr ""
@@ -486,10 +486,10 @@ msgid "Show dependency packages only"
 msgstr ""
 
 msgid "Recommended"
-msgstr ""
+msgstr "Rekommenderat"
 
 msgid "Recommended Packages"
-msgstr ""
+msgstr "Rekommenderade paket"
 
 msgid "Curated suggestions from Seafoam Labs"
 msgstr ""
@@ -498,7 +498,7 @@ msgid "Refresh the recommended packages list from the network"
 msgstr ""
 
 msgid "Clear selection"
-msgstr ""
+msgstr "Rensa markering"
 
 msgid "Deselect all recommended packages"
 msgstr ""
@@ -513,10 +513,10 @@ msgid "Check your internet connection and try again."
 msgstr ""
 
 msgid "Shelly Search"
-msgstr ""
+msgstr "Shelly-sökning"
 
 msgid "Search"
-msgstr ""
+msgstr "Sök"
 
 msgid "Search across every enabled backend."
 msgstr ""
