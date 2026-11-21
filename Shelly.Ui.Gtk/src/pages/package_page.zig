@@ -72,6 +72,7 @@ pub const PackagePage = extern struct {
         upgrade_check: *gtk.CheckButton,
         show_hidden_check: *gtk.CheckButton,
         foreign_only_check: *gtk.CheckButton,
+        local_archives_only_check: *gtk.CheckButton,
         show_explicit_only_check: *gtk.CheckButton,
         show_depends_only_check: *gtk.CheckButton,
         show_detail_pane_check: *gtk.CheckButton,
@@ -84,6 +85,7 @@ pub const PackagePage = extern struct {
         show_depends_only: bool,
         show_hidden: bool,
         show_foreign_only: bool,
+        show_local_archives_only: bool,
         pending_local_archive_packages: []const LocalArchivePackage = &.{},
         show_detail_pane: bool,
 
@@ -130,6 +132,7 @@ pub const PackagePage = extern struct {
         p.local_only = true;
         p.show_installed_only = true;
         gtk.Widget.setVisible(p.foreign_only_check.as(gtk.Widget), 1);
+        gtk.Widget.setVisible(p.local_archives_only_check.as(gtk.Widget), 1);
         gtk.Widget.setVisible(p.install_local_button.as(gtk.Widget), 1);
         gtk.Widget.setVisible(p.grouping_selection.as(gtk.Widget), 0);
         gtk.ColumnViewColumn.setVisible(p.install_date_column, 1);
@@ -676,6 +679,7 @@ pub const PackagePage = extern struct {
         }
 
         if (p.show_installed_only and !pkg.isInstalled()) return 0;
+        if (p.show_local_archives_only and !isTrackedLocalArchive(pkg.getName(), pkg.getVersion())) return 0;
 
         if (p.show_depends_only and pkg.isExplicit()) return 0;
 
@@ -1040,6 +1044,7 @@ pub const PackagePage = extern struct {
             gtk.Widget.Class.bindTemplateCallbackFull(wc, "on_depends_only", @ptrCast(&on_depends_only));
             gtk.Widget.Class.bindTemplateCallbackFull(wc, "on_installed_only_toggled", @ptrCast(&on_installed_only_toggled));
             gtk.Widget.Class.bindTemplateCallbackFull(wc, "on_foreign_only_toggled", @ptrCast(&on_foreign_only_toggled));
+            gtk.Widget.Class.bindTemplateCallbackFull(wc, "on_local_archives_only_toggled", @ptrCast(&on_local_archives_only_toggled));
             gtk.Widget.Class.bindTemplateCallbackFull(wc, "on_detail_pane", @ptrCast(&on_detail_pane));
         }
     };
@@ -1305,6 +1310,21 @@ pub const PackagePage = extern struct {
         const p = self.priv();
         p.show_foreign_only = gtk.CheckButton.getActive(check) != 0;
         if (p.local_only and p.loaded) self.reload();
+    }
+
+    fn on_local_archives_only_toggled(check: *gtk.CheckButton, self: *Self) callconv(.c) void {
+        const p = self.priv();
+        p.show_local_archives_only = gtk.CheckButton.getActive(check) != 0;
+        gtk.Filter.changed(p.filter.as(gtk.Filter), .different);
+    }
+
+    fn isTrackedLocalArchive(name: []const u8, version: []const u8) bool {
+        const resolver = runtime.config orelse return false;
+        const config = resolver.get() catch return false;
+        for (config.LocalArchivePackages) |archive| {
+            if (std.mem.eql(u8, archive.Name, name) and std.mem.eql(u8, archive.Version, version)) return true;
+        }
+        return false;
     }
 
     fn on_explicit_only(check: *gtk.CheckButton, self: *Self) callconv(.c) void {
