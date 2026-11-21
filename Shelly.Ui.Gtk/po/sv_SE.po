@@ -38,7 +38,7 @@ msgstr ""
 msgid ""
 "<a href=\"https://www.seafoam-labs.org/shelly-alpm/docs/aur-safety/\">AUR "
 "Safety Guide</a>"
-msgstr ""
+msgstr "<a href=\"https://www.seafoam-labs.org/shelly-alpm/docs/aur-safety/\">Säkerhetsguide för AUR</a>"
 
 msgid "Enable"
 msgstr "Aktivera"
@@ -82,7 +82,7 @@ msgstr "Varningar"
 msgid ""
 "These commands fetch and execute code outside of Shelly and libalpm's "
 "control. Review them before continuing."
-msgstr ""
+msgstr "Dessa kommandon hämtar och kör kod utanför Shellys och libalpms kontroll. Granska dem innan du fortsätter."
 
 msgid "Source Files"
 msgstr "Källfiler"
@@ -98,13 +98,13 @@ msgid ""
 "\n"
 "<a href=\"https://www.seafoam-labs.org/shelly-alpm/docs/polkit/\">seafoam-"
 "labs.org/shelly-alpm/docs/polkit</a>"
-msgstr ""
+msgstr "Shellys grafiska gränssnitt behöver <b>polkit</b> installerat och aktivt för att godkänna privilegierade åtgärder, men det hittades inte på systembussen.\n\nInstallera och aktivera det och försök sedan igen.\n\n<a href=\"https://www.seafoam-labs.org/shelly-alpm/docs/polkit/\">seafoam-labs.org/shelly-alpm/docs/polkit</a>"
 
 msgid "Review PKGBUILD"
 msgstr "Granska PKGBUILD"
 
 msgid "PKGBUILD"
-msgstr ""
+msgstr "PKGBUILD"
 
 msgid "Retry"
 msgstr "Försök igen"
@@ -113,7 +113,7 @@ msgid "Skip"
 msgstr "Hoppa över"
 
 msgid "AppImage"
-msgstr ""
+msgstr "AppImage"
 
 msgid "Install and integrate AppImage bundles."
 msgstr "Installera och integrera AppImage-paket."
@@ -122,25 +122,25 @@ msgid "Search..."
 msgstr "Sök..."
 
 msgid "Sync metadata for all AppImages. Useful if AppImage self updated."
-msgstr ""
+msgstr "Synkronisera metadata för alla AppImage-program. Användbart om AppImage har uppdaterat sig självt."
 
 msgid "Sync All"
 msgstr "Synkronisera alla"
 
 msgid "Upgrade all AppImages to their latest versions"
-msgstr ""
+msgstr "Uppgradera alla AppImage-program till deras senaste versioner"
 
 msgid "Upgrade All"
 msgstr "Uppgradera alla"
 
 msgid "Install a new AppImage from a file"
-msgstr ""
+msgstr "Installera en ny AppImage från en fil"
 
 msgid "Install AppImage"
 msgstr "Installera AppImage"
 
 msgid "Drop AppImage here to install"
-msgstr ""
+msgstr "Släpp AppImage här för att installera"
 
 msgid "App Name"
 msgstr "Appnamn"
@@ -149,7 +149,7 @@ msgid "Version"
 msgstr "Version"
 
 msgid "Description goes here..."
-msgstr ""
+msgstr "Beskrivningen visas här…"
 
 msgid "Size on Disk"
 msgstr "Storlek på disk"
@@ -158,20 +158,20 @@ msgid "Update Strategy"
 msgstr "Uppdateringsstrategi"
 
 msgid "Update URL / Repository Info"
-msgstr ""
+msgstr "Uppdaterings-URL/förrådsinformation"
 
 msgid "Get more information about Update URL / Repository Info"
-msgstr ""
+msgstr "Få mer information om uppdaterings-URL/förrådsinformation"
 
 msgid "e.g. owner/repo or https://..."
-msgstr ""
+msgstr "t.ex. ägare/förråd eller https://…"
 
 msgid ""
 "Enter the repository as owner/repo, for example seafoam-labs/shelly-alpm."
-msgstr ""
+msgstr "Ange förrådet som ägare/förråd, till exempel seafoam-labs/shelly-alpm."
 
 msgid "Allow Prerelease"
-msgstr ""
+msgstr "Tillåt förhandsutgåvor"
 
 msgid "Installation Path"
 msgstr "Installationssökväg"
@@ -184,7 +184,7 @@ msgstr "Miljövariabler"
 
 msgid ""
 "One KEY=value per line. Remove a line to restore the normal environment."
-msgstr ""
+msgstr "En NYCKEL=värde per rad. Ta bort en rad för att återställa den normala miljön."
 
 msgid "Save Environment"
 msgstr "Spara miljö"
@@ -199,7 +199,7 @@ msgid "Remove"
 msgstr "Ta bort"
 
 msgid "AUR"
-msgstr ""
+msgstr "AUR"
 
 msgid "Build and install packages from the Arch User Repository."
 msgstr "Bygg och installera paket från Arch User Repository."
@@ -220,7 +220,7 @@ msgid "Previous page"
 msgstr "Föregående sida"
 
 msgid "Page 1 of 1"
-msgstr ""
+msgstr "Sida 1 av 1"
 
 msgid "Next page"
 msgstr "Nästa sida"
@@ -247,19 +247,19 @@ msgid "Loading the AUR index"
 msgstr "Läser in AUR-indexet"
 
 msgid "Powered by Atoll."
-msgstr ""
+msgstr "Drivs av Atoll."
 
 msgid "Run checks"
 msgstr "Kör kontroller"
 
 msgid "Run the --check function during package build"
-msgstr ""
+msgstr "Kör funktionen --check vid paketbygget"
 
 msgid "Hide Detail Pane"
-msgstr ""
+msgstr "Dölj informationspanelen"
 
 msgid "Hide the detail pane on the right"
-msgstr ""
+msgstr "Dölj informationspanelen till höger"
 
 msgid "Information"
 msgstr "Information"
@@ -271,7 +271,7 @@ msgid "Search the AUR"
 msgstr "Sök i AUR"
 
 msgid "The AUR has no browsable index. Type a package name to begin."
-msgstr ""
+msgstr "AUR har inget bläddringsbart index. Skriv ett paketnamn för att börja."
 
 msgid "Install a local Flatpak"
 msgstr "Installera en lokal Flatpak"
@@ -279,7 +279,7 @@ msgstr "Installera en lokal Flatpak"
 msgid ""
 "Choose a .flatpak bundle from your system and install it for the current "
 "user or system-wide."
-msgstr ""
+msgstr "Välj ett .flatpak-paket från systemet och installera det för den aktuella användaren eller för hela systemet."
 
 msgid "Bundle"
 msgstr "Paket"
@@ -312,19 +312,19 @@ msgid "Addons"
 msgstr "Tillägg"
 
 msgid "Install source"
-msgstr ""
+msgstr "Installationskälla"
 
 msgid "Author"
 msgstr "Upphovsperson"
 
 msgid "Version: -"
-msgstr ""
+msgstr "Version: –"
 
 msgid "Size: -"
-msgstr ""
+msgstr "Storlek: –"
 
 msgid "License: -"
-msgstr ""
+msgstr "Licens: –"
 
 msgid "Summary"
 msgstr "Sammanfattning"
@@ -339,7 +339,7 @@ msgid "Version History"
 msgstr "Versionshistorik"
 
 msgid "Flatpak"
-msgstr ""
+msgstr "Flatpak"
 
 msgid "Manage Flatpak applications and remotes."
 msgstr "Hantera Flatpak-program och fjärrkällor."
@@ -354,10 +354,10 @@ msgid "Manage"
 msgstr "Hantera"
 
 msgid "Manage Remote Refs"
-msgstr ""
+msgstr "Hantera fjärrreferenser"
 
 msgid "Install Local"
-msgstr ""
+msgstr "Installera lokalt"
 
 msgid "Delete Selected Remote"
 msgstr "Ta bort vald fjärrkälla"
@@ -375,13 +375,13 @@ msgid "Remote Name"
 msgstr "Namn på fjärrkälla"
 
 msgid "e.g., flathub"
-msgstr ""
+msgstr "t.ex. flathub"
 
 msgid "Remote URL"
 msgstr "Fjärrkällans URL"
 
 msgid "e.g., https://flathub.org/repo/flathub.flatpakrepo"
-msgstr ""
+msgstr "t.ex. https://flathub.org/repo/flathub.flatpakrepo"
 
 msgid "Scope"
 msgstr "Omfattning"
@@ -393,13 +393,13 @@ msgid "Flatpak Repair"
 msgstr "Reparera Flatpak"
 
 msgid "Repairs Flatpak Installation (Experimental)"
-msgstr ""
+msgstr "Reparerar Flatpak-installationen (experimentellt)"
 
 msgid "About"
 msgstr "Om"
 
 msgid "Shelly"
-msgstr ""
+msgstr "Shelly"
 
 msgid "Install Optional Deps"
 msgstr "Installera valfria beroenden"
@@ -432,13 +432,13 @@ msgid "Install and manage software on your system."
 msgstr "Installera och hantera programvara på systemet."
 
 msgid "Package Group Filter"
-msgstr ""
+msgstr "Filter för paketgrupp"
 
 msgid "Selected Packages"
 msgstr "Valda paket"
 
 msgid "0 Selected"
-msgstr ""
+msgstr "0 valda"
 
 msgid "Grid View"
 msgstr "Rutnätsvy"
@@ -459,13 +459,13 @@ msgid "No matching packages found"
 msgstr "Inga matchande paket hittades"
 
 msgid "Had an issue loading your packages. Check if you have a db lock."
-msgstr ""
+msgstr "Det uppstod ett problem när paketen lästes in. Kontrollera om du har ett databaslås."
 
 msgid "Perform Upgrade"
 msgstr "Utför uppgradering"
 
 msgid "Perform a full system upgrade with install (-u)"
-msgstr ""
+msgstr "Utför en fullständig systemuppgradering med install (-u)"
 
 msgid "Show Hidden"
 msgstr "Visa dolda"
@@ -626,7 +626,7 @@ msgid "Update Time (24h):"
 msgstr "Uppdateringstid (24 h):"
 
 msgid ":"
-msgstr ""
+msgstr ":"
 
 msgid "Look & Feel"
 msgstr "Utseende"
@@ -699,10 +699,10 @@ msgid "Select Directory"
 msgstr "Välj katalog"
 
 msgid "v0.0.0"
-msgstr ""
+msgstr "v0.0.0"
 
 msgid "GitHub"
-msgstr ""
+msgstr "GitHub"
 
 msgid "Community fluxer"
 msgstr "Gemenskapsflöde"
@@ -762,51 +762,51 @@ msgid "Upgrade"
 msgstr "Uppgradera"
 
 msgid "Utilities"
-msgstr ""
+msgstr "Verktyg"
 
 msgid "Maintenance and repair tools for your Shelly installation."
-msgstr ""
+msgstr "Underhålls- och reparationsverktyg för din Shelly-installation."
 
 msgid "Force Database Update"
-msgstr ""
+msgstr "Tvinga databasuppdatering"
 
 msgid "Force a synchronization of the package database."
-msgstr ""
+msgstr "Tvinga fram synkronisering av paketdatabasen."
 
 msgid "Run"
-msgstr ""
+msgstr "Kör"
 
 msgid "Remove db.lck"
-msgstr ""
+msgstr "Ta bort db.lck"
 
 msgid ""
 "Removes the db.lck file if it was left behind by an interrupted ALPM process."
-msgstr ""
+msgstr "Tar bort filen db.lck om den lämnades kvar av en avbruten ALPM-process."
 
 msgid "Fix Permissions"
-msgstr ""
+msgstr "Rätta behörigheter"
 
 msgid ""
 "Restores correct user ownership of Shelly configuration and cache folders if "
 "they were accidentally created by root."
-msgstr ""
+msgstr "Återställer korrekt användarägarskap för Shellys konfigurations- och cachemappar om de av misstag skapades av root."
 
 msgid "Purify Packages"
-msgstr ""
+msgstr "Rensa paket"
 
 msgid "Remove corrupted/orphaned packages."
-msgstr ""
+msgstr "Ta bort skadade/föräldralösa paket."
 
 msgid "Clean Package Cache"
-msgstr ""
+msgstr "Rensa paketcache"
 
 msgid ""
 "Keeps the selected number of repository package versions and clears the "
 "entire Shelly cache, including AUR sources and build directories."
-msgstr ""
+msgstr "Behåller det valda antalet paketversioner från förråden och rensar hela Shelly-cachen, inklusive AUR-källor och byggkataloger."
 
 msgid "Keep"
-msgstr ""
+msgstr "Behåll"
 
 msgid ""
 "Number of repository package versions to keep; the Shelly cache is cleared "
@@ -888,7 +888,7 @@ msgstr "Atoll innehåller byggskript som kallas PKGBUILD:er. Skripten laddas upp
 msgid ""
 "<a href=\"https://www.seafoam-labs.org/shelly-alpm/docs/aur-safety/\">Atoll "
 "Safety Guide</a>"
-msgstr ""
+msgstr "<a href=\"https://www.seafoam-labs.org/shelly-alpm/docs/aur-safety/\">Säkerhetsguide för Atoll</a>"
 
 msgid "System files"
 msgstr "Systemfiler"
@@ -960,22 +960,22 @@ msgid "Review Changes"
 msgstr "Granska ändringar"
 
 msgid "Security scan completed -"
-msgstr ""
+msgstr "Säkerhetsgenomsökning klar –"
 
 msgid "warning(s) found."
-msgstr ""
+msgstr "varning(ar) hittades."
 
 msgid "Security scan completed - warnings found."
-msgstr ""
+msgstr "Säkerhetsgenomsökning klar – varningar hittades."
 
 msgid "Security scan completed - no issues found."
-msgstr ""
+msgstr "Säkerhetsgenomsökning klar – inga problem hittades."
 
 msgid "used in"
-msgstr ""
+msgstr "används i"
 
 msgid "Install Anyway"
-msgstr ""
+msgstr "Installera ändå"
 
 msgid "Unknown"
 msgstr "Okänd"
@@ -1024,16 +1024,16 @@ msgid "Static URL"
 msgstr "Statisk URL"
 
 msgid "GitLab"
-msgstr ""
+msgstr "GitLab"
 
 msgid "Codeberg"
-msgstr ""
+msgstr "Codeberg"
 
 msgid "Forgejo"
-msgstr ""
+msgstr "Forgejo"
 
 msgid "Zsync"
-msgstr ""
+msgstr "Zsync"
 
 msgid "Update Available"
 msgstr "Uppdatering tillgänglig"
@@ -1183,7 +1183,7 @@ msgid "First Submitted"
 msgstr "Först inskickad"
 
 msgid "URL"
-msgstr ""
+msgstr "URL"
 
 msgid "Licenses"
 msgstr "Licenser"
@@ -1306,13 +1306,13 @@ msgid "Donation"
 msgstr "Donation"
 
 msgid "FAQ"
-msgstr ""
+msgstr "Vanliga frågor"
 
 msgid "Help"
 msgstr "Hjälp"
 
 msgid "Vcs-browser"
-msgstr ""
+msgstr "VCS-webbläsare"
 
 msgid "Contact"
 msgstr "Kontakt"
@@ -1380,113 +1380,113 @@ msgid "Utility"
 msgstr "Verktyg"
 
 msgid "Removing Remote"
-msgstr ""
+msgstr "Tar bort fjärrkälla"
 
 msgid "Adding Remote"
-msgstr ""
+msgstr "Lägger till fjärrkälla"
 
 msgid "App ID"
-msgstr ""
+msgstr "Program-ID"
 
 msgid "Remote"
-msgstr ""
+msgstr "Fjärrkälla"
 
 msgid "Developer"
-msgstr ""
+msgstr "Utvecklare"
 
 msgid "Type"
-msgstr ""
+msgstr "Typ"
 
 msgid "Download Size"
-msgstr ""
+msgstr "Hämtningsstorlek"
 
 msgid "Installed Size"
-msgstr ""
+msgstr "Installerad storlek"
 
 msgid "Yes"
-msgstr ""
+msgstr "Ja"
 
 msgid "No"
-msgstr ""
+msgstr "Nej"
 
 msgid "Keywords"
-msgstr ""
+msgstr "Nyckelord"
 
 msgid "Flathub"
-msgstr ""
+msgstr "Flathub"
 
 msgid "Loading..."
-msgstr ""
+msgstr "Läser in…"
 
 msgid "Build Date"
-msgstr ""
+msgstr "Byggdatum"
 
 msgid "Install Reason"
-msgstr ""
+msgstr "Installationsorsak"
 
 msgid "Provides"
-msgstr ""
+msgstr "Tillhandahåller"
 
 msgid "Conflicts"
-msgstr ""
+msgstr "Konflikter"
 
 msgid "Required By"
-msgstr ""
+msgstr "Krävs av"
 
 msgid "Reinstalling package"
-msgstr ""
+msgstr "Installerar om paket"
 
 msgid "Adding to package ignore"
-msgstr ""
+msgstr "Lägger till i paketundantag"
 
 msgid "Adding to package to hold"
-msgstr ""
+msgstr "Lägger till paket att låsa"
 
 msgid "Making Package Explicit"
-msgstr ""
+msgstr "Markerar paket som uttryckligt installerat"
 
 msgid "Making Package Dependency"
-msgstr ""
+msgstr "Markerar paket som beroende"
 
 msgid "Select Optional Dependencies to Install"
-msgstr ""
+msgstr "Välj valfria beroenden att installera"
 
 msgid "Installing optional dependencies"
-msgstr ""
+msgstr "Installerar valfria beroenden"
 
 msgid "Package is already installed"
-msgstr ""
+msgstr "Paketet är redan installerat"
 
 msgid "Remove from selection"
-msgstr ""
+msgstr "Ta bort från urvalet"
 
 msgid "remove"
-msgstr ""
+msgstr "ta bort"
 
 msgid "install"
-msgstr ""
+msgstr "installera"
 
 msgid "No packages selected"
-msgstr ""
+msgstr "Inga paket valda"
 
 msgid "Selected"
-msgstr ""
+msgstr "Valda"
 
 msgid "Mixed selection"
-msgstr ""
+msgstr "Blandat urval"
 
 msgid ""
 "Select only installed packages to remove, or only available ones to install."
-msgstr ""
+msgstr "Välj bara installerade paket att ta bort eller bara tillgängliga paket att installera."
 
 msgid "Remove the selected packages?"
-msgstr ""
+msgstr "Ta bort de valda paketen?"
 
 msgid "Removing packages"
-msgstr ""
+msgstr "Tar bort paket"
 
 msgid "Installing packages"
-msgstr ""
+msgstr "Installerar paket"
 
 msgid "Select package for batch installation"
 msgstr "Välj paket för gruppinstallation"
@@ -1632,7 +1632,7 @@ msgid "Bulgarian"
 msgstr "Bulgariska"
 
 msgid "Català"
-msgstr ""
+msgstr "Katalanska"
 
 msgid "Deutsch"
 msgstr "Tyska"
@@ -1647,7 +1647,7 @@ msgid "Magyar"
 msgstr "Ungerska"
 
 msgid "日本語"
-msgstr ""
+msgstr "Japanska"
 
 msgid "Polski"
 msgstr "Polska"
