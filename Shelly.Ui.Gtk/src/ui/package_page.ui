@@ -120,11 +120,27 @@
                                     </object>
                                 </child>
                                 <child>
-                                    <object class="GtkButton" id="install_local_button">
-                                        <property name="label" translatable="yes">Install Local Packages</property>
-                                        <property name="tooltip-text" translatable="yes">Install one or more local Arch package archives</property>
-                                        <property name="icon-name">document-open-symbolic</property>
-                                    </object>
+                                  <object class="GtkButton" id="install_local_button">
+                                    <property name="tooltip-text" translatable="yes">Install one or more local Arch package archives</property>
+                                    <property name="child">
+                                      <object class="GtkBox">
+                                        <property name="orientation">horizontal</property>
+                                        <property name="spacing">6</property>
+                                        <property name="margin-start">6</property>
+                                        <property name="margin-end">6</property>
+                                        <child>
+                                          <object class="GtkImage">
+                                            <property name="icon-name">document-open-symbolic</property>
+                                          </object>
+                                        </child>
+                                        <child>
+                                          <object class="GtkLabel">
+                                            <property name="label" translatable="yes">Install Local Packages…</property>
+                                          </object>
+                                        </child>
+                                      </object>
+                                    </property>
+                                  </object>
                                 </child>
                                 <child>
                                     <object class="GtkBox">
