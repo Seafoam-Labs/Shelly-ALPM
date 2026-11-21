@@ -22,15 +22,15 @@ const max_import_depth = 8;
 
 /// First defined name wins.
 const sources = struct {
-    const bg = [_][]const u8{ "window_bg_color", "theme_bg_color_breeze", "theme_bg_color" };
-    const fg = [_][]const u8{ "window_fg_color", "theme_fg_color_breeze", "theme_fg_color" };
-    const view_bg = [_][]const u8{ "view_bg_color", "theme_base_color_breeze", "theme_base_color" };
-    const header_bg = [_][]const u8{ "headerbar_bg_color", "theme_titlebar_background_breeze", "theme_header_background_breeze" };
-    const sidebar_bg = [_][]const u8{"sidebar_bg_color"};
-    const card_bg = [_][]const u8{"card_bg_color"};
-    const accent = [_][]const u8{ "accent_bg_color", "accent_color", "theme_selected_bg_color_breeze", "theme_selected_bg_color" };
-    const accent_fg = [_][]const u8{ "accent_fg_color", "theme_selected_fg_color_breeze", "theme_selected_fg_color" };
-    const borders = [_][]const u8{ "borders", "borders_breeze" };
+    const bg = [_][]const u8{ "shelly_window_bg_color", "window_bg_color", "theme_bg_color_breeze", "theme_bg_color" };
+    const fg = [_][]const u8{ "shelly_window_fg_color", "window_fg_color", "theme_fg_color_breeze", "theme_fg_color" };
+    const view_bg = [_][]const u8{ "shelly_view_bg_color", "view_bg_color", "theme_base_color_breeze", "theme_base_color" };
+    const header_bg = [_][]const u8{ "shelly_headerbar_bg_color", "headerbar_bg_color", "theme_titlebar_background_breeze", "theme_header_background_breeze" };
+    const sidebar_bg = [_][]const u8{ "shelly_sidebar_bg_color", "sidebar_bg_color" };
+    const card_bg = [_][]const u8{ "shelly_card_bg_color", "card_bg_color" };
+    const accent = [_][]const u8{ "shelly_accent_bg_color", "accent_bg_color", "accent_color", "theme_selected_bg_color_breeze", "theme_selected_bg_color" };
+    const accent_fg = [_][]const u8{ "shelly_accent_fg_color", "accent_fg_color", "theme_selected_fg_color_breeze", "theme_selected_fg_color" };
+    const borders = [_][]const u8{ "shelly_borders", "borders", "borders_breeze" };
 };
 
 pub const Defines = std.StringHashMapUnmanaged([]const u8);
@@ -424,6 +424,32 @@ test "builds a full palette from libadwaita names" {
     try std.testing.expectEqual(true, p.dark.?);
     try std.testing.expectEqual(Rejection.none, rejection);
     try std.testing.expect(std.mem.indexOf(u8, p.css, "@define-color shelly_bg #1c1b1f;") != null);
+    try std.testing.expect(std.mem.indexOf(u8, p.css, "@define-color shelly_accent #a8c7fa;") != null);
+}
+
+test "shelly names win over libadwaita names" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+    var defines: Defines = .empty;
+    try collectText(arena, &defines,
+        \\@define-color window_bg_color #1c1b1f;
+        \\@define-color window_fg_color #e6e1e5;
+        \\@define-color sidebar_bg_color #2b2930;
+        \\@define-color accent_bg_color #a8c7fa;
+        \\@define-color shelly_window_bg_color #cfd3dd;
+        \\@define-color shelly_window_fg_color #18191b;
+        \\@define-color shelly_sidebar_bg_color @shelly_window_bg_color;
+        \\@define-color shelly_accent_bg_color @undefined_name;
+    , "/cfg", &noRead, 0);
+    var rejection: Rejection = undefined;
+    const p = try build(arena, &defines, null, true, &rejection);
+    try std.testing.expect(p.full);
+    try std.testing.expectEqual(false, p.dark.?);
+    try std.testing.expect(std.mem.indexOf(u8, p.css, "@define-color shelly_bg #cfd3dd;") != null);
+    try std.testing.expect(std.mem.indexOf(u8, p.css, "@define-color shelly_fg #18191b;") != null);
+    try std.testing.expect(std.mem.indexOf(u8, p.css, "@define-color shelly_sidebar_bg #cfd3dd;") != null);
+    // An unresolvable shelly name falls through to the libadwaita one.
     try std.testing.expect(std.mem.indexOf(u8, p.css, "@define-color shelly_accent #a8c7fa;") != null);
 }
 
