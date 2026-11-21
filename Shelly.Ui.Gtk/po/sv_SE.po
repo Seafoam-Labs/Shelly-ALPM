@@ -1159,225 +1159,225 @@ msgid "Remove the selected AUR packages?"
 msgstr "Ta bort de valda AUR-paketen?"
 
 msgid "Build from AUR"
-msgstr ""
+msgstr "Bygg från AUR"
 
 msgid "Build and install the selected packages? This may take a while."
-msgstr ""
+msgstr "Bygg och installera de valda paketen? Detta kan ta en stund."
 
 msgid "Build"
-msgstr ""
+msgstr "Bygg"
 
 msgid "Installing AUR packages"
-msgstr ""
+msgstr "Installerar AUR-paket"
 
 msgid "Removing AUR packages"
-msgstr ""
+msgstr "Tar bort AUR-paket"
 
 msgid "Maintainer"
-msgstr ""
+msgstr "Underhållare"
 
 msgid "Last Modified"
-msgstr ""
+msgstr "Senast ändrad"
 
 msgid "First Submitted"
-msgstr ""
+msgstr "Först inskickad"
 
 msgid "URL"
 msgstr ""
 
 msgid "Licenses"
-msgstr ""
+msgstr "Licenser"
 
 msgid "Depends"
-msgstr ""
+msgstr "Beroenden"
 
 msgid "Optional Depends"
-msgstr ""
+msgstr "Valfria beroenden"
 
 msgid "Make Depends"
-msgstr ""
+msgstr "Byggberoenden"
 
 msgid "Section"
-msgstr ""
+msgstr "Avsnitt"
 
 msgid "The AUR has no browsable index — type a package name to begin."
-msgstr ""
+msgstr "AUR har inget bläddringsbart index — skriv ett paketnamn för att börja."
 
 msgid "Could not search the configured AUR service."
-msgstr ""
+msgstr "Det gick inte att söka i den konfigurerade AUR-tjänsten."
 
 msgid "Choose a Flatpak file"
-msgstr ""
+msgstr "Välj en Flatpak-fil"
 
 msgid "Flatpak files"
-msgstr ""
+msgstr "Flatpak-filer"
 
 msgid "Unsupported file type. Choose a.flatpak or.flatpakref file."
-msgstr ""
+msgstr "Filtypen stöds inte. Välj en .flatpak- eller .flatpakref-fil."
 
 msgid "Installing local Flatpak"
-msgstr ""
+msgstr "Installerar lokal Flatpak"
 
 msgid "Could not install the selected packages."
-msgstr ""
+msgstr "Det gick inte att installera de valda paketen."
 
 msgid "Installation complete."
-msgstr ""
+msgstr "Installationen är klar."
 
 msgid "Choose file..."
-msgstr ""
+msgstr "Välj fil…"
 
 msgid "Verified"
-msgstr ""
+msgstr "Verifierad"
 
 msgid "Show less"
-msgstr ""
+msgstr "Visa mindre"
 
 msgid "Installing Flatpak"
-msgstr ""
+msgstr "Installerar Flatpak"
 
 msgid "Remove this Flatpak?"
-msgstr ""
+msgstr "Ta bort denna Flatpak?"
 
 msgid "Remove Flatpak"
-msgstr ""
+msgstr "Ta bort Flatpak"
 
 msgid "Removing Flatpak"
-msgstr ""
+msgstr "Tar bort Flatpak"
 
 msgid "Permissions"
-msgstr ""
+msgstr "Behörigheter"
 
 msgid "Available Addons"
-msgstr ""
+msgstr "Tillgängliga tillägg"
 
 msgid "Installing Flatpak addon"
-msgstr ""
+msgstr "Installerar Flatpak-tillägg"
 
 msgid "Unknown developer"
-msgstr ""
+msgstr "Okänd utvecklare"
 
 msgid "Version: Unknown"
-msgstr ""
+msgstr "Version: okänd"
 
 msgid "Size: Loading..."
-msgstr ""
+msgstr "Storlek: läser in…"
 
 msgid "Size: Unknown"
-msgstr ""
+msgstr "Storlek: okänd"
 
 msgid "License"
-msgstr ""
+msgstr "Licens"
 
 msgid "License: Unknown"
-msgstr ""
+msgstr "Licens: okänd"
 
 msgid "No summary available"
-msgstr ""
+msgstr "Ingen sammanfattning tillgänglig"
 
 msgid "Size: Unavailable"
-msgstr ""
+msgstr "Storlek: inte tillgänglig"
 
 msgid "Download"
-msgstr ""
+msgstr "Hämta"
 
 msgid "No description available."
-msgstr ""
+msgstr "Ingen beskrivning tillgänglig."
 
 msgid "Could not load this application screenshot."
-msgstr ""
+msgstr "Det gick inte att läsa in programmets skärmbild."
 
 msgid "Could not download this application screenshot."
-msgstr ""
+msgstr "Det gick inte att hämta programmets skärmbild."
 
 msgid "Could not display the downloaded application screenshot."
-msgstr ""
+msgstr "Det gick inte att visa den hämtade skärmbilden för programmet."
 
 msgid "Open link in browser"
-msgstr ""
+msgstr "Öppna länken i webbläsaren"
 
 msgid "Homepage"
-msgstr ""
+msgstr "Hemsida"
 
 msgid "Bug tracker"
-msgstr ""
+msgstr "Felhanterare"
 
 msgid "Donation"
-msgstr ""
+msgstr "Donation"
 
 msgid "FAQ"
 msgstr ""
 
 msgid "Help"
-msgstr ""
+msgstr "Hjälp"
 
 msgid "Vcs-browser"
 msgstr ""
 
 msgid "Contact"
-msgstr ""
+msgstr "Kontakt"
 
 msgid "Translate"
-msgstr ""
+msgstr "Översätt"
 
 msgid ""
 "Could not load Flatpak applications because Shelly ran out of memory. Close "
 "other applications and try again."
-msgstr ""
+msgstr "Det gick inte att läsa in Flatpak-program eftersom Shelly fick slut på minne. Stäng andra program och försök igen."
 
 msgid "Could not start loading Flatpak applications."
-msgstr ""
+msgstr "Det gick inte att börja läsa in Flatpak-program."
 
 msgid "Could not load Flatpak applications from the selected remote."
-msgstr ""
+msgstr "Det gick inte att läsa in Flatpak-program från den valda fjärrkällan."
 
 msgid "No Flatpak applications are available."
-msgstr ""
+msgstr "Inga Flatpak-program är tillgängliga."
 
 msgid "Discover"
-msgstr ""
+msgstr "Upptäck"
 
 msgid "Categories"
-msgstr ""
+msgstr "Kategorier"
 
 msgid "All Applications"
-msgstr ""
+msgstr "Alla program"
 
 msgid "Most Wanted"
-msgstr ""
+msgstr "Mest efterfrågade"
 
 msgid "Recently Added"
-msgstr ""
+msgstr "Nyligen tillagda"
 
 msgid "Recently Updated"
-msgstr ""
+msgstr "Nyligen uppdaterade"
 
 msgid "Audio & Video"
-msgstr ""
+msgstr "Ljud och video"
 
 msgid "Development"
-msgstr ""
+msgstr "Utveckling"
 
 msgid "Education"
-msgstr ""
+msgstr "Utbildning"
 
 msgid "Game"
-msgstr ""
+msgstr "Spel"
 
 msgid "Graphics"
-msgstr ""
+msgstr "Grafik"
 
 msgid "Network"
-msgstr ""
+msgstr "Nätverk"
 
 msgid "Office"
-msgstr ""
+msgstr "Kontor"
 
 msgid "Science"
-msgstr ""
+msgstr "Vetenskap"
 
 msgid "Utility"
-msgstr ""
+msgstr "Verktyg"
 
 msgid "Removing Remote"
 msgstr ""
