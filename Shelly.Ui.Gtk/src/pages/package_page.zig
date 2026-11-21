@@ -70,6 +70,7 @@ pub const PackagePage = extern struct {
         cart_label: *gtk.Label,
         upgrade_check: *gtk.CheckButton,
         show_hidden_check: *gtk.CheckButton,
+        foreign_only_check: *gtk.CheckButton,
         show_explicit_only_check: *gtk.CheckButton,
         show_depends_only_check: *gtk.CheckButton,
         show_detail_pane_check: *gtk.CheckButton,
@@ -81,6 +82,7 @@ pub const PackagePage = extern struct {
         show_explicit_only: bool,
         show_depends_only: bool,
         show_hidden: bool,
+        show_foreign_only: bool,
         show_detail_pane: bool,
 
         check_map_grid: std.AutoHashMapUnmanaged(*PackageObject, *gtk.CheckButton),
@@ -125,6 +127,7 @@ pub const PackagePage = extern struct {
         const p = page.priv();
         p.local_only = true;
         p.show_installed_only = true;
+        gtk.Widget.setVisible(p.foreign_only_check.as(gtk.Widget), 1);
         gtk.Widget.setVisible(p.install_local_button.as(gtk.Widget), 1);
         gtk.Widget.setVisible(p.grouping_selection.as(gtk.Widget), 0);
         gtk.ColumnViewColumn.setVisible(p.install_date_column, 1);
@@ -150,6 +153,7 @@ pub const PackagePage = extern struct {
         p.show_installed_only = false;
         p.show_explicit_only = false;
         p.show_hidden = false;
+        p.show_foreign_only = false;
         p.show_detail_pane = false;
         p.check_map_grid = .empty;
         p.check_map_column = .empty;
@@ -771,7 +775,7 @@ pub const PackagePage = extern struct {
         // The page is the focus stop, so a page switch lands on its group name
         // and Tab reaches the search entry from there.
         _ = a11y.focusFirst(self.as(gtk.Widget));
-        const thread = std.Thread.spawn(.{}, load_worker, .{ self, p.generation, p.show_hidden }) catch return;
+        const thread = std.Thread.spawn(.{}, load_worker, .{ self, p.generation, p.show_hidden, p.show_foreign_only }) catch return;
         gtk.Widget.setVisible(p.no_results_overlay.as(gtk.Widget), 0);
         thread.detach();
     }
@@ -839,7 +843,7 @@ pub const PackagePage = extern struct {
         _ = malloc_trim(0);
     }
 
-    fn load_worker(page: *Self, generation: u64, show_hidden: bool) void {
+    fn load_worker(page: *Self, generation: u64, show_hidden: bool, show_foreign_only: bool) void {
         const arena_ptr = std.heap.c_allocator.create(std.heap.ArenaAllocator) catch return;
         arena_ptr.* = std.heap.ArenaAllocator.init(std.heap.c_allocator);
         const alloc = arena_ptr.allocator();
@@ -852,7 +856,10 @@ pub const PackagePage = extern struct {
 
         const cli = ShellyCli{ .allocator = alloc, .io = threaded.io() };
         const packages = if (p.local_only) blk: {
-            const installed = cli.get_installed_packages() catch |err| {
+            const installed = (if (show_foreign_only)
+                cli.get_foreign_packages()
+            else
+                cli.get_installed_packages()) catch |err| {
                 std.debug.print("Could not load the installed-package list. {0s}\n\nTechnical details: {1s}\n", .{ diagnostics.cause(err), @errorName(err) });
                 arena_ptr.deinit();
                 std.heap.c_allocator.destroy(arena_ptr);
@@ -1005,6 +1012,7 @@ pub const PackagePage = extern struct {
         .{ "cart_items_box", @offsetOf(Private, "cart_items_box") },
         .{ "upgrade_check", @offsetOf(Private, "upgrade_check") },
         .{ "show_hidden_check", @offsetOf(Private, "show_hidden_check") },
+        .{ "foreign_only_check", @offsetOf(Private, "foreign_only_check") },
         .{ "show_explicit_only", @offsetOf(Private, "show_explicit_only_check") },
         .{ "show_detail_pane", @offsetOf(Private, "show_detail_pane_check") },
         .{ "no_results_overlay", @offsetOf(Private, "no_results_overlay") },
@@ -1029,6 +1037,7 @@ pub const PackagePage = extern struct {
             gtk.Widget.Class.bindTemplateCallbackFull(wc, "on_explicit_only", @ptrCast(&on_explicit_only));
             gtk.Widget.Class.bindTemplateCallbackFull(wc, "on_depends_only", @ptrCast(&on_depends_only));
             gtk.Widget.Class.bindTemplateCallbackFull(wc, "on_installed_only_toggled", @ptrCast(&on_installed_only_toggled));
+            gtk.Widget.Class.bindTemplateCallbackFull(wc, "on_foreign_only_toggled", @ptrCast(&on_foreign_only_toggled));
             gtk.Widget.Class.bindTemplateCallbackFull(wc, "on_detail_pane", @ptrCast(&on_detail_pane));
         }
     };
@@ -1273,6 +1282,12 @@ pub const PackagePage = extern struct {
         gtk.Filter.changed(p.filter.as(gtk.Filter), .different);
     }
 
+    fn on_foreign_only_toggled(check: *gtk.CheckButton, self: *Self) callconv(.c) void {
+        const p = self.priv();
+        p.show_foreign_only = gtk.CheckButton.getActive(check) != 0;
+        if (p.local_only and p.loaded) self.reload();
+    }
+
     fn on_explicit_only(check: *gtk.CheckButton, self: *Self) callconv(.c) void {
         const p = self.priv();
         if (p.applying_config) return;
@@ -1426,7 +1441,7 @@ pub const PackagePage = extern struct {
         const p = self.priv();
         p.generation += 1;
         show_loading(self);
-        const thread = std.Thread.spawn(.{}, load_worker, .{ self, p.generation, p.show_hidden }) catch return;
+        const thread = std.Thread.spawn(.{}, load_worker, .{ self, p.generation, p.show_hidden, p.show_foreign_only }) catch return;
         thread.detach();
     }
 };
