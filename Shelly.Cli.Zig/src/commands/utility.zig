@@ -99,14 +99,14 @@ fn inspectArchiveInfo(
         try paths.append(context.allocator, path_value);
     }
     if (paths.items.len == 0) {
-        try context.stderr.writeAll("--archive-info requires at least one package archive path.\\n");
+        try context.stderr.writeAll("--archive-info requires at least one package archive path.\n");
         return 1;
     }
 
     var packages: std.ArrayList(ArchivePackageInfo) = .empty;
     for (paths.items) |path_value| {
         var info = PackageManager.repo.pkginfo.readFromPackage(context.allocator, path_value) catch |err| {
-            try context.stderr.print("Could not read Arch package metadata from {s}: {s}\\n", .{ path_value, @errorName(err) });
+            try context.stderr.print("Could not read Arch package metadata from {s}: {s}\n", .{ path_value, @errorName(err) });
             return 1;
         };
         try packages.append(context.allocator, .{
