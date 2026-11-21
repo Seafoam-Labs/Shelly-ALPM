@@ -153,6 +153,14 @@ pub const ShellyCli = struct {
         return try JsonPackFrame.decode([]Package, self.allocator, result.stdout);
     }
 
+    pub fn get_foreign_packages(self: ShellyCli) !std.json.Parsed([]Package) {
+        const result = try self.run(&.{ "-Ls", "--foreign-only" });
+        defer self.allocator.free(result.stdout);
+        defer self.allocator.free(result.stderr);
+
+        return try JsonPackFrame.decode([]Package, self.allocator, result.stdout);
+    }
+
     pub fn isPackageInstalled(self: ShellyCli, name: []const u8) !bool {
         const result = try self.run(&.{ "-Ssi", name });
         defer self.allocator.free(result.stdout);
