@@ -736,16 +736,33 @@
                                   <class name="settings-form-row"/>
                                 </style>
                                 <child>
-                                  <object class="GtkLabel">
-                                    <property name="label" translatable="yes">Use System Title Bar</property>
-                                    <property name="tooltip-text" translatable="yes">If enabled, the desktop draws the window title bar and its buttons instead of Shelly.</property>
-                                    <property name="halign">start</property>
+                                  <object class="GtkBox">
+                                    <property name="orientation">vertical</property>
+                                    <property name="spacing">4</property>
                                     <property name="hexpand">true</property>
+                                    <child>
+                                      <object class="GtkLabel">
+                                        <property name="label" translatable="yes">Use System Title Bar</property>
+                                        <property name="tooltip-text" translatable="yes">If enabled, the desktop draws the window title bar and its buttons instead of Shelly.</property>
+                                        <property name="halign">start</property>
+                                      </object>
+                                    </child>
+                                    <child>
+                                      <object class="GtkLabel">
+                                        <property name="label" translatable="yes">Applies after restarting Shelly.</property>
+                                        <property name="halign">start</property>
+                                        <property name="wrap">true</property>
+                                        <style>
+                                          <class name="dim-label"/>
+                                        </style>
+                                      </object>
+                                    </child>
                                   </object>
                                 </child>
                                 <child>
                                   <object class="GtkSwitch" id="system_titlebar_switch">
                                     <property name="halign">end</property>
+                                    <property name="valign">center</property>
                                     <accessibility>
                                       <property name="label" translatable="yes">Use System Title Bar</property>
                                     </accessibility>

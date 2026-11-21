@@ -1943,3 +1943,6 @@ msgstr ""
 
 msgid "If enabled, the desktop draws the window title bar and its buttons instead of Shelly."
 msgstr ""
+
+msgid "Applies after restarting Shelly."
+msgstr ""

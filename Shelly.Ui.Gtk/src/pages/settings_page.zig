@@ -23,7 +23,6 @@ const icon_fetcher = @import("../services/icon_fetcher.zig");
 const support = @import("support.zig");
 const datetime = @import("../helpers/datetime.zig");
 const ShellyWindow = @import("../shelly_window.zig").ShellyWindow;
-const theme = @import("../services/theme.zig");
 const Toast = @import("../helpers/custom_ui_comps/toast.zig").Toast;
 const VersionHistoryDialog = @import("../dialog/page/version_history.zig").VersionHistoryDialog;
 const HistoryEntry = @import("../dialog/page/version_history.zig").Entry;
@@ -301,13 +300,6 @@ pub const ShellySettingsPage = extern struct {
             &onAutosaveNotify,
             self,
             .{ .detail = "active", .after = true },
-        );
-        _ = gobject.Object.signals.notify.connect(
-            p.system_titlebar_switch.as(gobject.Object),
-            *Self,
-            &onSystemTitlebarNotify,
-            self,
-            .{ .detail = "active" },
         );
 
         _ = gobject.Object.signals.notify.connect(
@@ -1196,14 +1188,6 @@ pub const ShellySettingsPage = extern struct {
         const mode = if (midx < theme_mode_entries.len) theme_mode_entries[midx].value else .shelly;
         if (support.getWindow(ShellyWindow, self)) |win| {
             win.applyThemeNow(mode, theme_variant_entries[idx].value);
-        }
-    }
-
-    fn onSystemTitlebarNotify(_: *gobject.Object, _: *gobject.ParamSpec, self: *Self) callconv(.c) void {
-        const p = self.priv();
-        if (p.save_guard or !p.loaded) return;
-        if (support.getWindow(ShellyWindow, self)) |win| {
-            theme.setSystemTitlebar(win.as(gtk.Window), getSwitch(p.system_titlebar_switch));
         }
     }
 

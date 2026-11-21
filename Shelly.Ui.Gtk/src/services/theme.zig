@@ -81,7 +81,7 @@ var base_provider: ?*gtk.CssProvider = null;
 var base_added: bool = false;
 var pin_name: ?[:0]const u8 = null;
 var headerbar: ?*gtk.HeaderBar = null;
-/// Read from the configuration on first apply; Settings updates it live.
+/// Read from the configuration on first apply; a change applies at the next start.
 var system_titlebar: ?bool = null;
 var watched_window: ?*gtk.Window = null;
 var current_mode: ThemeMode = .shelly;
@@ -164,13 +164,6 @@ pub fn applyWith(win: *gtk.Window, mode: ThemeMode, variant: ThemeVariant) void 
     notifyChanged();
 }
 
-/// Switches between Shelly's header bar and the desktop's own title bar
-/// (used by Settings when the switch changes).
-pub fn setSystemTitlebar(win: *gtk.Window, enabled: bool) void {
-    system_titlebar = enabled;
-    applyTitlebar(win);
-}
-
 fn applyTitlebar(win: *gtk.Window) void {
     const enabled = system_titlebar orelse blk: {
         var value = false;
@@ -188,6 +181,7 @@ fn applyTitlebar(win: *gtk.Window) void {
     // GTK falls back to its default header bar, which follows the desktop's
     // button layout.
     gtk.Window.setTitlebar(win, if (enabled) null else ensureHeaderBar().as(gtk.Widget));
+    if (enabled) gtk.Widget.addCssClass(win.as(gtk.Widget), "system-titlebar");
 }
 
 const DesktopResult = struct {
