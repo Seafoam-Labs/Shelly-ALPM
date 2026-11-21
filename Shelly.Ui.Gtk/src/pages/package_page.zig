@@ -87,6 +87,7 @@ pub const PackagePage = extern struct {
         check_map_column: std.AutoHashMapUnmanaged(*PackageObject, *gtk.CheckButton),
         loaded: bool,
         applying_config: bool,
+        local_only: bool,
         resolver: IconResolver,
         search_text: [256]u8,
         search_len: usize,
@@ -118,6 +119,18 @@ pub const PackagePage = extern struct {
         return gobject.ext.newInstance(Self, .{});
     }
 
+    /// Creates the installed-package view used by the Local navigation page.
+    pub fn newLocal() *Self {
+        const page = new();
+        const p = page.priv();
+        p.local_only = true;
+        p.show_installed_only = true;
+        gtk.Widget.setVisible(p.install_local_button.as(gtk.Widget), 1);
+        gtk.Widget.setVisible(p.grouping_selection.as(gtk.Widget), 0);
+        gtk.ColumnViewColumn.setVisible(p.install_date_column, 1);
+        return page;
+    }
+
     pub fn as(self: *Self, comptime T: type) *T {
         return gobject.ext.as(T, self);
     }
@@ -131,6 +144,7 @@ pub const PackagePage = extern struct {
         const p = self.priv();
         p.loaded = false;
         p.applying_config = false;
+        p.local_only = false;
         p.arena = null;
         p.generation = 0;
         p.show_installed_only = false;
@@ -140,6 +154,7 @@ pub const PackagePage = extern struct {
         p.check_map_grid = .empty;
         p.check_map_column = .empty;
 
+        gtk.Widget.setVisible(p.install_local_button.as(gtk.Widget), 0);
         _ = gtk.Button.signals.clicked.connect(p.install_local_button, *Self, &on_install_local_clicked, self, .{});
 
         const detail = PackageDetail.new();
@@ -836,20 +851,28 @@ pub const PackagePage = extern struct {
         defer threaded.deinit();
 
         const cli = ShellyCli{ .allocator = alloc, .io = threaded.io() };
-        const parsed = cli.get_packages(show_hidden) catch |err| {
-            std.debug.print("Could not load the standard-package list. {0s}\n\nTechnical details: {1s}\n", .{ diagnostics.cause(err), @errorName(err) });
-            arena_ptr.deinit();
-            std.heap.c_allocator.destroy(arena_ptr);
-            return;
-        };
-
-        const icli = ShellyCli{ .allocator = alloc, .io = threaded.io() };
-        const installed = icli.get_installed_packages() catch null;
-
-        const packages = repositoryPackageList(alloc, parsed.value, if (installed) |inst| inst.value else null) catch {
-            arena_ptr.deinit();
-            std.heap.c_allocator.destroy(arena_ptr);
-            return;
+        const packages = if (p.local_only) blk: {
+            const installed = cli.get_installed_packages() catch |err| {
+                std.debug.print("Could not load the installed-package list. {0s}\\n\\nTechnical details: {1s}\\n", .{ diagnostics.cause(err), @errorName(err) });
+                arena_ptr.deinit();
+                std.heap.c_allocator.destroy(arena_ptr);
+                return;
+            };
+            break :blk installed.value;
+        } else blk: {
+            const parsed = cli.get_packages(show_hidden) catch |err| {
+                std.debug.print("Could not load the standard-package list. {0s}\\n\\nTechnical details: {1s}\\n", .{ diagnostics.cause(err), @errorName(err) });
+                arena_ptr.deinit();
+                std.heap.c_allocator.destroy(arena_ptr);
+                return;
+            };
+            const icli = ShellyCli{ .allocator = alloc, .io = threaded.io() };
+            const installed = icli.get_installed_packages() catch null;
+            break :blk repositoryPackageList(alloc, parsed.value, if (installed) |inst| inst.value else null) catch {
+                arena_ptr.deinit();
+                std.heap.c_allocator.destroy(arena_ptr);
+                return;
+            };
         };
 
         var set: std.StringHashMapUnmanaged(void) = .empty;
