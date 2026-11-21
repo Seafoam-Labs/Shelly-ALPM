@@ -811,79 +811,79 @@ msgstr ""
 msgid ""
 "Number of repository package versions to keep; the Shelly cache is cleared "
 "completely"
-msgstr ""
+msgstr "Antal paketversioner från förråden att behålla; Shelly-cachen rensas helt"
 
 msgid "Welcome to Shelly v3"
-msgstr ""
+msgstr "Välkommen till Shelly v3"
 
 msgid ""
 "Shelly is a modern package manager for Arch Linux. Configure your sources "
 "and preferences to get started."
-msgstr ""
+msgstr "Shelly är en modern pakethanterare för Arch Linux. Konfigurera dina källor och inställningar för att komma igång."
 
 msgid "Select Your Sources"
-msgstr ""
+msgstr "Välj dina källor"
 
 msgid ""
 "Choose which package sources you want to browse. You can always change this "
 "later in settings."
-msgstr ""
+msgstr "Välj vilka paketkällor du vill bläddra i. Du kan alltid ändra detta senare i inställningarna."
 
 msgid "Arch User Repository community packages"
-msgstr ""
+msgstr "Gemenskapspaket från Arch User Repository"
 
 msgid "Sandboxed universal Linux applications"
-msgstr ""
+msgstr "Sandlådeisolerade universella Linux-program"
 
 msgid "Portable self-contained application bundles"
-msgstr ""
+msgstr "Portabla, fristående programpaket"
 
 msgid "Curated picks from Shelly"
-msgstr ""
+msgstr "Utvalda paket från Shelly"
 
 msgid "Look and Feel"
-msgstr ""
+msgstr "Utseende och känsla"
 
 msgid ""
 "Customize how Shelly looks and behaves. All of these can be changed later in "
 "preferences."
-msgstr ""
+msgstr "Anpassa hur Shelly ser ut och fungerar. Allt detta kan ändras senare i inställningarna."
 
 msgid "Navigation Style"
-msgstr ""
+msgstr "Navigeringsstil"
 
 msgid "Sidebar"
-msgstr ""
+msgstr "Sidofält"
 
 msgid "Vertical icon rail on the left"
-msgstr ""
+msgstr "Lodrät ikonrad till vänster"
 
 msgid "Top Bar"
-msgstr ""
+msgstr "Övre fält"
 
 msgid "Horizontal tab switcher at the top"
-msgstr ""
+msgstr "Vågrät flikväxlare högst upp"
 
 msgid "System Tray"
-msgstr ""
+msgstr "Systemfält"
 
 msgid "Run in system tray when minimized"
-msgstr ""
+msgstr "Kör i systemfältet när programmet minimeras"
 
 msgid "Next"
-msgstr ""
+msgstr "Nästa"
 
 msgid "Start Shelly"
-msgstr ""
+msgstr "Starta Shelly"
 
 msgid "Enable Atoll?"
-msgstr ""
+msgstr "Aktivera Atoll?"
 
 msgid ""
 "Atoll contains build scripts that are known as PKGBUILDs. Those scripts are "
 "uploaded by users, and are not verified or vetted in any way. Only enable "
 "this feature if you are comfortable in verifying the build scripts."
-msgstr ""
+msgstr "Atoll innehåller byggskript som kallas PKGBUILD:er. Skripten laddas upp av användare och verifieras eller granskas inte på något sätt. Aktivera bara funktionen om du kan granska byggskripten."
 
 msgid ""
 "<a href=\"https://www.seafoam-labs.org/shelly-alpm/docs/aur-safety/\">Atoll "
@@ -891,73 +891,73 @@ msgid ""
 msgstr ""
 
 msgid "System files"
-msgstr ""
+msgstr "Systemfiler"
 
 msgid "Other folders"
-msgstr ""
+msgstr "Andra mappar"
 
 msgid "Running services"
-msgstr ""
+msgstr "Körande tjänster"
 
 msgid "Other apps' data"
-msgstr ""
+msgstr "Andra programmens data"
 
 msgid "Home folder"
-msgstr ""
+msgstr "Hemkatalog"
 
 msgid "User folders"
-msgstr ""
+msgstr "Användarmappar"
 
 msgid "Persistent files"
-msgstr ""
+msgstr "Beständiga filer"
 
 msgid "Devices"
-msgstr ""
+msgstr "Enheter"
 
 msgid "Session bus"
-msgstr ""
+msgstr "Sessionsbuss"
 
 msgid "System bus"
-msgstr ""
+msgstr "Systembuss"
 
 msgid "Network access"
-msgstr ""
+msgstr "Nätverksåtkomst"
 
 msgid "Display server"
-msgstr ""
+msgstr "Bildskärmsserver"
 
 msgid "Sandbox features"
-msgstr ""
+msgstr "Sandlådefunktioner"
 
 msgid "Environment"
-msgstr ""
+msgstr "Miljö"
 
 msgid "Sound"
-msgstr ""
+msgstr "Ljud"
 
 msgid "Printing"
-msgstr ""
+msgstr "Utskrift"
 
 msgid "Inter-process communication"
-msgstr ""
+msgstr "Kommunikation mellan processer"
 
 msgid "Other"
-msgstr ""
+msgstr "Övrigt"
 
 msgid "No network access"
-msgstr ""
+msgstr "Ingen nätverksåtkomst"
 
 msgid "No device access"
-msgstr ""
+msgstr "Ingen enhetsåtkomst"
 
 msgid "No access to system files"
-msgstr ""
+msgstr "Ingen åtkomst till systemfiler"
 
 msgid "Review PKGBUILD changes for"
-msgstr ""
+msgstr "Granska PKGBUILD-ändringar för"
 
 msgid "Review Changes"
-msgstr ""
+msgstr "Granska ändringar"
 
 msgid "Security scan completed -"
 msgstr ""
