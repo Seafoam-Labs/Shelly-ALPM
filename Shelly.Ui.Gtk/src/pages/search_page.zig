@@ -19,6 +19,7 @@ const ShellyWindow = @import("../shelly_window.zig").ShellyWindow;
 const ShellyCli = @import("../services/shelly_cli.zig").ShellyCli;
 const ShellyCommands = @import("../services/shelly_operation.zig").ShellyCommands;
 const ShellyConfig = @import("../models/shelly_config.zig").ShellyConfig;
+const withoutLocalArchivePackages = @import("../models/shelly_config.zig").withoutLocalArchivePackages;
 const Package = @import("../models/packages.zig").Package;
 const runtime = @import("../services/runtime.zig");
 const translations = @import("../helpers/translations.zig");
@@ -73,6 +74,7 @@ pub const ShellySearchPage = extern struct {
         last_query_len: usize,
         check_map: std.AutoHashMapUnmanaged(*SearchResultObject, *gtk.CheckButton),
         pending_installs: std.ArrayListUnmanaged(PendingInstall),
+        pending_local_archive_removals: []const []const u8 = &.{},
         var offset: c_int = 0;
     };
 
@@ -1072,6 +1074,16 @@ pub const ShellySearchPage = extern struct {
         }
 
         const win = support.getWindow(ShellyWindow, self) orelse return;
+        freePendingLocalArchiveRemovals(p);
+        var pending: std.ArrayListUnmanaged([]const u8) = .empty;
+        errdefer {
+            for (pending.items) |name| std.heap.c_allocator.free(name);
+            pending.deinit(std.heap.c_allocator);
+        }
+        for (names.items) |name| {
+            pending.append(std.heap.c_allocator, std.heap.c_allocator.dupe(u8, name) catch return) catch return;
+        }
+        p.pending_local_archive_removals = pending.toOwnedSlice(std.heap.c_allocator) catch return;
         p.install_running = true;
         self.update_selection_ui();
         win.startTransaction(.{
@@ -1086,13 +1098,34 @@ pub const ShellySearchPage = extern struct {
 
     fn on_remove_complete(ctx: *anyopaque, success: bool) void {
         const self: *Self = @ptrCast(@alignCast(ctx));
-        self.priv().install_running = false;
+        const p = self.priv();
+        p.install_running = false;
+        defer freePendingLocalArchiveRemovals(p);
         if (success) {
+            removeTrackedLocalArchives(p.pending_local_archive_removals);
             self.clear_selection();
-            if (self.priv().last_query_len > 0) self.start_load(enabledSources());
+            if (p.last_query_len > 0) self.start_load(enabledSources());
         } else {
             self.update_selection_ui();
         }
+    }
+
+    fn freePendingLocalArchiveRemovals(p: *Private) void {
+        for (p.pending_local_archive_removals) |name| std.heap.c_allocator.free(name);
+        if (p.pending_local_archive_removals.len > 0) std.heap.c_allocator.free(p.pending_local_archive_removals);
+        p.pending_local_archive_removals = &.{};
+    }
+
+    fn removeTrackedLocalArchives(names: []const []const u8) void {
+        const resolver = runtime.config orelse return;
+        const current = resolver.get() catch return;
+        const remaining = withoutLocalArchivePackages(
+            std.heap.c_allocator,
+            current.LocalArchivePackages,
+            names,
+        ) catch return;
+        defer std.heap.c_allocator.free(remaining);
+        updateConfigField(.LocalArchivePackages, remaining);
     }
 
     fn on_install_response(ctx: ?*anyopaque, confirmed: bool) void {
