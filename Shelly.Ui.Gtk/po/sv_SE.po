@@ -978,50 +978,50 @@ msgid "Install Anyway"
 msgstr ""
 
 msgid "Unknown"
-msgstr ""
+msgstr "Okänd"
 
 msgid "package(s)"
-msgstr ""
+msgstr "paket"
 
 msgid "to"
-msgstr ""
+msgstr "till"
 
 msgid "removed size"
-msgstr ""
+msgstr "frigjort utrymme"
 
 msgid "download"
-msgstr ""
+msgstr "hämtning"
 
 msgid "net"
-msgstr ""
+msgstr "netto"
 
 msgid "Scanning PKGBUILD…"
-msgstr ""
+msgstr "Genomsöker PKGBUILD…"
 
 msgid "Security scan unavailable."
-msgstr ""
+msgstr "Säkerhetsgenomsökning är inte tillgänglig."
 
 msgid "Could not load the PKGBUILD preview."
-msgstr ""
+msgstr "Det gick inte att läsa in PKGBUILD-förhandsvisningen."
 
 msgid ""
 "PKGBUILD changed. Close and reopen the preview to scan the current version."
-msgstr ""
+msgstr "PKGBUILD har ändrats. Stäng och öppna förhandsvisningen igen för att genomsöka den aktuella versionen."
 
 msgid "No related files."
-msgstr ""
+msgstr "Inga relaterade filer."
 
 msgid "Previous"
-msgstr ""
+msgstr "Föregående"
 
 msgid "Dismiss"
-msgstr ""
+msgstr "Avfärda"
 
 msgid "None"
-msgstr ""
+msgstr "Inga"
 
 msgid "Static URL"
-msgstr ""
+msgstr "Statisk URL"
 
 msgid "GitLab"
 msgstr ""
@@ -1036,127 +1036,127 @@ msgid "Zsync"
 msgstr ""
 
 msgid "Update Available"
-msgstr ""
+msgstr "Uppdatering tillgänglig"
 
 msgid "Version ?"
-msgstr ""
+msgstr "Version?"
 
 msgid "Enter a download URL beginning with http:// or https://."
-msgstr ""
+msgstr "Ange en hämtnings-URL som börjar med http:// eller https://."
 
 msgid ""
 "Enter a Forgejo repository URL as http(s)://host/owner/repo or http(s)://"
 "host/owner/repo/releases."
-msgstr ""
+msgstr "Ange en Forgejo-förråds-URL som http(s)://värd/ägare/förråd eller http(s)://värd/ägare/förråd/releases."
 
 msgid ""
 "Enter the http(s) URL of the .zsync control file, optionally as a zsync|"
 "<url> update information string."
-msgstr ""
+msgstr "Ange http(s)-URL:en till .zsync-kontrollfilen, valfritt som en zsync|<url>-sträng med uppdateringsinformation."
 
 msgid "Choose an AppImage file"
-msgstr ""
+msgstr "Välj en AppImage-fil"
 
 msgid "AppImage files"
-msgstr ""
+msgstr "AppImage-filer"
 
 msgid "Only.AppImage files can be installed"
-msgstr ""
+msgstr "Endast .AppImage-filer kan installeras"
 
 msgid "Installing AppImage"
-msgstr ""
+msgstr "Installerar AppImage"
 
 msgid "Could not read the AppImage update setting."
-msgstr ""
+msgstr "Det gick inte att läsa inställningen för AppImage-uppdateringar."
 
 msgid "No AppImages need to be upgraded"
-msgstr ""
+msgstr "Inga AppImage-program behöver uppgraderas"
 
 msgid "Upgrading AppImages"
-msgstr ""
+msgstr "Uppgraderar AppImage-program"
 
 msgid "Syncing AppImages"
-msgstr ""
+msgstr "Synkroniserar AppImage-program"
 
 msgid "Syncing AppImage"
-msgstr ""
+msgstr "Synkroniserar AppImage"
 
 msgid ""
 "Use unique KEY=value lines. Keys must start with a letter or underscore and "
 "contain only letters, digits, or underscores."
-msgstr ""
+msgstr "Använd unika NYCKEL=värde-rader. Nycklar måste börja med en bokstav eller ett understreck och får endast innehålla bokstäver, siffror eller understreck."
 
 msgid "Saving AppImage environment"
-msgstr ""
+msgstr "Sparar AppImage-miljö"
 
 msgid "Saving update configuration"
-msgstr ""
+msgstr "Sparar uppdateringskonfiguration"
 
 msgid "Configuration files will be kept."
-msgstr ""
+msgstr "Konfigurationsfilerna behålls."
 
 msgid "Remove this AppImage?"
-msgstr ""
+msgstr "Ta bort denna AppImage?"
 
 msgid "Remove AppImage"
-msgstr ""
+msgstr "Ta bort AppImage"
 
 msgid "Removing AppImage"
-msgstr ""
+msgstr "Tar bort AppImage"
 
 msgid "Operation completed successfully"
-msgstr ""
+msgstr "Åtgärden slutfördes"
 
 msgid "Could not complete the requested operation."
-msgstr ""
+msgstr "Det gick inte att slutföra den begärda åtgärden."
 
 msgid "Discard environment changes?"
-msgstr ""
+msgstr "Förkasta miljöändringar?"
 
 msgid "Your environment changes have not been saved."
-msgstr ""
+msgstr "Dina miljöändringar har inte sparats."
 
 msgid "Discard"
-msgstr ""
+msgstr "Förkasta"
 
 msgid "No packages found"
-msgstr ""
+msgstr "Inga paket hittades"
 
 msgid "Try a shorter or more general keyword."
-msgstr ""
+msgstr "Prova ett kortare eller mer allmänt sökord."
 
 msgid "Could not reach Atoll"
-msgstr ""
+msgstr "Det gick inte att nå Atoll"
 
 msgid "Check your connection and try again."
-msgstr ""
+msgstr "Kontrollera anslutningen och försök igen."
 
 msgid "Flagged out of date"
-msgstr ""
+msgstr "Markerat som inaktuellt"
 
 msgid "Installed"
-msgstr ""
+msgstr "Installerad"
 
 msgid "Remove Selected"
-msgstr ""
+msgstr "Ta bort valda"
 
 msgid "Select one or more packages"
-msgstr ""
+msgstr "Välj ett eller flera paket"
 
 msgid "Package(s)"
-msgstr ""
+msgstr "Paket"
 
 msgid "Page"
-msgstr ""
+msgstr "Sida"
 
 msgid "of"
-msgstr ""
+msgstr "av"
 
 msgid "Remove Packages"
-msgstr ""
+msgstr "Ta bort paket"
 
 msgid "Remove the selected AUR packages?"
-msgstr ""
+msgstr "Ta bort de valda AUR-paketen?"
 
 msgid "Build from AUR"
 msgstr ""
