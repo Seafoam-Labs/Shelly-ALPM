@@ -172,6 +172,7 @@ const DetailsBody = struct {
 };
 
 pub const View = struct {
+    result_list: ?vxfw.Widget = null,
     state: *@import("../models/appimage_model.zig").State,
     list_percent: u8 = 40,
     help: ?*@import("help_view.zig").Panel = null,
@@ -194,7 +195,7 @@ pub const View = struct {
             const message = self.contentMessage();
             var label: vxfw.Text = .{ .text = message orelse "", .style = styles.secondary };
             const labels = [_]Border.BorderLabel{.{ .text = "Installed AppImages", .alignment = .top_left }};
-            const content = if (message != null) label.widget() else self.state.list_view.widget();
+            const content = if (message != null) label.widget() else self.result_list orelse self.state.list_view.widget();
             var border: Border = .{ .child = content, .labels = &labels, .focused = self.state.list_active and !self.state.details_active and self.help == null };
             if (list_width >= 2 and pane_height >= 2)
                 try children.append(arena, .{ .origin = .{ .row = 1, .col = 0 }, .surface = try border.draw(ctx.withConstraints(.{ .width = list_width, .height = pane_height }, .{ .width = list_width, .height = pane_height })) })

@@ -195,37 +195,8 @@ fn drawPackageTable(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw
     return .{ .size = size, .widget = .{ .userdata = ptr, .drawFn = drawPackageTable }, .buffer = &.{}, .children = children };
 }
 
-// Package rows are one terminal line high. Snapshot the identities after
-// ListView lays them out, since scrolling and resizing can change its top item.
-const VisibleRows = struct {
-    model: *Model,
-    packages: []const *const Package,
-
-    fn draw(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
-        const rows: *VisibleRows = @ptrCast(@alignCast(ptr));
-        return drawPackageList(rows.model, ctx);
-    }
-
-    fn click(ptr: *anyopaque, ctx: *vxfw.EventContext, event: vxfw.Event) anyerror!void {
-        const rows: *VisibleRows = @ptrCast(@alignCast(ptr));
-        if (event != .mouse or !commands.Mouse.primaryPress(event.mouse) or event.mouse.row < 0) return;
-        const index: usize = @intCast(event.mouse.row);
-        if (index < rows.packages.len)
-            try commands.Mouse.selectPackageRow(rows.model, ctx, rows.packages[index]);
-    }
-};
-
 fn drawPackageList(model: *Model, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
-    const state = &model.packages_state;
-    const list = try state.list_view.draw(ctx);
-    const items = state.filtered.items;
-    const top = @min(state.list_view.scroll.top, items.len);
-    const visible = items[top..][0..@min(items.len - top, list.size.height)];
-    const rows = try ctx.arena.create(VisibleRows);
-    rows.* = .{ .model = model, .packages = try ctx.arena.dupe(*const Package, visible) };
-    const children = try ctx.arena.alloc(vxfw.SubSurface, 1);
-    children[0] = .{ .origin = .{ .row = 0, .col = 0 }, .surface = list };
-    return .{ .size = list.size, .children = children, .buffer = &.{}, .widget = .{ .userdata = rows, .drawFn = VisibleRows.draw, .eventHandler = VisibleRows.click } };
+    return @import("result_list.zig").widget(model, .packages).draw(ctx);
 }
 
 pub fn drawColumn(ctx: vxfw.DrawContext, buffer: []vaxis.Cell, col: u16, width: u16, value: []const u8, style: vaxis.Style) Allocator.Error!void {

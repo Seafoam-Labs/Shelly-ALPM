@@ -563,12 +563,27 @@ pub fn buildFlatpakDetails(ptr: *const anyopaque, index: usize, _: usize) ?vxfw.
     return .{ .userdata = @constCast(&self.flatpak_state.flatpak_rows.items[self.flatpak_state.flatpak_list.cursor]), .drawFn = flatpak_view.drawDetails };
 }
 
+pub fn selectRow(self: *Model, ctx: *vxfw.EventContext, identity: flatpak_view.Row) !void {
+    const state = &self.flatpak_state;
+    if (self.active != .flatpak or self.help_open or self.overlay != null or state.flatpak_category_open or state.flatpak_job != null) return;
+    for (state.flatpak_rows.items, 0..) |item, index| {
+        if (std.meta.eql(item, identity)) {
+            state.flatpak_list.cursor = @intCast(index);
+            state.flatpak_list_active = true;
+            try syncScreenshots(self, ctx);
+            try ctx.requestFocus(state.flatpak_field.widget());
+            ctx.consumeAndRedraw();
+            return;
+        }
+    }
+}
+
 pub fn flatpakView(self: *Model) flatpak_view.View {
     if (self.flatpak_state.flatpak_details_cursor == null or self.flatpak_state.flatpak_details_cursor.? != self.flatpak_state.flatpak_list.cursor) {
         self.flatpak_state.flatpak_details_scroll.scroll = .{};
         self.flatpak_state.flatpak_details_cursor = self.flatpak_state.flatpak_list.cursor;
     }
-    return .{ .list_percent = self.list_percent.flatpak, .images = screenshotView(self), .category = self.flatpak_state.flatpak_category, .category_button = if (!self.flatpak_state.flatpak_installed_only) &self.flatpak_state.flatpak_category_button else null, .category_list = &self.flatpak_state.flatpak_category_list, .category_open = self.flatpak_state.flatpak_category_open, .details_scroll = &self.flatpak_state.flatpak_details_scroll, .selected = if (self.flatpak_state.flatpak_job == null and self.flatpak_state.flatpak_list.cursor < self.flatpak_state.flatpak_rows.items.len) self.flatpak_state.flatpak_rows.items[self.flatpak_state.flatpak_list.cursor] else null, .list_active = self.flatpak_state.flatpak_list_active, .details_active = self.overlay != null and self.overlay.? == .flatpak, .help = if (self.help_open) &self.help_panel else null, .field = &self.flatpak_state.flatpak_field, .list = &self.flatpak_state.flatpak_list, .installed_only = self.flatpak_state.flatpak_installed_only, .loading = self.flatpak_state.flatpak_job != null, .checking_backend = self.flatpak_state.flatpak_probe_job != null, .backend_failure = self.flatpak_state.flatpak_probe_error, .failure = self.flatpak_state.flatpak_failure, .checked = if (self.flatpak_state.flatpak_installed_only) self.flatpak_state.flatpak_installed != null else self.flatpak_state.flatpak_catalog != null, .count = self.flatpak_state.flatpak_rows.items.len };
+    return .{ .result_list = @import("../views/result_list.zig").widget(self, .flatpak), .list_percent = self.list_percent.flatpak, .images = screenshotView(self), .category = self.flatpak_state.flatpak_category, .category_button = if (!self.flatpak_state.flatpak_installed_only) &self.flatpak_state.flatpak_category_button else null, .category_list = &self.flatpak_state.flatpak_category_list, .category_open = self.flatpak_state.flatpak_category_open, .details_scroll = &self.flatpak_state.flatpak_details_scroll, .selected = if (self.flatpak_state.flatpak_job == null and self.flatpak_state.flatpak_list.cursor < self.flatpak_state.flatpak_rows.items.len) self.flatpak_state.flatpak_rows.items[self.flatpak_state.flatpak_list.cursor] else null, .list_active = self.flatpak_state.flatpak_list_active, .details_active = self.overlay != null and self.overlay.? == .flatpak, .help = if (self.help_open) &self.help_panel else null, .field = &self.flatpak_state.flatpak_field, .list = &self.flatpak_state.flatpak_list, .installed_only = self.flatpak_state.flatpak_installed_only, .loading = self.flatpak_state.flatpak_job != null, .checking_backend = self.flatpak_state.flatpak_probe_job != null, .backend_failure = self.flatpak_state.flatpak_probe_error, .failure = self.flatpak_state.flatpak_failure, .checked = if (self.flatpak_state.flatpak_installed_only) self.flatpak_state.flatpak_installed != null else self.flatpak_state.flatpak_catalog != null, .count = self.flatpak_state.flatpak_rows.items.len };
 }
 
 pub fn openFlatpakInstallChoice(self: *Model, app: *const flatpak.AppstreamApp) !void {

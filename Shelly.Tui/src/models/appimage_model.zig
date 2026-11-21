@@ -309,6 +309,22 @@ fn drawDetails(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surf
     return text.draw(ctx);
 }
 
+pub fn selectRow(self: *Model, ctx: *vxfw.EventContext, identity: *const AppImage) !void {
+    const state = &self.appimage_state;
+    if (self.active != .appimage or self.help_open or self.overlay != null or state.source_open or state.install_form != null) return;
+    for (state.items(), 0..) |*item, index| {
+        if (item == identity) {
+            state.list_view.cursor = @intCast(index);
+            state.list_active = true;
+            state.details_active = false;
+            syncSelection(state);
+            try ctx.requestFocus(self.widget());
+            ctx.consumeAndRedraw();
+            return;
+        }
+    }
+}
+
 pub fn appImageView(self: *Model) AppImageView.View {
     const state = &self.appimage_state;
     syncSelection(state);
@@ -316,7 +332,7 @@ pub fn appImageView(self: *Model) AppImageView.View {
         state.details_scroll.scroll = .{};
         state.details_cursor = @as(u32, @intCast(state.cursor));
     }
-    return .{ .state = state, .list_percent = self.list_percent.appimage, .help = if (self.help_open) &self.help_panel else null };
+    return .{ .result_list = @import("../views/result_list.zig").widget(self, .appimage), .state = state, .list_percent = self.list_percent.appimage, .help = if (self.help_open) &self.help_panel else null };
 }
 
 fn syncSelection(state: *State) void {

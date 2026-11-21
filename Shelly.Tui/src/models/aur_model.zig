@@ -429,6 +429,20 @@ pub fn rebuildAurFilter(self: *Model) Allocator.Error!void {
     self.aur_state.aur_list.jumpToItem(0);
 }
 
+pub fn selectRow(self: *Model, ctx: *vxfw.EventContext, identity: *const AurPackage) !void {
+    const state = &self.aur_state;
+    if (self.active != .aur or self.help_open or self.overlay != null or state.aur_job != null) return;
+    for (state.aur_filtered.items, 0..) |item, index| {
+        if (item == identity) {
+            state.aur_list.cursor = @intCast(index);
+            state.aur_list_active = true;
+            try ctx.requestFocus(state.aur_field.widget());
+            ctx.consumeAndRedraw();
+            return;
+        }
+    }
+}
+
 pub fn aurView(self: *Model) aur_view.View {
     if (self.aur_state.aur_details_cursor == null or self.aur_state.aur_details_cursor.? != self.aur_state.aur_list.cursor) {
         self.aur_state.aur_details_scroll.scroll = .{};
@@ -436,6 +450,7 @@ pub fn aurView(self: *Model) aur_view.View {
         self.aur_state.aur_details_cursor = self.aur_state.aur_list.cursor;
     }
     return .{
+        .result_list = @import("../views/result_list.zig").widget(self, .aur),
         .list_percent = self.list_percent.aur,
         .aur_field = &self.aur_state.aur_field,
         .selected = selectedAur(self),

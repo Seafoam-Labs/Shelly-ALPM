@@ -15,6 +15,7 @@ const formatEpoch = @import("detail_format.zig").formatEpoch;
 /// Borrows display state and widgets owned by the application.
 /// Query execution and user-action handling remain in Model.
 pub const View = struct {
+    result_list: ?vxfw.Widget = null,
     list_percent: u8 = 40,
     installed_only: bool = false,
     aur_field: *vxfw.TextField,
@@ -60,7 +61,7 @@ pub const View = struct {
             const page_label = [_]Border.BorderLabel{.{ .text = if (!self.installed_only and self.catalog_page > 0) try std.fmt.allocPrint(arena, "Page {d}/{d}", .{ self.catalog_page, @max(1, self.catalog_total_pages) }) else "", .alignment = .top_left }};
             const content: vxfw.Widget = if (message != null) label.widget() else blk: {
                 const table = try arena.create(AurTable);
-                table.* = .{ .list = self.aur_list, .longest_name = self.longest_name };
+                table.* = .{ .content = self.result_list orelse self.aur_list.widget(), .list = self.aur_list, .longest_name = self.longest_name };
                 break :blk .{ .userdata = table, .drawFn = drawAurTable };
             };
             var border: Border = .{ .child = content, .labels = if (!self.installed_only and self.catalog_page > 0) &page_label else &.{}, .focused = self.list_active and !self.details_active };
@@ -138,6 +139,7 @@ const selected_width: u16 = "Selected".len;
 const minimum_table_width = marker_width + "Package".len + 1 + selected_width;
 
 const AurTable = struct {
+    content: vxfw.Widget,
     list: *vxfw.ListView,
     longest_name: u16,
 };
@@ -147,7 +149,7 @@ fn drawAurTable(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Sur
     const list = table.list;
     const size = ctx.max.size();
     const gutter: u16 = if (list.draw_cursor) 2 else 0;
-    if (size.height < 2 or size.width -| gutter < minimum_table_width) return list.draw(ctx);
+    if (size.height < 2 or size.width -| gutter < minimum_table_width) return table.content.draw(ctx);
 
     const preferred = @max(@as(u16, "Package".len), table.longest_name);
     const table_width = @min(size.width, preferred +| (gutter + minimum_table_width - "Package".len));
@@ -159,7 +161,7 @@ fn drawAurTable(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Sur
     try drawColumn(ctx, header.buffer, selected_col, selected_width, "Selected", styles.emphasis);
     const children = try ctx.arena.alloc(vxfw.SubSurface, 2);
     children[0] = .{ .origin = .{ .row = 0, .col = 0 }, .surface = header };
-    children[1] = .{ .origin = .{ .row = 1, .col = 0 }, .surface = try list.draw(ctx.withConstraints(.{}, .{ .width = table_width, .height = size.height - 1 })) };
+    children[1] = .{ .origin = .{ .row = 1, .col = 0 }, .surface = try table.content.draw(ctx.withConstraints(.{}, .{ .width = table_width, .height = size.height - 1 })) };
     return .{ .size = size, .widget = widget, .buffer = &.{}, .children = children };
 }
 

@@ -66,6 +66,7 @@ fn contains(text: []const u8, query: []const u8) bool {
 }
 
 pub const View = struct {
+    result_list: ?vxfw.Widget = null,
     list_percent: u8 = 40,
     images: ?@import("image_view.zig").View = null,
     category_button: ?*vxfw.Button = null,
@@ -132,7 +133,7 @@ pub const View = struct {
             const message = self.contentMessage();
             var label: vxfw.Text = .{ .text = message orelse "", .style = styles.secondary };
             const labels = [_]Border.BorderLabel{.{ .text = if (self.installed_only) "Installed Flatpaks" else "Flatpak applications", .alignment = .top_left }};
-            const content = if (message != null) label.widget() else self.list.widget();
+            const content = if (message != null) label.widget() else self.result_list orelse self.list.widget();
             var border: Border = .{ .child = content, .labels = &labels, .focused = self.list_active and !self.details_active };
             if (list_height > 0) try children.append(arena, .{
                 .origin = .{ .row = @intCast(list_row), .col = 0 },
