@@ -3760,13 +3760,16 @@ fn artifactsFromReport(
 
 fn packageNameForArtifact(path: []const u8, requested_names: []const []const u8) ?[]const u8 {
     const file_name = std.fs.path.basename(path);
-    var match: ?[]const u8 = null;
-    for (requested_names) |name| {
-        if (file_name.len <= name.len or file_name[name.len] != '-' or
-            !std.mem.startsWith(u8, file_name, name)) continue;
-        if (match == null or name.len > match.?.len) match = name;
-    }
-    return match;
+    for (requested_names) |name|
+        if (builder.isBuiltPackageFileFor(file_name, name)) return name;
+    return null;
+}
+
+test "AUR artifact labels use the exact package file name" {
+    const names: []const []const u8 = &.{ "foo-bar", "foo-bar-1" };
+    try std.testing.expectEqualStrings("foo-bar", packageNameForArtifact("/cache/foo-bar-1-1-any.pkg.tar.zst", names).?);
+    try std.testing.expectEqualStrings("foo-bar-1", packageNameForArtifact("/cache/foo-bar-1-2-3-any.pkg.tar.zst", names).?);
+    try std.testing.expect(packageNameForArtifact("/cache/foo-bar-debug-1-1-any.pkg.tar.zst", names) == null);
 }
 
 fn forwardBuildLine(data: ?*anyopaque, stream: builder.StreamKind, line: []const u8) void {
