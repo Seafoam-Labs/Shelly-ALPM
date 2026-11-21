@@ -471,19 +471,19 @@ msgid "Show Hidden"
 msgstr "Visa dolda"
 
 msgid "Show packages in the IgnorePkg list from pacman.conf"
-msgstr ""
+msgstr "Visa paket i IgnorePkg-listan från pacman.conf"
 
 msgid "Show Explicit Only"
-msgstr ""
+msgstr "Visa endast explicit installerade"
 
 msgid "Show only explicitly installed packages"
-msgstr ""
+msgstr "Visa endast paket som har installerats explicit"
 
 msgid "Show Dependency Only"
-msgstr ""
+msgstr "Visa endast beroenden"
 
 msgid "Show dependency packages only"
-msgstr ""
+msgstr "Visa endast beroendepaket"
 
 msgid "Recommended"
 msgstr "Rekommenderat"
@@ -492,25 +492,25 @@ msgid "Recommended Packages"
 msgstr "Rekommenderade paket"
 
 msgid "Curated suggestions from Seafoam Labs"
-msgstr ""
+msgstr "Utvalda förslag från Seafoam Labs"
 
 msgid "Refresh the recommended packages list from the network"
-msgstr ""
+msgstr "Uppdatera listan med rekommenderade paket från nätverket"
 
 msgid "Clear selection"
 msgstr "Rensa markering"
 
 msgid "Deselect all recommended packages"
-msgstr ""
+msgstr "Avmarkera alla rekommenderade paket"
 
 msgid "Install all selected packages in one transaction"
-msgstr ""
+msgstr "Installera alla valda paket i en transaktion"
 
 msgid "Loading recommendations…"
-msgstr ""
+msgstr "Läser in rekommendationer…"
 
 msgid "Check your internet connection and try again."
-msgstr ""
+msgstr "Kontrollera internetanslutningen och försök igen."
 
 msgid "Shelly Search"
 msgstr "Shelly-sökning"
@@ -519,39 +519,39 @@ msgid "Search"
 msgstr "Sök"
 
 msgid "Search across every enabled backend."
-msgstr ""
+msgstr "Sök i alla aktiverade bakändar."
 
 msgid "Search standard repositories, AUR and Flatpak"
-msgstr ""
+msgstr "Sök i vanliga förråd, AUR och Flatpak"
 
 msgid "Standard"
-msgstr ""
+msgstr "Standard"
 
 msgid "Show results from the configured ALPM sync databases"
-msgstr ""
+msgstr "Visa resultat från de konfigurerade ALPM-synkroniseringsdatabaserna"
 
 msgid "Show results from the Arch User Repository"
-msgstr ""
+msgstr "Visa resultat från Arch User Repository"
 
 msgid "Show results from the configured Flatpak remotes"
-msgstr ""
+msgstr "Visa resultat från de konfigurerade Flatpak-fjärrkällorna"
 
 msgid "Source"
-msgstr ""
+msgstr "Källa"
 
 msgid "Search everywhere"
-msgstr ""
+msgstr "Sök överallt"
 
 msgid ""
 "Search the standard repositories, the AUR, and Flatpak all at once. Type a "
 "name to begin."
-msgstr ""
+msgstr "Sök i vanliga förråd, AUR och Flatpak samtidigt. Skriv ett namn för att börja."
 
 msgid "Settings"
 msgstr "Inställningar"
 
 msgid "Make Shelly feel at home on your desktop."
-msgstr ""
+msgstr "Anpassa Shelly till din skrivbordsmiljö."
 
 msgid "General"
 msgstr "Allmänt"
@@ -566,7 +566,7 @@ msgid "Enable Flatpak"
 msgstr "Aktivera Flatpak"
 
 msgid "Enable Recommended"
-msgstr ""
+msgstr "Aktivera rekommenderade paket"
 
 msgid "Enable AppImage"
 msgstr "Aktivera AppImage"
@@ -575,28 +575,28 @@ msgid "Enable Tray Icon"
 msgstr "Aktivera systemfältsikon"
 
 msgid "Add Tray To Auto Start"
-msgstr ""
+msgstr "Starta systemfältsikonen automatiskt"
 
 msgid "Use weekly schedule"
-msgstr ""
+msgstr "Använd veckoschema"
 
 msgid "Run Tray as cron"
-msgstr ""
+msgstr "Kör systemfältsikonen via cron"
 
 msgid "Tray update with UI"
-msgstr ""
+msgstr "Uppdatera systemfältsikonen med användargränssnitt"
 
 msgid "Update terminal"
-msgstr ""
+msgstr "Uppdateringsterminal"
 
 msgid "Terminal command"
-msgstr ""
+msgstr "Terminalkommando"
 
 msgid "Custom update terminal command"
-msgstr ""
+msgstr "Anpassat terminalkommando för uppdatering"
 
 msgid "Tray Check Interval (Hours)"
-msgstr ""
+msgstr "Kontrollintervall för systemfältsikonen (timmar)"
 
 msgid "Weekly Schedule"
 msgstr "Veckoschema"
