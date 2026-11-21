@@ -2085,3 +2085,12 @@ msgstr ""
 
 msgid "Updates & Tray"
 msgstr ""
+
+msgid "Installed From"
+msgstr ""
+
+msgid "Available From"
+msgstr ""
+
+msgid "inferred"
+msgstr ""
