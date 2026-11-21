@@ -2929,7 +2929,8 @@ pub const Manager = struct {
             var remote = try self.runAsInvokingUser(&.{ "git", "-C", cache_path, "remote", "get-url", "origin" }, null, null);
             defer remote.deinit(self.allocator);
             if (remote.exit_code == 0 and std.mem.eql(u8, std.mem.trim(u8, remote.stdout, " \t\r\n"), expected_remote)) {
-                var pull = try self.runAsInvokingUser(&.{ "git", "-C", cache_path, "pull", "--ff-only" }, null, null);
+                // pull.rebase in the user's config would refuse a dirty checkout.
+                var pull = try self.runAsInvokingUser(&.{ "git", "-C", cache_path, "pull", "--ff-only", "--no-rebase" }, null, null);
                 defer pull.deinit(self.allocator);
                 clone_needed = pull.exit_code != 0;
             }
