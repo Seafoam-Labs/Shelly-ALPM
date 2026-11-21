@@ -1251,7 +1251,11 @@ pub const PackagePage = extern struct {
         freePendingLocalArchives(p.pending_local_archive_packages);
         p.pending_local_archive_packages = pending;
 
-        const argv = ShellyCommands.install(std.heap.c_allocator, paths.items) catch return;
+        const argv = ShellyCommands.install(std.heap.c_allocator, paths.items) catch {
+            freePendingLocalArchives(p.pending_local_archive_packages);
+            p.pending_local_archive_packages = &.{};
+            return;
+        };
         defer std.heap.c_allocator.free(argv);
 
         if (support.getWindow(ShellyWindow, self)) |win| {
@@ -1263,6 +1267,9 @@ pub const PackagePage = extern struct {
                 .privileged = true,
                 .ctx = self,
             });
+        } else {
+            freePendingLocalArchives(p.pending_local_archive_packages);
+            p.pending_local_archive_packages = &.{};
         }
     }
 
