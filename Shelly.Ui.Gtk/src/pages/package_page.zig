@@ -853,7 +853,7 @@ pub const PackagePage = extern struct {
         const cli = ShellyCli{ .allocator = alloc, .io = threaded.io() };
         const packages = if (p.local_only) blk: {
             const installed = cli.get_installed_packages() catch |err| {
-                std.debug.print("Could not load the installed-package list. {0s}\\n\\nTechnical details: {1s}\\n", .{ diagnostics.cause(err), @errorName(err) });
+                std.debug.print("Could not load the installed-package list. {0s}\n\nTechnical details: {1s}\n", .{ diagnostics.cause(err), @errorName(err) });
                 arena_ptr.deinit();
                 std.heap.c_allocator.destroy(arena_ptr);
                 return;
@@ -861,7 +861,7 @@ pub const PackagePage = extern struct {
             break :blk installed.value;
         } else blk: {
             const parsed = cli.get_packages(show_hidden) catch |err| {
-                std.debug.print("Could not load the standard-package list. {0s}\\n\\nTechnical details: {1s}\\n", .{ diagnostics.cause(err), @errorName(err) });
+                std.debug.print("Could not load the standard-package list. {0s}\n\nTechnical details: {1s}\n", .{ diagnostics.cause(err), @errorName(err) });
                 arena_ptr.deinit();
                 std.heap.c_allocator.destroy(arena_ptr);
                 return;
