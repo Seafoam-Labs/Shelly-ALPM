@@ -52,6 +52,11 @@ pub const TableColumn = struct {
     Hidden: bool = false,
 };
 
+pub const LocalArchivePackage = struct {
+    Name: []const u8 = "",
+    Version: []const u8 = "",
+};
+
 pub const ShellyConfig = struct {
     // General
     Culture: []const u8 = "",
@@ -81,6 +86,7 @@ pub const ShellyConfig = struct {
 
     // Package Page
     PackageInstallView: ViewType = .grid,
+    LocalArchivePackages: []const LocalArchivePackage = &.{},
 
     PackageManagementCascadeDelete: bool = true,
     PackageManagementRemoveConfigs: bool = false,
