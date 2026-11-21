@@ -75,8 +75,8 @@ pub fn resolve(self: *Model) commands.Context {
             context.mode = if (context.split_details) .details else if (self.packages_state.package_list_active) .packages else .search;
             context.installed_only = self.packages_state.installed_only;
             context.selected_count = self.packages_state.selected_packages.items.len;
-            for (self.packages_state.selected_packages.items) |name| for (self.packages_state.packages) |pkg| {
-                if (std.mem.eql(u8, name, pkg.Name)) {
+            for (self.packages_state.selected_packages.items) |selection| for (self.packages_state.packages) |pkg| {
+                if (selection.matches(pkg)) {
                     if (pkg.Installed) context.selected_installed += 1;
                     break;
                 }

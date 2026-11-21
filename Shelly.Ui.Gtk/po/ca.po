@@ -1950,3 +1950,12 @@ msgstr ""
 
 msgid "Atoll package update"
 msgstr ""
+
+msgid "Installed From"
+msgstr ""
+
+msgid "Available From"
+msgstr ""
+
+msgid "inferred"
+msgstr ""

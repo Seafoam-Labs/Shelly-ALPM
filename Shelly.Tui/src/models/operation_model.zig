@@ -15,6 +15,7 @@ const ShellyCli = shelly_cli.ShellyCli;
 const runtime = @import("../runtime.zig");
 const Package = @import("packages.zig").Package;
 const AurPackage = @import("packages.zig").AurPackage;
+const packageTarget = @import("packages.zig").packageTarget;
 
 const flatpak = @import("flatpak.zig");
 
@@ -384,12 +385,16 @@ pub fn openPackageBatchPrompt(self: *Model, action: shelly_operation.Action, bac
     var available_names: std.ArrayList([]const u8) = .empty;
     defer available_names.deinit(self.gpa);
     var excluded: usize = 0;
+    var target_arena = std.heap.ArenaAllocator.init(self.gpa);
+    defer target_arena.deinit();
+    var included_names: std.ArrayList([]const u8) = .empty;
+    defer included_names.deinit(self.gpa);
     const highlighted = packages_model.selectedPackage(self);
     for (packages) |pkg| {
         const included = if (include_all) true else if (self.packages_state.selected_packages.items.len > 0)
-            packages_model.packageMarked(self, pkg.Name)
+            packages_model.packageCopyMarked(self, pkg)
         else if (highlighted) |item|
-            std.mem.eql(u8, item.Name, pkg.Name)
+            std.mem.eql(u8, item.Name, pkg.Name) and std.mem.eql(u8, item.Repository, pkg.Repository)
         else
             false;
         if (!included) continue;
@@ -397,16 +402,19 @@ pub fn openPackageBatchPrompt(self: *Model, action: shelly_operation.Action, bac
             excluded += 1;
             continue;
         }
+        // removal takes the bare name. one copy per name: the first wins.
+        const target = if (action == .remove or backend != .standard) pkg.Name else try packageTarget(target_arena.allocator(), pkg);
         var duplicate = false;
-        for (targets.items) |target| {
-            if (std.mem.eql(u8, target, pkg.Name)) duplicate = true;
+        for (included_names.items) |existing| {
+            if (std.mem.eql(u8, existing, pkg.Name)) duplicate = true;
         }
         if (duplicate) continue;
-        try targets.append(self.gpa, pkg.Name);
+        try included_names.append(self.gpa, pkg.Name);
+        try targets.append(self.gpa, target);
         if (pkg.Installed) {
-            try installed_names.append(self.gpa, pkg.Name);
+            try installed_names.append(self.gpa, target);
         } else {
-            try available_names.append(self.gpa, pkg.Name);
+            try available_names.append(self.gpa, target);
         }
     }
     if (targets.items.len == 0) {
@@ -1004,7 +1012,7 @@ test "successful native and AUR installs and removals deselect both lists throug
                 model.packages_state.packages = &packages;
                 model.packages_state.loading = false;
                 try packages_model.rebuildFilter(model);
-                try model.packages_state.selected_packages.appendSlice(std.testing.allocator, &.{ "target", "other-native" });
+                try model.packages_state.selected_packages.appendSlice(std.testing.allocator, &.{ .{ .name = "target" }, .{ .name = "other-native" } });
                 model.packages_state.selected_list_view.item_count = 2;
                 model.packages_state.selected_list_view.jumpToItem(1);
                 var aur = [_]AurPackage{ .{ .Name = "target" }, .{ .Name = "other-aur" } };
@@ -1065,7 +1073,7 @@ test "cancelling native and AUR authentication or declining a review clears both
         model.packages_state.loading = false;
         try packages_model.rebuildFilter(model);
         try aur_model.rebuildAurFilter(model);
-        try model.packages_state.selected_packages.append(std.testing.allocator, "native");
+        try model.packages_state.selected_packages.append(std.testing.allocator, .{ .name = "native" });
         try aur_model.toggleAurSelection(model);
         if (backend == .standard) try packages_model.openNativePrompt(model, .remove) else try aur_model.openAurPrompt(model, .remove);
         var ctx: vxfw.EventContext = .{ .io = std.testing.io, .alloc = std.testing.allocator, .cmds = .empty };
@@ -1074,7 +1082,7 @@ test "cancelling native and AUR authentication or declining a review clears both
         try std.testing.expect(model.overlay == null);
         try std.testing.expectEqual(@as(usize, 0), model.packages_state.selected_packages.items.len);
         try std.testing.expectEqual(@as(usize, 0), model.aur_state.aur_selection.items.len);
-        try model.packages_state.selected_packages.append(std.testing.allocator, "native");
+        try model.packages_state.selected_packages.append(std.testing.allocator, .{ .name = "native" });
         try aur_model.toggleAurSelection(model);
         const job = try std.heap.page_allocator.create(shelly_operation.Operation);
         job.* = .{
@@ -1089,6 +1097,39 @@ test "cancelling native and AUR authentication or declining a review clears both
         try std.testing.expectEqual(@as(usize, 0), model.aur_state.aur_selection.items.len);
         try std.testing.expectEqual(@as(u32, 0), model.packages_state.selected_list_view.item_count.?);
     }
+}
+
+test "native install prompt names the selected repository copy" {
+    const model = try Model.init(std.testing.allocator);
+    defer model.deinit();
+    var packages = [_]Package{
+        .{ .Name = "foo", .Repository = "first" },
+        .{ .Name = "foo", .Repository = "second" },
+        .{ .Name = "bar", .Repository = "local", .Installed = true },
+    };
+    model.packages_state.packages = &packages;
+    model.packages_state.loading = false;
+    try packages_model.rebuildFilter(model);
+    try model.packages_state.selected_packages.append(std.testing.allocator, .{ .name = "foo", .repository = "second" });
+    try packages_model.openNativePrompt(model, .install);
+    const prompt = model.overlay.?.sudo;
+    try std.testing.expectEqual(@as(usize, 1), prompt.targets.len);
+    try std.testing.expectEqualStrings("second/foo", prompt.targets[0]);
+    try std.testing.expect(std.mem.indexOf(u8, prompt.review_text, "second/foo") != null);
+    closeOverlay(model);
+
+    model.packages_state.selected_packages.clearRetainingCapacity();
+    try model.packages_state.selected_packages.appendSlice(std.testing.allocator, &.{ .{ .name = "foo", .repository = "first" }, .{ .name = "foo", .repository = "second" } });
+    try packages_model.openNativePrompt(model, .install);
+    try std.testing.expectEqual(@as(usize, 1), model.overlay.?.sudo.targets.len);
+    try std.testing.expectEqualStrings("first/foo", model.overlay.?.sudo.targets[0]);
+    closeOverlay(model);
+
+    model.packages_state.selected_packages.clearRetainingCapacity();
+    try model.packages_state.selected_packages.append(std.testing.allocator, .{ .name = "bar", .repository = "local" });
+    try packages_model.openNativePrompt(model, .remove);
+    try std.testing.expectEqualStrings("bar", model.overlay.?.sudo.targets[0]);
+    closeOverlay(model);
 }
 
 test "AUR batch removal refresh failure and retry remain drawable and navigable" {
