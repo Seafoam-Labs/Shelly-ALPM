@@ -2,8 +2,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: shelly-ui 2.2.4.1\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-11-13 22:42-0500\n"
-"PO-Revision-Date: 2026-11-06 10:18+0100\n"
+"POT-Creation-Date: 2026-11-14 01:29-0300\n"
+"PO-Revision-Date: 2026-11-21 13:28+0100\n"
 "Last-Translator: Roxfr <roxfr-dev@outlook.com>\n"
 "Language-Team: French\n"
 "Language: fr\n"
@@ -28,11 +28,11 @@ msgid ""
 "way. Only enable this feature if you are comfortable in verifying the build "
 "scripts."
 msgstr ""
-"Le dépôt d'utilisateurs Arch contient des scripts de construction connus "
-"sous le nom de PKGBUILDs. Ces scripts sont téléversés par des utilisateurs "
-"et ne sont vérifiés ni contrôlés d'aucune manière. N'activez cette "
-"fonctionnalité que si vous êtes à l'aise avec la vérification des scripts de "
-"construction."
+"Le dépôt des utilisateurs d’Arch (AUR) contient des scripts de compilation "
+"appelés PKGBUILDs. Ces scripts sont publiés par les utilisateurs et ne font "
+"l’objet d’aucune vérification ni validation. Activez cette fonctionnalité "
+"uniquement si vous êtes en mesure de vérifier vous-même les scripts de "
+"compilation."
 
 msgid ""
 "<a href=\"https://www.seafoam-labs.org/shelly-alpm/docs/aur-safety/\">AUR "
@@ -127,7 +127,7 @@ msgid "AppImage"
 msgstr "AppImage"
 
 msgid "Install and integrate AppImage bundles."
-msgstr ""
+msgstr "Installer et intégrer des bundles AppImage."
 
 msgid "Search..."
 msgstr "Rechercher..."
@@ -222,6 +222,8 @@ msgstr "AUR"
 
 msgid "Build and install packages from the Arch User Repository."
 msgstr ""
+"Compiler et installer des paquets depuis le dépôt des utilisateurs d’Arch "
+"(AUR)."
 
 msgid "Search the AUR by name or keyword"
 msgstr "Rechercher dans l'AUR par nom ou mot-clé"
@@ -364,7 +366,7 @@ msgid "Flatpak"
 msgstr "Flatpak"
 
 msgid "Manage Flatpak applications and remotes."
-msgstr ""
+msgstr "Gérer les applications Flatpak et les dépôts distants."
 
 msgid "Search packages..."
 msgstr "Rechercher des paquets..."
@@ -451,7 +453,7 @@ msgid "Packages"
 msgstr "Paquets"
 
 msgid "Install and manage software on your system."
-msgstr ""
+msgstr "Installer et gérer les logiciels sur votre système."
 
 msgid "Package Group Filter"
 msgstr "Filtre des groupes de paquets"
@@ -532,24 +534,20 @@ msgstr "Désélectionner tous les paquets recommandés"
 msgid "Install all selected packages in one transaction"
 msgstr "Installer tous les paquets sélectionnés en une seule opération"
 
-#, fuzzy
 msgid "Loading recommendations…"
-msgstr "Chargement des paquets recommandés…"
+msgstr "Chargement des recommandations…"
 
-#, fuzzy
 msgid "Check your internet connection and try again."
-msgstr ""
-"Aucune recommandation trouvée. Vérifiez votre connexion Internet et "
-"réessayez."
+msgstr "Vérifiez votre connexion Internet et réessayez."
 
 msgid "Shelly Search"
 msgstr "Recherche Shelly"
 
 msgid "Search"
-msgstr ""
+msgstr "Rechercher"
 
 msgid "Search across every enabled backend."
-msgstr ""
+msgstr "Rechercher dans toutes les sources activées."
 
 msgid "Search standard repositories, AUR and Flatpak"
 msgstr "Rechercher dans les dépôts standards, l'AUR et Flatpak"
@@ -563,7 +561,7 @@ msgstr ""
 "configurées"
 
 msgid "Show results from the Arch User Repository"
-msgstr "Afficher les résultats de l'AUR"
+msgstr "Afficher les résultats du dépôt des utilisateurs d’Arch (AUR)"
 
 msgid "Show results from the configured Flatpak remotes"
 msgstr "Afficher les résultats des dépôts Flatpak configurés"
@@ -586,6 +584,8 @@ msgstr "Paramètres"
 
 msgid "Make Shelly feel at home on your desktop."
 msgstr ""
+"Personnalisez Shelly pour l’intégrer parfaitement à votre environnement de "
+"bureau."
 
 msgid "General"
 msgstr "Général"
@@ -621,13 +621,13 @@ msgid "Tray update with UI"
 msgstr "Mise à jour de la zone de notification avec l'interface"
 
 msgid "Update terminal"
-msgstr ""
+msgstr "Mettre à jour le terminal"
 
 msgid "Terminal command"
-msgstr ""
+msgstr "Commande du terminal"
 
 msgid "Custom update terminal command"
-msgstr ""
+msgstr "Commande personnalisée de mise à jour du terminal"
 
 msgid "Tray Check Interval (Hours)"
 msgstr "Intervalle de vérification de la zone de notification (heures)"
@@ -704,10 +704,10 @@ msgid "Navigation style"
 msgstr "Style de navigation"
 
 msgid "Theme"
-msgstr ""
+msgstr "Thème"
 
 msgid "Color variant"
-msgstr ""
+msgstr "Variante de couleur"
 
 msgid "Advanced"
 msgstr "Avancé"
@@ -723,6 +723,16 @@ msgstr "Activer la recherche Shelly"
 
 msgid "Enable Atoll Powered AUR"
 msgstr "Activer l'AUR propulsé par Atoll"
+
+msgid "Always Recheck AppImage Updates on Upgrade All"
+msgstr ""
+"Toujours rechercher les mises à jour des AppImages lors de l’utilisation de "
+"'Tout mettre à jour'"
+
+msgid "When off, Upgrade All runs only when the AppImage page shows updates."
+msgstr ""
+"Si cette option est désactivée, 'Tout mettre à jour' ne s'exécute que "
+"lorsque la page AppImage affiche des mises à jour."
 
 msgid "AppImage Install Path"
 msgstr "Chemin d'installation des AppImages"
@@ -752,16 +762,16 @@ msgid "Done"
 msgstr "Terminé"
 
 msgid "1 · Download"
-msgstr ""
+msgstr "1 · Télécharger"
 
 msgid "2 · Install"
-msgstr ""
+msgstr "2 · Installer"
 
 msgid "Update"
 msgstr "Mettre à jour"
 
 msgid "Updates"
-msgstr ""
+msgstr "Mises à jour"
 
 msgid "7 of 7 updates included"
 msgstr "7 mises à jour sur 7 incluses"
@@ -776,7 +786,7 @@ msgid "Check Again"
 msgstr "Vérifier à nouveau"
 
 msgid "Available updates"
-msgstr ""
+msgstr "Mises à jour disponibles"
 
 msgid "Checking for updates…"
 msgstr "Vérification des mises à jour…"
@@ -788,7 +798,7 @@ msgid "Could not check for updates."
 msgstr "Impossible de vérifier les mises à jour."
 
 msgid "Upgrading may require administrator authorization."
-msgstr ""
+msgstr "La mise à jour peut nécessiter une autorisation de l’administrateur."
 
 msgid "Upgrade"
 msgstr "Mettre à jour"
@@ -875,7 +885,7 @@ msgstr ""
 "toujours modifier ce choix ultérieurement dans les paramètres."
 
 msgid "Arch User Repository community packages"
-msgstr "Paquets communautaires de l'AUR"
+msgstr "Paquets communautaires du dépôt des utilisateurs d’Arch (AUR)"
 
 msgid "Sandboxed universal Linux applications"
 msgstr "Applications Linux universelles en environnement isolé"
@@ -1126,6 +1136,9 @@ msgstr "Seuls les fichiers .AppImage peuvent être installés"
 
 msgid "Installing AppImage"
 msgstr "Installation de l'AppImage"
+
+msgid "Could not read the AppImage update setting."
+msgstr "Impossible de lire le paramètre de mise à jour des AppImages."
 
 msgid "No AppImages need to be upgraded"
 msgstr "Aucune AppImage ne doit être mise à jour"
@@ -1696,16 +1709,16 @@ msgid "AUR enabled"
 msgstr "AUR activé"
 
 msgid "System GTK"
-msgstr ""
+msgstr "GTK système"
 
 msgid "Follow system"
-msgstr ""
+msgstr "Suivre le thème du système"
 
 msgid "Dark"
-msgstr ""
+msgstr "Sombre"
 
 msgid "Light"
-msgstr ""
+msgstr "Clair"
 
 msgid "System Default"
 msgstr "Valeur par défaut du système"
@@ -1753,10 +1766,10 @@ msgid "中文（简体）"
 msgstr "Chinois (simplifié)"
 
 msgid "Default (auto-detect)"
-msgstr ""
+msgstr "Par défaut (détection automatique)"
 
 msgid "Custom…"
-msgstr ""
+msgstr "Personnalisé…"
 
 msgid "Pending"
 msgstr "En attente"
@@ -1789,7 +1802,7 @@ msgid "Cancelled"
 msgstr "Annulé"
 
 msgid "Overall progress"
-msgstr ""
+msgstr "Progression globale"
 
 msgid "Could not start the requested operation."
 msgstr "Impossible de démarrer l'opération demandée."
@@ -1837,25 +1850,25 @@ msgid "Checking disk space"
 msgstr "Vérification de l'espace disque"
 
 msgid "Preparing transaction"
-msgstr ""
+msgstr "Préparation de la transaction"
 
 msgid "Downloading packages"
-msgstr ""
+msgstr "Téléchargement des paquets"
 
 msgid "about"
-msgstr ""
+msgstr "à propos"
 
 msgid "s left"
-msgstr ""
+msgstr "s restantes"
 
 msgid "packages downloaded"
-msgstr ""
+msgstr "paquets téléchargés"
 
 msgid "packages processed"
-msgstr ""
+msgstr "paquets traités"
 
 msgid "Completed"
-msgstr ""
+msgstr "Terminé"
 
 msgid "Transaction Completed"
 msgstr "Transaction terminée"
@@ -1902,7 +1915,7 @@ msgid "AUR package update"
 msgstr "Mise à jour des paquets AUR"
 
 msgid "Include this update"
-msgstr ""
+msgstr "Inclure cette mise à jour"
 
 msgid "Update this package"
 msgstr "Mettre à jour ce paquet"
@@ -1914,13 +1927,13 @@ msgid "Updates included"
 msgstr "Mises à jour incluses"
 
 msgid "No download required"
-msgstr ""
+msgstr "Aucun téléchargement nécessaire"
 
 msgid "Total download:"
-msgstr ""
+msgstr "Téléchargement total :"
 
 msgid "Upgrade Selected"
-msgstr ""
+msgstr "Mettre à jour la sélection"
 
 msgid "Upgrading packages"
 msgstr "Mise à jour des paquets"
@@ -1958,10 +1971,10 @@ msgid "Installing Flatpak and AppImage support"
 msgstr "Installation du support Flatpak et AppImage"
 
 msgid "BROWSE"
-msgstr ""
+msgstr "PARCOURIR"
 
 msgid "SYSTEM"
-msgstr ""
+msgstr "SYSTÈME"
 
 msgid "Expand sidebar"
 msgstr "Élargir la barre latérale"
@@ -1970,13 +1983,13 @@ msgid "Collapse sidebar"
 msgstr "Réduire la barre latérale"
 
 msgid "No recommendations found"
-msgstr ""
+msgstr "Aucune recommandation trouvée."
 
 msgid "System-wide"
-msgstr ""
+msgstr "À l’échelle du système"
 
 msgid "Current user"
-msgstr ""
+msgstr "Utilisateur actuel"
 
 msgid "Atoll package update"
-msgstr ""
+msgstr "Mise à jour des paquets Atoll"
