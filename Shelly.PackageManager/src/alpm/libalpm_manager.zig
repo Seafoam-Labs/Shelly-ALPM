@@ -2983,10 +2983,15 @@ pub const Manager = struct {
         switch (libalpm.QuestionType.fromQuestionType(question.*.type)) {
             .install_ignore => {
                 const q = libalpm.InstallIgnoredQuestion.from(data).?;
-                const text = std.fmt.bufPrint(&buf, "Install ignored package: {s}?", .{
-                    q.package().name() orelse "unknown",
-                }) catch "Install ignored package?";
-                q.confirm_install(self.askYesNo(manager_io, qtype, text));
+                const is_update = if (self.dispatcher.operation) |op| op.envelope.kind == .update else false;
+                if (is_update) {
+                    q.confirm_install(false);
+                } else {
+                    const text = std.fmt.bufPrint(&buf, "Install ignored package: {s}?", .{
+                        q.package().name() orelse "unknown",
+                    }) catch "Install ignored package?";
+                    q.confirm_install(self.askYesNo(manager_io, qtype, text));
+                }
             },
             .replace_package => {
                 const q = libalpm.ReplacePackageQuestion.from(data).?;

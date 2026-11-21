@@ -4331,3 +4331,111 @@ test "native libalpm hook override replaces compiled defaults including an empty
         }
     }
 }
+
+test "InitOptions.ignore_packages temporarily excludes packages from updates and foreign queries without persisting to disk" {
+    const allocator = testing.allocator;
+    var threaded: std.Io.Threaded = .init(allocator, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+
+    inline for (.{ Manager, @import("../rlpm/manager.zig").Manager }) |BackendManager| {
+        var workspace = try SyncTestWorkspace.create(allocator, io);
+        defer workspace.cleanup(allocator);
+
+        // Add local packages
+        try workspace.addLocalPackage(allocator, "ordinary", "1.0-1");
+        try workspace.addLocalPackage(allocator, "temp-ignored-repo", "1.0-1");
+        try workspace.addLocalPackage(allocator, "temp-ignored-foreign", "1.0-1");
+
+        // Write a sync database providing updates for "ordinary" and "temp-ignored-repo"
+        const sync_dir = try std.fmt.allocPrint(allocator, "{s}/sync", .{workspace.db_path});
+        defer allocator.free(sync_dir);
+        try std.Io.Dir.cwd().createDirPath(io, sync_dir);
+        const database_path = try std.fmt.allocPrint(allocator, "{s}/test-repo.db", .{sync_dir});
+        defer allocator.free(database_path);
+        {
+            var file = try std.Io.Dir.cwd().createFile(io, database_path, .{});
+            defer file.close(io);
+            var buffer: [4096]u8 = undefined;
+            var writer = file.writer(io, &buffer);
+            var archive: std.tar.Writer = .{ .underlying_writer = &writer.interface };
+            const repo_packages = [_]struct { name: []const u8 }{
+                .{ .name = "ordinary" },
+                .{ .name = "temp-ignored-repo" },
+            };
+            for (repo_packages) |package| {
+                const path = try std.fmt.allocPrint(allocator, "{s}-2.0-1/desc", .{package.name});
+                defer allocator.free(path);
+                const desc = try std.fmt.allocPrint(
+                    allocator,
+                    "%FILENAME%\n{s}-2.0-1-any.pkg.tar\n\n%NAME%\n{s}\n\n%VERSION%\n2.0-1\n\n%ARCH%\nany\n\n%CSIZE%\n10\n\n%ISIZE%\n20\n\n",
+                    .{ package.name, package.name },
+                );
+                defer allocator.free(desc);
+                try archive.writeFileBytes(path, desc, .{ .mode = 0o644 });
+            }
+            try archive.finishPedantically();
+            try writer.interface.flush();
+        }
+
+        // Clean pacman.conf without any IgnorePkg
+        const initial_config = try std.fmt.allocPrint(
+            allocator,
+            "[options]\nArchitecture = auto\nSigLevel = Never\nDBPath = {s}\n[test-repo]\nServer = https://example.invalid\nUsage = All\n",
+            .{workspace.db_path},
+        );
+        defer allocator.free(initial_config);
+        {
+            var config_file = try std.Io.Dir.cwd().createFile(io, workspace.config_path, .{});
+            defer config_file.close(io);
+            try config_file.writeStreamingAll(io, initial_config);
+        }
+
+        // Verify baseline without ignore: 2 updates available, 1 foreign package
+        {
+            const baseline_mgr = try BackendManager.init(allocator, testing.environ, .{
+                .config_path = workspace.config_path,
+            });
+            defer baseline_mgr.deinit();
+
+            const updates = try baseline_mgr.get_updates_available();
+            defer libalpm.OwnedPackageWithUpdate.deinitSlice(allocator, updates);
+            try testing.expectEqual(@as(usize, 2), updates.len);
+
+            const foreign = try baseline_mgr.get_foreign_packages();
+            defer libalpm.OwnedPackage.deinitSlice(allocator, foreign);
+            try testing.expectEqual(@as(usize, 1), foreign.len);
+            try testing.expectEqualStrings("temp-ignored-foreign", foreign[0].name().?);
+        }
+
+        // Initialize with temporary ignore_packages via InitOptions:
+        // "temp-ignored-repo" is ignored from updates, "temp-ignored-foreign" is ignored from foreign packages
+        {
+            const ignored_names = [_][]const u8{ "temp-ignored-repo", "temp-ignored-foreign" };
+            const mgr = try BackendManager.init(allocator, testing.environ, .{
+                .config_path = workspace.config_path,
+                .ignore_packages = &ignored_names,
+            });
+            defer mgr.deinit();
+
+            // get_updates_available only returns "ordinary"
+            const updates = try mgr.get_updates_available();
+            defer libalpm.OwnedPackageWithUpdate.deinitSlice(allocator, updates);
+            try testing.expectEqual(@as(usize, 1), updates.len);
+            try testing.expectEqualStrings("ordinary", updates[0].new_package.name_value);
+
+            // get_foreign_packages returns 0 because temp-ignored-foreign is ignored
+            const foreign = try mgr.get_foreign_packages();
+            defer libalpm.OwnedPackage.deinitSlice(allocator, foreign);
+            try testing.expectEqual(@as(usize, 0), foreign.len);
+        }
+
+        // Verify zero persistence: pacman.conf on disk remains byte-for-byte identical to initial_config
+        {
+            const current_config = try std.Io.Dir.cwd().readFileAlloc(io, workspace.config_path, allocator, .limited(4096));
+            defer allocator.free(current_config);
+            try testing.expectEqualStrings(initial_config, current_config);
+            try testing.expect(std.mem.indexOf(u8, current_config, "IgnorePkg") == null);
+        }
+    }
+}

@@ -214,6 +214,93 @@ fn prepareAllUpgradePlanWith(
     return .{ .has_updates = true, .proceed = proceed };
 }
 
+pub fn extractIgnoredPackages(
+    allocator: std.mem.Allocator,
+    invocation: *const parser.Invocation,
+) ![]const []const u8 {
+    var list: std.ArrayList([]const u8) = .empty;
+    errdefer list.deinit(allocator);
+
+    for (invocation.options) |option| {
+        if (!std.mem.eql(u8, option.name, "--ignore")) continue;
+        const value = option.value orelse continue;
+        var it = std.mem.splitScalar(u8, value, ',');
+        while (it.next()) |token| {
+            const trimmed = std.mem.trim(u8, token, " \t\r\n");
+            if (trimmed.len == 0) continue;
+            var duplicate = false;
+            for (list.items) |existing| {
+                if (std.mem.eql(u8, existing, trimmed)) {
+                    duplicate = true;
+                    break;
+                }
+            }
+            if (!duplicate) {
+                try list.append(allocator, trimmed);
+            }
+        }
+    }
+    return list.toOwnedSlice(allocator);
+}
+
+pub fn isPackageIgnored(package_name: []const u8, ignored_list: []const []const u8) bool {
+    for (ignored_list) |ignored| {
+        if (std.mem.eql(u8, package_name, ignored)) return true;
+    }
+    return false;
+}
+
+fn filterIgnoredUpdates(
+    allocator: std.mem.Allocator,
+    result: *list_updates.Result,
+    ignored: []const []const u8,
+) !void {
+    if (ignored.len == 0) return;
+    switch (result.*) {
+        .standard => |*set| {
+            var kept: usize = 0;
+            for (set.items) |item| {
+                const is_ignored = isPackageIgnored(item.name, ignored) or
+                    (item.old_name.len > 0 and isPackageIgnored(item.old_name, ignored));
+                if (!is_ignored) kept += 1;
+            }
+            if (kept < set.items.len) {
+                const target_allocator = if (set.arena) |a| a.allocator() else allocator;
+                const new_items = try target_allocator.alloc(list_updates.StandardUpdate, kept);
+                var idx: usize = 0;
+                for (set.items) |item| {
+                    const is_ignored = isPackageIgnored(item.name, ignored) or
+                        (item.old_name.len > 0 and isPackageIgnored(item.old_name, ignored));
+                    if (!is_ignored) {
+                        new_items[idx] = item;
+                        idx += 1;
+                    }
+                }
+                set.items = new_items;
+            }
+        },
+        .aur => |*set| {
+            var kept: usize = 0;
+            for (set.items) |item| {
+                if (!isPackageIgnored(item.name, ignored)) kept += 1;
+            }
+            if (kept < set.items.len) {
+                const target_allocator = if (set.arena) |a| a.allocator() else allocator;
+                const new_items = try target_allocator.alloc(list_updates.AurUpdate, kept);
+                var idx: usize = 0;
+                for (set.items) |item| {
+                    if (!isPackageIgnored(item.name, ignored)) {
+                        new_items[idx] = item;
+                        idx += 1;
+                    }
+                }
+                set.items = new_items;
+            }
+        },
+        else => {},
+    }
+}
+
 fn buildAllUpgradePlan(
     context: *runtime.RuntimeContext,
     invocation: *const parser.Invocation,
@@ -222,6 +309,9 @@ fn buildAllUpgradePlan(
 ) anyerror!UpgradePlan {
     var plan: UpgradePlan = .{};
     errdefer plan.deinit(context.allocator);
+
+    const ignored = try extractIgnoredPackages(context.allocator, invocation);
+    defer context.allocator.free(ignored);
 
     try context.stdout.writeAll("Building upgrade plan...\n");
     try context.stdout.flush();
@@ -250,6 +340,7 @@ fn buildAllUpgradePlan(
             try context.stdout.flush();
             continue;
         };
+        try filterIgnoredUpdates(context.allocator, &result, ignored);
         const count = list_updates.resultCount(&result);
         if (count == 0) {
             try context.stdout.print("{s}\n", .{noUpdatesMessage(backend)});
@@ -387,6 +478,9 @@ fn prepareStandardUpgradePreview(
     try context.stdout.writeAll("Preparing standard upgrade plan...\n");
     try context.stdout.flush();
 
+    const ignored = try extractIgnoredPackages(context.allocator, invocation);
+    defer context.allocator.free(ignored);
+
     const database_path = try xdg.previewDatabase(context);
     defer context.allocator.free(database_path);
     try std.Io.Dir.cwd().createDirPath(context.io, database_path);
@@ -394,7 +488,12 @@ fn prepareStandardUpgradePreview(
     const manager = try PackageManager.Manager.init(
         context.allocator,
         context.environ,
-        .{ .config_path = context.config_path, .use_root = false, .temp_root_path = database_path },
+        .{
+            .config_path = context.config_path,
+            .use_root = false,
+            .temp_root_path = database_path,
+            .ignore_packages = ignored,
+        },
     );
     defer manager.deinit();
     try manager.sync_for_update_check(false);
@@ -587,7 +686,15 @@ fn runStandard(
     invocation: *const parser.Invocation,
 ) !void {
     news.showBeforeUpgrade(context, invocation.globals.ui_mode);
-    const manager = try PackageManager.Manager.init(context.allocator, context.environ, .{ .config_path = context.config_path, .use_root = true, .operation_context = operation_context });
+    const ignored = try extractIgnoredPackages(context.allocator, invocation);
+    defer context.allocator.free(ignored);
+
+    const manager = try PackageManager.Manager.init(context.allocator, context.environ, .{
+        .config_path = context.config_path,
+        .use_root = true,
+        .operation_context = operation_context,
+        .ignore_packages = ignored,
+    });
     defer manager.deinit();
     manager.setOperationContext(operation_context);
     defer manager.setOperationContext(null);
@@ -669,6 +776,9 @@ fn runAur(
     // selecting the same native output path as the default.
     _ = optionEnabled(invocation, "--singlepane");
 
+    const ignored = try extractIgnoredPackages(context.allocator, invocation);
+    defer context.allocator.free(ignored);
+
     const executable = try std.process.executablePathAlloc(context.io, context.allocator);
     defer context.allocator.free(executable);
     const build_command = std.mem.trimEnd(u8, executable, " (deleted)");
@@ -680,6 +790,7 @@ fn runAur(
         .check = checkOverride(invocation),
         .sign = signOverride(invocation),
         .build_command = build_command,
+        .ignore_packages = ignored,
     });
     defer manager.deinit();
     manager.setOperationContext(operation_context);
@@ -687,7 +798,12 @@ fn runAur(
 
     const updates = try manager.getPackagesNeedingUpdate(!optionEnabled(invocation, "--no-devel"));
     defer PackageManager.aur.models.Update.deinitSlice(context.allocator, updates);
-    if (updates.len == 0) {
+
+    var count: usize = 0;
+    for (updates) |update| {
+        if (!isPackageIgnored(update.name, ignored)) count += 1;
+    }
+    if (count == 0) {
         emitStatus(operation_context, .aur, .success, "All AUR packages are up to date.");
         return;
     }
@@ -698,20 +814,24 @@ fn runAur(
         .aur,
         .information,
         "{d} AUR packages need updates:",
-        .{updates.len},
+        .{count},
     );
-    const package_names = try context.allocator.alloc([]const u8, updates.len);
+    const package_names = try context.allocator.alloc([]const u8, count);
     defer context.allocator.free(package_names);
-    for (updates, package_names) |update, *name| {
-        name.* = update.name;
-        try emitFormattedStatus(
-            context,
-            operation_context,
-            .aur,
-            .information,
-            "  {s}: {s} -> {s}",
-            .{ update.name, update.version, update.new_version },
-        );
+    var idx: usize = 0;
+    for (updates) |update| {
+        if (!isPackageIgnored(update.name, ignored)) {
+            package_names[idx] = update.name;
+            idx += 1;
+            try emitFormattedStatus(
+                context,
+                operation_context,
+                .aur,
+                .information,
+                "  {s}: {s} -> {s}",
+                .{ update.name, update.version, update.new_version },
+            );
+        }
     }
     try manager.updatePackages(package_names);
 }
@@ -2843,4 +2963,254 @@ test "Flatpak upgrade treats list_eol failures as advisory" {
 
     try rebaseEolFlatpaks(&context, &operations, &manager);
     try std.testing.expectEqual(@as(usize, 0), manager.rebase_called);
+}
+
+test "extractIgnoredPackages normalizes repeated and comma-separated ignore flags" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    const manifest = try spec.Manifest.load(a);
+
+    // Test repeated, comma-separated, leading/trailing whitespace, empty segments, duplicates
+    const outcome = try parser.parse(a, &manifest, &.{
+        "upgrade",
+        "all",
+        "--ignore",
+        "  pkg-a , pkg-b , , ",
+        "--ignore",
+        "pkg-c,pkg-a",
+        "--ignore",
+        "pkg-d",
+    });
+    try std.testing.expect(outcome == .dispatch);
+
+    const ignored = try extractIgnoredPackages(a, &outcome.dispatch);
+    defer a.free(ignored);
+
+    try std.testing.expectEqual(@as(usize, 4), ignored.len);
+    try std.testing.expectEqualStrings("pkg-a", ignored[0]);
+    try std.testing.expectEqualStrings("pkg-b", ignored[1]);
+    try std.testing.expectEqualStrings("pkg-c", ignored[2]);
+    try std.testing.expectEqualStrings("pkg-d", ignored[3]);
+}
+
+test "upgrade plan excludes ignored packages from preview and download totals" {
+    var tc: test_support.TestContext = .{};
+    tc.init();
+    defer tc.deinit();
+    const manifest = try spec.Manifest.load(tc.arena.allocator());
+
+    const Capture = struct {
+        fn collect(
+            _: @This(),
+            _: *runtime.RuntimeContext,
+            backend: Backend,
+            _: *const parser.Invocation,
+        ) !list_updates.Result {
+            if (backend == .standard) {
+                return .{ .standard = .{ .items = &.{
+                    .{
+                        .name = "spandsp",
+                        .current_version = "0.0.6-7",
+                        .new_version = "3.1.1-1",
+                        .download_size = 500,
+                        .size_difference = 100,
+                        .description = "dsp lib",
+                        .url = "",
+                        .repository = "extra",
+                        .installed_size = 1000,
+                        .depends = &.{},
+                        .optional_depends = &.{},
+                        .licenses = &.{},
+                        .provides = &.{},
+                        .conflicts = &.{},
+                        .groups = &.{},
+                    },
+                    .{
+                        .name = "linux",
+                        .current_version = "6.6.1",
+                        .new_version = "6.6.2",
+                        .download_size = 1500,
+                        .size_difference = 200,
+                        .description = "kernel",
+                        .url = "",
+                        .repository = "core",
+                        .installed_size = 5000,
+                        .depends = &.{},
+                        .optional_depends = &.{},
+                        .licenses = &.{},
+                        .provides = &.{},
+                        .conflicts = &.{},
+                        .groups = &.{},
+                    },
+                } } };
+            }
+            if (backend == .aur) {
+                return .{ .aur = .{ .items = &.{
+                    .{
+                        .name = "broken-aur",
+                        .version = "1.0",
+                        .new_version = "2.0",
+                        .download_size = 100,
+                        .url = "",
+                        .package_base = "broken-aur",
+                        .description = "aur pkg",
+                    },
+                    .{
+                        .name = "valid-aur",
+                        .version = "1.0",
+                        .new_version = "2.0",
+                        .download_size = 200,
+                        .url = "",
+                        .package_base = "valid-aur",
+                        .description = "aur pkg",
+                    },
+                } } };
+            }
+            return .{ .appimage = .{ .items = &.{} } };
+        }
+    };
+    const collector = Capture{};
+
+    // Ignore spandsp and broken-aur
+    const outcome = try parser.parse(tc.arena.allocator(), &manifest, &.{
+        "upgrade",
+        "all",
+        "--ignore",
+        "spandsp,broken-aur",
+        "--no-flatpak",
+        "--no-appimage",
+        "--no-confirm",
+    });
+    try std.testing.expect(outcome == .dispatch);
+
+    const preview = try prepareAllUpgradePreviewWithCollector(
+        &tc.context,
+        &outcome.dispatch,
+        collector,
+    );
+    try std.testing.expect(preview.has_updates);
+    try std.testing.expect(preview.proceed);
+
+    const rendered = tc.stdout.writer.buffered();
+    // spandsp must be omitted
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "spandsp") == null);
+    // linux must be present
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "Repository (1):") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "linux") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "6.6.2") != null);
+    // broken-aur must be omitted
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "broken-aur") == null);
+    // valid-aur must be present
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "valid-aur: 1.0 -> 2.0") != null);
+}
+
+test "upgrade plan reports everything up to date when all updates are ignored" {
+    var tc: test_support.TestContext = .{};
+    tc.init();
+    defer tc.deinit();
+    const manifest = try spec.Manifest.load(tc.arena.allocator());
+
+    const Capture = struct {
+        fn collect(
+            _: @This(),
+            _: *runtime.RuntimeContext,
+            backend: Backend,
+            _: *const parser.Invocation,
+        ) !list_updates.Result {
+            if (backend == .standard) {
+                return .{ .standard = .{ .items = &.{
+                    .{
+                        .name = "faulty-pkg",
+                        .current_version = "1.0",
+                        .new_version = "2.0",
+                        .download_size = 100,
+                        .size_difference = 50,
+                        .description = "",
+                        .url = "",
+                        .repository = "extra",
+                        .installed_size = 200,
+                        .depends = &.{},
+                        .optional_depends = &.{},
+                        .licenses = &.{},
+                        .provides = &.{},
+                        .conflicts = &.{},
+                        .groups = &.{},
+                    },
+                } } };
+            }
+            return .{ .aur = .{ .items = &.{} } };
+        }
+    };
+    const collector = Capture{};
+
+    const outcome = try parser.parse(tc.arena.allocator(), &manifest, &.{
+        "upgrade",
+        "all",
+        "--ignore",
+        "faulty-pkg",
+        "--no-aur",
+        "--no-flatpak",
+        "--no-appimage",
+    });
+    try std.testing.expect(outcome == .dispatch);
+
+    const preview = try prepareAllUpgradePreviewWithCollector(
+        &tc.context,
+        &outcome.dispatch,
+        collector,
+    );
+    // Everything was ignored: no updates left to perform
+    try std.testing.expect(!preview.has_updates);
+    try std.testing.expect(!preview.proceed);
+
+    const rendered = tc.stdout.writer.buffered();
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "Everything is up to date.") != null);
+}
+
+test "elevatedUpgradeArguments preserves --ignore flags and arguments across elevation" {
+    var tc: test_support.TestContext = .{};
+    tc.init();
+    defer tc.deinit();
+    const manifest = try spec.Manifest.load(tc.arena.allocator());
+
+    const outcome = try parser.parse(tc.arena.allocator(), &manifest, &.{
+        "upgrade",
+        "all",
+        "--ignore",
+        "pkg1,pkg2",
+        "--ignore",
+        "pkg3",
+    });
+    try std.testing.expect(outcome == .dispatch);
+
+    const elevated_args = try elevatedUpgradeArguments(&tc.context, &outcome.dispatch);
+    defer tc.context.allocator.free(elevated_args);
+
+    // Verify --ignore tokens were preserved in the arguments list
+    var found_first_ignore = false;
+    var found_first_value = false;
+    var found_second_ignore = false;
+    var found_second_value = false;
+
+    for (elevated_args, 0..) |arg, idx| {
+        if (std.mem.eql(u8, arg, "--ignore")) {
+            if (!found_first_ignore) {
+                found_first_ignore = true;
+                if (idx + 1 < elevated_args.len and std.mem.eql(u8, elevated_args[idx + 1], "pkg1,pkg2")) {
+                    found_first_value = true;
+                }
+            } else {
+                found_second_ignore = true;
+                if (idx + 1 < elevated_args.len and std.mem.eql(u8, elevated_args[idx + 1], "pkg3")) {
+                    found_second_value = true;
+                }
+            }
+        }
+    }
+
+    try std.testing.expect(found_first_ignore);
+    try std.testing.expect(found_first_value);
+    try std.testing.expect(found_second_ignore);
+    try std.testing.expect(found_second_value);
 }

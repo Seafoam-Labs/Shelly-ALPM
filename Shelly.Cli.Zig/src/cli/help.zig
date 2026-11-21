@@ -738,9 +738,37 @@ test "upgrade action help documents every backend and its actual modifiers" {
     try std.testing.expect(std.mem.indexOf(u8, rendered, "-Uh") != null);
     for ([_][]const u8{ "[shortcode: -Us]", "[shortcode: -Ux]", "[shortcode: -Ui]", "[shortcode: -Ua]", "[shortcode: -Uf]" }) |needle|
         try std.testing.expect(std.mem.indexOf(u8, rendered, needle) != null);
-    for ([_][]const u8{ "--all", "--no-repo", "--no-aur", "--no-flatpak", "--no-appimage", "--check", "--singlepane" }) |needle|
+    for ([_][]const u8{ "--all", "--no-repo", "--no-aur", "--no-flatpak", "--no-appimage", "--check", "--singlepane", "--ignore" }) |needle|
         try std.testing.expect(std.mem.indexOf(u8, rendered, needle) != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "Implementation:") == null);
+}
+
+test "upgrade help documents --ignore under shared modifiers and individual subcommands" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    const manifest = try spec.Manifest.load(a);
+
+    // shelly upgrade --help includes --ignore <ignore> under Shared:
+    {
+        const cmd = manifest.findByPath("shelly upgrade").?;
+        var output = std.Io.Writer.Allocating.init(std.testing.allocator);
+        defer output.deinit();
+        try render(a, &manifest, cmd, &output.writer);
+        const rendered = output.writer.buffered();
+        try std.testing.expect(std.mem.indexOf(u8, rendered, "--ignore <ignore>") != null);
+        try std.testing.expect(std.mem.indexOf(u8, rendered, "[types: standard, all, aur]") != null);
+    }
+
+    // individual subcommands all document --ignore
+    for ([_][]const u8{ "shelly upgrade standard", "shelly upgrade all", "shelly upgrade aur" }) |path| {
+        const cmd = manifest.findByPath(path).?;
+        var output = std.Io.Writer.Allocating.init(std.testing.allocator);
+        defer output.deinit();
+        try render(a, &manifest, cmd, &output.writer);
+        const rendered = output.writer.buffered();
+        try std.testing.expect(std.mem.indexOf(u8, rendered, "--ignore") != null);
+    }
 }
 
 test "update action help documents targeted native backends and shortcodes" {
