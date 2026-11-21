@@ -64,6 +64,30 @@ pub fn repositoryPackageList(allocator: std.mem.Allocator, available: []const Pa
     return packages;
 }
 
+/// Mark packages returned by the local ALPM database query as installed.
+/// The CLI's -Ls JSON does not set the UI-only Installed/Explicit flags.
+pub fn markLocalPackagesInstalled(packages: []Package) []Package {
+    for (packages) |*pkg| {
+        pkg.Installed = true;
+        pkg.Explicit = std.mem.eql(u8, pkg.InstallReason, "Explicit");
+    }
+    return packages;
+}
+
+test "local package list marks all ALPM database entries installed" {
+    var packages = [_]Package{
+        .{ .Name = "explicit-pkg", .InstallReason = "Explicit" },
+        .{ .Name = "dependency-pkg", .InstallReason = "Dependency" },
+    };
+
+    _ = markLocalPackagesInstalled(&packages);
+
+    try std.testing.expect(packages[0].Installed);
+    try std.testing.expect(packages[0].Explicit);
+    try std.testing.expect(packages[1].Installed);
+    try std.testing.expect(!packages[1].Explicit);
+}
+
 test "repository package list excludes foreign and hidden installed packages" {
     const available = [_]Package{
         .{ .Name = "editor", .Repository = "extra", .Version = "2.0" },

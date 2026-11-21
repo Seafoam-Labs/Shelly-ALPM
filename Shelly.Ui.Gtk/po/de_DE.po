@@ -1953,3 +1953,30 @@ msgstr ""
 
 msgid "Atoll package update"
 msgstr ""
+
+msgid "Local"
+msgstr "Lokal"
+
+msgid "Install one or more local Arch package archives"
+msgstr "Ein oder mehrere lokale Arch-Paketarchive installieren"
+
+msgid "Install Local Packages…"
+msgstr "Lokale Pakete installieren…"
+
+msgid "Foreign"
+msgstr "Fremd"
+
+msgid "Local Archives"
+msgstr "Lokale Archive"
+
+msgid "Show only packages installed from local package archives through Shelly"
+msgstr "Nur Pakete anzeigen, die über Shelly aus lokalen Paketarchiven installiert wurden"
+
+msgid "Choose local Arch packages"
+msgstr "Lokale Arch-Pakete auswählen"
+
+msgid "Arch package archives"
+msgstr "Arch-Paketarchive"
+
+msgid "Installing local Arch packages"
+msgstr "Lokale Arch-Pakete werden installiert"

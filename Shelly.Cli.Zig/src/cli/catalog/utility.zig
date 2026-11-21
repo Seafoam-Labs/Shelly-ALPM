@@ -14,6 +14,7 @@ pub const variants = [_]types.Variant{
             flag("--fix-permissions", &.{"-f"}, "Restore the invoking user's ownership of Shelly's configuration, cache, and data directories"),
             flag("--repair-db", &.{"-r"}, "Remove stale database locks from the system database and the invoking user's update-check cache"),
             flag("--docs", &.{"-d"}, "Write Markdown CLI reference documentation to standard output"),
+            stringOption("--archive-info", &.{}, "Read package name and version from a local Arch package archive; repeat for multiple archives", false),
             .{
                 .name = "--completions",
                 .aliases = &.{"-c"},
