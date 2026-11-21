@@ -717,6 +717,14 @@ Document any known issues that are being tracked:
 - [ ] Round-trip Theme Shelly → System colors → Shelly several times (also with dialogs or
   popovers open): no crash, and the brand headerbar with circular window controls returns
   each time (headerbar is kept alive across titlebar swaps).
+- [ ] Settings → Look & Feel → Use System Title Bar on, then restart Shelly: the brand
+  headerbar is gone. On KDE Plasma or Hyprland the compositor draws the title bar (Hyprland
+  without decorations or a bar plugin shows none); on GNOME GTK's default header bar appears
+  with the desktop's button layout. Toggling the switch leaves the open window unchanged,
+  switching it off and restarting brings the brand headerbar back, and changing Theme or
+  Color variant leaves the choice in place. On KDE Plasma or Hyprland the main window with
+  the setting on, and the PKGBUILD review and preview windows always, show only the
+  compositor's corner rounding, with no second rounding inside it.
 - [ ] Neither mode loads the desktop GTK theme's widget styles: set any third-party,
   dark-only or high-contrast GTK theme (user or system priority) and the built-in design
   still renders exactly as authored. Shelly mode shows no foreign colors in any widget.
