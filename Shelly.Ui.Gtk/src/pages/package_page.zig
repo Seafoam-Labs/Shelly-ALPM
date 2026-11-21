@@ -858,7 +858,7 @@ pub const PackagePage = extern struct {
                 std.heap.c_allocator.destroy(arena_ptr);
                 return;
             };
-            break :blk installed.value;
+            break :blk @import("../models/packages.zig").markLocalPackagesInstalled(installed.value);
         } else blk: {
             const parsed = cli.get_packages(show_hidden) catch |err| {
                 std.debug.print("Could not load the standard-package list. {0s}\n\nTechnical details: {1s}\n", .{ diagnostics.cause(err), @errorName(err) });
