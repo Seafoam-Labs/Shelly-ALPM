@@ -205,6 +205,15 @@ pub fn build(b: *std.Build) void {
 
     const run_cmd = b.addRunArtifact(exe);
     run_cmd.step.dependOn(b.getInstallStep());
+
+    // Compile gettext catalogs into zig-out for local "zig build run".
+    // Packaged installations continue to use /usr/share/locale.
+    const local_translations = b.addSystemCommand(&.{
+        "bash",
+        b.pathFromRoot("scripts/compile-local-translations.sh"),
+    });
+    run_cmd.step.dependOn(&local_translations.step);
+    run_cmd.setEnvironmentVariable("SHELLY_LOCALE_DIR", b.pathFromRoot("zig-out/share/locale"));
     run_cmd.addPassthruArgs();
 
     const run_step = b.step("run", "Run the app");
