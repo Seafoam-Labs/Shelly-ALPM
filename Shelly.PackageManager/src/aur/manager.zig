@@ -2159,13 +2159,22 @@ pub const Manager = struct {
         requested_names: []const []const u8,
         historical: bool,
     ) ![]package_builder.BuildArtifact {
-        return self.buildPreparedPackageImpl(prepared, requested_names, historical) catch |err| {
+        const artifacts = self.buildPreparedPackageImpl(prepared, requested_names, historical) catch |err| {
             try self.checkCancelled();
             if (err == error.PkgbuildReviewDeclined) {
                 if (self.upgrade_reviews) |reviews| try reviews.decline(prepared.package_base);
             }
             return err;
         };
+        // an empty result keeps its own message. a partial one would install
+        // fewer packages than requested and still report success.
+        if (artifacts.len > 0) for (requested_names) |name| {
+            if (!artifactsContain(artifacts, name)) {
+                package_builder.deinitArtifacts(self.allocator, artifacts);
+                return error.RequestedPackageNotBuilt;
+            }
+        };
+        return artifacts;
     }
 
     fn buildPreparedPackageImpl(
@@ -3658,6 +3667,7 @@ fn buildFailureReason(err: anyerror) []const u8 {
         error.InvokingUserUnavailable => "Could not identify a regular user to run the build. Start Shelly from your regular user session and allow Shelly to request administrator privileges when needed.",
         error.ReviewedPkgbuildChanged, error.ReviewedCheckoutChanged => "The reviewed checkout or PKGBUILD inputs changed before the build started. Review the current checkout and source files again, then restart the build.",
         error.Cancelled => "Operation cancelled.",
+        error.RequestedPackageNotBuilt => "The build did not produce every requested package from this package base. Check the package() functions and supported architectures in the build details.",
         else => "Could not build the requested package. See the build details for the failed stage and command output.",
     };
 }
@@ -3699,6 +3709,12 @@ fn artifactPaths(
     const paths = try allocator.alloc([]const u8, artifacts.len);
     for (artifacts, paths) |artifact, *path| path.* = artifact.path;
     return paths;
+}
+
+fn artifactsContain(artifacts: []const package_builder.BuildArtifact, package_name: []const u8) bool {
+    for (artifacts) |artifact|
+        if (std.mem.eql(u8, artifact.package_name, package_name)) return true;
+    return false;
 }
 
 fn artifactsFromPaths(
@@ -4425,6 +4441,30 @@ test "AUR build preparation removes old builds but keeps package sources" {
         defer allocator.free(path);
         try std.testing.expectError(error.FileNotFound, std.Io.Dir.cwd().access(io, path, .{}));
     }
+}
+
+test "AUR builds fail when a requested split package is missing" {
+    const allocator = std.testing.allocator;
+    const io = std.testing.io;
+    var paths = try createAurManagerFixturePaths(allocator, io);
+    defer paths.deinit(allocator);
+    try createAurFixtureRepository(allocator, io, paths.remote_root, "demo", null);
+    var manager = try initFixtureAurManager(allocator, &paths, paths.remote_root);
+    defer manager.deinit();
+    _ = try manager.cachePkgbase("demo", "demo");
+    const Approval = struct {
+        fn answer(_: ?*anyopaque, _: PkgbuildDiffRequest) bool {
+            return true;
+        }
+    };
+    manager.setPkgbuildApprovalHandler(.{ .function = Approval.answer });
+    var prepared = try manager.preparePackageForBuild("demo", null);
+    defer prepared.deinit(allocator);
+    const command_path = try std.fs.path.join(allocator, &.{ paths.root, "fake-makepkg" });
+    defer allocator.free(command_path);
+    try writeFixtureFile(io, command_path, "#!/bin/sh\n: > demo-1-1-any.pkg.tar.zst\n", true);
+    manager.makepkg_command = try allocator.dupe(u8, command_path);
+    try std.testing.expectError(error.RequestedPackageNotBuilt, manager.buildPreparedPackage(&prepared, &.{ "demo", "demo-docs" }, false));
 }
 
 test "AUR command builds install only reported artifacts, not downloaded package sources" {
