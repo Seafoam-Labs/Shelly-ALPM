@@ -34,6 +34,7 @@ pub const Mouse = struct {
     pub const selectPath = @import("models/appimage_model.zig").activateInstallPath;
     pub const activateSourceControl = @import("models/appimage_model.zig").activateSourceControl;
     pub const movePath = @import("models/appimage_model.zig").moveInstallSelection;
+    pub const closePkgbuildPreview = @import("models/operation_model.zig").onPreviewBack;
     pub const previewPkgbuild = @import("models/aur_model.zig").onAurPreviewClick;
     pub const previousScreenshot = @import("models/flatpak_model.zig").onPreviousScreenshot;
     pub const nextScreenshot = @import("models/flatpak_model.zig").onNextScreenshot;

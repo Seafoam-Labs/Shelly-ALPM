@@ -312,6 +312,7 @@ pub const Document = struct {
 pub const Action = enum { close, retry, approve, decline, toggle_wrap };
 
 pub const View = struct {
+    back: ?*vxfw.Button = null,
     name: []const u8,
     scroll: *vxfw.ScrollView,
     loading: bool,
@@ -363,6 +364,7 @@ pub const View = struct {
         const width = size.width;
         const height = size.height;
         if (width < 12 or height < 5) {
+            if (self.back) |back| return drawBack(back, ctx);
             var small: vxfw.Text = .{ .text = "Enlarge the pane to view this content." };
             return small.draw(ctx);
         }
@@ -370,8 +372,13 @@ pub const View = struct {
         const inner_height = height - 2;
         const note_text = if (self.loading) "" else if (self.answer_error.len > 0) self.answer_error else self.scan_status;
         const note_height: u16 = if (note_text.len > 0) 1 else 0;
-        const body_height = inner_height -| note_height;
+        const body_start: u16 = @intFromBool(self.back != null);
+        const body_height = inner_height - body_start - note_height;
         var children: std.ArrayList(vxfw.SubSurface) = .empty;
+        if (self.back) |back| try children.append(ctx.arena, .{
+            .origin = .{ .row = 0, .col = 0 },
+            .surface = try drawBack(back, ctx.withConstraints(.{}, .{ .width = inner_width, .height = 1 })),
+        });
         if (self.loading or self.failure != null) {
             var text: vxfw.Text = .{ .text = if (self.failure) |err|
                 try std.fmt.allocPrint(ctx.arena, "Could not load PKGBUILD preview ({s}).", .{@errorName(err)})
@@ -380,27 +387,27 @@ pub const View = struct {
             else
                 try std.fmt.allocPrint(ctx.arena, "Fetching PKGBUILD for {f}…", .{@import("diagnostics").safe(self.name)}) };
             try children.append(ctx.arena, .{
-                .origin = .{ .row = 0, .col = 0 },
+                .origin = .{ .row = body_start, .col = 0 },
                 .surface = try text.draw(ctx.withConstraints(.{}, .{ .width = inner_width, .height = body_height })),
             });
         } else if (self.choices and self.choice_list != null) {
             var prompt: vxfw.Text = .{ .text = try std.fmt.allocPrint(ctx.arena, "{f}", .{@import("diagnostics").safe(self.choice_prompt)}), .softwrap = true };
             const prompt_surface = try prompt.draw(ctx.withConstraints(.{}, .{ .width = inner_width, .height = body_height -| 1 }));
-            try children.append(ctx.arena, .{ .origin = .{ .row = 0, .col = 0 }, .surface = prompt_surface });
+            try children.append(ctx.arena, .{ .origin = .{ .row = body_start, .col = 0 }, .surface = prompt_surface });
             try children.append(ctx.arena, .{
-                .origin = .{ .row = @intCast(prompt_surface.size.height), .col = 0 },
+                .origin = .{ .row = @intCast(body_start + prompt_surface.size.height), .col = 0 },
                 .surface = try self.choice_list.?.draw(ctx.withConstraints(.{}, .{ .width = inner_width, .height = body_height -| prompt_surface.size.height })),
             });
         } else {
             try children.append(ctx.arena, .{
-                .origin = .{ .row = 0, .col = 0 },
+                .origin = .{ .row = body_start, .col = 0 },
                 .surface = try self.scroll.draw(ctx.withConstraints(.{}, .{ .width = inner_width, .height = body_height })),
             });
         }
         if (note_height > 0) {
             var note: vxfw.Text = .{ .text = note_text, .softwrap = false };
             try children.append(ctx.arena, .{
-                .origin = .{ .row = @intCast(body_height), .col = 0 },
+                .origin = .{ .row = @intCast(body_start + body_height), .col = 0 },
                 .surface = try note.draw(ctx.withConstraints(.{}, .{ .width = inner_width, .height = note_height })),
             });
         }
@@ -425,6 +432,22 @@ pub const View = struct {
         return surface;
     }
 };
+
+fn drawBack(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
+    const button: *vxfw.Button = @ptrCast(@alignCast(ptr));
+    const bounds: vxfw.Size = .{ .width = @min(ctx.max.size().width, 6), .height = @min(ctx.max.size().height, 1) };
+    var surface = try button.draw(ctx.withConstraints(bounds, .{ .width = bounds.width, .height = bounds.height }));
+    surface.widget = .{ .userdata = button, .drawFn = drawBack, .eventHandler = backEvent };
+    return surface;
+}
+
+fn backEvent(ptr: *anyopaque, ctx: *vxfw.EventContext, event: vxfw.Event) anyerror!void {
+    const button: *vxfw.Button = @ptrCast(@alignCast(ptr));
+    const consumed = ctx.consume_event;
+    try button.handleEvent(ctx, event);
+    // vxfw delivers hover and press in the same dispatch.
+    if (event == .mouse_enter) ctx.consume_event = consumed;
+}
 
 const FixedContent = struct {
     surface: vxfw.Surface,

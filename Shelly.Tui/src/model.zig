@@ -246,6 +246,7 @@ pub const Model = struct {
                     return ctx.consumeAndRedraw();
                 }
                 if (self.active == .aur and self.overlay != null and self.overlay.? == .pkgbuild and self.operation_state.operation_question == null) {
+                    if (self.operation_state.preview_back.has_mouse and event.mouse.button == .left) return;
                     try commands.Mouse.navigateReview(self, ctx, event);
                     return ctx.consumeAndRedraw();
                 }

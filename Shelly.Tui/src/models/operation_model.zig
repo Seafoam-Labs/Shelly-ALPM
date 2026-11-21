@@ -35,6 +35,7 @@ pub const State = struct {
     pkgbuild_failure: ?anyerror = null,
     pkgbuild_scan_status: []const u8 = "",
     pkgbuild_wrap: bool = true,
+    preview_back: vxfw.Button,
     pkgbuild_scroll: vxfw.ScrollView,
 
     /// The currently running install, if any.
@@ -118,6 +119,7 @@ pub const SudoPrompt = struct {
 
 pub fn init(_: Allocator, model: *Model) State {
     return .{
+        .preview_back = .{ .label = " < ", .userdata = model, .onClick = commands.Mouse.closePkgbuildPreview },
         .dependency_choices = .{ .item_count = 0, .children = .{ .builder = .{ .userdata = model, .buildFn = buildDependencyChoice } } },
         .pkgbuild_scroll = .{ .children = .{ .builder = .{
             .userdata = model,
@@ -282,6 +284,13 @@ fn matchingPkgbuild(builds: []const PkgBuild, name: []const u8) ?PkgBuild {
     return null;
 }
 
+pub fn onPreviewBack(ptr: ?*anyopaque, ctx: *vxfw.EventContext) !void {
+    const self: *Model = @ptrCast(@alignCast(ptr.?));
+    if (self.help_open or self.overlay == null or self.overlay.? != .pkgbuild or self.operation_state.operation_question != null) return;
+    closePkgbuild(self);
+    ctx.consumeAndRedraw();
+}
+
 pub fn closePkgbuild(self: *Model) void {
     self.overlay = null;
     for (self.aur_state.aur_packages) |*pkg| {
@@ -301,6 +310,7 @@ pub fn closePkgbuild(self: *Model) void {
 
 pub fn pkgbuildView(self: *Model) pkgbuild_view.View {
     return .{
+        .back = if (self.operation_state.operation_question == null) &self.operation_state.preview_back else null,
         .name = self.operation_state.pkgbuild_name,
         .wrap = self.operation_state.pkgbuild_wrap,
         .scroll = &self.operation_state.pkgbuild_scroll,

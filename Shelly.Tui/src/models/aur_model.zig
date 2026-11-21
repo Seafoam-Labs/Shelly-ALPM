@@ -1162,7 +1162,7 @@ test "aur preview clicks do not replace an active worker's overlay" {
     try std.testing.expectEqualStrings("", model.operation_state.pkgbuild_name);
 }
 
-test "aur preview clicks still open previews without an operation" {
+test "mouse opens the AUR preview and returns to package details in wide and compact layouts" {
     vxfw.DrawContext.init(.unicode);
     const packages = [_]AurPackage{.{ .Name = "demo", .Description = "A description", .Version = "1" }};
     for ([_]?coordinator.Overlay{ null, .{ .aur = &packages[0] } }) |overlay| {
@@ -1177,6 +1177,27 @@ test "aur preview clicks still open previews without an operation" {
         try PreviewButtonTest.click(model, arena.allocator(), &ctx);
         try std.testing.expect(model.overlay.? == .pkgbuild);
         try std.testing.expectEqualStrings("demo", model.operation_state.pkgbuild_name);
+        const size: vxfw.Size = if (overlay == null) .{ .width = 120, .height = 40 } else .{ .width = 35, .height = 7 };
+        const surface = try model.widget().draw(.{ .arena = arena.allocator(), .min = .{}, .max = .{ .width = size.width, .height = size.height }, .cell_size = .{ .width = 10, .height = 20 } });
+        const button = &model.operation_state.preview_back;
+        const point = PreviewButtonTest.find(surface, button, 0, 0) orelse return error.MissingBack;
+        try std.testing.expect(point.row > 0);
+        if (size.width >= 64) try std.testing.expect(point.col >= @import("../views/split_layout.zig").listWidth(size.width, model.list_percent.aur));
+        var hits: std.ArrayList(vxfw.HitResult) = .empty;
+        try surface.hitTest(arena.allocator(), &hits, point);
+        const target = hits.pop().?;
+        try std.testing.expectEqual(@as(*anyopaque, button), target.widget.userdata);
+        for ([_]vaxis.Mouse.Type{ .press, .release }) |kind| {
+            ctx.consume_event = false;
+            if (kind == .press) try target.widget.handleEvent(&ctx, .mouse_enter);
+            for (hits.items) |hit| {
+                try hit.widget.captureEvent(&ctx, .{ .mouse = .{ .row = @intCast(hit.local.row), .col = @intCast(hit.local.col), .button = .left, .type = kind, .mods = .{} } });
+                try std.testing.expect(!ctx.consume_event);
+            }
+            try target.widget.handleEvent(&ctx, .{ .mouse = .{ .row = @intCast(target.local.row), .col = @intCast(target.local.col), .button = .left, .type = kind, .mods = .{} } });
+        }
+        try std.testing.expect(model.overlay.? == .aur);
+        try std.testing.expectEqual(&packages[0], model.overlay.?.aur);
     }
 }
 
