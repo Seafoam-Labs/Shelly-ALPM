@@ -41,6 +41,11 @@ fn containsPackageName(packages: []const Package, name: []const u8) bool {
     return false;
 }
 
+pub const LocalArchivePackage = struct {
+    Name: []const u8,
+    Version: []const u8,
+};
+
 pub const ShellyCli = struct {
     /// Optional explanation for a failed subprocess. Initialize to null;
     /// the caller owns the returned slice using this client's allocator.
@@ -143,6 +148,24 @@ pub const ShellyCli = struct {
         defer self.allocator.free(result.stderr);
 
         return try JsonPackFrame.decode([]Package, self.allocator, result.stdout);
+    }
+
+    pub fn get_local_archive_info(
+        self: ShellyCli,
+        paths: []const []const u8,
+    ) !std.json.Parsed([]LocalArchivePackage) {
+        if (paths.len == 0) return error.NoPackageArchives;
+        const args = try self.allocator.alloc([]const u8, paths.len * 2 + 1);
+        defer self.allocator.free(args);
+        args[0] = "utility";
+        for (paths, 0..) |path_value, index| {
+            args[index * 2 + 1] = "--archive-info";
+            args[index * 2 + 2] = path_value;
+        }
+        const result = try self.run(args);
+        defer self.allocator.free(result.stdout);
+        defer self.allocator.free(result.stderr);
+        return try JsonPackFrame.decode([]LocalArchivePackage, self.allocator, result.stdout);
     }
 
     pub fn get_installed_packages(self: ShellyCli) !std.json.Parsed([]Package) {
