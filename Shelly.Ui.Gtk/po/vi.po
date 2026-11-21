@@ -1934,3 +1934,9 @@ msgstr ""
 
 msgid "Atoll package update"
 msgstr ""
+
+msgid "Use System Title Bar"
+msgstr ""
+
+msgid "If enabled, the desktop draws the window title bar and its buttons instead of Shelly."
+msgstr ""

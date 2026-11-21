@@ -81,6 +81,8 @@ var base_provider: ?*gtk.CssProvider = null;
 var base_added: bool = false;
 var pin_name: ?[:0]const u8 = null;
 var headerbar: ?*gtk.HeaderBar = null;
+/// Read from the configuration on first apply; Settings updates it live.
+var system_titlebar: ?bool = null;
 var watched_window: ?*gtk.Window = null;
 var current_mode: ThemeMode = .shelly;
 var current_variant: ThemeVariant = .follow_system;
@@ -155,11 +157,37 @@ pub fn applyWith(win: *gtk.Window, mode: ThemeMode, variant: ThemeVariant) void 
     }
     applyDesktopCss(display, desktop_css);
     gtk.Widget.addCssClass(widget, "shelly-root");
-    gtk.Window.setTitlebar(win, ensureHeaderBar().as(gtk.Widget));
+    applyTitlebar(win);
     setDarkHint(dark);
     ensureWatchers();
     if (mode == .system) ensureDesktopWatchers();
     notifyChanged();
+}
+
+/// Switches between Shelly's header bar and the desktop's own title bar
+/// (used by Settings when the switch changes).
+pub fn setSystemTitlebar(win: *gtk.Window, enabled: bool) void {
+    system_titlebar = enabled;
+    applyTitlebar(win);
+}
+
+fn applyTitlebar(win: *gtk.Window) void {
+    const enabled = system_titlebar orelse blk: {
+        var value = false;
+        if (runtime.config) |svc| {
+            if (svc.get()) |cfg| {
+                value = cfg.UseSystemTitlebar;
+            } else |_| {}
+        }
+        system_titlebar = value;
+        break :blk value;
+    };
+    // Without a custom titlebar GTK asks the compositor for server-side
+    // decorations where it offers them (KDE, Hyprland), so window managers
+    // that draw their own bars are not stacked on top of Shelly's. Elsewhere
+    // GTK falls back to its default header bar, which follows the desktop's
+    // button layout.
+    gtk.Window.setTitlebar(win, if (enabled) null else ensureHeaderBar().as(gtk.Widget));
 }
 
 const DesktopResult = struct {

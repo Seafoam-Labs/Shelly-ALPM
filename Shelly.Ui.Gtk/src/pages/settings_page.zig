@@ -23,6 +23,7 @@ const icon_fetcher = @import("../services/icon_fetcher.zig");
 const support = @import("support.zig");
 const datetime = @import("../helpers/datetime.zig");
 const ShellyWindow = @import("../shelly_window.zig").ShellyWindow;
+const theme = @import("../services/theme.zig");
 const Toast = @import("../helpers/custom_ui_comps/toast.zig").Toast;
 const VersionHistoryDialog = @import("../dialog/page/version_history.zig").VersionHistoryDialog;
 const HistoryEntry = @import("../dialog/page/version_history.zig").Entry;
@@ -101,6 +102,7 @@ pub const ShellySettingsPage = extern struct {
         nav_mode_drop: *gtk.DropDown,
         theme_mode_drop: *gtk.DropDown,
         theme_variant_drop: *gtk.DropDown,
+        system_titlebar_switch: *gtk.Switch,
 
         // Advanced
         remove_cache_switch: *gtk.Switch,
@@ -276,6 +278,7 @@ pub const ShellySettingsPage = extern struct {
             p.recommended_switch,
             p.shelly_icons_switch,
             p.symbolic_tray_switch,
+            p.system_titlebar_switch,
             p.tray_cron_switch,
             p.no_confirm_switch,
             p.shelly_search_switch,
@@ -298,6 +301,13 @@ pub const ShellySettingsPage = extern struct {
             &onAutosaveNotify,
             self,
             .{ .detail = "active", .after = true },
+        );
+        _ = gobject.Object.signals.notify.connect(
+            p.system_titlebar_switch.as(gobject.Object),
+            *Self,
+            &onSystemTitlebarNotify,
+            self,
+            .{ .detail = "active" },
         );
 
         _ = gobject.Object.signals.notify.connect(
@@ -1189,6 +1199,14 @@ pub const ShellySettingsPage = extern struct {
         }
     }
 
+    fn onSystemTitlebarNotify(_: *gobject.Object, _: *gobject.ParamSpec, self: *Self) callconv(.c) void {
+        const p = self.priv();
+        if (p.save_guard or !p.loaded) return;
+        if (support.getWindow(ShellyWindow, self)) |win| {
+            theme.setSystemTitlebar(win.as(gtk.Window), getSwitch(p.system_titlebar_switch));
+        }
+    }
+
     fn onAurConfirmationResponse(ctx: ?*anyopaque, confirmed: bool) void {
         const self: *Self = @ptrCast(@alignCast(ctx.?));
         if (support.getWindow(ShellyWindow, self)) |win| win.hideLockout();
@@ -1251,6 +1269,7 @@ pub const ShellySettingsPage = extern struct {
         .{ "nav_mode_drop", @offsetOf(Private, "nav_mode_drop") },
         .{ "theme_mode_drop", @offsetOf(Private, "theme_mode_drop") },
         .{ "theme_variant_drop", @offsetOf(Private, "theme_variant_drop") },
+        .{ "system_titlebar_switch", @offsetOf(Private, "system_titlebar_switch") },
 
         // Advanced
         .{ "remove_cache_switch", @offsetOf(Private, "remove_cache_switch") },
@@ -1656,6 +1675,7 @@ fn applyConfig(p: *ShellySettingsPage.Private, cfg: *ShellyConfig) void {
     gtk.DropDown.setSelected(p.nav_mode_drop, navModeIndex(cfg.NavMode));
     gtk.DropDown.setSelected(p.theme_mode_drop, themeModeIndex(cfg.ThemeMode));
     gtk.DropDown.setSelected(p.theme_variant_drop, themeVariantIndex(cfg.ThemeVariant));
+    setSwitch(p.system_titlebar_switch, cfg.UseSystemTitlebar);
     gtk.DropDown.setSelected(p.language_drop, languageIndex(cfg.Culture));
 
     setButtonLabel(p.tray_icon_button, std.heap.c_allocator, cfg.TrayIconPath, translations._("Select Icon"));
@@ -1753,6 +1773,7 @@ fn collectIntoConfig(p: *ShellySettingsPage.Private, allocator: std.mem.Allocato
     if (theme_variant_idx != std.math.maxInt(u32) and theme_variant_idx < theme_variant_entries.len) {
         cfg.ThemeVariant = theme_variant_entries[theme_variant_idx].value;
     }
+    cfg.UseSystemTitlebar = getSwitch(p.system_titlebar_switch);
 
     // Advanced
     cfg.NoConfirm = getSwitch(p.no_confirm_switch);
