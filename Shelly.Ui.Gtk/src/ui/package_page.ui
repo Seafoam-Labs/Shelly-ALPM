@@ -149,6 +149,12 @@
                                         <property name="visible">false</property>
                                         <signal name="toggled" handler="on_foreign_only_toggled"/>
                                     </object>
+                                    <object class="GtkCheckButton" id="local_archives_only_check">
+                                        <property name="label" translatable="yes">Local Archives</property>
+                                        <property name="tooltip-text" translatable="yes">Show only packages installed from local package archives through Shelly</property>
+                                        <property name="visible">false</property>
+                                        <signal name="toggled" handler="on_local_archives_only_toggled"/>
+                                    </object>
                                 </child>
                                 <child>
                                     <object class="GtkBox">
