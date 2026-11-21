@@ -623,7 +623,7 @@ msgid "Sat"
 msgstr "Lör"
 
 msgid "Update Time (24h):"
-msgstr ""
+msgstr "Uppdateringstid (24 h):"
 
 msgid ":"
 msgstr ""
@@ -632,71 +632,71 @@ msgid "Look & Feel"
 msgstr "Utseende"
 
 msgid "Icons Enabled"
-msgstr ""
+msgstr "Aktivera ikoner"
 
 msgid ""
 "If enabled, Shelly will use appstream icons in the package list and details "
 "pages."
-msgstr ""
+msgstr "Om detta aktiveras använder Shelly AppStream-ikoner i paketlistan och på detaljsidorna."
 
 msgid "Use Symbolic Tray Icon"
-msgstr ""
+msgstr "Använd symbolisk systemfältsikon"
 
 msgid ""
 "If enabled, Shelly will use a symbolic SVG icon instead of the default image "
 "one."
-msgstr ""
+msgstr "Om detta aktiveras använder Shelly en symbolisk SVG-ikon i stället för standardbilden."
 
 msgid "Tray Icon"
-msgstr ""
+msgstr "Systemfältsikon"
 
 msgid "Select File"
-msgstr ""
+msgstr "Välj fil"
 
 msgid "Clear"
-msgstr ""
+msgstr "Rensa"
 
 msgid "Tray Updates Icon"
-msgstr ""
+msgstr "Systemfältsikon för uppdateringar"
 
 msgid "Default page"
-msgstr ""
+msgstr "Standardsida"
 
 msgid "Navigation style"
-msgstr ""
+msgstr "Navigeringsstil"
 
 msgid "Theme"
-msgstr ""
+msgstr "Tema"
 
 msgid "Color variant"
-msgstr ""
+msgstr "Färgvariant"
 
 msgid "Advanced"
-msgstr ""
+msgstr "Avancerat"
 
 msgid "Remove Cache on Uninstall"
-msgstr ""
+msgstr "Ta bort cache vid avinstallation"
 
 msgid "No Confirm"
-msgstr ""
+msgstr "Ingen bekräftelse"
 
 msgid "Enable Shelly Search"
-msgstr ""
+msgstr "Aktivera Shelly-sökning"
 
 msgid "Enable Atoll Powered AUR"
-msgstr ""
+msgstr "Aktivera AUR med Atoll"
 
 msgid "Always Recheck AppImage Updates on Upgrade All"
-msgstr ""
+msgstr "Kontrollera alltid AppImage-uppdateringar vid Uppgradera alla"
 
 msgid "When off, Upgrade All runs only when the AppImage page shows updates."
-msgstr ""
+msgstr "När detta är av körs Uppgradera alla bara när AppImage-sidan visar uppdateringar."
 
 msgid "AppImage Install Path"
-msgstr ""
+msgstr "Installationssökväg för AppImage"
 
 msgid "Select Directory"
-msgstr ""
+msgstr "Välj katalog"
 
 msgid "v0.0.0"
 msgstr ""
@@ -705,61 +705,61 @@ msgid "GitHub"
 msgstr ""
 
 msgid "Community fluxer"
-msgstr ""
+msgstr "Gemenskapsflöde"
 
 msgid "Sponsor"
-msgstr ""
+msgstr "Sponsra"
 
 msgid "View Changelog"
-msgstr ""
+msgstr "Visa ändringslogg"
 
 msgid "Toggle output"
-msgstr ""
+msgstr "Växla utdata"
 
 msgid "Done"
-msgstr ""
+msgstr "Klar"
 
 msgid "1 · Download"
-msgstr ""
+msgstr "1 · Hämta"
 
 msgid "2 · Install"
-msgstr ""
+msgstr "2 · Installera"
 
 msgid "Update"
-msgstr ""
+msgstr "Uppdatera"
 
 msgid "Updates"
-msgstr ""
+msgstr "Uppdateringar"
 
 msgid "7 of 7 updates included"
-msgstr ""
+msgstr "7 av 7 uppdateringar ingår"
 
 msgid "System"
-msgstr ""
+msgstr "System"
 
 msgid "Check all enabled sources again"
-msgstr ""
+msgstr "Kontrollera alla aktiverade källor igen"
 
 msgid "Check Again"
-msgstr ""
+msgstr "Kontrollera igen"
 
 msgid "Available updates"
-msgstr ""
+msgstr "Tillgängliga uppdateringar"
 
 msgid "Checking for updates…"
-msgstr ""
+msgstr "Söker efter uppdateringar…"
 
 msgid "Your system is up to date"
-msgstr ""
+msgstr "Systemet är uppdaterat"
 
 msgid "Could not check for updates."
-msgstr ""
+msgstr "Det gick inte att söka efter uppdateringar."
 
 msgid "Upgrading may require administrator authorization."
-msgstr ""
+msgstr "Uppgradering kan kräva administratörsbehörighet."
 
 msgid "Upgrade"
-msgstr ""
+msgstr "Uppgradera"
 
 msgid "Utilities"
 msgstr ""
