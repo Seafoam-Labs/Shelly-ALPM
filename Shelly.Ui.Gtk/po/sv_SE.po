@@ -202,55 +202,55 @@ msgid "AUR"
 msgstr ""
 
 msgid "Build and install packages from the Arch User Repository."
-msgstr ""
+msgstr "Bygg och installera paket från Arch User Repository."
 
 msgid "Search the AUR by name or keyword"
-msgstr ""
+msgstr "Sök i AUR efter namn eller nyckelord"
 
 msgid "Search By"
-msgstr ""
+msgstr "Sök efter"
 
 msgid "Installed Only"
-msgstr ""
+msgstr "Endast installerade"
 
 msgid "Show only installed packages"
-msgstr ""
+msgstr "Visa endast installerade paket"
 
 msgid "Previous page"
-msgstr ""
+msgstr "Föregående sida"
 
 msgid "Page 1 of 1"
 msgstr ""
 
 msgid "Next page"
-msgstr ""
+msgstr "Nästa sida"
 
 msgid "Additional Options"
-msgstr ""
+msgstr "Ytterligare alternativ"
 
 msgid "Install Selected"
-msgstr ""
+msgstr "Installera valda"
 
 msgid "Select"
-msgstr ""
+msgstr "Välj"
 
 msgid "Name"
-msgstr ""
+msgstr "Namn"
 
 msgid "Votes"
-msgstr ""
+msgstr "Röster"
 
 msgid "Popularity"
-msgstr ""
+msgstr "Popularitet"
 
 msgid "Loading the AUR index"
-msgstr ""
+msgstr "Läser in AUR-indexet"
 
 msgid "Powered by Atoll."
 msgstr ""
 
 msgid "Run checks"
-msgstr ""
+msgstr "Kör kontroller"
 
 msgid "Run the --check function during package build"
 msgstr ""
@@ -262,19 +262,19 @@ msgid "Hide the detail pane on the right"
 msgstr ""
 
 msgid "Information"
-msgstr ""
+msgstr "Information"
 
 msgid "Preview PKGBUILD"
-msgstr ""
+msgstr "Förhandsgranska PKGBUILD"
 
 msgid "Search the AUR"
-msgstr ""
+msgstr "Sök i AUR"
 
 msgid "The AUR has no browsable index. Type a package name to begin."
 msgstr ""
 
 msgid "Install a local Flatpak"
-msgstr ""
+msgstr "Installera en lokal Flatpak"
 
 msgid ""
 "Choose a .flatpak bundle from your system and install it for the current "
@@ -282,40 +282,40 @@ msgid ""
 msgstr ""
 
 msgid "Bundle"
-msgstr ""
+msgstr "Paket"
 
 msgid "Choose file…"
-msgstr ""
+msgstr "Välj fil…"
 
 msgid "Install for"
-msgstr ""
+msgstr "Installera för"
 
 msgid "system"
-msgstr ""
+msgstr "systemet"
 
 msgid "user"
-msgstr ""
+msgstr "användaren"
 
 msgid "Install"
-msgstr ""
+msgstr "Installera"
 
 msgid "No matching applications found"
-msgstr ""
+msgstr "Inga matchande program hittades"
 
 msgid "Loading Flatpak Data..."
-msgstr ""
+msgstr "Läser in Flatpak-data..."
 
 msgid "Back"
-msgstr ""
+msgstr "Tillbaka"
 
 msgid "Addons"
-msgstr ""
+msgstr "Tillägg"
 
 msgid "Install source"
 msgstr ""
 
 msgid "Author"
-msgstr ""
+msgstr "Upphovsperson"
 
 msgid "Version: -"
 msgstr ""
@@ -327,31 +327,31 @@ msgid "License: -"
 msgstr ""
 
 msgid "Summary"
-msgstr ""
+msgstr "Sammanfattning"
 
 msgid "Show more"
-msgstr ""
+msgstr "Visa mer"
 
 msgid "App Permissions"
-msgstr ""
+msgstr "Appbehörigheter"
 
 msgid "Version History"
-msgstr ""
+msgstr "Versionshistorik"
 
 msgid "Flatpak"
 msgstr ""
 
 msgid "Manage Flatpak applications and remotes."
-msgstr ""
+msgstr "Hantera Flatpak-program och fjärrkällor."
 
 msgid "Search packages..."
-msgstr ""
+msgstr "Sök paket..."
 
 msgid "Browse"
-msgstr ""
+msgstr "Bläddra"
 
 msgid "Manage"
-msgstr ""
+msgstr "Hantera"
 
 msgid "Manage Remote Refs"
 msgstr ""
@@ -363,22 +363,22 @@ msgid "Delete Selected Remote"
 msgstr ""
 
 msgid "Add Remote"
-msgstr ""
+msgstr "Lägg till fjärrkälla"
 
 msgid "Add New Flatpak Remote"
 msgstr ""
 
 msgid "Add"
-msgstr ""
+msgstr "Lägg till"
 
 msgid "Remote Name"
-msgstr ""
+msgstr "Namn på fjärrkälla"
 
 msgid "e.g., flathub"
 msgstr ""
 
 msgid "Remote URL"
-msgstr ""
+msgstr "Fjärrkällans URL"
 
 msgid "e.g., https://flathub.org/repo/flathub.flatpakrepo"
 msgstr ""
