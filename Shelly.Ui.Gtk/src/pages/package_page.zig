@@ -1019,6 +1019,7 @@ pub const PackagePage = extern struct {
         .{ "upgrade_check", @offsetOf(Private, "upgrade_check") },
         .{ "show_hidden_check", @offsetOf(Private, "show_hidden_check") },
         .{ "foreign_only_check", @offsetOf(Private, "foreign_only_check") },
+        .{ "local_archives_only_check", @offsetOf(Private, "local_archives_only_check") },
         .{ "show_explicit_only", @offsetOf(Private, "show_explicit_only_check") },
         .{ "show_detail_pane", @offsetOf(Private, "show_detail_pane_check") },
         .{ "no_results_overlay", @offsetOf(Private, "no_results_overlay") },
