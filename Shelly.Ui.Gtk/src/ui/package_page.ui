@@ -143,6 +143,14 @@
                                   </object>
                                 </child>
                                 <child>
+                                    <object class="GtkCheckButton" id="foreign_only_check">
+                                        <property name="label" translatable="yes">Foreign</property>
+                                        <property name="tooltip-text" translatable="yes">Show only installed packages not found in configured repositories</property>
+                                        <property name="visible">false</property>
+                                        <signal name="toggled" handler="on_foreign_only_toggled"/>
+                                    </object>
+                                </child>
+                                <child>
                                     <object class="GtkBox">
                                         <property name="hexpand">true</property>
                                     </object>
@@ -412,14 +420,6 @@
                         <property name="label" translatable="yes">Installed Only</property>
                         <property name="tooltip-text" translatable="yes">Show only installed packages</property>
                         <signal name="toggled" handler="on_installed_only_toggled"/>
-                    </object>
-                </child>
-                <child>
-                    <object class="GtkCheckButton" id="foreign_only_check">
-                        <property name="label" translatable="yes">Foreign Packages Only</property>
-                        <property name="tooltip-text" translatable="yes">Show only installed packages that are not present in any configured repository</property>
-                        <property name="visible">false</property>
-                        <signal name="toggled" handler="on_foreign_only_toggled"/>
                     </object>
                 </child>
                 <child>
