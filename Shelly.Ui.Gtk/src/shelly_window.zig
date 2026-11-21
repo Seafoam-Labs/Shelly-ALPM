@@ -373,6 +373,7 @@ pub const ShellyWindow = extern struct {
 
         const chevron = gtk.Button.new();
         gtk.Widget.addCssClass(chevron.as(gtk.Widget), "flat");
+        gtk.Widget.addCssClass(chevron.as(gtk.Widget), "nav-chevron");
         const chevron_img = gtk.Image.newFromIconName(if (p.collapsed) "go-next-symbolic" else "go-previous-symbolic");
         gtk.Widget.setSizeRequest(chevron_img.as(gtk.Widget), ICON_SLOT, -1);
         gtk.Widget.setHalign(chevron_img.as(gtk.Widget), .center);

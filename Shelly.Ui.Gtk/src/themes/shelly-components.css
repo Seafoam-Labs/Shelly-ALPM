@@ -467,6 +467,9 @@
 }
 
 /* Navigation */
+.shelly-root .nav-chevron {
+  padding: 0 12px;
+}
 .shelly-root .nav-btn {
   border-radius: 12px;
   min-height: 44px;
