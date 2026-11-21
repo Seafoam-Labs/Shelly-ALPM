@@ -1489,234 +1489,234 @@ msgid "Installing packages"
 msgstr ""
 
 msgid "Select package for batch installation"
-msgstr ""
+msgstr "Välj paket för gruppinstallation"
 
 msgid "Search standard repositories, Atoll and Flatpak"
-msgstr ""
+msgstr "Sök i vanliga förråd, Atoll och Flatpak"
 
 msgid "Show results from Atoll"
-msgstr ""
+msgstr "Visa resultat från Atoll"
 
 msgid ""
 "Search the standard repositories, Atoll, and Flatpak all at once. Type a "
 "name to begin."
-msgstr ""
+msgstr "Sök i vanliga förråd, Atoll och Flatpak samtidigt. Skriv ett namn för att börja."
 
 msgid ""
 "Search standard repositories, the AUR and Flatpak at once. Type a name to "
 "begin."
-msgstr ""
+msgstr "Sök i vanliga förråd, AUR och Flatpak samtidigt. Skriv ett namn för att börja."
 
 msgid "Could not search the selected sources"
-msgstr ""
+msgstr "Det gick inte att söka i de valda källorna"
 
 msgid "Installation in progress"
-msgstr ""
+msgstr "Installation pågår"
 
 msgid "No sources selected"
-msgstr ""
+msgstr "Inga källor valda"
 
 msgid "Enable at least one source filter above."
-msgstr ""
+msgstr "Aktivera minst ett källfilter ovan."
 
 msgid "Install Packages"
-msgstr ""
+msgstr "Installera paket"
 
 msgid "Install the selected packages?"
-msgstr ""
+msgstr "Installera de valda paketen?"
 
 msgid "Enable Atoll"
-msgstr ""
+msgstr "Aktivera Atoll"
 
 msgid ""
 "Could not save settings to the configured file. Your latest changes were not "
 "saved."
-msgstr ""
+msgstr "Det gick inte att spara inställningarna till den konfigurerade filen. Dina senaste ändringar sparades inte."
 
 msgid "Settings saved"
-msgstr ""
+msgstr "Inställningarna har sparats"
 
 msgid "Installing Flatpak support"
-msgstr ""
+msgstr "Installerar Flatpak-stöd"
 
 msgid "Installing AppImage support"
-msgstr ""
+msgstr "Installerar AppImage-stöd"
 
 msgid "Could not start installing Flatpak support."
-msgstr ""
+msgstr "Det gick inte att starta installationen av Flatpak-stöd."
 
 msgid "Could not start installing AppImage support."
-msgstr ""
+msgstr "Det gick inte att starta installationen av AppImage-stöd."
 
 msgid "Could not install Flatpak support."
-msgstr ""
+msgstr "Det gick inte att installera Flatpak-stöd."
 
 msgid "Could not install AppImage support."
-msgstr ""
+msgstr "Det gick inte att installera AppImage-stöd."
 
 msgid "Flatpak support enabled"
-msgstr ""
+msgstr "Flatpak-stöd aktiverat"
 
 msgid "AppImage support enabled"
-msgstr ""
+msgstr "AppImage-stöd aktiverat"
 
 msgid "No changelog entries found"
-msgstr ""
+msgstr "Inga ändringsloggposter hittades"
 
 msgid "No details for this release"
-msgstr ""
+msgstr "Inga detaljer för denna utgåva"
 
 msgid "Could not load the release notes."
-msgstr ""
+msgstr "Det gick inte att läsa in versionsinformationen."
 
 msgid "Changelog"
-msgstr ""
+msgstr "Ändringslogg"
 
 msgid "Select Tray Icon"
-msgstr ""
+msgstr "Välj systemfältsikon"
 
 msgid "Select Icon"
-msgstr ""
+msgstr "Välj ikon"
 
 msgid "Select Tray Updates Icon"
-msgstr ""
+msgstr "Välj systemfältsikon för uppdateringar"
 
 msgid "Select AppImage Install Directory"
-msgstr ""
+msgstr "Välj installationskatalog för AppImage"
 
 msgid "Tray enabled"
-msgstr ""
+msgstr "Systemfältsikon aktiverad"
 
 msgid ""
 "The tray is disabled, but its autostart service could not be removed. It may "
 "start again at the next login."
-msgstr ""
+msgstr "Systemfältsikonen är avstängd, men dess autostarttjänst kunde inte tas bort. Den kan starta igen vid nästa inloggning."
 
 msgid "Tray disabled"
-msgstr ""
+msgstr "Systemfältsikon avstängd"
 
 msgid "Could not enable the tray autostart service."
-msgstr ""
+msgstr "Det gick inte att aktivera autostarttjänsten för systemfältsikonen."
 
 msgid "Systemd startup service added."
-msgstr ""
+msgstr "Systemd-starttjänst har lagts till."
 
 msgid "Could not disable the tray autostart service."
-msgstr ""
+msgstr "Det gick inte att stänga av autostarttjänsten för systemfältsikonen."
 
 msgid "Systemd startup service removed."
-msgstr ""
+msgstr "Systemd-starttjänst har tagits bort."
 
 msgid "AUR enabled"
-msgstr ""
+msgstr "AUR aktiverat"
 
 msgid "System GTK"
-msgstr ""
+msgstr "Systemets GTK"
 
 msgid "Follow system"
-msgstr ""
+msgstr "Följ systemet"
 
 msgid "Dark"
-msgstr ""
+msgstr "Mörkt"
 
 msgid "Light"
-msgstr ""
+msgstr "Ljust"
 
 msgid "System Default"
-msgstr ""
+msgstr "Systemstandard"
 
 msgid "English"
-msgstr ""
+msgstr "Engelska"
 
 msgid "Bulgarian"
-msgstr ""
+msgstr "Bulgariska"
 
 msgid "Català"
 msgstr ""
 
 msgid "Deutsch"
-msgstr ""
+msgstr "Tyska"
 
 msgid "Español"
-msgstr ""
+msgstr "Spanska"
 
 msgid "Français"
-msgstr ""
+msgstr "Franska"
 
 msgid "Magyar"
-msgstr ""
+msgstr "Ungerska"
 
 msgid "日本語"
 msgstr ""
 
 msgid "Polski"
-msgstr ""
+msgstr "Polska"
 
 msgid "Português (Brasil)"
-msgstr ""
+msgstr "Portugisiska (Brasilien)"
 
 msgid "Português (Portugal)"
-msgstr ""
+msgstr "Portugisiska (Portugal)"
 
 msgid "Русский"
-msgstr ""
+msgstr "Ryska"
 
 msgid "Türkçe"
-msgstr ""
+msgstr "Turkiska"
 
 msgid "中文（简体）"
-msgstr ""
+msgstr "Kinesiska (förenklad)"
 
 msgid "Default (auto-detect)"
-msgstr ""
+msgstr "Standard (identifiera automatiskt)"
 
 msgid "Custom…"
-msgstr ""
+msgstr "Anpassat…"
 
 msgid "Pending"
-msgstr ""
+msgstr "Väntar"
 
 msgid "Working"
-msgstr ""
+msgstr "Arbetar"
 
 msgid "Upgraded"
-msgstr ""
+msgstr "Uppgraderad"
 
 msgid "Downgraded"
-msgstr ""
+msgstr "Nedgraderad"
 
 msgid "Reinstalled"
-msgstr ""
+msgstr "Installerad på nytt"
 
 msgid "Removed"
-msgstr ""
+msgstr "Borttagen"
 
 msgid "Failed"
-msgstr ""
+msgstr "Misslyckades"
 
 msgid "Not processed"
-msgstr ""
+msgstr "Inte bearbetad"
 
 msgid "Interrupted"
-msgstr ""
+msgstr "Avbruten"
 
 msgid "Cancelled"
-msgstr ""
+msgstr "Avbruten"
 
 msgid "Overall progress"
-msgstr ""
+msgstr "Sammanlagt förlopp"
 
 msgid "Could not start the requested operation."
-msgstr ""
+msgstr "Det gick inte att starta den begärda åtgärden."
 
 msgid "Synchronizing databases"
-msgstr ""
+msgstr "Synkroniserar databaser"
 
 msgid "Building"
-msgstr ""
+msgstr "Bygger"
 
 msgid "Downloading"
-msgstr ""
+msgstr "Hämtar"
 
 msgid "Packaging"
 msgstr ""
