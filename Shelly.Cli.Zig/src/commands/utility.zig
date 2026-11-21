@@ -160,7 +160,8 @@ fn selectOperation(invocation: *const parser.Invocation) Selection {
             null;
         if (operation) |value| {
             if (selected) |current| {
-                if (current == value and (value == .pacfiles or value == .archive_info)) continue;
+                if ((current == .pacfiles and value == .pacfiles) or
+                    (current == .archive_info and value == .archive_info)) continue;
                 return .conflicting;
             }
             selected = value;
