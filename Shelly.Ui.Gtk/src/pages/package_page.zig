@@ -17,6 +17,7 @@ const repositoryPackageList = @import("../models/packages.zig").repositoryPackag
 const runtime = @import("../services/runtime.zig");
 const c_string = @import("../helpers/c_string.zig");
 const ShellyConfig = @import("../models/shelly_config.zig").ShellyConfig;
+const LocalArchivePackage = @import("../models/shelly_config.zig").LocalArchivePackage;
 const ViewType = @import("../models/shelly_config.zig").ViewType;
 const RecommendCategory = @import("../models/recommendation.zig").RecommendCategory;
 const sorters = @import("../helpers/sorters.zig");
@@ -83,6 +84,7 @@ pub const PackagePage = extern struct {
         show_depends_only: bool,
         show_hidden: bool,
         show_foreign_only: bool,
+        pending_local_archive_packages: []const LocalArchivePackage = &.{},
         show_detail_pane: bool,
 
         check_map_grid: std.AutoHashMapUnmanaged(*PackageObject, *gtk.CheckButton),
@@ -1227,6 +1229,23 @@ pub const PackagePage = extern struct {
         }
         if (paths.items.len == 0) return;
 
+        const cli = ShellyCli{ .allocator = std.heap.c_allocator, .io = runtime.io };
+        const metadata = cli.get_local_archive_info(paths.items) catch |err| {
+            std.log.err("Could not inspect selected local package archives. {0s}\n\nTechnical details: {1s}", .{ diagnostics.cause(err), @errorName(err) });
+            return;
+        };
+        defer metadata.deinit();
+        const p = self.priv();
+        const pending = std.heap.c_allocator.alloc(LocalArchivePackage, metadata.value.len) catch return;
+        for (metadata.value, 0..) |item, i| {
+            pending[i] = .{
+                .Name = std.heap.c_allocator.dupe(u8, item.Name) catch return,
+                .Version = std.heap.c_allocator.dupe(u8, item.Version) catch return,
+            };
+        }
+        freePendingLocalArchives(p.pending_local_archive_packages);
+        p.pending_local_archive_packages = pending;
+
         const argv = ShellyCommands.install(std.heap.c_allocator, paths.items) catch return;
         defer std.heap.c_allocator.free(argv);
 
@@ -1421,9 +1440,15 @@ pub const PackagePage = extern struct {
 
     fn on_transaction_complete(ctx: *anyopaque, success: bool) void {
         const self: *PackagePage = @ptrCast(@alignCast(ctx));
-        if (!success) return;
-
         const p = self.priv();
+        if (!success) {
+            freePendingLocalArchives(p.pending_local_archive_packages);
+            p.pending_local_archive_packages = &.{};
+            return;
+        }
+
+        persistPendingLocalArchives(p);
+
         const model = p.list_store.as(gio.ListModel);
         const n = gio.ListModel.getNItems(model);
         var i: u32 = 0;
@@ -1435,6 +1460,59 @@ pub const PackagePage = extern struct {
 
         self.update_selection_ui();
         self.reload();
+    }
+
+    fn freePendingLocalArchives(packages: []const LocalArchivePackage) void {
+        for (packages) |pkg| {
+            std.heap.c_allocator.free(pkg.Name);
+            std.heap.c_allocator.free(pkg.Version);
+        }
+        if (packages.len > 0) std.heap.c_allocator.free(packages);
+    }
+
+    fn persistPendingLocalArchives(p: *Private) void {
+        if (p.pending_local_archive_packages.len == 0) return;
+        defer {
+            freePendingLocalArchives(p.pending_local_archive_packages);
+            p.pending_local_archive_packages = &.{};
+        }
+        const resolver = runtime.config orelse return;
+        const current = resolver.get() catch return;
+        var merged: std.ArrayListUnmanaged(LocalArchivePackage) = .empty;
+        defer {
+            for (merged.items) |pkg| {
+                std.heap.c_allocator.free(pkg.Name);
+                std.heap.c_allocator.free(pkg.Version);
+            }
+            merged.deinit(std.heap.c_allocator);
+        }
+        for (current.LocalArchivePackages) |pkg| {
+            const name = std.heap.c_allocator.dupe(u8, pkg.Name) catch return;
+            const version = std.heap.c_allocator.dupe(u8, pkg.Version) catch {
+                std.heap.c_allocator.free(name);
+                return;
+            };
+            merged.append(std.heap.c_allocator, .{ .Name = name, .Version = version }) catch return;
+        }
+        for (p.pending_local_archive_packages) |candidate| {
+            var exists = false;
+            for (merged.items) |existing| {
+                if (std.mem.eql(u8, existing.Name, candidate.Name) and
+                    std.mem.eql(u8, existing.Version, candidate.Version))
+                {
+                    exists = true;
+                    break;
+                }
+            }
+            if (exists) continue;
+            const name = std.heap.c_allocator.dupe(u8, candidate.Name) catch return;
+            const version = std.heap.c_allocator.dupe(u8, candidate.Version) catch {
+                std.heap.c_allocator.free(name);
+                return;
+            };
+            merged.append(std.heap.c_allocator, .{ .Name = name, .Version = version }) catch return;
+        }
+        updateConfigField(.LocalArchivePackages, merged.items);
     }
 
     fn reload(self: *Self) void {
