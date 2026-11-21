@@ -34,6 +34,7 @@ const theme = @import("services/theme.zig");
 const ShellyCli = @import("services/shelly_cli.zig").ShellyCli;
 const AtollApiService = @import("services/atoll_api.zig").AtollApiService;
 const NavMode = @import("models/shelly_config.zig").NavMode;
+const OperationLogFontSize = @import("models/shelly_config.zig").OperationLogFontSize;
 const ShellyTabs = @import("models/shelly_config.zig").ShellyTabs;
 const translations = @import("helpers/translations.zig");
 const a11y = @import("helpers/a11y.zig");
@@ -157,13 +158,16 @@ pub const ShellyWindow = extern struct {
     pub fn refreshTheme(self: *ShellyWindow) void {
         var mode: theme.ThemeMode = .shelly;
         var variant: theme.ThemeVariant = .follow_system;
+        var operation_log_font_size: OperationLogFontSize = .px_14;
         if (runtime.config) |svc| {
             if (svc.get()) |cfg| {
                 mode = cfg.ThemeMode;
                 variant = cfg.ThemeVariant;
+                operation_log_font_size = cfg.OperationLogFontSize;
             } else |_| {}
         }
         self.applyThemeNow(mode, variant);
+        self.applyOperationLogFontSize(operation_log_font_size);
     }
 
     /// Live theme application, used by Settings before the config is saved.
@@ -174,6 +178,10 @@ pub const ShellyWindow = extern struct {
         const p = self.private();
         if (p.rail) |rail| setZeroMargins(rail.as(gtk.Widget));
         if (p.topnav) |bar| setZeroMargins(bar.as(gtk.Widget));
+    }
+
+    pub fn applyOperationLogFontSize(self: *ShellyWindow, size: OperationLogFontSize) void {
+        theme.applyOperationLogFontSize(gtk.Widget.getDisplay(self.as(gtk.Widget)), size);
     }
 
     fn setZeroMargins(w: *gtk.Widget) void {

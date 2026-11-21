@@ -728,6 +728,28 @@
                                 </child>
                               </object>
                             </child>
+                            <child>
+                              <object class="GtkBox">
+                                <property name="orientation">horizontal</property>
+                                <property name="spacing">12</property>
+                                <style><class name="settings-form-row"/></style>
+                                <child>
+                                  <object class="GtkLabel">
+                                    <property name="label" translatable="yes">Operation log text size</property>
+                                    <property name="halign">start</property>
+                                    <property name="hexpand">true</property>
+                                  </object>
+                                </child>
+                                <child>
+                                  <object class="GtkDropDown" id="operation_log_font_size_drop">
+                                    <property name="halign">end</property>
+                                    <accessibility>
+                                      <property name="label" translatable="yes">Operation log text size</property>
+                                    </accessibility>
+                                  </object>
+                                </child>
+                              </object>
+                            </child>
                           </object>
                         </child>
                       </object>
@@ -997,6 +1019,7 @@
       <widget name="nav_mode_drop"/>
       <widget name="theme_mode_drop"/>
       <widget name="theme_variant_drop"/>
+      <widget name="operation_log_font_size_drop"/>
     </widgets>
   </object>
 </interface>

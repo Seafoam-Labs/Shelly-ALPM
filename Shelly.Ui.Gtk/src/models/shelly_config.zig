@@ -23,6 +23,14 @@ pub const ThemeVariant = enum(u8) {
     light = 2,
 };
 
+pub const OperationLogFontSize = enum(u8) {
+    px_14,
+    px_16,
+    px_18,
+    px_20,
+    px_24,
+};
+
 pub const ShellyTabs = enum(u8) {
     packages = 0,
     aur = 1,
@@ -75,6 +83,7 @@ pub const ShellyConfig = struct {
     NavMode: NavMode = .sidebar,
     ThemeMode: ThemeMode = .shelly,
     ThemeVariant: ThemeVariant = .follow_system,
+    OperationLogFontSize: OperationLogFontSize = .px_14,
     // Internal: persisted window geometry, not exposed in settings UI
     WindowLastWidth: i32 = 0,
     WindowLastHeight: i32 = 0,
