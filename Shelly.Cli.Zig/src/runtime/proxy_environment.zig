@@ -13,6 +13,7 @@ const Frame = struct {
     HTTPS_PROXY: ?[]const u8 = null,
     all_proxy: ?[]const u8 = null,
     ALL_PROXY: ?[]const u8 = null,
+    github_token: ?[]const u8 = null,
 };
 
 pub const Prepared = struct {
@@ -37,8 +38,8 @@ pub const Prepared = struct {
 
 /// Removes the private startup marker and, only when it is present, consumes
 /// one framed environment message from stdin. The reconstructed environment
-/// retains all variables that survived elevation and overlays the six standard
-/// proxy variables supplied by the unprivileged GTK process.
+/// retains all variables that survived elevation and overlays the standard
+/// proxy variables and GitHub token supplied by the unprivileged GTK process.
 pub fn prepare(
     allocator: std.mem.Allocator,
     reader: *std.Io.Reader,
@@ -100,6 +101,10 @@ pub fn prepare(
             try environment_map.put(name, value);
         }
     }
+    if (parsed.value.github_token) |token| {
+        if (std.mem.findScalar(u8, token, 0) != null) return error.InvalidProxyEnvironmentFrame;
+        try environment_map.put("GITHUB_TOKEN", token);
+    }
 
     const environ: std.process.Environ = .{
         .block = try environment_map.createPosixBlock(allocator, .{}),
@@ -152,6 +157,27 @@ test "proxy environment marker overlays variables and is removed" {
     try std.testing.expectEqualStrings("1000", map_value.get("PKEXEC_UID").?);
     try std.testing.expectEqualStrings("http://user:p%40ss@proxy:443/", map_value.get("http_proxy").?);
     try std.testing.expectEqualStrings("http://fallback:8080/", map_value.get("ALL_PROXY").?);
+}
+
+test "proxy environment marker restores the GitHub token" {
+    const allocator = std.testing.allocator;
+    var initial_map = std.process.Environ.Map.init(allocator);
+    defer initial_map.deinit();
+    const initial_environ: std.process.Environ = .{
+        .block = try initial_map.createPosixBlock(allocator, .{}),
+    };
+    defer initial_environ.block.deinit(allocator);
+
+    const frame = try encodeTestFrame(allocator,
+        \\{"$kind":"proxy.environment","github_token":"test-token"}
+    );
+    defer allocator.free(frame);
+    var reader = std.Io.Reader.fixed(frame);
+    const args = [_][]const u8{ "upgrade", marker };
+    var prepared = try prepare(allocator, &reader, initial_environ, &args);
+    defer prepared.deinit(allocator);
+
+    try std.testing.expectEqualStrings("test-token", prepared.map(&initial_map).get("GITHUB_TOKEN").?);
 }
 
 test "ordinary invocation does not consume stdin" {
