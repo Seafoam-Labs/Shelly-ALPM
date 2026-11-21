@@ -9,10 +9,11 @@ pub const variants = [_]types.Variant{
         .action = .list,
         .name = "standard",
         .type_code = 's',
-        .description = "List packages installed in the local ALPM database, including ignored packages, with optional install-reason filters.",
-        .implementation = "PackageManager.Manager.get_installed_packages",
+        .description = "List packages installed in the local ALPM database, optionally limited to foreign packages not present in configured sync databases.",
+        .implementation = "PackageManager.Manager.get_installed_packages / get_foreign_packages",
         .options = &.{
             flag("--show-hidden", &.{"-w"}, "Accepted for compatibility; ignored packages are always included"),
+            flag("--foreign-only", &.{}, "List only installed packages absent from configured sync databases"),
             flag("--explicitOnly", &.{"-e"}, "List explicitly installed packages only"),
             flag("--dependencyOnly", &.{"-d"}, "List dependency-installed packages only"),
             flag("--required-by", &.{}, "Include packages that directly require each listed package"),
