@@ -131,8 +131,9 @@ pub const PackagePage = extern struct {
         const p = page.priv();
         p.local_only = true;
         p.show_installed_only = true;
+        p.show_local_archives_only = true;
         gtk.Widget.setVisible(p.foreign_only_check.as(gtk.Widget), 1);
-        gtk.Widget.setVisible(p.local_archives_only_check.as(gtk.Widget), 1);
+        gtk.Widget.setVisible(p.local_archives_only_check.as(gtk.Widget), 0);
         gtk.Widget.setVisible(p.install_local_button.as(gtk.Widget), 1);
         gtk.Widget.setVisible(p.grouping_selection.as(gtk.Widget), 0);
         gtk.ColumnViewColumn.setVisible(p.install_date_column, 1);
