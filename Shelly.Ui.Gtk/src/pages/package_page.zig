@@ -26,6 +26,7 @@ const translations = @import("../helpers/translations.zig");
 const a11y = @import("../helpers/a11y.zig");
 
 const Event = @import("../services/shelly_operation.zig").Event;
+const ShellyCommands = @import("../services/shelly_operation.zig").ShellyCommands;
 const PackageDetail = @import("package_detail.zig").PackageDetail;
 
 pub const PackagePage = extern struct {
@@ -63,6 +64,7 @@ pub const PackagePage = extern struct {
         grid_view_button: *gtk.ToggleButton,
         list_view_button: *gtk.ToggleButton,
         install_button: *gtk.Button,
+        install_local_button: *gtk.Button,
         selection_actions: *gtk.Box,
         cart_items_box: *gtk.Box,
         cart_label: *gtk.Label,
@@ -137,6 +139,8 @@ pub const PackagePage = extern struct {
         p.show_detail_pane = false;
         p.check_map_grid = .empty;
         p.check_map_column = .empty;
+
+        _ = gtk.Button.signals.clicked.connect(p.install_local_button, *Self, &on_install_local_clicked, self, .{});
 
         const detail = PackageDetail.new();
         p.detail = detail;
@@ -972,6 +976,7 @@ pub const PackagePage = extern struct {
         .{ "grouping_selection", @offsetOf(Private, "grouping_selection") },
         .{ "detail_revealer", @offsetOf(Private, "detail_revealer") },
         .{ "install_button", @offsetOf(Private, "install_button") },
+        .{ "install_local_button", @offsetOf(Private, "install_local_button") },
         .{ "selection_actions", @offsetOf(Private, "selection_actions") },
         .{ "cart_label", @offsetOf(Private, "cart_label") },
         .{ "cart_items_box", @offsetOf(Private, "cart_items_box") },
@@ -1131,6 +1136,78 @@ pub const PackagePage = extern struct {
         if (install_count == 0 and remove_count == 0) return;
         if (install_count > 0 and remove_count > 0) return;
         if (remove_count > 0) self.confirm_remove() else self.start_install();
+    }
+
+    fn on_install_local_clicked(_: *gtk.Button, self: *Self) callconv(.c) void {
+        const dialog = gtk.FileDialog.new();
+        gtk.FileDialog.setTitle(dialog, translations._("Choose local Arch packages"));
+
+        const filter = gtk.FileFilter.new();
+        gtk.FileFilter.setName(filter, translations._("Arch package archives"));
+        gtk.FileFilter.addSuffix(filter, "pkg.tar.zst");
+        gtk.FileFilter.addSuffix(filter, "pkg.tar.xz");
+        gtk.FileFilter.addSuffix(filter, "pkg.tar.gz");
+        gtk.FileFilter.addSuffix(filter, "pkg.tar.bz2");
+
+        const filters = gio.ListStore.new(gtk.FileFilter.getGObjectType());
+        gio.ListStore.append(filters, filter.as(gobject.Object));
+        gtk.FileDialog.setFilters(dialog, filters.as(gio.ListModel));
+        filter.as(gobject.Object).unref();
+        filters.as(gobject.Object).unref();
+
+        const root = gtk.Widget.getRoot(self.as(gtk.Widget));
+        const parent_window: ?*gtk.Window = if (root) |r| gobject.ext.cast(gtk.Window, r) else null;
+
+        _ = self.as(gobject.Object).ref();
+        gtk.FileDialog.openMultiple(dialog, parent_window, null, &on_local_archives_chosen, self);
+    }
+
+    fn on_local_archives_chosen(source: ?*gobject.Object, result: *gio.AsyncResult, data: ?*anyopaque) callconv(.c) void {
+        const self: *Self = @ptrCast(@alignCast(data.?));
+        defer self.as(gobject.Object).unref();
+        const dialog: *gtk.FileDialog = @ptrCast(@alignCast(source.?));
+        const files = gtk.FileDialog.openMultipleFinish(dialog, result, null) orelse return;
+        defer files.as(gobject.Object).unref();
+
+        var paths: std.ArrayListUnmanaged([]const u8) = .empty;
+        defer {
+            for (paths.items) |path| std.heap.c_allocator.free(path);
+            paths.deinit(std.heap.c_allocator);
+        }
+        var names: std.ArrayListUnmanaged([]const u8) = .empty;
+        defer names.deinit(std.heap.c_allocator);
+
+        const count = gio.ListModel.getNItems(files);
+        var index: u32 = 0;
+        while (index < count) : (index += 1) {
+            const object = gio.ListModel.getObject(files, index) orelse continue;
+            defer object.unref();
+            const file = gobject.ext.cast(gio.File, object) orelse continue;
+            const path_c = gio.File.getPath(file) orelse continue;
+            defer glib.free(path_c);
+
+            const path = std.heap.c_allocator.dupe(u8, std.mem.span(path_c)) catch return;
+            paths.append(std.heap.c_allocator, path) catch {
+                std.heap.c_allocator.free(path);
+                return;
+            };
+            names.append(std.heap.c_allocator, std.fs.path.basename(path)) catch return;
+        }
+        if (paths.items.len == 0) return;
+
+        const argv = ShellyCommands.install(std.heap.c_allocator, paths.items) catch return;
+        defer std.heap.c_allocator.free(argv);
+
+        if (support.getWindow(ShellyWindow, self)) |win| {
+            win.startTransaction(.{
+                .title = translations._("Installing local Arch packages"),
+                .argv = argv,
+                .packages = names.items,
+                .on_complete = &on_transaction_complete,
+                .privileged = true,
+                .ctx = self,
+            });
+        }
     }
 
     fn on_grid_view_toggled(self: *Self) callconv(.c) void {

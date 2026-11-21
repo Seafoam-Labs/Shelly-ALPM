@@ -120,6 +120,13 @@
                                     </object>
                                 </child>
                                 <child>
+                                    <object class="GtkButton" id="install_local_button">
+                                        <property name="label" translatable="yes">Install Local Packages</property>
+                                        <property name="tooltip-text" translatable="yes">Install one or more local Arch package archives</property>
+                                        <property name="icon-name">document-open-symbolic</property>
+                                    </object>
+                                </child>
+                                <child>
                                     <object class="GtkBox">
                                         <property name="hexpand">true</property>
                                     </object>
