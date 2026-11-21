@@ -390,7 +390,7 @@ pub const ShellyWindow = extern struct {
         add_nav_group(self, items, translations._("BROWSE"));
         if (features.builtWithRecommend) add_nav_button(self, items, stack, true, "recommend", RecommendPage.icon_name, translations._(RecommendPage.title));
         add_nav_button(self, items, stack, true, "package", PackagePage.icon_name, translations._(PackagePage.title));
-        if (!features.builtWithDevario) add_nav_button(self, items, stack, true, "local", PackagePage.icon_name, translations._("Local"));
+        if (!features.builtWithDevario) add_nav_button(self, items, stack, true, "local", "drive-harddisk-symbolic", translations._("Local"));
         if (features.builtWithAur) add_nav_button(self, items, stack, true, "aur", aur_icon_name, translations._(aur_title));
         if (features.builtWithFlatpak) add_nav_button(self, items, stack, true, "flatpak", FlatpakPage.icon_name, translations._(FlatpakPage.title));
         if (features.builtWithAppImage) add_nav_button(self, items, stack, true, "appimage", AppImagePage.icon_name, translations._(AppImagePage.title));
@@ -457,7 +457,7 @@ pub const ShellyWindow = extern struct {
 
         if (features.builtWithRecommend) add_nav_button(self, items, stack, false, "recommend", RecommendPage.icon_name, translations._(RecommendPage.title));
         add_nav_button(self, items, stack, false, "package", PackagePage.icon_name, translations._(PackagePage.title));
-        if (!features.builtWithDevario) add_nav_button(self, items, stack, false, "local", PackagePage.icon_name, translations._("Local"));
+        if (!features.builtWithDevario) add_nav_button(self, items, stack, false, "local", "drive-harddisk-symbolic", translations._("Local"));
         if (features.builtWithAur) add_nav_button(self, items, stack, false, "aur", aur_icon_name, translations._(aur_title));
         if (features.builtWithFlatpak) add_nav_button(self, items, stack, false, "flatpak", FlatpakPage.icon_name, translations._(FlatpakPage.title));
         if (features.builtWithAppImage) add_nav_button(self, items, stack, false, "appimage", AppImagePage.icon_name, translations._(AppImagePage.title));
@@ -665,7 +665,7 @@ pub const ShellyWindow = extern struct {
         if (!features.builtWithDevario) {
             const lp = PackagePage.newLocal();
             const lp_page = gtk.Stack.addTitled(stack, lp.as(gtk.Widget), "local", translations._("Local"));
-            gtk.StackPage.setIconName(lp_page, PackagePage.icon_name);
+            gtk.StackPage.setIconName(lp_page, "drive-harddisk-symbolic");
         }
 
         if (features.builtWithFlatpak) {
