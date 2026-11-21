@@ -27,7 +27,7 @@
 @define-color shelly_fg #1d1b20;
 @define-color shelly_secondary_fg #5f5b66;
 @define-color shelly_column_header_fg #625b71;
-@define-color shelly_muted_fg #7a7582;
+@define-color shelly_muted_fg #6e6975;
 
 /* Lines */
 @define-color shelly_border #d5cfe0;
@@ -42,6 +42,11 @@
 @define-color shelly_accent_active #594391;
 @define-color shelly_selected_bg #eaddff;
 @define-color shelly_selected_fg #21005d;
+
+/* Status */
+@define-color shelly_error #b3261e;
+@define-color shelly_warning #7d5700;
+@define-color shelly_success #256b45;
 
 /* Derived roles */
 @define-color shelly_hairline alpha(@shelly_fg, 0.08);
@@ -58,4 +63,6 @@
 @define-color shelly_scroll_slider_hover alpha(@shelly_accent, 0.75);
 @define-color shelly_scroll_slider_active alpha(@shelly_accent, 0.9);
 @define-color shelly_overlay_slider alpha(@shelly_accent, 0.4);
-@define-color shelly_destructive_bg alpha(@error_color, 0.12);
+@define-color shelly_destructive_bg alpha(@shelly_error, 0.12);
+@define-color shelly_success_tint_bg alpha(@shelly_success, 0.12);
+@define-color shelly_accent_tint_bg alpha(@shelly_accent, 0.10);
