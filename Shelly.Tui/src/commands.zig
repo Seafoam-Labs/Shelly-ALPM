@@ -19,6 +19,18 @@ pub const Mouse = struct {
         try model.help_panel.scroll.handleEvent(ctx, event);
     }
 
+    pub const FocusTarget = enum { search, results, details };
+    pub fn focusPane(model: *@import("model.zig").Model, ctx: *vaxis.vxfw.EventContext, tab: @import("model.zig").Tab, target: FocusTarget) !void {
+        if (!model.allowsMousePaneFocus(tab, target)) return;
+        switch (tab) {
+            .packages => try @import("models/packages_model.zig").focusPane(model, ctx, target),
+            .aur => try @import("models/aur_model.zig").focusPane(model, ctx, target),
+            .flatpak => try @import("models/flatpak_model.zig").focusPane(model, ctx, target),
+            .appimage => try @import("models/appimage_model.zig").focusPane(model, ctx, target),
+            else => {},
+        }
+    }
+
     pub const SettingsTarget = union(enum) { control: usize, header: usize };
     pub const activateSetting = @import("models/settings_model.zig").onSettingsAction;
     pub const selectTab = @import("model.zig").Model.onTabSelected;
@@ -30,6 +42,7 @@ pub const Mouse = struct {
     pub const sortPackages = @import("models/packages_model.zig").sortBy;
     pub const navigateReview = @import("models/operation_model.zig").handleReviewMouse;
     pub const scrollUpdates = @import("models/updates_model.zig").handleScrollEvent;
+    pub const cancelAppImageSource = @import("models/appimage_model.zig").cancelSourceFromMouse;
     pub const configureSource = @import("models/appimage_model.zig").onConfigureClick;
     pub const selectPath = @import("models/appimage_model.zig").activateInstallPath;
     pub const activateSourceControl = @import("models/appimage_model.zig").activateSourceControl;

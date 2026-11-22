@@ -1,3 +1,4 @@
+const pane_focus = @import("pane_focus.zig");
 const commands = @import("../commands.zig");
 const std = @import("std");
 const styles = @import("styles.zig");
@@ -67,6 +68,7 @@ pub const View = struct {
             else
                 try self.text_field.draw(ctx.withConstraints(.{}, .{ .width = list_width, .height = search_height })),
         });
+        if (split) try pane_focus.attach(ctx, &children.items[children.items.len - 1].surface, self.model, .packages, .search);
 
         if ((split or !self.details_active) and height > 0) {
             const message: ?[]const u8 = if (self.loading)
@@ -93,6 +95,7 @@ pub const View = struct {
                 else
                     try content.draw(ctx.withConstraints(.{}, .{ .width = list_width, .height = height })),
             });
+            if (split) try pane_focus.attach(ctx, &children.items[children.items.len - 1].surface, self.model, .packages, .results);
         }
 
         if (self.help) |panel| {
@@ -124,6 +127,7 @@ pub const View = struct {
                     .{ .width = right_w, .height = details_height },
                 )),
             });
+            if (split) try pane_focus.attach(ctx, &children.items[children.items.len - 1].surface, self.model, .packages, .details);
         }
     }
     pub fn statusText(self: View, arena: Allocator) Allocator.Error![]const u8 {

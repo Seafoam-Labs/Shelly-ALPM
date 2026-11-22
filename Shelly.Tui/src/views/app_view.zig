@@ -215,14 +215,7 @@ test "tab views preserve input widgets and render without background work" {
                 .upgrade, .settings, .appimage => model.widget(),
                 .flatpak => model.flatpak_state.flatpak_field.widget(),
             };
-            var found = surface.widget.eql(input);
-            for (surface.children) |child| {
-                found = found or child.surface.widget.eql(input);
-                for (child.surface.children) |nested| {
-                    found = found or nested.surface.widget.eql(input);
-                }
-            }
-            try std.testing.expect(found);
+            try std.testing.expect(@import("pane_focus.zig").testContainsWidget(surface, input));
         }
     }
 }

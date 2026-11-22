@@ -309,6 +309,28 @@ fn drawDetails(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surf
     return text.draw(ctx);
 }
 
+pub fn focusPane(self: *Model, ctx: *vxfw.EventContext, target: commands.Mouse.FocusTarget) !void {
+    const state = &self.appimage_state;
+    if (state.install_form != null) return;
+    if (state.source_open) {
+        if (target != .results or state.source_draft.?.save_job != null) return;
+        discardSourceDraft(self);
+    }
+    if (target == .details) {
+        if (state.selected() == null) return;
+        state.details_active = true;
+        state.list_active = false;
+        try ctx.requestFocus(self.widget());
+    } else {
+        operation_model.closeOverlay(self);
+        state.details_active = false;
+        state.source_button.focused = false;
+        state.list_active = target == .results;
+        try ctx.requestFocus(self.widget());
+    }
+    ctx.redraw = true;
+}
+
 pub fn selectRow(self: *Model, ctx: *vxfw.EventContext, identity: *const AppImage) !void {
     const state = &self.appimage_state;
     if (self.active != .appimage or self.help_open or self.overlay != null or state.source_open or state.install_form != null) return;
@@ -332,7 +354,7 @@ pub fn appImageView(self: *Model) AppImageView.View {
         state.details_scroll.scroll = .{};
         state.details_cursor = @as(u32, @intCast(state.cursor));
     }
-    return .{ .result_list = @import("../views/result_list.zig").widget(self, .appimage), .state = state, .list_percent = self.list_percent.appimage, .help = if (self.help_open) &self.help_panel else null };
+    return .{ .model = self, .result_list = @import("../views/result_list.zig").widget(self, .appimage), .state = state, .list_percent = self.list_percent.appimage, .help = if (self.help_open) &self.help_panel else null };
 }
 
 fn syncSelection(state: *State) void {
@@ -1182,7 +1204,23 @@ fn openSource(self: *Model, ctx: *vxfw.EventContext) !void {
     ctx.consumeAndRedraw();
 }
 
+fn discardSourceDraft(self: *Model) void {
+    const draft = self.appimage_state.source_draft.?;
+    self.appimage_state.source_open = false;
+    self.appimage_state.source_draft = null;
+    draft.deinit(self.gpa);
+}
+
+pub fn cancelSourceFromMouse(self: *Model, ctx: *vxfw.EventContext) !void {
+    const draft = self.appimage_state.source_draft orelse return;
+    if (!self.appimage_state.source_open or self.help_open or draft.save_job != null) return;
+    try ctx.requestFocus(self.widget());
+    discardSourceDraft(self);
+    ctx.consumeAndRedraw();
+}
+
 pub fn activateSourceControl(draft: *SourceDraft, ctx: *vxfw.EventContext, control: usize) !void {
+    if (control == 4) return commands.Mouse.cancelAppImageSource(draft.owner, ctx);
     if (control == 1 and draft.update_type == .None) return;
     draft.selected = control;
     if (control != 1) {
@@ -1205,9 +1243,7 @@ pub fn captureSource(self: *Model, ctx: *vxfw.EventContext, event: vxfw.Event) !
             }
             const activate = commands.matches(key, .confirm) or commands.matches(key, .mark);
             if (commands.matches(key, .cancel_capture) or (activate and draft.selected == 4)) {
-                self.appimage_state.source_open = false;
-                self.appimage_state.source_draft = null;
-                draft.deinit(self.gpa);
+                discardSourceDraft(self);
             } else if (key.matches(vaxis.Key.up, .{}) or key.matches(vaxis.Key.down, .{}) or key.matches(vaxis.Key.tab, .{})) {
                 const forward = !key.matches(vaxis.Key.up, .{});
                 draft.selected = if (forward) (draft.selected + 1) % 5 else (draft.selected + 4) % 5;
@@ -1275,6 +1311,23 @@ test "update source form owns its draft, validates input and preserves failed sa
     try std.testing.expect(!model.appimage_state.source_open);
     try std.testing.expect(model.appimage_state.source_draft == null);
     try std.testing.expectEqualStrings("repo", model.appimage_state.selected().?.RepoName.?);
+    try openSource(model, &events);
+    try commands.Mouse.activateSourceControl(model.appimage_state.source_draft.?, &events, 4);
+    try std.testing.expect(!model.appimage_state.source_open);
+    try std.testing.expect(model.appimage_state.details_active);
+
+    try openSource(model, &events);
+    {
+        var arena = std.heap.ArenaAllocator.init(allocator);
+        defer arena.deinit();
+        const surface = try model.widget().draw(.{ .arena = arena.allocator(), .min = .{}, .max = .{ .width = 100, .height = 24 }, .cell_size = .{ .width = 10, .height = 20 } });
+        try @import("../views/pane_focus.zig").testClick(surface, &events, .results);
+        try std.testing.expect(model.appimage_state.source_draft == null);
+        try std.testing.expect(model.appimage_state.list_active);
+        try std.testing.expect(!model.appimage_state.details_active);
+        try std.testing.expect(!events.consume_event);
+    }
+
     try openSource(model, &events);
     const saving = model.appimage_state.source_draft.?;
     saving.field.clearRetainingCapacity();

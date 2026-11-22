@@ -328,6 +328,19 @@ pub fn buildPackageDetails(ptr: *const anyopaque, idx: usize, _: usize) ?vxfw.Wi
     return .{ .userdata = @constCast(pkg), .drawFn = packages_view.drawDetails };
 }
 
+pub fn focusPane(self: *Model, ctx: *vxfw.EventContext, target: commands.Mouse.FocusTarget) !void {
+    const state = &self.packages_state;
+    if (target == .details) {
+        self.overlay = .{ .package = selectedPackage(self) orelse return };
+        try ctx.requestFocus(self.widget());
+    } else {
+        operation_model.closeOverlay(self);
+        state.package_list_active = target == .results;
+        try ctx.requestFocus(state.text_field.widget());
+    }
+    ctx.redraw = true;
+}
+
 pub fn selectPackageRow(self: *Model, ctx: *vxfw.EventContext, package: *const Package) !void {
     if (self.active != .packages or self.help_open or self.overlay != null) return;
     const state = &self.packages_state;

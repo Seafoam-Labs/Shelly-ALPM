@@ -1,3 +1,4 @@
+const pane_focus = @import("pane_focus.zig");
 const styles = @import("styles.zig");
 const commands = @import("../commands.zig");
 const std = @import("std");
@@ -66,6 +67,7 @@ fn contains(text: []const u8, query: []const u8) bool {
 }
 
 pub const View = struct {
+    model: ?*@import("../model.zig").Model = null,
     result_list: ?vxfw.Widget = null,
     list_percent: u8 = 40,
     images: ?@import("image_view.zig").View = null,
@@ -124,6 +126,7 @@ pub const View = struct {
                 else
                     try self.field.draw(ctx.withConstraints(.{}, .{ .width = search_width, .height = search_height })),
             });
+            if (split) try pane_focus.attach(ctx, &children.items[children.items.len - 1].surface, self.model, .flatpak, .search);
             if (self.category_button) |button| {
                 button.label = try std.fmt.allocPrint(arena, "{f} ▾", .{diagnostics.safe(if (self.category.len == 0) "All categories" else self.category)});
                 var border: Border = .{ .child = categoryButtonWidget(button) };
@@ -142,6 +145,7 @@ pub const View = struct {
                 else
                     try content.draw(ctx.withConstraints(.{}, .{ .width = list_width, .height = list_height })),
             });
+            if (split and list_height > 0) try pane_focus.attach(ctx, &children.items[children.items.len - 1].surface, self.model, .flatpak, .results);
         }
         if (show_pane and pane_height >= 2 and right_w >= 2) {
             const pane_ctx = ctx.withConstraints(.{}, .{ .width = right_w, .height = pane_height });
@@ -164,6 +168,7 @@ pub const View = struct {
                 break :blk try border.draw(pane_ctx.withConstraints(.{ .width = right_w, .height = pane_height }, .{ .width = right_w, .height = pane_height }));
             };
             try children.append(arena, .{ .origin = .{ .row = @intCast(pane_row), .col = if (split) @intCast(left_w) else 0 }, .surface = surface });
+            if (split) try pane_focus.attach(ctx, &children.items[children.items.len - 1].surface, self.model, .flatpak, .details);
         }
         if (self.category_open and self.category_list != null and self.help == null) {
             const popup_height = @min(@as(u16, 14), max.height -| (1 + search_height + 1));

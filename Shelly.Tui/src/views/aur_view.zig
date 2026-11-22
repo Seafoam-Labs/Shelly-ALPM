@@ -1,3 +1,4 @@
+const pane_focus = @import("pane_focus.zig");
 const drawColumn = @import("packages_view.zig").drawColumn;
 const styles = @import("styles.zig");
 const std = @import("std");
@@ -15,6 +16,7 @@ const formatEpoch = @import("detail_format.zig").formatEpoch;
 /// Borrows display state and widgets owned by the application.
 /// Query execution and user-action handling remain in Model.
 pub const View = struct {
+    model: ?*@import("../model.zig").Model = null,
     result_list: ?vxfw.Widget = null,
     list_percent: u8 = 40,
     installed_only: bool = false,
@@ -56,6 +58,7 @@ pub const View = struct {
                 else
                     try self.aur_field.draw(ctx.withConstraints(.{}, .{ .width = list_width, .height = search_height })),
             });
+            if (split) try pane_focus.attach(ctx, &children.items[children.items.len - 1].surface, self.model, .aur, .search);
             const message = try self.aurMessage(arena);
             var label: vxfw.Text = .{ .text = if (message) |item| item.text else "", .style = if (message != null and message.?.red) .{ .fg = .{ .index = 1 } } else styles.secondary };
             const page_label = [_]Border.BorderLabel{.{ .text = if (!self.installed_only and self.catalog_page > 0) try std.fmt.allocPrint(arena, "Page {d}/{d}", .{ self.catalog_page, @max(1, self.catalog_total_pages) }) else "", .alignment = .top_left }};
@@ -72,6 +75,7 @@ pub const View = struct {
                 else
                     try content.draw(ctx.withConstraints(.{}, .{ .width = list_width, .height = list_height })),
             });
+            if (split and list_height > 0) try pane_focus.attach(ctx, &children.items[children.items.len - 1].surface, self.model, .aur, .results);
         }
         if (show_pane and pane_height >= 2 and right_w >= 2) {
             const pane_ctx = ctx.withConstraints(.{}, .{ .width = right_w, .height = pane_height });
@@ -91,6 +95,7 @@ pub const View = struct {
                 break :blk try border.draw(pane_ctx.withConstraints(.{ .width = right_w, .height = pane_height }, .{ .width = right_w, .height = pane_height }));
             };
             try children.append(arena, .{ .origin = .{ .row = @intCast(pane_row), .col = if (split) @intCast(left_w) else 0 }, .surface = surface });
+            if (split) try pane_focus.attach(ctx, &children.items[children.items.len - 1].surface, self.model, .aur, .details);
         }
     }
     fn aurMessage(self: View, arena: Allocator) Allocator.Error!?struct { text: []const u8, red: bool } {

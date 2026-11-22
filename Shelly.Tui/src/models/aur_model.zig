@@ -429,6 +429,20 @@ pub fn rebuildAurFilter(self: *Model) Allocator.Error!void {
     self.aur_state.aur_list.jumpToItem(0);
 }
 
+pub fn focusPane(self: *Model, ctx: *vxfw.EventContext, target: commands.Mouse.FocusTarget) !void {
+    const state = &self.aur_state;
+    if (target == .details) {
+        self.overlay = .{ .aur = selectedAur(self) orelse return };
+        try ctx.requestFocus(self.widget());
+    } else {
+        operation_model.closeOverlay(self);
+        state.aur_preview_button.focused = false;
+        state.aur_list_active = target == .results;
+        try ctx.requestFocus(state.aur_field.widget());
+    }
+    ctx.redraw = true;
+}
+
 pub fn selectRow(self: *Model, ctx: *vxfw.EventContext, identity: *const AurPackage) !void {
     const state = &self.aur_state;
     if (self.active != .aur or self.help_open or self.overlay != null or state.aur_job != null) return;
@@ -450,6 +464,7 @@ pub fn aurView(self: *Model) aur_view.View {
         self.aur_state.aur_details_cursor = self.aur_state.aur_list.cursor;
     }
     return .{
+        .model = self,
         .result_list = @import("../views/result_list.zig").widget(self, .aur),
         .list_percent = self.list_percent.aur,
         .aur_field = &self.aur_state.aur_field,
@@ -846,7 +861,7 @@ test "AUR preview replaces the details pane and preserves search and selection" 
         var preview_found = false;
         for (surface.children) |child| {
             try std.testing.expectEqual(@as(u8, 0), child.z_index);
-            if (child.surface.children.len > 0 and child.surface.children[0].surface.widget.eql(model.operation_state.pkgbuild_scroll.widget())) {
+            if (@import("../views/pane_focus.zig").testContainsWidget(child.surface, model.operation_state.pkgbuild_scroll.widget())) {
                 preview_found = true;
                 try std.testing.expectEqual(size.width >= 64, child.origin.col > 0);
             }

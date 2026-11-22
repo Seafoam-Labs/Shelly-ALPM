@@ -1,3 +1,4 @@
+const pane_focus = @import("pane_focus.zig");
 const styles = @import("styles.zig");
 const commands = @import("../commands.zig");
 const std = @import("std");
@@ -172,6 +173,7 @@ const DetailsBody = struct {
 };
 
 pub const View = struct {
+    model: ?*@import("../model.zig").Model = null,
     result_list: ?vxfw.Widget = null,
     state: *@import("../models/appimage_model.zig").State,
     list_percent: u8 = 40,
@@ -201,6 +203,7 @@ pub const View = struct {
                 try children.append(arena, .{ .origin = .{ .row = 1, .col = 0 }, .surface = try border.draw(ctx.withConstraints(.{ .width = list_width, .height = pane_height }, .{ .width = list_width, .height = pane_height })) })
             else
                 try children.append(arena, .{ .origin = .{ .row = 1, .col = 0 }, .surface = try content.draw(ctx.withConstraints(.{}, .{ .width = list_width, .height = pane_height })) });
+            if (split) try pane_focus.attach(ctx, &children.items[children.items.len - 1].surface, self.model, .appimage, .results);
         }
         if (show_pane and pane_height >= 2 and right_w >= 2) {
             const pane_ctx = ctx.withConstraints(.{}, .{ .width = right_w, .height = pane_height });
@@ -222,6 +225,7 @@ pub const View = struct {
                 break :blk try border.draw(pane_ctx.withConstraints(.{ .width = right_w, .height = pane_height }, .{ .width = right_w, .height = pane_height }));
             };
             try children.append(arena, .{ .origin = .{ .row = 1, .col = if (split) @intCast(left_w) else 0 }, .surface = surface });
+            if (split) try pane_focus.attach(ctx, &children.items[children.items.len - 1].surface, self.model, .appimage, .details);
         }
     }
 };
