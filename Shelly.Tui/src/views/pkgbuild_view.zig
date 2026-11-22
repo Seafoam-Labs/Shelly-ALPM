@@ -322,6 +322,7 @@ pub const View = struct {
     transaction_review: bool = false,
     wrap: bool = true,
     choices: bool = false,
+    choice_owner: ?*@import("../model.zig").Model = null,
     choice_list: ?*vxfw.ListView = null,
     choice_prompt: []const u8 = "",
     optional_dependencies: bool = false,
@@ -356,6 +357,15 @@ pub const View = struct {
             .surface = try self.drawInPane(ctx.withConstraints(.{}, .{ .width = width, .height = height })),
             .z_index = 3,
         };
+    }
+
+    fn drawChoices(self: View, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
+        const list = self.choice_list.?;
+        const surface = try list.draw(ctx);
+        const owner = self.choice_owner orelse return surface;
+        const rows = try ctx.arena.create(ChoiceRows);
+        rows.* = .{ .owner = owner, .top = list.scroll.top, .child = .{.{ .origin = .{ .row = 0, .col = 0 }, .surface = surface }} };
+        return ChoiceRows.draw(rows, ctx);
     }
 
     /// Shared preview/review renderer; the caller owns placement and size.
@@ -396,7 +406,7 @@ pub const View = struct {
             try children.append(ctx.arena, .{ .origin = .{ .row = body_start, .col = 0 }, .surface = prompt_surface });
             try children.append(ctx.arena, .{
                 .origin = .{ .row = @intCast(body_start + prompt_surface.size.height), .col = 0 },
-                .surface = try self.choice_list.?.draw(ctx.withConstraints(.{}, .{ .width = inner_width, .height = body_height -| prompt_surface.size.height })),
+                .surface = try self.drawChoices(ctx.withConstraints(.{}, .{ .width = inner_width, .height = body_height -| prompt_surface.size.height })),
             });
         } else {
             try children.append(ctx.arena, .{
@@ -840,6 +850,28 @@ test "dependency choices preserve answer indices without source line numbers" {
         for (document.rows) |item| try std.testing.expectEqual(@as(usize, 0), item.prefix);
     }
 }
+
+const ChoiceRows = struct {
+    owner: *@import("../model.zig").Model,
+    top: usize,
+    child: [1]vxfw.SubSurface,
+
+    fn draw(ptr: *anyopaque, _: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
+        const self: *ChoiceRows = @ptrCast(@alignCast(ptr));
+        return .{ .size = self.child[0].surface.size, .buffer = &.{}, .children = &self.child, .widget = .{ .userdata = ptr, .drawFn = draw, .eventHandler = click } };
+    }
+
+    fn click(ptr: *anyopaque, ctx: *vxfw.EventContext, event: vxfw.Event) anyerror!void {
+        if (event != .mouse or !commands.Mouse.primaryPress(event.mouse)) return;
+        const self: *ChoiceRows = @ptrCast(@alignCast(ptr));
+        // Descriptions can wrap, so use each rendered option's actual height.
+        for (self.child[0].surface.children, self.top..) |item, index| {
+            const offset = @as(i32, event.mouse.row) - item.origin.row;
+            if (offset >= 0 and offset < item.surface.size.height)
+                return commands.Mouse.selectDependency(self.owner, ctx, index);
+        }
+    }
+};
 
 pub fn drawChoice(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
     const option: *const operation.Option = @ptrCast(@alignCast(ptr));

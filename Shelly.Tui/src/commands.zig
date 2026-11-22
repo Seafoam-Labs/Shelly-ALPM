@@ -52,6 +52,8 @@ pub const Mouse = struct {
     }
 
     pub const sortPackages = @import("models/packages_model.zig").sortBy;
+    pub const toggleUnusedDependencies = @import("models/operation_model.zig").toggleUnusedDependencies;
+    pub const selectDependency = @import("models/operation_model.zig").selectDependencyFromMouse;
     pub const navigateReview = @import("models/operation_model.zig").handleReviewMouse;
     pub const scrollUpdates = @import("models/updates_model.zig").handleScrollEvent;
     pub const cancelAppImageSource = @import("models/appimage_model.zig").cancelSourceFromMouse;

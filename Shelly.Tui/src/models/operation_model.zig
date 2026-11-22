@@ -320,6 +320,7 @@ pub fn pkgbuildView(self: *Model) pkgbuild_view.View {
         .pkgbuild_review = if (self.operation_state.operation_question) |message| message.value.question == .pkgbuild else false,
         .transaction_review = if (self.operation_state.operation_question) |message| message.value.question == .transaction else false,
         .optional_dependencies = if (self.operation_state.operation_question) |message| message.value.question == .select_many else false,
+        .choice_owner = self,
         .choice_list = &self.operation_state.dependency_choices,
         .choice_prompt = if (choiceOptions(self)) |_| switch (self.operation_state.operation_question.?.value.question) {
             .select_one => |q| q.prompt,
@@ -349,6 +350,22 @@ pub fn syncProviderSelection(self: *Model) void {
     const message = self.operation_state.operation_question orelse return;
     if (message.value.question != .select_one) return;
     for (message.value.question.select_one.options, 0..) |*option, index| option.is_selected = index == self.operation_state.dependency_choices.cursor;
+}
+
+fn markDependency(self: *Model, options: []shelly_operation.Option, index: usize) void {
+    if (self.operation_state.operation_question.?.value.question == .select_many)
+        options[index].is_selected = !options[index].is_selected;
+}
+
+pub fn selectDependencyFromMouse(self: *Model, ctx: *vxfw.EventContext, index: usize) !void {
+    if (self.help_open or self.overlay == null or self.overlay.? != .pkgbuild) return;
+    const options = choiceOptions(self) orelse return;
+    if (index >= options.len) return;
+    self.operation_state.dependency_choices.cursor = @intCast(index);
+    markDependency(self, options, index);
+    syncProviderSelection(self);
+    self.operation_state.answer_error = "";
+    ctx.consumeAndRedraw();
 }
 
 pub fn buildDependencyChoice(ptr: *const anyopaque, index: usize, _: usize) ?vxfw.Widget {
@@ -586,6 +603,13 @@ fn sendAuthenticationKey(job: *shelly_operation.Operation, key: vaxis.Key) !void
     }
 }
 
+pub fn toggleUnusedDependencies(self: *Model, ctx: *vxfw.EventContext) void {
+    const prompt = operationPrompt(self) orelse return;
+    if (self.help_open or prompt.state != .entering or prompt.action != .remove or (prompt.backend != .standard and prompt.backend != .aur)) return;
+    prompt.remove_unused_dependencies = !prompt.remove_unused_dependencies;
+    ctx.consumeAndRedraw();
+}
+
 pub fn handleSudoKey(self: *Model, prompt: *SudoPrompt, ctx: *vxfw.EventContext, key: vaxis.Key) anyerror!void {
     if (prompt.state == .running) if (self.operation_state.install_job) |job| {
         if (job.snapshot(runtime.io).authenticating) {
@@ -596,8 +620,7 @@ pub fn handleSudoKey(self: *Model, prompt: *SudoPrompt, ctx: *vxfw.EventContext,
         }
     };
     if (prompt.state == .entering and (prompt.backend == .standard or prompt.backend == .aur) and prompt.action == .remove and commands.matches(key, .mark)) {
-        prompt.remove_unused_dependencies = !prompt.remove_unused_dependencies;
-        return ctx.consumeAndRedraw();
+        return toggleUnusedDependencies(self, ctx);
     }
     switch (try prompt.panel.handleKey(promptView(self, prompt), ctx, key)) {
         .none => {},
@@ -622,8 +645,9 @@ pub fn operationPrompt(self: *Model) ?*SudoPrompt {
     return if (overlay == .sudo) overlay.sudo else null;
 }
 
-pub fn promptView(self: *const Model, prompt: *const SudoPrompt) operation_view.View {
+pub fn promptView(self: *Model, prompt: *const SudoPrompt) operation_view.View {
     var view = prompt.operationView();
+    view.owner = self;
     view.refresh_pending = self.appimage_state.refresh_after_operation or self.appimage_state.load != null or self.updates_state.refresh_after_upgrade or self.flatpak_state.refresh_flatpak_after_operation or
         self.updates_state.refresh_updates_after_operation or self.packages_state.loading or self.updates_state.updates_job != null or self.flatpak_state.flatpak_job != null;
     return view;
@@ -766,7 +790,7 @@ pub fn handleReviewKey(self: *Model, ctx: *vxfw.EventContext, key: vaxis.Key) an
     if (choiceOptions(self)) |options| {
         const cursor = self.operation_state.dependency_choices.cursor;
         if (commands.matches(key, .mark) and cursor < options.len) {
-            if (self.operation_state.operation_question.?.value.question == .select_many) options[cursor].is_selected = !options[cursor].is_selected;
+            markDependency(self, options, cursor);
         } else {
             try self.operation_state.dependency_choices.handleEvent(ctx, .{ .key_press = commands.scrollKey(key) orelse key });
         }
@@ -983,13 +1007,40 @@ test "dependency checkboxes navigate toggle and submit actual CLI indices" {
     try std.testing.expectEqualSlices(usize, &.{7}, answer.optional_dependencies);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    _ = try model.widget().draw(.{ .arena = arena.allocator(), .min = .{}, .max = .{ .width = 80, .height = 24 }, .cell_size = .{ .width = 10, .height = 20 } });
+    const draw_ctx: vxfw.DrawContext = .{ .arena = arena.allocator(), .min = .{}, .max = .{ .width = 80, .height = 24 }, .cell_size = .{ .width = 10, .height = 20 } };
+    const clickFirst = struct {
+        fn locate(surface: vxfw.Surface, list: vxfw.Widget, origin: vxfw.Point) ?vxfw.Point {
+            if (surface.widget.eql(list)) return origin;
+            for (surface.children) |child| {
+                if (child.origin.row < 0 or child.origin.col < 0) continue;
+                if (locate(child.surface, list, .{ .row = origin.row + @as(u16, @intCast(child.origin.row)), .col = origin.col + @as(u16, @intCast(child.origin.col)) })) |point| return point;
+            }
+            return null;
+        }
+        fn run(owner: *Model, draw: vxfw.DrawContext, events: *vxfw.EventContext) !void {
+            const surface = try owner.widget().draw(draw);
+            var point = locate(surface, owner.operation_state.dependency_choices.widget(), .{ .row = 0, .col = 0 }) orelse return error.MissingList;
+            point.col += 2;
+            var hits: std.ArrayList(vxfw.HitResult) = .empty;
+            try surface.hitTest(draw.arena, &hits, point);
+            events.consume_event = false;
+            while (hits.pop()) |hit| {
+                try hit.widget.handleEvent(events, .{ .mouse = .{ .button = .left, .type = .press, .row = @intCast(hit.local.row), .col = @intCast(hit.local.col), .mods = .{} } });
+                if (events.consume_event) return;
+            }
+        }
+    };
+    try clickFirst.run(model, draw_ctx, &ctx);
+    try std.testing.expect(choiceOptions(model).?[0].is_selected);
     try std.testing.expect(choiceOptions(model).?[1].is_selected);
+    try clickFirst.run(model, draw_ctx, &ctx);
+    try std.testing.expect(!choiceOptions(model).?[0].is_selected);
     finishOperationQuestion(model);
     try showOperationQuestion(model, try shelly_operation.decodeJson(std.testing.allocator,
         \\{"$kind":"q.provider","QuestionId":"102","QuestionText":"Choose provider","Options":[{"Index":3,"Name":"first"},{"Index":9,"Name":"second","IsSelected":true}]}
     ));
     try std.testing.expectEqual(@as(usize, 9), (try dependencyAnswer(model, &indices)).provider);
+    try clickFirst.run(model, draw_ctx, &ctx);
     try Model.typeErasedCaptureHandler(model, &ctx, .{ .key_press = commands.bindings.previous });
     try std.testing.expectEqual(@as(usize, 3), (try dependencyAnswer(model, &indices)).provider);
     try std.testing.expect(choiceOptions(model).?[0].is_selected);

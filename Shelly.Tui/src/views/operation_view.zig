@@ -9,6 +9,7 @@ const Allocator = std.mem.Allocator;
 
 /// Borrowed operation state. Password input goes directly to sudo's terminal.
 pub const View = struct {
+    owner: ?*@import("../model.zig").Model = null,
     name: []const u8,
     backend: operation.Backend = .standard,
     elevated: bool = true,
@@ -201,8 +202,42 @@ pub const Panel = struct {
     fn drawBody(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
         const self: *Panel = @ptrCast(@alignCast(ptr));
         const width = ctx.max.width orelse ctx.min.width;
-        var text: vxfw.Text = .{ .text = try self.view.body(ctx.arena, width), .softwrap = true };
+        const body = try self.view.body(ctx.arena, width);
+        var text: vxfw.Text = .{ .text = body, .softwrap = true };
+        if (self.view.state == .entering and self.view.action == .remove and (self.view.backend == .standard or self.view.backend == .aur)) {
+            if (self.view.owner) |owner| {
+                const split = std.mem.indexOfScalar(u8, body, '\n').?;
+                const label: vxfw.Text = .{ .text = body[0..split], .softwrap = true };
+                const children = try ctx.arena.alloc(vxfw.SubSurface, 2);
+                const checkbox_label = try ctx.arena.create(Checkbox);
+                checkbox_label.* = .{ .owner = owner, .label = label };
+                const checkbox = try Checkbox.draw(checkbox_label, ctx.withConstraints(.{}, .{ .width = width, .height = null }));
+                children[0] = .{ .origin = .{ .row = 0, .col = 0 }, .surface = checkbox };
+                text.text = body[split + 1 ..];
+                const targets = try text.draw(ctx.withConstraints(.{ .width = width }, .{ .width = width, .height = null }));
+                children[1] = .{ .origin = .{ .row = checkbox.size.height, .col = 0 }, .surface = targets };
+                return .{ .widget = .{ .userdata = self, .drawFn = drawBody }, .size = .{ .width = width, .height = checkbox.size.height + targets.size.height }, .buffer = &.{}, .children = children };
+            }
+        }
         return text.draw(ctx.withConstraints(.{ .width = width }, .{ .width = width, .height = null }));
+    }
+
+    const Checkbox = struct {
+        owner: *@import("../model.zig").Model,
+        label: vxfw.Text,
+
+        fn draw(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
+            const self: *Checkbox = @ptrCast(@alignCast(ptr));
+            var surface = try self.label.draw(ctx);
+            surface.widget = .{ .userdata = ptr, .drawFn = Checkbox.draw, .eventHandler = checkboxClick };
+            return surface;
+        }
+    };
+
+    fn checkboxClick(ptr: *anyopaque, ctx: *vxfw.EventContext, event: vxfw.Event) anyerror!void {
+        const checkbox: *Checkbox = @ptrCast(@alignCast(ptr));
+        if (event == .mouse and commands.Mouse.primaryPress(event.mouse))
+            commands.Mouse.toggleUnusedDependencies(checkbox.owner, ctx);
     }
 
     fn drawContent(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
@@ -493,4 +528,28 @@ test "authentication normalizes PTY line endings while escaping other controls" 
     const after = try view.body(allocator, 80);
     try std.testing.expectEqualStrings("Touch sensor\n", before);
     try std.testing.expectEqualStrings(before, after);
+}
+
+test "clicking the removal option toggles it without confirming" {
+    const model_types = @import("../model.zig");
+    const operations = @import("../models/operation_model.zig");
+    vxfw.DrawContext.init(.unicode);
+    const model = try model_types.Model.init(std.testing.allocator);
+    defer model.deinit();
+    const prompt = try model.gpa.create(model_types.SudoPrompt);
+    prompt.* = .{ .name = try model.gpa.dupe(u8, "komikku"), .backend = .standard, .action = .remove };
+    model.overlay = .{ .sudo = prompt };
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+    var events: vxfw.EventContext = .{ .io = std.testing.io, .alloc = alloc, .cmds = .empty };
+    for ([_]bool{ true, false }) |checked| {
+        const surface = try prompt.panel.draw(operations.promptView(model, prompt), .{ .arena = alloc, .min = .{}, .max = .{ .width = 80, .height = 8 }, .cell_size = .{ .width = 10, .height = 20 } });
+        var hits: std.ArrayList(vxfw.HitResult) = .empty;
+        try surface.hitTest(alloc, &hits, .{ .row = 1, .col = 2 });
+        const hit = hits.getLast();
+        try hit.widget.handleEvent(&events, .{ .mouse = .{ .button = .left, .type = .press, .row = @intCast(hit.local.row), .col = @intCast(hit.local.col), .mods = .{} } });
+        try std.testing.expectEqual(checked, prompt.remove_unused_dependencies);
+        try std.testing.expect(prompt.state == .entering);
+    }
 }
