@@ -67,15 +67,21 @@ pub const View = struct {
                 table.* = .{ .content = self.result_list orelse self.aur_list.widget(), .list = self.aur_list, .longest_name = self.longest_name };
                 break :blk .{ .userdata = table, .drawFn = drawAurTable };
             };
+            const marks = if (self.model) |model| model.aur_state.aur_selection.items else &.{};
+            const removable = for (marks) |mark| {
+                if (mark.installed) break true;
+            } else false;
+            const action_height = try @import("marked_actions.zig").append(ctx.withConstraints(.{}, .{ .width = list_width, .height = list_height }), children, list_row, self.model, marks.len, removable);
+            const remaining = list_height - action_height;
             var border: Border = .{ .child = content, .labels = if (!self.installed_only and self.catalog_page > 0) &page_label else &.{}, .focused = self.list_active and !self.details_active };
-            if (list_height > 0) try children.append(arena, .{
-                .origin = .{ .row = @intCast(list_row), .col = 0 },
-                .surface = if (list_width >= 2 and list_height >= 2)
-                    try border.draw(ctx.withConstraints(.{ .width = list_width, .height = list_height }, .{ .width = list_width, .height = list_height }))
+            if (remaining > 0) try children.append(arena, .{
+                .origin = .{ .row = @intCast(list_row + action_height), .col = 0 },
+                .surface = if (list_width >= 2 and remaining >= 2)
+                    try border.draw(ctx.withConstraints(.{ .width = list_width, .height = remaining }, .{ .width = list_width, .height = remaining }))
                 else
-                    try content.draw(ctx.withConstraints(.{}, .{ .width = list_width, .height = list_height })),
+                    try content.draw(ctx.withConstraints(.{}, .{ .width = list_width, .height = remaining })),
             });
-            if (split and list_height > 0) try pane_focus.attach(ctx, &children.items[children.items.len - 1].surface, self.model, .aur, .results);
+            if (split and remaining > 0) try pane_focus.attach(ctx, &children.items[children.items.len - 1].surface, self.model, .aur, .results);
         }
         if (show_pane and pane_height >= 2 and right_w >= 2) {
             const pane_ctx = ctx.withConstraints(.{}, .{ .width = right_w, .height = pane_height });

@@ -41,6 +41,16 @@ pub const Mouse = struct {
     pub const selectPackageRow = @import("models/packages_model.zig").selectPackageRow;
     pub const markPackageRow = @import("models/packages_model.zig").markRow;
     pub const markAurRow = @import("models/aur_model.zig").markRow;
+    pub fn markedAction(model: *@import("model.zig").Model, tab: @import("model.zig").Tab, action: PackageAction) !void {
+        if (model.active != tab or model.help_open or model.overlay != null or model.operation_state.review_prompt != null) return;
+        const operation: @import("services/shelly_operation.zig").Action = if (action == .install) .install else .remove;
+        switch (tab) {
+            .packages => if (model.packages_state.selected_packages.items.len > 0) try @import("models/packages_model.zig").openNativePrompt(model, operation),
+            .aur => if (model.aur_state.aur_selection.items.len > 0) try @import("models/aur_model.zig").openAurPrompt(model, operation),
+            else => {},
+        }
+    }
+
     pub const sortPackages = @import("models/packages_model.zig").sortBy;
     pub const navigateReview = @import("models/operation_model.zig").handleReviewMouse;
     pub const scrollUpdates = @import("models/updates_model.zig").handleScrollEvent;

@@ -81,19 +81,21 @@ pub const View = struct {
                 null;
             var label: vxfw.Text = .{ .text = message orelse "" };
             const content: vxfw.Widget = if (message != null) label.widget() else .{ .userdata = self.model, .drawFn = drawPackageTable };
+            const action_height = try @import("marked_actions.zig").append(ctx.withConstraints(.{}, .{ .width = list_width, .height = height }), children, content_row, self.model, if (self.loading or self.load_failed) 0 else self.selected_count, self.selected_installed > 0);
+            const remaining = height - action_height;
             var border: Border = .{
                 .child = content,
                 .focused = self.list_active and !self.details_active,
             };
             try children.append(arena, .{
-                .origin = .{ .row = @intCast(content_row), .col = 0 },
-                .surface = if (list_width >= 2 and height >= 2)
+                .origin = .{ .row = @intCast(content_row + action_height), .col = 0 },
+                .surface = if (list_width >= 2 and remaining >= 2)
                     try border.widget().draw(ctx.withConstraints(
-                        .{ .width = list_width, .height = height },
-                        .{ .width = list_width, .height = height },
+                        .{ .width = list_width, .height = remaining },
+                        .{ .width = list_width, .height = remaining },
                     ))
                 else
-                    try content.draw(ctx.withConstraints(.{}, .{ .width = list_width, .height = height })),
+                    try content.draw(ctx.withConstraints(.{}, .{ .width = list_width, .height = remaining })),
             });
             if (split) try pane_focus.attach(ctx, &children.items[children.items.len - 1].surface, self.model, .packages, .results);
         }
