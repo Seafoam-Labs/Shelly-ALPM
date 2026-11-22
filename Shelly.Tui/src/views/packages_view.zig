@@ -143,6 +143,10 @@ const marker_width = 2;
 const selected_width: u16 = "Selected".len;
 const minimum_table_width = 30;
 
+pub fn checkboxColumn(width: u16) u16 {
+    return if (width >= minimum_table_width) width - selected_width else width -| 3;
+}
+
 fn repositoryColumn(width: u16) u16 {
     const available = width - selected_width;
     return available - @max(11, available / 3);
@@ -224,7 +228,7 @@ fn drawRow(ptr: *anyopaque, ctx: vxfw.DrawContext, selected: bool) Allocator.Err
 
     const width = ctx.max.width orelse ctx.min.width;
     const table = width >= minimum_table_width;
-    const checkbox_col = if (table) width - selected_width else width -| 3;
+    const checkbox_col = checkboxColumn(width);
     const name = try diagnostics.sanitizeAlloc(arena, pkg.Name);
     const repository = try diagnostics.sanitizeAlloc(arena, pkg.Repository);
     const widget: vxfw.Widget = .{ .userdata = ptr, .drawFn = if (selected) drawMarkedPackageRow else drawPackageRow };

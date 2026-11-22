@@ -378,7 +378,10 @@ pub fn clearAurSelection(self: *Model) void {
 }
 
 pub fn toggleAurSelection(self: *Model) !void {
-    const pkg = selectedAur(self) orelse return;
+    try toggleAurMark(self, selectedAur(self) orelse return);
+}
+
+fn toggleAurMark(self: *Model, pkg: *const AurPackage) !void {
     for (self.aur_state.aur_selection.items, 0..) |selected, index| {
         if (std.mem.eql(u8, selected.name, pkg.Name)) {
             self.gpa.free(self.aur_state.aur_selection.orderedRemove(index).name);
@@ -441,6 +444,13 @@ pub fn focusPane(self: *Model, ctx: *vxfw.EventContext, target: commands.Mouse.F
         try ctx.requestFocus(state.aur_field.widget());
     }
     ctx.redraw = true;
+}
+
+pub fn markRow(self: *Model, ctx: *vxfw.EventContext, package: *const AurPackage) !void {
+    if (self.active != .aur or self.help_open or self.overlay != null or self.aur_state.aur_job != null) return;
+    if (std.mem.indexOfScalar(*const AurPackage, self.aur_state.aur_filtered.items, package) == null) return;
+    try toggleAurMark(self, package);
+    ctx.consumeAndRedraw();
 }
 
 pub fn selectRow(self: *Model, ctx: *vxfw.EventContext, identity: *const AurPackage) !void {

@@ -19,6 +19,7 @@ fn ResultList(comptime kind: Kind) type {
     return struct {
         model: *Model,
         identities: []const Identity,
+        checkbox_start: ?u16,
 
         fn draw(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
             const model: *Model = @ptrCast(@alignCast(ptr));
@@ -45,7 +46,14 @@ fn ResultList(comptime kind: Kind) type {
                 .appimage => item,
             };
             const rows = try ctx.arena.create(@This());
-            rows.* = .{ .model = model, .identities = ids };
+            const gutter: u16 = if (list.draw_cursor) 2 else 0;
+            const width = surface.size.width -| gutter;
+            const checkbox_start = switch (kind) {
+                .packages => gutter + @import("packages_view.zig").checkboxColumn(width),
+                .aur => gutter + @import("aur_view.zig").checkboxColumn(width),
+                else => null,
+            };
+            rows.* = .{ .model = model, .identities = ids, .checkbox_start = checkbox_start };
             const children = try ctx.arena.alloc(vxfw.SubSurface, 1);
             children[0] = .{ .origin = .{ .row = 0, .col = 0 }, .surface = surface };
             return .{ .size = surface.size, .children = children, .buffer = &.{}, .widget = .{ .userdata = rows, .drawFn = redraw, .eventHandler = click } };
@@ -62,6 +70,14 @@ fn ResultList(comptime kind: Kind) type {
             const index: usize = @intCast(event.mouse.row);
             if (index >= rows.identities.len) return;
             const id = rows.identities[index];
+            if (rows.checkbox_start) |start| {
+                const col = @as(i32, event.mouse.col);
+                if (col >= start and col < @as(i32, start) + 3) switch (kind) {
+                    .packages => return commands.Mouse.markPackageRow(rows.model, ctx, id),
+                    .aur => return commands.Mouse.markAurRow(rows.model, ctx, id),
+                    else => unreachable,
+                };
+            }
             switch (kind) {
                 .packages => try commands.Mouse.selectPackageRow(rows.model, ctx, id),
                 .aur => try commands.Mouse.selectAurRow(rows.model, ctx, id),
@@ -115,6 +131,46 @@ test "AUR Flatpak and AppImage result clicks select the rendered package" {
             .flatpak => try std.testing.expectEqual(@as(u32, 1), model.flatpak_state.flatpak_list.cursor),
             .appimage => try std.testing.expectEqualStrings("/b", model.appimage_state.selected().?.Path.?),
             else => unreachable,
+        }
+    }
+}
+
+test "package checkboxes toggle the clicked result without moving the cursor" {
+    const std = @import("std");
+    const packages = @import("../models/packages_model.zig");
+    const aur = @import("../models/aur_model.zig");
+    const model = try Model.init(std.testing.allocator);
+    defer model.deinit();
+    var native = [_]@import("../models/packages.zig").Package{ .{ .Name = "a" }, .{ .Name = "b" } };
+    const community = [_]@import("../models/packages.zig").AurPackage{ .{ .Name = "a" }, .{ .Name = "b" } };
+    model.packages_state.packages = &native;
+    try packages.rebuildFilter(model);
+    model.aur_state.aur_packages = &community;
+    try aur.rebuildAurFilter(model);
+    vxfw.DrawContext.init(.unicode);
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var events: vxfw.EventContext = .{ .io = std.testing.io, .alloc = arena.allocator(), .cmds = .empty };
+    inline for (.{ Kind.packages, Kind.aur }) |kind| {
+        model.active = if (kind == .packages) .packages else .aur;
+        const list = if (kind == .packages) &model.packages_state.list_view else &model.aur_state.aur_list;
+        for ([_]struct { width: u16, mark_col: i16 }{ .{ .width = 16, .mark_col = 14 }, .{ .width = 40, .mark_col = 33 } }) |size| {
+            const surface = try widget(model, kind).draw(.{
+                .arena = arena.allocator(),
+                .min = .{},
+                .max = .{ .width = size.width, .height = 4 },
+                .cell_size = .{ .width = 10, .height = 20 },
+            });
+            for ([_]bool{ true, false }) |marked| {
+                try surface.widget.handleEvent(&events, .{ .mouse = .{ .row = 1, .col = size.mark_col, .button = .left, .type = .press, .mods = .{} } });
+                const is_marked = if (kind == .packages)
+                    model.packages_state.selected_packages.items.len == 1 and std.mem.eql(u8, model.packages_state.selected_packages.items[0], "b")
+                else
+                    model.aur_state.aur_selection.items.len == 1 and std.mem.eql(u8, model.aur_state.aur_selection.items[0].name, "b");
+                try std.testing.expectEqual(marked, is_marked);
+                try std.testing.expectEqual(@as(u32, 0), list.cursor);
+                try std.testing.expect(model.overlay == null);
+            }
         }
     }
 }

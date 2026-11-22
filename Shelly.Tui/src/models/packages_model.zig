@@ -241,8 +241,11 @@ pub fn openNativePrompt(self: *Model, action: shelly_operation.Action) !void {
 }
 
 pub fn toggleSelectedList(self: *Model) !void {
+    try togglePackageMark(self, self.packages_state.filtered.items[self.packages_state.list_view.cursor].Name);
+}
+
+fn togglePackageMark(self: *Model, package_name: []const u8) !void {
     try self.setNotice("");
-    const package_name = self.packages_state.filtered.items[self.packages_state.list_view.cursor].Name;
     for (self.packages_state.selected_packages.items, 0..) |*item, index| {
         if (std.mem.eql(u8, item.*, package_name)) {
             _ = self.packages_state.selected_packages.orderedRemove(index);
@@ -339,6 +342,13 @@ pub fn focusPane(self: *Model, ctx: *vxfw.EventContext, target: commands.Mouse.F
         try ctx.requestFocus(state.text_field.widget());
     }
     ctx.redraw = true;
+}
+
+pub fn markRow(self: *Model, ctx: *vxfw.EventContext, package: *const Package) !void {
+    if (self.active != .packages or self.help_open or self.overlay != null) return;
+    if (std.mem.indexOfScalar(*const Package, self.packages_state.filtered.items, package) == null) return;
+    try togglePackageMark(self, package.Name);
+    ctx.consumeAndRedraw();
 }
 
 pub fn selectPackageRow(self: *Model, ctx: *vxfw.EventContext, package: *const Package) !void {

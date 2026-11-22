@@ -143,6 +143,10 @@ const marker_width = 2;
 const selected_width: u16 = "Selected".len;
 const minimum_table_width = marker_width + "Package".len + 1 + selected_width;
 
+pub fn checkboxColumn(width: u16) u16 {
+    return if (width >= minimum_table_width) width - selected_width else width -| 3;
+}
+
 const AurTable = struct {
     content: vxfw.Widget,
     list: *vxfw.ListView,
@@ -181,7 +185,7 @@ pub fn drawSelectedAurRow(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Erro
 fn drawRow(ptr: *anyopaque, ctx: vxfw.DrawContext, selected: bool) Allocator.Error!vxfw.Surface {
     const pkg: *const AurPackage = @ptrCast(@alignCast(ptr));
     const width = ctx.max.width orelse ctx.min.width;
-    const checkbox_col = if (width >= minimum_table_width) width - selected_width else width -| 3;
+    const checkbox_col = checkboxColumn(width);
     const widget: vxfw.Widget = .{ .userdata = ptr, .drawFn = if (selected) drawSelectedAurRow else drawAurRow };
     const surface = try vxfw.Surface.init(ctx.arena, widget, .{ .width = width, .height = 1 });
     @memset(surface.buffer, .{});
