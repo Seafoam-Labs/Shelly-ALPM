@@ -96,7 +96,7 @@ pub fn draw(self: *Model, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
         const col = bar.right_edge + 1;
         self.help_button = .{ .col = col, .width = help_width, .height = navigation_height };
         const help = try arena.create(vxfw.Text);
-        help.* = .{ .text = help_label, .softwrap = false, .style = @import("styles.zig").emphasis };
+        help.* = .{ .text = help_label, .softwrap = false, .style = @import("styles.zig").action };
         const border = try arena.create(@import("border.zig"));
         border.* = .{ .child = help.widget() };
         const bounds: vxfw.Size = .{ .width = help_width, .height = navigation_height };
