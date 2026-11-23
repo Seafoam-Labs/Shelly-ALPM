@@ -614,13 +614,16 @@ pub fn runMouseOperationAction(self: *Model, ctx: *vxfw.EventContext, action: co
         .confirm, .cancel => {
             const prompt = operationPrompt(self) orelse return;
             if (prompt.state != .entering) return;
-            if (action == .cancel) closeOverlay(self) else if (prompt.panel.ready) try confirmPrompt(self, ctx, prompt);
+            if (action == .cancel) {
+                closeOverlay(self);
+                try self.restoreTabFocus(ctx);
+            } else if (prompt.panel.ready) try confirmPrompt(self, ctx, prompt);
         },
         .close => {
             const prompt = operationPrompt(self) orelse return;
             if (prompt.state == .entering or prompt.state == .running) return;
             closeOverlay(self);
-            try self.focusActiveTab(ctx);
+            try self.restoreTabFocus(ctx);
         },
         .approve, .decline => {
             if (self.overlay == null or self.overlay.? != .pkgbuild or self.operation_state.operation_question == null) return;
@@ -1331,4 +1334,28 @@ test "missing Atoll preview source is displayed without scheduling another reque
     const text = try std.mem.join(model.gpa, "\n", model.operation_state.pkgbuild_document.?.lines);
     defer model.gpa.free(text);
     try std.testing.expect(std.mem.indexOf(u8, text, "PKGBUILD unavailable for demo.") != null);
+}
+
+test "mouse and keyboard Cancel restore package search and results focus" {
+    const model = try Model.init(std.testing.allocator);
+    defer model.deinit();
+    var ctx: vxfw.EventContext = .{ .io = std.testing.io, .alloc = std.testing.allocator, .cmds = .empty };
+    defer ctx.cmds.deinit(ctx.alloc);
+    for ([_]bool{ false, true }) |list_active| {
+        for ([_]bool{ false, true }) |mouse| {
+            model.packages_state.package_list_active = list_active;
+            const prompt = try model.gpa.create(SudoPrompt);
+            prompt.* = .{ .name = try model.gpa.dupe(u8, "package"), .backend = .standard };
+            model.overlay = .{ .sudo = prompt };
+            ctx.cmds.clearRetainingCapacity();
+            ctx.consume_event = false;
+            if (mouse) {
+                try Model.typeErasedCaptureHandler(model, &ctx, .{ .mouse = .{ .button = .left, .type = .press, .row = 5, .col = 10, .mods = .{} } });
+                try commands.Mouse.operationAction(model, &ctx, .cancel);
+            } else try Model.typeErasedCaptureHandler(model, &ctx, .{ .key_press = commands.bindings.cancel });
+            try std.testing.expect(model.overlay == null);
+            try std.testing.expect(ctx.cmds.items[ctx.cmds.items.len - 1].request_focus.eql(model.packages_state.text_field.widget()));
+            try std.testing.expectEqual(list_active, model.packages_state.package_list_active);
+        }
+    }
 }

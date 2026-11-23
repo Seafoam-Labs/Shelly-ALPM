@@ -120,13 +120,7 @@ pub const Model = struct {
             // replaces browsing with the operation panel.
             try ctx.requestFocus(self.widget());
         } else if (had_operation or had_help or had_aur_pane) {
-            const list_active = self.packages_state.package_list_active;
-            const aur_active = self.aur_state.aur_list_active;
-            const flatpak_active = self.flatpak_state.flatpak_list_active;
-            try self.focusActiveTab(ctx);
-            self.packages_state.package_list_active = list_active;
-            self.aur_state.aur_list_active = aur_active;
-            self.flatpak_state.flatpak_list_active = flatpak_active;
+            try self.restoreTabFocus(ctx);
         }
     }
 
@@ -410,11 +404,17 @@ pub const Model = struct {
     }
 
     pub fn focusActiveTab(self: *Model, ctx: *vxfw.EventContext) !void {
-        if (self.active == .appimage) if (self.appimage_state.install_form) |form| return ctx.requestFocus(if (form.editing_path) form.field.widget() else self.widget());
+        if (self.active == .appimage and self.appimage_state.install_form != null) return self.restoreTabFocus(ctx);
         if (self.help_open or operation_model.operationPrompt(self) != null or operation_model.aurPaneFocused(self) or self.flatpak_state.flatpak_category_open) return ctx.requestFocus(self.widget());
         self.packages_state.package_list_active = false;
         self.aur_state.aur_list_active = false;
         self.flatpak_state.flatpak_list_active = false;
+        try self.restoreTabFocus(ctx);
+    }
+
+    /// Search and results share the field widget. Preserve their logical focus on dismissal.
+    pub fn restoreTabFocus(self: *Model, ctx: *vxfw.EventContext) !void {
+        if (self.active == .appimage) if (self.appimage_state.install_form) |form| return ctx.requestFocus(if (form.editing_path) form.field.widget() else self.widget());
         switch (self.active) {
             .packages => try ctx.requestFocus(self.packages_state.text_field.widget()),
             .aur => try ctx.requestFocus(self.aur_state.aur_field.widget()),
