@@ -244,7 +244,9 @@ pub const Panel = struct {
         const self: *Panel = @ptrCast(@alignCast(ptr));
         const view = self.view;
         const size = ctx.max.size();
-        const review_height = size.height;
+        const entering = view.state == .entering;
+        const actions = view.owner != null and view.state != .running and size.height >= (if (entering) @as(u16, 2) else 1);
+        const review_height = size.height - @as(u16, @intFromBool(actions));
         if (view.state != .entering) {
             // Upward keyboard or wheel navigation pauses following.
             if (self.scroll.scroll.pending_lines < 0) self.follow_output = false;
@@ -257,11 +259,43 @@ pub const Panel = struct {
         }
         const output = try self.scroll.draw(ctx.withConstraints(.{}, .{ .width = size.width, .height = review_height }));
         if (view.state != .entering and !self.scroll.scroll.has_more_vertical) self.follow_output = true;
-        const children = try ctx.arena.alloc(vxfw.SubSurface, 1);
+        const children = try ctx.arena.alloc(vxfw.SubSurface, if (actions) (if (entering) 3 else 2) else 1);
         children[0] = .{ .origin = .{ .row = 0, .col = 0 }, .surface = output };
+        if (actions and entering) {
+            children[1] = .{ .origin = .{ .row = review_height, .col = 0 }, .surface = try drawActionButton(ctx, view.owner.?, "[Confirm]", .confirm) };
+            children[2] = .{ .origin = .{ .row = review_height, .col = 10 }, .surface = try drawActionButton(ctx, view.owner.?, "[Cancel]", .cancel) };
+        } else if (actions) {
+            children[1] = .{ .origin = .{ .row = review_height, .col = 0 }, .surface = try drawActionButton(ctx, view.owner.?, "[Close]", .close) };
+        }
         return .{ .size = size, .widget = .{ .userdata = self, .drawFn = drawContent }, .buffer = &.{}, .children = children };
     }
 };
+
+const ActionButton = struct {
+    owner: *@import("../model.zig").Model,
+    label: []const u8,
+    action: commands.Mouse.OperationAction,
+
+    fn draw(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
+        const self: *ActionButton = @ptrCast(@alignCast(ptr));
+        var label: vxfw.Text = .{ .text = self.label, .softwrap = false, .style = .{ .bold = true } };
+        var surface = try label.draw(ctx);
+        surface.widget = .{ .userdata = ptr, .drawFn = ActionButton.draw, .eventHandler = click };
+        return surface;
+    }
+
+    fn click(ptr: *anyopaque, ctx: *vxfw.EventContext, event: vxfw.Event) anyerror!void {
+        const self: *ActionButton = @ptrCast(@alignCast(ptr));
+        if (event == .mouse and commands.Mouse.primaryPress(event.mouse))
+            try commands.Mouse.operationAction(self.owner, ctx, self.action);
+    }
+};
+
+pub fn drawActionButton(ctx: vxfw.DrawContext, owner: *@import("../model.zig").Model, label: []const u8, action: commands.Mouse.OperationAction) Allocator.Error!vxfw.Surface {
+    const button = try ctx.arena.create(ActionButton);
+    button.* = .{ .owner = owner, .label = label, .action = action };
+    return ActionButton.draw(button, ctx.withConstraints(.{}, .{ .width = @min(ctx.max.size().width, @as(u16, @intCast(label.len))), .height = 1 }));
+}
 
 test "direct sudo authentication has no password field and sanitizes terminal output" {
     var arena: std.heap.ArenaAllocator = .init(std.testing.allocator);
@@ -551,5 +585,28 @@ test "clicking the removal option toggles it without confirming" {
         try hit.widget.handleEvent(&events, .{ .mouse = .{ .button = .left, .type = .press, .row = @intCast(hit.local.row), .col = @intCast(hit.local.col), .mods = .{} } });
         try std.testing.expectEqual(checked, prompt.remove_unused_dependencies);
         try std.testing.expect(prompt.state == .entering);
+    }
+}
+
+test "clicking Close dismisses each completed operation" {
+    const model_types = @import("../model.zig");
+    const operations = @import("../models/operation_model.zig");
+    vxfw.DrawContext.init(.unicode);
+    const model = try model_types.Model.init(std.testing.allocator);
+    defer model.deinit();
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+    for ([_]model_types.SudoPrompt.State{ .succeeded, .failed, .declined }) |state| {
+        const prompt = try model.gpa.create(model_types.SudoPrompt);
+        prompt.* = .{ .name = try model.gpa.dupe(u8, "package"), .backend = .standard, .state = state };
+        model.overlay = .{ .sudo = prompt };
+        const surface = try prompt.panel.draw(operations.promptView(model, prompt), .{ .arena = alloc, .min = .{}, .max = .{ .width = 80, .height = 8 }, .cell_size = .{ .width = 10, .height = 20 } });
+        var hits: std.ArrayList(vxfw.HitResult) = .empty;
+        try surface.hitTest(alloc, &hits, .{ .row = 6, .col = 2 });
+        const hit = hits.getLast();
+        var events: vxfw.EventContext = .{ .io = std.testing.io, .alloc = alloc, .cmds = .empty };
+        try hit.widget.handleEvent(&events, .{ .mouse = .{ .button = .left, .type = .press, .row = @intCast(hit.local.row), .col = @intCast(hit.local.col), .mods = .{} } });
+        try std.testing.expect(model.overlay == null);
     }
 }

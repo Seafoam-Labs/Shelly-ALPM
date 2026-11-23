@@ -603,6 +603,33 @@ fn sendAuthenticationKey(job: *shelly_operation.Operation, key: vaxis.Key) !void
     }
 }
 
+fn confirmPrompt(self: *Model, ctx: *vxfw.EventContext, prompt: *SudoPrompt) !void {
+    try startElevatedInstall(self, ctx, prompt);
+    prompt.state = .running;
+}
+
+pub fn runMouseOperationAction(self: *Model, ctx: *vxfw.EventContext, action: commands.Mouse.OperationAction) !void {
+    if (self.help_open) return;
+    switch (action) {
+        .confirm, .cancel => {
+            const prompt = operationPrompt(self) orelse return;
+            if (prompt.state != .entering) return;
+            if (action == .cancel) closeOverlay(self) else if (prompt.panel.ready) try confirmPrompt(self, ctx, prompt);
+        },
+        .close => {
+            const prompt = operationPrompt(self) orelse return;
+            if (prompt.state == .entering or prompt.state == .running) return;
+            closeOverlay(self);
+            try self.focusActiveTab(ctx);
+        },
+        .approve, .decline => {
+            if (self.overlay == null or self.overlay.? != .pkgbuild or self.operation_state.operation_question == null) return;
+            try answerOperationQuestion(self, action == .approve);
+        },
+    }
+    ctx.consumeAndRedraw();
+}
+
 pub fn toggleUnusedDependencies(self: *Model, ctx: *vxfw.EventContext) void {
     const prompt = operationPrompt(self) orelse return;
     if (self.help_open or prompt.state != .entering or prompt.action != .remove or (prompt.backend != .standard and prompt.backend != .aur)) return;
@@ -625,10 +652,7 @@ pub fn handleSudoKey(self: *Model, prompt: *SudoPrompt, ctx: *vxfw.EventContext,
     switch (try prompt.panel.handleKey(promptView(self, prompt), ctx, key)) {
         .none => {},
         .close => closeOverlay(self),
-        .confirm => {
-            try startElevatedInstall(self, ctx, prompt);
-            prompt.state = .running;
-        },
+        .confirm => try confirmPrompt(self, ctx, prompt),
     }
     return ctx.consumeAndRedraw();
 }

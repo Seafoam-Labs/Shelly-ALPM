@@ -383,7 +383,8 @@ pub const View = struct {
         const note_text = if (self.loading) "" else if (self.answer_error.len > 0) self.answer_error else self.scan_status;
         const note_height: u16 = if (note_text.len > 0) 1 else 0;
         const body_start: u16 = @intFromBool(self.back != null);
-        const body_height = inner_height - body_start - note_height;
+        const actions = self.review and self.choice_owner != null and inner_width >= 10 and inner_height >= 3;
+        const body_height = inner_height - body_start - note_height - @as(u16, @intFromBool(actions));
         var children: std.ArrayList(vxfw.SubSurface) = .empty;
         if (self.back) |back| try children.append(ctx.arena, .{
             .origin = .{ .row = 0, .col = 0 },
@@ -419,6 +420,18 @@ pub const View = struct {
             try children.append(ctx.arena, .{
                 .origin = .{ .row = @intCast(body_start + body_height), .col = 0 },
                 .surface = try note.draw(ctx.withConstraints(.{}, .{ .width = inner_width, .height = note_height })),
+            });
+        }
+        if (actions) {
+            const buttons = @import("operation_view.zig");
+            const owner = self.choice_owner.?;
+            try children.append(ctx.arena, .{
+                .origin = .{ .row = inner_height - 1, .col = 0 },
+                .surface = try buttons.drawActionButton(ctx, owner, if (self.choices) "[Confirm]" else "[Approve]", .approve),
+            });
+            if (!self.choices and inner_width >= 19) try children.append(ctx.arena, .{
+                .origin = .{ .row = inner_height - 1, .col = 10 },
+                .surface = try buttons.drawActionButton(ctx, owner, "[Decline]", .decline),
             });
         }
         const content: vxfw.Surface = .{

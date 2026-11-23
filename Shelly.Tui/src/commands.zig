@@ -52,6 +52,8 @@ pub const Mouse = struct {
     }
 
     pub const sortPackages = @import("models/packages_model.zig").sortBy;
+    pub const OperationAction = enum { confirm, cancel, close, approve, decline };
+    pub const operationAction = @import("models/operation_model.zig").runMouseOperationAction;
     pub const toggleUnusedDependencies = @import("models/operation_model.zig").toggleUnusedDependencies;
     pub const selectDependency = @import("models/operation_model.zig").selectDependencyFromMouse;
     pub const navigateReview = @import("models/operation_model.zig").handleReviewMouse;
