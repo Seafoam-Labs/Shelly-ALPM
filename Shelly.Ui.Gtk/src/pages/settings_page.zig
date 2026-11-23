@@ -23,6 +23,7 @@ const icon_fetcher = @import("../services/icon_fetcher.zig");
 const support = @import("support.zig");
 const datetime = @import("../helpers/datetime.zig");
 const ShellyWindow = @import("../shelly_window.zig").ShellyWindow;
+const project_links = @import("../helpers/project_links.zig");
 const Toast = @import("../helpers/custom_ui_comps/toast.zig").Toast;
 const VersionHistoryDialog = @import("../dialog/page/version_history.zig").VersionHistoryDialog;
 const HistoryEntry = @import("../dialog/page/version_history.zig").Entry;
@@ -118,9 +119,7 @@ pub const ShellySettingsPage = extern struct {
         save_button: *gtk.Button,
         changelog_button: *gtk.Button,
         version_label: *gtk.Label,
-        github_link: *gtk.LinkButton,
-        fluxer_link: *gtk.LinkButton,
-        sponsor_link: *gtk.LinkButton,
+        footer_start: *gtk.Box,
 
         toast: *Toast,
         loaded: bool,
@@ -168,6 +167,8 @@ pub const ShellySettingsPage = extern struct {
 
         _ = gtk.Button.signals.clicked.connect(p.save_button, *Self, &onSaveClicked, self, .{});
         _ = gtk.Button.signals.clicked.connect(p.changelog_button, *Self, &onChangelogClicked, self, .{});
+        // Devario builds have no project links in the navigation.
+        if (features.builtWithDevario) gtk.Box.append(p.footer_start, project_links.build(.horizontal).as(gtk.Widget));
 
         _ = gtk.Button.signals.clicked.connect(p.tray_icon_button, *Self, &onPickTrayIcon, self, .{});
         _ = gtk.Button.signals.clicked.connect(p.tray_icon_clear_button, *Self, &onClearTrayIcon, self, .{});
@@ -1276,9 +1277,7 @@ pub const ShellySettingsPage = extern struct {
         .{ "save_button", @offsetOf(Private, "save_button") },
         .{ "changelog_button", @offsetOf(Private, "changelog_button") },
         .{ "version_label", @offsetOf(Private, "version_label") },
-        .{ "github_link", @offsetOf(Private, "github_link") },
-        .{ "fluxer_link", @offsetOf(Private, "fluxer_link") },
-        .{ "sponsor_link", @offsetOf(Private, "sponsor_link") },
+        .{ "footer_start", @offsetOf(Private, "footer_start") },
     };
 
     pub const Class = extern struct {

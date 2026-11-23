@@ -341,16 +341,6 @@
   background: alpha(@shelly_accent, 0.14);
   color: @shelly_accent;
 }
-.shelly-root .settings-footer button.link {
-  padding: 0 10px;
-}
-.shelly-root .settings-footer button.link label {
-  color: @shelly_secondary_fg;
-  text-decoration-line: none;
-}
-.shelly-root .settings-footer button.link:hover label {
-  color: @shelly_accent;
-}
 .shelly-root stackswitcher button:checked {
   background: @shelly_selected_bg;
   border-color: @shelly_selected_ring;

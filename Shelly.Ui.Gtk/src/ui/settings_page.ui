@@ -2034,7 +2034,7 @@
                   <class name="settings-footer"/>
                 </style>
                 <child>
-                  <object class="GtkBox">
+                  <object class="GtkBox" id="footer_start">
                     <property name="orientation">horizontal</property>
                     <property name="spacing">10</property>
                     <property name="hexpand">true</property>
@@ -2047,24 +2047,6 @@
                         <style>
                           <class name="dim-label"/>
                         </style>
-                      </object>
-                    </child>
-                    <child>
-                      <object class="GtkLinkButton" id="github_link">
-                        <property name="label" translatable="yes">GitHub</property>
-                        <property name="uri">https://github.com/Seafoam-Labs/Shelly-ALPM</property>
-                      </object>
-                    </child>
-                    <child>
-                      <object class="GtkLinkButton" id="fluxer_link">
-                        <property name="label" translatable="yes">Community fluxer</property>
-                        <property name="uri">https://fluxer.gg/vOjrMXcE</property>
-                      </object>
-                    </child>
-                    <child>
-                      <object class="GtkLinkButton" id="sponsor_link">
-                        <property name="label" translatable="yes">Sponsor</property>
-                        <property name="uri">https://www.patreon.com/cw/SeafoamLabs</property>
                       </object>
                     </child>
                   </object>
