@@ -235,7 +235,10 @@ pub const Model = struct {
             },
             .mouse => {
                 self.trackPointer(ctx, event.mouse);
-                if (self.settings_state.keybinding_capture) return ctx.consumeEvent();
+                if (self.settings_state.keybinding_capture) {
+                    if (self.settings_state.mouse_binding_capture) return;
+                    return ctx.consumeEvent();
+                }
                 if (self.help_button) |button| {
                     if (event.mouse.row >= 0 and event.mouse.row < @as(i17, button.height) and
                         event.mouse.col >= @as(i17, button.col) and event.mouse.col < @as(i17, button.col) + @as(i17, button.width) and
@@ -377,6 +380,7 @@ pub const Model = struct {
     }
 
     pub fn setTab(self: *Model, tab: Tab, ctx: *vxfw.EventContext) !void {
+        if (self.settings_state.keybinding_capture) return;
         if (self.appimage_state.install_form != null or self.appimage_state.source_open) return;
         if (!self.tabEnabled(tab)) return;
         if (tab == self.active) return;

@@ -23,6 +23,8 @@ pub const View = struct {
     keybindings_open: bool = false,
     binding_selected: usize = 0,
     capturing: bool = false,
+    mouse_capture: bool = false,
+    binding_candidate: ?@import("../services/keybindings.zig").Config = null,
     binding_error: ?anyerror = null,
     dirty: bool = false,
     show_save_notice: bool = false,
@@ -72,7 +74,7 @@ pub const View = struct {
         if (self.pane == .full and size.width >= 80 and size.height >= 10) return self.drawSplit(ptr, ctx);
         if (self.pane == .details) return self.drawDetails(ptr, ctx);
         if (self.help) |help| if (self.pane != .controls) return help.draw(ctx);
-        if (self.keybindings_open and self.pane != .controls) return keybindings_view.draw(.{ .config = self.settings.keybindings, .selected = self.binding_selected, .capturing = self.capturing, .failure = self.binding_error orelse self.failure, .busy = self.busy }, ctx);
+        if (self.keybindings_open and self.pane != .controls) return keybindings_view.draw(.{ .config = self.binding_candidate orelse self.settings.keybindings, .owner = self.userdata, .mouse_capture = self.mouse_capture, .can_save = self.binding_candidate != null, .selected = self.binding_selected, .capturing = self.capturing and self.binding_candidate == null, .failure = self.binding_error orelse self.failure, .busy = self.busy }, ctx);
         const widget: vxfw.Widget = .{ .userdata = ptr, .drawFn = drawBody };
         if (size.width == 0 or size.height == 0) return .{ .size = size, .widget = widget, .buffer = &.{}, .children = &.{} };
         const width = if (self.pane == .controls) size.width else @min(size.width, 72);
@@ -186,7 +188,7 @@ pub const View = struct {
     }
 
     fn drawDetails(self: *const View, ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
-        if (self.keybindings_open or self.previewSelection() == preferences.keybindings_index) return keybindings_view.draw(.{ .config = self.settings.keybindings, .selected = self.binding_selected, .capturing = self.capturing, .failure = self.binding_error orelse self.failure, .busy = self.busy, .focused = self.keybindings_open }, ctx);
+        if (self.keybindings_open or self.previewSelection() == preferences.keybindings_index) return keybindings_view.draw(.{ .config = self.binding_candidate orelse self.settings.keybindings, .owner = self.userdata, .mouse_capture = self.mouse_capture, .can_save = self.binding_candidate != null, .selected = self.binding_selected, .capturing = self.capturing and self.binding_candidate == null, .failure = self.binding_error orelse self.failure, .busy = self.busy, .focused = self.keybindings_open }, ctx);
         const size = ctx.max.size();
         const error_height: u16 = if (size.height > 0 and (self.failure != null or self.busy)) 1 else 0;
         const available = size.height - error_height;

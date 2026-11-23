@@ -45,6 +45,8 @@ pub const State = struct {
     keybindings_open: bool = false,
     keybinding_selected: usize = 0,
     keybinding_capture: bool = false,
+    mouse_binding_capture: bool = false,
+    mouse_binding_candidate: ?keybindings.Config = null,
     keybinding_error: ?anyerror = null,
     watch_pending: bool = false,
     watch_fingerprint: ?u64 = null,
@@ -150,6 +152,8 @@ pub fn applySettings(self: *Model, saved: Settings) void {
     if (!saved.show_flatpak_screenshots and self.settings_state.settings.show_flatpak_screenshots) flatpak_model.closeScreenshots(self);
     self.settings_state.header_open = false;
     self.settings_state.keybinding_capture = false;
+    self.settings_state.mouse_binding_capture = false;
+    self.settings_state.mouse_binding_candidate = null;
     self.settings_state.keybinding_error = null;
     self.settings_state.settings = saved;
     self.settings_state.settings_draft = saved;
@@ -383,6 +387,8 @@ pub fn settingsView(self: *Model) settings_view.View {
         .keybindings_open = self.settings_state.keybindings_open,
         .binding_selected = self.settings_state.keybinding_selected,
         .capturing = self.settings_state.keybinding_capture,
+        .mouse_capture = self.settings_state.mouse_binding_capture,
+        .binding_candidate = self.settings_state.mouse_binding_candidate,
         .binding_error = self.settings_state.keybinding_error,
         .settings = self.settings_state.settings_draft,
         .dirty = hasChanges(self),
@@ -400,7 +406,7 @@ pub fn settingsView(self: *Model) settings_view.View {
 
 pub fn onSettingsAction(ptr: *anyopaque, ctx: *vxfw.EventContext, action: settings_view.Action) anyerror!void {
     const self: *Model = @ptrCast(@alignCast(ptr));
-    if (self.operation_state.install_job != null) return;
+    if (self.operation_state.install_job != null or self.settings_state.keybinding_capture) return;
     switch (action) {
         .control => |index| {
             if (index >= control_count) return;
@@ -440,15 +446,49 @@ fn handleHeaderKey(self: *Model, ctx: *vxfw.EventContext, key: vaxis.Key) void {
 }
 
 /// Root capture must run this before Quit, Help, or tab navigation.
+pub fn editBindingFromMouse(ptr: *anyopaque, ctx: *vxfw.EventContext, action: commands.Mouse.BindingTarget) anyerror!void {
+    const self: *Model = @ptrCast(@alignCast(ptr));
+    const state = &self.settings_state;
+    if (self.active != .settings or self.help_open or !state.keybindings_open or self.operation_state.install_job != null) return;
+    switch (action) {
+        .binding => |index| {
+            if (state.keybinding_capture or index >= keybindings.editable.len) return;
+            state.keybinding_selected = index;
+            state.keybinding_capture = true;
+            state.mouse_binding_capture = state.settings.expanded_mouse_support;
+        },
+        .save => {
+            if (!state.mouse_binding_capture) return;
+            state.settings_draft.keybindings = state.mouse_binding_candidate orelse return;
+            state.keybinding_capture = false;
+            state.mouse_binding_capture = false;
+            state.mouse_binding_candidate = null;
+            try saveSettings(self, ctx);
+        },
+        .cancel => {
+            if (!state.mouse_binding_capture) return;
+            state.keybinding_capture = false;
+            state.mouse_binding_capture = false;
+            state.mouse_binding_candidate = null;
+        },
+    }
+    state.keybinding_error = null;
+    ctx.consumeAndRedraw();
+}
+
 pub fn captureBinding(self: *Model, ctx: *vxfw.EventContext, input: vaxis.Key) !bool {
     const state = &self.settings_state;
     if (self.active != .settings or self.help_open or !state.keybindings_open or !state.keybinding_capture) return false;
     if (self.operation_state.install_job != null) {
         state.keybinding_capture = false;
+        state.mouse_binding_capture = false;
+        state.mouse_binding_candidate = null;
         return false;
     }
     if (commands.matches(input, .cancel_capture)) {
         state.keybinding_capture = false;
+        state.mouse_binding_capture = false;
+        state.mouse_binding_candidate = null;
         state.keybinding_error = null;
     } else {
         var key: vaxis.Key = .{ .codepoint = input.codepoint, .mods = input.mods };
@@ -473,6 +513,12 @@ pub fn captureBinding(self: *Model, ctx: *vxfw.EventContext, input: vaxis.Key) !
             ctx.consumeAndRedraw();
             return true;
         };
+        if (state.mouse_binding_capture) {
+            state.mouse_binding_candidate = candidate;
+            state.keybinding_error = null;
+            ctx.consumeAndRedraw();
+            return true;
+        }
         state.settings_draft.keybindings = candidate;
         state.keybinding_error = null;
         state.keybinding_capture = false;
@@ -1713,4 +1759,36 @@ test "external edits wait for the AppImage source editor" {
     model.appimage_state.source_open = false;
     try pollSettingsFile(model, &fixture.events);
     try fixture.expectLabel(.help, "F2");
+}
+
+test "mouse keybinding capture can cancel or save a candidate" {
+    const fixture = try KeybindingTest.init("{}");
+    defer fixture.deinit();
+    fixture.load();
+    const model = fixture.model.?;
+    model.active = .settings;
+    model.settings_state.keybindings_open = true;
+    const help = std.mem.indexOfScalar(commands.Id, &keybindings.editable, .help).?;
+    try commands.Mouse.editBinding(model, &fixture.events, .{ .binding = help });
+    try std.testing.expect(model.settings_state.keybinding_capture);
+    try std.testing.expect(!model.settings_state.mouse_binding_capture);
+    try std.testing.expect(try captureBinding(model, &fixture.events, commands.bindings.cancel_capture));
+    model.settings_state.settings.expanded_mouse_support = true;
+    model.settings_state.settings_draft.expanded_mouse_support = true;
+    const old = model.settings_state.settings_draft.keybindings;
+    for ([_]commands.Mouse.BindingTarget{ .cancel, .save }) |action| {
+        try commands.Mouse.editBinding(model, &fixture.events, .{ .binding = help });
+        try std.testing.expect(try captureBinding(model, &fixture.events, .{ .codepoint = vaxis.Key.f2 }));
+        try std.testing.expect(old.eql(model.settings_state.settings_draft.keybindings));
+        try commands.Mouse.editBinding(model, &fixture.events, action);
+        try std.testing.expect(!model.settings_state.keybinding_capture);
+        try std.testing.expect(model.settings_state.mouse_binding_candidate == null);
+        if (action == .cancel) {
+            try std.testing.expect(old.eql(model.settings_state.settings_draft.keybindings));
+        } else {
+            try fixture.expectLabel(.help, "F2");
+            const saved = try model.settings_state.settings_store.?.load(std.testing.io);
+            try std.testing.expectEqual(vaxis.Key.f2, saved.keybindings.get(.help).codepoint);
+        }
+    }
 }

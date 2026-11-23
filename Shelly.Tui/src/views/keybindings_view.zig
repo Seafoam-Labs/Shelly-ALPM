@@ -52,6 +52,9 @@ pub fn adjacent(selected: usize, forward: bool) ?usize {
 
 pub const View = struct {
     config: keybindings.Config,
+    owner: ?*anyopaque = null,
+    mouse_capture: bool = false,
+    can_save: bool = false,
     selected: usize,
     capturing: bool,
     failure: ?anyerror,
@@ -83,8 +86,12 @@ fn drawBody(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface
     const gap: u16 = 1;
     // Stack rows when columns would leave fewer than 12 cells for names.
     const stacked = width < key_width + gap + 12;
-    const status: u16 = if (size.height >= 3 and (view.failure != null or view.busy)) 1 else 0;
-    const available = size.height - status;
+    const footer: u16 = if (view.mouse_capture and size.height >= 2)
+        (if (view.can_save and width < 15 and size.height >= 3) 2 else 1)
+    else
+        0;
+    const status: u16 = if (size.height - footer >= 2 and (view.failure != null or view.busy)) 1 else 0;
+    const available = size.height - status - footer;
     const row_height: usize = if (stacked and available >= 2) 2 else 1;
     const DisplayRow = struct { section: usize, command: ?usize = null, continuation: bool = false };
     var rows: std.ArrayList(DisplayRow) = .empty;
@@ -115,6 +122,7 @@ fn drawBody(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface
         const label = if (view.capturing and index == view.selected) "…" else labels[index];
         const name = title(keybindings.editable[index]);
         const binding_style = if (selected) styles.selected else styles.emphasis;
+        const first_cell = children.items.len;
         if (stacked) {
             try line(line_ctx, &children, row, col, if (item.continuation or row_height == 1) label else name, if (item.continuation or row_height == 1) binding_style else style);
         } else {
@@ -122,9 +130,47 @@ fn drawBody(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface
             try line(line_ctx.withConstraints(.{}, .{ .width = name_width, .height = 1 }), &children, row, col, name, style);
             try line(line_ctx.withConstraints(.{}, .{ .width = key_width, .height = 1 }), &children, row, col + name_width + gap, label, binding_style);
         }
+        if (view.focused and !view.busy and !view.capturing and !view.mouse_capture) {
+            if (view.owner) |owner| for (children.items[first_cell..]) |*cell|
+                try bindClick(ctx, &cell.surface, owner, .{ .binding = index });
+        }
     }
     if (status > 0) try line(line_ctx, &children, size.height - 1, col, if (view.failure) |err| errorText(err) else "Settings are locked while an operation is running.", styles.emphasis);
+    if (footer > 0) if (view.owner) |owner| {
+        const button_row = size.height - footer;
+        if (status > 0) children.items[children.items.len - 1].origin.row = @intCast(available);
+        if (view.can_save and (footer == 2 or width >= 15)) {
+            try line(line_ctx.withConstraints(.{}, .{ .width = @min(width, 6), .height = 1 }), &children, button_row, 0, "[Save]", styles.action);
+            try bindClick(ctx, &children.items[children.items.len - 1].surface, owner, .save);
+        }
+        try line(line_ctx.withConstraints(.{}, .{ .width = @min(width, 8), .height = 1 }), &children, size.height - 1, if (view.can_save and footer == 1 and width >= 15) 7 else 0, "[Cancel]", styles.action);
+        try bindClick(ctx, &children.items[children.items.len - 1].surface, owner, .cancel);
+    };
     return .{ .size = size, .widget = widget, .buffer = &.{}, .children = children.items };
+}
+
+const Control = struct {
+    owner: *anyopaque,
+    action: commands.Mouse.BindingTarget,
+    surface: vxfw.Surface,
+
+    fn draw(ptr: *anyopaque, _: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
+        const self: *Control = @ptrCast(@alignCast(ptr));
+        return self.surface;
+    }
+
+    fn click(ptr: *anyopaque, ctx: *vxfw.EventContext, event: vxfw.Event) anyerror!void {
+        if (event != .mouse or !commands.Mouse.primaryPress(event.mouse)) return;
+        const self: *Control = @ptrCast(@alignCast(ptr));
+        try commands.Mouse.editBinding(self.owner, ctx, self.action);
+    }
+};
+
+fn bindClick(ctx: vxfw.DrawContext, surface: *vxfw.Surface, owner: *anyopaque, action: commands.Mouse.BindingTarget) Allocator.Error!void {
+    const control = try ctx.arena.create(Control);
+    control.* = .{ .owner = owner, .action = action, .surface = surface.* };
+    surface.widget = .{ .userdata = control, .drawFn = Control.draw, .eventHandler = Control.click };
+    try styles.hoverLabel(ctx.arena, surface);
 }
 
 fn line(ctx: vxfw.DrawContext, children: *std.ArrayList(vxfw.SubSurface), row: u16, col: u16, text: []const u8, style: vaxis.Style) Allocator.Error!void {
