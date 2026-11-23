@@ -203,6 +203,7 @@ pub fn toggleSetting(self: *Model, ctx: *vxfw.EventContext) !void {
         @import("settings.zig").appimage_index => draft.appimage_enabled = !draft.appimage_enabled,
         @import("settings.zig").atoll_index => draft.atoll_aur_enabled = !draft.atoll_aur_enabled,
         screenshots_index => draft.show_flatpak_screenshots = !draft.show_flatpak_screenshots,
+        preferences.expanded_mouse_index => draft.expanded_mouse_support = !draft.expanded_mouse_support,
         preferences.footer_shortcuts_index => draft.show_footer_shortcuts = !draft.show_footer_shortcuts,
         else => unreachable,
     }
@@ -1544,9 +1545,15 @@ test "mouse controls edit drafts select dropdown entries and Save or Discard exp
     try std.testing.expect(!hasChanges(model));
     try std.testing.expectEqual(fingerprint, try model.settings_state.settings_store.?.fingerprint(std.testing.io));
     try SettingsMouseTest.click(fixture, "[ ] Enable AUR");
+    try std.testing.expect(!model.settings_state.settings.expanded_mouse_support);
+    try SettingsMouseTest.click(fixture, "[ ] Expanded Mouse Support");
+    try std.testing.expect(model.settings_state.settings_draft.expanded_mouse_support);
+    try std.testing.expect(!model.settings_state.settings.expanded_mouse_support);
     try SettingsMouseTest.click(fixture, "[ Save changes ]");
     try std.testing.expect(model.settings_state.settings.aur_enabled);
     try std.testing.expect((try model.settings_state.settings_store.?.load(std.testing.io)).aur_enabled);
+    try std.testing.expect(model.settings_state.settings.expanded_mouse_support);
+    try std.testing.expect((try model.settings_state.settings_store.?.load(std.testing.io)).expanded_mouse_support);
     try std.testing.expect(!hasChanges(model));
     try SettingsMouseTest.click(fixture, "[ Configure keybindings");
     try std.testing.expect(model.settings_state.keybindings_open);

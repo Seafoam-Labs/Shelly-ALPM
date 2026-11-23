@@ -186,7 +186,7 @@ pub const View = struct {
         const size = ctx.max.size();
         var action_row: u16 = 0;
         if (self.owner) |owner| {
-            if (!self.loading and owner.overlay == null and owner.operation_state.install_job == null) {
+            if (owner.settings_state.settings.expanded_mouse_support and !self.loading and owner.overlay == null and owner.operation_state.install_job == null) {
                 var col: u16 = 0;
                 for ([_]commands.Updates{ .refresh, .upgrade_all, .upgrade_system, .upgrade_aur, .upgrade_flatpak, .upgrade_appimage }) |action| {
                     if (!self.allows(action)) continue;

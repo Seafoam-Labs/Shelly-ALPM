@@ -45,6 +45,7 @@ pub const Store = struct {
         try document.value.object.put(alloc, "AppImageEnabled", .{ .bool = settings.appimage_enabled });
         try document.value.object.put(alloc, "FlatpakEnabled", .{ .bool = settings.flatpak_enabled });
         try document.value.object.put(alloc, "HeaderIcons", .{ .string = @tagName(settings.header_icons) });
+        try document.value.object.put(alloc, "ExpandedMouseSupport", .{ .bool = settings.expanded_mouse_support });
         try document.value.object.put(alloc, "ShowFooterShortcuts", .{ .bool = settings.show_footer_shortcuts });
         try document.value.object.put(alloc, "ShowFlatpakScreenshots", .{ .bool = settings.show_flatpak_screenshots });
         try document.value.object.put(alloc, "Keybindings", try keybindings.encode(alloc, settings.keybindings));
@@ -96,6 +97,10 @@ fn decode(value: std.json.Value) !Settings {
         if (enabled != .bool) return error.InvalidSettings;
         result.flatpak_enabled = enabled.bool;
     }
+    if (value.object.get("ExpandedMouseSupport")) |enabled| {
+        if (enabled != .bool) return error.InvalidSettings;
+        result.expanded_mouse_support = enabled.bool;
+    }
     if (value.object.get("ShowFooterShortcuts")) |show| {
         if (show != .bool) return error.InvalidSettings;
         result.show_footer_shortcuts = show.bool;
@@ -125,8 +130,8 @@ test "settings round trip preserves unknown keys and rejects invalid files" {
     var file = try temporary.dir.createFile(io, "tui-settings.json", .{});
     try file.writeStreamingAll(io, "{\"Other\":{\"value\":42},\"AurEnabled\":true}");
     file.close(io);
-    try store.save(io, .{ .flatpak_enabled = true, .appimage_enabled = true, .show_flatpak_screenshots = false, .show_footer_shortcuts = false });
-    try std.testing.expect((try store.load(io)).eql(.{ .flatpak_enabled = true, .appimage_enabled = true, .show_flatpak_screenshots = false, .show_footer_shortcuts = false }));
+    try store.save(io, .{ .flatpak_enabled = true, .appimage_enabled = true, .show_flatpak_screenshots = false, .show_footer_shortcuts = false, .expanded_mouse_support = true });
+    try std.testing.expect((try store.load(io)).eql(.{ .flatpak_enabled = true, .appimage_enabled = true, .show_flatpak_screenshots = false, .show_footer_shortcuts = false, .expanded_mouse_support = true }));
     const document = try store.read(io);
     defer document.deinit();
     try std.testing.expectEqual(@as(i64, 42), document.value.object.get("Other").?.object.get("value").?.integer);

@@ -383,7 +383,7 @@ pub const View = struct {
         const note_text = if (self.loading) "" else if (self.answer_error.len > 0) self.answer_error else self.scan_status;
         const note_height: u16 = if (note_text.len > 0) 1 else 0;
         const body_start: u16 = @intFromBool(self.back != null);
-        const actions = self.review and self.choice_owner != null and inner_width >= 10 and inner_height >= 3;
+        const actions = if (self.choice_owner) |owner| owner.settings_state.settings.expanded_mouse_support and self.review and inner_width >= 10 and inner_height >= 3 else false;
         const body_height = inner_height - body_start - note_height - @as(u16, @intFromBool(actions));
         var children: std.ArrayList(vxfw.SubSurface) = .empty;
         if (self.back) |back| try children.append(ctx.arena, .{

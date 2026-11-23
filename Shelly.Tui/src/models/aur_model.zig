@@ -1193,6 +1193,7 @@ test "mouse opens the AUR preview and returns to package details in wide and com
     for ([_]?coordinator.Overlay{ null, .{ .aur = &packages[0] } }) |overlay| {
         const model = try Model.init(std.testing.allocator);
         defer model.deinit();
+        model.settings_state.settings.expanded_mouse_support = true;
         try PreviewButtonTest.setup(model, &packages);
         model.overlay = overlay;
         var arena = std.heap.ArenaAllocator.init(std.testing.allocator);

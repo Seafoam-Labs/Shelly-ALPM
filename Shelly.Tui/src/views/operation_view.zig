@@ -245,7 +245,7 @@ pub const Panel = struct {
         const view = self.view;
         const size = ctx.max.size();
         const entering = view.state == .entering;
-        const actions = view.owner != null and view.state != .running and size.height >= (if (entering) @as(u16, 2) else 1);
+        const actions = if (view.owner) |owner| owner.settings_state.settings.expanded_mouse_support and view.state != .running and size.height >= (if (entering) @as(u16, 2) else 1) else false;
         const review_height = size.height - @as(u16, @intFromBool(actions));
         if (view.state != .entering) {
             // Upward keyboard or wheel navigation pauses following.
@@ -594,6 +594,7 @@ test "clicking Close dismisses each completed operation" {
     vxfw.DrawContext.init(.unicode);
     const model = try model_types.Model.init(std.testing.allocator);
     defer model.deinit();
+    model.settings_state.settings.expanded_mouse_support = true;
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const alloc = arena.allocator();

@@ -310,7 +310,7 @@ pub fn closePkgbuild(self: *Model) void {
 
 pub fn pkgbuildView(self: *Model) pkgbuild_view.View {
     return .{
-        .back = if (self.operation_state.operation_question == null) &self.operation_state.preview_back else null,
+        .back = if (self.settings_state.settings.expanded_mouse_support and self.operation_state.operation_question == null) &self.operation_state.preview_back else null,
         .name = self.operation_state.pkgbuild_name,
         .wrap = self.operation_state.pkgbuild_wrap,
         .scroll = &self.operation_state.pkgbuild_scroll,

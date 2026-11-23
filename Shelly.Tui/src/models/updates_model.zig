@@ -297,6 +297,7 @@ test "updates action opens a native-only upgrade prompt" {
         \\{"Packages":[{"Name":"native","CurrentVersion":"1","NewVersion":"2"}],"Aur":[{"Name":"foreign"}]}
     , .{ .allocate = .alloc_always }));
     model.active = .upgrade;
+    model.settings_state.settings.expanded_mouse_support = true;
     vxfw.DrawContext.init(.unicode);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();

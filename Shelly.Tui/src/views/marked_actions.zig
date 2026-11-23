@@ -7,7 +7,7 @@ const Allocator = std.mem.Allocator;
 pub fn append(ctx: vxfw.DrawContext, children: *std.ArrayList(vxfw.SubSurface), row: u16, owner: ?*app.Model, count: usize, removable: bool) Allocator.Error!u16 {
     const model = owner orelse return 0;
     const size = ctx.max.size();
-    if (size.width < 9 or size.height < 2 or count == 0 or model.help_open or model.overlay != null or model.operation_state.install_job != null or model.operation_state.review_prompt != null) return 0;
+    if (!model.settings_state.settings.expanded_mouse_support or size.width < 9 or size.height < 2 or count == 0 or model.help_open or model.overlay != null or model.operation_state.install_job != null or model.operation_state.review_prompt != null) return 0;
     const header = try ctx.arena.create(Header);
     header.* = .{ .model = model, .tab = model.active, .count = count, .removable = removable };
     const surface = try Header.draw(header, ctx);
@@ -85,6 +85,7 @@ test "marked header clicks open the batch prompt for each package source" {
         for ([_]commands.PackageAction{ .install, .remove }) |action| {
             const model = try app.Model.init(std.testing.allocator);
             defer model.deinit();
+            model.settings_state.settings.expanded_mouse_support = true;
             model.active = tab;
             model.settings_state.settings.aur_enabled = true;
             var native = [_]types.Package{.{ .Name = "chosen", .Installed = true }};
