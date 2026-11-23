@@ -161,7 +161,7 @@
                                           <class name="settings-form-row"/>
                                         </style>
                                         <child>
-                                          <object class="GtkImage">
+                                          <object class="GtkImage" id="aur_row_icon">
                                             <property name="icon-name">arch-symbolic</property>
                                             <property name="pixel-size">20</property>
                                             <property name="valign">center</property>
@@ -189,7 +189,7 @@
                                               </object>
                                             </child>
                                             <child>
-                                              <object class="GtkLabel">
+                                              <object class="GtkLabel" id="aur_row_subtitle">
                                                 <property name="label" translatable="yes">Arch User Repository community packages</property>
                                                 <property name="halign">start</property>
                                                 <property name="xalign">0</property>

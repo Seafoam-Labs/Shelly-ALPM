@@ -56,6 +56,8 @@ pub const ShellySettingsPage = extern struct {
         // General
         aur_switch: *gtk.Switch,
         aur_row_label: *gtk.Label,
+        aur_row_subtitle: *gtk.Label,
+        aur_row_icon: *gtk.Image,
         language_drop: *gtk.DropDown,
         flatpak_switch: *gtk.Switch,
         recommended_switch: *gtk.Switch,
@@ -206,6 +208,10 @@ pub const ShellySettingsPage = extern struct {
             const aur_row_text = translations._("Enable Atoll");
             gtk.Label.setLabel(p.aur_row_label, aur_row_text);
             a11y.setName(p.aur_switch.as(gtk.Widget), aur_row_text);
+            const aur_row_description = translations._("Browse the AUR through Seafoam Labs' Atoll service.");
+            gtk.Label.setLabel(p.aur_row_subtitle, aur_row_description);
+            a11y.setDescription(p.aur_switch.as(gtk.Widget), aur_row_description);
+            gtk.Image.setFromIconName(p.aur_row_icon, "atoll-shark-symbolic");
         }
         hideUnbuiltRows(p);
 
@@ -1210,6 +1216,8 @@ pub const ShellySettingsPage = extern struct {
         // General
         .{ "aur_switch", @offsetOf(Private, "aur_switch") },
         .{ "aur_row_label", @offsetOf(Private, "aur_row_label") },
+        .{ "aur_row_subtitle", @offsetOf(Private, "aur_row_subtitle") },
+        .{ "aur_row_icon", @offsetOf(Private, "aur_row_icon") },
         .{ "language_drop", @offsetOf(Private, "language_drop") },
         .{ "flatpak_switch", @offsetOf(Private, "flatpak_switch") },
         .{ "recommended_switch", @offsetOf(Private, "recommended_switch") },
