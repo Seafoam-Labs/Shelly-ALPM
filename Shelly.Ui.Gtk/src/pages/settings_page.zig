@@ -1526,9 +1526,19 @@ fn terminalNeedsWarning(previous: []const u8, updated: []const u8) bool {
 const terminal_missing_warning = "The selected terminal was not found on this system. Updates will try it first and fall back to another terminal.";
 
 fn hideSettingsRow(widget: anytype) void {
-    if (gtk.Widget.getParent(widget.as(gtk.Widget))) |row| {
-        gtk.Widget.setVisible(row, @intFromBool(false));
+    if (gtk.Widget.getParent(widget.as(gtk.Widget))) |row| hideRow(row);
+}
+
+/// Hides a settings row, and its whole section (heading and card) when the
+/// build left that card with no visible rows.
+fn hideRow(row: *gtk.Widget) void {
+    gtk.Widget.setVisible(row, @intFromBool(false));
+    const card = gtk.Widget.getParent(row) orelse return;
+    var child = gtk.Widget.getFirstChild(card);
+    while (child) |c| : (child = gtk.Widget.getNextSibling(c)) {
+        if (gtk.Widget.getVisible(c) != 0) return;
     }
+    if (gtk.Widget.getParent(card)) |section| gtk.Widget.setVisible(section, @intFromBool(false));
 }
 
 fn hideUnbuiltRows(p: *ShellySettingsPage.Private) void {
@@ -1541,7 +1551,7 @@ fn hideUnbuiltRows(p: *ShellySettingsPage.Private) void {
     if (!features.builtWithRecommend) hideSettingsRow(p.recommended_switch);
     if (!features.builtWithAppImage) {
         hideSettingsRow(p.appimage_switch);
-        gtk.Widget.setVisible(p.appimage_install_path_box.as(gtk.Widget), @intFromBool(false));
+        hideRow(p.appimage_install_path_box.as(gtk.Widget));
         hideSettingsRow(p.appimage_upgrade_all_recheck_switch);
     }
     if (!features.builtWithShellySearch) hideSettingsRow(p.shelly_search_switch);
