@@ -249,10 +249,12 @@ const PathRow = struct {
         }, diagnostics.safe(if (self.form.has_parent and self.index == 0) ".." else std.fs.path.basename(std.mem.trimEnd(u8, candidate.path, "/"))), if (candidate.is_directory) "/" else "" }), .style = if (selected) styles.selected else styles.secondary, .softwrap = false, .overflow = .ellipsis, .width_basis = .parent };
         var surface = try text.draw(ctx);
         surface.widget = self.widget();
+        try styles.hoverLabel(ctx.arena, &surface);
         return surface;
     }
     fn event(ptr: *anyopaque, ctx: *vxfw.EventContext, input: vxfw.Event) !void {
         const self: *PathRow = @ptrCast(@alignCast(ptr));
+
         if (input == .mouse and commands.Mouse.primaryPress(input.mouse)) {
             try commands.Mouse.selectPath(self.form, self.index);
             ctx.consumeAndRedraw();
@@ -377,8 +379,8 @@ const SourceEditor = struct {
                 .Zsync => "Example: https://example.org/Application.AppImage.zsync",
             },
             if (draft.hosted()) (if (draft.prerelease) "[x] Allow prereleases" else "[ ] Allow prereleases") else "",
-            if (draft.save_job != null) "Saving…" else "[ Save ]",
-            "[ Cancel ]",
+            if (draft.save_job != null) "Saving…" else "[Save]",
+            "[Cancel]",
             draft.error_text orelse "",
         };
         var visible: [texts.len]usize = undefined;
@@ -405,7 +407,10 @@ const SourceEditor = struct {
             };
             const style = if (index == selected_index) styles.selected else styles.secondary;
             var label: vxfw.Text = .{ .text = text, .style = style, .softwrap = false, .overflow = .ellipsis, .width_basis = .parent };
-            try children.append(ctx.arena, .{ .origin = .{ .row = row, .col = 0 }, .surface = try label.draw(ctx.withConstraints(.{}, .{ .width = size.width, .height = 1 })) });
+            var surface = try label.draw(ctx.withConstraints(.{}, .{ .width = size.width, .height = 1 }));
+            if (self.controls[position - first] != null and draft.save_job == null and (index != 2 or draft.update_type != .None))
+                try styles.hoverLabel(ctx.arena, &surface);
+            try children.append(ctx.arena, .{ .origin = .{ .row = row, .col = 0 }, .surface = surface });
             if (index == 2 and draft.update_type != .None and size.width > 0) {
                 const col: u16 = if (size.width > 8) 8 else 0;
                 try children.append(ctx.arena, .{ .origin = .{ .row = row, .col = @intCast(col) }, .surface = try draft.field.draw(ctx.withConstraints(.{}, .{ .width = size.width - col, .height = 1 })) });

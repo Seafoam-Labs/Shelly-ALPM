@@ -1541,7 +1541,7 @@ test "mouse controls edit drafts select dropdown entries and Save or Discard exp
     try SettingsMouseTest.click(fixture, "[ ] Nerd Font");
     try std.testing.expect(!model.settings_state.header_open);
     try std.testing.expectEqual(preferences.HeaderIcons.nerd_font, model.settings_state.settings_draft.header_icons);
-    try SettingsMouseTest.click(fixture, "[ Discard changes ]");
+    try SettingsMouseTest.click(fixture, "[Discard changes]");
     try std.testing.expect(!hasChanges(model));
     try std.testing.expectEqual(fingerprint, try model.settings_state.settings_store.?.fingerprint(std.testing.io));
     try SettingsMouseTest.click(fixture, "[ ] Enable AUR");
@@ -1549,13 +1549,13 @@ test "mouse controls edit drafts select dropdown entries and Save or Discard exp
     try SettingsMouseTest.click(fixture, "[ ] Expanded Mouse Support");
     try std.testing.expect(model.settings_state.settings_draft.expanded_mouse_support);
     try std.testing.expect(!model.settings_state.settings.expanded_mouse_support);
-    try SettingsMouseTest.click(fixture, "[ Save changes ]");
+    try SettingsMouseTest.click(fixture, "[Save changes]");
     try std.testing.expect(model.settings_state.settings.aur_enabled);
     try std.testing.expect((try model.settings_state.settings_store.?.load(std.testing.io)).aur_enabled);
     try std.testing.expect(model.settings_state.settings.expanded_mouse_support);
     try std.testing.expect((try model.settings_state.settings_store.?.load(std.testing.io)).expanded_mouse_support);
     try std.testing.expect(!hasChanges(model));
-    try SettingsMouseTest.click(fixture, "[ Configure keybindings");
+    try SettingsMouseTest.click(fixture, "[Configure keybindings");
     try std.testing.expect(model.settings_state.keybindings_open);
 }
 
@@ -1570,7 +1570,7 @@ test "mouse settings controls remain locked during package operations" {
     defer job.arena.deinit();
     model.operation_state.install_job = &job;
     defer model.operation_state.install_job = null;
-    for ([_][]const u8{ "[ ] Enable AUR", "Icons", "[ Configure keybindings", "[ Save changes ]", "[ Discard changes ]" }) |label|
+    for ([_][]const u8{ "[ ] Enable AUR", "Icons", "[Configure keybindings", "[Save changes]", "[Discard changes]" }) |label|
         try SettingsMouseTest.click(fixture, label);
     try std.testing.expect(!hasChanges(model));
     try std.testing.expect(!model.settings_state.header_open);
@@ -1626,13 +1626,13 @@ test "shared settings actions save and discard binding drafts focus their own de
     const model = fixture.model.?;
     model.settings_state.keybinding_selected = keybindings_view.row_count - 1;
     model.settings_state.settings_draft.keybindings = try model.settings_state.settings_draft.keybindings.withBinding(.help, .{ .codepoint = vaxis.Key.f2 });
-    try SettingsMouseTest.click(fixture, "[ Save changes ]");
+    try SettingsMouseTest.click(fixture, "[Save changes]");
     try fixture.expectLabel(.help, "F2");
     try std.testing.expect(!model.settings_state.keybindings_open);
     try std.testing.expectEqual(preferences.save_index, model.settings_state.settings_selected);
     model.settings_state.settings_draft.keybindings = try model.settings_state.settings_draft.keybindings.withBinding(.help, .{ .codepoint = vaxis.Key.f3 });
     model.settings_state.keybinding_error = error.ConflictingBinding;
-    try SettingsMouseTest.click(fixture, "[ Discard changes ]");
+    try SettingsMouseTest.click(fixture, "[Discard changes]");
     try std.testing.expect(!hasChanges(model));
     try std.testing.expect(model.settings_state.keybinding_error == null);
     try std.testing.expect(!model.settings_state.keybindings_open);

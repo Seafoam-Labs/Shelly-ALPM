@@ -8,23 +8,44 @@ const vxfw = vaxis.vxfw;
 const sync = @import("../models/sync.zig");
 const Allocator = std.mem.Allocator;
 
-const UpdateButton = struct {
+pub const UpdateButton = struct {
     owner: *@import("../model.zig").Model,
     label: []const u8,
     action: commands.Updates,
+    hovered: bool = false,
+
+    pub fn init(owner: *@import("../model.zig").Model, action: commands.Updates) UpdateButton {
+        const label = switch (action) {
+            .refresh => "[Refresh]",
+            .upgrade_all => "[Upgrade all]",
+            .upgrade_system => "[Upgrade system]",
+            .upgrade_aur => "[Upgrade AUR]",
+            .upgrade_flatpak => "[Upgrade Flatpak]",
+            .upgrade_appimage => "[Upgrade AppImage]",
+        };
+        return .{ .owner = owner, .action = action, .label = label };
+    }
 
     fn draw(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
         const self: *UpdateButton = @ptrCast(@alignCast(ptr));
-        var text: vxfw.Text = .{ .text = self.label, .softwrap = false, .style = styles.emphasis };
+        var text: vxfw.Text = .{ .text = self.label, .softwrap = false, .style = if (self.hovered) styles.action_button.hover else styles.action };
         var surface = try text.draw(ctx);
         surface.widget = .{ .userdata = ptr, .drawFn = UpdateButton.draw, .eventHandler = click };
         return surface;
     }
 
     fn click(ptr: *anyopaque, ctx: *vxfw.EventContext, event: vxfw.Event) anyerror!void {
-        if (event != .mouse or !commands.Mouse.primaryPress(event.mouse)) return;
         const self: *UpdateButton = @ptrCast(@alignCast(ptr));
-        try commands.Mouse.updateAction(self.owner, ctx, self.action);
+        switch (event) {
+            .mouse_enter, .mouse_leave => {
+                self.hovered = event == .mouse_enter;
+                try ctx.setMouseShape(if (self.hovered) .pointer else .default);
+                ctx.redraw = true;
+            },
+            .mouse => |mouse| if (commands.Mouse.primaryPress(mouse))
+                try commands.Mouse.updateAction(self.owner, ctx, self.action),
+            else => {},
+        }
     }
 };
 
@@ -190,15 +211,8 @@ pub const View = struct {
                 var col: u16 = 0;
                 for ([_]commands.Updates{ .refresh, .upgrade_all, .upgrade_system, .upgrade_aur, .upgrade_flatpak, .upgrade_appimage }) |action| {
                     if (!self.allows(action)) continue;
-                    const label = switch (action) {
-                        .refresh => "[Refresh]",
-                        .upgrade_all => "[Upgrade all]",
-                        .upgrade_system => "[Upgrade system]",
-                        .upgrade_aur => "[Upgrade AUR]",
-                        .upgrade_flatpak => "[Upgrade Flatpak]",
-                        .upgrade_appimage => "[Upgrade AppImage]",
-                    };
-                    const width: u16 = @intCast(label.len);
+                    const button = &owner.updates_state.buttons[@backingInt(action)];
+                    const width: u16 = @intCast(button.label.len);
                     if (width > size.width) continue;
                     if (width > size.width -| col) {
                         if (action_row + 1 >= size.height -| 1) break;
@@ -206,8 +220,6 @@ pub const View = struct {
                         col = 0;
                     }
                     if (action_row >= size.height -| 1) break;
-                    const button = try ctx.arena.create(UpdateButton);
-                    button.* = .{ .owner = owner, .label = label, .action = action };
                     try children.append(ctx.arena, .{
                         .origin = .{ .row = action_row, .col = col },
                         .surface = try UpdateButton.draw(button, ctx.withConstraints(.{}, .{ .width = width, .height = 1 })),

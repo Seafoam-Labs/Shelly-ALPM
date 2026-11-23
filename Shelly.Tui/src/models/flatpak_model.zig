@@ -85,14 +85,9 @@ pub const FlatpakJob = struct {
 pub fn init(gpa: Allocator, model: *Model) State {
     return .{
         .flatpak_details_scroll = .{ .item_count = 1, .children = .{ .builder = .{ .userdata = model, .buildFn = buildFlatpakDetails } } },
-        .screenshot_previous = .{ .label = " < ", .userdata = model, .onClick = commands.Mouse.previousScreenshot, .style = screenshotButtonStyle },
-        .screenshot_next = .{ .label = " > ", .userdata = model, .onClick = commands.Mouse.nextScreenshot, .style = screenshotButtonStyle },
-        .flatpak_category_button = .{ .label = "All categories ▾", .userdata = model, .onClick = commands.Mouse.toggleCategories, .style = .{
-            .default = styles.secondary,
-            .hover = styles.emphasis,
-            .focus = styles.emphasis,
-            .mouse_down = .{ .reverse = true },
-        } },
+        .screenshot_previous = .{ .label = "[<]", .userdata = model, .onClick = commands.Mouse.previousScreenshot, .style = screenshotButtonStyle },
+        .screenshot_next = .{ .label = "[>]", .userdata = model, .onClick = commands.Mouse.nextScreenshot, .style = screenshotButtonStyle },
+        .flatpak_category_button = .{ .label = "All categories ▾", .userdata = model, .onClick = commands.Mouse.toggleCategories, .style = styles.action_button },
         .flatpak_category_list = .{ .item_count = 0, .children = .{ .builder = .{ .userdata = model, .buildFn = buildFlatpakCategory } } },
         .flatpak_field = .{ .buf = .init(gpa), .userdata = model, .onChange = onFlatpakQueryChange },
         .flatpak_list = .{ .item_count = 0, .children = .{ .builder = .{ .userdata = model, .buildFn = buildFlatpakRow } } },
@@ -635,12 +630,7 @@ pub fn openFlatpakPrompt(self: *Model, action: shelly_operation.Action, name: []
     self.overlay = .{ .sudo = prompt };
 }
 
-pub const screenshotButtonStyle: @TypeOf(@as(vxfw.Button, undefined).style) = .{
-    .default = styles.secondary,
-    .hover = styles.emphasis,
-    .focus = styles.emphasis,
-    .mouse_down = .{ .reverse = true },
-};
+pub const screenshotButtonStyle = styles.action_button;
 
 /// Returns whether page input was consumed. Globals remain with the coordinator.
 pub fn handleKey(self: *Model, ctx: *vxfw.EventContext, input: vaxis.Key, global_command: bool) anyerror!bool {

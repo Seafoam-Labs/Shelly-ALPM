@@ -53,6 +53,7 @@ pub const Model = struct {
     quit_blocked_notice: bool = false,
     help_open: bool = false,
 
+    hover_point: ?vxfw.Point = null,
     help_button: ?struct { col: u16, width: u16, height: u16 } = null,
     help_panel: help_view.Panel = .{},
 
@@ -233,6 +234,7 @@ pub const Model = struct {
                 }
             },
             .mouse => {
+                self.trackPointer(ctx, event.mouse);
                 if (self.settings_state.keybinding_capture) return ctx.consumeEvent();
                 if (self.help_button) |button| {
                     if (event.mouse.row >= 0 and event.mouse.row < @as(i17, button.height) and
@@ -320,6 +322,7 @@ pub const Model = struct {
                 .settings => {},
             },
             .mouse => {
+                self.trackPointer(ctx, event.mouse);
                 if (self.overlay) |overlay| {
                     if (overlay == .pkgbuild and self.operation_state.pkgbuild_document != null and !operation_model.pkgbuildView(self).loading) {
                         return commands.Mouse.navigateReview(self, ctx, event);
@@ -442,9 +445,19 @@ pub const Model = struct {
 
     // -- drawing -----------------------------------------------------------
 
+    fn trackPointer(self: *Model, ctx: *vxfw.EventContext, mouse: vaxis.Mouse) void {
+        self.hover_point = if (mouse.row >= 0 and mouse.col >= 0)
+            .{ .row = @intCast(mouse.row), .col = @intCast(mouse.col) }
+        else
+            null;
+        if (mouse.type == .motion or mouse.type == .drag) ctx.redraw = true;
+    }
+
     pub fn typeErasedDrawFn(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
         const self: *Model = @ptrCast(@alignCast(ptr));
-        return app_view.draw(self, ctx);
+        const surface = try app_view.draw(self, ctx);
+        if (self.hover_point) |point| try @import("views/styles.zig").paintHover(surface, ctx.arena, point);
+        return surface;
     }
 
     pub fn drawTabBar(self: *Model, arena: Allocator) Allocator.Error!vxfw.Widget {

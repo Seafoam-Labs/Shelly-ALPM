@@ -72,12 +72,7 @@ pub const AurSelection = struct { name: []const u8, installed: bool };
 
 pub fn init(gpa: Allocator, model: *Model) State {
     return .{
-        .aur_preview_button = .{ .label = " PKGBUILD ", .userdata = model, .onClick = commands.Mouse.previewPkgbuild, .style = .{
-            .default = styles.button,
-            .focus = styles.selected,
-            .hover = styles.selected,
-            .mouse_down = .{ .reverse = true },
-        } },
+        .aur_preview_button = .{ .label = "[PKGBUILD]", .userdata = model, .onClick = commands.Mouse.previewPkgbuild, .style = styles.action_button },
         .aur_details_scroll = .{ .item_count = 2, .children = .{ .builder = .{ .userdata = model, .buildFn = buildAurDetails } } },
         .aur_list = .{
             .item_count = 0,

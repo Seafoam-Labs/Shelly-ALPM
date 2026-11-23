@@ -80,13 +80,14 @@ pub fn draw(self: *Model, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
     const framed_help = navigation_height == 3;
     const help_label = if (command_context.settings_capture or command_context.appimage_path) "" else try std.fmt.allocPrint(arena, "{s}{s} {s}{s}", .{ if (framed_help) "" else "[", try @import("../commands.zig").label(arena, .help), if (self.help_open) "Back" else "Help", if (framed_help) "" else "]" });
     const desired_help_width = ctx.stringWidth(help_label) + @as(u16, if (framed_help) 2 else 0);
-    const bar: *const @import("tab_bar.zig").TabBar = @ptrCast(@alignCast(tab_bar.userdata));
+    const bar: *@import("tab_bar.zig").TabBar = @ptrCast(@alignCast(tab_bar.userdata));
     const active_width = for (bar.tabs, bar.rich.text) |tab, span| {
         if (tab == self.active) break ctx.stringWidth(span.text);
     } else ctx.stringWidth(self.active.title());
     const tab_width = active_width + @as(usize, if (framed_help) 8 else 0);
     const help_width: u16 = if (help_label.len > 0 and desired_help_width + 1 + tab_width <= max.width) @intCast(desired_help_width) else 0;
     const navigation = try arena.alloc(vxfw.SubSurface, if (help_width > 0) 2 else 1);
+    bar.hover_point = self.hover_point;
     navigation[0] = .{
         .origin = .{ .row = 0, .col = 0 },
         .surface = try tab_bar.draw(ctx.withConstraints(.{}, .{ .width = max.width - help_width - @intFromBool(help_width > 0), .height = navigation_height })),
@@ -104,6 +105,8 @@ pub fn draw(self: *Model, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
             .origin = .{ .row = 0, .col = @intCast(col) },
             .surface = if (framed_help) try border.draw(help_ctx) else try help.draw(help_ctx),
         };
+        const label_surface = if (framed_help) &navigation[1].surface.children[0].surface else &navigation[1].surface;
+        try @import("styles.zig").hoverLabel(arena, label_surface);
     }
     try children.append(arena, .{
         .origin = .{ .row = 0, .col = 0 },

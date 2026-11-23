@@ -1,3 +1,4 @@
+const styles = @import("styles.zig");
 const std = @import("std");
 const Border = @import("border.zig");
 const commands = @import("../commands.zig");
@@ -230,12 +231,14 @@ pub const Panel = struct {
             const self: *Checkbox = @ptrCast(@alignCast(ptr));
             var surface = try self.label.draw(ctx);
             surface.widget = .{ .userdata = ptr, .drawFn = Checkbox.draw, .eventHandler = checkboxClick };
+            try styles.hoverLabel(ctx.arena, &surface);
             return surface;
         }
     };
 
     fn checkboxClick(ptr: *anyopaque, ctx: *vxfw.EventContext, event: vxfw.Event) anyerror!void {
         const checkbox: *Checkbox = @ptrCast(@alignCast(ptr));
+
         if (event == .mouse and commands.Mouse.primaryPress(event.mouse))
             commands.Mouse.toggleUnusedDependencies(checkbox.owner, ctx);
     }
@@ -278,14 +281,16 @@ const ActionButton = struct {
 
     fn draw(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
         const self: *ActionButton = @ptrCast(@alignCast(ptr));
-        var label: vxfw.Text = .{ .text = self.label, .softwrap = false, .style = .{ .bold = true } };
+        var label: vxfw.Text = .{ .text = self.label, .softwrap = false, .style = @import("styles.zig").action };
         var surface = try label.draw(ctx);
         surface.widget = .{ .userdata = ptr, .drawFn = ActionButton.draw, .eventHandler = click };
+        try styles.hoverLabel(ctx.arena, &surface);
         return surface;
     }
 
     fn click(ptr: *anyopaque, ctx: *vxfw.EventContext, event: vxfw.Event) anyerror!void {
         const self: *ActionButton = @ptrCast(@alignCast(ptr));
+
         if (event == .mouse and commands.Mouse.primaryPress(event.mouse))
             try commands.Mouse.operationAction(self.owner, ctx, self.action);
     }
@@ -582,6 +587,8 @@ test "clicking the removal option toggles it without confirming" {
         var hits: std.ArrayList(vxfw.HitResult) = .empty;
         try surface.hitTest(alloc, &hits, .{ .row = 1, .col = 2 });
         const hit = hits.getLast();
+        try hit.widget.handleEvent(&events, .mouse_enter);
+        try std.testing.expect((try hit.widget.draw(.{ .arena = alloc, .min = .{}, .max = .{ .width = 80, .height = 1 }, .cell_size = .{ .width = 10, .height = 20 } })).buffer[0].style.bold);
         try hit.widget.handleEvent(&events, .{ .mouse = .{ .button = .left, .type = .press, .row = @intCast(hit.local.row), .col = @intCast(hit.local.col), .mods = .{} } });
         try std.testing.expectEqual(checked, prompt.remove_unused_dependencies);
         try std.testing.expect(prompt.state == .entering);

@@ -32,6 +32,7 @@ pub const State = struct {
     updates_checked: bool = false,
     updates_failed: bool = false,
     updates_list: vxfw.ScrollView,
+    buttons: [std.enums.values(commands.Updates).len]updates_view.UpdateButton,
 };
 
 pub const UpdatesJob = struct {
@@ -46,7 +47,10 @@ pub const UpdatesJob = struct {
 };
 
 pub fn init(_: Allocator, model: *Model) State {
+    var buttons: [std.enums.values(commands.Updates).len]updates_view.UpdateButton = undefined;
+    for (std.enums.values(commands.Updates)) |action| buttons[@backingInt(action)] = .init(model, action);
     return .{
+        .buttons = buttons,
         .updates_list = .{ .children = .{ .builder = .{
             .userdata = model,
             .buildFn = buildUpdateRow,
@@ -313,6 +317,12 @@ test "updates action opens a native-only upgrade prompt" {
     try frame.hitTest(alloc, &hits, .{ .row = @intCast(body.origin.row + system.origin.row), .col = @intCast(body.origin.col + system.origin.col) });
     const hit = hits.getLast();
     var events: vxfw.EventContext = .{ .io = std.testing.io, .alloc = alloc, .cmds = .empty };
+    const button_ctx: vxfw.DrawContext = .{ .arena = alloc, .min = .{}, .max = .{ .width = system.surface.size.width, .height = 1 }, .cell_size = .{ .width = 10, .height = 20 } };
+    try std.testing.expect(!system.surface.buffer[0].style.bold);
+    try hit.widget.handleEvent(&events, .mouse_enter);
+    try std.testing.expect((try hit.widget.draw(button_ctx)).buffer[0].style.bold);
+    try hit.widget.handleEvent(&events, .mouse_leave);
+    try std.testing.expect(!(try hit.widget.draw(button_ctx)).buffer[0].style.bold);
     try hit.widget.handleEvent(&events, .{ .mouse = .{ .button = .left, .type = .press, .col = @intCast(hit.local.col), .row = @intCast(hit.local.row), .mods = .{} } });
     try std.testing.expect(model.overlay.?.sudo.backend == .standard);
     @import("operation_model.zig").closeOverlay(model);

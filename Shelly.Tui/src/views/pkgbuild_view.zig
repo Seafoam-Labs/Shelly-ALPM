@@ -458,7 +458,7 @@ pub const View = struct {
 
 fn drawBack(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
     const button: *vxfw.Button = @ptrCast(@alignCast(ptr));
-    const bounds: vxfw.Size = .{ .width = @min(ctx.max.size().width, 6), .height = @min(ctx.max.size().height, 1) };
+    const bounds: vxfw.Size = .{ .width = @min(ctx.max.size().width, @as(u16, @intCast(ctx.stringWidth(button.label)))), .height = @min(ctx.max.size().height, 1) };
     var surface = try button.draw(ctx.withConstraints(bounds, .{ .width = bounds.width, .height = bounds.height }));
     surface.widget = .{ .userdata = button, .drawFn = drawBack, .eventHandler = backEvent };
     return surface;
@@ -894,7 +894,9 @@ pub fn drawChoice(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.S
     spans[1] = .{ .text = if (option.description.len > 0) try std.fmt.allocPrint(ctx.arena, "\n    {f}", .{@import("diagnostics").safe(option.description)}) else "", .style = styles.secondary };
     const rich = try ctx.arena.create(vxfw.RichText);
     rich.* = .{ .text = spans, .softwrap = true };
-    return rich.draw(ctx.withConstraints(.{ .width = width }, .{ .width = width, .height = null }));
+    var surface = try rich.draw(ctx.withConstraints(.{ .width = width }, .{ .width = width, .height = null }));
+    try styles.hoverLabel(ctx.arena, &surface);
+    return surface;
 }
 
 test "install review presents owned colored scan findings before source and keeps attachments" {

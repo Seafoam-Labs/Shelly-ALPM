@@ -17,7 +17,7 @@ const LoadState = struct {
 pub const State = struct {
     source_draft: ?*SourceDraft = null,
     source_open: bool = false,
-    source_button: vxfw.Button = .{ .label = " Configure update source ", .onClick = commands.Mouse.configureSource },
+    source_button: vxfw.Button = .{ .label = "[Configure update source]", .onClick = commands.Mouse.configureSource },
     install_form: ?*Form = null,
     install_closing: ?*Form = null,
     refresh_after_operation: bool = false,
@@ -374,7 +374,7 @@ fn initializeWidgets(self: *Model) void {
         state.list_view.jumpToItem(@intCast(state.cursor));
         const styles = @import("../views/styles.zig");
         state.source_button.userdata = self;
-        state.source_button.style = .{ .default = styles.button, .focus = styles.selected, .hover = styles.selected, .mouse_down = .{ .reverse = true } };
+        state.source_button.style = styles.action_button;
         state.details_scroll = .{ .item_count = 2, .children = .{ .builder = .{ .userdata = self, .buildFn = buildDetails } } };
         state.widgets_initialized = true;
     }

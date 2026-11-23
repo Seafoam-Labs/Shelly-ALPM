@@ -30,6 +30,15 @@ fn ResultList(comptime kind: Kind) type {
                 .appimage => &model.appimage_state.list_view,
             };
             const surface = try list.draw(ctx);
+            for (surface.children) |*item| {
+                // The cursor row wraps the row content in a separate surface.
+                const row_surface = if (item.surface.widget.eql(list.widget()) and item.surface.children.len == 1)
+                    &item.surface.children[0].surface
+                else
+                    &item.surface;
+                if (row_surface.buffer.len > 0)
+                    try @import("styles.zig").hoverLabel(ctx.arena, row_surface);
+            }
             // Each result occupies one line. Capture only the visible identities
             // after ListView has adjusted its viewport for scrolling or resizing.
             const items = switch (kind) {

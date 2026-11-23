@@ -277,6 +277,7 @@ pub const CategoryOption = struct {
         var text: vxfw.Text = .{ .text = try std.fmt.allocPrint(ctx.arena, "{f}", .{diagnostics.safe(if (self.name.len == 0) "All categories" else self.name)}), .softwrap = false, .overflow = .ellipsis };
         var surface = try text.draw(ctx.withConstraints(.{}, .{ .width = ctx.max.width orelse ctx.min.width, .height = 1 }));
         surface.widget = self.widget();
+        try styles.hoverLabel(ctx.arena, &surface);
         return surface;
     }
     fn event(ptr: *anyopaque, ctx: *vxfw.EventContext, value: vxfw.Event) anyerror!void {

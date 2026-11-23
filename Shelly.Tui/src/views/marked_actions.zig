@@ -1,3 +1,4 @@
+const styles = @import("styles.zig");
 const std = @import("std");
 const vxfw = @import("vaxis").vxfw;
 const commands = @import("../commands.zig");
@@ -62,15 +63,17 @@ const Button = struct {
 
     fn draw(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
         const self: *Button = @ptrCast(@alignCast(ptr));
-        var text: vxfw.Text = .{ .text = self.label(), .style = .{ .bold = true }, .softwrap = false };
+        var text: vxfw.Text = .{ .text = self.label(), .style = @import("styles.zig").action, .softwrap = false };
         var surface = try text.draw(ctx);
         surface.widget = .{ .userdata = ptr, .drawFn = draw, .eventHandler = click };
+        try styles.hoverLabel(ctx.arena, &surface);
         return surface;
     }
 
     fn click(ptr: *anyopaque, ctx: *vxfw.EventContext, event: vxfw.Event) anyerror!void {
         if (event != .mouse or !commands.Mouse.primaryPress(event.mouse)) return;
         const self: *Button = @ptrCast(@alignCast(ptr));
+
         try commands.Mouse.markedAction(self.header.model, self.header.tab, self.action);
         ctx.consumeAndRedraw();
     }

@@ -215,12 +215,12 @@ pub const View = struct {
     }
 
     fn actionRow(self: *const View, index: usize) Row {
-        return .{ .text = if (index == preferences.save_index) "[ Save changes ]" else "[ Discard changes ]", .action = .{ .control = index }, .selected = self.selected == index, .emphasis = self.dirty };
+        return .{ .text = if (index == preferences.save_index) "[Save changes]" else "[Discard changes]", .action = .{ .control = index }, .selected = self.selected == index, .emphasis = self.dirty };
     }
 
     fn controlText(self: *const View, arena: Allocator, index: usize) Allocator.Error![]const u8 {
         if (index == preferences.header_index) return std.fmt.allocPrint(arena, "Icons       {s} {s}", .{ self.settings.header_icons.title(), if (self.header_open) "▴" else "▾" });
-        if (index == preferences.keybindings_index) return "[ Configure keybindings… ]";
+        if (index == preferences.keybindings_index) return "[Configure keybindings]";
         const enabled = switch (index) {
             0 => self.settings.aur_enabled,
             1 => self.settings.flatpak_enabled,
@@ -284,10 +284,12 @@ const Control = struct {
         var text: vxfw.Text = .{ .text = self.row.text, .softwrap = false, .overflow = .ellipsis, .width_basis = .parent, .style = if (self.row.selected and !self.view.busy) styles.selected else if (self.row.emphasis) styles.emphasis else styles.secondary };
         var surface = try text.draw(ctx);
         surface.widget = self.widget();
+        if (self.row.action != null and !self.view.busy and self.view.on_action != null) try styles.hoverLabel(ctx.arena, &surface);
         return surface;
     }
     fn handleEvent(ptr: *anyopaque, ctx: *vxfw.EventContext, event: vxfw.Event) anyerror!void {
         const self: *Control = @ptrCast(@alignCast(ptr));
+
         if (event != .mouse or self.view.busy) return;
         const mouse = event.mouse;
         if (!commands.Mouse.primaryPress(mouse)) return;
@@ -382,8 +384,8 @@ test "Save and Discard use separate rows and display their own details" {
         var save_row: ?i17 = null;
         var discard_row: ?i17 = null;
         for (controls.children) |child| {
-            if (try LayoutTest.contains(child.surface, "[ Save changes ]", arena.allocator())) save_row = child.origin.row;
-            if (try LayoutTest.contains(child.surface, "[ Discard changes ]", arena.allocator())) discard_row = child.origin.row;
+            if (try LayoutTest.contains(child.surface, "[Save changes]", arena.allocator())) save_row = child.origin.row;
+            if (try LayoutTest.contains(child.surface, "[Discard changes]", arena.allocator())) discard_row = child.origin.row;
         }
         try std.testing.expect(save_row != null and discard_row != null);
         try std.testing.expectEqual(save_row.? + 1, discard_row.?);
