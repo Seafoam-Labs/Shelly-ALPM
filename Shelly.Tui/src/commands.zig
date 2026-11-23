@@ -57,6 +57,7 @@ pub const Mouse = struct {
     pub const toggleUnusedDependencies = @import("models/operation_model.zig").toggleUnusedDependencies;
     pub const selectDependency = @import("models/operation_model.zig").selectDependencyFromMouse;
     pub const navigateReview = @import("models/operation_model.zig").handleReviewMouse;
+    pub const updateAction = @import("models/updates_model.zig").runMouseAction;
     pub const scrollUpdates = @import("models/updates_model.zig").handleScrollEvent;
     pub const cancelAppImageSource = @import("models/appimage_model.zig").cancelSourceFromMouse;
     pub const configureSource = @import("models/appimage_model.zig").onConfigureClick;

@@ -8,8 +8,29 @@ const vxfw = vaxis.vxfw;
 const sync = @import("../models/sync.zig");
 const Allocator = std.mem.Allocator;
 
+const UpdateButton = struct {
+    owner: *@import("../model.zig").Model,
+    label: []const u8,
+    action: commands.Updates,
+
+    fn draw(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
+        const self: *UpdateButton = @ptrCast(@alignCast(ptr));
+        var text: vxfw.Text = .{ .text = self.label, .softwrap = false, .style = styles.emphasis };
+        var surface = try text.draw(ctx);
+        surface.widget = .{ .userdata = ptr, .drawFn = UpdateButton.draw, .eventHandler = click };
+        return surface;
+    }
+
+    fn click(ptr: *anyopaque, ctx: *vxfw.EventContext, event: vxfw.Event) anyerror!void {
+        if (event != .mouse or !commands.Mouse.primaryPress(event.mouse)) return;
+        const self: *UpdateButton = @ptrCast(@alignCast(ptr));
+        try commands.Mouse.updateAction(self.owner, ctx, self.action);
+    }
+};
+
 /// Borrows query results and the list widget; Model owns their lifetimes.
 pub const View = struct {
+    owner: ?*@import("../model.zig").Model = null,
     list: *vxfw.ScrollView,
     data: ?*const sync.CheckUpdates,
     loading: bool,
@@ -43,12 +64,18 @@ pub const View = struct {
 
     pub fn handleKey(self: View, key: vaxis.Key) ?commands.Updates {
         const action = commands.updates(key) orelse return null;
-        if (action == .upgrade_all and !self.canUpgradeAll()) return null;
-        if (action == .upgrade_system and !self.canUpgrade()) return null;
-        if (action == .upgrade_aur and !self.canUpgradeAur()) return null;
-        if (action == .upgrade_flatpak and !self.canUpgradeFlatpak()) return null;
-        if (action == .upgrade_appimage and !self.canUpgradeAppImage()) return null;
-        return action;
+        return if (self.allows(action)) action else null;
+    }
+
+    pub fn allows(self: View, action: commands.Updates) bool {
+        return switch (action) {
+            .refresh => true,
+            .upgrade_all => self.canUpgradeAll(),
+            .upgrade_system => self.canUpgrade(),
+            .upgrade_aur => self.canUpgradeAur(),
+            .upgrade_flatpak => self.canUpgradeFlatpak(),
+            .upgrade_appimage => self.canUpgradeAppImage(),
+        };
     }
 
     pub fn statusText(self: View, arena: Allocator) Allocator.Error![]const u8 {
@@ -90,36 +117,107 @@ pub const View = struct {
             "Updates have not been checked."
         else
             "No update data received.";
+        var children: std.ArrayList(vxfw.SubSurface) = .empty;
+        const content_height = size.height - try self.appendActions(ctx, &children);
+        const action_count = children.items.len;
+        var top: u16 = 0;
         if (message) |text| {
             var label: vxfw.Text = .{ .text = text, .softwrap = true, .text_align = .center, .width_basis = .parent };
-            return label.draw(ctx);
+            try children.append(ctx.arena, .{ .origin = .{ .row = top, .col = 0 }, .surface = try label.draw(ctx.withConstraints(.{}, .{ .width = size.width, .height = content_height - top })) });
+            placeActions(children.items[0..action_count], children.items[action_count..], size.width, content_height);
+            return .{ .size = size, .widget = widget, .buffer = &.{}, .children = children.items };
         }
-        var children: std.ArrayList(vxfw.SubSurface) = .empty;
         var summary: vxfw.Text = .{ .text = try self.sourceSummary(ctx.arena), .text_align = .center, .width_basis = .parent, .softwrap = true, .style = styles.emphasis };
-        const summary_surface = try summary.draw(ctx.withConstraints(.{}, .{ .width = size.width, .height = size.height }));
-        try children.append(ctx.arena, .{ .origin = .{ .row = 0, .col = 0 }, .surface = summary_surface });
-        var top = summary_surface.size.height;
-        if (size.height >= 8) top += 1;
+        const summary_surface = try summary.draw(ctx.withConstraints(.{}, .{ .width = size.width, .height = content_height - top }));
+        try children.append(ctx.arena, .{ .origin = .{ .row = top, .col = 0 }, .surface = summary_surface });
+        top += summary_surface.size.height;
+        if (content_height >= 8) top += 1;
         const row_width = try tableWidth(ctx, self.data.?);
         const table_col = (size.width - row_width) / 2;
         const empty = self.data.?.count() == 0;
-        if (empty and top < size.height) {
+        if (empty and top < content_height) {
             var label: vxfw.Text = .{ .text = "No updates reported for checked sources.", .softwrap = true, .text_align = .center, .width_basis = .parent };
             try children.append(ctx.arena, .{
                 .origin = .{ .row = @intCast(top), .col = 0 },
-                .surface = try label.draw(ctx.withConstraints(.{}, .{ .width = size.width, .height = size.height - top })),
+                .surface = try label.draw(ctx.withConstraints(.{}, .{ .width = size.width, .height = content_height - top })),
             });
         }
-        if (!empty and row_width >= table_min_width and top < size.height) {
+        if (!empty and row_width >= table_min_width and top < content_height) {
             const heading = try drawColumns(ctx.withConstraints(.{}, .{ .width = row_width, .height = 1 }), .{ .source = "Source", .name = "Package", .current = "Upgrade", .available = "" }, true);
             try children.append(ctx.arena, .{ .origin = .{ .row = @intCast(top), .col = @intCast(table_col) }, .surface = heading });
-            top += if (size.height >= 10) @as(u16, 2) else 1;
+            top += if (content_height >= 10) @as(u16, 2) else 1;
         }
-        if (!empty and top < size.height) try children.append(ctx.arena, .{
-            .origin = .{ .row = @intCast(top), .col = @intCast(table_col) },
-            .surface = try self.list.draw(ctx.withConstraints(.{}, .{ .width = row_width, .height = size.height - top })),
-        });
+        if (!empty and top < content_height) {
+            var results = try self.list.draw(ctx.withConstraints(.{}, .{ .width = row_width, .height = content_height - top }));
+            var used_height: u16 = 0;
+            for (results.children) |child| {
+                const bottom = @as(i32, child.origin.row) + child.surface.size.height;
+                used_height = @max(used_height, @as(u16, @intCast(std.math.clamp(bottom, 0, results.size.height))));
+            }
+            // The scroll widget can fill its constraint even when its rows do not.
+            if (results.buffer.len == 0) results.size.height = used_height;
+            try children.append(ctx.arena, .{ .origin = .{ .row = top, .col = table_col }, .surface = results });
+        }
+        placeActions(children.items[0..action_count], children.items[action_count..], size.width, content_height);
         return .{ .size = size, .widget = widget, .buffer = &.{}, .children = children.items };
+    }
+
+    fn placeActions(actions: []vxfw.SubSurface, content: []const vxfw.SubSurface, width: u16, limit: u16) void {
+        if (actions.len == 0) return;
+        var bottom: i17 = 0;
+        for (content) |child| bottom = @max(bottom, child.origin.row + child.surface.size.height);
+        const start_row = @min(bottom + 1, limit);
+        var first: usize = 0;
+        while (first < actions.len) {
+            var end = first + 1;
+            while (end < actions.len and actions[end].origin.row == actions[first].origin.row) : (end += 1) {}
+            const last = actions[end - 1];
+            const row_width = last.origin.col + last.surface.size.width;
+            const left = @divFloor(@as(i17, width) - row_width, 2);
+            for (actions[first..end]) |*action| {
+                action.origin.row += start_row;
+                action.origin.col += left;
+            }
+            first = end;
+        }
+    }
+
+    fn appendActions(self: *const View, ctx: vxfw.DrawContext, children: *std.ArrayList(vxfw.SubSurface)) Allocator.Error!u16 {
+        const size = ctx.max.size();
+        var action_row: u16 = 0;
+        if (self.owner) |owner| {
+            if (!self.loading and owner.overlay == null and owner.operation_state.install_job == null) {
+                var col: u16 = 0;
+                for ([_]commands.Updates{ .refresh, .upgrade_all, .upgrade_system, .upgrade_aur, .upgrade_flatpak, .upgrade_appimage }) |action| {
+                    if (!self.allows(action)) continue;
+                    const label = switch (action) {
+                        .refresh => "[Refresh]",
+                        .upgrade_all => "[Upgrade all]",
+                        .upgrade_system => "[Upgrade system]",
+                        .upgrade_aur => "[Upgrade AUR]",
+                        .upgrade_flatpak => "[Upgrade Flatpak]",
+                        .upgrade_appimage => "[Upgrade AppImage]",
+                    };
+                    const width: u16 = @intCast(label.len);
+                    if (width > size.width) continue;
+                    if (width > size.width -| col) {
+                        if (action_row + 1 >= size.height -| 1) break;
+                        action_row += 1;
+                        col = 0;
+                    }
+                    if (action_row >= size.height -| 1) break;
+                    const button = try ctx.arena.create(UpdateButton);
+                    button.* = .{ .owner = owner, .label = label, .action = action };
+                    try children.append(ctx.arena, .{
+                        .origin = .{ .row = action_row, .col = col },
+                        .surface = try UpdateButton.draw(button, ctx.withConstraints(.{}, .{ .width = width, .height = 1 })),
+                    });
+                    col += width + 1;
+                }
+                if (col > 0) action_row += 1;
+            }
+        }
+        return action_row;
     }
 
     pub fn sourceSummary(self: View, arena: Allocator) Allocator.Error![]const u8 {

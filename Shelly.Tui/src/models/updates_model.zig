@@ -124,6 +124,7 @@ pub fn pollUpdates(self: *Model) void {
 
 pub fn updatesView(self: *Model) updates_view.View {
     return .{
+        .owner = self,
         .list = &self.updates_state.updates_list,
         .data = if (self.updates_state.updates_parsed) |*parsed| &parsed.value else null,
         .loading = self.updates_state.updates_job != null,
@@ -185,6 +186,24 @@ pub fn upgradeFromUpdates(self: *Model, backend: OperationBackend) !void {
 }
 
 /// Returns whether page input was consumed. Globals remain with the coordinator.
+pub fn runMouseAction(self: *Model, ctx: *vxfw.EventContext, action: commands.Updates) !void {
+    if (self.active != .upgrade or self.help_open or self.overlay != null or self.operation_state.install_job != null) return;
+    if (!updatesView(self).allows(action)) return;
+    try runAction(self, ctx, action);
+    ctx.consumeAndRedraw();
+}
+
+fn runAction(self: *Model, ctx: *vxfw.EventContext, action: commands.Updates) !void {
+    switch (action) {
+        .refresh => try startUpdates(self, ctx),
+        .upgrade_all => try upgradeFromUpdates(self, .all),
+        .upgrade_system => try upgradeFromUpdates(self, .standard),
+        .upgrade_aur => try upgradeFromUpdates(self, .aur),
+        .upgrade_flatpak => try upgradeFromUpdates(self, .flatpak),
+        .upgrade_appimage => try upgradeFromUpdates(self, .appimage),
+    }
+}
+
 pub fn handleKey(self: *Model, ctx: *vxfw.EventContext, key: vaxis.Key) anyerror!bool {
     if (commands.matches(key, .previous) or commands.matches(key, .next)) {
         try handleScrollEvent(self, ctx, .{ .key_press = .{ .codepoint = if (commands.matches(key, .previous)) vaxis.Key.up else vaxis.Key.down } });
@@ -192,14 +211,7 @@ pub fn handleKey(self: *Model, ctx: *vxfw.EventContext, key: vaxis.Key) anyerror
         return true;
     }
     if (updatesView(self).handleKey(key)) |action| {
-        switch (action) {
-            .refresh => try startUpdates(self, ctx),
-            .upgrade_all => try upgradeFromUpdates(self, .all),
-            .upgrade_system => try upgradeFromUpdates(self, .standard),
-            .upgrade_aur => try upgradeFromUpdates(self, .aur),
-            .upgrade_flatpak => try upgradeFromUpdates(self, .flatpak),
-            .upgrade_appimage => try upgradeFromUpdates(self, .appimage),
-        }
+        try runAction(self, ctx, action);
         ctx.consumeAndRedraw();
         return true;
     }
@@ -284,6 +296,25 @@ test "updates action opens a native-only upgrade prompt" {
     model.updates_state.updates_parsed = ParsedCheckUpdates.fromParsed(try std.json.parseFromSlice(CheckUpdates, std.testing.allocator,
         \\{"Packages":[{"Name":"native","CurrentVersion":"1","NewVersion":"2"}],"Aur":[{"Name":"foreign"}]}
     , .{ .allocate = .alloc_always }));
+    model.active = .upgrade;
+    vxfw.DrawContext.init(.unicode);
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+    var children: std.ArrayList(vxfw.SubSurface) = .empty;
+    try updatesView(model).appendContent(.{ .arena = alloc, .min = .{}, .max = .{ .width = 90, .height = 24 }, .cell_size = .{ .width = 10, .height = 20 } }, &children);
+    var hits: std.ArrayList(vxfw.HitResult) = .empty;
+    const frame = children.items[0].surface;
+    const body = frame.children[0];
+    const system = body.surface.children[2];
+    try std.testing.expect(system.origin.row < frame.size.height - 2);
+    try std.testing.expect(body.surface.children[0].origin.col > 0);
+    try frame.hitTest(alloc, &hits, .{ .row = @intCast(body.origin.row + system.origin.row), .col = @intCast(body.origin.col + system.origin.col) });
+    const hit = hits.getLast();
+    var events: vxfw.EventContext = .{ .io = std.testing.io, .alloc = alloc, .cmds = .empty };
+    try hit.widget.handleEvent(&events, .{ .mouse = .{ .button = .left, .type = .press, .col = @intCast(hit.local.col), .row = @intCast(hit.local.row), .mods = .{} } });
+    try std.testing.expect(model.overlay.?.sudo.backend == .standard);
+    @import("operation_model.zig").closeOverlay(model);
     const action = updatesView(model).handleKey(.{ .codepoint = 'u' });
     try std.testing.expectEqual(commands.Updates.upgrade_system, action.?);
     try upgradeFromUpdates(model, .standard);
