@@ -120,6 +120,7 @@ pub const ShellyConfig = struct {
     NavMode: NavMode = .sidebar,
     ThemeMode: ThemeMode = .shelly,
     ThemeVariant: ThemeVariant = .follow_system,
+    UseSystemTitlebar: bool = false,
     // Internal: persisted window geometry, not exposed in settings UI
     WindowLastWidth: i32 = 0,
     WindowLastHeight: i32 = 0,

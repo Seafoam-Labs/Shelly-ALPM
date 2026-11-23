@@ -1980,3 +1980,11 @@ msgstr "Arch-Paketarchive"
 
 msgid "Installing local Arch packages"
 msgstr "Lokale Arch-Pakete werden installiert"
+msgid "Use System Title Bar"
+msgstr ""
+
+msgid "If enabled, the desktop draws the window title bar and its buttons instead of Shelly."
+msgstr ""
+
+msgid "Applies after restarting Shelly."
+msgstr ""
