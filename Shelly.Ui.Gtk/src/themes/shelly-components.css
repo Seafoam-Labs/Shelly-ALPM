@@ -312,6 +312,45 @@
 .shelly-root .settings-form-row:not(:first-child) {
   border-top: 1px solid @shelly_hairline;
 }
+/* settings sections: a heading, an optional line of help, then a card. */
+.shelly-root .settings-page-body {
+  padding: 8px 4px 32px;
+}
+.shelly-root .settings-group-title {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0 4px;
+}
+.shelly-root .settings-group-description {
+  color: @shelly_secondary_fg;
+  font-size: 12px;
+  margin: 0 4px 4px;
+}
+.shelly-root .settings-row-title {
+  font-size: 14px;
+}
+.shelly-root .settings-row-subtitle {
+  color: @shelly_secondary_fg;
+  font-size: 12px;
+}
+/* software sources wear the same icons as their pages in the navigation. */
+.shelly-root .settings-row-icon {
+  min-width: 36px;
+  min-height: 36px;
+  border-radius: 12px;
+  background: alpha(@shelly_accent, 0.14);
+  color: @shelly_accent;
+}
+.shelly-root .settings-footer button.link {
+  padding: 0 10px;
+}
+.shelly-root .settings-footer button.link label {
+  color: @shelly_secondary_fg;
+  text-decoration-line: none;
+}
+.shelly-root .settings-footer button.link:hover label {
+  color: @shelly_accent;
+}
 .shelly-root stackswitcher button:checked {
   background: @shelly_selected_bg;
   border-color: @shelly_selected_ring;
