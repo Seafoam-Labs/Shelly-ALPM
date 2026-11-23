@@ -32,7 +32,7 @@ pub const Mouse = struct {
     }
 
     pub const SettingsTarget = union(enum) { control: usize, header: usize };
-    pub const BindingTarget = union(enum) { binding: usize, save, cancel };
+    pub const BindingTarget = union(enum) { binding: usize, scroll_down: bool, save, cancel };
     pub const editBinding = @import("models/settings_model.zig").editBindingFromMouse;
     pub const activateSetting = @import("models/settings_model.zig").onSettingsAction;
     pub const selectTab = @import("model.zig").Model.onTabSelected;

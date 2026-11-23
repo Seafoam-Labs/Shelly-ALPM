@@ -68,10 +68,17 @@ pub fn draw(view: View, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
     return drawBody(owned, ctx);
 }
 
+fn scroll(ptr: *anyopaque, ctx: *vxfw.EventContext, event: vxfw.Event) anyerror!void {
+    if (event != .mouse) return;
+    const down = commands.Mouse.wheelDown(event.mouse) orelse return;
+    const view: *const View = @ptrCast(@alignCast(ptr));
+    if (view.owner) |owner| try commands.Mouse.editBinding(owner, ctx, .{ .scroll_down = down });
+}
+
 fn drawBody(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
     const view: *const View = @ptrCast(@alignCast(ptr));
     const size = ctx.max.size();
-    const widget: vxfw.Widget = .{ .userdata = ptr, .drawFn = drawBody };
+    const widget: vxfw.Widget = .{ .userdata = ptr, .drawFn = drawBody, .eventHandler = if (view.focused) scroll else null };
     if (size.width == 0 or size.height == 0) return .{ .size = size, .widget = widget, .buffer = &.{}, .children = &.{} };
     const width = size.width;
     const col: u16 = 0;

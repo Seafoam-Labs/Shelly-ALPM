@@ -451,6 +451,11 @@ pub fn editBindingFromMouse(ptr: *anyopaque, ctx: *vxfw.EventContext, action: co
     const state = &self.settings_state;
     if (self.active != .settings or self.help_open or !state.keybindings_open or self.operation_state.install_job != null) return;
     switch (action) {
+        .scroll_down => |down| {
+            if (state.keybinding_capture) return;
+            if (!down and keybindings_view.displayPosition(state.keybinding_selected) == 0) return ctx.consumeEvent();
+            state.keybinding_selected = keybindings_view.adjacent(state.keybinding_selected, down) orelse return ctx.consumeEvent();
+        },
         .binding => |index| {
             if (state.keybinding_capture or index >= keybindings.editable.len) return;
             state.keybinding_selected = index;
@@ -1790,5 +1795,27 @@ test "mouse keybinding capture can cancel or save a candidate" {
             const saved = try model.settings_state.settings_store.?.load(std.testing.io);
             try std.testing.expectEqual(vaxis.Key.f2, saved.keybindings.get(.help).codepoint);
         }
+    }
+}
+
+test "wheel navigation reveals a clickable off-screen keybinding" {
+    vxfw.DrawContext.init(.unicode);
+    const fixture = try KeybindingTest.init("{}");
+    defer fixture.deinit();
+    fixture.load();
+    try openTestBindingEditor(fixture);
+    const model = fixture.model.?;
+    const arena = fixture.arena.allocator();
+    const draw_ctx: vxfw.DrawContext = .{ .arena = arena, .min = .{}, .max = .{ .width = 40, .height = 5 }, .cell_size = .{ .width = 10, .height = 20 } };
+    const wheel: vxfw.Event = .{ .mouse = .{ .button = .wheel_down, .type = .press, .col = 0, .row = 0, .mods = .{} } };
+    for (0..keybindings_view.row_count + 1) |step| {
+        const surface = try keybindings_view.draw(.{ .owner = model, .config = model.settings_state.settings_draft.keybindings, .selected = model.settings_state.keybinding_selected, .capturing = false, .busy = false, .failure = null }, draw_ctx);
+        const last = try SettingsMouseTest.find(surface, "Show hidden files", arena);
+        if (step == 0) try std.testing.expect(last == null);
+        if (step == keybindings_view.row_count) {
+            try last.?.handleEvent(&fixture.events, .{ .mouse = .{ .button = .left, .type = .press, .col = 0, .row = 0, .mods = .{} } });
+            try std.testing.expect(model.settings_state.keybinding_capture);
+            try std.testing.expectEqual(commands.Id.toggle_hidden, keybindings.editable[model.settings_state.keybinding_selected]);
+        } else try surface.widget.handleEvent(&fixture.events, wheel);
     }
 }
