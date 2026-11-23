@@ -737,11 +737,17 @@ Document any known issues that are being tracked:
 - [ ] System colors with a palette generator (matugen, Noctalia, or similar) that writes
   libadwaita names to `~/.config/gtk-4.0/`: Shelly uses those colors, including the accent,
   and follows regenerated palettes live.
-- [ ] System colors with no user GTK 4 colors: Shelly keeps the Shelly palette for the
-  desktop's dark or light preference, using the portal accent color when the desktop
-  sets one.
-- [ ] System colors with a user `gtk.css` that sets only `accent_bg_color`: Shelly keeps the
-  Shelly palette and uses that accent instead of the portal accent.
+- [ ] System colors with an installed GTK 4 theme (adw-gtk3 or similar) and no user GTK 4
+  colors: Shelly keeps its design and uses the theme's colors for the desktop's dark or
+  light preference, with the portal accent over the theme's. With Plasma colors in
+  `~/.config/gtk-4.0/colors.css` as well, the Plasma colors win. Picking another GTK theme
+  while Shelly is open updates Shelly within a second, unless `GTK_THEME` is set.
+- [ ] System colors with GTK's built-in theme and no user GTK 4 colors: Shelly keeps the
+  Shelly palette for the desktop's dark or light preference, using the portal accent color
+  when the desktop sets one.
+- [ ] System colors with GTK's built-in theme and a user `gtk.css` that sets only
+  `accent_bg_color`: Shelly keeps the Shelly palette and uses that accent instead of the
+  portal accent.
 - [ ] System colors with unreadable desktop colors (text and background too close): Shelly
   keeps the Shelly palette for the desktop's dark or light preference and logs a warning.
 

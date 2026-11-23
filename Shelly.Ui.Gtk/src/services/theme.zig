@@ -99,9 +99,18 @@ var desktop_refresh_source: c_uint = 0;
 var portal_connection: ?*gio.DBusConnection = null;
 var portal_accent: ?desktop_palette.Rgb = null;
 var portal_dark: ?bool = null;
+var portal_high_contrast: bool = false;
 var portal_read: bool = false;
 var hint_dark: ?bool = null;
 var hint_changing: bool = false;
+/// read before the pin hides it; later changes come from the portal or
+/// gsettings.
+var desktop_theme_name: ?[:0]u8 = null;
+var desktop_theme_forced: bool = false;
+/// set by `GTK_THEME`: gtk then loads `gtk-<variant>.css`, or `gtk.css`,
+/// whatever the desktop scheme.
+var desktop_theme_variant: ?[]u8 = null;
+var desktop_theme_read: bool = false;
 
 /// Reads the persisted configuration and applies it to `win`.
 pub fn apply(win: *gtk.Window) void {
@@ -125,13 +134,14 @@ pub fn applyWith(win: *gtk.Window, mode: ThemeMode, variant: ThemeVariant) void 
 
     const display = gdk.Display.getDefault() orelse return;
     const widget = win.as(gtk.Widget);
+    readDesktopThemeName();
 
     var desktop_css: ?[:0]u8 = null;
     defer if (desktop_css) |css| std.heap.c_allocator.free(css);
     const dark = if (mode == .system) blk: {
         const result = buildDesktopPalette();
         desktop_css = result.css;
-        break :blk result.dark orelse systemPrefersDark();
+        break :blk result.dark orelse systemColorsScheme().dark;
     } else resolveDark(variant);
     resolved_dark = dark;
 
@@ -203,20 +213,116 @@ fn readFile(arena: std.mem.Allocator, path: []const u8) ?[]const u8 {
     return arena.dupe(u8, contents[0..len]) catch null;
 }
 
+fn pathExists(arena: std.mem.Allocator, path: []const u8) bool {
+    const path_z = arena.dupeSentinel(u8, path, 0) catch return false;
+    return glib.fileTest(path_z, .{ .exists = true }) != 0;
+}
+
+/// runs before the first `applyThemePin`; a non-empty `GTK_THEME` wins, as in
+/// gtk.
+fn readDesktopThemeName() void {
+    if (desktop_theme_read) return;
+    desktop_theme_read = true;
+    var name: []const u8 = "";
+    var value = std.mem.zeroes(gobject.Value);
+    _ = value.init(gobject.typeFromName("gchararray"));
+    defer value.unset();
+    if (std.c.getenv("GTK_THEME")) |env| {
+        const forced = desktop_palette.splitThemeVariable(std.mem.span(env));
+        if (forced.name.len > 0) {
+            name = forced.name;
+            desktop_theme_forced = true;
+            desktop_theme_variant = std.heap.c_allocator.dupe(u8, forced.variant) catch null;
+        }
+    }
+    if (name.len == 0) {
+        if (gtk.Settings.getDefault()) |gtk_settings| {
+            gtk_settings.as(gobject.Object).getProperty("gtk-theme-name", &value);
+            if (value.getString()) |current| name = std.mem.span(current);
+        }
+    }
+    if (name.len == 0) return;
+    desktop_theme_name = std.heap.c_allocator.dupeSentinel(u8, name, 0) catch null;
+}
+
+fn setDesktopThemeName(name: []const u8) void {
+    if (desktop_theme_forced) return;
+    if (desktop_theme_name) |current| {
+        if (std.mem.eql(u8, current, name)) return;
+        std.heap.c_allocator.free(current);
+    }
+    desktop_theme_name = if (name.len == 0) null else std.heap.c_allocator.dupeSentinel(u8, name, 0) catch null;
+    scheduleDesktopRefresh();
+}
+
+fn onGnomeThemeChanged(settings: *gio.Settings, _: [*:0]const u8, _: *c_int) callconv(.c) void {
+    const theme = settings.getString("gtk-theme");
+    defer glib.free(theme);
+    setDesktopThemeName(std.mem.span(theme));
+}
+
+fn desktopScheme() desktop_palette.Scheme {
+    const dark = systemPrefersDark();
+    return .{ .dark = dark, .high_contrast = portal_high_contrast };
+}
+
+/// a `GTK_THEME` variant decides both for the theme, as in gtk.
+fn systemColorsScheme() desktop_palette.Scheme {
+    // the accent comes from the portal even when `GTK_THEME` decides the rest.
+    readPortal();
+    if (desktop_theme_variant) |variant| return .{
+        .dark = std.mem.indexOf(u8, variant, "dark") != null,
+        .high_contrast = std.mem.indexOf(u8, variant, "hc") != null,
+    };
+    return desktopScheme();
+}
+
+/// the file gtk would load, or null for its built-in themes. like gtk, a
+/// missing `gtk-dark.css` does not fall back to `gtk.css`.
+fn desktopThemeFile(arena: std.mem.Allocator, scheme: desktop_palette.Scheme) ?[]const u8 {
+    const name = desktop_theme_name orelse return null;
+    const resource = std.fmt.allocPrintSentinel(arena, "/org/gtk/libgtk/theme/{s}/gtk.css", .{name}, 0) catch return null;
+    if (resourceExists(resource)) return null;
+    // gtk's order: user data, ~/.themes, then the system data dirs.
+    var dirs: std.ArrayListUnmanaged([]const u8) = .empty;
+    const user_dir = std.fs.path.join(arena, &.{ std.mem.span(glib.getUserDataDir()), "themes" }) catch return null;
+    const home_dir = std.fs.path.join(arena, &.{ std.mem.span(glib.getHomeDir()), ".themes" }) catch return null;
+    dirs.appendSlice(arena, &.{ user_dir, home_dir }) catch return null;
+    const system_dirs: [*:null]const ?[*:0]const u8 = @ptrCast(glib.getSystemDataDirs());
+    var i: usize = 0;
+    while (system_dirs[i]) |dir| : (i += 1) {
+        const themes = std.fs.path.join(arena, &.{ std.mem.span(dir), "themes" }) catch return null;
+        dirs.append(arena, themes) catch return null;
+    }
+    const variant: []const u8 = desktop_theme_variant orelse
+        if (scheme.high_contrast) (if (scheme.dark) "hc-dark" else "hc") else if (scheme.dark) "dark" else "";
+    const file = if (variant.len == 0) "gtk.css" else std.fmt.allocPrint(arena, "gtk-{s}.css", .{variant}) catch return null;
+    return desktop_palette.findThemeFile(arena, dirs.items, name, file, gtk.getMinorVersion(), &pathExists) catch null;
+}
+
 fn buildDesktopPalette() DesktopResult {
     var arena_state = std.heap.ArenaAllocator.init(std.heap.c_allocator);
     defer arena_state.deinit();
     const arena = arena_state.allocator();
 
+    const scheme = systemColorsScheme();
+    // like gtk, a `GTK_THEME` variant does not reach the user stylesheet.
+    const user_scheme = if (desktop_theme_variant != null) desktopScheme() else scheme;
+    // the theme first, so user colors override it, as in gtk.
     var defines: desktop_palette.Defines = .empty;
+    if (desktopThemeFile(arena, scheme)) |path| {
+        desktop_palette.collectFile(arena, &defines, path, &readFile, scheme, 0) catch {};
+    }
+    var user_defines: desktop_palette.Defines = .empty;
     var path_buf: [std.fs.max_path_bytes]u8 = undefined;
     if (userGtkCssPath(&path_buf)) |path| {
-        desktop_palette.collectFile(arena, &defines, path, &readFile, 0) catch {};
+        desktop_palette.collectFile(arena, &user_defines, path, &readFile, user_scheme, 0) catch {};
     }
+    var it = user_defines.iterator();
+    while (it.next()) |entry| defines.put(arena, entry.key_ptr.*, entry.value_ptr.*) catch {};
 
     var rejection: desktop_palette.Rejection = .none;
-    const prefers_dark = systemPrefersDark();
-    const palette = desktop_palette.build(arena, &defines, portal_accent, prefers_dark, &rejection) catch {
+    const palette = desktop_palette.build(arena, &defines, &user_defines, portal_accent, scheme.dark, &rejection) catch {
         return .{ .css = null, .dark = null };
     };
     switch (rejection) {
@@ -308,6 +414,10 @@ fn readPortal() void {
             defer value.unref();
             portal_dark = schemeFromVariant(value);
         }
+        if (vd.lookupValue("contrast", null)) |value| {
+            defer value.unref();
+            portal_high_contrast = contrastFromVariant(value);
+        }
     }
 }
 
@@ -319,6 +429,12 @@ fn schemeFromVariant(value: *glib.Variant) ?bool {
         2 => false,
         else => null,
     };
+}
+
+/// the portal sends 1 for higher contrast and 0 for no preference.
+fn contrastFromVariant(value: *glib.Variant) bool {
+    if (!std.mem.eql(u8, std.mem.span(value.getTypeString()), "u")) return false;
+    return value.getUint32() == 1;
 }
 
 /// The portal sends `(ddd)` in 0..1; values outside that range mean unset.
@@ -362,7 +478,7 @@ fn ensureDesktopWatchers() void {
                 "org.freedesktop.portal.Settings",
                 "SettingChanged",
                 "/org/freedesktop/portal/desktop",
-                "org.freedesktop.appearance",
+                null,
                 .{},
                 &onPortalSettingChanged,
                 null,
@@ -386,17 +502,38 @@ fn onPortalSettingChanged(
     _: ?*anyopaque,
 ) callconv(.c) void {
     if (!std.mem.eql(u8, std.mem.span(params.getTypeString()), "(ssv)")) return;
+    const namespace = params.getChildValue(0);
+    defer namespace.unref();
+    const ns = std.mem.span(namespace.getString(null));
     const key = params.getChildValue(1);
     defer key.unref();
     const name = std.mem.span(key.getString(null));
+    // gtk reads the theme name from this namespace on wayland.
+    if (std.mem.eql(u8, ns, "org.gnome.desktop.interface")) {
+        if (!std.mem.eql(u8, name, "gtk-theme")) return;
+        const boxed = params.getChildValue(2);
+        defer boxed.unref();
+        const value = boxed.getVariant();
+        defer value.unref();
+        if (std.mem.eql(u8, std.mem.span(value.getTypeString()), "s")) setDesktopThemeName(std.mem.span(value.getString(null)));
+        return;
+    }
+    if (!std.mem.eql(u8, ns, "org.freedesktop.appearance")) return;
     const is_accent = std.mem.eql(u8, name, "accent-color");
-    if (!is_accent and !std.mem.eql(u8, name, "color-scheme")) return;
+    const is_scheme = std.mem.eql(u8, name, "color-scheme");
+    if (!is_accent and !is_scheme and !std.mem.eql(u8, name, "contrast")) return;
     readPortal();
     const boxed = params.getChildValue(2);
     defer boxed.unref();
     const value = boxed.getVariant();
     defer value.unref();
-    if (is_accent) portal_accent = accentFromVariant(value) else portal_dark = schemeFromVariant(value);
+    if (is_accent) {
+        portal_accent = accentFromVariant(value);
+    } else if (is_scheme) {
+        portal_dark = schemeFromVariant(value);
+    } else {
+        portal_high_contrast = contrastFromVariant(value);
+    }
     scheduleDesktopRefresh();
 }
 
@@ -646,6 +783,13 @@ fn ensureWatchers() void {
             &onGnomeSchemeChanged,
             &watch_dummy,
             .{ .detail = "color-scheme" },
+        );
+        _ = gio.Settings.signals.changed.connect(
+            settings,
+            *c_int,
+            &onGnomeThemeChanged,
+            &watch_dummy,
+            .{ .detail = "gtk-theme" },
         );
     }
     if (gtk.Settings.getDefault()) |gtk_settings| {
