@@ -1,3 +1,5 @@
+const pane_focus = @import("pane_focus.zig");
+const commands = @import("../commands.zig");
 const std = @import("std");
 const styles = @import("styles.zig");
 const Border = @import("border.zig");
@@ -66,6 +68,7 @@ pub const View = struct {
             else
                 try self.text_field.draw(ctx.withConstraints(.{}, .{ .width = list_width, .height = search_height })),
         });
+        if (split) try pane_focus.attach(ctx, &children.items[children.items.len - 1].surface, self.model, .packages, .search);
 
         if ((split or !self.details_active) and height > 0) {
             const message: ?[]const u8 = if (self.loading)
@@ -78,20 +81,23 @@ pub const View = struct {
                 null;
             var label: vxfw.Text = .{ .text = message orelse "" };
             const content: vxfw.Widget = if (message != null) label.widget() else .{ .userdata = self.model, .drawFn = drawPackageTable };
+            const action_height = try @import("marked_actions.zig").append(ctx.withConstraints(.{}, .{ .width = list_width, .height = height }), children, content_row, self.model, if (self.loading or self.load_failed) 0 else self.selected_count, self.selected_installed > 0);
+            const remaining = height - action_height;
             var border: Border = .{
                 .child = content,
                 .focused = self.list_active and !self.details_active,
             };
             try children.append(arena, .{
-                .origin = .{ .row = @intCast(content_row), .col = 0 },
-                .surface = if (list_width >= 2 and height >= 2)
+                .origin = .{ .row = @intCast(content_row + action_height), .col = 0 },
+                .surface = if (list_width >= 2 and remaining >= 2)
                     try border.widget().draw(ctx.withConstraints(
-                        .{ .width = list_width, .height = height },
-                        .{ .width = list_width, .height = height },
+                        .{ .width = list_width, .height = remaining },
+                        .{ .width = list_width, .height = remaining },
                     ))
                 else
-                    try content.draw(ctx.withConstraints(.{}, .{ .width = list_width, .height = height })),
+                    try content.draw(ctx.withConstraints(.{}, .{ .width = list_width, .height = remaining })),
             });
+            if (split) try pane_focus.attach(ctx, &children.items[children.items.len - 1].surface, self.model, .packages, .results);
         }
 
         if (self.help) |panel| {
@@ -123,6 +129,7 @@ pub const View = struct {
                     .{ .width = right_w, .height = details_height },
                 )),
             });
+            if (split) try pane_focus.attach(ctx, &children.items[children.items.len - 1].surface, self.model, .packages, .details);
         }
     }
     pub fn statusText(self: View, arena: Allocator) Allocator.Error![]const u8 {
@@ -137,6 +144,10 @@ pub const View = struct {
 const marker_width = 2;
 const selected_width: u16 = "Selected".len;
 const minimum_table_width = 30;
+
+pub fn checkboxColumn(width: u16) u16 {
+    return if (width >= minimum_table_width) width - selected_width else width -| 3;
+}
 
 fn repositoryColumn(width: u16) u16 {
     const available = width - selected_width;
@@ -167,8 +178,8 @@ const SortHeader = struct {
         const header: *SortHeader = @ptrCast(@alignCast(ptr));
         if (event != .mouse or header.model.help_open) return;
         const mouse = event.mouse;
-        if (mouse.button != .left or mouse.type != .press or mouse.col < 0 or mouse.col >= header.selected) return;
-        packages_model.sortBy(header.model, if (mouse.col < header.repository) .name else .repository);
+        if (!commands.Mouse.primaryPress(mouse) or mouse.col < 0 or mouse.col >= header.selected) return;
+        commands.Mouse.sortPackages(header.model, if (mouse.col < header.repository) .name else .repository);
         ctx.consumeAndRedraw();
     }
 };
@@ -179,7 +190,7 @@ fn drawPackageTable(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw
     const size = ctx.max.size();
     const gutter: u16 = if (list.draw_cursor) 2 else 0;
     const width = size.width -| gutter;
-    if (width < minimum_table_width or size.height < 2) return list.draw(ctx);
+    if (width < minimum_table_width or size.height < 2) return drawPackageList(model, ctx);
 
     const repo = repositoryColumn(width);
     const hit = try ctx.arena.create(SortHeader);
@@ -189,9 +200,13 @@ fn drawPackageTable(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw
     children[0] = .{ .origin = .{ .row = 0, .col = 0 }, .surface = header };
     children[1] = .{
         .origin = .{ .row = 1, .col = 0 },
-        .surface = try list.draw(ctx.withConstraints(.{}, .{ .width = size.width, .height = size.height - 1 })),
+        .surface = try drawPackageList(model, ctx.withConstraints(.{}, .{ .width = size.width, .height = size.height - 1 })),
     };
     return .{ .size = size, .widget = .{ .userdata = ptr, .drawFn = drawPackageTable }, .buffer = &.{}, .children = children };
+}
+
+fn drawPackageList(model: *Model, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
+    return @import("result_list.zig").widget(model, .packages).draw(ctx);
 }
 
 pub fn drawColumn(ctx: vxfw.DrawContext, buffer: []vaxis.Cell, col: u16, width: u16, value: []const u8, style: vaxis.Style) Allocator.Error!void {
@@ -215,7 +230,7 @@ fn drawRow(ptr: *anyopaque, ctx: vxfw.DrawContext, selected: bool) Allocator.Err
 
     const width = ctx.max.width orelse ctx.min.width;
     const table = width >= minimum_table_width;
-    const checkbox_col = if (table) width - selected_width else width -| 3;
+    const checkbox_col = checkboxColumn(width);
     const name = try diagnostics.sanitizeAlloc(arena, pkg.Name);
     const repository = try diagnostics.sanitizeAlloc(arena, pkg.Repository);
     const widget: vxfw.Widget = .{ .userdata = ptr, .drawFn = if (selected) drawMarkedPackageRow else drawPackageRow };
@@ -436,4 +451,32 @@ test "selected package names escape terminal control bytes" {
     try std.testing.expect(std.mem.indexOf(u8, text.items, "demo\\x1b[31m\\x0d\\x7f") != null);
     try std.testing.expect(std.mem.indexOfAny(u8, text.items, "\x1b\r\x7f") == null);
     try std.testing.expectEqualStrings("demo\x1b[31m\r\x7f", name);
+}
+
+test "clicking a scrolled package row selects it and Down continues from it" {
+    vxfw.DrawContext.init(.unicode);
+    const model = try Model.init(std.testing.allocator);
+    defer model.deinit();
+    var packages = [_]Package{ .{ .Name = "a" }, .{ .Name = "b" }, .{ .Name = "c" }, .{ .Name = "d" } };
+    const state = &model.packages_state;
+    state.packages = &packages;
+    try packages_model.rebuildFilter(model);
+    state.list_view.scroll.top = 1;
+    state.list_view.scroll.wants_cursor = false;
+
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const surface = try drawPackageList(model, .{ .arena = arena.allocator(), .min = .{}, .max = .{ .width = 30, .height = 2 }, .cell_size = .{ .width = 10, .height = 20 } });
+    var ctx: vxfw.EventContext = .{ .io = std.testing.io, .alloc = arena.allocator(), .cmds = .empty };
+    const click: vxfw.Event = .{ .mouse = .{ .row = 1, .col = 0, .button = .left, .type = .press, .mods = .{} } };
+    model.overlay = .{ .package = &packages[0] };
+    try surface.widget.handleEvent(&ctx, click);
+    try std.testing.expectEqual(@as(u32, 0), state.list_view.cursor);
+    model.overlay = null;
+    try surface.widget.handleEvent(&ctx, click);
+    try std.testing.expectEqual(&packages[2], packages_model.selectedPackage(model).?);
+    try std.testing.expect(state.package_list_active);
+    try std.testing.expectEqual(@as(usize, 0), state.selected_packages.items.len);
+    _ = try packages_model.handleKey(model, &ctx, .{ .codepoint = vaxis.Key.down }, false);
+    try std.testing.expectEqual(&packages[3], packages_model.selectedPackage(model).?);
 }

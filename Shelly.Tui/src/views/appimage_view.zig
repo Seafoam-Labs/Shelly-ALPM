@@ -1,4 +1,6 @@
+const pane_focus = @import("pane_focus.zig");
 const styles = @import("styles.zig");
+const commands = @import("../commands.zig");
 const std = @import("std");
 const Border = @import("border.zig");
 const diagnostics = @import("diagnostics");
@@ -171,6 +173,8 @@ const DetailsBody = struct {
 };
 
 pub const View = struct {
+    model: ?*@import("../model.zig").Model = null,
+    result_list: ?vxfw.Widget = null,
     state: *@import("../models/appimage_model.zig").State,
     list_percent: u8 = 40,
     help: ?*@import("help_view.zig").Panel = null,
@@ -193,12 +197,13 @@ pub const View = struct {
             const message = self.contentMessage();
             var label: vxfw.Text = .{ .text = message orelse "", .style = styles.secondary };
             const labels = [_]Border.BorderLabel{.{ .text = "Installed AppImages", .alignment = .top_left }};
-            const content = if (message != null) label.widget() else self.state.list_view.widget();
+            const content = if (message != null) label.widget() else self.result_list orelse self.state.list_view.widget();
             var border: Border = .{ .child = content, .labels = &labels, .focused = self.state.list_active and !self.state.details_active and self.help == null };
             if (list_width >= 2 and pane_height >= 2)
                 try children.append(arena, .{ .origin = .{ .row = 1, .col = 0 }, .surface = try border.draw(ctx.withConstraints(.{ .width = list_width, .height = pane_height }, .{ .width = list_width, .height = pane_height })) })
             else
                 try children.append(arena, .{ .origin = .{ .row = 1, .col = 0 }, .surface = try content.draw(ctx.withConstraints(.{}, .{ .width = list_width, .height = pane_height })) });
+            if (split) try pane_focus.attach(ctx, &children.items[children.items.len - 1].surface, self.model, .appimage, .results);
         }
         if (show_pane and pane_height >= 2 and right_w >= 2) {
             const pane_ctx = ctx.withConstraints(.{}, .{ .width = right_w, .height = pane_height });
@@ -220,6 +225,7 @@ pub const View = struct {
                 break :blk try border.draw(pane_ctx.withConstraints(.{ .width = right_w, .height = pane_height }, .{ .width = right_w, .height = pane_height }));
             };
             try children.append(arena, .{ .origin = .{ .row = 1, .col = if (split) @intCast(left_w) else 0 }, .surface = surface });
+            if (split) try pane_focus.attach(ctx, &children.items[children.items.len - 1].surface, self.model, .appimage, .details);
         }
     }
 };
@@ -243,13 +249,14 @@ const PathRow = struct {
         }, diagnostics.safe(if (self.form.has_parent and self.index == 0) ".." else std.fs.path.basename(std.mem.trimEnd(u8, candidate.path, "/"))), if (candidate.is_directory) "/" else "" }), .style = if (selected) styles.selected else styles.secondary, .softwrap = false, .overflow = .ellipsis, .width_basis = .parent };
         var surface = try text.draw(ctx);
         surface.widget = self.widget();
+        try styles.hoverLabel(ctx.arena, &surface);
         return surface;
     }
     fn event(ptr: *anyopaque, ctx: *vxfw.EventContext, input: vxfw.Event) !void {
         const self: *PathRow = @ptrCast(@alignCast(ptr));
-        if (input == .mouse and input.mouse.button == .left and input.mouse.type == .press) {
-            self.form.editing_path = false;
-            try @import("../models/appimage_model.zig").selectInstallPath(self.form, self.index);
+
+        if (input == .mouse and commands.Mouse.primaryPress(input.mouse)) {
+            try commands.Mouse.selectPath(self.form, self.index);
             ctx.consumeAndRedraw();
         }
     }
@@ -344,20 +351,13 @@ const SourceEditor = struct {
 
     fn event(ptr: *anyopaque, ctx: *vxfw.EventContext, input: vxfw.Event) !void {
         const self: *SourceEditor = @ptrCast(@alignCast(ptr));
-        if (input != .mouse or input.mouse.button != .left or input.mouse.type != .press or input.mouse.row < 0) return;
+        if (input != .mouse or !commands.Mouse.primaryPress(input.mouse) or input.mouse.row < 0) return;
         const draft = self.draft.?;
         if (draft.save_job != null) return;
         const row: usize = @intCast(input.mouse.row);
         if (row >= self.controls.len) return;
         const control = self.controls[row] orelse return;
-        if (control == 1 and draft.update_type == .None) return;
-        draft.selected = control;
-        if (control != 1) {
-            _ = try @import("../models/appimage_model.zig").captureSource(draft.owner, ctx, .{ .key_press = @import("../commands.zig").bindings.confirm });
-        } else {
-            try ctx.requestFocus(draft.owner.widget());
-            ctx.consumeAndRedraw();
-        }
+        try commands.Mouse.activateSourceControl(draft, ctx, control);
     }
 
     fn draw(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
@@ -379,8 +379,8 @@ const SourceEditor = struct {
                 .Zsync => "Example: https://example.org/Application.AppImage.zsync",
             },
             if (draft.hosted()) (if (draft.prerelease) "[x] Allow prereleases" else "[ ] Allow prereleases") else "",
-            if (draft.save_job != null) "Saving…" else "[ Save ]",
-            "[ Cancel ]",
+            if (draft.save_job != null) "Saving…" else "[Save]",
+            "[Cancel]",
             draft.error_text orelse "",
         };
         var visible: [texts.len]usize = undefined;
@@ -407,7 +407,10 @@ const SourceEditor = struct {
             };
             const style = if (index == selected_index) styles.selected else styles.secondary;
             var label: vxfw.Text = .{ .text = text, .style = style, .softwrap = false, .overflow = .ellipsis, .width_basis = .parent };
-            try children.append(ctx.arena, .{ .origin = .{ .row = row, .col = 0 }, .surface = try label.draw(ctx.withConstraints(.{}, .{ .width = size.width, .height = 1 })) });
+            var surface = try label.draw(ctx.withConstraints(.{}, .{ .width = size.width, .height = 1 }));
+            if (self.controls[position - first] != null and draft.save_job == null and (index != 2 or draft.update_type != .None))
+                try styles.hoverLabel(ctx.arena, &surface);
+            try children.append(ctx.arena, .{ .origin = .{ .row = row, .col = 0 }, .surface = surface });
             if (index == 2 and draft.update_type != .None and size.width > 0) {
                 const col: u16 = if (size.width > 8) 8 else 0;
                 try children.append(ctx.arena, .{ .origin = .{ .row = row, .col = @intCast(col) }, .surface = try draft.field.draw(ctx.withConstraints(.{}, .{ .width = size.width - col, .height = 1 })) });
