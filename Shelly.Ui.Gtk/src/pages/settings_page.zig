@@ -11,6 +11,7 @@ const DayOfWeek = @import("../models/shelly_config.zig").DayOfWeek;
 const NavMode = @import("../models/shelly_config.zig").NavMode;
 const ThemeMode = @import("../models/shelly_config.zig").ThemeMode;
 const ThemeVariant = @import("../models/shelly_config.zig").ThemeVariant;
+const OperationLogFontSize = @import("../models/shelly_config.zig").OperationLogFontSize;
 const ConfigResolver = @import("../services/ui_config_resolver.zig").ConfigResolver;
 const ConfigError = @import("../services/ui_config_resolver.zig").ConfigError;
 const CliConfigResolver = @import("../services/cli_config_resolver.zig").CliConfigResolver;
@@ -101,6 +102,7 @@ pub const ShellySettingsPage = extern struct {
         nav_mode_drop: *gtk.DropDown,
         theme_mode_drop: *gtk.DropDown,
         theme_variant_drop: *gtk.DropDown,
+        operation_log_font_size_drop: *gtk.DropDown,
         system_titlebar_switch: *gtk.Switch,
 
         // Advanced
@@ -238,6 +240,13 @@ pub const ShellySettingsPage = extern struct {
             .{ .detail = "selected" },
         );
         _ = gobject.Object.signals.notify.connect(
+            p.operation_log_font_size_drop.as(gobject.Object),
+            *Self,
+            &onOperationLogFontSizeChanged,
+            self,
+            .{ .detail = "selected" },
+        );
+        _ = gobject.Object.signals.notify.connect(
             p.terminal_update_drop.as(gobject.Object),
             *Self,
             &onTerminalDropSelected,
@@ -332,6 +341,13 @@ pub const ShellySettingsPage = extern struct {
         );
         _ = gobject.Object.signals.notify.connect(
             p.theme_variant_drop.as(gobject.Object),
+            *Self,
+            &onAutosaveNotify,
+            self,
+            .{ .detail = "selected", .after = true },
+        );
+        _ = gobject.Object.signals.notify.connect(
+            p.operation_log_font_size_drop.as(gobject.Object),
             *Self,
             &onAutosaveNotify,
             self,
@@ -1191,6 +1207,15 @@ pub const ShellySettingsPage = extern struct {
         }
     }
 
+    fn onOperationLogFontSizeChanged(obj: *gobject.Object, _: *gobject.ParamSpec, self: *Self) callconv(.c) void {
+        const dropdown: *gtk.DropDown = @ptrCast(@alignCast(obj));
+        const index = gtk.DropDown.getSelected(dropdown);
+        if (index >= operation_log_font_size_entries.len) return;
+        if (support.getWindow(ShellyWindow, self)) |win| {
+            win.applyOperationLogFontSize(operation_log_font_size_entries[index]);
+        }
+    }
+
     fn onAurConfirmationResponse(ctx: ?*anyopaque, confirmed: bool) void {
         const self: *Self = @ptrCast(@alignCast(ctx.?));
         if (support.getWindow(ShellyWindow, self)) |win| win.hideLockout();
@@ -1253,6 +1278,7 @@ pub const ShellySettingsPage = extern struct {
         .{ "nav_mode_drop", @offsetOf(Private, "nav_mode_drop") },
         .{ "theme_mode_drop", @offsetOf(Private, "theme_mode_drop") },
         .{ "theme_variant_drop", @offsetOf(Private, "theme_variant_drop") },
+        .{ "operation_log_font_size_drop", @offsetOf(Private, "operation_log_font_size_drop") },
         .{ "system_titlebar_switch", @offsetOf(Private, "system_titlebar_switch") },
 
         // Advanced
@@ -1359,6 +1385,8 @@ const theme_variant_entries = [_]ThemeVariantEntry{
     .{ .label = "Light", .value = .light },
 };
 
+const operation_log_font_size_entries = [_]OperationLogFontSize{ .px_14, .px_16, .px_18, .px_20, .px_24 };
+
 /// Terminal emulators offered in Settings. Keep in sync with
 /// `terminal_candidates` in Shelly.Notifications.Zig/src/services/app_runner.zig.
 const known_terminals = [_][:0]const u8{
@@ -1450,6 +1478,21 @@ fn populateDropdowns(p: *ShellySettingsPage.Private) void {
         gtk.StringList.append(theme_variant_strings, label);
     }
     gtk.DropDown.setModel(p.theme_variant_drop, theme_variant_strings.as(gio.ListModel));
+
+    const operation_log_font_size_strings = gtk.StringList.new(null);
+    inline for (operation_log_font_size_entries, 0..) |_, index| {
+        const label = switch (index) {
+            0 => translations._("Default (14 px)"),
+            1 => translations._("16 px"),
+            2 => translations._("18 px"),
+            3 => translations._("20 px"),
+            4 => translations._("24 px"),
+            else => unreachable,
+        };
+        gtk.StringList.append(operation_log_font_size_strings, label);
+    }
+    gtk.DropDown.setModel(p.operation_log_font_size_drop, operation_log_font_size_strings.as(gio.ListModel));
+    operation_log_font_size_strings.as(gobject.Object).unref();
 
     const lang_strings = gtk.StringList.new(null);
     inline for (language_entries, 0..) |_, index| {
@@ -1659,6 +1702,7 @@ fn applyConfig(p: *ShellySettingsPage.Private, cfg: *ShellyConfig) void {
     gtk.DropDown.setSelected(p.nav_mode_drop, navModeIndex(cfg.NavMode));
     gtk.DropDown.setSelected(p.theme_mode_drop, themeModeIndex(cfg.ThemeMode));
     gtk.DropDown.setSelected(p.theme_variant_drop, themeVariantIndex(cfg.ThemeVariant));
+    gtk.DropDown.setSelected(p.operation_log_font_size_drop, operationLogFontSizeIndex(cfg.OperationLogFontSize));
     setSwitch(p.system_titlebar_switch, cfg.UseSystemTitlebar);
     gtk.DropDown.setSelected(p.language_drop, languageIndex(cfg.Culture));
 
@@ -1758,6 +1802,11 @@ fn collectIntoConfig(p: *ShellySettingsPage.Private, allocator: std.mem.Allocato
         cfg.ThemeVariant = theme_variant_entries[theme_variant_idx].value;
     }
     cfg.UseSystemTitlebar = getSwitch(p.system_titlebar_switch);
+
+    const operation_log_font_size_idx = gtk.DropDown.getSelected(p.operation_log_font_size_drop);
+    if (operation_log_font_size_idx != std.math.maxInt(u32) and operation_log_font_size_idx < operation_log_font_size_entries.len) {
+        cfg.OperationLogFontSize = operation_log_font_size_entries[operation_log_font_size_idx];
+    }
 
     // Advanced
     cfg.NoConfirm = getSwitch(p.no_confirm_switch);
@@ -1974,6 +2023,13 @@ fn themeModeIndex(mode: ThemeMode) c_uint {
 fn themeVariantIndex(variant: ThemeVariant) c_uint {
     inline for (theme_variant_entries, 0..) |entry, i| {
         if (entry.value == variant) return @intCast(i);
+    }
+    return 0;
+}
+
+fn operationLogFontSizeIndex(size: OperationLogFontSize) c_uint {
+    for (operation_log_font_size_entries, 0..) |entry, index| {
+        if (entry == size) return @intCast(index);
     }
     return 0;
 }
