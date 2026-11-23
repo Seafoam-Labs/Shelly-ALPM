@@ -484,16 +484,15 @@ pub fn editBindingFromMouse(ptr: *anyopaque, ctx: *vxfw.EventContext, action: co
 pub fn captureBinding(self: *Model, ctx: *vxfw.EventContext, input: vaxis.Key) !bool {
     const state = &self.settings_state;
     if (self.active != .settings or self.help_open or !state.keybindings_open or !state.keybinding_capture) return false;
+    state.mouse_binding_candidate = null;
     if (self.operation_state.install_job != null) {
         state.keybinding_capture = false;
         state.mouse_binding_capture = false;
-        state.mouse_binding_candidate = null;
         return false;
     }
     if (commands.matches(input, .cancel_capture)) {
         state.keybinding_capture = false;
         state.mouse_binding_capture = false;
-        state.mouse_binding_candidate = null;
         state.keybinding_error = null;
     } else {
         var key: vaxis.Key = .{ .codepoint = input.codepoint, .mods = input.mods };
@@ -1818,4 +1817,27 @@ test "wheel navigation reveals a clickable off-screen keybinding" {
             try std.testing.expectEqual(commands.Id.toggle_hidden, keybindings.editable[model.settings_state.keybinding_selected]);
         } else try surface.widget.handleEvent(&fixture.events, wheel);
     }
+}
+
+test "conflicting mouse input invalidates the previous save candidate" {
+    const fixture = try KeybindingTest.init("{}");
+    defer fixture.deinit();
+    fixture.load();
+    try openTestBindingEditor(fixture);
+    const model = fixture.model.?;
+    const state = &model.settings_state;
+    state.settings.expanded_mouse_support = true;
+    const original = state.settings_draft.keybindings;
+    const install = std.mem.indexOfScalar(commands.Id, &keybindings.editable, .install).?;
+    try commands.Mouse.editBinding(model, &fixture.events, .{ .binding = install });
+    try std.testing.expect(try captureBinding(model, &fixture.events, .{ .codepoint = vaxis.Key.f2 }));
+    try std.testing.expect(state.mouse_binding_candidate != null);
+    try std.testing.expect(try captureBinding(model, &fixture.events, original.get(.remove)));
+    try std.testing.expect(settingsView(model).binding_candidate == null);
+    try commands.Mouse.editBinding(model, &fixture.events, .save);
+    try std.testing.expect(state.keybinding_capture);
+    try std.testing.expect(state.keybinding_error.? == error.ConflictingBinding);
+    try std.testing.expect(original.eql(state.settings_draft.keybindings));
+    const saved = try state.settings_store.?.load(std.testing.io);
+    try std.testing.expect(original.eql(saved.keybindings));
 }

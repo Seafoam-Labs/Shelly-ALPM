@@ -190,7 +190,7 @@ fn errorText(err: anyerror) []const u8 {
         error.ReservedBinding => "Reserved for navigation, confirmation, or text editing. Try another key.",
         error.ConflictingBinding => "Already assigned to another action in this context. Try another key.",
         error.TextInputConflict => "Use Ctrl, Alt, or a function key for actions active in text fields.",
-        error.InvalidKey => "Unsupported key. Use ASCII or function keys; Shift+letters is unsupported.",
+        error.InvalidKey => "Unsupported key. Use ASCII or function keys. Shift+letters is unsupported.",
         else => @errorName(err),
     };
 }
