@@ -2014,3 +2014,6 @@ msgstr ""
 
 msgid "Folder where new AppImages are saved."
 msgstr ""
+
+msgid "Remove Configuration on Uninstall"
+msgstr ""
