@@ -103,6 +103,7 @@ pub const ShellySettingsPage = extern struct {
         theme_mode_drop: *gtk.DropDown,
         theme_variant_drop: *gtk.DropDown,
         operation_log_font_size_drop: *gtk.DropDown,
+        system_titlebar_switch: *gtk.Switch,
 
         // Advanced
         remove_cache_switch: *gtk.Switch,
@@ -285,6 +286,7 @@ pub const ShellySettingsPage = extern struct {
             p.recommended_switch,
             p.shelly_icons_switch,
             p.symbolic_tray_switch,
+            p.system_titlebar_switch,
             p.tray_cron_switch,
             p.no_confirm_switch,
             p.shelly_search_switch,
@@ -1277,6 +1279,7 @@ pub const ShellySettingsPage = extern struct {
         .{ "theme_mode_drop", @offsetOf(Private, "theme_mode_drop") },
         .{ "theme_variant_drop", @offsetOf(Private, "theme_variant_drop") },
         .{ "operation_log_font_size_drop", @offsetOf(Private, "operation_log_font_size_drop") },
+        .{ "system_titlebar_switch", @offsetOf(Private, "system_titlebar_switch") },
 
         // Advanced
         .{ "remove_cache_switch", @offsetOf(Private, "remove_cache_switch") },
@@ -1700,6 +1703,7 @@ fn applyConfig(p: *ShellySettingsPage.Private, cfg: *ShellyConfig) void {
     gtk.DropDown.setSelected(p.theme_mode_drop, themeModeIndex(cfg.ThemeMode));
     gtk.DropDown.setSelected(p.theme_variant_drop, themeVariantIndex(cfg.ThemeVariant));
     gtk.DropDown.setSelected(p.operation_log_font_size_drop, operationLogFontSizeIndex(cfg.OperationLogFontSize));
+    setSwitch(p.system_titlebar_switch, cfg.UseSystemTitlebar);
     gtk.DropDown.setSelected(p.language_drop, languageIndex(cfg.Culture));
 
     setButtonLabel(p.tray_icon_button, std.heap.c_allocator, cfg.TrayIconPath, translations._("Select Icon"));
@@ -1797,6 +1801,7 @@ fn collectIntoConfig(p: *ShellySettingsPage.Private, allocator: std.mem.Allocato
     if (theme_variant_idx != std.math.maxInt(u32) and theme_variant_idx < theme_variant_entries.len) {
         cfg.ThemeVariant = theme_variant_entries[theme_variant_idx].value;
     }
+    cfg.UseSystemTitlebar = getSwitch(p.system_titlebar_switch);
 
     const operation_log_font_size_idx = gtk.DropDown.getSelected(p.operation_log_font_size_drop);
     if (operation_log_font_size_idx != std.math.maxInt(u32) and operation_log_font_size_idx < operation_log_font_size_entries.len) {

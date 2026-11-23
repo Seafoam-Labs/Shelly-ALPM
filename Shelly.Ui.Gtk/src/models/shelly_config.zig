@@ -84,6 +84,7 @@ pub const ShellyConfig = struct {
     ThemeMode: ThemeMode = .shelly,
     ThemeVariant: ThemeVariant = .follow_system,
     OperationLogFontSize: OperationLogFontSize = .px_14,
+    UseSystemTitlebar: bool = false,
     // Internal: persisted window geometry, not exposed in settings UI
     WindowLastWidth: i32 = 0,
     WindowLastHeight: i32 = 0,
