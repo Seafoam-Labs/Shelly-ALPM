@@ -13,14 +13,17 @@
       <object class="GtkOverlay" id="page_overlay">
         <property name="hexpand">true</property>
         <property name="vexpand">true</property>
+        <style>
+          <class name="settings-overlay"/>
+        </style>
         <child>
           <object class="GtkBox">
             <property name="orientation">vertical</property>
             <property name="margin-start">30</property>
             <property name="margin-end">30</property>
             <property name="margin-top">16</property>
-            <property name="margin-bottom">24</property>
             <property name="spacing">16</property>
+            <!-- Tabs; save floats at the bottom of the page -->
             <child>
               <object class="GtkStackSwitcher">
                 <property name="stack">settings_stack</property>
@@ -2025,48 +2028,45 @@
                 </child>
               </object>
             </child>
-            <!-- Bottom action bar -->
+          </object>
+        </child>
+        <!-- Version, mirroring save in the other bottom corner; opens the
+             changelog. The label is set to the running version. Devario
+             builds add the project links here, since their navigation has
+             none. -->
+        <child type="overlay">
+          <object class="GtkBox" id="corner_box">
+            <property name="spacing">12</property>
+            <property name="halign">start</property>
+            <property name="valign">end</property>
+            <property name="margin-start">16</property>
+            <property name="margin-bottom">28</property>
             <child>
-              <object class="GtkBox">
-                <property name="orientation">horizontal</property>
-                <property name="spacing">10</property>
+              <object class="GtkButton" id="changelog_button">
+                <property name="label">v0.0.0</property>
+                <property name="valign">center</property>
+                <property name="tooltip-text" translatable="yes">View Changelog</property>
+                <accessibility>
+                  <property name="label" translatable="yes">View Changelog</property>
+                </accessibility>
                 <style>
-                  <class name="settings-footer"/>
+                  <class name="version-link"/>
                 </style>
-                <child>
-                  <object class="GtkBox" id="footer_start">
-                    <property name="orientation">horizontal</property>
-                    <property name="spacing">10</property>
-                    <property name="hexpand">true</property>
-                    <property name="halign">start</property>
-                    <child>
-                      <object class="GtkLabel" id="version_label">
-                        <property name="margin-start">20</property>
-                        <property name="margin-end">20</property>
-                        <property name="label" translatable="yes">v0.0.0</property>
-                        <style>
-                          <class name="dim-label"/>
-                        </style>
-                      </object>
-                    </child>
-                  </object>
-                </child>
-                <child>
-                  <object class="GtkButton" id="changelog_button">
-                    <property name="label" translatable="yes">View Changelog</property>
-                  </object>
-                </child>
-                <child>
-                  <object class="GtkButton" id="save_button">
-                    <property name="label" translatable="yes">Save</property>
-                    <property name="halign">end</property>
-                    <style>
-                      <class name="suggested-action"/>
-                    </style>
-                  </object>
-                </child>
               </object>
             </child>
+          </object>
+        </child>
+        <child type="overlay">
+          <object class="GtkButton" id="save_button">
+            <property name="label" translatable="yes">Save</property>
+            <property name="halign">end</property>
+            <property name="valign">end</property>
+            <property name="margin-end">16</property>
+            <property name="margin-bottom">20</property>
+            <style>
+              <class name="suggested-action"/>
+              <class name="settings-save"/>
+            </style>
           </object>
         </child>
       </object>

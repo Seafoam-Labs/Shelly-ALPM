@@ -118,8 +118,7 @@ pub const ShellySettingsPage = extern struct {
         // Bottom action bar
         save_button: *gtk.Button,
         changelog_button: *gtk.Button,
-        version_label: *gtk.Label,
-        footer_start: *gtk.Box,
+        corner_box: *gtk.Box,
 
         toast: *Toast,
         loaded: bool,
@@ -167,8 +166,9 @@ pub const ShellySettingsPage = extern struct {
 
         _ = gtk.Button.signals.clicked.connect(p.save_button, *Self, &onSaveClicked, self, .{});
         _ = gtk.Button.signals.clicked.connect(p.changelog_button, *Self, &onChangelogClicked, self, .{});
+        gtk.Widget.setCursorFromName(p.changelog_button.as(gtk.Widget), "pointer");
         // Devario builds have no project links in the navigation.
-        if (features.builtWithDevario) gtk.Box.append(p.footer_start, project_links.build(.horizontal).as(gtk.Widget));
+        if (features.builtWithDevario) gtk.Box.append(p.corner_box, project_links.build(.horizontal).as(gtk.Widget));
 
         _ = gtk.Button.signals.clicked.connect(p.tray_icon_button, *Self, &onPickTrayIcon, self, .{});
         _ = gtk.Button.signals.clicked.connect(p.tray_icon_clear_button, *Self, &onClearTrayIcon, self, .{});
@@ -380,7 +380,12 @@ pub const ShellySettingsPage = extern struct {
             return;
         };
         defer std.heap.c_allocator.free(version);
-        p.version_label.setLabel(version);
+        gtk.Button.setLabel(p.changelog_button, version);
+        // The accessible name starts with the visible text, so voice control
+        // can activate the button by saying the version.
+        var name_buf: [256]u8 = undefined;
+        const name = std.fmt.bufPrint(&name_buf, "{s}, {s}", .{ version, translations._("View Changelog") }) catch version;
+        a11y.setName(p.changelog_button.as(gtk.Widget), name);
 
         const svc = obtainConfigService() catch |err| {
             std.log.warn("Could not open the settings service. {0s}\n\nTechnical details: {1s}", .{ diagnostics.cause(err), @errorName(err) });
@@ -1276,8 +1281,7 @@ pub const ShellySettingsPage = extern struct {
         // Bottom action bar
         .{ "save_button", @offsetOf(Private, "save_button") },
         .{ "changelog_button", @offsetOf(Private, "changelog_button") },
-        .{ "version_label", @offsetOf(Private, "version_label") },
-        .{ "footer_start", @offsetOf(Private, "footer_start") },
+        .{ "corner_box", @offsetOf(Private, "corner_box") },
     };
 
     pub const Class = extern struct {
