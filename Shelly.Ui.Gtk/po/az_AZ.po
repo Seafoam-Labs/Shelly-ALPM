@@ -1994,16 +1994,10 @@ msgstr ""
 msgid "Light, dark, or follow your system."
 msgstr ""
 
-msgid "Navigation"
-msgstr ""
-
 msgid "The page Shelly opens on."
 msgstr ""
 
 msgid "Sidebar on the left, or tabs across the top."
-msgstr ""
-
-msgid "Window"
 msgstr ""
 
 msgid "Tray icon"
@@ -2037,4 +2031,10 @@ msgid "Folder where new AppImages are saved."
 msgstr ""
 
 msgid "Remove Configuration on Uninstall"
+msgstr ""
+
+msgid "Layout"
+msgstr ""
+
+msgid "Updates & Tray"
 msgstr ""

@@ -457,6 +457,31 @@
                                 </child>
                               </object>
                             </child>
+                          </object>
+                        </child>
+                      </object>
+                    </property>
+                  </object>
+                </child>
+                <!-- Updates page -->
+                <child>
+                  <object class="GtkStackPage">
+                    <property name="name">updates_page</property>
+                    <property name="title" translatable="yes">Updates &amp; Tray</property>
+                    <property name="child">
+                      <object class="GtkScrolledWindow">
+                        <property name="hscrollbar-policy">never</property>
+                        <property name="vexpand">true</property>
+                        <child>
+                          <object class="GtkBox">
+                            <property name="orientation">vertical</property>
+                            <property name="hexpand">true</property>
+                            <property name="halign">center</property>
+                            <property name="width-request">640</property>
+                            <property name="spacing">28</property>
+                            <style>
+                              <class name="settings-page-body"/>
+                            </style>
                             <child>
                               <object class="GtkBox">
                                 <property name="orientation">vertical</property>
@@ -995,6 +1020,202 @@
                                 </child>
                               </object>
                             </child>
+                            <child>
+                              <object class="GtkBox">
+                                <property name="orientation">vertical</property>
+                                <property name="spacing">8</property>
+                                <style>
+                                  <class name="settings-group"/>
+                                </style>
+                                <child>
+                                  <object class="GtkLabel">
+                                    <property name="label" translatable="yes">Tray icon</property>
+                                    <property name="halign">start</property>
+                                    <property name="xalign">0</property>
+                                    <property name="accessible-role">heading</property>
+                                    <accessibility>
+                                      <property name="level">3</property>
+                                    </accessibility>
+                                    <style>
+                                      <class name="settings-group-title"/>
+                                    </style>
+                                  </object>
+                                </child>
+                                <child>
+                                  <object class="GtkBox">
+                                    <property name="orientation">vertical</property>
+                                    <style>
+                                      <class name="settings-card"/>
+                                    </style>
+                                    <child>
+                                      <object class="GtkBox" id="symbolic_tray_box">
+                                        <property name="orientation">horizontal</property>
+                                        <property name="spacing">16</property>
+                                        <style>
+                                          <class name="settings-form-row"/>
+                                        </style>
+                                        <child>
+                                          <object class="GtkBox">
+                                            <property name="orientation">vertical</property>
+                                            <property name="spacing">2</property>
+                                            <property name="hexpand">true</property>
+                                            <property name="valign">center</property>
+                                            <child>
+                                              <object class="GtkLabel">
+                                                <property name="label" translatable="yes">Use Symbolic Tray Icon</property>
+                                                <property name="halign">start</property>
+                                                <property name="xalign">0</property>
+                                                <property name="wrap">true</property>
+                                                <style>
+                                                  <class name="settings-row-title"/>
+                                                </style>
+                                              </object>
+                                            </child>
+                                            <child>
+                                              <object class="GtkLabel">
+                                                <property name="label" translatable="yes">If enabled, Shelly will use a symbolic SVG icon instead of the default image one.</property>
+                                                <property name="halign">start</property>
+                                                <property name="xalign">0</property>
+                                                <property name="wrap">true</property>
+                                                <style>
+                                                  <class name="settings-row-subtitle"/>
+                                                </style>
+                                              </object>
+                                            </child>
+                                          </object>
+                                        </child>
+                                        <child>
+                                          <object class="GtkSwitch" id="symbolic_tray_switch">
+                                            <property name="halign">end</property>
+                                            <property name="valign">center</property>
+                                            <accessibility>
+                                              <property name="label" translatable="yes">Use Symbolic Tray Icon</property>
+                                              <property name="description" translatable="yes">If enabled, Shelly will use a symbolic SVG icon instead of the default image one.</property>
+                                            </accessibility>
+                                          </object>
+                                        </child>
+                                      </object>
+                                    </child>
+                                    <child>
+                                      <object class="GtkBox">
+                                        <property name="orientation">horizontal</property>
+                                        <property name="spacing">16</property>
+                                        <style>
+                                          <class name="settings-form-row"/>
+                                        </style>
+                                        <child>
+                                          <object class="GtkBox">
+                                            <property name="orientation">vertical</property>
+                                            <property name="spacing">2</property>
+                                            <property name="hexpand">true</property>
+                                            <property name="valign">center</property>
+                                            <child>
+                                              <object class="GtkLabel">
+                                                <property name="label" translatable="yes">Tray Icon</property>
+                                                <property name="halign">start</property>
+                                                <property name="xalign">0</property>
+                                                <property name="wrap">true</property>
+                                                <style>
+                                                  <class name="settings-row-title"/>
+                                                </style>
+                                              </object>
+                                            </child>
+                                            <child>
+                                              <object class="GtkLabel">
+                                                <property name="label" translatable="yes">Use your own image for the tray icon.</property>
+                                                <property name="halign">start</property>
+                                                <property name="xalign">0</property>
+                                                <property name="wrap">true</property>
+                                                <style>
+                                                  <class name="settings-row-subtitle"/>
+                                                </style>
+                                              </object>
+                                            </child>
+                                          </object>
+                                        </child>
+                                        <child>
+                                          <object class="GtkBox">
+                                            <property name="halign">end</property>
+                                            <property name="valign">center</property>
+                                            <style>
+                                              <class name="linked"/>
+                                            </style>
+                                            <child>
+                                              <object class="GtkButton" id="tray_icon_button">
+                                                <property name="label" translatable="yes">Select File</property>
+                                              </object>
+                                            </child>
+                                            <child>
+                                              <object class="GtkButton" id="tray_icon_clear_button">
+                                                <property name="label" translatable="yes">Clear</property>
+                                              </object>
+                                            </child>
+                                          </object>
+                                        </child>
+                                      </object>
+                                    </child>
+                                    <child>
+                                      <object class="GtkBox">
+                                        <property name="orientation">horizontal</property>
+                                        <property name="spacing">16</property>
+                                        <style>
+                                          <class name="settings-form-row"/>
+                                        </style>
+                                        <child>
+                                          <object class="GtkBox">
+                                            <property name="orientation">vertical</property>
+                                            <property name="spacing">2</property>
+                                            <property name="hexpand">true</property>
+                                            <property name="valign">center</property>
+                                            <child>
+                                              <object class="GtkLabel">
+                                                <property name="label" translatable="yes">Tray Updates Icon</property>
+                                                <property name="halign">start</property>
+                                                <property name="xalign">0</property>
+                                                <property name="wrap">true</property>
+                                                <style>
+                                                  <class name="settings-row-title"/>
+                                                </style>
+                                              </object>
+                                            </child>
+                                            <child>
+                                              <object class="GtkLabel">
+                                                <property name="label" translatable="yes">Image the tray shows when updates are available.</property>
+                                                <property name="halign">start</property>
+                                                <property name="xalign">0</property>
+                                                <property name="wrap">true</property>
+                                                <style>
+                                                  <class name="settings-row-subtitle"/>
+                                                </style>
+                                              </object>
+                                            </child>
+                                          </object>
+                                        </child>
+                                        <child>
+                                          <object class="GtkBox">
+                                            <property name="halign">end</property>
+                                            <property name="valign">center</property>
+                                            <style>
+                                              <class name="linked"/>
+                                            </style>
+                                            <child>
+                                              <object class="GtkButton" id="tray_updates_icon_button">
+                                                <property name="label" translatable="yes">Select File</property>
+                                              </object>
+                                            </child>
+                                            <child>
+                                              <object class="GtkButton" id="tray_updates_icon_clear_button">
+                                                <property name="label" translatable="yes">Clear</property>
+                                              </object>
+                                            </child>
+                                          </object>
+                                        </child>
+                                      </object>
+                                    </child>
+                                  </object>
+                                </child>
+                              </object>
+                            </child>
                           </object>
                         </child>
                       </object>
@@ -1207,7 +1428,7 @@
                                 </style>
                                 <child>
                                   <object class="GtkLabel">
-                                    <property name="label" translatable="yes">Navigation</property>
+                                    <property name="label" translatable="yes">Layout</property>
                                     <property name="halign">start</property>
                                     <property name="xalign">0</property>
                                     <property name="accessible-role">heading</property>
@@ -1323,37 +1544,6 @@
                                         </child>
                                       </object>
                                     </child>
-                                  </object>
-                                </child>
-                              </object>
-                            </child>
-                            <child>
-                              <object class="GtkBox">
-                                <property name="orientation">vertical</property>
-                                <property name="spacing">8</property>
-                                <style>
-                                  <class name="settings-group"/>
-                                </style>
-                                <child>
-                                  <object class="GtkLabel">
-                                    <property name="label" translatable="yes">Window</property>
-                                    <property name="halign">start</property>
-                                    <property name="xalign">0</property>
-                                    <property name="accessible-role">heading</property>
-                                    <accessibility>
-                                      <property name="level">3</property>
-                                    </accessibility>
-                                    <style>
-                                      <class name="settings-group-title"/>
-                                    </style>
-                                  </object>
-                                </child>
-                                <child>
-                                  <object class="GtkBox">
-                                    <property name="orientation">vertical</property>
-                                    <style>
-                                      <class name="settings-card"/>
-                                    </style>
                                     <child>
                                       <object class="GtkBox">
                                         <property name="orientation">horizontal</property>
@@ -1410,202 +1600,6 @@
                                               <property name="label" translatable="yes">Use System Title Bar</property>
                                               <property name="description" translatable="yes">If enabled, the desktop draws the window title bar and its buttons instead of Shelly.</property>
                                             </accessibility>
-                                          </object>
-                                        </child>
-                                      </object>
-                                    </child>
-                                  </object>
-                                </child>
-                              </object>
-                            </child>
-                            <child>
-                              <object class="GtkBox">
-                                <property name="orientation">vertical</property>
-                                <property name="spacing">8</property>
-                                <style>
-                                  <class name="settings-group"/>
-                                </style>
-                                <child>
-                                  <object class="GtkLabel">
-                                    <property name="label" translatable="yes">Tray icon</property>
-                                    <property name="halign">start</property>
-                                    <property name="xalign">0</property>
-                                    <property name="accessible-role">heading</property>
-                                    <accessibility>
-                                      <property name="level">3</property>
-                                    </accessibility>
-                                    <style>
-                                      <class name="settings-group-title"/>
-                                    </style>
-                                  </object>
-                                </child>
-                                <child>
-                                  <object class="GtkBox">
-                                    <property name="orientation">vertical</property>
-                                    <style>
-                                      <class name="settings-card"/>
-                                    </style>
-                                    <child>
-                                      <object class="GtkBox" id="symbolic_tray_box">
-                                        <property name="orientation">horizontal</property>
-                                        <property name="spacing">16</property>
-                                        <style>
-                                          <class name="settings-form-row"/>
-                                        </style>
-                                        <child>
-                                          <object class="GtkBox">
-                                            <property name="orientation">vertical</property>
-                                            <property name="spacing">2</property>
-                                            <property name="hexpand">true</property>
-                                            <property name="valign">center</property>
-                                            <child>
-                                              <object class="GtkLabel">
-                                                <property name="label" translatable="yes">Use Symbolic Tray Icon</property>
-                                                <property name="halign">start</property>
-                                                <property name="xalign">0</property>
-                                                <property name="wrap">true</property>
-                                                <style>
-                                                  <class name="settings-row-title"/>
-                                                </style>
-                                              </object>
-                                            </child>
-                                            <child>
-                                              <object class="GtkLabel">
-                                                <property name="label" translatable="yes">If enabled, Shelly will use a symbolic SVG icon instead of the default image one.</property>
-                                                <property name="halign">start</property>
-                                                <property name="xalign">0</property>
-                                                <property name="wrap">true</property>
-                                                <style>
-                                                  <class name="settings-row-subtitle"/>
-                                                </style>
-                                              </object>
-                                            </child>
-                                          </object>
-                                        </child>
-                                        <child>
-                                          <object class="GtkSwitch" id="symbolic_tray_switch">
-                                            <property name="halign">end</property>
-                                            <property name="valign">center</property>
-                                            <accessibility>
-                                              <property name="label" translatable="yes">Use Symbolic Tray Icon</property>
-                                              <property name="description" translatable="yes">If enabled, Shelly will use a symbolic SVG icon instead of the default image one.</property>
-                                            </accessibility>
-                                          </object>
-                                        </child>
-                                      </object>
-                                    </child>
-                                    <child>
-                                      <object class="GtkBox">
-                                        <property name="orientation">horizontal</property>
-                                        <property name="spacing">16</property>
-                                        <style>
-                                          <class name="settings-form-row"/>
-                                        </style>
-                                        <child>
-                                          <object class="GtkBox">
-                                            <property name="orientation">vertical</property>
-                                            <property name="spacing">2</property>
-                                            <property name="hexpand">true</property>
-                                            <property name="valign">center</property>
-                                            <child>
-                                              <object class="GtkLabel">
-                                                <property name="label" translatable="yes">Tray Icon</property>
-                                                <property name="halign">start</property>
-                                                <property name="xalign">0</property>
-                                                <property name="wrap">true</property>
-                                                <style>
-                                                  <class name="settings-row-title"/>
-                                                </style>
-                                              </object>
-                                            </child>
-                                            <child>
-                                              <object class="GtkLabel">
-                                                <property name="label" translatable="yes">Use your own image for the tray icon.</property>
-                                                <property name="halign">start</property>
-                                                <property name="xalign">0</property>
-                                                <property name="wrap">true</property>
-                                                <style>
-                                                  <class name="settings-row-subtitle"/>
-                                                </style>
-                                              </object>
-                                            </child>
-                                          </object>
-                                        </child>
-                                        <child>
-                                          <object class="GtkBox">
-                                            <property name="halign">end</property>
-                                            <property name="valign">center</property>
-                                            <style>
-                                              <class name="linked"/>
-                                            </style>
-                                            <child>
-                                              <object class="GtkButton" id="tray_icon_button">
-                                                <property name="label" translatable="yes">Select File</property>
-                                              </object>
-                                            </child>
-                                            <child>
-                                              <object class="GtkButton" id="tray_icon_clear_button">
-                                                <property name="label" translatable="yes">Clear</property>
-                                              </object>
-                                            </child>
-                                          </object>
-                                        </child>
-                                      </object>
-                                    </child>
-                                    <child>
-                                      <object class="GtkBox">
-                                        <property name="orientation">horizontal</property>
-                                        <property name="spacing">16</property>
-                                        <style>
-                                          <class name="settings-form-row"/>
-                                        </style>
-                                        <child>
-                                          <object class="GtkBox">
-                                            <property name="orientation">vertical</property>
-                                            <property name="spacing">2</property>
-                                            <property name="hexpand">true</property>
-                                            <property name="valign">center</property>
-                                            <child>
-                                              <object class="GtkLabel">
-                                                <property name="label" translatable="yes">Tray Updates Icon</property>
-                                                <property name="halign">start</property>
-                                                <property name="xalign">0</property>
-                                                <property name="wrap">true</property>
-                                                <style>
-                                                  <class name="settings-row-title"/>
-                                                </style>
-                                              </object>
-                                            </child>
-                                            <child>
-                                              <object class="GtkLabel">
-                                                <property name="label" translatable="yes">Image the tray shows when updates are available.</property>
-                                                <property name="halign">start</property>
-                                                <property name="xalign">0</property>
-                                                <property name="wrap">true</property>
-                                                <style>
-                                                  <class name="settings-row-subtitle"/>
-                                                </style>
-                                              </object>
-                                            </child>
-                                          </object>
-                                        </child>
-                                        <child>
-                                          <object class="GtkBox">
-                                            <property name="halign">end</property>
-                                            <property name="valign">center</property>
-                                            <style>
-                                              <class name="linked"/>
-                                            </style>
-                                            <child>
-                                              <object class="GtkButton" id="tray_updates_icon_button">
-                                                <property name="label" translatable="yes">Select File</property>
-                                              </object>
-                                            </child>
-                                            <child>
-                                              <object class="GtkButton" id="tray_updates_icon_clear_button">
-                                                <property name="label" translatable="yes">Clear</property>
-                                              </object>
-                                            </child>
                                           </object>
                                         </child>
                                       </object>
