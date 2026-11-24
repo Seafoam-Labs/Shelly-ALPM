@@ -94,7 +94,11 @@ var watch_dummy: c_int = 0;
 const desktop_priority = themed_priority + 1;
 var desktop_provider: ?*gtk.CssProvider = null;
 var desktop_added: bool = false;
-var desktop_monitor: ?*gio.FileMonitor = null;
+/// keys are owned.
+var watched_dirs: std.StringHashMapUnmanaged(*gio.FileMonitor) = .empty;
+const max_watched_dirs = 16;
+/// set while reading the user stylesheets, so their imports get watched.
+var user_paths: ?*std.ArrayListUnmanaged([]const u8) = null;
 var desktop_refresh_source: c_uint = 0;
 var portal_connection: ?*gio.DBusConnection = null;
 var portal_accent: ?desktop_palette.Rgb = null;
@@ -301,6 +305,45 @@ fn desktopThemeFile(arena: std.mem.Allocator, scheme: desktop_palette.Scheme) ?[
     return desktop_palette.findThemeFile(arena, dirs.items, name, file, gtk.getMinorVersion(), &pathExists) catch null;
 }
 
+fn readUserFile(arena: std.mem.Allocator, path: []const u8) ?[]const u8 {
+    const text = readFile(arena, path) orelse return null;
+    if (user_paths) |list| list.append(arena, path) catch {};
+    return text;
+}
+
+fn watchDir(dir: []const u8) void {
+    if (watched_dirs.contains(dir) or watched_dirs.count() >= max_watched_dirs) return;
+    const dir_z = std.heap.c_allocator.dupeSentinel(u8, dir, 0) catch return;
+    const file = gio.File.newForPath(dir_z.ptr);
+    defer file.as(gobject.Object).unref();
+    var err: ?*glib.Error = null;
+    const monitor = gio.File.monitorDirectory(file, .{}, null, &err);
+    if (err) |e| glib.Error.free(e);
+    const created = monitor orelse {
+        std.heap.c_allocator.free(dir_z);
+        return;
+    };
+    watched_dirs.put(std.heap.c_allocator, dir_z, created) catch {
+        created.as(gobject.Object).unref();
+        std.heap.c_allocator.free(dir_z);
+        return;
+    };
+    _ = gio.FileMonitor.signals.changed.connect(created, *c_int, &onDesktopFilesChanged, &watch_dummy, .{});
+}
+
+/// imports can live outside `gtk-4.0` (pywal uses `~/.cache/wal`), and a
+/// symlink changes where its target lives.
+fn watchUserFiles(arena: std.mem.Allocator, paths: []const []const u8) void {
+    for (paths) |path| {
+        if (std.fs.path.dirname(path)) |dir| watchDir(dir);
+        const path_z = arena.dupeSentinel(u8, path, 0) catch continue;
+        var buf: [std.fs.max_path_bytes]u8 = undefined;
+        if (std.c.realpath(path_z, &buf)) |real| {
+            if (std.fs.path.dirname(std.mem.span(real))) |dir| watchDir(dir);
+        }
+    }
+}
+
 fn buildDesktopPalette() DesktopResult {
     var arena_state = std.heap.ArenaAllocator.init(std.heap.c_allocator);
     defer arena_state.deinit();
@@ -316,9 +359,13 @@ fn buildDesktopPalette() DesktopResult {
     }
     var user_defines: desktop_palette.Defines = .empty;
     var path_buf: [std.fs.max_path_bytes]u8 = undefined;
+    var read_paths: std.ArrayListUnmanaged([]const u8) = .empty;
     if (userGtkCssPath(&path_buf)) |path| {
-        desktop_palette.collectFile(arena, &user_defines, path, &readFile, user_scheme, 0) catch {};
+        user_paths = &read_paths;
+        defer user_paths = null;
+        desktop_palette.collectFile(arena, &user_defines, path, &readUserFile, user_scheme, 0) catch {};
     }
+    watchUserFiles(arena, read_paths.items);
     var it = user_defines.iterator();
     while (it.next()) |entry| defines.put(arena, entry.key_ptr.*, entry.value_ptr.*) catch {};
 
@@ -366,14 +413,18 @@ fn portalBus() ?*gio.DBusConnection {
     return conn;
 }
 
-/// Reads the portal accent and color scheme once; later changes arrive
+fn portalReadAllParams() *glib.Variant {
+    const namespaces = [_:null]?[*:0]const u8{"org.freedesktop.appearance"};
+    return glib.Variant.new("(^as)", &namespaces);
+}
+
+/// Reads the portal accent, color scheme, and contrast once, waiting at most
+/// 250 ms; a failed read retries in the background. Later changes arrive
 /// through SettingChanged.
 fn readPortal() void {
     if (portal_read) return;
     portal_read = true;
     const conn = portalBus() orelse return;
-    const namespaces = [_:null]?[*:0]const u8{"org.freedesktop.appearance"};
-    const params = glib.Variant.new("(^as)", &namespaces);
     const reply_type = glib.VariantType.new("(a{sa{sv}})");
     defer reply_type.free();
     var err: ?*glib.Error = null;
@@ -382,19 +433,51 @@ fn readPortal() void {
         "/org/freedesktop/portal/desktop",
         "org.freedesktop.portal.Settings",
         "ReadAll",
-        params,
+        portalReadAllParams(),
         reply_type,
         .{},
-        500,
+        250,
         null,
         &err,
     );
     if (err) |e| {
         glib.Error.free(e);
+        // a portal that is still starting answers later.
+        conn.call(
+            "org.freedesktop.portal.Desktop",
+            "/org/freedesktop/portal/desktop",
+            "org.freedesktop.portal.Settings",
+            "ReadAll",
+            portalReadAllParams(),
+            reply_type,
+            .{},
+            -1,
+            null,
+            &onPortalReadAll,
+            null,
+        );
         return;
     }
     const res = result orelse return;
     defer res.unref();
+    applyPortalReply(res);
+}
+
+fn onPortalReadAll(source: ?*gobject.Object, res: *gio.AsyncResult, _: ?*anyopaque) callconv(.c) void {
+    const conn: *gio.DBusConnection = @ptrCast(source orelse return);
+    var err: ?*glib.Error = null;
+    const reply = conn.callFinish(res, &err);
+    if (err) |e| {
+        glib.Error.free(e);
+        return;
+    }
+    const value = reply orelse return;
+    defer value.unref();
+    applyPortalReply(value);
+    scheduleDesktopRefresh();
+}
+
+fn applyPortalReply(res: *glib.Variant) void {
     const all = res.getChildValue(0);
     defer all.unref();
     for (0..all.nChildren()) |idx| {
@@ -453,19 +536,10 @@ fn accentFromVariant(value: *glib.Variant) ?desktop_palette.Rgb {
 
 /// Watches the folder because Plasma rewrites `colors.css`.
 fn ensureDesktopWatchers() void {
-    if (desktop_monitor == null) {
+    {
         const config_dir = std.mem.span(glib.getUserConfigDir());
         var buf: [std.fs.max_path_bytes]u8 = undefined;
-        if (std.fmt.bufPrintSentinel(&buf, "{s}/gtk-4.0", .{config_dir}, 0)) |dir| {
-            const file = gio.File.newForPath(dir.ptr);
-            defer file.as(gobject.Object).unref();
-            var err: ?*glib.Error = null;
-            if (gio.File.monitorDirectory(file, .{}, null, &err)) |monitor| {
-                desktop_monitor = monitor;
-                _ = gio.FileMonitor.signals.changed.connect(monitor, *c_int, &onDesktopFilesChanged, &watch_dummy, .{});
-            }
-            if (err) |e| glib.Error.free(e);
-        } else |_| {}
+        if (std.fmt.bufPrint(&buf, "{s}/gtk-4.0", .{config_dir})) |dir| watchDir(dir) else |_| {}
     }
     if (portal_connection == null) _ = portalBus();
     if (portal_connection) |conn| {
@@ -544,11 +618,21 @@ fn scheduleDesktopRefresh() void {
     desktop_refresh_source = glib.timeoutAdd(100, &onDesktopRefresh, null);
 }
 
+/// reloads only the desktop colors unless dark or light flips.
 fn onDesktopRefresh(_: ?*anyopaque) callconv(.c) c_int {
     desktop_refresh_source = 0;
     if (current_mode != .system) return 0;
     const win = watched_window orelse return 0;
-    applyWith(win, current_mode, current_variant);
+    const display = gdk.Display.getDefault() orelse return 0;
+    const result = buildDesktopPalette();
+    defer if (result.css) |css| std.heap.c_allocator.free(css);
+    const dark = result.dark orelse systemColorsScheme().dark;
+    if (!provider_added or dark != resolved_dark) {
+        applyWith(win, current_mode, current_variant);
+        return 0;
+    }
+    applyDesktopCss(display, result.css);
+    notifyChanged();
     return 0;
 }
 
