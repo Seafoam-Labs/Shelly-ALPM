@@ -18,13 +18,11 @@ pub const PageTarget = enum {
     firmware,
 };
 
-
 pub fn extractLocalAppImageFile(arg: []const u8, path_buffer: *[max_file_path_len + 1]u8) ?[:0]const u8 {
     const path = resolveLocalPath(arg, path_buffer) orelse return null;
     if (!hasAppImageFileSuffix(path)) return null;
     return path;
 }
-
 
 pub fn extractLocalFlatpakFile(arg: []const u8, path_buffer: *[max_file_path_len + 1]u8) ?[:0]const u8 {
     const path = resolveLocalPath(arg, path_buffer) orelse return null;

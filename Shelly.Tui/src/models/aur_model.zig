@@ -46,6 +46,7 @@ pub const State = struct {
     aur_installed_only: bool = false,
     aur_thread: ?std.Thread = null,
     aur_filtered: std.ArrayList(*const AurPackage) = .empty,
+    longest_name: u16 = 0,
     refresh_aur_after_operation: bool = false,
     aur_list: vxfw.ListView,
     aur_preview_button: vxfw.Button,
@@ -71,12 +72,7 @@ pub const AurSelection = struct { name: []const u8, installed: bool };
 
 pub fn init(gpa: Allocator, model: *Model) State {
     return .{
-        .aur_preview_button = .{ .label = " PKGBUILD ", .userdata = model, .onClick = onAurPreviewClick, .style = .{
-            .default = styles.button,
-            .focus = styles.selected,
-            .hover = styles.selected,
-            .mouse_down = .{ .reverse = true },
-        } },
+        .aur_preview_button = .{ .label = "[PKGBUILD]", .userdata = model, .onClick = commands.Mouse.previewPkgbuild, .style = styles.action_button },
         .aur_details_scroll = .{ .item_count = 2, .children = .{ .builder = .{ .userdata = model, .buildFn = buildAurDetails } } },
         .aur_list = .{
             .item_count = 0,
@@ -377,7 +373,10 @@ pub fn clearAurSelection(self: *Model) void {
 }
 
 pub fn toggleAurSelection(self: *Model) !void {
-    const pkg = selectedAur(self) orelse return;
+    try toggleAurMark(self, selectedAur(self) orelse return);
+}
+
+fn toggleAurMark(self: *Model, pkg: *const AurPackage) !void {
     for (self.aur_state.aur_selection.items, 0..) |selected, index| {
         if (std.mem.eql(u8, selected.name, pkg.Name)) {
             self.gpa.free(self.aur_state.aur_selection.orderedRemove(index).name);
@@ -410,6 +409,7 @@ pub fn rebuildAurFilter(self: *Model) Allocator.Error!void {
     self.aur_state.aur_details_scroll.scroll = .{};
     self.aur_state.aur_details_cursor = null;
     self.aur_state.aur_filtered.clearRetainingCapacity();
+    self.aur_state.longest_name = 0;
     if (self.aur_state.aur_job != null) {
         self.aur_state.aur_list.item_count = 0;
         self.aur_state.aur_list.jumpToItem(0);
@@ -418,11 +418,48 @@ pub fn rebuildAurFilter(self: *Model) Allocator.Error!void {
     const query = try self.aur_state.aur_field.buf.dupe();
     defer self.gpa.free(query);
     for (self.aur_state.aur_packages) |*pkg| {
-        if (!self.aur_state.aur_installed_only or query.len == 0 or Model.containsFold(pkg.Name, query) or Model.containsFold(pkg.Description orelse "", query))
+        if (!self.aur_state.aur_installed_only or query.len == 0 or Model.containsFold(pkg.Name, query) or Model.containsFold(pkg.Description orelse "", query)) {
             try self.aur_state.aur_filtered.append(self.gpa, pkg);
+            self.aur_state.longest_name = @max(self.aur_state.longest_name, std.math.lossyCast(u16, pkg.Name.len));
+        }
     }
     self.aur_state.aur_list.item_count = @intCast(self.aur_state.aur_filtered.items.len);
     self.aur_state.aur_list.jumpToItem(0);
+}
+
+pub fn focusPane(self: *Model, ctx: *vxfw.EventContext, target: commands.Mouse.FocusTarget) !void {
+    const state = &self.aur_state;
+    if (target == .details) {
+        self.overlay = .{ .aur = selectedAur(self) orelse return };
+        try ctx.requestFocus(self.widget());
+    } else {
+        operation_model.closeOverlay(self);
+        state.aur_preview_button.focused = false;
+        state.aur_list_active = target == .results;
+        try ctx.requestFocus(state.aur_field.widget());
+    }
+    ctx.redraw = true;
+}
+
+pub fn markRow(self: *Model, ctx: *vxfw.EventContext, package: *const AurPackage) !void {
+    if (self.active != .aur or self.help_open or self.overlay != null or self.aur_state.aur_job != null) return;
+    if (std.mem.indexOfScalar(*const AurPackage, self.aur_state.aur_filtered.items, package) == null) return;
+    try toggleAurMark(self, package);
+    ctx.consumeAndRedraw();
+}
+
+pub fn selectRow(self: *Model, ctx: *vxfw.EventContext, identity: *const AurPackage) !void {
+    const state = &self.aur_state;
+    if (self.active != .aur or self.help_open or self.overlay != null or state.aur_job != null) return;
+    for (state.aur_filtered.items, 0..) |item, index| {
+        if (item == identity) {
+            state.aur_list.cursor = @intCast(index);
+            state.aur_list_active = true;
+            try ctx.requestFocus(state.aur_field.widget());
+            ctx.consumeAndRedraw();
+            return;
+        }
+    }
 }
 
 pub fn aurView(self: *Model) aur_view.View {
@@ -432,7 +469,9 @@ pub fn aurView(self: *Model) aur_view.View {
         self.aur_state.aur_details_cursor = self.aur_state.aur_list.cursor;
     }
     return .{
-        .list_percent = self.list_percent,
+        .model = self,
+        .result_list = @import("../views/result_list.zig").widget(self, .aur),
+        .list_percent = self.list_percent.aur,
         .aur_field = &self.aur_state.aur_field,
         .selected = selectedAur(self),
         .details_scroll = &self.aur_state.aur_details_scroll,
@@ -445,6 +484,7 @@ pub fn aurView(self: *Model) aur_view.View {
         .aur_failed = self.aur_state.aur_failed,
         .aur_query = self.aur_state.aur_query,
         .result_count = self.aur_state.aur_filtered.items.len,
+        .longest_name = self.aur_state.longest_name,
         .catalog_page = if (catalogActive(self)) self.aur_state.catalog_page else 0,
         .catalog_total_pages = self.aur_state.catalog_total_pages,
         .installed_only = self.aur_state.aur_installed_only,
@@ -826,7 +866,7 @@ test "AUR preview replaces the details pane and preserves search and selection" 
         var preview_found = false;
         for (surface.children) |child| {
             try std.testing.expectEqual(@as(u8, 0), child.z_index);
-            if (child.surface.children.len > 0 and child.surface.children[0].surface.widget.eql(model.operation_state.pkgbuild_scroll.widget())) {
+            if (@import("../views/pane_focus.zig").testContainsWidget(child.surface, model.operation_state.pkgbuild_scroll.widget())) {
                 preview_found = true;
                 try std.testing.expectEqual(size.width >= 64, child.origin.col > 0);
             }
@@ -970,7 +1010,7 @@ test "PKGBUILD shortcuts appear only in the contextual footer" {
     var footer: std.ArrayList(u8) = .empty;
     for (surface.children) |child| try Text.append(arena.allocator(), if (child.origin.row == 23) &footer else &body, child.surface);
     try std.testing.expect(std.mem.indexOf(u8, body.items, "pkgname") != null);
-    for ([_][]const u8{ "Retry", "Unwrap", "F1 Help" }) |hint| {
+    for ([_][]const u8{ "Retry", "Unwrap" }) |hint| {
         try std.testing.expectEqual(@as(usize, 1), std.mem.count(u8, footer.items, hint));
         try std.testing.expect(std.mem.indexOf(u8, body.items, hint) == null);
     }
@@ -1142,12 +1182,13 @@ test "aur preview clicks do not replace an active worker's overlay" {
     try std.testing.expectEqualStrings("", model.operation_state.pkgbuild_name);
 }
 
-test "aur preview clicks still open previews without an operation" {
+test "mouse opens the AUR preview and returns to package details in wide and compact layouts" {
     vxfw.DrawContext.init(.unicode);
     const packages = [_]AurPackage{.{ .Name = "demo", .Description = "A description", .Version = "1" }};
     for ([_]?coordinator.Overlay{ null, .{ .aur = &packages[0] } }) |overlay| {
         const model = try Model.init(std.testing.allocator);
         defer model.deinit();
+        model.settings_state.settings.expanded_mouse_support = true;
         try PreviewButtonTest.setup(model, &packages);
         model.overlay = overlay;
         var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
@@ -1157,6 +1198,27 @@ test "aur preview clicks still open previews without an operation" {
         try PreviewButtonTest.click(model, arena.allocator(), &ctx);
         try std.testing.expect(model.overlay.? == .pkgbuild);
         try std.testing.expectEqualStrings("demo", model.operation_state.pkgbuild_name);
+        const size: vxfw.Size = if (overlay == null) .{ .width = 120, .height = 40 } else .{ .width = 35, .height = 7 };
+        const surface = try model.widget().draw(.{ .arena = arena.allocator(), .min = .{}, .max = .{ .width = size.width, .height = size.height }, .cell_size = .{ .width = 10, .height = 20 } });
+        const button = &model.operation_state.preview_back;
+        const point = PreviewButtonTest.find(surface, button, 0, 0) orelse return error.MissingBack;
+        try std.testing.expect(point.row > 0);
+        if (size.width >= 64) try std.testing.expect(point.col >= @import("../views/split_layout.zig").listWidth(size.width, model.list_percent.aur));
+        var hits: std.ArrayList(vxfw.HitResult) = .empty;
+        try surface.hitTest(arena.allocator(), &hits, point);
+        const target = hits.pop().?;
+        try std.testing.expectEqual(@as(*anyopaque, button), target.widget.userdata);
+        for ([_]vaxis.Mouse.Type{ .press, .release }) |kind| {
+            ctx.consume_event = false;
+            if (kind == .press) try target.widget.handleEvent(&ctx, .mouse_enter);
+            for (hits.items) |hit| {
+                try hit.widget.captureEvent(&ctx, .{ .mouse = .{ .row = @intCast(hit.local.row), .col = @intCast(hit.local.col), .button = .left, .type = kind, .mods = .{} } });
+                try std.testing.expect(!ctx.consume_event);
+            }
+            try target.widget.handleEvent(&ctx, .{ .mouse = .{ .row = @intCast(target.local.row), .col = @intCast(target.local.col), .button = .left, .type = kind, .mods = .{} } });
+        }
+        try std.testing.expect(model.overlay.? == .aur);
+        try std.testing.expectEqual(&packages[0], model.overlay.?.aur);
     }
 }
 

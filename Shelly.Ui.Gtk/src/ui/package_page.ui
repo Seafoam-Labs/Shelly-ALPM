@@ -24,7 +24,7 @@
                             <object class="GtkBox">
                                 <property name="halign">baseline</property>
                                 <property name="orientation">horizontal</property>
-                                <property name="spacing">5</property>
+                                <property name="spacing">6</property>
                                 <property name="valign">baseline-center</property>
                                 <style>
                                     <class name="toolbar-card"/>
@@ -327,7 +327,7 @@
                           <object class="GtkLabel" id="no_results_label">
                             <property name="label" translatable="yes">No matching packages found</property>
                             <style>
-                              <class name="title-4"/>
+                              <class name="title-3"/>
                             </style>
                           </object>
                         </child>

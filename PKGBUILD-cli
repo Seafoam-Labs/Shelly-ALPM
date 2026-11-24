@@ -2,7 +2,7 @@
 
 pkgbase=shelly-cli
 pkgname=('shelly-cli' 'shelly-cli-flatpak-backend')
-pkgver='3.4.0r5462.gb24939d'
+pkgver='3.4.1r5476.g496089a'
 pkgrel=1
 arch=('x86_64')
 url='https://github.com/Seafoam-Labs/Shelly-ALPM'
@@ -37,7 +37,7 @@ conflicts=('shelly' 'shelly-git' 'shelly-bin')
 pkgver() {
   cd "${srcdir}/${pkgname}"
 
-  printf '3.4.0r%s.g%s' \
+  printf '3.4.1r%s.g%s' \
     "$(git rev-list --count HEAD)" \
     "$(git rev-parse --short=7 HEAD)"
 }

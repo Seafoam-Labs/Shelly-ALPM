@@ -1,5 +1,6 @@
 const keybindings_view = @import("keybindings_view.zig");
 const styles = @import("styles.zig");
+const commands = @import("../commands.zig");
 const std = @import("std");
 const vaxis = @import("vaxis");
 const vxfw = vaxis.vxfw;
@@ -9,7 +10,7 @@ const Settings = preferences.Settings;
 const diagnostics = @import("diagnostics");
 const Allocator = std.mem.Allocator;
 
-pub const Action = union(enum) { control: usize, header: usize };
+pub const Action = commands.Mouse.SettingsTarget;
 
 pub const View = struct {
     settings: Settings,
@@ -22,10 +23,14 @@ pub const View = struct {
     keybindings_open: bool = false,
     binding_selected: usize = 0,
     capturing: bool = false,
+    mouse_capture: bool = false,
+    binding_candidate: ?@import("../services/keybindings.zig").Config = null,
     binding_error: ?anyerror = null,
     dirty: bool = false,
+    show_save_notice: bool = false,
     selected: usize,
     path: []const u8,
+    home: ?[]const u8 = null,
     failure: ?anyerror,
     flatpak_checked: bool,
     flatpak_available: bool,
@@ -38,11 +43,13 @@ pub const View = struct {
         const body = try ctx.arena.create(View);
         body.* = self;
         const content: vxfw.Widget = .{ .userdata = body, .drawFn = drawBody };
-        const labels = [_]Border.BorderLabel{.{ .text = if (self.keybindings_open) try self.bindingHeader(ctx.arena) else if (self.dirty) "Settings · Unsaved changes" else "Settings", .alignment = .top_left }};
+        const labels = [_]Border.BorderLabel{.{ .text = if (self.keybindings_open) try self.bindingHeader(ctx.arena) else "Settings", .alignment = .top_left }};
         var border: Border = .{ .child = content, .labels = &labels, .style = styles.emphasis };
-        const height = size.height -| 2;
+        const show_notice = (self.dirty or self.show_save_notice) and size.width > 0 and size.height >= 5;
+        const notice_height: u16 = @intFromBool(show_notice);
+        const height = size.height -| (2 + notice_height);
         try children.append(ctx.arena, .{
-            .origin = .{ .row = 1, .col = 0 },
+            .origin = .{ .row = @intCast(1 + notice_height), .col = 0 },
             .surface = if (size.width >= 80 and height >= 10)
                 try content.draw(ctx.withConstraints(.{}, .{ .width = size.width, .height = height }))
             else if (size.width >= 2 and height >= 2)
@@ -50,6 +57,11 @@ pub const View = struct {
             else
                 try content.draw(ctx.withConstraints(.{}, .{ .width = size.width, .height = height })),
         });
+        if (show_notice) {
+            const text = if (self.dirty) "Unsaved changes" else "Settings saved";
+            const width: u16 = @intCast(@min(size.width, ctx.stringWidth(text)));
+            try body.appendRow(ctx.withConstraints(.{}, .{ .width = width, .height = 1 }), children, 1, (size.width - width) / 2, .{ .text = text, .emphasis = true });
+        }
     }
 
     fn backendStatus(self: View) []const u8 {
@@ -62,24 +74,24 @@ pub const View = struct {
         if (self.pane == .full and size.width >= 80 and size.height >= 10) return self.drawSplit(ptr, ctx);
         if (self.pane == .details) return self.drawDetails(ptr, ctx);
         if (self.help) |help| if (self.pane != .controls) return help.draw(ctx);
-        if (self.keybindings_open and self.pane != .controls) return keybindings_view.draw(.{ .config = self.settings.keybindings, .selected = self.binding_selected, .capturing = self.capturing, .failure = self.binding_error orelse self.failure, .busy = self.busy }, ctx);
+        if (self.keybindings_open and self.pane != .controls) return keybindings_view.draw(.{ .config = self.binding_candidate orelse self.settings.keybindings, .owner = self.userdata, .mouse_capture = self.mouse_capture, .can_save = self.binding_candidate != null, .selected = self.binding_selected, .capturing = self.capturing and self.binding_candidate == null, .failure = self.binding_error orelse self.failure, .busy = self.busy }, ctx);
         const widget: vxfw.Widget = .{ .userdata = ptr, .drawFn = drawBody };
         if (size.width == 0 or size.height == 0) return .{ .size = size, .widget = widget, .buffer = &.{}, .children = &.{} };
         const width = if (self.pane == .controls) size.width else @min(size.width, 72);
         const col = (size.width - width) / 2;
         const line_ctx = ctx.withConstraints(.{}, .{ .width = width, .height = 1 });
         var children: std.ArrayList(vxfw.SubSurface) = .empty;
-        const path_height: u16 = if (self.pane == .full and size.height >= 14) 1 else 0;
+        const path_height: u16 = if (size.height >= 4) 1 else 0;
         const description_height: u16 = if (self.pane == .controls) 0 else if (size.height >= 10) 2 else if (size.height >= 6) 1 else 0;
         const error_height: u16 = if (self.pane == .full and size.height >= 4 and (self.failure != null or self.busy)) 1 else 0;
-        const description_row = size.height - path_height - error_height - description_height;
-        const form_height = description_row;
+        const description_row = size.height - error_height - description_height;
+        const form_height = description_row -| path_height;
 
         var rows: std.ArrayList(Row) = .empty;
         const form = [_]struct { heading: ?[]const u8 = null, control: ?usize = null }{
-            .{ .heading = "Package sources" }, .{ .control = 0 },                              .{ .control = 1 },                        .{ .control = preferences.appimage_index },    .{ .control = preferences.atoll_index },
-            .{ .heading = "" },                .{ .heading = "Appearance and accessibility" }, .{ .control = preferences.header_index }, .{ .control = preferences.screenshots_index }, .{ .heading = "" },
-            .{ .heading = "Keyboard" },        .{ .control = preferences.keybindings_index },
+            .{ .heading = "Package sources" },                .{ .control = 0 },                              .{ .control = 1 },                        .{ .control = preferences.appimage_index },    .{ .control = preferences.atoll_index },
+            .{ .heading = "" },                               .{ .heading = "Appearance and accessibility" }, .{ .control = preferences.header_index }, .{ .control = preferences.screenshots_index }, .{ .control = preferences.footer_shortcuts_index },
+            .{ .control = preferences.expanded_mouse_index }, .{ .heading = "" },                             .{ .heading = "Keyboard" },               .{ .control = preferences.keybindings_index },
         };
         var selected_line: usize = 0;
         for (form) |item| {
@@ -110,21 +122,20 @@ pub const View = struct {
         const visible = @min(rows.items.len, form_height);
         const first = @min(selected_line -| (visible / 2), rows.items.len - visible);
         for (rows.items[first .. first + visible], 0..) |item, offset|
-            try self.appendRow(line_ctx, &children, @intCast(offset), col, item);
+            try self.appendRow(line_ctx, &children, @intCast(offset + path_height), col, item);
 
         if (description_height > 0) {
             var detail_text: vxfw.Text = .{ .text = try self.description(ctx.arena), .softwrap = true, .overflow = .ellipsis, .width_basis = .parent, .style = styles.secondary };
             try children.append(ctx.arena, .{ .origin = .{ .row = @intCast(description_row), .col = @intCast(col) }, .surface = try detail_text.draw(ctx.withConstraints(.{}, .{ .width = width, .height = description_height })) });
         }
-        if (error_height > 0) try self.appendRow(line_ctx, &children, size.height - path_height - 1, col, .{ .text = if (self.busy) "Settings are locked while an operation is running." else try std.fmt.allocPrint(ctx.arena, "Settings error: {s}", .{@errorName(self.failure.?)}), .emphasis = true });
-        if (path_height > 0) try self.appendPath(ctx, &children, size.height - 1);
+        if (error_height > 0) try self.appendRow(line_ctx, &children, size.height - 1, col, .{ .text = if (self.busy) "Settings are locked while an operation is running." else try std.fmt.allocPrint(ctx.arena, "Settings error: {s}", .{@errorName(self.failure.?)}), .emphasis = true });
+        if (path_height > 0) try self.appendPath(ctx, &children, 0);
         return .{ .size = size, .widget = widget, .buffer = &.{}, .children = children.items };
     }
 
     fn drawSplit(self: *const View, ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
         const size = ctx.max.size();
-        const path_height: u16 = if (size.height >= 14) 1 else 0;
-        const pane_height = size.height - path_height;
+        const pane_height = size.height;
         const left_width = @import("split_layout.zig").listWidth(size.width, self.list_percent);
         var children: std.ArrayList(vxfw.SubSurface) = .empty;
         for ([_]bool{ false, true }) |right| {
@@ -136,23 +147,48 @@ pub const View = struct {
                 try children.append(ctx.arena, .{ .origin = .{ .row = 0, .col = @intCast(left_width) }, .surface = try help.draw(ctx.withConstraints(.{}, .{ .width = width, .height = pane_height })) });
                 continue;
             };
-            const labels = [_]Border.BorderLabel{.{ .text = if (!right) (if (self.dirty) "Settings · Unsaved changes" else "Settings") else if (self.keybindings_open or self.previewSelection() == preferences.keybindings_index) try self.bindingHeader(ctx.arena) else if (self.header_open or self.previewSelection() == preferences.header_index) "Icons" else "Details", .alignment = .top_left }};
+            const labels = [_]Border.BorderLabel{.{ .text = if (!right) "Settings" else if (self.keybindings_open or self.previewSelection() == preferences.keybindings_index) try self.bindingHeader(ctx.arena) else if (self.header_open or self.previewSelection() == preferences.header_index) "Icons" else "Details", .alignment = .top_left }};
             var border: Border = .{ .child = .{ .userdata = pane, .drawFn = drawBody }, .labels = &labels, .style = styles.emphasis };
             const width = if (right) size.width - left_width else left_width;
             try children.append(ctx.arena, .{ .origin = .{ .row = 0, .col = if (right) @intCast(left_width) else 0 }, .surface = try border.draw(ctx.withConstraints(.{ .width = width, .height = pane_height }, .{ .width = width, .height = pane_height })) });
         }
-        if (path_height > 0) try self.appendPath(ctx, &children, size.height - 1);
         return .{ .size = size, .widget = .{ .userdata = ptr, .drawFn = drawBody }, .buffer = &.{}, .children = children.items };
     }
 
     fn appendPath(self: *const View, ctx: vxfw.DrawContext, children: *std.ArrayList(vxfw.SubSurface), row: u16) Allocator.Error!void {
-        const text = try std.fmt.allocPrint(ctx.arena, "File: {f}", .{diagnostics.safe(self.path)});
+        const prefix = "Config: ";
+        const available = ctx.max.size().width -| prefix.len;
+        var path: []const u8 = try std.fmt.allocPrint(ctx.arena, "{f}", .{diagnostics.safe(self.path)});
+        if (ctx.stringWidth(path) > available) {
+            if (self.home) |home| {
+                const base = std.mem.trimEnd(u8, home, "/");
+                if (std.fs.path.isAbsolute(home) and std.mem.startsWith(u8, self.path, base) and
+                    self.path.len > base.len and self.path[base.len] == '/')
+                {
+                    path = try std.fmt.allocPrint(ctx.arena, "~{f}", .{diagnostics.safe(self.path[base.len..])});
+                }
+            }
+        }
+        var remaining = ctx.stringWidth(path);
+        if (remaining > available) {
+            const budget = available -| ctx.stringWidth("…");
+            var start: usize = 0;
+            var iter = ctx.graphemeIterator(path);
+            while (iter.next()) |grapheme| {
+                const bytes = grapheme.bytes(path);
+                start += bytes.len;
+                remaining -= ctx.stringWidth(bytes);
+                if (remaining <= budget) break;
+            }
+            path = try std.mem.concat(ctx.arena, u8, &.{ "…", path[start..] });
+        }
+        const text = try std.mem.concat(ctx.arena, u8, &.{ prefix, path });
         const width: u16 = @intCast(@min(ctx.max.size().width, ctx.stringWidth(text)));
-        try self.appendRow(ctx.withConstraints(.{}, .{ .width = width, .height = 1 }), children, row, (ctx.max.size().width - width) / 2, .{ .text = text });
+        try self.appendRow(ctx.withConstraints(.{}, .{ .width = width, .height = 1 }), children, row, 0, .{ .text = text });
     }
 
     fn drawDetails(self: *const View, ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
-        if (self.keybindings_open or self.previewSelection() == preferences.keybindings_index) return keybindings_view.draw(.{ .config = self.settings.keybindings, .selected = self.binding_selected, .capturing = self.capturing, .failure = self.binding_error orelse self.failure, .busy = self.busy, .focused = self.keybindings_open }, ctx);
+        if (self.keybindings_open or self.previewSelection() == preferences.keybindings_index) return keybindings_view.draw(.{ .config = self.binding_candidate orelse self.settings.keybindings, .owner = self.userdata, .mouse_capture = self.mouse_capture, .can_save = self.binding_candidate != null, .selected = self.binding_selected, .capturing = self.capturing and self.binding_candidate == null, .failure = self.binding_error orelse self.failure, .busy = self.busy, .focused = self.keybindings_open }, ctx);
         const size = ctx.max.size();
         const error_height: u16 = if (size.height > 0 and (self.failure != null or self.busy)) 1 else 0;
         const available = size.height - error_height;
@@ -173,7 +209,7 @@ pub const View = struct {
     }
 
     fn bindingHeader(self: *const View, arena: Allocator) Allocator.Error![]const u8 {
-        return std.fmt.allocPrint(arena, "Keybindings · {d}/{d}{s}", .{ keybindings_view.displayPosition(self.binding_selected) + 1, keybindings_view.row_count, if (self.capturing) " · Press a replacement key" else if (self.dirty) " · Unsaved changes" else "" });
+        return std.fmt.allocPrint(arena, "Keybindings · {d}/{d}{s}", .{ keybindings_view.displayPosition(self.binding_selected) + 1, keybindings_view.row_count, if (self.capturing) " · Press a replacement key" else "" });
     }
 
     fn previewSelection(self: *const View) usize {
@@ -181,25 +217,31 @@ pub const View = struct {
     }
 
     fn actionRow(self: *const View, index: usize) Row {
-        return .{ .text = if (index == preferences.save_index) "[ Save changes ]" else "[ Discard changes ]", .action = .{ .control = index }, .selected = self.selected == index, .emphasis = self.dirty };
+        return .{ .text = if (index == preferences.save_index) "[Save changes]" else "[Discard changes]", .action = .{ .control = index }, .selected = self.selected == index, .emphasis = self.dirty };
     }
 
     fn controlText(self: *const View, arena: Allocator, index: usize) Allocator.Error![]const u8 {
         if (index == preferences.header_index) return std.fmt.allocPrint(arena, "Icons       {s} {s}", .{ self.settings.header_icons.title(), if (self.header_open) "▴" else "▾" });
-        if (index == preferences.keybindings_index) return "[ Configure keybindings… ]";
+        if (index == preferences.keybindings_index) return "[Configure keybindings]";
         const enabled = switch (index) {
             0 => self.settings.aur_enabled,
             1 => self.settings.flatpak_enabled,
             preferences.appimage_index => self.settings.appimage_enabled,
             preferences.atoll_index => self.settings.atoll_aur_enabled,
-            else => self.settings.show_flatpak_screenshots,
+            preferences.screenshots_index => self.settings.show_flatpak_screenshots,
+            preferences.expanded_mouse_index => self.settings.expanded_mouse_support,
+            preferences.footer_shortcuts_index => self.settings.show_footer_shortcuts,
+            else => unreachable,
         };
         const title = switch (index) {
             0 => "Enable AUR",
             1 => "Enable Flatpak",
             preferences.appimage_index => "Enable AppImage",
             preferences.atoll_index => "Use Atoll-backed AUR",
-            else => "Show Flatpak screenshots",
+            preferences.screenshots_index => "Show Flatpak screenshots",
+            preferences.expanded_mouse_index => "Expanded Mouse Support",
+            preferences.footer_shortcuts_index => "Show footer shortcuts",
+            else => unreachable,
         };
         return std.fmt.allocPrint(arena, "[{s}] {s}", .{ if (enabled) "x" else " ", title });
     }
@@ -216,6 +258,8 @@ pub const View = struct {
             preferences.appimage_index => "Show installed AppImages and their metadata.",
             preferences.atoll_index => "Use Shelly's shared AUR mirror and scan Atoll PKGBUILD previews.",
             preferences.header_index => "Choose text-only, Nerd Font, or ASCII icons for page headers and the AppImage browser.",
+            preferences.expanded_mouse_index => "Show mouse buttons for package actions, updates, previews, and operation dialogs.",
+            preferences.footer_shortcuts_index => "Show keyboard shortcuts at the bottom of each page.",
             preferences.screenshots_index => "Show images in Flatpak details when the terminal supports them.",
             preferences.keybindings_index => "Configure shortcuts without changing navigation or authentication input.",
             preferences.save_index => "Save and apply all pending preferences and keybinding edits.",
@@ -242,13 +286,15 @@ const Control = struct {
         var text: vxfw.Text = .{ .text = self.row.text, .softwrap = false, .overflow = .ellipsis, .width_basis = .parent, .style = if (self.row.selected and !self.view.busy) styles.selected else if (self.row.emphasis) styles.emphasis else styles.secondary };
         var surface = try text.draw(ctx);
         surface.widget = self.widget();
+        if (self.row.action != null and !self.view.busy and self.view.on_action != null) try styles.hoverLabel(ctx.arena, &surface);
         return surface;
     }
     fn handleEvent(ptr: *anyopaque, ctx: *vxfw.EventContext, event: vxfw.Event) anyerror!void {
         const self: *Control = @ptrCast(@alignCast(ptr));
+
         if (event != .mouse or self.view.busy) return;
         const mouse = event.mouse;
-        if (mouse.button != .left or mouse.type != .press) return;
+        if (!commands.Mouse.primaryPress(mouse)) return;
         const action = self.row.action orelse return;
         const callback = self.view.on_action orelse return;
         try callback(self.view.userdata orelse return, ctx, action);
@@ -340,8 +386,8 @@ test "Save and Discard use separate rows and display their own details" {
         var save_row: ?i17 = null;
         var discard_row: ?i17 = null;
         for (controls.children) |child| {
-            if (try LayoutTest.contains(child.surface, "[ Save changes ]", arena.allocator())) save_row = child.origin.row;
-            if (try LayoutTest.contains(child.surface, "[ Discard changes ]", arena.allocator())) discard_row = child.origin.row;
+            if (try LayoutTest.contains(child.surface, "[Save changes]", arena.allocator())) save_row = child.origin.row;
+            if (try LayoutTest.contains(child.surface, "[Discard changes]", arena.allocator())) discard_row = child.origin.row;
         }
         try std.testing.expect(save_row != null and discard_row != null);
         try std.testing.expectEqual(save_row.? + 1, discard_row.?);

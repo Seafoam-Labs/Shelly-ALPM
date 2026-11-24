@@ -79,7 +79,7 @@ msgid "Warnings"
 msgstr "Warnhinweise"
 
 msgid ""
-"These commands fetch and execute code outside of shelly and libalpm's "
+"These commands fetch and execute code outside of Shelly and libalpm's "
 "control. Review them before continuing."
 msgstr ""
 "Diese Befehle rufen Code ab und führen ihn aus, der außerhalb der Kontrolle "
@@ -278,7 +278,7 @@ msgstr "Detailbereich auf der rechten Seite ausblenden"
 msgid "Information"
 msgstr "Information"
 
-msgid "Preview Pkgbuild"
+msgid "Preview PKGBUILD"
 msgstr "PKGBUILD-Vorschau"
 
 msgid "Search the AUR"
@@ -527,12 +527,12 @@ msgstr ""
 msgid "Install all selected packages in one transaction"
 msgstr ""
 
-msgid "Loading Recommended Packages..."
+#, fuzzy
+msgid "Loading recommendations…"
 msgstr "Empfohlene Pakete laden..."
 
-msgid ""
-"No recommendations found. Please check your internet connection and try "
-"again."
+#, fuzzy
+msgid "Check your internet connection and try again."
 msgstr ""
 "Es wurden keine Empfehlungen gefunden. Bitte überprüfe deine "
 "Internetverbindung und versuche es erneut."
@@ -611,7 +611,7 @@ msgstr "Wochenplan verwenden"
 msgid "Run Tray as cron"
 msgstr "Tray als Cron-Job ausführen"
 
-msgid "Tray update with ui"
+msgid "Tray update with UI"
 msgstr "Tray-Aktualisierung mit Benutzeroberfläche"
 
 msgid "Update terminal"
@@ -673,7 +673,7 @@ msgid "Use Symbolic Tray Icon"
 msgstr "Symbolisches Taskleisten-Symbol verwenden"
 
 msgid ""
-"If enabled, Shelly will use a symbolic svg icon instead of the default image "
+"If enabled, Shelly will use a symbolic SVG icon instead of the default image "
 "one."
 msgstr ""
 "Wenn diese Option aktiviert ist, verwendet Shelly ein symbolisches SVG-"
@@ -806,7 +806,7 @@ msgid "Remove db.lck"
 msgstr "Entfernt db.lock"
 
 msgid ""
-"Removes the db.lck file if it was left behind by an interrupted alpm process."
+"Removes the db.lck file if it was left behind by an interrupted ALPM process."
 msgstr ""
 "Entfernt die Datei db.lck, falls diese von einem unterbrochenen alpm-Prozess "
 "zurückgelassen wurde."
@@ -1260,7 +1260,7 @@ msgstr ""
 "Nicht unterstützter Dateityp. Wähle eine .flatpak- oder .flatpakref-Datei "
 "aus."
 
-msgid "Installing local flatpak"
+msgid "Installing local Flatpak"
 msgstr "Lokales Flatpak installieren"
 
 msgid "Could not install the selected packages."
@@ -1278,7 +1278,7 @@ msgstr "Verifiziert"
 msgid "Show less"
 msgstr "Weniger anzeigen"
 
-msgid "Installing flatpak"
+msgid "Installing Flatpak"
 msgstr "Flatpak installieren"
 
 msgid "Remove this Flatpak?"
@@ -1296,7 +1296,7 @@ msgstr "Berechtigungen"
 msgid "Available Addons"
 msgstr "Flatpak-Addons verfügbar"
 
-msgid "Installing flatpak addon"
+msgid "Installing Flatpak addon"
 msgstr "Flatpak-Addon installieren"
 
 msgid "Unknown developer"
@@ -1562,8 +1562,8 @@ msgstr ""
 "Durchsuche gleichzeitig die Standard-Repositorys, das AUR und Flatpak. Gib "
 "einen Namen ein, um zu beginnen."
 
-msgid "Could not search the selected sources."
-msgstr "Die ausgewählten Quellen konnten nicht durchsucht werden."
+msgid "Could not search the selected sources"
+msgstr "Die ausgewählten Quellen konnten nicht durchsucht werden"
 
 msgid "Installation in progress"
 msgstr "Installation läuft"
@@ -1941,3 +1941,123 @@ msgstr "Seitenleiste aufklappen"
 
 msgid "Collapse sidebar"
 msgstr "Seitenleiste einklappen"
+
+msgid "No recommendations found"
+msgstr ""
+
+msgid "System-wide"
+msgstr ""
+
+msgid "Current user"
+msgstr ""
+
+msgid "Atoll package update"
+msgstr ""
+
+msgid "Use System Title Bar"
+msgstr ""
+
+msgid "If enabled, the desktop draws the window title bar and its buttons instead of Shelly."
+msgstr ""
+
+msgid "Applies after restarting Shelly."
+msgstr ""
+
+msgid "Language for Shelly's menus and messages."
+msgstr ""
+
+msgid "Software sources"
+msgstr ""
+
+msgid "Choose which kinds of software Shelly shows. You can change this at any time."
+msgstr ""
+
+msgid "Enable Firmware"
+msgstr ""
+
+msgid "Update device firmware such as UEFI/BIOS and peripherals"
+msgstr ""
+
+msgid "Update notifications"
+msgstr ""
+
+msgid "Shelly can check for updates in the background and let you know from the system tray."
+msgstr ""
+
+msgid "Show a tray icon that checks for updates in the background."
+msgstr ""
+
+msgid "Start the tray icon when you log in."
+msgstr ""
+
+msgid "How often the tray looks for updates."
+msgstr ""
+
+msgid "Check on chosen days at a set time instead of every few hours."
+msgstr ""
+
+msgid "Days and time when Shelly checks for updates."
+msgstr ""
+
+msgid "Check only at the scheduled time, not when the tray starts."
+msgstr ""
+
+msgid "Run updates started from the tray in the Shelly window instead of a terminal."
+msgstr ""
+
+msgid "Terminal that runs updates started from the tray."
+msgstr ""
+
+msgid "Appearance"
+msgstr ""
+
+msgid "Use Shelly's colors or your desktop's colors."
+msgstr ""
+
+msgid "Light, dark, or follow your system."
+msgstr ""
+
+msgid "The page Shelly opens on."
+msgstr ""
+
+msgid "Sidebar on the left, or tabs across the top."
+msgstr ""
+
+msgid "Tray icon"
+msgstr ""
+
+msgid "Use your own image for the tray icon."
+msgstr ""
+
+msgid "Image the tray shows when updates are available."
+msgstr ""
+
+msgid "Installing and removing"
+msgstr ""
+
+msgid "Skip confirmation prompts when installing, updating, or removing."
+msgstr ""
+
+msgid "Also delete an app's configuration files when you remove it."
+msgstr ""
+
+msgid "Search and AUR"
+msgstr ""
+
+msgid "Add a page that searches every source at once."
+msgstr ""
+
+msgid "Browse the AUR through Seafoam Labs' Atoll service."
+msgstr ""
+
+msgid "Folder where new AppImages are saved."
+msgstr ""
+
+msgid "Remove Configuration on Uninstall"
+msgstr ""
+
+msgid "Layout"
+msgstr ""
+
+msgid "Updates & Tray"
+msgstr ""

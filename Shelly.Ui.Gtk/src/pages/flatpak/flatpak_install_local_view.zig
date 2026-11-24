@@ -175,7 +175,7 @@ pub const FlatpakInstallLocalView = extern struct {
 
         if (support.getWindow(ShellyWindow, self)) |win| {
             win.startTransaction(.{
-                .title = translations._("Installing local flatpak"),
+                .title = translations._("Installing local Flatpak"),
                 .argv = argv,
                 .packages = names.items,
                 .on_complete = &onTransactionComplete,

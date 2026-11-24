@@ -33,7 +33,7 @@
 @define-color shelly_border #49454e;
 @define-color shelly_borders #49454e;
 @define-color shelly_divider #2b2930;
-@define-color shelly_divider_strong #2b2930;
+@define-color shelly_divider_strong #3a3740;
 
 /* Accent and selection */
 @define-color shelly_accent #d0bcff;
@@ -42,6 +42,11 @@
 @define-color shelly_accent_active #bda6ee;
 @define-color shelly_selected_bg #4f378b;
 @define-color shelly_selected_fg #eaddff;
+
+/* Status */
+@define-color shelly_error #f2b8b5;
+@define-color shelly_warning #eac16a;
+@define-color shelly_success #8fd5a6;
 
 /* Derived roles */
 @define-color shelly_hairline alpha(@shelly_fg, 0.07);
@@ -58,4 +63,6 @@
 @define-color shelly_scroll_slider_hover alpha(@shelly_accent, 0.7);
 @define-color shelly_scroll_slider_active alpha(@shelly_accent, 0.85);
 @define-color shelly_overlay_slider alpha(@shelly_accent, 0.35);
-@define-color shelly_destructive_bg alpha(@error_color, 0.15);
+@define-color shelly_destructive_bg alpha(@shelly_error, 0.15);
+@define-color shelly_success_tint_bg alpha(@shelly_success, 0.15);
+@define-color shelly_accent_tint_bg alpha(@shelly_accent, 0.12);
