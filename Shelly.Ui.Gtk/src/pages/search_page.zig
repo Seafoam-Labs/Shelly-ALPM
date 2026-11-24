@@ -20,6 +20,9 @@ const ShellyCli = @import("../services/shelly_cli.zig").ShellyCli;
 const ShellyCommands = @import("../services/shelly_operation.zig").ShellyCommands;
 const ShellyConfig = @import("../models/shelly_config.zig").ShellyConfig;
 const Package = @import("../models/packages.zig").Package;
+const RepositoryCopy = @import("../models/packages.zig").RepositoryCopy;
+const installedCopy = @import("../models/packages.zig").installedCopy;
+const packageTarget = @import("../models/packages.zig").packageTarget;
 const runtime = @import("../services/runtime.zig");
 const translations = @import("../helpers/translations.zig");
 const a11y = @import("../helpers/a11y.zig");
@@ -281,7 +284,7 @@ pub const ShellySearchPage = extern struct {
         const p = self.priv();
         switch (pkg_obj.getSource()) {
             .standard => {
-                p.standard_detail.showPackage(pkg_obj.getName(), pkg_obj.isInstalled(), null);
+                p.standard_detail.showPackage(pkg_obj.getInstallTarget(), pkg_obj.isInstalled(), null);
                 gtk.Stack.setVisibleChildName(p.detail_stack, "standard");
             },
             .aur => {
@@ -425,7 +428,7 @@ pub const ShellySearchPage = extern struct {
         const check = gobject.ext.cast(gtk.CheckButton, child) orelse return;
 
         page.priv().check_map.put(std.heap.c_allocator, pkg, check) catch {};
-        a11y.setName(check.as(gtk.Widget), pkg.getName());
+        a11y.setName(check.as(gtk.Widget), if (pkg.getSource() == .standard) pkg.getInstallTarget() else pkg.getName());
         set_sync_active(check, pkg.isSelected());
     }
 
@@ -434,6 +437,25 @@ pub const ShellySearchPage = extern struct {
         const obj = gtk.ColumnViewCell.getItem(cell) orelse return;
         const pkg = gobject.ext.cast(SearchResultObject, obj) orelse return;
         _ = page.priv().check_map.remove(pkg);
+    }
+
+    /// a transaction takes one repository copy per name, so selecting a copy
+    /// clears the others.
+    fn deselect_other_copies(self: *Self, selected: *SearchResultObject) void {
+        if (selected.getSource() != .standard) return;
+        const p = self.priv();
+        const model = p.list_store.as(gio.ListModel);
+        const n = gio.ListModel.getNItems(model);
+        var i: u32 = 0;
+        while (i < n) : (i += 1) {
+            const obj = gio.ListModel.getObject(model, i) orelse continue;
+            defer obj.unref();
+            const pkg = gobject.ext.cast(SearchResultObject, obj) orelse continue;
+            if (pkg == selected or !pkg.isSelected() or pkg.getSource() != .standard) continue;
+            if (!std.mem.eql(u8, pkg.getName(), selected.getName())) continue;
+            pkg.setSelected(false);
+            if (p.check_map.get(pkg)) |check| set_sync_active(check, false);
+        }
     }
 
     fn set_sync_active(check: *gtk.CheckButton, active: bool) void {
@@ -453,6 +475,7 @@ pub const ShellySearchPage = extern struct {
 
         const page_ptr = gobject.Object.getData(check.as(gobject.Object), "page") orelse return;
         const self: *Self = @ptrCast(@alignCast(page_ptr));
+        if (pkg.isSelected()) self.deselect_other_copies(pkg);
 
         self.showDetail(pkg);
         self.update_selection_ui();
@@ -466,6 +489,7 @@ pub const ShellySearchPage = extern struct {
 
         const new_state = !pkg.isSelected();
         pkg.setSelected(new_state);
+        if (new_state) self.deselect_other_copies(pkg);
         if (p.check_map.get(pkg)) |check| set_sync_active(check, new_state);
 
         self.showDetail(pkg);
@@ -1174,51 +1198,101 @@ pub const ShellySearchPage = extern struct {
         packages: []const Package,
         items: *std.ArrayListUnmanaged(SearchResult),
     ) !void {
-        var seen: std.StringHashMapUnmanaged(usize) = .empty;
-        defer seen.deinit(alloc);
-        try seen.ensureTotalCapacity(alloc, @intCast(packages.len));
-
+        // one row per repository copy. an installed package with no copy keeps
+        // its own row.
+        var copies_by_name: std.StringHashMapUnmanaged(std.ArrayListUnmanaged(usize)) = .empty;
+        defer {
+            var it = copies_by_name.valueIterator();
+            while (it.next()) |list| list.deinit(alloc);
+            copies_by_name.deinit(alloc);
+        }
+        var names_with_copies: std.StringHashMapUnmanaged(void) = .empty;
+        defer names_with_copies.deinit(alloc);
         for (packages) |pkg| {
-            const is_local = std.mem.eql(u8, pkg.Repository, "local") or
-                pkg.Installed or
-                pkg.InstallDate != null;
+            if (!isInstalledRecord(pkg)) try names_with_copies.put(alloc, pkg.Name, {});
+        }
 
-            if (seen.get(pkg.Name)) |idx| {
-                if (is_local and !items.items[idx].installed) {
-                    items.items[idx].version = try alloc.dupeSentinel(u8, pkg.Version, 0);
-                    items.items[idx].repository = try alloc.dupeSentinel(u8, pkg.Repository, 0);
-                    items.items[idx].installed = true;
-                    if (pkg.Description.len > 0 and items.items[idx].description.len == 0) {
-                        items.items[idx].description = try alloc.dupeSentinel(u8, pkg.Description, 0);
-                    }
-                } else if (!is_local and items.items[idx].installed) {
-                    if (pkg.Description.len > 0 and items.items[idx].description.len == 0) {
-                        items.items[idx].description = try alloc.dupeSentinel(u8, pkg.Description, 0);
-                    }
-                }
+        var deferred: std.ArrayListUnmanaged(*const Package) = .empty;
+        defer deferred.deinit(alloc);
+        for (packages) |*pkg| {
+            const installed = isInstalledRecord(pkg.*);
+            if (installed and names_with_copies.contains(pkg.Name)) {
+                try deferred.append(alloc, pkg);
                 continue;
             }
+            const entry = try copies_by_name.getOrPut(alloc, pkg.Name);
+            if (!entry.found_existing) entry.value_ptr.* = .empty;
+            var duplicate = false;
+            for (entry.value_ptr.items) |index| {
+                if (std.mem.eql(u8, items.items[index].repository, pkg.Repository)) duplicate = true;
+            }
+            if (duplicate) continue;
 
-            const idx = items.items.len;
-            const name_z = try alloc.dupeSentinel(u8, pkg.Name, 0);
-            const target_z = try alloc.dupeSentinel(u8, pkg.Name, 0);
-            const version_z = try alloc.dupeSentinel(u8, pkg.Version, 0);
-            const desc_z = try alloc.dupeSentinel(u8, pkg.Description, 0);
-            const repo_z = try alloc.dupeSentinel(u8, pkg.Repository, 0);
-
+            const repository = if (installed) pkg.InstalledFrom orelse pkg.Repository else pkg.Repository;
+            try entry.value_ptr.append(alloc, items.items.len);
             try items.append(alloc, .{
                 .source = .standard,
-                .name = name_z,
-                .install_target = target_z,
-                .version = version_z,
-                .description = desc_z,
-                .repository = repo_z,
-                .installed = is_local,
+                .name = try alloc.dupeSentinel(u8, pkg.Name, 0),
+                .install_target = try packageTarget(alloc, pkg.Name, if (installed) "" else pkg.Repository),
+                .version = try alloc.dupeSentinel(u8, pkg.Version, 0),
+                .description = try alloc.dupeSentinel(u8, pkg.Description, 0),
+                .repository = try alloc.dupeSentinel(u8, repository, 0),
+                .installed = installed,
             });
-            seen.putAssumeCapacity(items.items[idx].name, idx);
+        }
+
+        var copies: std.ArrayListUnmanaged(RepositoryCopy) = .empty;
+        defer copies.deinit(alloc);
+        for (deferred.items) |pkg| {
+            const indexes = copies_by_name.get(pkg.Name) orelse continue;
+            copies.clearRetainingCapacity();
+            for (indexes.items) |index| try copies.append(alloc, .{ .repository = items.items[index].repository, .version = items.items[index].version });
+            const choice = installedCopy(copies.items, pkg.*) orelse continue;
+            const row = &items.items[indexes.items[choice.index]];
+            if (row.installed) continue;
+            row.installed = true;
+            row.version = try alloc.dupeSentinel(u8, pkg.Version, 0);
+            if (!choice.known) {
+                row.repository = try alloc.dupeSentinel(u8, pkg.InstalledFrom orelse pkg.Repository, 0);
+                row.install_target = try alloc.dupeSentinel(u8, pkg.Name, 0);
+            }
+            if (pkg.Description.len > 0 and row.description.len == 0) {
+                row.description = try alloc.dupeSentinel(u8, pkg.Description, 0);
+            }
         }
     }
+
+    fn isInstalledRecord(pkg: Package) bool {
+        return std.mem.eql(u8, pkg.Repository, "local") or pkg.Installed or pkg.InstallDate != null;
+    }
 };
+
+test "deduplicateStandardResults keeps repository copies and marks the installed one" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+    var items: std.ArrayListUnmanaged(SearchResult) = .empty;
+    const packages = [_]Package{
+        .{ .Name = "foo", .Version = "1-1", .Repository = "local", .Installed = true, .InstalledFrom = "second" },
+        .{ .Name = "foo", .Version = "1-1", .Repository = "first" },
+        .{ .Name = "foo", .Version = "1-1", .Repository = "second" },
+        .{ .Name = "foreign", .Version = "9-1", .Repository = "local", .Installed = true },
+        .{ .Name = "bar", .Version = "2-1", .Repository = "extra" },
+    };
+    try ShellySearchPage.deduplicateStandardResults(alloc, &packages, &items);
+    try std.testing.expectEqual(@as(usize, 4), items.items.len);
+    try std.testing.expectEqualStrings("first", items.items[0].repository);
+    try std.testing.expectEqualStrings("first/foo", items.items[0].install_target);
+    try std.testing.expect(!items.items[0].installed);
+    try std.testing.expectEqualStrings("second", items.items[1].repository);
+    try std.testing.expectEqualStrings("second/foo", items.items[1].install_target);
+    try std.testing.expect(items.items[1].installed);
+    try std.testing.expectEqualStrings("foreign", items.items[2].name);
+    try std.testing.expectEqualStrings("local", items.items[2].repository);
+    try std.testing.expectEqualStrings("foreign", items.items[2].install_target);
+    try std.testing.expect(items.items[2].installed);
+    try std.testing.expectEqualStrings("extra/bar", items.items[3].install_target);
+}
 
 test "deduplicateStandardResults prioritizes installed local package over sync package" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);

@@ -1,6 +1,7 @@
 const std = @import("std");
 const bindings = @import("Shelly_Ui_Gtk");
 const Package = @import("../models/packages.zig").Package;
+const packageTarget = @import("../models/packages.zig").packageTarget;
 const gobject = bindings.gobject;
 
 pub const PackageObject = extern struct {
@@ -14,6 +15,7 @@ pub const PackageObject = extern struct {
         name: [:0]const u8,
         version: [:0]const u8,
         repository: [:0]const u8,
+        target: [:0]const u8,
         description: [:0]const u8,
         groups: []const [:0]const u8,
         install_date: [:0]const u8,
@@ -42,6 +44,7 @@ pub const PackageObject = extern struct {
         p.name = "";
         p.version = "";
         p.repository = "";
+        p.target = "";
         p.description = "";
         p.explicit = false;
         p.groups = &.{};
@@ -63,6 +66,7 @@ pub const PackageObject = extern struct {
         p.name = a.dupeSentinel(u8, package.Name, 0) catch "";
         p.version = a.dupeSentinel(u8, package.Version, 0) catch "";
         p.repository = a.dupeSentinel(u8, package.Repository, 0) catch "";
+        p.target = packageTarget(a, package.Name, package.Repository) catch p.name;
         p.description = a.dupeSentinel(u8, package.Description, 0) catch "";
         p.install_date = if (package.InstallDate) |d| a.dupeSentinel(u8, d, 0) catch "" else "";
         p.installed_size = package.InstalledSize;
@@ -101,6 +105,9 @@ pub const PackageObject = extern struct {
     }
     pub fn getRepository(self: *Self) [:0]const u8 {
         return self.priv().repository;
+    }
+    pub fn getTarget(self: *Self) [:0]const u8 {
+        return self.priv().target;
     }
     pub fn getDescription(self: *Self) [:0]const u8 {
         return self.priv().description;

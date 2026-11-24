@@ -9,6 +9,7 @@ const vxfw = vaxis.vxfw;
 const shelly_cli = @import("../services/shelly_cli.zig");
 const ShellyCli = shelly_cli.ShellyCli;
 const Package = @import("packages.zig").Package;
+const Selection = @import("packages.zig").Selection;
 
 const Allocator = std.mem.Allocator;
 
@@ -54,7 +55,7 @@ pub fn sortBy(self: *Model, column: SortColumn) void {
 pub const State = struct {
     /// All known packages, borrowed from `parsed`.
     packages: []Package = &.{},
-    selected_packages: std.ArrayList([]const u8),
+    selected_packages: std.ArrayList(Selection),
     /// Owns the package data returned by the CLI.
     parsed: ?std.json.Parsed([]Package) = null,
 
@@ -170,7 +171,14 @@ pub fn loadPackages(load: *LoadState) void {
         return;
     };
     defer installed.deinit();
-    @import("packages.zig").markInstalled(alloc, parsed.value, installed.value) catch {
+    const packages = @import("packages.zig");
+    packages.markInstalled(alloc, parsed.value, installed.value) catch {
+        parsed.deinit();
+        load.failed = true;
+        return;
+    };
+    // `installed` is freed on return.
+    packages.ownInstalledOrigins(parsed.arena.allocator(), parsed.value) catch {
         parsed.deinit();
         load.failed = true;
         return;
@@ -202,10 +210,10 @@ pub fn pollLoad(self: *Model) !bool {
         self.packages_state.selected_packages = .empty;
         self.packages_state.parsed = p;
         self.packages_state.packages = p.value;
-        for (previous_selection.items) |name| {
+        for (previous_selection.items) |selection| {
             for (self.packages_state.packages) |pkg| {
-                if (std.mem.eql(u8, pkg.Name, name)) {
-                    try self.packages_state.selected_packages.append(self.gpa, pkg.Name);
+                if (selection.matches(pkg)) {
+                    try self.packages_state.selected_packages.append(self.gpa, .{ .name = pkg.Name, .repository = pkg.Repository });
                     break;
                 }
             }
@@ -230,7 +238,14 @@ pub fn pollLoad(self: *Model) !bool {
 
 pub fn packageMarked(self: *const Model, name: []const u8) bool {
     for (self.packages_state.selected_packages.items) |selected| {
-        if (std.mem.eql(u8, name, selected)) return true;
+        if (std.mem.eql(u8, name, selected.name)) return true;
+    }
+    return false;
+}
+
+pub fn packageCopyMarked(self: *const Model, pkg: Package) bool {
+    for (self.packages_state.selected_packages.items) |selected| {
+        if (selected.matches(pkg)) return true;
     }
     return false;
 }
@@ -241,18 +256,25 @@ pub fn openNativePrompt(self: *Model, action: shelly_operation.Action) !void {
 }
 
 pub fn toggleSelectedList(self: *Model) !void {
-    try togglePackageMark(self, self.packages_state.filtered.items[self.packages_state.list_view.cursor].Name);
+    try togglePackageMark(self, self.packages_state.filtered.items[self.packages_state.list_view.cursor]);
 }
 
-fn togglePackageMark(self: *Model, package_name: []const u8) !void {
+fn togglePackageMark(self: *Model, pkg: *const Package) !void {
     try self.setNotice("");
-    for (self.packages_state.selected_packages.items, 0..) |*item, index| {
-        if (std.mem.eql(u8, item.*, package_name)) {
+    for (self.packages_state.selected_packages.items, 0..) |item, index| {
+        if (item.matches(pkg.*)) {
             _ = self.packages_state.selected_packages.orderedRemove(index);
             return;
         }
     }
-    try self.packages_state.selected_packages.append(self.gpa, package_name);
+    // selecting a copy replaces another selected copy of the same name.
+    var index: usize = 0;
+    while (index < self.packages_state.selected_packages.items.len) {
+        if (std.mem.eql(u8, self.packages_state.selected_packages.items[index].name, pkg.Name)) {
+            _ = self.packages_state.selected_packages.orderedRemove(index);
+        } else index += 1;
+    }
+    try self.packages_state.selected_packages.append(self.gpa, .{ .name = pkg.Name, .repository = pkg.Repository });
 }
 
 pub fn onQueryChange(maybe_ptr: ?*anyopaque, _: *vxfw.EventContext, str: []const u8) anyerror!void {
@@ -291,9 +313,9 @@ pub fn packagesView(self: *Model) packages_view.View {
         self.packages_state.package_details_cursor = self.packages_state.list_view.cursor;
     }
     var selected_installed: usize = 0;
-    for (self.packages_state.selected_packages.items) |name| {
+    for (self.packages_state.selected_packages.items) |selection| {
         for (self.packages_state.packages) |pkg| {
-            if (std.mem.eql(u8, pkg.Name, name)) {
+            if (selection.matches(pkg)) {
                 if (pkg.Installed) selected_installed += 1;
                 break;
             }
@@ -347,7 +369,7 @@ pub fn focusPane(self: *Model, ctx: *vxfw.EventContext, target: commands.Mouse.F
 pub fn markRow(self: *Model, ctx: *vxfw.EventContext, package: *const Package) !void {
     if (self.active != .packages or self.help_open or self.overlay != null) return;
     if (std.mem.indexOfScalar(*const Package, self.packages_state.filtered.items, package) == null) return;
-    try togglePackageMark(self, package.Name);
+    try togglePackageMark(self, package);
     ctx.consumeAndRedraw();
 }
 
@@ -367,7 +389,7 @@ pub fn buildRow(ptr: *const anyopaque, idx: usize, _: usize) ?vxfw.Widget {
     const pkg = self.packages_state.filtered.items[idx];
     return .{
         .userdata = @constCast(pkg),
-        .drawFn = if (packageMarked(self, pkg.Name)) packages_view.drawMarkedPackageRow else packages_view.drawPackageRow,
+        .drawFn = if (packageCopyMarked(self, pkg.*)) packages_view.drawMarkedPackageRow else packages_view.drawPackageRow,
     };
 }
 
@@ -572,7 +594,7 @@ test "package refresh replaces borrowed data and preserves selection" {
     , .{ .allocate = .alloc_always });
     model.packages_state.packages = model.packages_state.parsed.?.value;
     try rebuildFilter(model);
-    try model.packages_state.selected_packages.append(std.testing.allocator, model.packages_state.packages[0].Name);
+    try model.packages_state.selected_packages.append(std.testing.allocator, .{ .name = model.packages_state.packages[0].Name });
     model.packages_state.load.result = try std.json.parseFromSlice([]Package, std.testing.allocator,
         \\[{"Name":"native","Repository":"repo","Version":"2","Installed":true}]
     , .{ .allocate = .alloc_always });
@@ -580,8 +602,8 @@ test "package refresh replaces borrowed data and preserves selection" {
     model.packages_state.loading = true;
     _ = try pollLoad(model);
     try std.testing.expectEqualStrings("2", model.packages_state.packages[0].Version);
-    try std.testing.expectEqualStrings("native", model.packages_state.selected_packages.items[0]);
-    try std.testing.expect(model.packages_state.selected_packages.items[0].ptr == model.packages_state.packages[0].Name.ptr);
+    try std.testing.expectEqualStrings("native", model.packages_state.selected_packages.items[0].name);
+    try std.testing.expect(model.packages_state.selected_packages.items[0].name.ptr == model.packages_state.packages[0].Name.ptr);
     try std.testing.expectEqual(@as(u32, 0), model.packages_state.list_view.cursor);
 }
 
@@ -822,7 +844,7 @@ test "native batch selection survives filtering and confirms mixed targets" {
     packages[0].Name = "available";
     operation_model.closeOverlay(model);
     try std.testing.expectEqual(@as(usize, 0), model.packages_state.selected_packages.items.len);
-    try model.packages_state.selected_packages.appendSlice(std.testing.allocator, &.{ "available", "installed" });
+    try model.packages_state.selected_packages.appendSlice(std.testing.allocator, &.{ .{ .name = "available" }, .{ .name = "installed" } });
     try openNativePrompt(model, .remove);
     prompt = model.overlay.?.sudo;
     try std.testing.expectEqual(@as(usize, 1), prompt.targets.len);
@@ -831,7 +853,7 @@ test "native batch selection survives filtering and confirms mixed targets" {
     try std.testing.expect(std.mem.indexOf(u8, prompt.review_text, "Remove (1): installed") != null);
     operation_model.closeOverlay(model);
     try std.testing.expectEqual(@as(usize, 0), model.packages_state.selected_packages.items.len);
-    try model.packages_state.selected_packages.append(std.testing.allocator, "available");
+    try model.packages_state.selected_packages.append(std.testing.allocator, .{ .name = "available" });
     try std.testing.expectEqual(@as(usize, 1), model.packages_state.selected_packages.items.len);
     try std.testing.expect(packageMarked(model, "available"));
     try openNativePrompt(model, .remove);
@@ -850,7 +872,7 @@ test "native batch confirmation scrolls long reviews without collecting credenti
     model.packages_state.packages = &packages;
     model.packages_state.loading = false;
     try rebuildFilter(model);
-    for (packages) |pkg| try model.packages_state.selected_packages.append(std.testing.allocator, pkg.Name);
+    for (packages) |pkg| try model.packages_state.selected_packages.append(std.testing.allocator, .{ .name = pkg.Name });
     try openNativePrompt(model, .install);
     const prompt = model.overlay.?.sudo;
     const drawn = try model.widget().draw(.{
@@ -877,7 +899,7 @@ test "native removal refreshes actual state and clears all successful selections
         defer model.deinit();
         var packages = [_]Package{ .{ .Name = "available" }, .{ .Name = "installed", .Installed = true } };
         model.packages_state.packages = &packages;
-        try model.packages_state.selected_packages.appendSlice(std.testing.allocator, &.{ "available", "installed" });
+        try model.packages_state.selected_packages.appendSlice(std.testing.allocator, &.{ .{ .name = "available" }, .{ .name = "installed" } });
         var env: std.process.Environ.Map = .init(std.testing.allocator);
         defer env.deinit();
         const job = try std.heap.page_allocator.create(shelly_operation.Operation);
@@ -906,7 +928,7 @@ test "clear selection includes filtered packages and preserves search and cursor
     model.packages_state.packages = &packages;
     model.packages_state.loading = false;
     try rebuildFilter(model);
-    try model.packages_state.selected_packages.appendSlice(std.testing.allocator, &.{ "visible", "hidden" });
+    try model.packages_state.selected_packages.appendSlice(std.testing.allocator, &.{ .{ .name = "visible" }, .{ .name = "hidden" } });
     try setQuery(model, "visible");
     var ctx: vxfw.EventContext = .{ .io = std.testing.io, .alloc = std.testing.allocator, .cmds = .empty };
     defer ctx.cmds.deinit(std.testing.allocator);
@@ -933,7 +955,7 @@ test "clear selection includes filtered packages and preserves search and cursor
     try std.testing.expect(model.packages_state.package_list_active);
     for (try commands.entries(arena.allocator(), model.commandContext())) |entry|
         try std.testing.expect(entry.id != .clear_selection);
-    try model.packages_state.selected_packages.append(std.testing.allocator, "hidden");
+    try model.packages_state.selected_packages.append(std.testing.allocator, .{ .name = "hidden" });
     commands.bindings.clear_selection = .{ .codepoint = 'k', .mods = .{ .ctrl = true } };
     try Model.typeErasedCaptureHandler(model, &ctx, .{ .key_press = .{ .codepoint = 'k', .mods = .{ .ctrl = true } } });
     try std.testing.expectEqual(@as(usize, 0), model.packages_state.selected_packages.items.len);
