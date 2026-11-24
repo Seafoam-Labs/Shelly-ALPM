@@ -7867,6 +7867,7 @@ fn probeSandboxPolicy(
     builder_mod.sandbox.applyPolicy(allocator, .{
         .read_write_paths = &.{allowed_root},
         .read_only_paths = &.{},
+        .optional_read_only_paths = &.{"/nonexistent/shelly-sandbox-optional"},
     }) catch return 11;
     if (!probePathReadable(allocator, allowed_path)) return 12;
     if (probePathReadable(allocator, denied_path)) return 13;
@@ -7895,6 +7896,8 @@ test "PackageBuilder wraps lifecycle steps through the sandbox wrapper when enab
         \\
         \\build() {
         \\  test "$BUILD_ENV_SANDBOX" = 'configured inside sandbox'
+        \\  test "$GIT_CONFIG_GLOBAL" = /dev/null
+        \\  test "$CCACHE_DISABLE" = 'kept from build.env'
         \\  echo built > build-marker
         \\  echo cached > "$SRCDEST/cache-marker"
         \\}
@@ -7940,7 +7943,11 @@ test "PackageBuilder wraps lifecycle steps through the sandbox wrapper when enab
     var wrapper_prefix = [_][]const u8{stub_path};
 
     fixture.builder.shellybuild_config.sandbox.enabled = true;
-    fixture.builder.shellybuild_config.build.env = &.{.{ .name = "BUILD_ENV_SANDBOX", .value = "configured inside sandbox" }};
+    // build.env overrides the sandbox defaults.
+    fixture.builder.shellybuild_config.build.env = &.{
+        .{ .name = "BUILD_ENV_SANDBOX", .value = "configured inside sandbox" },
+        .{ .name = "CCACHE_DISABLE", .value = "kept from build.env" },
+    };
     fixture.builder.options.sandbox_wrapper_prefix = &wrapper_prefix;
 
     const artifacts = try fixture.builder.BuildPackage();

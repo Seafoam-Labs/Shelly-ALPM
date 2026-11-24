@@ -274,6 +274,14 @@ pub const PackageBuilder = struct {
         defer self.allocator.free(path);
         var environment = try self.environ.createMap(self.allocator);
         defer environment.deinit();
+        // the sandbox denies these under $HOME. git fails on an unreadable
+        // ~/.gitconfig, and meson uses ccache from PATH on its own.
+        if (self.shellybuild_config.sandbox.enabled) {
+            if (environment.get("GIT_CONFIG_GLOBAL") == null)
+                try environment.put("GIT_CONFIG_GLOBAL", "/dev/null");
+            if (!self.shellybuild_config.build.ccache and environment.get("CCACHE_DISABLE") == null)
+                try environment.put("CCACHE_DISABLE", "1");
+        }
         for (self.shellybuild_config.build.env) |assignment| {
             const config = @import("../shellybuild.zig");
             config.validateEnvironmentAssignment(assignment) catch |err| {
