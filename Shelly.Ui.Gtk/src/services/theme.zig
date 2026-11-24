@@ -135,6 +135,7 @@ pub fn applyWith(win: *gtk.Window, mode: ThemeMode, variant: ThemeVariant) void 
     const display = gdk.Display.getDefault() orelse return;
     const widget = win.as(gtk.Widget);
     readDesktopThemeName();
+    if (!hasInterfaceColorScheme()) _ = settingsPrefersDark();
 
     var desktop_css: ?[:0]u8 = null;
     defer if (desktop_css) |css| std.heap.c_allocator.free(css);
@@ -728,16 +729,32 @@ fn systemPrefersDark() bool {
     return portal_dark orelse legacyPrefersDark();
 }
 
+/// gnome's `default` means no preference, so a `settings.ini` prefer-dark
+/// (wayfire and similar) still applies.
 fn legacyPrefersDark() bool {
     if (gnomeInterfaceSettings()) |settings| {
         const scheme = settings.getString("color-scheme");
-        return std.mem.eql(u8, std.mem.span(scheme), "prefer-dark");
+        defer glib.free(scheme);
+        const value = std.mem.span(scheme);
+        if (std.mem.eql(u8, value, "prefer-dark")) return true;
+        if (std.mem.eql(u8, value, "prefer-light")) return false;
     }
+    return settingsPrefersDark();
+}
+
+/// before gtk 4.23 `setDarkHint` writes this property, so the desktop value
+/// is kept from before the first write.
+var settings_prefer_dark: ?bool = null;
+
+fn settingsPrefersDark() bool {
+    if (settings_prefer_dark) |cached| return cached;
     const gtk_settings = gtk.Settings.getDefault() orelse return true;
     var value = std.mem.zeroes(gobject.Value);
     _ = value.init(gobject.typeFromName("gboolean"));
     gtk_settings.as(gobject.Object).getProperty("gtk-application-prefer-dark-theme", &value);
-    return value.getBoolean() != 0;
+    const dark = value.getBoolean() != 0;
+    if (!hasInterfaceColorScheme()) settings_prefer_dark = dark;
+    return dark;
 }
 
 /// Returns the GNOME interface settings only when the schema is installed;
