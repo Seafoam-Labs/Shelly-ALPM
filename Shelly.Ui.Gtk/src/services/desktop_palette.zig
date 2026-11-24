@@ -7,6 +7,15 @@ pub const Rgb = struct {
     r: f64,
     g: f64,
     b: f64,
+    a: f64 = 1,
+
+    fn over(top: Rgb, bottom: Rgb) Rgb {
+        return .{
+            .r = top.r * top.a + bottom.r * (1 - top.a),
+            .g = top.g * top.a + bottom.g * (1 - top.a),
+            .b = top.b * top.a + bottom.b * (1 - top.a),
+        };
+    }
 
     fn luminance(c: Rgb) f64 {
         return 0.2126 * linear(c.r) + 0.7152 * linear(c.g) + 0.0722 * linear(c.b);
@@ -20,6 +29,9 @@ pub const Rgb = struct {
 pub const min_contrast: f64 = 4.5;
 
 const max_import_depth = 8;
+
+/// caps values grown by nested references; real colors stay far below.
+const max_resolved_len = 4096;
 
 /// First defined name wins.
 const sources = struct {
@@ -209,16 +221,25 @@ fn stripComments(arena: std.mem.Allocator, css: []const u8) ![]const u8 {
 /// Only local files are followed.
 fn importTarget(spec_raw: []const u8) ?[]const u8 {
     var spec = std.mem.trim(u8, spec_raw, " \t\r\n");
+    var rest: []const u8 = "";
     if (std.mem.startsWith(u8, spec, "url(")) {
-        const close = std.mem.lastIndexOfScalar(u8, spec, ')') orelse return null;
+        // the first `)` after the target.
+        const inner = std.mem.trimStart(u8, spec[4..], " \t\r\n");
+        const offset = spec.len - inner.len;
+        const from = if (inner.len > 0 and (inner[0] == '"' or inner[0] == '\''))
+            offset + 1 + (std.mem.indexOfScalarPos(u8, inner, 1, inner[0]) orelse return null)
+        else
+            offset;
+        const close = std.mem.indexOfScalarPos(u8, spec, from, ')') orelse return null;
+        rest = spec[close + 1 ..];
         spec = std.mem.trim(u8, spec[4..close], " \t\r\n");
-    } else {
-        // Drop media queries after the quoted target.
-        if (spec.len > 0 and (spec[0] == '"' or spec[0] == '\'')) {
-            const close = std.mem.indexOfScalarPos(u8, spec, 1, spec[0]) orelse return null;
-            spec = spec[0 .. close + 1];
-        }
+    } else if (spec.len > 0 and (spec[0] == '"' or spec[0] == '\'')) {
+        const close = std.mem.indexOfScalarPos(u8, spec, 1, spec[0]) orelse return null;
+        rest = spec[close + 1 ..];
+        spec = spec[0 .. close + 1];
     }
+    // gtk skips an import with anything after its target, such as a media query.
+    if (std.mem.trim(u8, rest, " \t\r\n").len > 0) return null;
     if (spec.len >= 2 and (spec[0] == '"' or spec[0] == '\'') and spec[spec.len - 1] == spec[0]) {
         spec = spec[1 .. spec.len - 1];
     }
@@ -250,6 +271,7 @@ pub fn resolve(arena: std.mem.Allocator, defines: *const Defines, expr: []const 
             try out.append(arena, ')');
             i = j;
         }
+        if (out.items.len > max_resolved_len) return null;
         current = try out.toOwnedSlice(arena);
     }
     return try unwrapParens(arena, current);
@@ -307,32 +329,43 @@ pub fn parseRgb(text_raw: []const u8) ?Rgb {
     if (text.len > 0 and text[0] == '#') {
         const hex = text[1..];
         return switch (hex.len) {
-            3 => .{ .r = hexDigit(hex[0]) orelse return null, .g = hexDigit(hex[1]) orelse return null, .b = hexDigit(hex[2]) orelse return null },
+            3, 4 => .{
+                .r = hexDigit(hex[0]) orelse return null,
+                .g = hexDigit(hex[1]) orelse return null,
+                .b = hexDigit(hex[2]) orelse return null,
+                .a = if (hex.len == 4) hexDigit(hex[3]) orelse return null else 1,
+            },
             6, 8 => .{
                 .r = hexByte(hex[0..2]) orelse return null,
                 .g = hexByte(hex[2..4]) orelse return null,
                 .b = hexByte(hex[4..6]) orelse return null,
+                .a = if (hex.len == 8) hexByte(hex[6..8]) orelse return null else 1,
             },
             else => null,
         };
     }
     const open = std.mem.indexOfScalar(u8, text, '(') orelse return null;
     const func = text[0..open];
-    if (!std.mem.eql(u8, func, "rgb") and !std.mem.eql(u8, func, "rgba")) return null;
+    if (!std.ascii.eqlIgnoreCase(func, "rgb") and !std.ascii.eqlIgnoreCase(func, "rgba")) return null;
     if (text[text.len - 1] != ')') return null;
     var parts = std.mem.tokenizeAny(u8, text[open + 1 .. text.len - 1], ", \t/");
-    var channels: [3]f64 = undefined;
-    for (&channels) |*ch| {
-        const part = parts.next() orelse return null;
+    var channels: [4]f64 = .{ 0, 0, 0, 1 };
+    for (&channels, 0..) |*ch, idx| {
+        const part = parts.next() orelse {
+            if (idx == 3) break;
+            return null;
+        };
+        const scale: f64 = if (idx == 3) 1 else 255;
         if (std.mem.endsWith(u8, part, "%")) {
             const v = std.fmt.parseFloat(f64, part[0 .. part.len - 1]) catch return null;
             ch.* = std.math.clamp(v / 100.0, 0, 1);
         } else {
             const v = std.fmt.parseFloat(f64, part) catch return null;
-            ch.* = std.math.clamp(v / 255.0, 0, 1);
+            ch.* = std.math.clamp(v / scale, 0, 1);
         }
     }
-    return .{ .r = channels[0], .g = channels[1], .b = channels[2] };
+    if (parts.next() != null) return null;
+    return .{ .r = channels[0], .g = channels[1], .b = channels[2], .a = channels[3] };
 }
 
 fn hexDigit(c: u8) ?f64 {
@@ -379,10 +412,12 @@ pub fn build(
     var dark: ?bool = null;
 
     if (full) {
-        const bg_rgb = parseRgb(bg.?);
+        // blend see-through colors before checking contrast.
+        const base: Rgb = if (dark_hint) .{ .r = 0, .g = 0, .b = 0 } else .{ .r = 1, .g = 1, .b = 1 };
+        const bg_rgb = if (parseRgb(bg.?)) |c| c.over(base) else null;
         const fg_rgb = parseRgb(fg.?);
         if (bg_rgb != null and fg_rgb != null) {
-            if (contrastRatio(bg_rgb.?, fg_rgb.?) < min_contrast) {
+            if (contrastRatio(bg_rgb.?, fg_rgb.?.over(bg_rgb.?)) < min_contrast) {
                 rejection.* = .low_contrast;
                 full = false;
             }
@@ -493,6 +528,9 @@ test "import targets accept url and quoted forms and skip remote schemes" {
     try std.testing.expectEqualStrings("colors.css", importTarget(" 'colors.css'").?);
     try std.testing.expectEqualStrings("/x/y.css", importTarget(" url(\"file:///x/y.css\")").?);
     try std.testing.expect(importTarget(" url(\"resource:///org/x.css\")") == null);
+    try std.testing.expectEqualStrings("b (1).css", importTarget(" url('b (1).css')").?);
+    try std.testing.expect(importTarget(" url(a.css) (prefers-color-scheme: dark)") == null);
+    try std.testing.expect(importTarget(" 'a.css' (prefers-color-scheme: dark)") == null);
 }
 
 test "resolves references and rejects unknown ones" {
@@ -749,4 +787,63 @@ test "high contrast reads prefers-contrast: more blocks" {
     try std.testing.expectEqualStrings("#ffffff", defines.get("window_bg_color").?);
     try std.testing.expect(defines.get("window_fg_color") == null);
     try std.testing.expect(!mediaMatches("(prefers-contrast: less)", .{ .dark = false, .high_contrast = true }));
+}
+
+test "colors keep their alpha and translucent text is checked over the background" {
+    const short = parseRgb("#0008").?;
+    try std.testing.expectApproxEqAbs(@as(f64, 0x88) / 255.0, short.a, 1e-9);
+    try std.testing.expectEqual(@as(f64, 0), parseRgb("#00000000").?.a);
+    const adw = parseRgb("RGB(0 0 6 / 80%)").?;
+    try std.testing.expectApproxEqAbs(@as(f64, 0.8), adw.a, 1e-9);
+    try std.testing.expectApproxEqAbs(@as(f64, 0.5), parseRgb("rgba(10, 20, 30, 0.5)").?.a, 1e-9);
+    try std.testing.expect(parseRgb("rgb(1, 2)") == null);
+    try std.testing.expect(parseRgb("rgb(1, 2, 3, 4, 5)") == null);
+
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+    const empty: Defines = .empty;
+    var rejection: Rejection = undefined;
+
+    var faint: Defines = .empty;
+    try collectText(arena, &faint,
+        \\@define-color window_bg_color #ffffff;
+        \\@define-color window_fg_color rgba(0, 0, 0, 0.1);
+    , "/cfg", &noRead, .{ .dark = false }, 0);
+    _ = try build(arena, &faint, &empty, null, false, &rejection);
+    try std.testing.expectEqual(Rejection.low_contrast, rejection);
+
+    var clear: Defines = .empty;
+    try collectText(arena, &clear,
+        \\@define-color window_bg_color #00000000;
+        \\@define-color window_fg_color #ffffff;
+    , "/cfg", &noRead, .{ .dark = false }, 0);
+    _ = try build(arena, &clear, &empty, null, false, &rejection);
+    try std.testing.expectEqual(Rejection.low_contrast, rejection);
+
+    var readable: Defines = .empty;
+    try collectText(arena, &readable,
+        \\@define-color window_bg_color #fafafb;
+        \\@define-color window_fg_color RGB(0 0 6 / 80%);
+    , "/cfg", &noRead, .{ .dark = false }, 0);
+    const p = try build(arena, &readable, &empty, null, false, &rejection);
+    try std.testing.expectEqual(Rejection.none, rejection);
+    try std.testing.expectEqual(false, p.dark.?);
+}
+
+test "deeply nested references stop growing" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+    var defines: Defines = .empty;
+    try defines.put(arena, "c0", "#101010");
+    var names: [17][]const u8 = undefined;
+    names[0] = "c0";
+    for (1..names.len) |n| {
+        names[n] = try std.fmt.allocPrint(arena, "c{d}", .{n});
+        const prev = names[n - 1];
+        try defines.put(arena, names[n], try std.fmt.allocPrint(arena, "mix(@{s}, @{s}, 0.5)", .{ prev, prev }));
+    }
+    try std.testing.expect((try resolve(arena, &defines, "@c16")) == null);
+    try std.testing.expect((try resolve(arena, &defines, "@c2")) != null);
 }
