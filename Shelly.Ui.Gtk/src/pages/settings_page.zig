@@ -23,6 +23,7 @@ const icon_fetcher = @import("../services/icon_fetcher.zig");
 const support = @import("support.zig");
 const datetime = @import("../helpers/datetime.zig");
 const ShellyWindow = @import("../shelly_window.zig").ShellyWindow;
+const project_links = @import("../helpers/project_links.zig");
 const Toast = @import("../helpers/custom_ui_comps/toast.zig").Toast;
 const VersionHistoryDialog = @import("../dialog/page/version_history.zig").VersionHistoryDialog;
 const HistoryEntry = @import("../dialog/page/version_history.zig").Entry;
@@ -56,6 +57,8 @@ pub const ShellySettingsPage = extern struct {
         // General
         aur_switch: *gtk.Switch,
         aur_row_label: *gtk.Label,
+        aur_row_subtitle: *gtk.Label,
+        aur_row_icon: *gtk.Image,
         language_drop: *gtk.DropDown,
         flatpak_switch: *gtk.Switch,
         recommended_switch: *gtk.Switch,
@@ -115,10 +118,7 @@ pub const ShellySettingsPage = extern struct {
         // Bottom action bar
         save_button: *gtk.Button,
         changelog_button: *gtk.Button,
-        version_label: *gtk.Label,
-        github_link: *gtk.LinkButton,
-        fluxer_link: *gtk.LinkButton,
-        sponsor_link: *gtk.LinkButton,
+        corner_box: *gtk.Box,
 
         toast: *Toast,
         loaded: bool,
@@ -166,6 +166,9 @@ pub const ShellySettingsPage = extern struct {
 
         _ = gtk.Button.signals.clicked.connect(p.save_button, *Self, &onSaveClicked, self, .{});
         _ = gtk.Button.signals.clicked.connect(p.changelog_button, *Self, &onChangelogClicked, self, .{});
+        gtk.Widget.setCursorFromName(p.changelog_button.as(gtk.Widget), "pointer");
+        // Devario builds have no project links in the navigation.
+        if (features.builtWithDevario) gtk.Box.append(p.corner_box, project_links.build(.horizontal).as(gtk.Widget));
 
         _ = gtk.Button.signals.clicked.connect(p.tray_icon_button, *Self, &onPickTrayIcon, self, .{});
         _ = gtk.Button.signals.clicked.connect(p.tray_icon_clear_button, *Self, &onClearTrayIcon, self, .{});
@@ -206,6 +209,10 @@ pub const ShellySettingsPage = extern struct {
             const aur_row_text = translations._("Enable Atoll");
             gtk.Label.setLabel(p.aur_row_label, aur_row_text);
             a11y.setName(p.aur_switch.as(gtk.Widget), aur_row_text);
+            const aur_row_description = translations._("Browse the AUR through Seafoam Labs' Atoll service.");
+            gtk.Label.setLabel(p.aur_row_subtitle, aur_row_description);
+            a11y.setDescription(p.aur_switch.as(gtk.Widget), aur_row_description);
+            gtk.Image.setFromIconName(p.aur_row_icon, "atoll-shark-symbolic");
         }
         hideUnbuiltRows(p);
 
@@ -373,7 +380,12 @@ pub const ShellySettingsPage = extern struct {
             return;
         };
         defer std.heap.c_allocator.free(version);
-        p.version_label.setLabel(version);
+        gtk.Button.setLabel(p.changelog_button, version);
+        // The accessible name starts with the visible text, so voice control
+        // can activate the button by saying the version.
+        var name_buf: [256]u8 = undefined;
+        const name = std.fmt.bufPrint(&name_buf, "{s}, {s}", .{ version, translations._("View Changelog") }) catch version;
+        a11y.setName(p.changelog_button.as(gtk.Widget), name);
 
         const svc = obtainConfigService() catch |err| {
             std.log.warn("Could not open the settings service. {0s}\n\nTechnical details: {1s}", .{ diagnostics.cause(err), @errorName(err) });
@@ -1210,6 +1222,8 @@ pub const ShellySettingsPage = extern struct {
         // General
         .{ "aur_switch", @offsetOf(Private, "aur_switch") },
         .{ "aur_row_label", @offsetOf(Private, "aur_row_label") },
+        .{ "aur_row_subtitle", @offsetOf(Private, "aur_row_subtitle") },
+        .{ "aur_row_icon", @offsetOf(Private, "aur_row_icon") },
         .{ "language_drop", @offsetOf(Private, "language_drop") },
         .{ "flatpak_switch", @offsetOf(Private, "flatpak_switch") },
         .{ "recommended_switch", @offsetOf(Private, "recommended_switch") },
@@ -1267,10 +1281,7 @@ pub const ShellySettingsPage = extern struct {
         // Bottom action bar
         .{ "save_button", @offsetOf(Private, "save_button") },
         .{ "changelog_button", @offsetOf(Private, "changelog_button") },
-        .{ "version_label", @offsetOf(Private, "version_label") },
-        .{ "github_link", @offsetOf(Private, "github_link") },
-        .{ "fluxer_link", @offsetOf(Private, "fluxer_link") },
-        .{ "sponsor_link", @offsetOf(Private, "sponsor_link") },
+        .{ "corner_box", @offsetOf(Private, "corner_box") },
     };
 
     pub const Class = extern struct {
@@ -1526,9 +1537,19 @@ fn terminalNeedsWarning(previous: []const u8, updated: []const u8) bool {
 const terminal_missing_warning = "The selected terminal was not found on this system. Updates will try it first and fall back to another terminal.";
 
 fn hideSettingsRow(widget: anytype) void {
-    if (gtk.Widget.getParent(widget.as(gtk.Widget))) |row| {
-        gtk.Widget.setVisible(row, @intFromBool(false));
+    if (gtk.Widget.getParent(widget.as(gtk.Widget))) |row| hideRow(row);
+}
+
+/// Hides a settings row, and its whole section (heading and card) when the
+/// build left that card with no visible rows.
+fn hideRow(row: *gtk.Widget) void {
+    gtk.Widget.setVisible(row, @intFromBool(false));
+    const card = gtk.Widget.getParent(row) orelse return;
+    var child = gtk.Widget.getFirstChild(card);
+    while (child) |c| : (child = gtk.Widget.getNextSibling(c)) {
+        if (gtk.Widget.getVisible(c) != 0) return;
     }
+    if (gtk.Widget.getParent(card)) |section| gtk.Widget.setVisible(section, @intFromBool(false));
 }
 
 fn hideUnbuiltRows(p: *ShellySettingsPage.Private) void {
@@ -1541,7 +1562,7 @@ fn hideUnbuiltRows(p: *ShellySettingsPage.Private) void {
     if (!features.builtWithRecommend) hideSettingsRow(p.recommended_switch);
     if (!features.builtWithAppImage) {
         hideSettingsRow(p.appimage_switch);
-        gtk.Widget.setVisible(p.appimage_install_path_box.as(gtk.Widget), @intFromBool(false));
+        hideRow(p.appimage_install_path_box.as(gtk.Widget));
         hideSettingsRow(p.appimage_upgrade_all_recheck_switch);
     }
     if (!features.builtWithShellySearch) hideSettingsRow(p.shelly_search_switch);

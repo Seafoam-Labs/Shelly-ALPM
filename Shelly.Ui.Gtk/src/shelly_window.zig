@@ -37,6 +37,7 @@ const NavMode = @import("models/shelly_config.zig").NavMode;
 const ShellyTabs = @import("models/shelly_config.zig").ShellyTabs;
 const translations = @import("helpers/translations.zig");
 const a11y = @import("helpers/a11y.zig");
+const project_links = @import("helpers/project_links.zig");
 const deep_link = @import("helpers/deep_link.zig");
 const ConfirmDialog = @import("dialog/page/yn_dialog.zig").ConfirmDialog;
 const PolkitDialog = @import("dialog/page/polkit_warning.zig").PolkitDialog;
@@ -297,33 +298,6 @@ pub const ShellyWindow = extern struct {
         applyNavMode(self, readNavMode());
     }
 
-    const ProjectLink = struct { icon: [:0]const u8, label: [:0]const u8, uri: [:0]const u8 };
-    const project_links = [_]ProjectLink{
-        .{ .icon = "github-symbolic", .label = "GitHub", .uri = "https://github.com/Seafoam-Labs/Shelly-ALPM" },
-        .{ .icon = "community-symbolic", .label = "Community fluxer", .uri = "https://fluxer.gg/vOjrMXcE" },
-        .{ .icon = "heart-symbolic", .label = "Sponsor", .uri = "https://www.patreon.com/cw/SeafoamLabs" },
-    };
-
-    /// non-Devario builds also show the project links in the navigation; Settings
-    /// keeps its own text links.
-    fn build_project_links(orientation: gtk.Orientation) *gtk.Box {
-        const box = gtk.Box.new(orientation, 8);
-        gtk.Widget.addCssClass(box.as(gtk.Widget), "project-links");
-        gtk.Widget.setHalign(box.as(gtk.Widget), .center);
-        gtk.Widget.setValign(box.as(gtk.Widget), .center);
-        for (project_links) |link| {
-            const button = gtk.LinkButton.new(link.uri);
-            const image = gtk.Image.newFromIconName(link.icon);
-            gtk.Image.setPixelSize(image, 20);
-            gtk.Button.setChild(button.as(gtk.Button), image.as(gtk.Widget));
-            const label = translations._(link.label);
-            a11y.setName(button.as(gtk.Widget), label);
-            gtk.Widget.setTooltipText(button.as(gtk.Widget), label);
-            gtk.Box.append(box, button.as(gtk.Widget));
-        }
-        return box;
-    }
-
     fn readNavMode() NavMode {
         const svc = runtime.config orelse return .sidebar;
         const cfg = svc.get() catch return .sidebar;
@@ -407,7 +381,7 @@ pub const ShellyWindow = extern struct {
         if (!features.builtWithDevario) {
             const footer = gtk.Box.new(.vertical, 0);
             gtk.Widget.addCssClass(footer.as(gtk.Widget), "project-links-footer");
-            const links = build_project_links(if (p.collapsed) .vertical else .horizontal);
+            const links = project_links.build(if (p.collapsed) .vertical else .horizontal);
             p.rail_links = links;
             gtk.Box.append(footer, links.as(gtk.Widget));
             gtk.Box.append(rail, footer.as(gtk.Widget));
@@ -470,7 +444,7 @@ pub const ShellyWindow = extern struct {
         const right_spacer = gtk.Box.new(.horizontal, 0);
         gtk.Widget.setHexpand(right_spacer.as(gtk.Widget), 1);
         gtk.Box.append(bar, right_spacer.as(gtk.Widget));
-        if (!features.builtWithDevario) gtk.Box.append(bar, build_project_links(.horizontal).as(gtk.Widget));
+        if (!features.builtWithDevario) gtk.Box.append(bar, project_links.build(.horizontal).as(gtk.Widget));
 
         return bar;
     }

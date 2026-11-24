@@ -1,4 +1,6 @@
+const pane_focus = @import("pane_focus.zig");
 const styles = @import("styles.zig");
+const commands = @import("../commands.zig");
 const std = @import("std");
 const Border = @import("border.zig");
 const diagnostics = @import("diagnostics");
@@ -65,6 +67,8 @@ fn contains(text: []const u8, query: []const u8) bool {
 }
 
 pub const View = struct {
+    model: ?*@import("../model.zig").Model = null,
+    result_list: ?vxfw.Widget = null,
     list_percent: u8 = 40,
     images: ?@import("image_view.zig").View = null,
     category_button: ?*vxfw.Button = null,
@@ -122,6 +126,7 @@ pub const View = struct {
                 else
                     try self.field.draw(ctx.withConstraints(.{}, .{ .width = search_width, .height = search_height })),
             });
+            if (split) try pane_focus.attach(ctx, &children.items[children.items.len - 1].surface, self.model, .flatpak, .search);
             if (self.category_button) |button| {
                 button.label = try std.fmt.allocPrint(arena, "{f} ▾", .{diagnostics.safe(if (self.category.len == 0) "All categories" else self.category)});
                 var border: Border = .{ .child = categoryButtonWidget(button) };
@@ -131,7 +136,7 @@ pub const View = struct {
             const message = self.contentMessage();
             var label: vxfw.Text = .{ .text = message orelse "", .style = styles.secondary };
             const labels = [_]Border.BorderLabel{.{ .text = if (self.installed_only) "Installed Flatpaks" else "Flatpak applications", .alignment = .top_left }};
-            const content = if (message != null) label.widget() else self.list.widget();
+            const content = if (message != null) label.widget() else self.result_list orelse self.list.widget();
             var border: Border = .{ .child = content, .labels = &labels, .focused = self.list_active and !self.details_active };
             if (list_height > 0) try children.append(arena, .{
                 .origin = .{ .row = @intCast(list_row), .col = 0 },
@@ -140,6 +145,7 @@ pub const View = struct {
                 else
                     try content.draw(ctx.withConstraints(.{}, .{ .width = list_width, .height = list_height })),
             });
+            if (split and list_height > 0) try pane_focus.attach(ctx, &children.items[children.items.len - 1].surface, self.model, .flatpak, .results);
         }
         if (show_pane and pane_height >= 2 and right_w >= 2) {
             const pane_ctx = ctx.withConstraints(.{}, .{ .width = right_w, .height = pane_height });
@@ -162,6 +168,7 @@ pub const View = struct {
                 break :blk try border.draw(pane_ctx.withConstraints(.{ .width = right_w, .height = pane_height }, .{ .width = right_w, .height = pane_height }));
             };
             try children.append(arena, .{ .origin = .{ .row = @intCast(pane_row), .col = if (split) @intCast(left_w) else 0 }, .surface = surface });
+            if (split) try pane_focus.attach(ctx, &children.items[children.items.len - 1].surface, self.model, .flatpak, .details);
         }
         if (self.category_open and self.category_list != null and self.help == null) {
             const popup_height = @min(@as(u16, 14), max.height -| (1 + search_height + 1));
@@ -270,10 +277,11 @@ pub const CategoryOption = struct {
         var text: vxfw.Text = .{ .text = try std.fmt.allocPrint(ctx.arena, "{f}", .{diagnostics.safe(if (self.name.len == 0) "All categories" else self.name)}), .softwrap = false, .overflow = .ellipsis };
         var surface = try text.draw(ctx.withConstraints(.{}, .{ .width = ctx.max.width orelse ctx.min.width, .height = 1 }));
         surface.widget = self.widget();
+        try styles.hoverLabel(ctx.arena, &surface);
         return surface;
     }
     fn event(ptr: *anyopaque, ctx: *vxfw.EventContext, value: vxfw.Event) anyerror!void {
-        if (value != .mouse or value.mouse.type != .press or value.mouse.button != .left) return;
+        if (value != .mouse or !commands.Mouse.primaryPress(value.mouse)) return;
         const self: *const CategoryOption = @ptrCast(@alignCast(ptr));
         try self.onSelect(self.userdata, ctx, self.name);
         return ctx.consumeAndRedraw();
