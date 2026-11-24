@@ -5661,7 +5661,7 @@ test "updpkgsums generates pinned Git sums and skips moving references" {
         &.{ "git", "-c", "tag.gpgsign=false", "tag", "v1" },
         &.{ "git", "archive", "--format=tar", "--output=expected.tar", "v1" },
     }) |argv| {
-        var result = try PackageManager.process_runner.run(allocator, std.testing.io, argv, upstream, null);
+        var result = try PackageManager.process_runner.runWithEnvironment(allocator, std.testing.io, environ, argv, upstream, null);
         defer result.deinit(allocator);
         try std.testing.expectEqual(@as(u8, 0), result.exit_code);
     }
