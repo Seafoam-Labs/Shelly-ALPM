@@ -17,6 +17,8 @@ const repositoryPackageList = @import("../models/packages.zig").repositoryPackag
 const runtime = @import("../services/runtime.zig");
 const c_string = @import("../helpers/c_string.zig");
 const ShellyConfig = @import("../models/shelly_config.zig").ShellyConfig;
+const LocalArchivePackage = @import("../models/shelly_config.zig").LocalArchivePackage;
+const withoutLocalArchivePackages = @import("../models/shelly_config.zig").withoutLocalArchivePackages;
 const ViewType = @import("../models/shelly_config.zig").ViewType;
 const RecommendCategory = @import("../models/recommendation.zig").RecommendCategory;
 const sorters = @import("../helpers/sorters.zig");
@@ -26,6 +28,7 @@ const translations = @import("../helpers/translations.zig");
 const a11y = @import("../helpers/a11y.zig");
 
 const Event = @import("../services/shelly_operation.zig").Event;
+const ShellyCommands = @import("../services/shelly_operation.zig").ShellyCommands;
 const PackageDetail = @import("package_detail.zig").PackageDetail;
 
 pub const PackagePage = extern struct {
@@ -63,11 +66,15 @@ pub const PackagePage = extern struct {
         grid_view_button: *gtk.ToggleButton,
         list_view_button: *gtk.ToggleButton,
         install_button: *gtk.Button,
+        install_local_button: *gtk.Button,
         selection_actions: *gtk.Box,
         cart_items_box: *gtk.Box,
         cart_label: *gtk.Label,
         upgrade_check: *gtk.CheckButton,
+        installed_only_check: *gtk.CheckButton,
         show_hidden_check: *gtk.CheckButton,
+        foreign_only_check: *gtk.CheckButton,
+        local_archives_only_check: *gtk.CheckButton,
         show_explicit_only_check: *gtk.CheckButton,
         show_depends_only_check: *gtk.CheckButton,
         show_detail_pane_check: *gtk.CheckButton,
@@ -79,12 +86,17 @@ pub const PackagePage = extern struct {
         show_explicit_only: bool,
         show_depends_only: bool,
         show_hidden: bool,
+        show_foreign_only: bool,
+        show_local_archives_only: bool,
+        pending_local_archive_packages: []const LocalArchivePackage = &.{},
+        pending_local_archive_removals: []const []const u8 = &.{},
         show_detail_pane: bool,
 
         check_map_grid: std.AutoHashMapUnmanaged(*PackageObject, *gtk.CheckButton),
         check_map_column: std.AutoHashMapUnmanaged(*PackageObject, *gtk.CheckButton),
         loaded: bool,
         applying_config: bool,
+        local_only: bool,
         resolver: IconResolver,
         search_text: [256]u8,
         search_len: usize,
@@ -116,6 +128,26 @@ pub const PackagePage = extern struct {
         return gobject.ext.newInstance(Self, .{});
     }
 
+    /// Creates the installed-package view used by the Local navigation page.
+    pub fn newLocal() *Self {
+        const page = new();
+        const p = page.priv();
+        p.local_only = true;
+        p.show_installed_only = true;
+        p.show_local_archives_only = true;
+        gtk.Widget.setVisible(p.foreign_only_check.as(gtk.Widget), 1);
+        gtk.Widget.setVisible(p.local_archives_only_check.as(gtk.Widget), 0);
+        gtk.Widget.setVisible(p.install_local_button.as(gtk.Widget), 1);
+        gtk.Widget.setVisible(p.upgrade_check.as(gtk.Widget), 0);
+        gtk.Widget.setVisible(p.installed_only_check.as(gtk.Widget), 0);
+        if (gtk.Widget.getParent(p.grouping_selection.as(gtk.Widget))) |search_group| {
+            gtk.Widget.removeCssClass(search_group, "linked");
+        }
+        gtk.Widget.setVisible(p.grouping_selection.as(gtk.Widget), 0);
+        gtk.ColumnViewColumn.setVisible(p.install_date_column, 1);
+        return page;
+    }
+
     pub fn as(self: *Self, comptime T: type) *T {
         return gobject.ext.as(T, self);
     }
@@ -129,14 +161,19 @@ pub const PackagePage = extern struct {
         const p = self.priv();
         p.loaded = false;
         p.applying_config = false;
+        p.local_only = false;
         p.arena = null;
         p.generation = 0;
         p.show_installed_only = false;
         p.show_explicit_only = false;
         p.show_hidden = false;
+        p.show_foreign_only = false;
         p.show_detail_pane = false;
         p.check_map_grid = .empty;
         p.check_map_column = .empty;
+
+        gtk.Widget.setVisible(p.install_local_button.as(gtk.Widget), 0);
+        _ = gtk.Button.signals.clicked.connect(p.install_local_button, *Self, &on_install_local_clicked, self, .{});
 
         const detail = PackageDetail.new();
         p.detail = detail;
@@ -651,6 +688,7 @@ pub const PackagePage = extern struct {
         }
 
         if (p.show_installed_only and !pkg.isInstalled()) return 0;
+        if (p.show_local_archives_only and !isTrackedLocalArchive(pkg.getName(), pkg.getVersion())) return 0;
 
         if (p.show_depends_only and pkg.isExplicit()) return 0;
 
@@ -752,7 +790,7 @@ pub const PackagePage = extern struct {
         // The page is the focus stop, so a page switch lands on its group name
         // and Tab reaches the search entry from there.
         _ = a11y.focusFirst(self.as(gtk.Widget));
-        const thread = std.Thread.spawn(.{}, load_worker, .{ self, p.generation, p.show_hidden }) catch return;
+        const thread = std.Thread.spawn(.{}, load_worker, .{ self, p.generation, p.show_hidden, p.show_foreign_only }) catch return;
         gtk.Widget.setVisible(p.no_results_overlay.as(gtk.Widget), 0);
         thread.detach();
     }
@@ -820,7 +858,7 @@ pub const PackagePage = extern struct {
         _ = malloc_trim(0);
     }
 
-    fn load_worker(page: *Self, generation: u64, show_hidden: bool) void {
+    fn load_worker(page: *Self, generation: u64, show_hidden: bool, show_foreign_only: bool) void {
         const arena_ptr = std.heap.c_allocator.create(std.heap.ArenaAllocator) catch return;
         arena_ptr.* = std.heap.ArenaAllocator.init(std.heap.c_allocator);
         const alloc = arena_ptr.allocator();
@@ -832,20 +870,31 @@ pub const PackagePage = extern struct {
         defer threaded.deinit();
 
         const cli = ShellyCli{ .allocator = alloc, .io = threaded.io() };
-        const parsed = cli.get_packages(show_hidden) catch |err| {
-            std.debug.print("Could not load the standard-package list. {0s}\n\nTechnical details: {1s}\n", .{ diagnostics.cause(err), @errorName(err) });
-            arena_ptr.deinit();
-            std.heap.c_allocator.destroy(arena_ptr);
-            return;
-        };
-
-        const icli = ShellyCli{ .allocator = alloc, .io = threaded.io() };
-        const installed = icli.get_installed_packages() catch null;
-
-        const packages = repositoryPackageList(alloc, parsed.value, if (installed) |inst| inst.value else null) catch {
-            arena_ptr.deinit();
-            std.heap.c_allocator.destroy(arena_ptr);
-            return;
+        const packages = if (p.local_only) blk: {
+            const installed = (if (show_foreign_only)
+                cli.get_foreign_packages()
+            else
+                cli.get_installed_packages()) catch |err| {
+                std.debug.print("Could not load the installed-package list. {0s}\n\nTechnical details: {1s}\n", .{ diagnostics.cause(err), @errorName(err) });
+                arena_ptr.deinit();
+                std.heap.c_allocator.destroy(arena_ptr);
+                return;
+            };
+            break :blk @import("../models/packages.zig").markLocalPackagesInstalled(installed.value);
+        } else blk: {
+            const parsed = cli.get_packages(show_hidden) catch |err| {
+                std.debug.print("Could not load the standard-package list. {0s}\n\nTechnical details: {1s}\n", .{ diagnostics.cause(err), @errorName(err) });
+                arena_ptr.deinit();
+                std.heap.c_allocator.destroy(arena_ptr);
+                return;
+            };
+            const icli = ShellyCli{ .allocator = alloc, .io = threaded.io() };
+            const installed = icli.get_installed_packages() catch null;
+            break :blk repositoryPackageList(alloc, parsed.value, if (installed) |inst| inst.value else null) catch {
+                arena_ptr.deinit();
+                std.heap.c_allocator.destroy(arena_ptr);
+                return;
+            };
         };
 
         var set: std.StringHashMapUnmanaged(void) = .empty;
@@ -972,11 +1021,15 @@ pub const PackagePage = extern struct {
         .{ "grouping_selection", @offsetOf(Private, "grouping_selection") },
         .{ "detail_revealer", @offsetOf(Private, "detail_revealer") },
         .{ "install_button", @offsetOf(Private, "install_button") },
+        .{ "install_local_button", @offsetOf(Private, "install_local_button") },
         .{ "selection_actions", @offsetOf(Private, "selection_actions") },
         .{ "cart_label", @offsetOf(Private, "cart_label") },
         .{ "cart_items_box", @offsetOf(Private, "cart_items_box") },
         .{ "upgrade_check", @offsetOf(Private, "upgrade_check") },
+        .{ "installed_only_check", @offsetOf(Private, "installed_only_check") },
         .{ "show_hidden_check", @offsetOf(Private, "show_hidden_check") },
+        .{ "foreign_only_check", @offsetOf(Private, "foreign_only_check") },
+        .{ "local_archives_only_check", @offsetOf(Private, "local_archives_only_check") },
         .{ "show_explicit_only", @offsetOf(Private, "show_explicit_only_check") },
         .{ "show_detail_pane", @offsetOf(Private, "show_detail_pane_check") },
         .{ "no_results_overlay", @offsetOf(Private, "no_results_overlay") },
@@ -1001,6 +1054,8 @@ pub const PackagePage = extern struct {
             gtk.Widget.Class.bindTemplateCallbackFull(wc, "on_explicit_only", @ptrCast(&on_explicit_only));
             gtk.Widget.Class.bindTemplateCallbackFull(wc, "on_depends_only", @ptrCast(&on_depends_only));
             gtk.Widget.Class.bindTemplateCallbackFull(wc, "on_installed_only_toggled", @ptrCast(&on_installed_only_toggled));
+            gtk.Widget.Class.bindTemplateCallbackFull(wc, "on_foreign_only_toggled", @ptrCast(&on_foreign_only_toggled));
+            gtk.Widget.Class.bindTemplateCallbackFull(wc, "on_local_archives_only_toggled", @ptrCast(&on_local_archives_only_toggled));
             gtk.Widget.Class.bindTemplateCallbackFull(wc, "on_detail_pane", @ptrCast(&on_detail_pane));
         }
     };
@@ -1133,6 +1188,102 @@ pub const PackagePage = extern struct {
         if (remove_count > 0) self.confirm_remove() else self.start_install();
     }
 
+    fn on_install_local_clicked(_: *gtk.Button, self: *Self) callconv(.c) void {
+        const dialog = gtk.FileDialog.new();
+        gtk.FileDialog.setTitle(dialog, translations._("Choose local Arch packages"));
+
+        const filter = gtk.FileFilter.new();
+        gtk.FileFilter.setName(filter, translations._("Arch package archives"));
+        gtk.FileFilter.addSuffix(filter, "pkg.tar.zst");
+        gtk.FileFilter.addSuffix(filter, "pkg.tar.xz");
+        gtk.FileFilter.addSuffix(filter, "pkg.tar.gz");
+        gtk.FileFilter.addSuffix(filter, "pkg.tar.bz2");
+
+        const filters = gio.ListStore.new(gtk.FileFilter.getGObjectType());
+        gio.ListStore.append(filters, filter.as(gobject.Object));
+        gtk.FileDialog.setFilters(dialog, filters.as(gio.ListModel));
+        filter.as(gobject.Object).unref();
+        filters.as(gobject.Object).unref();
+
+        const root = gtk.Widget.getRoot(self.as(gtk.Widget));
+        const parent_window: ?*gtk.Window = if (root) |r| gobject.ext.cast(gtk.Window, r) else null;
+
+        _ = self.as(gobject.Object).ref();
+        gtk.FileDialog.openMultiple(dialog, parent_window, null, &on_local_archives_chosen, self);
+    }
+
+    fn on_local_archives_chosen(source: ?*gobject.Object, result: *gio.AsyncResult, data: ?*anyopaque) callconv(.c) void {
+        const self: *Self = @ptrCast(@alignCast(data.?));
+        defer self.as(gobject.Object).unref();
+        const dialog: *gtk.FileDialog = @ptrCast(@alignCast(source.?));
+        const files = gtk.FileDialog.openMultipleFinish(dialog, result, null) orelse return;
+        defer files.as(gobject.Object).unref();
+
+        var paths: std.ArrayListUnmanaged([]const u8) = .empty;
+        defer {
+            for (paths.items) |path| std.heap.c_allocator.free(path);
+            paths.deinit(std.heap.c_allocator);
+        }
+        var names: std.ArrayListUnmanaged([]const u8) = .empty;
+        defer names.deinit(std.heap.c_allocator);
+
+        const count = gio.ListModel.getNItems(files);
+        var index: u32 = 0;
+        while (index < count) : (index += 1) {
+            const object = gio.ListModel.getObject(files, index) orelse continue;
+            defer object.unref();
+            const file = gobject.ext.cast(gio.File, object) orelse continue;
+            const path_c = gio.File.getPath(file) orelse continue;
+            defer glib.free(path_c);
+
+            const path = std.heap.c_allocator.dupe(u8, std.mem.span(path_c)) catch return;
+            paths.append(std.heap.c_allocator, path) catch {
+                std.heap.c_allocator.free(path);
+                return;
+            };
+            names.append(std.heap.c_allocator, std.fs.path.basename(path)) catch return;
+        }
+        if (paths.items.len == 0) return;
+
+        const cli = ShellyCli{ .allocator = std.heap.c_allocator, .io = runtime.io };
+        const metadata = cli.get_local_archive_info(paths.items) catch |err| {
+            std.log.err("Could not inspect selected local package archives. {0s}\n\nTechnical details: {1s}", .{ diagnostics.cause(err), @errorName(err) });
+            return;
+        };
+        defer metadata.deinit();
+        const p = self.priv();
+        const pending = std.heap.c_allocator.alloc(LocalArchivePackage, metadata.value.len) catch return;
+        for (metadata.value, 0..) |item, i| {
+            pending[i] = .{
+                .Name = std.heap.c_allocator.dupe(u8, item.Name) catch return,
+                .Version = std.heap.c_allocator.dupe(u8, item.Version) catch return,
+            };
+        }
+        freePendingLocalArchives(p.pending_local_archive_packages);
+        p.pending_local_archive_packages = pending;
+
+        const argv = ShellyCommands.install(std.heap.c_allocator, paths.items) catch {
+            freePendingLocalArchives(p.pending_local_archive_packages);
+            p.pending_local_archive_packages = &.{};
+            return;
+        };
+        defer std.heap.c_allocator.free(argv);
+
+        if (support.getWindow(ShellyWindow, self)) |win| {
+            win.startTransaction(.{
+                .title = translations._("Installing local Arch packages"),
+                .argv = argv,
+                .packages = names.items,
+                .on_complete = &on_transaction_complete,
+                .privileged = true,
+                .ctx = self,
+            });
+        } else {
+            freePendingLocalArchives(p.pending_local_archive_packages);
+            p.pending_local_archive_packages = &.{};
+        }
+    }
+
     fn on_grid_view_toggled(self: *Self) callconv(.c) void {
         const p = self.priv();
         if (p.applying_config) return;
@@ -1171,6 +1322,27 @@ pub const PackagePage = extern struct {
         p.show_installed_only = gtk.CheckButton.getActive(check) != 0;
         gtk.ColumnViewColumn.setVisible(p.install_date_column, @intFromBool(p.show_installed_only));
         gtk.Filter.changed(p.filter.as(gtk.Filter), .different);
+    }
+
+    fn on_foreign_only_toggled(check: *gtk.CheckButton, self: *Self) callconv(.c) void {
+        const p = self.priv();
+        p.show_foreign_only = gtk.CheckButton.getActive(check) != 0;
+        if (p.local_only and p.loaded) self.reload();
+    }
+
+    fn on_local_archives_only_toggled(check: *gtk.CheckButton, self: *Self) callconv(.c) void {
+        const p = self.priv();
+        p.show_local_archives_only = gtk.CheckButton.getActive(check) != 0;
+        gtk.Filter.changed(p.filter.as(gtk.Filter), .different);
+    }
+
+    fn isTrackedLocalArchive(name: []const u8, version: []const u8) bool {
+        const resolver = runtime.config orelse return false;
+        const config = resolver.get() catch return false;
+        for (config.LocalArchivePackages) |archive| {
+            if (std.mem.eql(u8, archive.Name, name) and std.mem.eql(u8, archive.Version, version)) return true;
+        }
+        return false;
     }
 
     fn on_explicit_only(check: *gtk.CheckButton, self: *Self) callconv(.c) void {
@@ -1255,11 +1427,13 @@ pub const PackagePage = extern struct {
         }
 
         if (support.getWindow(ShellyWindow, self)) |win| {
+            freePendingLocalArchiveRemovals(p);
+            p.pending_local_archive_removals = duplicatePackageNames(names.items) catch return;
             win.startTransaction(.{
                 .title = translations._("Removing packages"),
                 .argv = argv.items,
                 .packages = names.items,
-                .on_complete = &on_transaction_complete,
+                .on_complete = &on_remove_complete,
                 .privileged = true,
                 .ctx = self,
             });
@@ -1306,8 +1480,27 @@ pub const PackagePage = extern struct {
 
     fn on_transaction_complete(ctx: *anyopaque, success: bool) void {
         const self: *PackagePage = @ptrCast(@alignCast(ctx));
-        if (!success) return;
+        const p = self.priv();
+        if (!success) {
+            freePendingLocalArchives(p.pending_local_archive_packages);
+            p.pending_local_archive_packages = &.{};
+            return;
+        }
 
+        persistPendingLocalArchives(p);
+        finishPackageTransaction(self);
+    }
+
+    fn on_remove_complete(ctx: *anyopaque, success: bool) void {
+        const self: *PackagePage = @ptrCast(@alignCast(ctx));
+        const p = self.priv();
+        defer freePendingLocalArchiveRemovals(p);
+
+        if (success) removeTrackedLocalArchives(p.pending_local_archive_removals);
+        if (success) finishPackageTransaction(self);
+    }
+
+    fn finishPackageTransaction(self: *Self) void {
         const p = self.priv();
         const model = p.list_store.as(gio.ListModel);
         const n = gio.ListModel.getNItems(model);
@@ -1322,11 +1515,98 @@ pub const PackagePage = extern struct {
         self.reload();
     }
 
+    fn duplicatePackageNames(names: []const []const u8) ![]const []const u8 {
+        var copied: std.ArrayListUnmanaged([]const u8) = .empty;
+        errdefer {
+            for (copied.items) |name| std.heap.c_allocator.free(name);
+            copied.deinit(std.heap.c_allocator);
+        }
+        for (names) |name| {
+            const copy = try std.heap.c_allocator.dupe(u8, name);
+            copied.append(std.heap.c_allocator, copy) catch |err| {
+                std.heap.c_allocator.free(copy);
+                return err;
+            };
+        }
+        return copied.toOwnedSlice(std.heap.c_allocator);
+    }
+
+    fn freePendingLocalArchiveRemovals(p: *Private) void {
+        for (p.pending_local_archive_removals) |name| std.heap.c_allocator.free(name);
+        if (p.pending_local_archive_removals.len > 0) std.heap.c_allocator.free(p.pending_local_archive_removals);
+        p.pending_local_archive_removals = &.{};
+    }
+
+    fn removeTrackedLocalArchives(names: []const []const u8) void {
+        const resolver = runtime.config orelse return;
+        const current = resolver.get() catch return;
+        const remaining = withoutLocalArchivePackages(
+            std.heap.c_allocator,
+            current.LocalArchivePackages,
+            names,
+        ) catch return;
+        defer std.heap.c_allocator.free(remaining);
+        updateConfigField(.LocalArchivePackages, remaining);
+    }
+
+    fn freePendingLocalArchives(packages: []const LocalArchivePackage) void {
+        for (packages) |pkg| {
+            std.heap.c_allocator.free(pkg.Name);
+            std.heap.c_allocator.free(pkg.Version);
+        }
+        if (packages.len > 0) std.heap.c_allocator.free(packages);
+    }
+
+    fn persistPendingLocalArchives(p: *Private) void {
+        if (p.pending_local_archive_packages.len == 0) return;
+        defer {
+            freePendingLocalArchives(p.pending_local_archive_packages);
+            p.pending_local_archive_packages = &.{};
+        }
+        const resolver = runtime.config orelse return;
+        const current = resolver.get() catch return;
+        var merged: std.ArrayListUnmanaged(LocalArchivePackage) = .empty;
+        defer {
+            for (merged.items) |pkg| {
+                std.heap.c_allocator.free(pkg.Name);
+                std.heap.c_allocator.free(pkg.Version);
+            }
+            merged.deinit(std.heap.c_allocator);
+        }
+        for (current.LocalArchivePackages) |pkg| {
+            const name = std.heap.c_allocator.dupe(u8, pkg.Name) catch return;
+            const version = std.heap.c_allocator.dupe(u8, pkg.Version) catch {
+                std.heap.c_allocator.free(name);
+                return;
+            };
+            merged.append(std.heap.c_allocator, .{ .Name = name, .Version = version }) catch return;
+        }
+        for (p.pending_local_archive_packages) |candidate| {
+            var exists = false;
+            for (merged.items) |existing| {
+                if (std.mem.eql(u8, existing.Name, candidate.Name) and
+                    std.mem.eql(u8, existing.Version, candidate.Version))
+                {
+                    exists = true;
+                    break;
+                }
+            }
+            if (exists) continue;
+            const name = std.heap.c_allocator.dupe(u8, candidate.Name) catch return;
+            const version = std.heap.c_allocator.dupe(u8, candidate.Version) catch {
+                std.heap.c_allocator.free(name);
+                return;
+            };
+            merged.append(std.heap.c_allocator, .{ .Name = name, .Version = version }) catch return;
+        }
+        updateConfigField(.LocalArchivePackages, merged.items);
+    }
+
     fn reload(self: *Self) void {
         const p = self.priv();
         p.generation += 1;
         show_loading(self);
-        const thread = std.Thread.spawn(.{}, load_worker, .{ self, p.generation, p.show_hidden }) catch return;
+        const thread = std.Thread.spawn(.{}, load_worker, .{ self, p.generation, p.show_hidden, p.show_foreign_only }) catch return;
         thread.detach();
     }
 };

@@ -1,3 +1,5 @@
+const std = @import("std");
+
 pub const ViewType = enum(u8) {
     grid = 0,
     list = 1,
@@ -52,6 +54,49 @@ pub const TableColumn = struct {
     Hidden: bool = false,
 };
 
+pub const LocalArchivePackage = struct {
+    Name: []const u8 = "",
+    Version: []const u8 = "",
+};
+
+/// Return tracked local archives excluding packages that were successfully removed.
+/// The returned slice owns its container; its strings remain borrowed from `tracked`.
+pub fn withoutLocalArchivePackages(
+    allocator: std.mem.Allocator,
+    tracked: []const LocalArchivePackage,
+    removed_names: []const []const u8,
+) ![]LocalArchivePackage {
+    var result: std.ArrayListUnmanaged(LocalArchivePackage) = .empty;
+    errdefer result.deinit(allocator);
+
+    for (tracked) |pkg| {
+        var removed = false;
+        for (removed_names) |name| {
+            if (std.mem.eql(u8, pkg.Name, name)) {
+                removed = true;
+                break;
+            }
+        }
+        if (!removed) try result.append(allocator, pkg);
+    }
+    return result.toOwnedSlice(allocator);
+}
+
+test "withoutLocalArchivePackages removes all versions by package name" {
+    const tracked = [_]LocalArchivePackage{
+        .{ .Name = "alpha", .Version = "1.0-1" },
+        .{ .Name = "beta", .Version = "2.0-1" },
+        .{ .Name = "alpha", .Version = "1.1-1" },
+    };
+    const removed = [_][]const u8{"alpha"};
+    const remaining = try withoutLocalArchivePackages(std.testing.allocator, &tracked, &removed);
+    defer std.testing.allocator.free(remaining);
+
+    try std.testing.expectEqual(@as(usize, 1), remaining.len);
+    try std.testing.expectEqualStrings("beta", remaining[0].Name);
+    try std.testing.expectEqualStrings("2.0-1", remaining[0].Version);
+}
+
 pub const ShellyConfig = struct {
     // General
     Culture: []const u8 = "",
@@ -82,6 +127,7 @@ pub const ShellyConfig = struct {
 
     // Package Page
     PackageInstallView: ViewType = .grid,
+    LocalArchivePackages: []const LocalArchivePackage = &.{},
 
     PackageManagementCascadeDelete: bool = true,
     PackageManagementRemoveConfigs: bool = false,

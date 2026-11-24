@@ -19,6 +19,7 @@ const ShellyWindow = @import("../shelly_window.zig").ShellyWindow;
 const ShellyCli = @import("../services/shelly_cli.zig").ShellyCli;
 const ShellyCommands = @import("../services/shelly_operation.zig").ShellyCommands;
 const ShellyConfig = @import("../models/shelly_config.zig").ShellyConfig;
+const withoutLocalArchivePackages = @import("../models/shelly_config.zig").withoutLocalArchivePackages;
 const Package = @import("../models/packages.zig").Package;
 const runtime = @import("../services/runtime.zig");
 const translations = @import("../helpers/translations.zig");
@@ -73,6 +74,7 @@ pub const ShellySearchPage = extern struct {
         last_query_len: usize,
         check_map: std.AutoHashMapUnmanaged(*SearchResultObject, *gtk.CheckButton),
         pending_installs: std.ArrayListUnmanaged(PendingInstall),
+        pending_local_archive_removals: []const []const u8 = &.{},
         var offset: c_int = 0;
     };
 
@@ -502,12 +504,42 @@ pub const ShellySearchPage = extern struct {
         self.update_selection_ui();
     }
 
+    const SelectionState = struct {
+        install_count: u32 = 0,
+        remove_count: u32 = 0,
+        removable: bool = true,
+    };
+
+    fn selection_state(self: *Self) SelectionState {
+        const p = self.priv();
+        const model = p.list_store.as(gio.ListModel);
+        const n = gio.ListModel.getNItems(model);
+        var state: SelectionState = .{};
+        var i: u32 = 0;
+        while (i < n) : (i += 1) {
+            const obj = gio.ListModel.getObject(model, i) orelse continue;
+            defer obj.unref();
+            const pkg = gobject.ext.cast(SearchResultObject, obj) orelse continue;
+            if (!pkg.isSelected()) continue;
+
+            if (pkg.isInstalled()) {
+                state.remove_count += 1;
+                if (pkg.getSource() != .standard) state.removable = false;
+            } else {
+                state.install_count += 1;
+            }
+        }
+        return state;
+    }
+
     fn update_selection_ui(self: *Self) void {
         const p = self.priv();
-        const count = self.selection_count();
+        const state = self.selection_state();
+        const count = state.install_count + state.remove_count;
         const btn = p.install_button.as(gtk.Widget);
 
         gtk.Widget.removeCssClass(btn, "suggested-action");
+        gtk.Widget.removeCssClass(btn, "destructive-action");
         gtk.Widget.setVisible(btn, @intFromBool(count > 0));
 
         if (count == 0 or p.install_running) {
@@ -517,14 +549,29 @@ pub const ShellySearchPage = extern struct {
             return;
         }
 
-        var buf: [64]u8 = undefined;
-        gtk.Button.setLabel(
-            p.install_button,
-            std.fmt.bufPrintSentinel(&buf, "{s} {d} {s}", .{ translations._("Install"), count, translations._("Package(s)") }, 0) catch translations._("Install Selected"),
-        );
-        gtk.Widget.setSensitive(btn, 1);
-        gtk.Widget.addCssClass(btn, "suggested-action");
-        gtk.Widget.setTooltipText(btn, null);
+        if (state.install_count > 0 and state.remove_count > 0) {
+            gtk.Button.setLabel(p.install_button, translations._("Mixed selection"));
+            gtk.Widget.setSensitive(btn, 0);
+            gtk.Widget.setTooltipText(btn, translations._("Select only installed packages to remove, or only available packages to install."));
+        } else if (state.remove_count > 0) {
+            var buf: [64]u8 = undefined;
+            gtk.Button.setLabel(
+                p.install_button,
+                std.fmt.bufPrintSentinel(&buf, "{s} {d} {s}", .{ translations._("Remove"), state.remove_count, translations._("Package(s)") }, 0) catch translations._("Remove Selected"),
+            );
+            gtk.Widget.setSensitive(btn, @intFromBool(state.removable));
+            gtk.Widget.addCssClass(btn, "destructive-action");
+            gtk.Widget.setTooltipText(btn, if (state.removable) null else translations._("Only installed standard repository packages can be removed from search results."));
+        } else {
+            var buf: [64]u8 = undefined;
+            gtk.Button.setLabel(
+                p.install_button,
+                std.fmt.bufPrintSentinel(&buf, "{s} {d} {s}", .{ translations._("Install"), state.install_count, translations._("Package(s)") }, 0) catch translations._("Install Selected"),
+            );
+            gtk.Widget.setSensitive(btn, 1);
+            gtk.Widget.addCssClass(btn, "suggested-action");
+            gtk.Widget.setTooltipText(btn, null);
+        }
     }
 
     fn update_source_labels(self: *Self, standard_count: u32, aur_count: u32, flatpak_count: u32) void {
@@ -951,7 +998,23 @@ pub const ShellySearchPage = extern struct {
     fn on_install_clicked(self: *Self) callconv(.c) void {
         const p = self.priv();
         if (p.install_running) return;
-        if (self.selection_count() == 0) return;
+
+        const state = self.selection_state();
+        if (state.install_count == 0 and state.remove_count == 0) return;
+        if (state.install_count > 0 and state.remove_count > 0) return;
+
+        if (state.remove_count > 0) {
+            if (!state.removable) return;
+            const dialog = ConfirmDialog.new(
+                translations._("Remove Packages"),
+                translations._("Remove the selected packages?"),
+                &on_remove_response,
+                self,
+            );
+            dialog.setButtons(translations._("Remove"), translations._("Cancel"));
+            if (support.getWindow(ShellyWindow, self)) |win| win.showLockout(dialog.as(gtk.Widget));
+            return;
+        }
 
         const dialog = ConfirmDialog.new(
             translations._("Install Packages"),
@@ -961,6 +1024,116 @@ pub const ShellySearchPage = extern struct {
         );
         dialog.setButtons(translations._("Install"), translations._("Cancel"));
         if (support.getWindow(ShellyWindow, self)) |win| win.showLockout(dialog.as(gtk.Widget));
+    }
+
+    fn on_remove_response(ctx: ?*anyopaque, confirmed: bool) void {
+        const self: *Self = @ptrCast(@alignCast(ctx.?));
+        if (support.getWindow(ShellyWindow, self)) |win| win.hideLockout();
+        if (!confirmed) return;
+
+        const p = self.priv();
+        if (p.install_running) return;
+
+        var names: std.ArrayListUnmanaged([]const u8) = .empty;
+        defer {
+            for (names.items) |name| std.heap.c_allocator.free(name);
+            names.deinit(std.heap.c_allocator);
+        }
+
+        const model = p.list_store.as(gio.ListModel);
+        const n = gio.ListModel.getNItems(model);
+        var i: u32 = 0;
+        while (i < n) : (i += 1) {
+            const obj = gio.ListModel.getObject(model, i) orelse continue;
+            defer obj.unref();
+            const pkg = gobject.ext.cast(SearchResultObject, obj) orelse continue;
+            if (!pkg.isSelected()) continue;
+            if (!pkg.isInstalled() or pkg.getSource() != .standard) continue;
+            names.append(std.heap.c_allocator, std.heap.c_allocator.dupe(u8, pkg.getInstallTarget()) catch continue) catch continue;
+        }
+        if (names.items.len == 0) return;
+
+        var argv: std.ArrayListUnmanaged([]const u8) = .empty;
+        defer argv.deinit(std.heap.c_allocator);
+        argv.append(std.heap.c_allocator, "remove") catch return;
+        argv.append(std.heap.c_allocator, "standard") catch return;
+        for (names.items) |name| argv.append(std.heap.c_allocator, name) catch return;
+
+        if (runtime.config) |cfg_service| {
+            if (cfg_service.get()) |cfg| {
+                if (!cfg.PackageManagementCascadeDelete) {
+                    argv.append(std.heap.c_allocator, "--no-cascade") catch return;
+                }
+                if (cfg.PackageManagementRemoveOptionalDeps) {
+                    argv.append(std.heap.c_allocator, "--opt-deps") catch return;
+                }
+                if (cfg.PackageManagementRemoveConfigs) {
+                    argv.append(std.heap.c_allocator, "--remove-config") catch return;
+                }
+            } else |_| {}
+        }
+
+        const win = support.getWindow(ShellyWindow, self) orelse return;
+        freePendingLocalArchiveRemovals(p);
+        p.pending_local_archive_removals = duplicatePackageNames(names.items) catch return;
+        p.install_running = true;
+        self.update_selection_ui();
+        win.startTransaction(.{
+            .title = translations._("Removing packages"),
+            .argv = argv.items,
+            .packages = names.items,
+            .on_complete = &on_remove_complete,
+            .privileged = true,
+            .ctx = self,
+        });
+    }
+
+    fn on_remove_complete(ctx: *anyopaque, success: bool) void {
+        const self: *Self = @ptrCast(@alignCast(ctx));
+        const p = self.priv();
+        p.install_running = false;
+        defer freePendingLocalArchiveRemovals(p);
+        if (success) {
+            removeTrackedLocalArchives(p.pending_local_archive_removals);
+            self.clear_selection();
+            if (p.last_query_len > 0) self.start_load(enabledSources());
+        } else {
+            self.update_selection_ui();
+        }
+    }
+
+    fn duplicatePackageNames(names: []const []const u8) ![]const []const u8 {
+        var copied: std.ArrayListUnmanaged([]const u8) = .empty;
+        errdefer {
+            for (copied.items) |name| std.heap.c_allocator.free(name);
+            copied.deinit(std.heap.c_allocator);
+        }
+        for (names) |name| {
+            const copy = try std.heap.c_allocator.dupe(u8, name);
+            copied.append(std.heap.c_allocator, copy) catch |err| {
+                std.heap.c_allocator.free(copy);
+                return err;
+            };
+        }
+        return copied.toOwnedSlice(std.heap.c_allocator);
+    }
+
+    fn freePendingLocalArchiveRemovals(p: *Private) void {
+        for (p.pending_local_archive_removals) |name| std.heap.c_allocator.free(name);
+        if (p.pending_local_archive_removals.len > 0) std.heap.c_allocator.free(p.pending_local_archive_removals);
+        p.pending_local_archive_removals = &.{};
+    }
+
+    fn removeTrackedLocalArchives(names: []const []const u8) void {
+        const resolver = runtime.config orelse return;
+        const current = resolver.get() catch return;
+        const remaining = withoutLocalArchivePackages(
+            std.heap.c_allocator,
+            current.LocalArchivePackages,
+            names,
+        ) catch return;
+        defer std.heap.c_allocator.free(remaining);
+        updateConfigField(.LocalArchivePackages, remaining);
     }
 
     fn on_install_response(ctx: ?*anyopaque, confirmed: bool) void {

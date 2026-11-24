@@ -24,6 +24,7 @@ pub const Backend = enum { standard, appimage, aur, flatpak };
 
 const ListOptions = struct {
     show_hidden: bool = false,
+    foreign_only: bool = false,
     required_by: bool = false,
     optional_for: bool = false,
     aur_url: ?[]const u8 = null,
@@ -179,6 +180,7 @@ fn dispatchWithRunner(
         backend,
         .{
             .show_hidden = optionEnabled(invocation, "--show-hidden"),
+            .foreign_only = optionEnabled(invocation, "--foreign-only"),
             .required_by = optionEnabled(invocation, "--required-by"),
             .optional_for = optionEnabled(invocation, "--optional-for"),
             .aur_url = aur_url.overrideValue(invocation),
@@ -992,10 +994,13 @@ fn runStandard(context: *runtime.RuntimeContext, options: ListOptions) !Result {
 }
 
 fn collectStandard(context: *runtime.RuntimeContext, manager: *PackageManager.Manager, options: ListOptions) !Result {
-    const native_items = try manager.get_installed_packages_with_reverse_dependencies(.{
-        .required_by = options.required_by,
-        .optional_for = options.optional_for,
-    });
+    const native_items = if (options.foreign_only)
+        try manager.get_foreign_packages()
+    else
+        try manager.get_installed_packages_with_reverse_dependencies(.{
+            .required_by = options.required_by,
+            .optional_for = options.optional_for,
+        });
     defer PackageManager.Manager.OwnedPackage.deinitSlice(context.allocator, native_items);
 
     const arena = try createArena(context.allocator);
@@ -1293,9 +1298,15 @@ test "list reverse dependency modifiers are selective and backend scoped" {
         backend: Backend,
         required_by: bool = false,
         optional_for: bool = false,
+        foreign_only: bool = false,
     };
     const cases = [_]Case{
         .{ .arguments = &.{ "list", "standard", "--json" }, .backend = .standard },
+        .{
+            .arguments = &.{ "list", "standard", "--foreign-only", "--json" },
+            .backend = .standard,
+            .foreign_only = true,
+        },
         .{
             .arguments = &.{ "list", "standard", "--required-by", "--json" },
             .backend = .standard,
@@ -1322,6 +1333,7 @@ test "list reverse dependency modifiers are selective and backend scoped" {
                 try std.testing.expectEqual(self.expected.backend, backend);
                 try std.testing.expectEqual(self.expected.required_by, options.required_by);
                 try std.testing.expectEqual(self.expected.optional_for, options.optional_for);
+                try std.testing.expectEqual(self.expected.foreign_only, options.foreign_only);
                 self.called = true;
                 return switch (backend) {
                     .standard => .{ .standard = .{ .items = &.{} } },

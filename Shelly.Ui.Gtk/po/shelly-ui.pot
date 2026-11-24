@@ -1885,6 +1885,31 @@ msgstr ""
 msgid "Atoll package update"
 msgstr ""
 
+msgid "Local"
+msgstr ""
+
+msgid "Install one or more local Arch package archives"
+msgstr ""
+
+msgid "Install Local Packages…"
+msgstr ""
+
+msgid "Foreign"
+msgstr ""
+
+msgid "Local Archives"
+msgstr ""
+
+msgid "Show only packages installed from local package archives through Shelly"
+msgstr ""
+
+msgid "Choose local Arch packages"
+msgstr ""
+
+msgid "Arch package archives"
+msgstr ""
+
+msgid "Installing local Arch packages"
 msgid "Use System Title Bar"
 msgstr ""
 
