@@ -247,9 +247,8 @@ Upcoming features and development targets:
 - **vala** (for building)
 - **libalpm** (provided by `pacman`; omitted from the CLI build with `-Dlibalpm=false`)
 
-CI installs the official Zig **0.17.1** Linux archive, verifies its SHA-256,
-and checks the compiler version. The shared setup action selects the matching
-runner architecture. Builds retain Zig's normal backend defaults.
+CI installs Zig from the Arch repositories with `pacman -S zig` after a full
+system update. Use a Zig version at least as new as the one listed above.
 
 ### Optional Prerequisites
 
