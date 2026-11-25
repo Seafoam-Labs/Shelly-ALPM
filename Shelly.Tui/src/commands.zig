@@ -33,6 +33,7 @@ pub const Mouse = struct {
 
     pub const SettingsTarget = union(enum) { control: usize, header: usize };
     pub const BindingTarget = union(enum) { binding: usize, scroll_down: bool, save, cancel };
+    pub const discoverPacfiles = @import("models/utilities_model.zig").discoverFromMouse;
     pub const editBinding = @import("models/settings_model.zig").editBindingFromMouse;
     pub const activateSetting = @import("models/settings_model.zig").onSettingsAction;
     pub const selectTab = @import("model.zig").Model.onTabSelected;
@@ -394,7 +395,7 @@ pub fn scrollsOperation(key: vaxis.Key) bool {
     return scrollKey(key) != null;
 }
 
-pub const Mode = enum { appimage, search, packages, details, aur, flatpak, updates, settings, authentication, confirmation, running, result, review, preview_document, answers, choice, help };
+pub const Mode = enum { appimage, search, packages, details, aur, flatpak, updates, utilities, settings, authentication, confirmation, running, result, review, preview_document, answers, choice, help };
 pub const Context = struct {
     removal_confirmation: bool = false,
     appimage_source: bool = false,
@@ -533,6 +534,11 @@ pub fn entries(arena: std.mem.Allocator, context: Context) std.mem.Allocator.Err
             try add(arena, &list, .next, "Next", "Next result");
             try add(arena, &list, .filter, if (context.installed_only) "All" else "Installed", "Toggle browsing / installed packages");
             if (context.mode == .flatpak or context.installed_only or context.catalog_available) try add(arena, &list, .refresh_list, "Refresh", "Refresh the current package list");
+        },
+        .utilities => {
+            try add(arena, &list, .confirm, "Find files", "Find pending configuration files");
+            try add(arena, &list, .previous, "Up", "Scroll file paths up");
+            try add(arena, &list, .next, "Down", "Scroll file paths down");
         },
         .updates => {
             if (context.upgrade_all) try add(arena, &list, .upgrade_all, "Update all", "Upgrade all enabled package sources");

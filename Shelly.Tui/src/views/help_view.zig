@@ -45,6 +45,7 @@ pub const Panel = struct {
             .flatpak => "Flatpak browsing",
             .appimage => "AppImage browsing",
             .updates => "Updates",
+            .utilities => "Utilities",
             .settings => "Settings",
             .authentication => "Authentication",
             .confirmation => "Confirmation",

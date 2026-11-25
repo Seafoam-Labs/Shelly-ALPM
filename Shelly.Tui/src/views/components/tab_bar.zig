@@ -214,12 +214,12 @@ test "tab bar centers labels and retains the active tab on narrow terminals" {
             try std.testing.expectEqual(width, surface.size.width);
             try std.testing.expectEqual(@as(u16, 3), surface.size.height);
             const bar: *TabBar = @ptrCast(@alignCast(widget.userdata));
-            try std.testing.expect(bar.first_visible + bar.rich.text.len > 4);
+            const active = std.mem.indexOfScalar(Tab, bar.tabs[bar.first_visible..][0..bar.rich.text.len], model.active) orelse return error.ActiveTabNotVisible;
             var total: usize = bar.rich.text.len -| 1;
             for (bar.label_widths) |label_width| total += label_width;
             const padding: usize = if (width >= 8) 4 else 0;
             try std.testing.expectEqual(@as(i16, @intCast((width - total - padding) / 2 + padding / 2)), bar.start_col);
-            try std.testing.expect(bar.rich.text[bar.rich.text.len - 1].style.reverse);
+            try std.testing.expect(bar.rich.text[active].style.reverse);
             if (width >= 8) {
                 var corners: usize = 0;
                 var caps: usize = 0;
@@ -255,7 +255,7 @@ test "centered tab mouse targets exclude borders and padding" {
         try TabBar.handleEvent(bar, &ctx, .{ .mouse = .{ .button = .left, .type = .press, .col = 0, .row = 1, .mods = .{} } });
         try std.testing.expectEqual(Tab.packages, model.active);
         try TabBar.handleEvent(bar, &ctx, .{ .mouse = .{ .button = .left, .type = .press, .col = @intCast(col), .row = 1, .mods = .{} } });
-        try std.testing.expectEqual(Tab.settings, model.active);
+        try std.testing.expectEqual(model.tabs[model.tabs.len - 1], model.active);
     }
 }
 

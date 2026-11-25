@@ -600,7 +600,7 @@ pub fn handleKey(self: *Model, ctx: *vxfw.EventContext, input: vaxis.Key) anyerr
 test "settings determine source visibility before backend or native loading finishes" {
     const model = try Model.init(std.testing.allocator);
     defer model.deinit();
-    try std.testing.expectEqualSlices(Tab, &.{ .packages, .upgrade, .settings }, model.visibleTabs());
+    try std.testing.expectEqualSlices(Tab, Tab.always, model.visibleTabs());
     var events: vxfw.EventContext = .{ .io = std.testing.io, .alloc = std.testing.allocator, .cmds = .empty };
     defer events.cmds.deinit(std.testing.allocator);
     try model.setTab(.aur, &events);

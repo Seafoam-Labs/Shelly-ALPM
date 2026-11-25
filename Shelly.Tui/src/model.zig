@@ -5,6 +5,7 @@ const tab_bar_view = @import("views/components/tab_bar.zig");
 const packages_model = @import("models/packages_model.zig");
 const aur_model = @import("models/aur_model.zig");
 const flatpak_model = @import("models/flatpak_model.zig");
+const utilities_model = @import("models/utilities_model.zig");
 const updates_model = @import("models/updates_model.zig");
 const settings_model = @import("models/settings_model.zig");
 const operation_model = @import("models/operation_model.zig");
@@ -33,10 +34,11 @@ pub const Tab = enum {
     appimage,
     upgrade,
     settings,
+    utilities,
 
-    pub const always: []const Tab = &.{ .packages, .upgrade, .settings };
+    pub const always: []const Tab = &.{ .packages, .upgrade, .settings, .utilities };
 
-    pub const all: []const Tab = &.{ .packages, .aur, .flatpak, .appimage, .upgrade, .settings };
+    pub const all: []const Tab = &.{ .packages, .aur, .flatpak, .appimage, .upgrade, .settings, .utilities };
 
     pub fn title(self: Tab) []const u8 {
         return switch (self) {
@@ -46,6 +48,7 @@ pub const Tab = enum {
             .flatpak => "Flatpak",
             .appimage => "AppImage",
             .settings => "Settings",
+            .utilities => "Utilities",
         };
     }
     pub fn icon(self: Tab, style: HeaderIcons) []const u8 {
@@ -60,6 +63,7 @@ pub const Tab = enum {
                 .appimage => "\u{f085}",
                 .upgrade => "\u{f46a}",
                 .settings => "\u{f423}",
+                .utilities => "\u{f0ad}",
             },
             .ascii => switch (self) {
                 .packages => "[#]",
@@ -68,6 +72,7 @@ pub const Tab = enum {
                 .appimage => "[A]",
                 .upgrade => "[^]",
                 .settings => "[=]",
+                .utilities => "[U]",
             },
         };
     }
@@ -109,6 +114,7 @@ pub const Model = struct {
     aur_state: aur_model.State,
     flatpak_state: flatpak_model.State,
     updates_state: updates_model.State,
+    utilities_state: utilities_model.State,
     settings_state: settings_model.State = .{},
     operation_state: operation_model.State,
 
@@ -122,6 +128,7 @@ pub const Model = struct {
             .aur_state = aur_model.init(gpa, model),
             .flatpak_state = flatpak_model.init(gpa, model),
             .updates_state = updates_model.init(gpa, model),
+            .utilities_state = utilities_model.State.init(model),
             .operation_state = operation_model.init(gpa, model),
         };
         return model;
@@ -133,6 +140,7 @@ pub const Model = struct {
         self.appimage_state.deinit(self.gpa);
         flatpak_model.deinit(self);
         updates_model.deinit(self);
+        self.utilities_state.deinit(self.gpa);
         aur_model.deinit(self);
         packages_model.deinit(self);
         settings_model.deinit(self);
@@ -255,6 +263,7 @@ pub const Model = struct {
                     .upgrade => try updates_model.handleKey(self, ctx, key),
                     .appimage => try appimage_model.handleKey(self, ctx, key),
                     .settings => try settings_model.handleKey(self, ctx, key),
+                    .utilities => try utilities_model.handleKey(self, ctx, key),
                 };
                 if (handled) return;
 
@@ -324,6 +333,7 @@ pub const Model = struct {
                 const installing = try operation_model.pollInstall(self);
                 try appimage_model.ensureLoaded(self, ctx);
                 updates_model.pollUpdates(self);
+                self.utilities_state.poll(self.gpa);
                 try updates_model.ensureUpdates(self, ctx);
                 try aur_model.ensureAur(self, ctx);
                 try flatpak_model.pollFlatpak(self);
@@ -352,7 +362,7 @@ pub const Model = struct {
                     if (aur_model.catalogActive(self) or self.aur_state.aur_installed_only or self.aur_state.aur_query.len > 0) try aur_model.startAurSearch(self, ctx, self.aur_state.aur_query);
                     self.aur_state.refresh_aur_after_operation = false;
                 }
-                if ((self.appimage_state.source_draft != null and self.appimage_state.source_draft.?.save_job != null) or self.appimage_state.install_closing != null or (self.appimage_state.install_form != null and self.appimage_state.install_form.?.job != null) or self.appimage_state.load != null or loading or installing or self.packages_state.loading or self.updates_state.updates_job != null or self.operation_state.pkgbuild_job != null or self.flatpak_state.flatpak_job != null or self.flatpak_state.flatpak_probe_job != null) {
+                if ((self.appimage_state.source_draft != null and self.appimage_state.source_draft.?.save_job != null) or self.appimage_state.install_closing != null or (self.appimage_state.install_form != null and self.appimage_state.install_form.?.job != null) or self.appimage_state.load != null or self.utilities_state.job != null or loading or installing or self.packages_state.loading or self.updates_state.updates_job != null or self.operation_state.pkgbuild_job != null or self.flatpak_state.flatpak_job != null or self.flatpak_state.flatpak_probe_job != null) {
                     try ctx.tick(100, self.widget());
                 }
                 return ctx.consumeAndRedraw();
@@ -362,6 +372,7 @@ pub const Model = struct {
                 .aur => aur_model.handleUnhandledKey(self, ctx, key),
                 .flatpak => flatpak_model.handleUnhandledKey(self, ctx, key),
                 .upgrade => updates_model.handleScrollEvent(self, ctx, event),
+                .utilities => utilities_model.handleScroll(self, ctx, event),
                 .appimage => {},
                 .settings => {},
             },
@@ -372,6 +383,8 @@ pub const Model = struct {
                         return commands.Mouse.navigateReview(self, ctx, event);
                     }
                 }
+                if (self.active == .utilities and self.overlay == null)
+                    return utilities_model.handleScroll(self, ctx, event);
                 if (self.active == .upgrade and self.overlay == null)
                     return commands.Mouse.scrollUpdates(self, ctx, event);
             },
@@ -465,7 +478,7 @@ pub const Model = struct {
         switch (self.active) {
             .packages => try ctx.requestFocus(self.packages_state.text_field.widget()),
             .aur => try ctx.requestFocus(self.aur_state.aur_field.widget()),
-            .upgrade, .settings, .appimage => try ctx.requestFocus(self.widget()),
+            .upgrade, .settings, .appimage, .utilities => try ctx.requestFocus(self.widget()),
             .flatpak => try ctx.requestFocus(self.flatpak_state.flatpak_field.widget()),
         }
     }
@@ -551,6 +564,7 @@ pub const Model = struct {
             .flatpak => flatpak_model.flatpakView(self).statusText(arena),
             .appimage => "Installed AppImages",
             .settings => "Settings — source preferences are saved for future sessions",
+            .utilities => "Utilities",
         };
     }
 };
@@ -578,7 +592,7 @@ test "tab switching requests focus on a widget in the active page" {
         const expected = switch (model.active) {
             .packages => model.packages_state.text_field.widget(),
             .aur => model.aur_state.aur_field.widget(),
-            .upgrade, .settings, .appimage => model.widget(),
+            .upgrade, .settings, .appimage, .utilities => model.widget(),
             .flatpak => model.flatpak_state.flatpak_field.widget(),
         };
         try std.testing.expect(ctx.cmds.items[0].request_focus.eql(expected));

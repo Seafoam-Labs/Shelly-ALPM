@@ -137,6 +137,7 @@ pub fn draw(self: *Model, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
         .flatpak => try flatpak_model.flatpakView(self).appendContent(content_ctx, &children),
         .appimage => try appimage_model.appendContent(self, content_ctx, &children),
         .settings => try settings_model.settingsView(self).appendContent(content_ctx, &children),
+        .utilities => try @import("utilities_view.zig").appendContent(self, content_ctx, &children),
     };
 
     for (children.items[content_start..]) |*child| child.origin.row += @intCast(content_offset);
@@ -215,7 +216,7 @@ test "tab views preserve input widgets and render without background work" {
             const input = switch (tab) {
                 .packages => model.packages_state.text_field.widget(),
                 .aur => model.aur_state.aur_field.widget(),
-                .upgrade, .settings, .appimage => model.widget(),
+                .upgrade, .settings, .appimage, .utilities => model.widget(),
                 .flatpak => model.flatpak_state.flatpak_field.widget(),
             };
             try std.testing.expect(@import("components/pane_focus.zig").testContainsWidget(surface, input));

@@ -132,6 +132,7 @@ pub fn resolve(self: *Model) commands.Context {
             }
             context.split_details = self.appimage_state.details_active;
         },
+        .utilities => context.mode = .utilities,
         .settings => {
             context.mode = .settings;
             context.settings_keybindings = self.settings_state.keybindings_open;
