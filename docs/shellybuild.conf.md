@@ -311,7 +311,11 @@ The reviewed checkout remains `$startdir`. Local PKGBUILD sources and `verify()`
 - `extra_read` grants read access to additional absolute paths, for builds that legitimately read user state (`~/.cargo`, `~/.cache/ccache`, npm or Gradle caches).
 - `extra_write` grants read-write access to additional absolute paths.
 
-Steps always keep access to the build work directory, `$startdir`, `/usr`, `/etc`, `/opt`, `/proc`, `/sys`, `/tmp`, and the common `/dev` nodes toolchains open. The orchestrator itself is not sandboxed: source downloads, package assembly, log writing, and GPG signing run outside the policy, so the keyring never enters the allow-list.
+Steps always keep access to the build work directory, `$startdir`, `/usr`, `/etc`, `/opt`, `/proc`, `/sys`, `/tmp`, and the common `/dev` nodes toolchains open. The target of `/etc/resolv.conf` is readable when present.
+
+Steps also get `GIT_CONFIG_GLOBAL=/dev/null`, and `CCACHE_DISABLE=1` when `build.ccache` is off; `build.env` overrides both. To use ccache, enable `build.ccache`, add its cache to `extra_write`, and set `CCACHE_DIR` in `build.env`.
+
+The orchestrator itself is not sandboxed: source downloads, package assembly, log writing, and GPG signing run outside the policy, so the keyring never enters the allow-list.
 
 Known limitations: `/tmp` is the shared host tmpfs rather than a private mount, `/proc` visibility is unchanged from an unsandboxed build, and networking is not restricted. A sandboxed step that fails writes a `[sandbox]` hint line into the build log pointing at `extra_read` / `extra_write`.
 
