@@ -3,6 +3,8 @@ const diagnostics = @import("diagnostics");
 const PackageManager = @import("PackageManager");
 const test_support = @import("test_support.zig");
 const install = @import("install.zig");
+const search = @import("search.zig");
+const InstalledOrigin = search.InstalledOrigin;
 const parser = @import("../cli/parser.zig");
 const output = @import("../output/config.zig");
 const colors = @import("../output/colors.zig");
@@ -161,22 +163,48 @@ fn discoverStandard(
         .{ .config_path = context.config_path, .use_root = false },
     );
     defer manager.deinit();
+    const installed = try manager.get_installed_packages();
+    defer PackageManager.Manager.OwnedPackage.deinitSlice(context.allocator, installed);
+    var origins = std.StringHashMap(InstalledOrigin).init(context.allocator);
+    defer origins.deinit();
+    for (installed) |package| {
+        const name = package.name() orelse continue;
+        try origins.put(name, .{
+            .recorded = if (package.installed_from()) |value| value else null,
+            .version = package.version() orelse "",
+        });
+    }
+
     const packages = try manager.get_available_packages();
     defer PackageManager.Manager.OwnedPackage.deinitSlice(context.allocator, packages);
+    for (packages) |package| {
+        const name = package.name() orelse continue;
+        const entry = origins.getPtr(name) orelse continue;
+        entry.noteCopy(package.repository() orelse "", package.version() orelse "");
+    }
     for (packages) |package| {
         const name = package.name() orelse continue;
         if (ignoredStandardPackage(manager, name)) continue;
         const description = package.description() orelse "";
         if (matchScore(name, description, query) == 0) continue;
+        const repository = package.repository() orelse "";
         try appendUnique(context.allocator, candidates, .{
             .source = .standard,
             .name = try context.allocator.dupe(u8, name),
             .version = try context.allocator.dupe(u8, package.version() orelse ""),
             .description = try context.allocator.dupe(u8, description),
-            .repository = try context.allocator.dupe(u8, package.repository() orelse ""),
-            .is_installed = manager.is_package_installed(name),
+            .repository = try context.allocator.dupe(u8, repository),
+            .is_installed = isInstalledCopy(origins.get(name), repository),
         });
     }
+}
+
+/// `entry` is null when the name is not installed. with no known origin,
+/// every copy is marked.
+fn isInstalledCopy(entry: ?InstalledOrigin, repository: []const u8) bool {
+    const installed = entry orelse return false;
+    const known = installed.origin() orelse return true;
+    return std.mem.eql(u8, known, repository);
 }
 
 fn discoverAur(
@@ -237,10 +265,26 @@ fn appendUnique(
     candidate: Candidate,
 ) !void {
     for (candidates.items) |existing| {
-        if (existing.source == candidate.source and std.ascii.eqlIgnoreCase(existing.name, candidate.name))
-            return;
+        if (sameCandidate(existing, candidate)) return;
     }
     try candidates.append(allocator, candidate);
+}
+
+/// repositories may share a name, so standard candidates also compare it.
+fn sameCandidate(left: Candidate, right: Candidate) bool {
+    return left.source == right.source and
+        std.ascii.eqlIgnoreCase(left.name, right.name) and
+        std.mem.eql(u8, left.repository, right.repository);
+}
+
+/// the prompt names the repository when another one has the same name.
+fn sharesNameAcrossRepositories(candidates: []const Candidate, candidate: Candidate) bool {
+    if (candidate.source != .standard) return false;
+    for (candidates) |other| {
+        if (other.source != .standard or !std.ascii.eqlIgnoreCase(other.name, candidate.name)) continue;
+        if (!std.mem.eql(u8, other.repository, candidate.repository)) return true;
+    }
+    return false;
 }
 
 fn ignoredStandardPackage(manager: *PackageManager.Manager, name: []const u8) bool {
@@ -268,7 +312,7 @@ fn prepareCandidates(
     for (scored.items) |candidate| {
         var duplicate = false;
         for (selected.items) |existing| {
-            if (existing.source == candidate.source and std.ascii.eqlIgnoreCase(existing.name, candidate.name)) {
+            if (sameCandidate(existing, candidate)) {
                 duplicate = true;
                 break;
             }
@@ -368,7 +412,10 @@ fn promptSelection(
         if (name_allocated) context.allocator.free(name_display);
         if (hyper_path) |path| context.allocator.free(path);
         switch (candidate.source) {
-            .standard => try context.stdout.writeAll("standard"),
+            .standard => if (sharesNameAcrossRepositories(candidates, candidate))
+                try context.stdout.print("standard ({s})", .{candidate.repository})
+            else
+                try context.stdout.writeAll("standard"),
             .aur => try context.stdout.writeAll("AUR"),
         }
         if (candidate.version.len > 0) try context.stdout.print(" {s}", .{candidate.version});
@@ -531,6 +578,53 @@ test "reverse-numbered selection defaults one to the final closest match" {
     var cancel_input = std.Io.Reader.fixed("0\n");
     context.stdin = &cancel_input;
     try std.testing.expectEqual(@as(?usize, null), try promptSelection(&context, "firefox", &candidates, aur_url.default_base));
+}
+
+test "search install keeps same-named packages from different repositories apart" {
+    var stdout = std.Io.Writer.Allocating.init(std.testing.allocator);
+    defer stdout.deinit();
+    var stderr = std.Io.Writer.Allocating.init(std.testing.allocator);
+    defer stderr.deinit();
+    var stdin_reader: std.Io.Reader = .fixed("2\n");
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var context: runtime.RuntimeContext = .{
+        .allocator = arena.allocator(),
+        .io = std.testing.io,
+        .stdin = &stdin_reader,
+        .stdout = &stdout.writer,
+        .stderr = &stderr.writer,
+        .stdin_is_tty = true,
+        .stdout_is_tty = true,
+    };
+    var candidates: std.ArrayList(Candidate) = .empty;
+    try appendUnique(arena.allocator(), &candidates, .{ .source = .standard, .name = "foo", .repository = "extra" });
+    try appendUnique(arena.allocator(), &candidates, .{ .source = .standard, .name = "foo", .repository = "cachyos" });
+    try appendUnique(arena.allocator(), &candidates, .{ .source = .standard, .name = "foo", .repository = "extra" });
+    try std.testing.expectEqual(@as(usize, 2), candidates.items.len);
+    _ = try promptSelection(&context, "foo", candidates.items, aur_url.default_base);
+    const rendered = stdout.writer.buffered();
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "standard (extra)") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "standard (cachyos)") != null);
+}
+
+test "only the repository copy a package was installed from is marked installed" {
+    try std.testing.expect(!isInstalledCopy(null, "extra"));
+    const recorded: InstalledOrigin = .{ .recorded = "extra", .version = "1-1" };
+    try std.testing.expect(isInstalledCopy(recorded, "extra"));
+    try std.testing.expect(!isInstalledCopy(recorded, "cachyos"));
+
+    var inferred: InstalledOrigin = .{ .recorded = null, .version = "1-1" };
+    inferred.noteCopy("extra", "1-1");
+    inferred.noteCopy("testing", "1-2");
+    try std.testing.expect(isInstalledCopy(inferred, "extra"));
+    try std.testing.expect(!isInstalledCopy(inferred, "testing"));
+
+    var ambiguous: InstalledOrigin = .{ .recorded = null, .version = "1-1" };
+    ambiguous.noteCopy("extra", "1-1");
+    ambiguous.noteCopy("cachyos", "1-1");
+    try std.testing.expect(isInstalledCopy(ambiguous, "extra"));
+    try std.testing.expect(isInstalledCopy(ambiguous, "cachyos"));
 }
 
 test "fuzzy score handles insertion and transposition typos" {
