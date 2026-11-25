@@ -27,17 +27,10 @@ pub const State = struct {
     result: ?Pacfiles = null,
     failed: bool = false,
     list: vxfw.ScrollView,
-    discover: vxfw.Button,
 
     pub fn init(model: *Model) State {
         return .{
             .list = .{ .children = .{ .builder = .{ .userdata = model, .buildFn = buildRow } } },
-            .discover = .{
-                .label = "[Find files]",
-                .userdata = model,
-                .onClick = commands.Mouse.discoverPacfiles,
-                .style = @import("../views/components/styles.zig").action_button,
-            },
         };
     }
 
@@ -78,8 +71,8 @@ fn buildRow(ptr: *const anyopaque, index: usize, _: usize) ?vxfw.Widget {
     return .{ .userdata = @ptrCast(&result.value[index]), .drawFn = utilities_view.drawPath };
 }
 
-pub fn discoverFromMouse(ptr: ?*anyopaque, ctx: *vxfw.EventContext) !void {
-    const model: *Model = @ptrCast(@alignCast(ptr.?));
+pub fn discoverFromMouse(ptr: *anyopaque, ctx: *vxfw.EventContext) !void {
+    const model: *Model = @ptrCast(@alignCast(ptr));
     if (model.active != .utilities or model.help_open or model.overlay != null) return;
     try discover(model, ctx);
 }

@@ -11,17 +11,13 @@ pub fn appendContent(model: *Model, ctx: vxfw.DrawContext, children: *std.ArrayL
     const size = ctx.max.size();
     const height = size.height -| 2;
     if (height == 0 or size.width == 0) return;
-    const list_width = split_layout.listWidth(size.width, model.list_percent.utilities);
-    const split = list_width < size.width;
-    const action_height = if (split) height else @min(height -| 1, 3);
-    if (action_height > 0) {
-        const action = vxfw.Widget{ .userdata = model, .drawFn = drawAction };
-        try appendPane(ctx, children, .{ .row = 1, .col = 0 }, .{ .width = list_width, .height = action_height }, "Utilities", action);
+    if (size.width < 80 or height < 10) {
+        try appendPane(ctx, children, .{ .row = 1, .col = 0 }, .{ .width = size.width, .height = height }, "Utilities", .{ .userdata = model, .drawFn = drawStacked });
+        return;
     }
-    const result_height = if (split) height else height - action_height;
-    const result_width = if (split) size.width - list_width else size.width;
-    const results = vxfw.Widget{ .userdata = model, .drawFn = drawResults };
-    try appendPane(ctx, children, .{ .row = if (split) 1 else 1 + action_height, .col = if (split) list_width else 0 }, .{ .width = result_width, .height = result_height }, "Configuration files", results);
+    const list_width = split_layout.listWidth(size.width, model.list_percent.utilities);
+    try appendPane(ctx, children, .{ .row = 1, .col = 0 }, .{ .width = list_width, .height = height }, "Utilities", .{ .userdata = model, .drawFn = drawActions });
+    try appendPane(ctx, children, .{ .row = 1, .col = list_width }, .{ .width = size.width - list_width, .height = height }, "Details", .{ .userdata = model, .drawFn = drawResults });
 }
 
 fn appendPane(ctx: vxfw.DrawContext, children: *std.ArrayList(vxfw.SubSurface), origin: vxfw.Point, size: vxfw.Size, title: []const u8, widget: vxfw.Widget) Allocator.Error!void {
@@ -47,17 +43,54 @@ fn drawPaneContent(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.
     return .{ .size = ctx.max.size(), .widget = .{ .userdata = ptr, .drawFn = drawPaneContent }, .buffer = &.{}, .children = children };
 }
 
+fn drawStacked(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
+    const size = ctx.max.size();
+    const action_height = @min(2, @max(size.height -| 1, 1));
+    const children = try ctx.arena.alloc(vxfw.SubSurface, if (size.height > action_height) 2 else 1);
+    children[0] = .{ .origin = .{ .row = 0, .col = 0 }, .surface = try drawActions(ptr, ctx.withConstraints(.{}, .{ .width = size.width, .height = action_height })) };
+    if (children.len == 2) {
+        const gap: u16 = @intFromBool(size.height > action_height + 1);
+        const result_row = action_height + gap;
+        children[1] = .{ .origin = .{ .row = result_row, .col = 0 }, .surface = try drawResults(ptr, ctx.withConstraints(.{}, .{ .width = size.width, .height = size.height - result_row })) };
+    }
+    return .{ .size = size, .widget = .{ .userdata = ptr, .drawFn = drawStacked }, .buffer = &.{}, .children = children };
+}
+
+fn drawActions(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
+    const size = ctx.max.size();
+    const widget: vxfw.Widget = .{ .userdata = ptr, .drawFn = drawActions };
+    if (size.width == 0 or size.height == 0) return .{ .size = size, .widget = widget, .buffer = &.{}, .children = &.{} };
+    const line_ctx = ctx.withConstraints(.{}, .{ .width = size.width, .height = 1 });
+    const children = try ctx.arena.alloc(vxfw.SubSurface, @min(size.height, 2));
+    const action_row: u16 = @intCast(children.len - 1);
+    if (action_row != 0) {
+        const heading: vxfw.Text = .{ .text = "Configuration files", .softwrap = false, .overflow = .ellipsis, .style = styles.emphasis };
+        children[0] = .{ .origin = .{ .row = 0, .col = 0 }, .surface = try heading.draw(line_ctx) };
+    }
+    children[action_row] = .{ .origin = .{ .row = action_row, .col = 0 }, .surface = try drawAction(ptr, line_ctx) };
+    return .{ .size = size, .widget = widget, .buffer = &.{}, .children = children };
+}
+
 fn drawAction(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
     const model: *Model = @ptrCast(@alignCast(ptr));
-    const size = ctx.max.size();
-    const line_ctx = ctx.withConstraints(.{}, .{ .width = size.width, .height = @min(size.height, 1) });
-    if (model.settings_state.settings.expanded_mouse_support and model.utilities_state.job == null and size.width >= model.utilities_state.discover.label.len) {
-        return model.utilities_state.discover.draw(line_ctx.withConstraints(.{}, .{ .width = @intCast(model.utilities_state.discover.label.len), .height = @min(size.height, 1) }));
-    }
-    const key = try commands.label(ctx.arena, .confirm);
-    const label = try std.fmt.allocPrint(ctx.arena, "{s} Find pending configuration files", .{key});
-    const text: vxfw.Text = .{ .text = label, .softwrap = false, .overflow = .ellipsis };
-    return text.draw(line_ctx);
+    const busy = model.utilities_state.job != null;
+    const label: vxfw.Text = .{
+        .text = "Find pending files",
+        .softwrap = false,
+        .overflow = .ellipsis,
+        .width_basis = .parent,
+        .style = if (busy) styles.secondary else styles.selected,
+    };
+    var surface = try label.draw(ctx);
+    surface.widget = .{ .userdata = ptr, .drawFn = drawAction, .eventHandler = activate };
+    if (model.settings_state.settings.expanded_mouse_support and !busy) try styles.hoverLabel(ctx.arena, &surface);
+    return surface;
+}
+
+fn activate(ptr: *anyopaque, ctx: *vxfw.EventContext, event: vxfw.Event) anyerror!void {
+    if (event != .mouse or !commands.Mouse.primaryPress(event.mouse)) return;
+    const model: *Model = @ptrCast(@alignCast(ptr));
+    if (model.settings_state.settings.expanded_mouse_support) try commands.Mouse.discoverPacfiles(model, ctx);
 }
 
 fn drawResults(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
