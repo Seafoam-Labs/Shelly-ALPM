@@ -17,7 +17,8 @@ const AurPackageDetail = @import("aur_package_detail.zig").PackageDetail;
 const translations = @import("../helpers/translations.zig");
 const a11y = @import("../helpers/a11y.zig");
 const sorters = @import("../helpers/sorters.zig");
-const installed = @import("../helpers/installed.zig");
+const appendAurInstalledNames = @import("../helpers/installed.zig").appendAurInstalledNames;
+const aurInstalledContains = @import("../helpers/installed.zig").aurInstalledContains;
 const table_columns = @import("../helpers/table_columns.zig");
 
 pub const AtollAurPage = extern struct {
@@ -698,7 +699,7 @@ pub const AtollAurPage = extern struct {
         };
         defer parsed.deinit();
         var names: std.ArrayListUnmanaged([:0]const u8) = .empty;
-        installed.appendAurInstalledNames(alloc, parsed.value, &names) catch {};
+        appendAurInstalledNames(alloc, parsed.value, &names) catch {};
         return names.items;
     }
 
@@ -812,7 +813,7 @@ pub const AtollAurPage = extern struct {
         var i: usize = 0;
         for (result.packages[result.index..end]) |d| {
             const pkg = AurPackageObject.new(d) catch continue;
-            pkg.setInstalled(result.all_installed or installed.aurInstalledContains(result.installed_names, d.Name));
+            pkg.setInstalled(result.all_installed or aurInstalledContains(result.installed_names, d.Name));
             batch[i] = pkg.as(gobject.Object);
             i += 1;
         }
