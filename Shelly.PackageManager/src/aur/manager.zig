@@ -1772,7 +1772,9 @@ pub const Manager = struct {
         self.raisePackageProgress(.aur_cleanup_start, package_name, current, total, "Removing build-only dependencies");
         var recoverable_errors = self.alpm.dispatcher.beginRecoverableErrors("Could not remove the build-only dependencies. Review the remaining dependencies before removing them manually.");
         defer recoverable_errors.deinit();
-        self.removeRepoPackages(installed.items, .{}, true, .already_approved) catch {};
+        // Recurse like pacman -Rs so dependencies that came in with the
+        // build-only packages and are needed by nothing else go too.
+        self.removeRepoPackages(installed.items, .{ .recurse = true }, true, .already_approved) catch {};
         self.raisePackageProgress(.aur_cleanup_done, package_name, current, total, "");
     }
 
@@ -7502,6 +7504,115 @@ test "build-only dependencies are removed after a failed build" {
     const failpkg_z = try allocator.dupeSentinel(u8, "failpkg", 0);
     defer allocator.free(failpkg_z);
     try std.testing.expect(!manager.alpm.is_package_installed(failpkg_z));
+}
+
+test "build-only dependencies are removed after a failed build together with their own dependencies" {
+    const allocator = std.testing.allocator;
+    const io = std.testing.io;
+    var temporary = std.testing.tmpDir(.{});
+    defer temporary.cleanup();
+    const root = try temporary.dir.realPathFileAlloc(io, ".", allocator);
+    defer allocator.free(root);
+
+    const remote_root = try std.fs.path.join(allocator, &.{ root, "remotes" });
+    defer allocator.free(remote_root);
+    const cache_root = try std.fs.path.join(allocator, &.{ root, "cache" });
+    defer allocator.free(cache_root);
+    const alpm_root = try std.fs.path.join(allocator, &.{ root, "alpm-root" });
+    defer allocator.free(alpm_root);
+    const db_path = try std.fs.path.join(allocator, &.{ root, "db" });
+    defer allocator.free(db_path);
+    const package_cache = try std.fs.path.join(allocator, &.{ root, "packages" });
+    defer allocator.free(package_cache);
+    for ([_][]const u8{ remote_root, cache_root, alpm_root, db_path, package_cache }) |path|
+        try std.Io.Dir.cwd().createDirPath(io, path);
+
+    // The build-only tool pulls in a library of its own, as cmake pulls in
+    // cppdap and rhash. Nothing else needs the library after the build.
+    try createAurFixtureRepository(allocator, io, remote_root, "makedep-lib", null);
+    try createAurFixtureRepository(allocator, io, remote_root, "makedep-tool", "makedep-lib");
+
+    const failpkg_remote = try std.fs.path.join(allocator, &.{ remote_root, "failpkg.git" });
+    defer allocator.free(failpkg_remote);
+    try std.Io.Dir.cwd().createDirPath(io, failpkg_remote);
+    const failpkg_pkgbuild = try std.fs.path.join(allocator, &.{ failpkg_remote, "PKGBUILD" });
+    defer allocator.free(failpkg_pkgbuild);
+    try writeFixtureFile(io, failpkg_pkgbuild,
+        \\pkgname=failpkg
+        \\pkgver=1
+        \\pkgrel=1
+        \\arch=('any')
+        \\makedepends=('makedep-tool')
+        \\package() { :; }
+    , false);
+    const failpkg_srcinfo = try std.fs.path.join(allocator, &.{ failpkg_remote, ".SRCINFO" });
+    defer allocator.free(failpkg_srcinfo);
+    try writeFixtureFile(io, failpkg_srcinfo, "pkgbase = failpkg\n\tpkgver = 1\n\tpkgrel = 1\n\tarch = any\n\tmakedepends = makedep-tool\n\tpkgname = failpkg\n", false);
+    try runFixtureCommand(allocator, io, &.{ "git", "init" }, failpkg_remote);
+    try runFixtureCommand(allocator, io, &.{ "git", "config", "user.email", "shelly-tests@example.invalid" }, failpkg_remote);
+    try runFixtureCommand(allocator, io, &.{ "git", "config", "user.name", "Shelly Tests" }, failpkg_remote);
+    try runFixtureCommand(allocator, io, &.{ "git", "add", "PKGBUILD", ".SRCINFO" }, failpkg_remote);
+    try runFixtureCommand(allocator, io, &.{ "git", "commit", "-m", "fixture" }, failpkg_remote);
+
+    // The fake makepkg packages the tool and its library, recording the
+    // tool's dependency in .PKGINFO, and fails for everything else.
+    const fake_makepkg_path = try std.fs.path.join(allocator, &.{ root, "fake-makepkg" });
+    defer allocator.free(fake_makepkg_path);
+    try writeFixtureFile(io, fake_makepkg_path,
+        \\#!/bin/sh
+        \\name=$(sed -n 's/^pkgname=//p' PKGBUILD)
+        \\case $name in
+        \\  makedep-lib) depend= ;;
+        \\  makedep-tool) depend='depend = makedep-lib\n' ;;
+        \\  *) exit 1 ;;
+        \\esac
+        \\printf "pkgname = $name\npkgbase = $name\npkgver = 1-1\npkgdesc = fixture\nurl = https://example.invalid\nbuilddate = 1700000000\npackager = Shelly Tests\nsize = 0\narch = any\n$depend" > .PKGINFO
+        \\tar -czf "$name-1-1-any.pkg.tar.gz" .PKGINFO
+        \\rm -f .PKGINFO
+    , true);
+
+    const config_path = try std.fs.path.join(allocator, &.{ root, "pacman.conf" });
+    defer allocator.free(config_path);
+    const config = try std.fmt.allocPrint(
+        allocator,
+        "[options]\nArchitecture = auto\nSigLevel = Never\nRootDir = {s}\nDBPath = {s}\nCacheDir = {s}\n",
+        .{ alpm_root, db_path, package_cache },
+    );
+    defer allocator.free(config);
+    try writeFixtureFile(io, config_path, config, false);
+
+    var operation_context = operation_api.OperationContext.init(allocator, io);
+    defer operation_context.deinit();
+    operation_context.setQuestionHandler(.{
+        .function = struct {
+            fn answer(_: ?*anyopaque, question: operation_api.Question) operation_api.QuestionResponse {
+                return switch (question.kind) {
+                    .review_changes, .confirm_transaction => .accepted,
+                    else => .default,
+                };
+            }
+        }.answer,
+    });
+
+    var manager = try Manager.init(allocator, std.testing.environ, .{
+        .config_path = config_path,
+        .cache_root = cache_root,
+        .aur_git_base_url = remote_root,
+        .makepkg_command = fake_makepkg_path,
+    });
+    defer manager.deinit();
+    manager.alpm.disable_transaction_hooks();
+    manager.setOperationContext(&operation_context);
+    defer manager.setOperationContext(null);
+    for ([_][]const u8{ "failpkg", "makedep-tool", "makedep-lib" }) |name|
+        _ = try manager.cachePkgbase(name, name);
+    try manager.bin_variant_cache.put(try allocator.dupe(u8, "makedep-tool"), null);
+    try manager.bin_variant_cache.put(try allocator.dupe(u8, "makedep-lib"), null);
+
+    try std.testing.expectError(error.BuildFailed, manager.installPackages(&.{"failpkg"}));
+
+    for ([_][:0]const u8{ "makedep-tool", "makedep-lib", "failpkg" }) |name|
+        try std.testing.expect(!manager.alpm.is_package_installed(name));
 }
 
 test "AUR operation-hooked public APIs compile" {

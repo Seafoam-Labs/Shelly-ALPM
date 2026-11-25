@@ -36,6 +36,7 @@ pub const StandardItem = struct {
     description: []const u8 = "",
     url: []const u8 = "",
     repository: []const u8 = "",
+    installed_from: ?[]const u8 = null,
     replaces: []const []const u8 = &.{},
     licenses: []const []const u8 = &.{},
     groups: []const []const u8 = &.{},
@@ -618,6 +619,7 @@ fn writeStandardJson(json: *std.json.Stringify, item: StandardItem) !void {
     try field(json, "Description", item.description);
     try field(json, "Url", item.url);
     try field(json, "Repository", item.repository);
+    try field(json, "InstalledFrom", item.installed_from);
     try field(json, "Replaces", item.replaces);
     try field(json, "Licenses", item.licenses);
     try field(json, "Groups", item.groups);
@@ -773,7 +775,7 @@ fn writeStandardPlain(
         var values: std.ArrayList([]const u8) = .empty;
         try values.appendSlice(allocator, &.{
             item.name,
-            item.repository,
+            item.installed_from orelse item.repository,
             item.version,
             try formatSignedSize(allocator, size_display, item.installed_size),
             truncate(item.description, 50),
@@ -1011,6 +1013,7 @@ fn collectStandard(context: *runtime.RuntimeContext, manager: *PackageManager.Ma
             .description = try allocator.dupe(u8, native.description() orelse ""),
             .url = try allocator.dupe(u8, native.url() orelse ""),
             .repository = try allocator.dupe(u8, native.repository() orelse ""),
+            .installed_from = if (native.installed_from()) |value| try allocator.dupe(u8, value) else null,
             .replaces = try copyStrings(allocator, native.replaces()),
             .licenses = try copyStrings(allocator, native.licenses()),
             .groups = try copyStrings(allocator, native.groups()),

@@ -52,6 +52,8 @@ pub const Model = struct {
     notice: []const u8 = "",
     quit_blocked_notice: bool = false,
     help_open: bool = false,
+
+    hover_point: ?vxfw.Point = null,
     help_button: ?struct { col: u16, width: u16, height: u16 } = null,
     help_panel: help_view.Panel = .{},
 
@@ -118,13 +120,7 @@ pub const Model = struct {
             // replaces browsing with the operation panel.
             try ctx.requestFocus(self.widget());
         } else if (had_operation or had_help or had_aur_pane) {
-            const list_active = self.packages_state.package_list_active;
-            const aur_active = self.aur_state.aur_list_active;
-            const flatpak_active = self.flatpak_state.flatpak_list_active;
-            try self.focusActiveTab(ctx);
-            self.packages_state.package_list_active = list_active;
-            self.aur_state.aur_list_active = aur_active;
-            self.flatpak_state.flatpak_list_active = flatpak_active;
+            try self.restoreTabFocus(ctx);
         }
     }
 
@@ -232,22 +228,26 @@ pub const Model = struct {
                 }
             },
             .mouse => {
-                if (self.settings_state.keybinding_capture) return ctx.consumeEvent();
+                self.trackPointer(ctx, event.mouse);
+                if (self.settings_state.keybinding_capture) {
+                    if (self.settings_state.mouse_binding_capture) return;
+                    return ctx.consumeEvent();
+                }
                 if (self.help_button) |button| {
                     if (event.mouse.row >= 0 and event.mouse.row < @as(i17, button.height) and
                         event.mouse.col >= @as(i17, button.col) and event.mouse.col < @as(i17, button.col) + @as(i17, button.width) and
-                        event.mouse.button == .left and event.mouse.type == .press)
+                        commands.Mouse.primaryPress(event.mouse))
                     {
-                        self.help_open = !self.help_open;
-                        return ctx.consumeAndRedraw();
+                        return commands.Mouse.toggleHelp(self, ctx);
                     }
                 }
                 if (self.help_open) {
-                    try self.help_panel.scroll.handleEvent(ctx, event);
+                    try commands.Mouse.scrollHelp(self, ctx, event);
                     return ctx.consumeAndRedraw();
                 }
                 if (self.active == .aur and self.overlay != null and self.overlay.? == .pkgbuild and self.operation_state.operation_question == null) {
-                    try operation_model.handleReviewMouse(self, ctx, event);
+                    if (event.mouse.button == .left) return;
+                    try commands.Mouse.navigateReview(self, ctx, event);
                     return ctx.consumeAndRedraw();
                 }
             },
@@ -319,13 +319,14 @@ pub const Model = struct {
                 .settings => {},
             },
             .mouse => {
+                self.trackPointer(ctx, event.mouse);
                 if (self.overlay) |overlay| {
                     if (overlay == .pkgbuild and self.operation_state.pkgbuild_document != null and !operation_model.pkgbuildView(self).loading) {
-                        return operation_model.handleReviewMouse(self, ctx, event);
+                        return commands.Mouse.navigateReview(self, ctx, event);
                     }
                 }
                 if (self.active == .upgrade and self.overlay == null)
-                    return updates_model.handleScrollEvent(self, ctx, event);
+                    return commands.Mouse.scrollUpdates(self, ctx, event);
             },
             else => {},
         }
@@ -373,6 +374,7 @@ pub const Model = struct {
     }
 
     pub fn setTab(self: *Model, tab: Tab, ctx: *vxfw.EventContext) !void {
+        if (self.settings_state.keybinding_capture) return;
         if (self.appimage_state.install_form != null or self.appimage_state.source_open) return;
         if (!self.tabEnabled(tab)) return;
         if (tab == self.active) return;
@@ -391,12 +393,28 @@ pub const Model = struct {
         try flatpak_model.ensureFlatpak(self, ctx);
     }
 
+    pub fn allowsMousePaneFocus(self: *const Model, tab: Tab, target: commands.Mouse.FocusTarget) bool {
+        if (self.active != tab or self.help_open or self.settings_state.keybinding_capture or
+            self.operation_state.review_prompt != null or self.operation_state.operation_question != null) return false;
+        return if (self.overlay) |overlay| switch (overlay) {
+            .sudo, .flatpak_install => false,
+            .pkgbuild => target != .details,
+            else => true,
+        } else true;
+    }
+
     pub fn focusActiveTab(self: *Model, ctx: *vxfw.EventContext) !void {
-        if (self.active == .appimage) if (self.appimage_state.install_form) |form| return ctx.requestFocus(if (form.editing_path) form.field.widget() else self.widget());
+        if (self.active == .appimage and self.appimage_state.install_form != null) return self.restoreTabFocus(ctx);
         if (self.help_open or operation_model.operationPrompt(self) != null or operation_model.aurPaneFocused(self) or self.flatpak_state.flatpak_category_open) return ctx.requestFocus(self.widget());
         self.packages_state.package_list_active = false;
         self.aur_state.aur_list_active = false;
         self.flatpak_state.flatpak_list_active = false;
+        try self.restoreTabFocus(ctx);
+    }
+
+    /// Search and results share the field widget. Preserve their logical focus on dismissal.
+    pub fn restoreTabFocus(self: *Model, ctx: *vxfw.EventContext) !void {
+        if (self.active == .appimage) if (self.appimage_state.install_form) |form| return ctx.requestFocus(if (form.editing_path) form.field.widget() else self.widget());
         switch (self.active) {
             .packages => try ctx.requestFocus(self.packages_state.text_field.widget()),
             .aur => try ctx.requestFocus(self.aur_state.aur_field.widget()),
@@ -431,9 +449,19 @@ pub const Model = struct {
 
     // -- drawing -----------------------------------------------------------
 
+    fn trackPointer(self: *Model, ctx: *vxfw.EventContext, mouse: vaxis.Mouse) void {
+        self.hover_point = if (mouse.row >= 0 and mouse.col >= 0)
+            .{ .row = @intCast(mouse.row), .col = @intCast(mouse.col) }
+        else
+            null;
+        if (mouse.type == .motion or mouse.type == .drag) ctx.redraw = true;
+    }
+
     pub fn typeErasedDrawFn(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
         const self: *Model = @ptrCast(@alignCast(ptr));
-        return app_view.draw(self, ctx);
+        const surface = try app_view.draw(self, ctx);
+        if (self.hover_point) |point| try @import("views/styles.zig").paintHover(surface, ctx.arena, point);
+        return surface;
     }
 
     pub fn drawTabBar(self: *Model, arena: Allocator) Allocator.Error!vxfw.Widget {
@@ -442,11 +470,16 @@ pub const Model = struct {
             .active = self.active,
             .header_icons = self.settings_state.settings.header_icons,
             .userdata = self,
-            .on_select = onTabSelected,
+            .on_select = commands.Mouse.selectTab,
         });
     }
 
-    fn onTabSelected(ptr: *anyopaque, ctx: *vxfw.EventContext, tab: Tab) anyerror!void {
+    pub fn toggleHelpFromMouse(self: *Model, ctx: *vxfw.EventContext) void {
+        self.help_open = !self.help_open;
+        ctx.consumeAndRedraw();
+    }
+
+    pub fn onTabSelected(ptr: *anyopaque, ctx: *vxfw.EventContext, tab: Tab) anyerror!void {
         const self: *Model = @ptrCast(@alignCast(ptr));
         try self.setTab(tab, ctx);
     }
@@ -791,4 +824,35 @@ test "settings help keeps editor state and restores it on dismissal" {
     try std.testing.expect(!model.help_open);
     try std.testing.expect(model.settings_state.keybindings_open);
     try std.testing.expectEqual(@as(usize, 4), model.settings_state.keybinding_selected);
+}
+
+test "mouse focus transfers from the AUR preview to the results and details panes" {
+    vxfw.DrawContext.init(.unicode);
+    const model = try Model.init(std.testing.allocator);
+    defer model.deinit();
+    model.active = .aur;
+    model.aur_state.aur_packages = &.{ .{ .Name = "a" }, .{ .Name = "b" } };
+    model.aur_state.aur_installed_only = true;
+    try aur_model.rebuildAurFilter(model);
+    model.overlay = .pkgbuild;
+
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const draw: vxfw.DrawContext = .{ .arena = arena.allocator(), .min = .{}, .max = .{ .width = 100, .height = 24 }, .cell_size = .{ .width = 10, .height = 20 } };
+    var ctx: vxfw.EventContext = .{ .io = std.testing.io, .alloc = arena.allocator(), .cmds = .empty };
+    const pane = @import("views/pane_focus.zig");
+    var surface = try model.widget().draw(draw);
+    try pane.testClick(surface, &ctx, .results);
+    try std.testing.expect(model.overlay == null);
+    try std.testing.expect(model.aur_state.aur_list_active);
+    try std.testing.expect(!ctx.consume_event);
+    try model.widget().captureEvent(&ctx, .{ .key_press = .{ .codepoint = vaxis.Key.down } });
+    try std.testing.expectEqual(@as(u32, 1), model.aur_state.aur_list.cursor);
+
+    surface = try model.widget().draw(draw);
+    try pane.testClick(surface, &ctx, .details);
+    try std.testing.expectEqualStrings("b", model.overlay.?.aur.Name);
+    try pane.testClick(surface, &ctx, .search);
+    try std.testing.expect(model.overlay == null);
+    try std.testing.expect(!model.aur_state.aur_list_active);
 }

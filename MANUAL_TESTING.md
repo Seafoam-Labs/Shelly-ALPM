@@ -717,6 +717,14 @@ Document any known issues that are being tracked:
 - [ ] Round-trip Theme Shelly → System colors → Shelly several times (also with dialogs or
   popovers open): no crash, and the brand headerbar with circular window controls returns
   each time (headerbar is kept alive across titlebar swaps).
+- [ ] Settings → Look & Feel → Use System Title Bar on, then restart Shelly: the brand
+  headerbar is gone. On KDE Plasma or Hyprland the compositor draws the title bar (Hyprland
+  without decorations or a bar plugin shows none); on GNOME GTK's default header bar appears
+  with the desktop's button layout. Toggling the switch leaves the open window unchanged,
+  switching it off and restarting brings the brand headerbar back, and changing Theme or
+  Color variant leaves the choice in place. On KDE Plasma or Hyprland the main window with
+  the setting on, and the PKGBUILD review and preview windows always, show only the
+  compositor's corner rounding, with no second rounding inside it.
 - [ ] Neither mode loads the desktop GTK theme's widget styles: set any third-party,
   dark-only or high-contrast GTK theme (user or system priority) and the built-in design
   still renders exactly as authored. Shelly mode shows no foreign colors in any widget.
@@ -729,11 +737,17 @@ Document any known issues that are being tracked:
 - [ ] System colors with a palette generator (matugen, Noctalia, or similar) that writes
   libadwaita names to `~/.config/gtk-4.0/`: Shelly uses those colors, including the accent,
   and follows regenerated palettes live.
-- [ ] System colors with no user GTK 4 colors: Shelly keeps the Shelly palette for the
-  desktop's dark or light preference, using the portal accent color when the desktop
-  sets one.
-- [ ] System colors with a user `gtk.css` that sets only `accent_bg_color`: Shelly keeps the
-  Shelly palette and uses that accent instead of the portal accent.
+- [ ] System colors with an installed GTK 4 theme (adw-gtk3 or similar) and no user GTK 4
+  colors: Shelly keeps its design and uses the theme's colors for the desktop's dark or
+  light preference, with the portal accent over the theme's. With Plasma colors in
+  `~/.config/gtk-4.0/colors.css` as well, the Plasma colors win. Picking another GTK theme
+  while Shelly is open updates Shelly within a second, unless `GTK_THEME` is set.
+- [ ] System colors with GTK's built-in theme and no user GTK 4 colors: Shelly keeps the
+  Shelly palette for the desktop's dark or light preference, using the portal accent color
+  when the desktop sets one.
+- [ ] System colors with GTK's built-in theme and a user `gtk.css` that sets only
+  `accent_bg_color`: Shelly keeps the Shelly palette and uses that accent instead of the
+  portal accent.
 - [ ] System colors with unreadable desktop colors (text and background too close): Shelly
   keeps the Shelly palette for the desktop's dark or light preference and logs a warning.
 

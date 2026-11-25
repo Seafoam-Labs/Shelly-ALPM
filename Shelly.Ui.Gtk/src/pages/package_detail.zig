@@ -9,6 +9,7 @@ const support = @import("support.zig");
 const runtime = @import("../services/runtime.zig");
 const ShellyCli = @import("../services/shelly_cli.zig").ShellyCli;
 const Package = @import("../models/packages.zig").Package;
+const packageName = @import("../models/packages.zig").packageName;
 const SizeConverter = @import("../helpers/size_converts.zig").SizeConverter;
 const ShellyWindow = @import("../shelly_window.zig").ShellyWindow;
 const Option = @import("../services/shelly_operation.zig").Option;
@@ -132,7 +133,7 @@ pub const PackageDetail = extern struct {
             }
         }
         var buf: [256]u8 = undefined;
-        gtk.Label.setLabel(p.name_label, c_string.cstr(&buf, name));
+        gtk.Label.setLabel(p.name_label, c_string.cstr(&buf, packageName(name)));
         gtk.Label.setLabel(p.description_label, translations._("Loading..."));
         clearBox(p.spec_box);
         clearBox(p.sections_box);
@@ -235,7 +236,17 @@ pub const PackageDetail = extern struct {
 
         clearBox(p.spec_box);
         addSpecRow(p.spec_box, translations._("Version"), package.Version);
-        addSpecRow(p.spec_box, translations._("Repository"), package.Repository);
+        if (package.Installed) {
+            var origin_buf: [256]u8 = undefined;
+            const origin = package.InstalledFrom orelse translations._("Unknown");
+            const origin_text = if (package.InstalledFromInferred)
+                std.fmt.bufPrint(&origin_buf, "{s} ({s})", .{ origin, translations._("inferred") }) catch origin
+            else
+                origin;
+            addSpecRow(p.spec_box, translations._("Installed From"), origin_text);
+        } else {
+            addSpecRow(p.spec_box, translations._("Repository"), package.Repository);
+        }
         addSpecRow(p.spec_box, translations._("Installed Size"), SizeConverter.convert_null_term(&sbuf, package.InstalledSize));
         if (package.DownloadSize > 0) addSpecSize(p.spec_box, translations._("Download Size"), package.DownloadSize);
         if (package.BuildDate.len > 0) addSpecRow(p.spec_box, translations._("Build Date"), package.BuildDate);
@@ -245,6 +256,15 @@ pub const PackageDetail = extern struct {
 
         clearBox(p.sections_box);
         const alloc = (p.arena orelse return).allocator();
+
+        if (package.AvailableFrom.len > 1 or (package.Installed and package.AvailableFrom.len > 0)) {
+            var copies: std.ArrayListUnmanaged([]const u8) = .empty;
+            for (package.AvailableFrom) |copy| {
+                const text = std.fmt.allocPrint(alloc, "{s} {s}", .{ copy.Repository, copy.Version }) catch continue;
+                copies.append(alloc, text) catch continue;
+            }
+            addSpecList(p.spec_box, alloc, translations._("Available From"), copies.items);
+        }
 
         addSpecList(p.spec_box, alloc, translations._("Licenses"), package.Licenses);
         addSpecList(p.spec_box, alloc, translations._("Provides"), package.Provides);
@@ -517,7 +537,7 @@ pub const PackageDetail = extern struct {
             win.startTransaction(.{
                 .title = translations._("Reinstalling package"),
                 .argv = argv.items,
-                .packages = &.{&p.pending_name},
+                .packages = &.{p.pending_name[0..p.pending_len]},
                 .on_complete = &onActionComplete,
                 .privileged = true,
                 .ctx = self,
@@ -533,13 +553,13 @@ pub const PackageDetail = extern struct {
         argv.append(std.heap.c_allocator, "mark") catch return;
         argv.append(std.heap.c_allocator, "ignore") catch return;
         argv.append(std.heap.c_allocator, "--add") catch return;
-        argv.append(std.heap.c_allocator, p.pending_name[0..p.pending_len]) catch return;
+        argv.append(std.heap.c_allocator, packageName(p.pending_name[0..p.pending_len])) catch return;
 
         if (support.getWindow(ShellyWindow, self)) |win| {
             win.startTransaction(.{
                 .title = translations._("Adding to package ignore"),
                 .argv = argv.items,
-                .packages = &.{&p.pending_name},
+                .packages = &.{packageName(p.pending_name[0..p.pending_len])},
                 .on_complete = &onActionComplete,
                 .privileged = true,
                 .ctx = self,
@@ -555,13 +575,13 @@ pub const PackageDetail = extern struct {
         argv.append(std.heap.c_allocator, "mark") catch return;
         argv.append(std.heap.c_allocator, "hold") catch return;
         argv.append(std.heap.c_allocator, "--add") catch return;
-        argv.append(std.heap.c_allocator, p.pending_name[0..p.pending_len]) catch return;
+        argv.append(std.heap.c_allocator, packageName(p.pending_name[0..p.pending_len])) catch return;
 
         if (support.getWindow(ShellyWindow, self)) |win| {
             win.startTransaction(.{
                 .title = translations._("Adding to package to hold"),
                 .argv = argv.items,
-                .packages = &.{&p.pending_name},
+                .packages = &.{packageName(p.pending_name[0..p.pending_len])},
                 .on_complete = &onActionComplete,
                 .privileged = true,
                 .ctx = self,
@@ -576,13 +596,13 @@ pub const PackageDetail = extern struct {
         defer argv.deinit(std.heap.c_allocator);
         argv.append(std.heap.c_allocator, "mark") catch return;
         argv.append(std.heap.c_allocator, "explicit") catch return;
-        argv.append(std.heap.c_allocator, p.pending_name[0..p.pending_len]) catch return;
+        argv.append(std.heap.c_allocator, packageName(p.pending_name[0..p.pending_len])) catch return;
 
         if (support.getWindow(ShellyWindow, self)) |win| {
             win.startTransaction(.{
                 .title = translations._("Making Package Explicit"),
                 .argv = argv.items,
-                .packages = &.{&p.pending_name},
+                .packages = &.{packageName(p.pending_name[0..p.pending_len])},
                 .on_complete = &onActionComplete,
                 .privileged = true,
                 .ctx = self,
@@ -597,13 +617,13 @@ pub const PackageDetail = extern struct {
         defer argv.deinit(std.heap.c_allocator);
         argv.append(std.heap.c_allocator, "mark") catch return;
         argv.append(std.heap.c_allocator, "dependency") catch return;
-        argv.append(std.heap.c_allocator, p.pending_name[0..p.pending_len]) catch return;
+        argv.append(std.heap.c_allocator, packageName(p.pending_name[0..p.pending_len])) catch return;
 
         if (support.getWindow(ShellyWindow, self)) |win| {
             win.startTransaction(.{
                 .title = translations._("Making Package Dependency"),
                 .argv = argv.items,
-                .packages = &.{&p.pending_name},
+                .packages = &.{packageName(p.pending_name[0..p.pending_len])},
                 .on_complete = &onActionComplete,
                 .privileged = true,
                 .ctx = self,

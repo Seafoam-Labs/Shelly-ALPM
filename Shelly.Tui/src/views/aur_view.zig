@@ -1,3 +1,4 @@
+const pane_focus = @import("pane_focus.zig");
 const drawColumn = @import("packages_view.zig").drawColumn;
 const styles = @import("styles.zig");
 const std = @import("std");
@@ -15,6 +16,8 @@ const formatEpoch = @import("detail_format.zig").formatEpoch;
 /// Borrows display state and widgets owned by the application.
 /// Query execution and user-action handling remain in Model.
 pub const View = struct {
+    model: ?*@import("../model.zig").Model = null,
+    result_list: ?vxfw.Widget = null,
     list_percent: u8 = 40,
     installed_only: bool = false,
     aur_field: *vxfw.TextField,
@@ -55,22 +58,30 @@ pub const View = struct {
                 else
                     try self.aur_field.draw(ctx.withConstraints(.{}, .{ .width = list_width, .height = search_height })),
             });
+            if (split) try pane_focus.attach(ctx, &children.items[children.items.len - 1].surface, self.model, .aur, .search);
             const message = try self.aurMessage(arena);
             var label: vxfw.Text = .{ .text = if (message) |item| item.text else "", .style = if (message != null and message.?.red) .{ .fg = .{ .index = 1 } } else styles.secondary };
             const page_label = [_]Border.BorderLabel{.{ .text = if (!self.installed_only and self.catalog_page > 0) try std.fmt.allocPrint(arena, "Page {d}/{d}", .{ self.catalog_page, @max(1, self.catalog_total_pages) }) else "", .alignment = .top_left }};
             const content: vxfw.Widget = if (message != null) label.widget() else blk: {
                 const table = try arena.create(AurTable);
-                table.* = .{ .list = self.aur_list, .longest_name = self.longest_name };
+                table.* = .{ .content = self.result_list orelse self.aur_list.widget(), .list = self.aur_list, .longest_name = self.longest_name };
                 break :blk .{ .userdata = table, .drawFn = drawAurTable };
             };
+            const marks = if (self.model) |model| model.aur_state.aur_selection.items else &.{};
+            const removable = for (marks) |mark| {
+                if (mark.installed) break true;
+            } else false;
+            const action_height = try @import("marked_actions.zig").append(ctx.withConstraints(.{}, .{ .width = list_width, .height = list_height }), children, list_row, self.model, marks.len, removable);
+            const remaining = list_height - action_height;
             var border: Border = .{ .child = content, .labels = if (!self.installed_only and self.catalog_page > 0) &page_label else &.{}, .focused = self.list_active and !self.details_active };
-            if (list_height > 0) try children.append(arena, .{
-                .origin = .{ .row = @intCast(list_row), .col = 0 },
-                .surface = if (list_width >= 2 and list_height >= 2)
-                    try border.draw(ctx.withConstraints(.{ .width = list_width, .height = list_height }, .{ .width = list_width, .height = list_height }))
+            if (remaining > 0) try children.append(arena, .{
+                .origin = .{ .row = @intCast(list_row + action_height), .col = 0 },
+                .surface = if (list_width >= 2 and remaining >= 2)
+                    try border.draw(ctx.withConstraints(.{ .width = list_width, .height = remaining }, .{ .width = list_width, .height = remaining }))
                 else
-                    try content.draw(ctx.withConstraints(.{}, .{ .width = list_width, .height = list_height })),
+                    try content.draw(ctx.withConstraints(.{}, .{ .width = list_width, .height = remaining })),
             });
+            if (split and remaining > 0) try pane_focus.attach(ctx, &children.items[children.items.len - 1].surface, self.model, .aur, .results);
         }
         if (show_pane and pane_height >= 2 and right_w >= 2) {
             const pane_ctx = ctx.withConstraints(.{}, .{ .width = right_w, .height = pane_height });
@@ -90,6 +101,7 @@ pub const View = struct {
                 break :blk try border.draw(pane_ctx.withConstraints(.{ .width = right_w, .height = pane_height }, .{ .width = right_w, .height = pane_height }));
             };
             try children.append(arena, .{ .origin = .{ .row = @intCast(pane_row), .col = if (split) @intCast(left_w) else 0 }, .surface = surface });
+            if (split) try pane_focus.attach(ctx, &children.items[children.items.len - 1].surface, self.model, .aur, .details);
         }
     }
     fn aurMessage(self: View, arena: Allocator) Allocator.Error!?struct { text: []const u8, red: bool } {
@@ -137,7 +149,12 @@ const marker_width = 2;
 const selected_width: u16 = "Selected".len;
 const minimum_table_width = marker_width + "Package".len + 1 + selected_width;
 
+pub fn checkboxColumn(width: u16) u16 {
+    return if (width >= minimum_table_width) width - selected_width else width -| 3;
+}
+
 const AurTable = struct {
+    content: vxfw.Widget,
     list: *vxfw.ListView,
     longest_name: u16,
 };
@@ -147,7 +164,7 @@ fn drawAurTable(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Sur
     const list = table.list;
     const size = ctx.max.size();
     const gutter: u16 = if (list.draw_cursor) 2 else 0;
-    if (size.height < 2 or size.width -| gutter < minimum_table_width) return list.draw(ctx);
+    if (size.height < 2 or size.width -| gutter < minimum_table_width) return table.content.draw(ctx);
 
     const preferred = @max(@as(u16, "Package".len), table.longest_name);
     const table_width = @min(size.width, preferred +| (gutter + minimum_table_width - "Package".len));
@@ -159,7 +176,7 @@ fn drawAurTable(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Sur
     try drawColumn(ctx, header.buffer, selected_col, selected_width, "Selected", styles.emphasis);
     const children = try ctx.arena.alloc(vxfw.SubSurface, 2);
     children[0] = .{ .origin = .{ .row = 0, .col = 0 }, .surface = header };
-    children[1] = .{ .origin = .{ .row = 1, .col = 0 }, .surface = try list.draw(ctx.withConstraints(.{}, .{ .width = table_width, .height = size.height - 1 })) };
+    children[1] = .{ .origin = .{ .row = 1, .col = 0 }, .surface = try table.content.draw(ctx.withConstraints(.{}, .{ .width = table_width, .height = size.height - 1 })) };
     return .{ .size = size, .widget = widget, .buffer = &.{}, .children = children };
 }
 
@@ -174,7 +191,7 @@ pub fn drawSelectedAurRow(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Erro
 fn drawRow(ptr: *anyopaque, ctx: vxfw.DrawContext, selected: bool) Allocator.Error!vxfw.Surface {
     const pkg: *const AurPackage = @ptrCast(@alignCast(ptr));
     const width = ctx.max.width orelse ctx.min.width;
-    const checkbox_col = if (width >= minimum_table_width) width - selected_width else width -| 3;
+    const checkbox_col = checkboxColumn(width);
     const widget: vxfw.Widget = .{ .userdata = ptr, .drawFn = if (selected) drawSelectedAurRow else drawAurRow };
     const surface = try vxfw.Surface.init(ctx.arena, widget, .{ .width = width, .height = 1 });
     @memset(surface.buffer, .{});

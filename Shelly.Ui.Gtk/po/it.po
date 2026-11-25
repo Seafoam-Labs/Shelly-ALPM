@@ -1951,3 +1951,120 @@ msgstr ""
 
 msgid "Atoll package update"
 msgstr ""
+
+msgid "Use System Title Bar"
+msgstr ""
+
+msgid "If enabled, the desktop draws the window title bar and its buttons instead of Shelly."
+msgstr ""
+
+msgid "Applies after restarting Shelly."
+msgstr ""
+
+msgid "Language for Shelly's menus and messages."
+msgstr ""
+
+msgid "Software sources"
+msgstr ""
+
+msgid "Choose which kinds of software Shelly shows. You can change this at any time."
+msgstr ""
+
+msgid "Enable Firmware"
+msgstr ""
+
+msgid "Update device firmware such as UEFI/BIOS and peripherals"
+msgstr ""
+
+msgid "Update notifications"
+msgstr ""
+
+msgid "Shelly can check for updates in the background and let you know from the system tray."
+msgstr ""
+
+msgid "Show a tray icon that checks for updates in the background."
+msgstr ""
+
+msgid "Start the tray icon when you log in."
+msgstr ""
+
+msgid "How often the tray looks for updates."
+msgstr ""
+
+msgid "Check on chosen days at a set time instead of every few hours."
+msgstr ""
+
+msgid "Days and time when Shelly checks for updates."
+msgstr ""
+
+msgid "Check only at the scheduled time, not when the tray starts."
+msgstr ""
+
+msgid "Run updates started from the tray in the Shelly window instead of a terminal."
+msgstr ""
+
+msgid "Terminal that runs updates started from the tray."
+msgstr ""
+
+msgid "Appearance"
+msgstr ""
+
+msgid "Use Shelly's colors or your desktop's colors."
+msgstr ""
+
+msgid "Light, dark, or follow your system."
+msgstr ""
+
+msgid "The page Shelly opens on."
+msgstr ""
+
+msgid "Sidebar on the left, or tabs across the top."
+msgstr ""
+
+msgid "Tray icon"
+msgstr ""
+
+msgid "Use your own image for the tray icon."
+msgstr ""
+
+msgid "Image the tray shows when updates are available."
+msgstr ""
+
+msgid "Installing and removing"
+msgstr ""
+
+msgid "Skip confirmation prompts when installing, updating, or removing."
+msgstr ""
+
+msgid "Also delete an app's configuration files when you remove it."
+msgstr ""
+
+msgid "Search and AUR"
+msgstr ""
+
+msgid "Add a page that searches every source at once."
+msgstr ""
+
+msgid "Browse the AUR through Seafoam Labs' Atoll service."
+msgstr ""
+
+msgid "Folder where new AppImages are saved."
+msgstr ""
+
+msgid "Remove Configuration on Uninstall"
+msgstr ""
+
+msgid "Layout"
+msgstr ""
+
+msgid "Updates & Tray"
+msgstr ""
+
+msgid "Installed From"
+msgstr ""
+
+msgid "Available From"
+msgstr ""
+
+msgid "inferred"
+msgstr ""
