@@ -1,6 +1,6 @@
-const styles = @import("styles.zig");
+const styles = @import("components/styles.zig");
 const std = @import("std");
-const Border = @import("border.zig");
+const Border = @import("components/border.zig");
 const commands = @import("../commands.zig");
 const diagnostics = @import("diagnostics");
 const operation = @import("../services/shelly_operation.zig");
@@ -281,7 +281,7 @@ const ActionButton = struct {
 
     fn draw(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
         const self: *ActionButton = @ptrCast(@alignCast(ptr));
-        var label: vxfw.Text = .{ .text = self.label, .softwrap = false, .style = @import("styles.zig").action };
+        var label: vxfw.Text = .{ .text = self.label, .softwrap = false, .style = @import("components/styles.zig").action };
         var surface = try label.draw(ctx);
         surface.widget = .{ .userdata = ptr, .drawFn = ActionButton.draw, .eventHandler = click };
         try styles.hoverLabel(ctx.arena, &surface);

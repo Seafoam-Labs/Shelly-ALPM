@@ -1,58 +1,13 @@
 //! Tab labels, centered layout, and mouse hit testing. Navigation policy belongs to the caller.
-const commands = @import("../commands.zig");
+const commands = @import("../../commands.zig");
 const std = @import("std");
 const vaxis = @import("vaxis");
 const vxfw = vaxis.vxfw;
 const styles = @import("styles.zig");
-const HeaderIcons = @import("../models/settings.zig").HeaderIcons;
+const HeaderIcons = @import("../../models/settings.zig").HeaderIcons;
 const Allocator = std.mem.Allocator;
 
-pub const Tab = enum {
-    packages,
-    aur,
-    flatpak,
-    appimage,
-    upgrade,
-    settings,
-
-    pub const always: []const Tab = &.{ .packages, .upgrade, .settings };
-
-    pub const all: []const Tab = &.{ .packages, .aur, .flatpak, .appimage, .upgrade, .settings };
-
-    pub fn title(self: Tab) []const u8 {
-        return switch (self) {
-            .packages => "Packages",
-            .aur => "AUR",
-            .upgrade => "Updates",
-            .flatpak => "Flatpak",
-            .appimage => "AppImage",
-            .settings => "Settings",
-        };
-    }
-    pub fn icon(self: Tab, style: HeaderIcons) []const u8 {
-        return switch (style) {
-            .none => "",
-            // Nerd Fonts mappings: Octicons package/sync/gear, Font Logos Arch,
-            // and Font Awesome cube. See nerd-fonts/bin/scripts/lib upstream.
-            .nerd_font => switch (self) {
-                .packages => "\u{f487}",
-                .aur => "\u{f303}",
-                .flatpak => "\u{f1b2}",
-                .appimage => "\u{f085}",
-                .upgrade => "\u{f46a}",
-                .settings => "\u{f423}",
-            },
-            .ascii => switch (self) {
-                .packages => "[#]",
-                .aur => "[*]",
-                .flatpak => "[F]",
-                .appimage => "[A]",
-                .upgrade => "[^]",
-                .settings => "[=]",
-            },
-        };
-    }
-};
+const Tab = @import("../../model.zig").Tab;
 
 pub const Options = struct {
     tabs: []const Tab,

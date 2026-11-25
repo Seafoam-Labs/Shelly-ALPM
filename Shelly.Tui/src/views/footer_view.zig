@@ -1,4 +1,4 @@
-const styles = @import("styles.zig");
+const styles = @import("components/styles.zig");
 const std = @import("std");
 const vaxis = @import("vaxis");
 const vxfw = vaxis.vxfw;

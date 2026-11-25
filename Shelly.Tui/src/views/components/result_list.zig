@@ -1,7 +1,7 @@
 const vxfw = @import("vaxis").vxfw;
 const Allocator = @import("std").mem.Allocator;
-const commands = @import("../commands.zig");
-const Model = @import("../model.zig").Model;
+const commands = @import("../../commands.zig");
+const Model = @import("../../model.zig").Model;
 
 const Kind = enum { packages, aur, flatpak, appimage };
 
@@ -11,10 +11,10 @@ pub fn widget(model: *Model, comptime kind: Kind) vxfw.Widget {
 
 fn ResultList(comptime kind: Kind) type {
     const Identity = switch (kind) {
-        .packages => *const @import("../models/packages.zig").Package,
-        .aur => *const @import("../models/packages.zig").AurPackage,
-        .flatpak => @import("flatpak_view.zig").Row,
-        .appimage => *const @import("../models/appimage.zig").AppImage,
+        .packages => *const @import("../../models/packages.zig").Package,
+        .aur => *const @import("../../models/packages.zig").AurPackage,
+        .flatpak => @import("../flatpak_view.zig").Row,
+        .appimage => *const @import("../../models/appimage.zig").AppImage,
     };
     return struct {
         model: *Model,
@@ -58,8 +58,8 @@ fn ResultList(comptime kind: Kind) type {
             const gutter: u16 = if (list.draw_cursor) 2 else 0;
             const width = surface.size.width -| gutter;
             const checkbox_start = switch (kind) {
-                .packages => gutter + @import("packages_view.zig").checkboxColumn(width),
-                .aur => gutter + @import("aur_view.zig").checkboxColumn(width),
+                .packages => gutter + @import("../packages_view.zig").checkboxColumn(width),
+                .aur => gutter + @import("../aur_view.zig").checkboxColumn(width),
                 else => null,
             };
             rows.* = .{ .model = model, .identities = ids, .checkbox_start = checkbox_start };
@@ -99,21 +99,21 @@ fn ResultList(comptime kind: Kind) type {
 
 test "AUR Flatpak and AppImage result clicks select the rendered package" {
     const std = @import("std");
-    const aur = @import("../models/aur_model.zig");
-    const flatpak = @import("../models/flatpak_model.zig");
-    const appimage = @import("../models/appimage_model.zig");
+    const aur = @import("../../models/aur_model.zig");
+    const flatpak = @import("../../models/flatpak_model.zig");
+    const appimage = @import("../../models/appimage_model.zig");
     const allocator = std.testing.allocator;
     const model = try Model.init(allocator);
     defer model.deinit();
-    const aur_items = [_]@import("../models/packages.zig").AurPackage{ .{ .Name = "a" }, .{ .Name = "b" } };
+    const aur_items = [_]@import("../../models/packages.zig").AurPackage{ .{ .Name = "a" }, .{ .Name = "b" } };
     model.aur_state.aur_packages = &aur_items;
     try aur.rebuildAurFilter(model);
     model.flatpak_state.flatpak_installed_only = true;
-    model.flatpak_state.flatpak_installed = try std.json.parseFromSlice([]@import("../models/flatpak.zig").Flatpak, allocator,
+    model.flatpak_state.flatpak_installed = try std.json.parseFromSlice([]@import("../../models/flatpak.zig").Flatpak, allocator,
         \\[{"Id":"editor","InstallLevel":0},{"Id":"editor","InstallLevel":1}]
     , .{ .allocate = .alloc_always });
     try flatpak.rebuildFlatpakFilter(model);
-    model.appimage_state.parsed = try std.json.parseFromSlice([]@import("../models/appimage.zig").AppImage, allocator,
+    model.appimage_state.parsed = try std.json.parseFromSlice([]@import("../../models/appimage.zig").AppImage, allocator,
         \\[{"Name":"a","Path":"/a"},{"Name":"b","Path":"/b"}]
     , .{ .allocate = .alloc_always });
     vxfw.DrawContext.init(.unicode);
@@ -122,7 +122,7 @@ test "AUR Flatpak and AppImage result clicks select the rendered package" {
     const ctx: vxfw.DrawContext = .{ .arena = arena.allocator(), .min = .{}, .max = .{ .width = 40, .height = 8 }, .cell_size = .{ .width = 10, .height = 20 } };
     var events: vxfw.EventContext = .{ .io = std.testing.io, .alloc = arena.allocator(), .cmds = .empty };
     inline for (.{ Kind.aur, Kind.flatpak, Kind.appimage }) |kind| {
-        model.active = @field(@import("../model.zig").Tab, @tagName(kind));
+        model.active = @field(@import("../../model.zig").Tab, @tagName(kind));
         if (kind == .appimage) {
             var children: std.ArrayList(vxfw.SubSurface) = .empty;
             try appimage.appendContent(model, ctx, &children);
@@ -146,12 +146,12 @@ test "AUR Flatpak and AppImage result clicks select the rendered package" {
 
 test "package checkboxes toggle the clicked result without moving the cursor" {
     const std = @import("std");
-    const packages = @import("../models/packages_model.zig");
-    const aur = @import("../models/aur_model.zig");
+    const packages = @import("../../models/packages_model.zig");
+    const aur = @import("../../models/aur_model.zig");
     const model = try Model.init(std.testing.allocator);
     defer model.deinit();
-    var native = [_]@import("../models/packages.zig").Package{ .{ .Name = "a" }, .{ .Name = "b" } };
-    const community = [_]@import("../models/packages.zig").AurPackage{ .{ .Name = "a" }, .{ .Name = "b" } };
+    var native = [_]@import("../../models/packages.zig").Package{ .{ .Name = "a" }, .{ .Name = "b" } };
+    const community = [_]@import("../../models/packages.zig").AurPackage{ .{ .Name = "a" }, .{ .Name = "b" } };
     model.packages_state.packages = &native;
     try packages.rebuildFilter(model);
     model.aur_state.aur_packages = &community;

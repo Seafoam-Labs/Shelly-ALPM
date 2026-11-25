@@ -1,8 +1,8 @@
 const std = @import("std");
 const vaxis = @import("vaxis");
 const vxfw = vaxis.vxfw;
-const commands = @import("../commands.zig");
-const coordinator = @import("../model.zig");
+const commands = @import("../../commands.zig");
+const coordinator = @import("../../model.zig");
 
 const Pane = struct {
     model: *coordinator.Model,

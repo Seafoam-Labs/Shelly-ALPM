@@ -1,5 +1,5 @@
 //! AUR searches, installed listings, batch selection, and details.
-const styles = @import("../views/styles.zig");
+const styles = @import("../views/components/styles.zig");
 const operation_model = @import("operation_model.zig");
 const std = @import("std");
 const commands = @import("../commands.zig");
@@ -470,7 +470,7 @@ pub fn aurView(self: *Model) aur_view.View {
     }
     return .{
         .model = self,
-        .result_list = @import("../views/result_list.zig").widget(self, .aur),
+        .result_list = @import("../views/components/result_list.zig").widget(self, .aur),
         .list_percent = self.list_percent.aur,
         .aur_field = &self.aur_state.aur_field,
         .selected = selectedAur(self),
@@ -866,7 +866,7 @@ test "AUR preview replaces the details pane and preserves search and selection" 
         var preview_found = false;
         for (surface.children) |child| {
             try std.testing.expectEqual(@as(u8, 0), child.z_index);
-            if (@import("../views/pane_focus.zig").testContainsWidget(child.surface, model.operation_state.pkgbuild_scroll.widget())) {
+            if (@import("../views/components/pane_focus.zig").testContainsWidget(child.surface, model.operation_state.pkgbuild_scroll.widget())) {
                 preview_found = true;
                 try std.testing.expectEqual(size.width >= 64, child.origin.col > 0);
             }
@@ -1203,7 +1203,7 @@ test "mouse opens the AUR preview and returns to package details in wide and com
         const button = &model.operation_state.preview_back;
         const point = PreviewButtonTest.find(surface, button, 0, 0) orelse return error.MissingBack;
         try std.testing.expect(point.row > 0);
-        if (size.width >= 64) try std.testing.expect(point.col >= @import("../views/split_layout.zig").listWidth(size.width, model.list_percent.aur));
+        if (size.width >= 64) try std.testing.expect(point.col >= @import("../views/components/split_layout.zig").listWidth(size.width, model.list_percent.aur));
         var hits: std.ArrayList(vxfw.HitResult) = .empty;
         try surface.hitTest(arena.allocator(), &hits, point);
         const target = hits.pop().?;

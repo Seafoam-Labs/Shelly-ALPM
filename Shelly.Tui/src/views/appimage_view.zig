@@ -1,15 +1,15 @@
-const pane_focus = @import("pane_focus.zig");
-const styles = @import("styles.zig");
+const pane_focus = @import("components/pane_focus.zig");
+const styles = @import("components/styles.zig");
 const commands = @import("../commands.zig");
 const std = @import("std");
-const Border = @import("border.zig");
+const Border = @import("components/border.zig");
 const diagnostics = @import("diagnostics");
 const vxfw = @import("vaxis").vxfw;
 const Allocator = std.mem.Allocator;
 const AppImage = @import("../models/appimage.zig").AppImage;
 const HeaderIcons = @import("../models/settings.zig").HeaderIcons;
-const detail_fields = @import("detail_fields.zig");
-const formatSize = @import("detail_format.zig").formatSize;
+const detail_fields = @import("components/detail_fields.zig");
+const formatSize = @import("components/detail_format.zig").formatSize;
 
 pub fn drawRow(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
     const app: *const AppImage = @ptrCast(@alignCast(ptr));
@@ -188,7 +188,7 @@ pub const View = struct {
         const size = ctx.max.size();
         if (size.width < 2 or size.height < 4) return;
         const split = size.width >= 64;
-        const left_w: u16 = if (split) @import("split_layout.zig").listWidth(size.width, self.list_percent) else size.width;
+        const left_w: u16 = if (split) @import("components/split_layout.zig").listWidth(size.width, self.list_percent) else size.width;
         const right_w = if (split) size.width - left_w else size.width;
         const list_width = left_w -| @as(u16, if (split) 1 else 0);
         const pane_height = size.height -| 2;

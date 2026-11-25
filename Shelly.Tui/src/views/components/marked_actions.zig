@@ -1,8 +1,8 @@
 const styles = @import("styles.zig");
 const std = @import("std");
 const vxfw = @import("vaxis").vxfw;
-const commands = @import("../commands.zig");
-const app = @import("../model.zig");
+const commands = @import("../../commands.zig");
+const app = @import("../../model.zig");
 const Allocator = std.mem.Allocator;
 
 pub fn append(ctx: vxfw.DrawContext, children: *std.ArrayList(vxfw.SubSurface), row: u16, owner: ?*app.Model, count: usize, removable: bool) Allocator.Error!u16 {
@@ -80,9 +80,9 @@ const Button = struct {
 };
 
 test "marked header clicks open the batch prompt for each package source" {
-    const packages = @import("../models/packages_model.zig");
-    const aur = @import("../models/aur_model.zig");
-    const types = @import("../models/packages.zig");
+    const packages = @import("../../models/packages_model.zig");
+    const aur = @import("../../models/aur_model.zig");
+    const types = @import("../../models/packages.zig");
     vxfw.DrawContext.init(.unicode);
     for ([_]app.Tab{ .packages, .aur }) |tab| {
         for ([_]commands.PackageAction{ .install, .remove }) |action| {

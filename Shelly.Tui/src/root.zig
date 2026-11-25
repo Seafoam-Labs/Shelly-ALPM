@@ -40,9 +40,9 @@ test "all source modules are included" {
     std.testing.refAllDecls(@import("views/app_view.zig"));
     std.testing.refAllDecls(@import("views/appimage_view.zig"));
     std.testing.refAllDecls(@import("views/aur_view.zig"));
-    std.testing.refAllDecls(@import("views/border.zig"));
-    std.testing.refAllDecls(@import("views/detail_fields.zig"));
-    std.testing.refAllDecls(@import("views/detail_format.zig"));
+    std.testing.refAllDecls(@import("views/components/border.zig"));
+    std.testing.refAllDecls(@import("views/components/detail_fields.zig"));
+    std.testing.refAllDecls(@import("views/components/detail_format.zig"));
     std.testing.refAllDecls(@import("views/flatpak_view.zig"));
     std.testing.refAllDecls(@import("views/footer_view.zig"));
     std.testing.refAllDecls(@import("views/help_view.zig"));
@@ -52,10 +52,10 @@ test "all source modules are included" {
     std.testing.refAllDecls(@import("views/pkgbuild_view.zig"));
     std.testing.refAllDecls(@import("views/settings_view.zig"));
     std.testing.refAllDecls(@import("views/keybindings_view.zig"));
-    std.testing.refAllDecls(@import("views/source_highlight.zig"));
-    std.testing.refAllDecls(@import("views/split_layout.zig"));
-    std.testing.refAllDecls(@import("views/styles.zig"));
-    std.testing.refAllDecls(@import("views/tab_bar.zig"));
+    std.testing.refAllDecls(@import("views/components/source_highlight.zig"));
+    std.testing.refAllDecls(@import("views/components/split_layout.zig"));
+    std.testing.refAllDecls(@import("views/components/styles.zig"));
+    std.testing.refAllDecls(@import("views/components/tab_bar.zig"));
     std.testing.refAllDecls(@import("views/updates_view.zig"));
     std.testing.refAllDecls(@import("xdg_paths.zig"));
 }

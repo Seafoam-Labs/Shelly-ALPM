@@ -354,7 +354,7 @@ pub fn appImageView(self: *Model) AppImageView.View {
         state.details_scroll.scroll = .{};
         state.details_cursor = @as(u32, @intCast(state.cursor));
     }
-    return .{ .model = self, .result_list = @import("../views/result_list.zig").widget(self, .appimage), .state = state, .list_percent = self.list_percent.appimage, .help = if (self.help_open) &self.help_panel else null };
+    return .{ .model = self, .result_list = @import("../views/components/result_list.zig").widget(self, .appimage), .state = state, .list_percent = self.list_percent.appimage, .help = if (self.help_open) &self.help_panel else null };
 }
 
 fn syncSelection(state: *State) void {
@@ -372,7 +372,7 @@ fn initializeWidgets(self: *Model) void {
     if (!state.widgets_initialized) {
         state.list_view = .{ .item_count = @intCast(state.items().len), .children = .{ .builder = .{ .userdata = self, .buildFn = buildRow } } };
         state.list_view.jumpToItem(@intCast(state.cursor));
-        const styles = @import("../views/styles.zig");
+        const styles = @import("../views/components/styles.zig");
         state.source_button.userdata = self;
         state.source_button.style = styles.action_button;
         state.details_scroll = .{ .item_count = 2, .children = .{ .builder = .{ .userdata = self, .buildFn = buildDetails } } };
@@ -1321,7 +1321,7 @@ test "update source form owns its draft, validates input and preserves failed sa
         var arena = std.heap.ArenaAllocator.init(allocator);
         defer arena.deinit();
         const surface = try model.widget().draw(.{ .arena = arena.allocator(), .min = .{}, .max = .{ .width = 100, .height = 24 }, .cell_size = .{ .width = 10, .height = 20 } });
-        try @import("../views/pane_focus.zig").testClick(surface, &events, .results);
+        try @import("../views/components/pane_focus.zig").testClick(surface, &events, .results);
         try std.testing.expect(model.appimage_state.source_draft == null);
         try std.testing.expect(model.appimage_state.list_active);
         try std.testing.expect(!model.appimage_state.details_active);

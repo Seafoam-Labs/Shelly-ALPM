@@ -1,12 +1,12 @@
-const styles = @import("styles.zig");
+const styles = @import("components/styles.zig");
 const std = @import("std");
 const Allocator = std.mem.Allocator;
-const Border = @import("border.zig");
+const Border = @import("components/border.zig");
 const vaxis = @import("vaxis");
 const vxfw = vaxis.vxfw;
 const commands = @import("../commands.zig");
 const operation = @import("../services/shelly_operation.zig");
-const highlight = @import("source_highlight.zig");
+const highlight = @import("components/source_highlight.zig");
 const PkgBuild = @import("../models/pkgbuild.zig").PkgBuild;
 
 // Only unwrap the CLI's known diff presentation tags; source files remain literal.

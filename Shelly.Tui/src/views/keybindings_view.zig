@@ -4,7 +4,7 @@ const vaxis = @import("vaxis");
 const vxfw = vaxis.vxfw;
 const commands = @import("../commands.zig");
 const keybindings = @import("../services/keybindings.zig");
-const styles = @import("styles.zig");
+const styles = @import("components/styles.zig");
 const Allocator = std.mem.Allocator;
 
 pub const row_count = keybindings.editable.len;

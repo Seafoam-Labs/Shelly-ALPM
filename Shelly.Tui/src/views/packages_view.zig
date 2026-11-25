@@ -1,8 +1,8 @@
-const pane_focus = @import("pane_focus.zig");
+const pane_focus = @import("components/pane_focus.zig");
 const commands = @import("../commands.zig");
 const std = @import("std");
-const styles = @import("styles.zig");
-const Border = @import("border.zig");
+const styles = @import("components/styles.zig");
+const Border = @import("components/border.zig");
 const help_view = @import("help_view.zig");
 const vaxis = @import("vaxis");
 const vxfw = vaxis.vxfw;
@@ -11,9 +11,9 @@ const Model = @import("../model.zig").Model;
 const packages_model = @import("../models/packages_model.zig");
 const Package = @import("../models/packages.zig").Package;
 const Selection = @import("../models/packages.zig").Selection;
-const appendDetailList = @import("detail_format.zig").appendDetailList;
+const appendDetailList = @import("components/detail_format.zig").appendDetailList;
 const diagnostics = @import("diagnostics");
-const formatSize = @import("detail_format.zig").formatSize;
+const formatSize = @import("components/detail_format.zig").formatSize;
 
 /// Borrows display state and widgets owned by the application.
 /// Query execution and user-action handling remain in Model.
@@ -46,7 +46,7 @@ pub const View = struct {
             });
             return;
         };
-        const left_w: u16 = if (split) @import("split_layout.zig").listWidth(max.width, self.list_percent) else max.width;
+        const left_w: u16 = if (split) @import("components/split_layout.zig").listWidth(max.width, self.list_percent) else max.width;
         const right_w: u16 = if (split) max.width - left_w else max.width;
         const list_width = left_w -| @as(u16, if (split) 1 else 0);
         const bordered_search = max.width >= 2 and max.height >= 8;
@@ -82,7 +82,7 @@ pub const View = struct {
                 null;
             var label: vxfw.Text = .{ .text = message orelse "" };
             const content: vxfw.Widget = if (message != null) label.widget() else .{ .userdata = self.model, .drawFn = drawPackageTable };
-            const action_height = try @import("marked_actions.zig").append(ctx.withConstraints(.{}, .{ .width = list_width, .height = height }), children, content_row, self.model, if (self.loading or self.load_failed) 0 else self.selected_count, self.selected_installed > 0);
+            const action_height = try @import("components/marked_actions.zig").append(ctx.withConstraints(.{}, .{ .width = list_width, .height = height }), children, content_row, self.model, if (self.loading or self.load_failed) 0 else self.selected_count, self.selected_installed > 0);
             const remaining = height - action_height;
             var border: Border = .{
                 .child = content,
@@ -207,7 +207,7 @@ fn drawPackageTable(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw
 }
 
 fn drawPackageList(model: *Model, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
-    return @import("result_list.zig").widget(model, .packages).draw(ctx);
+    return @import("components/result_list.zig").widget(model, .packages).draw(ctx);
 }
 
 pub fn drawColumn(ctx: vxfw.DrawContext, buffer: []vaxis.Cell, col: u16, width: u16, value: []const u8, style: vaxis.Style) Allocator.Error!void {
@@ -311,7 +311,7 @@ fn appendSection(arena: Allocator, lines: *std.ArrayList([]const u8), title: []c
     }
 }
 
-const detail_fields = @import("detail_fields.zig");
+const detail_fields = @import("components/detail_fields.zig");
 const DetailField = detail_fields.Field;
 const listField = detail_fields.listField;
 

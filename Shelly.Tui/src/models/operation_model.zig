@@ -120,7 +120,7 @@ pub const SudoPrompt = struct {
 
 pub fn init(_: Allocator, model: *Model) State {
     return .{
-        .preview_back = .{ .label = "[<]", .userdata = model, .onClick = commands.Mouse.closePkgbuildPreview, .style = @import("../views/styles.zig").action_button },
+        .preview_back = .{ .label = "[<]", .userdata = model, .onClick = commands.Mouse.closePkgbuildPreview, .style = @import("../views/components/styles.zig").action_button },
         .dependency_choices = .{ .item_count = 0, .children = .{ .builder = .{ .userdata = model, .buildFn = buildDependencyChoice } } },
         .pkgbuild_scroll = .{ .children = .{ .builder = .{
             .userdata = model,

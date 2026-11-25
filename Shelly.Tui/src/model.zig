@@ -1,7 +1,7 @@
 const appimage_model = @import("models/appimage_model.zig");
 const command_context = @import("command_context.zig");
 const app_view = @import("views/app_view.zig");
-const tab_bar_view = @import("views/tab_bar.zig");
+const tab_bar_view = @import("views/components/tab_bar.zig");
 const packages_model = @import("models/packages_model.zig");
 const aur_model = @import("models/aur_model.zig");
 const flatpak_model = @import("models/flatpak_model.zig");
@@ -24,7 +24,54 @@ const flatpak = @import("models/flatpak.zig");
 
 const Allocator = std.mem.Allocator;
 
-pub const Tab = tab_bar_view.Tab;
+const HeaderIcons = @import("models/settings.zig").HeaderIcons;
+
+pub const Tab = enum {
+    packages,
+    aur,
+    flatpak,
+    appimage,
+    upgrade,
+    settings,
+
+    pub const always: []const Tab = &.{ .packages, .upgrade, .settings };
+
+    pub const all: []const Tab = &.{ .packages, .aur, .flatpak, .appimage, .upgrade, .settings };
+
+    pub fn title(self: Tab) []const u8 {
+        return switch (self) {
+            .packages => "Packages",
+            .aur => "AUR",
+            .upgrade => "Updates",
+            .flatpak => "Flatpak",
+            .appimage => "AppImage",
+            .settings => "Settings",
+        };
+    }
+    pub fn icon(self: Tab, style: HeaderIcons) []const u8 {
+        return switch (style) {
+            .none => "",
+            // Nerd Fonts mappings: Octicons package/sync/gear, Font Logos Arch,
+            // and Font Awesome cube. See nerd-fonts/bin/scripts/lib upstream.
+            .nerd_font => switch (self) {
+                .packages => "\u{f487}",
+                .aur => "\u{f303}",
+                .flatpak => "\u{f1b2}",
+                .appimage => "\u{f085}",
+                .upgrade => "\u{f46a}",
+                .settings => "\u{f423}",
+            },
+            .ascii => switch (self) {
+                .packages => "[#]",
+                .aur => "[*]",
+                .flatpak => "[F]",
+                .appimage => "[A]",
+                .upgrade => "[^]",
+                .settings => "[=]",
+            },
+        };
+    }
+};
 
 /// Operation state owned by Model and presented by the reusable panel.
 pub const SudoPrompt = operation_model.SudoPrompt;
@@ -156,7 +203,7 @@ pub const Model = struct {
                 if (!self.help_open and operation_model.operationPrompt(self) == null and self.operation_state.review_prompt == null and (self.active == .packages or self.active == .aur or self.active == .flatpak or self.active == .appimage or self.active == .settings) and (self.overlay == null or self.overlay.? == .package or self.overlay.? == .aur or self.overlay.? == .flatpak)) {
                     if (commands.matches(key, .narrow_view) or commands.matches(key, .widen_view)) {
                         const percent = self.activeListPercent();
-                        percent.* = @import("views/split_layout.zig").resize(self.viewport_width, percent.*, commands.matches(key, .widen_view)) orelse return ctx.consumeEvent();
+                        percent.* = @import("views/components/split_layout.zig").resize(self.viewport_width, percent.*, commands.matches(key, .widen_view)) orelse return ctx.consumeEvent();
                         return ctx.consumeAndRedraw();
                     }
                 }
@@ -460,7 +507,7 @@ pub const Model = struct {
     pub fn typeErasedDrawFn(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
         const self: *Model = @ptrCast(@alignCast(ptr));
         const surface = try app_view.draw(self, ctx);
-        if (self.hover_point) |point| try @import("views/styles.zig").paintHover(surface, ctx.arena, point);
+        if (self.hover_point) |point| try @import("views/components/styles.zig").paintHover(surface, ctx.arena, point);
         return surface;
     }
 
@@ -840,7 +887,7 @@ test "mouse focus transfers from the AUR preview to the results and details pane
     defer arena.deinit();
     const draw: vxfw.DrawContext = .{ .arena = arena.allocator(), .min = .{}, .max = .{ .width = 100, .height = 24 }, .cell_size = .{ .width = 10, .height = 20 } };
     var ctx: vxfw.EventContext = .{ .io = std.testing.io, .alloc = arena.allocator(), .cmds = .empty };
-    const pane = @import("views/pane_focus.zig");
+    const pane = @import("views/components/pane_focus.zig");
     var surface = try model.widget().draw(draw);
     try pane.testClick(surface, &ctx, .results);
     try std.testing.expect(model.overlay == null);
