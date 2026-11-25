@@ -12,6 +12,13 @@ pub fn appendContent(model: *Model, ctx: vxfw.DrawContext, children: *std.ArrayL
     const size = ctx.max.size();
     const height = size.height -| 2;
     if (height == 0 or size.width == 0) return;
+    if (model.utilities_state.diff_open) {
+        try children.append(ctx.arena, .{
+            .origin = .{ .row = 1, .col = 0 },
+            .surface = try @import("../models/utilities_model.zig").diffView(model).drawInPane(ctx.withConstraints(.{}, .{ .width = size.width, .height = height })),
+        });
+        return;
+    }
     if (size.width < 80 or height < 10) {
         try appendPane(ctx, children, .{ .row = 1, .col = 0 }, .{ .width = size.width, .height = height }, "Utilities", .{ .userdata = model, .drawFn = drawStacked });
         return;
@@ -99,7 +106,7 @@ const ActionRow = struct {
             .softwrap = false,
             .overflow = .ellipsis,
             .width_basis = .parent,
-            .style = if (self.model.utilities_state.selected == self.task) styles.selected else styles.secondary,
+            .style = if (self.model.utilities_state.selected == self.task) styles.emphasis else styles.secondary,
         };
         var surface = try label.draw(ctx);
         surface.widget = .{ .userdata = ptr, .drawFn = draw, .eventHandler = activate };
@@ -135,8 +142,16 @@ fn drawResults(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surf
 }
 
 pub fn drawPath(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
+    return drawPacfilePath(ptr, ctx, styles.secondary);
+}
+
+pub fn drawSelectedPath(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
+    return drawPacfilePath(ptr, ctx, styles.emphasis);
+}
+
+fn drawPacfilePath(ptr: *anyopaque, ctx: vxfw.DrawContext, style: @import("vaxis").Style) Allocator.Error!vxfw.Surface {
     const path: *const []const u8 = @ptrCast(@alignCast(ptr));
-    const text: vxfw.Text = .{ .text = try @import("diagnostics").sanitizeAlloc(ctx.arena, path.*), .softwrap = true };
+    const text: vxfw.Text = .{ .text = try @import("diagnostics").sanitizeAlloc(ctx.arena, path.*), .softwrap = true, .style = style };
     return text.draw(ctx);
 }
 
@@ -152,4 +167,19 @@ test "utilities frames fill their allocated panes before scanning" {
     try std.testing.expectEqual(vxfw.Size{ .width = 40, .height = 22 }, children.items[0].surface.size);
     try std.testing.expectEqual(vxfw.Size{ .width = 60, .height = 22 }, children.items[1].surface.size);
     try std.testing.expectEqual(@as(i17, 40), children.items[1].origin.col);
+}
+
+test "selected pacfile keeps its full row and inherits terminal colors" {
+    vxfw.DrawContext.init(.unicode);
+    const model = try Model.init(std.testing.allocator);
+    defer model.deinit();
+    model.utilities_state.result = try std.json.parseFromSlice([][]const u8, std.testing.allocator, "[\"/etc/test.pacnew\"]", .{ .allocate = .alloc_always });
+    model.utilities_state.list.item_count = 1;
+    model.utilities_state.results_focused = true;
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const surface = try drawResults(model, .{ .arena = arena.allocator(), .min = .{}, .max = .{ .width = 40, .height = 6 }, .cell_size = .{ .width = 10, .height = 20 } });
+    const row = surface.children[0].surface;
+    try std.testing.expectEqualStrings("/", row.buffer[0].char.grapheme);
+    try std.testing.expectEqual(styles.emphasis, row.buffer[0].style);
 }

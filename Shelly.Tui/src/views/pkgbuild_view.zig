@@ -78,6 +78,17 @@ pub const Document = struct {
         return .{ .arena = arena.*, .lines = lines, .rows = rows };
     }
 
+    pub fn fromDiff(allocator: std.mem.Allocator, text: []const u8) !Document {
+        var arena = std.heap.ArenaAllocator.init(allocator);
+        errdefer arena.deinit();
+        var lines: Builder = .{};
+        var remaining: usize = 8 * 1024 * 1024;
+        if (text.len == 0) {
+            try prose(arena.allocator(), &lines, "The files are identical.", &remaining);
+        } else try sourceStyled(arena.allocator(), &lines, text, &remaining, .diff);
+        return finish(&arena, &lines);
+    }
+
     pub fn init(allocator: std.mem.Allocator, builds: []const PkgBuild) !Document {
         if (builds.len == 0) return error.NoPkgbuildData;
         var arena = std.heap.ArenaAllocator.init(allocator);
@@ -319,6 +330,7 @@ pub const Action = enum { close, retry, approve, decline, toggle_wrap };
 pub const View = struct {
     back: ?*vxfw.Button = null,
     name: []const u8,
+    title: ?[]const u8 = null,
     scroll: *vxfw.ScrollView,
     loading: bool,
     failure: ?anyerror,
@@ -334,6 +346,7 @@ pub const View = struct {
     answer_input: []const u8 = "",
     answer_error: []const u8 = "",
     scan_status: []const u8 = "",
+    failure_text: ?[]const u8 = null,
 
     pub fn handleKey(self: View, key: vaxis.Key) ?Action {
         if (!self.choices and commands.matches(key, .toggle_wrap)) return .toggle_wrap;
@@ -397,7 +410,7 @@ pub const View = struct {
         });
         if (self.loading or self.failure != null) {
             var text: vxfw.Text = .{ .text = if (self.failure) |err|
-                try std.fmt.allocPrint(ctx.arena, "Could not load PKGBUILD preview ({s}).", .{@errorName(err)})
+                self.failure_text orelse try std.fmt.allocPrint(ctx.arena, "Could not load PKGBUILD preview ({s}).", .{@errorName(err)})
             else if (self.scan_status.len > 0)
                 self.scan_status
             else
@@ -448,7 +461,7 @@ pub const View = struct {
         const holder = try ctx.arena.create(FixedContent);
         holder.* = .{ .surface = content };
         const labels = [_]Border.BorderLabel{.{
-            .text = if (self.review) (if (self.pkgbuild_review) "PKGBUILD review" else if (self.transaction_review) "Transaction review" else if (self.optional_dependencies) "Optional dependencies" else if (self.choices) "Dependency selection" else "Operation review") else try std.fmt.allocPrint(ctx.arena, "PKGBUILD — {f}", .{@import("diagnostics").safe(self.name)}),
+            .text = if (self.review) (if (self.pkgbuild_review) "PKGBUILD review" else if (self.transaction_review) "Transaction review" else if (self.optional_dependencies) "Optional dependencies" else if (self.choices) "Dependency selection" else "Operation review") else self.title orelse try std.fmt.allocPrint(ctx.arena, "PKGBUILD — {f}", .{@import("diagnostics").safe(self.name)}),
             .alignment = .top_left,
         }};
         const border = try ctx.arena.create(Border);
