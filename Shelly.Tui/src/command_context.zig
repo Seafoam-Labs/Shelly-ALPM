@@ -132,7 +132,12 @@ pub fn resolve(self: *Model) commands.Context {
             }
             context.split_details = self.appimage_state.details_active;
         },
-        .utilities => context.mode = .utilities,
+        .utilities => {
+            context.mode = .utilities;
+            context.utilities_action = self.utilities_state.selected.label();
+            context.utilities_has_results = self.utilities_state.selected == .pacfiles;
+            context.utilities_results = self.utilities_state.results_focused;
+        },
         .settings => {
             context.mode = .settings;
             context.settings_keybindings = self.settings_state.keybindings_open;

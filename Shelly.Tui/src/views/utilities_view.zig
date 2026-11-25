@@ -1,6 +1,7 @@
 const std = @import("std");
 const vxfw = @import("vaxis").vxfw;
 const Model = @import("../model.zig").Model;
+const Task = @import("../models/utilities_model.zig").Task;
 const commands = @import("../commands.zig");
 const Border = @import("components/border.zig");
 const styles = @import("components/styles.zig");
@@ -45,7 +46,7 @@ fn drawPaneContent(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.
 
 fn drawStacked(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
     const size = ctx.max.size();
-    const action_height = @min(2, @max(size.height -| 1, 1));
+    const action_height = @min(5, @max(size.height -| 1, 1));
     const children = try ctx.arena.alloc(vxfw.SubSurface, if (size.height > action_height) 2 else 1);
     children[0] = .{ .origin = .{ .row = 0, .col = 0 }, .surface = try drawActions(ptr, ctx.withConstraints(.{}, .{ .width = size.width, .height = action_height })) };
     if (children.len == 2) {
@@ -61,43 +62,74 @@ fn drawActions(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surf
     const widget: vxfw.Widget = .{ .userdata = ptr, .drawFn = drawActions };
     if (size.width == 0 or size.height == 0) return .{ .size = size, .widget = widget, .buffer = &.{}, .children = &.{} };
     const line_ctx = ctx.withConstraints(.{}, .{ .width = size.width, .height = 1 });
-    const children = try ctx.arena.alloc(vxfw.SubSurface, @min(size.height, 2));
-    const action_row: u16 = @intCast(children.len - 1);
-    if (action_row != 0) {
-        const heading: vxfw.Text = .{ .text = "Configuration files", .softwrap = false, .overflow = .ellipsis, .style = styles.emphasis };
-        children[0] = .{ .origin = .{ .row = 0, .col = 0 }, .surface = try heading.draw(line_ctx) };
-    }
-    children[action_row] = .{ .origin = .{ .row = action_row, .col = 0 }, .surface = try drawAction(ptr, line_ctx) };
-    return .{ .size = size, .widget = widget, .buffer = &.{}, .children = children };
-}
-
-fn drawAction(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
     const model: *Model = @ptrCast(@alignCast(ptr));
-    const busy = model.utilities_state.job != null;
-    const label: vxfw.Text = .{
-        .text = "Find pending files",
-        .softwrap = false,
-        .overflow = .ellipsis,
-        .width_basis = .parent,
-        .style = if (busy) styles.secondary else styles.selected,
+    const rows = [_]union(enum) { heading: []const u8, task: Task }{
+        .{ .heading = "Configuration files" },
+        .{ .task = .pacfiles },
+        .{ .heading = "Cleanup" },
+        .{ .task = .cleanup },
+        .{ .task = .flatpak_cleanup },
     };
-    var surface = try label.draw(ctx);
-    surface.widget = .{ .userdata = ptr, .drawFn = drawAction, .eventHandler = activate };
-    if (model.settings_state.settings.expanded_mouse_support and !busy) try styles.hoverLabel(ctx.arena, &surface);
-    return surface;
+    var children: std.ArrayList(vxfw.SubSurface) = .empty;
+    if (size.height < rows.len) {
+        try children.append(ctx.arena, .{ .origin = .{ .row = 0, .col = 0 }, .surface = try drawAction(model, line_ctx, model.utilities_state.selected) });
+    } else {
+        for (rows) |row| {
+            const surface = switch (row) {
+                .heading => |label| blk: {
+                    const heading: vxfw.Text = .{ .text = label, .softwrap = false, .overflow = .ellipsis, .style = styles.emphasis };
+                    break :blk try heading.draw(line_ctx);
+                },
+                .task => |task| if (task.available(model)) try drawAction(model, line_ctx, task) else continue,
+            };
+            try children.append(ctx.arena, .{ .origin = .{ .row = @intCast(children.items.len), .col = 0 }, .surface = surface });
+        }
+    }
+    return .{ .size = size, .widget = widget, .buffer = &.{}, .children = children.items };
 }
 
-fn activate(ptr: *anyopaque, ctx: *vxfw.EventContext, event: vxfw.Event) anyerror!void {
-    if (event != .mouse or !commands.Mouse.primaryPress(event.mouse)) return;
-    const model: *Model = @ptrCast(@alignCast(ptr));
-    if (model.settings_state.settings.expanded_mouse_support) try commands.Mouse.discoverPacfiles(model, ctx);
+const ActionRow = struct {
+    model: *Model,
+    task: Task,
+
+    fn draw(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
+        const self: *ActionRow = @ptrCast(@alignCast(ptr));
+        const label: vxfw.Text = .{
+            .text = self.task.label(),
+            .softwrap = false,
+            .overflow = .ellipsis,
+            .width_basis = .parent,
+            .style = if (self.model.utilities_state.selected == self.task) styles.selected else styles.secondary,
+        };
+        var surface = try label.draw(ctx);
+        surface.widget = .{ .userdata = ptr, .drawFn = draw, .eventHandler = activate };
+        if (self.model.settings_state.settings.expanded_mouse_support) try styles.hoverLabel(ctx.arena, &surface);
+        return surface;
+    }
+
+    fn activate(ptr: *anyopaque, ctx: *vxfw.EventContext, event: vxfw.Event) anyerror!void {
+        if (event != .mouse or !commands.Mouse.primaryPress(event.mouse)) return;
+        const self: *ActionRow = @ptrCast(@alignCast(ptr));
+        try commands.Mouse.activateUtility(self.model, ctx, self.task);
+    }
+};
+
+fn drawAction(model: *Model, ctx: vxfw.DrawContext, task: Task) Allocator.Error!vxfw.Surface {
+    const row = try ctx.arena.create(ActionRow);
+    row.* = .{ .model = model, .task = task };
+    return ActionRow.draw(row, ctx);
 }
 
 fn drawResults(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
     const model: *Model = @ptrCast(@alignCast(ptr));
-    if (model.utilities_state.message()) |message| {
-        const text: vxfw.Text = .{ .text = message, .softwrap = true };
-        return text.draw(ctx);
+    const message = switch (model.utilities_state.selected) {
+        .pacfiles => model.utilities_state.message(),
+        .cleanup => "Review orphaned packages and corrupted cache entries before removing them. Administrator authorization is required to build the cleanup plan.",
+        .flatpak_cleanup => "Review unused Flatpak dependencies in system and user installations before removing them.",
+    };
+    if (message) |text| {
+        const label: vxfw.Text = .{ .text = text, .softwrap = true };
+        return label.draw(ctx);
     }
     return model.utilities_state.list.draw(ctx);
 }

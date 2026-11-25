@@ -1,6 +1,7 @@
 //! Read-only maintenance queries for the Utilities tab.
 const std = @import("std");
-const vxfw = @import("vaxis").vxfw;
+const vaxis = @import("vaxis");
+const vxfw = vaxis.vxfw;
 const Model = @import("../model.zig").Model;
 const commands = @import("../commands.zig");
 const ShellyCli = @import("../services/shelly_cli.zig").ShellyCli;
@@ -22,7 +23,27 @@ const Job = struct {
     }
 };
 
+pub const Task = enum {
+    pacfiles,
+    cleanup,
+    flatpak_cleanup,
+
+    pub fn label(self: Task) []const u8 {
+        return switch (self) {
+            .pacfiles => "Find pending files",
+            .cleanup => "Clean standard packages",
+            .flatpak_cleanup => "Clean unused Flatpaks",
+        };
+    }
+
+    pub fn available(self: Task, model: *const Model) bool {
+        return self != .flatpak_cleanup or (model.settings_state.settings.flatpak_enabled and model.flatpak_state.flatpak_available);
+    }
+};
+
 pub const State = struct {
+    selected: Task = .pacfiles,
+    results_focused: bool = false,
     job: ?*Job = null,
     result: ?Pacfiles = null,
     failed: bool = false,
@@ -71,10 +92,24 @@ fn buildRow(ptr: *const anyopaque, index: usize, _: usize) ?vxfw.Widget {
     return .{ .userdata = @ptrCast(&result.value[index]), .drawFn = utilities_view.drawPath };
 }
 
-pub fn discoverFromMouse(ptr: *anyopaque, ctx: *vxfw.EventContext) !void {
-    const model: *Model = @ptrCast(@alignCast(ptr));
-    if (model.active != .utilities or model.help_open or model.overlay != null) return;
-    try discover(model, ctx);
+pub fn activateFromMouse(model: *Model, ctx: *vxfw.EventContext, task: Task) !void {
+    if (model.active != .utilities or model.help_open or model.overlay != null or !model.settings_state.settings.expanded_mouse_support or !task.available(model)) return;
+    model.utilities_state.selected = task;
+    try activate(model, ctx);
+}
+
+fn activate(model: *Model, ctx: *vxfw.EventContext) !void {
+    const state = &model.utilities_state;
+    switch (state.selected) {
+        .pacfiles => {
+            state.results_focused = true;
+            try discover(model, ctx);
+        },
+        .cleanup, .flatpak_cleanup => {
+            if (!state.selected.available(model)) return ctx.consumeEvent();
+            try @import("operation_model.zig").startCleanup(model, ctx, if (state.selected == .cleanup) .standard else .flatpak);
+        },
+    }
 }
 
 pub fn discover(model: *Model, ctx: *vxfw.EventContext) !void {
@@ -89,20 +124,57 @@ pub fn discover(model: *Model, ctx: *vxfw.EventContext) !void {
     ctx.consumeAndRedraw();
 }
 
-pub fn handleKey(model: *Model, ctx: *vxfw.EventContext, key: @import("vaxis").Key) !bool {
-    if (commands.matches(key, .confirm) or commands.matches(key, .refresh)) {
-        try discover(model, ctx);
+pub fn handleKey(model: *Model, ctx: *vxfw.EventContext, key: vaxis.Key) !bool {
+    const state = &model.utilities_state;
+    if (commands.matches(key, .confirm) or (state.selected == .pacfiles and commands.matches(key, .refresh))) {
+        try activate(model, ctx);
         return true;
     }
-    return false;
+    const direction = commands.scrollKey(key) orelse return false;
+    switch (direction.codepoint) {
+        vaxis.Key.left => state.results_focused = false,
+        vaxis.Key.right => state.results_focused = state.selected == .pacfiles,
+        vaxis.Key.up, vaxis.Key.down => {
+            if (state.results_focused) return false;
+            const tasks = std.enums.values(Task);
+            const index = @backingInt(state.selected);
+            const next = if (direction.codepoint == vaxis.Key.up) index -| 1 else @min(index + 1, tasks.len - 1);
+            if (tasks[next].available(model)) state.selected = tasks[next];
+        },
+        else => return false,
+    }
+    ctx.consumeAndRedraw();
+    return true;
 }
 
 pub fn handleScroll(model: *Model, ctx: *vxfw.EventContext, event: vxfw.Event) !void {
-    const state = &model.utilities_state;
-    if (state.message() != null) return;
+    if (model.utilities_state.selected != .pacfiles or model.utilities_state.message() != null) return;
+    const list = &model.utilities_state.list;
     if (event == .key_press) {
+        if (!model.utilities_state.results_focused) return;
         const key = commands.scrollKey(event.key_press) orelse event.key_press;
-        return state.list.handleEvent(ctx, .{ .key_press = key });
+        return list.handleEvent(ctx, .{ .key_press = key });
     }
-    try state.list.handleEvent(ctx, event);
+    try list.handleEvent(ctx, event);
+}
+
+test "Utilities switches actions with keyboard and keeps results navigation separate" {
+    const model = try Model.init(std.testing.allocator);
+    defer model.deinit();
+    model.active = .utilities;
+    var ctx: vxfw.EventContext = .{ .io = std.testing.io, .alloc = std.testing.allocator, .cmds = .empty };
+    defer ctx.cmds.deinit(ctx.alloc);
+
+    try model.captureEvent(&ctx, .{ .key_press = commands.bindings.next });
+    try std.testing.expectEqual(Task.cleanup, model.utilities_state.selected);
+    try std.testing.expectEqualStrings("Clean standard packages", model.commandContext().utilities_action);
+    try model.captureEvent(&ctx, .{ .key_press = commands.bindings.previous });
+    try model.captureEvent(&ctx, .{ .key_press = commands.bindings.details });
+    try model.captureEvent(&ctx, .{ .key_press = commands.bindings.previous });
+    try std.testing.expectEqual(Task.pacfiles, model.utilities_state.selected);
+    try std.testing.expect(model.utilities_state.results_focused);
+    try model.captureEvent(&ctx, .{ .key_press = commands.bindings.back });
+    try model.captureEvent(&ctx, .{ .key_press = commands.bindings.previous });
+    try std.testing.expectEqual(Task.pacfiles, model.utilities_state.selected);
+    try std.testing.expectEqualStrings("Find pending files", model.commandContext().utilities_action);
 }

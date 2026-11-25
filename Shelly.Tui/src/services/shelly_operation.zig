@@ -15,6 +15,7 @@ pub const Action = enum {
     remove,
     upgrade,
     sync,
+    purify,
 
     pub fn verb(self: Action) []const u8 {
         return switch (self) {
@@ -22,6 +23,7 @@ pub const Action = enum {
             .remove => "Remove",
             .upgrade => "Upgrade",
             .sync => "Sync",
+            .purify => "Clean",
         };
     }
 
@@ -31,6 +33,7 @@ pub const Action = enum {
             .remove => "Removed",
             .upgrade => "Upgraded",
             .sync => "Synchronized",
+            .purify => "Cleaned",
         };
     }
 };
@@ -128,9 +131,22 @@ const ProgressStream = struct {
     transaction_done: bool = false,
     transaction_depth: usize = 0,
     transaction_cancelled: bool = false,
+    cleanup_plan: ?std.json.Parsed([][]const u8) = null,
+    cleanup_reviewed: bool = false,
 
     fn deinit(self: *ProgressStream) void {
         self.payload.deinit(std.heap.page_allocator);
+        if (self.cleanup_plan) |*plan| plan.deinit();
+    }
+
+    fn attachCleanupPlan(self: *ProgressStream, message: *OwnedMessage) !void {
+        const plan = self.cleanup_plan orelse return error.MissingCleanupPlan;
+        if (message.value.question != .yes_no or plan.value.len == 0) return error.InvalidCleanupReview;
+        const allocator = message.arena.allocator();
+        const targets = try allocator.alloc([]const u8, plan.value.len);
+        for (plan.value, targets) |target, *copy| copy.* = try allocator.dupe(u8, target);
+        message.value.question.yes_no.arguments = targets;
+        self.cleanup_reviewed = true;
     }
 
     fn feed(self: *ProgressStream, bytes: []const u8, operation: ?*Operation, io: std.Io) void {
@@ -163,7 +179,28 @@ const ProgressStream = struct {
             self.len += 1;
             if (!std.mem.endsWith(u8, self.payload.items, "[/JSON]")) continue;
             self.in_frame = false;
-            var message = decodePayload(std.heap.page_allocator, self.payload.items[0 .. self.len - 7]) catch {
+            const allocator = std.heap.page_allocator;
+            const json = JsonPackFrame.decodeBase64(allocator, self.payload.items[0 .. self.len - 7]) catch {
+                self.failed = true;
+                if (operation) |op| op.closeInput(io);
+                continue;
+            };
+            defer allocator.free(json);
+            const cleanup = if (operation) |op| op.request.action == .purify else false;
+            if (cleanup and std.mem.startsWith(u8, std.mem.trimStart(u8, json, " \t\r\n"), "[")) {
+                if (self.cleanup_plan != null) {
+                    self.failed = true;
+                    operation.?.closeInput(io);
+                    continue;
+                }
+                self.cleanup_plan = std.json.parseFromSlice([][]const u8, allocator, json, .{ .allocate = .alloc_always }) catch {
+                    self.failed = true;
+                    operation.?.closeInput(io);
+                    continue;
+                };
+                continue;
+            }
+            var message = decodeJson(allocator, json) catch {
                 self.failed = true;
                 if (operation) |op| op.closeInput(io);
                 continue;
@@ -173,6 +210,11 @@ const ProgressStream = struct {
             switch (message.value) {
                 .question => {
                     if (operation) |op| {
+                        if (cleanup and !self.cleanup_reviewed) self.attachCleanupPlan(&message) catch {
+                            self.failed = true;
+                            op.closeInput(io);
+                            continue;
+                        };
                         op.queueQuestion(io, message) catch {
                             self.failed = true;
                             op.closeInput(io);
@@ -327,6 +369,9 @@ pub const Operation = struct {
         switch (answer) {
             .yes_no, .transaction, .pkgbuild => |accepted| {
                 if (!accepted) self.user_declined = true;
+                if (self.request.action == .purify) {
+                    self.progress.update(if (accepted) "Applying cleanup…" else "Cancelling cleanup…", null);
+                }
             },
             else => {},
         }
@@ -444,7 +489,7 @@ pub const OperationResult = struct {
 };
 
 fn interactive(request: OperationRequest) bool {
-    return (request.action == .remove and request.remove_unused_dependencies and (std.mem.eql(u8, request.backend, "standard") or std.mem.eql(u8, request.backend, "aur"))) or
+    return request.action == .purify or (request.action == .remove and request.remove_unused_dependencies and (std.mem.eql(u8, request.backend, "standard") or std.mem.eql(u8, request.backend, "aur"))) or
         (std.mem.eql(u8, request.backend, "aur") and request.action != .remove) or isFlatpak(request) or combined(request);
 }
 
@@ -462,14 +507,15 @@ fn elevated(request: OperationRequest) bool {
 
 fn operationArgv(alloc: std.mem.Allocator, request: OperationRequest) ![][]const u8 {
     const package_backend = std.mem.eql(u8, request.backend, "standard") or std.mem.eql(u8, request.backend, "aur");
+    if (request.action == .purify and !std.mem.eql(u8, request.backend, "standard") and !isFlatpak(request)) return error.UnsupportedCleanupBackend;
     if (request.action == .sync and !std.mem.eql(u8, request.backend, "standard")) return error.UnsupportedSyncBackend;
-    if (request.targets.len > 0 and (!package_backend or request.action == .upgrade or request.action == .sync))
+    if (request.targets.len > 0 and (!package_backend or request.action == .upgrade or request.action == .sync or request.action == .purify))
         return error.UnsupportedBatchAction;
     if (std.mem.eql(u8, request.backend, "all") and request.action != .upgrade) return error.UnsupportedCombinedAction;
     const native_removal = request.action == .remove and std.mem.eql(u8, request.backend, "standard");
     if (request.action == .upgrade and !std.mem.eql(u8, request.backend, "standard") and !std.mem.eql(u8, request.backend, "aur") and !isFlatpak(request) and !std.mem.eql(u8, request.backend, "appimage") and !combined(request))
         return error.UnsupportedUpgradeSource;
-    if (isFlatpak(request) and request.action != .upgrade) {
+    if (isFlatpak(request) and request.action != .upgrade and request.action != .purify) {
         const target = request.flatpak orelse return error.MissingFlatpakTarget;
         if (request.action == .install and (target.remote.len == 0 or target.arch.len > 0)) return error.UnsupportedFlatpakInstallTarget;
     }
@@ -498,6 +544,7 @@ fn operationArgv(alloc: std.mem.Allocator, request: OperationRequest) ![][]const
     }
     if (request.action != .sync and !interactive(request)) try argv.append(alloc, "--no-confirm");
     try argv.append(alloc, "--ui-mode");
+    if (request.action == .purify and !isFlatpak(request)) try argv.append(alloc, "--orphans");
     if (native_removal) try argv.append(alloc, if (request.remove_unused_dependencies) "--cascade" else "--no-cascade");
     if (request.action == .remove and std.mem.eql(u8, request.backend, "aur") and request.remove_unused_dependencies) try argv.append(alloc, "--cascade");
     return argv.toOwnedSlice(alloc);
@@ -663,6 +710,11 @@ fn runInstall(io: std.Io, alloc: std.mem.Allocator, request: OperationRequest, o
         defer op.progress_mutex.unlock(io);
         result.declined = op.user_declined;
         if (op.expected_answer != null) stream.failed = true;
+    }
+    if (request.action == .purify) {
+        if (stream.cleanup_plan) |plan| {
+            if (plan.value.len != 0 and !stream.cleanup_reviewed) stream.failed = true;
+        } else stream.failed = true;
     }
     const missing_completion = (request.action == .upgrade or request.action == .sync or interactive(request)) and (!stream.transaction_done or stream.transaction_depth != 0);
     if (term != .exited or term.exited != 0 or read_failed or stream.failed or stream.transaction_cancelled or missing_completion or result.declined) {
@@ -1924,4 +1976,50 @@ test "AppImage upgrade subprocess requires completion and reports failures witho
         try std.testing.expectEqual(!std.mem.eql(u8, end, "TransactionDone"), result.failed);
         if (result.failed) try std.testing.expect(result.error_detail.len > 0);
     }
+}
+
+test "cleanup commands preserve confirmation and attach CLI targets to the review" {
+    const allocator = std.testing.allocator;
+    var env: std.process.Environ.Map = .init(allocator);
+    defer env.deinit();
+    var request: OperationRequest = .{ .action = .purify, .shelly_bin = "shelly", .environ_map = &env, .name = "cleanup", .backend = "standard" };
+    const standard = try operationArgv(allocator, request);
+    defer allocator.free(standard);
+    for ([_][]const u8{ "sudo", "shelly", "purify", "standard", "--ui-mode", "--orphans" }, standard) |expected, actual|
+        try std.testing.expectEqualStrings(expected, actual);
+    try std.testing.expect(interactive(request));
+    request.backend = "flatpak";
+    const flatpak = try operationArgv(allocator, request);
+    defer allocator.free(flatpak);
+    for ([_][]const u8{ "shelly", "purify", "flatpak", "--ui-mode" }, flatpak) |expected, actual|
+        try std.testing.expectEqualStrings(expected, actual);
+
+    var operation: Operation = .{
+        .arena = .init(allocator),
+        .request = request,
+        .input = .{ .handle = -1, .flags = .{ .nonblocking = false } },
+    };
+    defer operation.arena.deinit();
+    var stream: ProgressStream = .{};
+    defer stream.deinit();
+    for ([_][]const u8{
+        \\["[user] runtime/demo","[system] runtime/example"]
+        ,
+        \\{"$kind":"q.yesno","QuestionId":"1","QuestionText":"Proceed with purify?"}
+        ,
+    }) |json| {
+        const encoded = try allocator.alloc(u8, std.base64.standard.Encoder.calcSize(json.len));
+        defer allocator.free(encoded);
+        const frame = try std.fmt.allocPrint(allocator, "[JSON]{s}[/JSON]", .{std.base64.standard.Encoder.encode(encoded, json)});
+        defer allocator.free(frame);
+        stream.feed(frame, &operation, std.testing.io);
+    }
+    var message = operation.takeQuestion(std.testing.io) orelse return error.MissingCleanupReview;
+    defer message.deinit();
+    try std.testing.expect(!stream.failed);
+    try std.testing.expectEqualStrings("1", message.value.question.yes_no.question_id);
+    const targets = message.value.question.yes_no.arguments;
+    try std.testing.expectEqual(@as(usize, 2), targets.len);
+    try std.testing.expectEqualStrings("[user] runtime/demo", targets[0]);
+    try std.testing.expectEqualStrings("[system] runtime/example", targets[1]);
 }

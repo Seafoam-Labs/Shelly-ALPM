@@ -383,8 +383,6 @@ pub const Model = struct {
                         return commands.Mouse.navigateReview(self, ctx, event);
                     }
                 }
-                if (self.active == .utilities and self.overlay == null)
-                    return utilities_model.handleScroll(self, ctx, event);
                 if (self.active == .upgrade and self.overlay == null)
                     return commands.Mouse.scrollUpdates(self, ctx, event);
             },

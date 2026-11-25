@@ -151,8 +151,13 @@ pub const Document = struct {
                 }
             },
             .yes_no => |request| {
-                try source(alloc, &lines, request.question_text, &remaining);
-                for (request.arguments) |argument| try source(alloc, &lines, argument, &remaining);
+                if (action == .purify) {
+                    try prose(alloc, &lines, request.question_text, &remaining);
+                    for (request.arguments) |target| try prose(alloc, &lines, target, &remaining);
+                } else {
+                    try source(alloc, &lines, request.question_text, &remaining);
+                    for (request.arguments) |argument| try source(alloc, &lines, argument, &remaining);
+                }
             },
             .transaction => |request| {
                 try prose(alloc, &lines, request.question_text, &remaining);

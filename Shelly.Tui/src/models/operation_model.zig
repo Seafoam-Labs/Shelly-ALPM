@@ -489,7 +489,7 @@ pub fn closeOverlay(self: *Model) void {
     if (self.overlay) |overlay| {
         switch (overlay) {
             .sudo => |prompt| {
-                if (prompt.backend == .standard or prompt.backend == .aur) resetPackageSelection(self);
+                if (prompt.action != .purify and (prompt.backend == .standard or prompt.backend == .aur)) resetPackageSelection(self);
                 prompt.deinit(self.gpa);
                 if (self.notice.len > 0) self.gpa.free(self.notice);
                 self.notice = "";
@@ -587,7 +587,8 @@ pub fn answerOperationQuestion(self: *Model, approve: bool) !void {
         self.operation_state.answer_error = "Could not send the answer. The operation may have ended.";
         return;
     };
-    if (!approve and (std.mem.eql(u8, job.request.backend, "standard") or std.mem.eql(u8, job.request.backend, "aur"))) resetPackageSelection(self);
+    if (!approve and job.request.action != .purify and (std.mem.eql(u8, job.request.backend, "standard") or std.mem.eql(u8, job.request.backend, "aur"))) resetPackageSelection(self);
+    if (self.operation_state.review_prompt) |prompt| prompt.progress = job.snapshot(runtime.io);
     finishOperationQuestion(self);
 }
 
@@ -609,6 +610,19 @@ fn sendAuthenticationKey(job: *shelly_operation.Operation, key: vaxis.Key) !void
         for (text) |byte| if (byte < 0x20 or byte == 0x7f) return;
         try job.sendAuthentication(runtime.io, text);
     }
+}
+
+pub fn startCleanup(self: *Model, ctx: *vxfw.EventContext, backend: OperationBackend) !void {
+    if (self.overlay != null or self.operation_state.install_job != null) return ctx.consumeEvent();
+    const name = try self.gpa.dupe(u8, if (backend == .flatpak) "unused Flatpak dependencies" else "standard packages");
+    errdefer self.gpa.free(name);
+    const prompt = try self.gpa.create(SudoPrompt);
+    errdefer self.gpa.destroy(prompt);
+    prompt.* = .{ .name = name, .backend = backend, .action = .purify, .elevated = backend == .standard };
+    try ctx.requestFocus(self.widget());
+    try confirmPrompt(self, ctx, prompt);
+    self.overlay = .{ .sudo = prompt };
+    ctx.consumeAndRedraw();
 }
 
 fn confirmPrompt(self: *Model, ctx: *vxfw.EventContext, prompt: *SudoPrompt) !void {
@@ -759,7 +773,7 @@ pub fn pollInstall(self: *Model) !bool {
         self.updates_state.refresh_updates_after_operation = true;
         if (self.settings_state.settings.aur_enabled) self.aur_state.refresh_aur_after_operation = true;
     }
-    if (package_batch or job.request.action == .sync) {
+    if (package_batch or job.request.action == .sync or (job.request.action == .purify and !is_flatpak and !completed.declined)) {
         self.updates_state.refresh_after_upgrade = true;
         self.updates_state.refresh_updates_after_operation = true;
     }

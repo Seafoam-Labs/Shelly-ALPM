@@ -194,13 +194,21 @@ fn dispatchWithRunner(
 ) anyerror!?u8 {
     const backend = backendForPath(invocation.command.path) orelse return null;
     const options = optionsFor(invocation);
+    if (invocation.globals.ui_mode) {
+        try output.writeAlpmInfoFrame(context, "TransactionStart", "Preparing cleanup plan…");
+        try ui_operation.flush(context);
+    }
     var plan = buildPlan(context, backend, options, runner) catch |err| {
         try writePlanFailure(context, invocation, backend, err);
+        if (invocation.globals.ui_mode) {
+            try output.writeAlpmInfoFrame(context, "TransactionFailed", "Could not prepare cleanup plan.");
+            try ui_operation.flush(context);
+        }
         return 1;
     };
     defer plan.deinit(context.allocator);
 
-    try writePlan(context, invocation, backend, options, plan.targets);
+    try writePlan(context, invocation, options, plan.targets);
     if (plan.targets.len == 0 or options.dry_run) return 0;
 
     if (!invocation.globals.no_confirm) {
@@ -399,7 +407,7 @@ fn executeUi(
     });
     defer _ = operation_context.unsubscribe(subscription);
 
-    try output.writeAlpmInfoFrame(context, "TransactionStart", openingMessage(backend, options));
+    try output.writeAlpmInfoFrame(context, "TransactionStart", "Applying cleanup…");
     try ui_operation.flush(context);
 
     var result = runner.run(
@@ -508,12 +516,10 @@ fn scopeName(scope: anytype) []const u8 {
 fn writePlan(
     context: *runtime.RuntimeContext,
     invocation: *const parser.Invocation,
-    backend: Backend,
     options: Options,
     targets: []const [:0]const u8,
 ) !void {
     if (invocation.globals.ui_mode) {
-        try output.writeAlpmInfoFrame(context, "TransactionStart", planMessage(backend));
         var payload = std.Io.Writer.Allocating.init(context.allocator);
         defer payload.deinit();
         try writeTargetsJson(&payload.writer, targets);
@@ -547,13 +553,6 @@ fn writePlan(
         &.{"Target"},
         rows,
     );
-}
-
-fn planMessage(backend: Backend) []const u8 {
-    return switch (backend) {
-        .standard => "Building standard package purify plan...",
-        .flatpak => "Building Flatpak dependency cleanup plan...",
-    };
 }
 
 fn planSummary(target_count: usize) []const u8 {
@@ -1056,11 +1055,12 @@ test "purify UI emits result and transaction frames" {
     const Success = struct {
         pub fn run(
             _: @This(),
-            _: *runtime.RuntimeContext,
+            context: *runtime.RuntimeContext,
             _: *PackageManager.OperationContext,
             _: Backend,
             _: Options,
         ) !Result {
+            try std.testing.expect(std.mem.startsWith(u8, context.stdout.buffered(), "[JSON]"));
             return .{ .targets = &.{"orphan-one"} };
         }
     };

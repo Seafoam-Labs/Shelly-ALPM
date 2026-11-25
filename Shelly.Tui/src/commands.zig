@@ -33,7 +33,7 @@ pub const Mouse = struct {
 
     pub const SettingsTarget = union(enum) { control: usize, header: usize };
     pub const BindingTarget = union(enum) { binding: usize, scroll_down: bool, save, cancel };
-    pub const discoverPacfiles = @import("models/utilities_model.zig").discoverFromMouse;
+    pub const activateUtility = @import("models/utilities_model.zig").activateFromMouse;
     pub const editBinding = @import("models/settings_model.zig").editBindingFromMouse;
     pub const activateSetting = @import("models/settings_model.zig").onSettingsAction;
     pub const selectTab = @import("model.zig").Model.onTabSelected;
@@ -397,6 +397,9 @@ pub fn scrollsOperation(key: vaxis.Key) bool {
 
 pub const Mode = enum { appimage, search, packages, details, aur, flatpak, updates, utilities, settings, authentication, confirmation, running, result, review, preview_document, answers, choice, help };
 pub const Context = struct {
+    utilities_action: []const u8 = "",
+    utilities_has_results: bool = false,
+    utilities_results: bool = false,
     removal_confirmation: bool = false,
     appimage_source: bool = false,
     appimage_configure_selected: bool = false,
@@ -536,9 +539,10 @@ pub fn entries(arena: std.mem.Allocator, context: Context) std.mem.Allocator.Err
             if (context.mode == .flatpak or context.installed_only or context.catalog_available) try add(arena, &list, .refresh_list, "Refresh", "Refresh the current package list");
         },
         .utilities => {
-            try add(arena, &list, .confirm, "Find files", "Find pending configuration files");
-            try add(arena, &list, .previous, "Up", "Scroll file paths up");
-            try add(arena, &list, .next, "Down", "Scroll file paths down");
+            try add(arena, &list, .confirm, context.utilities_action, context.utilities_action);
+            try add(arena, &list, .previous, if (context.utilities_results) "Scroll up" else "Previous", "Move up in the active pane");
+            try add(arena, &list, .next, if (context.utilities_results) "Scroll down" else "Next", "Move down in the active pane");
+            if (context.utilities_has_results) try add(arena, &list, if (context.utilities_results) .back else .details, if (context.utilities_results) "Actions" else "Details", "Switch between actions and results");
         },
         .updates => {
             if (context.upgrade_all) try add(arena, &list, .upgrade_all, "Update all", "Upgrade all enabled package sources");
