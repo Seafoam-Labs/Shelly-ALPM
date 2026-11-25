@@ -22,6 +22,8 @@
             <property name="margin-start">30</property>
             <property name="margin-end">30</property>
             <property name="margin-top">16</property>
+            <property name="valign">center</property>
+            <property name="vexpand">true</property>
             <property name="spacing">16</property>
             <!-- Tabs; save floats at the bottom of the page -->
             <child>
@@ -33,6 +35,9 @@
             <child>
               <object class="GtkStack" id="settings_stack">
                 <property name="transition-type">slide-left-right</property>
+                <property name="vhomogeneous">false</property>
+                <property name="interpolate-size">true</property>
+                <property name="vexpand">true</property>
                 <!-- General page -->
                 <child>
                   <object class="GtkStackPage">
@@ -41,12 +46,14 @@
                     <property name="child">
                       <object class="GtkScrolledWindow">
                         <property name="hscrollbar-policy">never</property>
+                        <property name="propagate-natural-height">true</property>
                         <property name="vexpand">true</property>
                         <child>
                           <object class="GtkBox">
                             <property name="orientation">vertical</property>
                             <property name="hexpand">true</property>
                             <property name="halign">center</property>
+                            <property name="valign">center</property>
                             <property name="width-request">640</property>
                             <property name="spacing">28</property>
                             <style>
@@ -474,12 +481,14 @@
                     <property name="child">
                       <object class="GtkScrolledWindow">
                         <property name="hscrollbar-policy">never</property>
+                        <property name="propagate-natural-height">true</property>
                         <property name="vexpand">true</property>
                         <child>
                           <object class="GtkBox">
                             <property name="orientation">vertical</property>
                             <property name="hexpand">true</property>
                             <property name="halign">center</property>
+                            <property name="valign">center</property>
                             <property name="width-request">640</property>
                             <property name="spacing">28</property>
                             <style>
@@ -1233,12 +1242,14 @@
                     <property name="child">
                       <object class="GtkScrolledWindow">
                         <property name="hscrollbar-policy">never</property>
+                        <property name="propagate-natural-height">true</property>
                         <property name="vexpand">true</property>
                         <child>
                           <object class="GtkBox">
                             <property name="orientation">vertical</property>
                             <property name="hexpand">true</property>
                             <property name="halign">center</property>
+                            <property name="valign">center</property>
                             <property name="width-request">640</property>
                             <property name="spacing">28</property>
                             <style>
@@ -1625,12 +1636,14 @@
                     <property name="child">
                       <object class="GtkScrolledWindow">
                         <property name="hscrollbar-policy">never</property>
+                        <property name="propagate-natural-height">true</property>
                         <property name="vexpand">true</property>
                         <child>
                           <object class="GtkBox">
                             <property name="orientation">vertical</property>
                             <property name="hexpand">true</property>
                             <property name="halign">center</property>
+                            <property name="valign">center</property>
                             <property name="width-request">640</property>
                             <property name="spacing">28</property>
                             <style>
