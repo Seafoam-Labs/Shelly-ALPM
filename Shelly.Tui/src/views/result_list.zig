@@ -173,7 +173,7 @@ test "package checkboxes toggle the clicked result without moving the cursor" {
             for ([_]bool{ true, false }) |marked| {
                 try surface.widget.handleEvent(&events, .{ .mouse = .{ .row = 1, .col = size.mark_col, .button = .left, .type = .press, .mods = .{} } });
                 const is_marked = if (kind == .packages)
-                    model.packages_state.selected_packages.items.len == 1 and std.mem.eql(u8, model.packages_state.selected_packages.items[0], "b")
+                    model.packages_state.selected_packages.items.len == 1 and std.mem.eql(u8, model.packages_state.selected_packages.items[0].name, "b")
                 else
                     model.aur_state.aur_selection.items.len == 1 and std.mem.eql(u8, model.aur_state.aur_selection.items[0].name, "b");
                 try std.testing.expectEqual(marked, is_marked);

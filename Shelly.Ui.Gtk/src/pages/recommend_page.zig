@@ -171,7 +171,9 @@ pub const RecommendPage = extern struct {
 
         var avail: std.StringHashMapUnmanaged(*const Package) = .empty;
         for (parsed.value) |*pkg| {
-            avail.put(alloc, pkg.Name, pkg) catch {};
+            // repository copies come in priority order; keep the first.
+            const entry = avail.getOrPut(alloc, pkg.Name) catch continue;
+            if (!entry.found_existing) entry.value_ptr.* = pkg;
         }
 
         var sections: std.ArrayListUnmanaged(CategorySection) = .empty;

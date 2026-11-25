@@ -385,7 +385,7 @@ pub const PackagePage = extern struct {
         const check = gobject.ext.cast(gtk.CheckButton, child) orelse return;
 
         page.priv().check_map_column.put(std.heap.c_allocator, pkg, check) catch {};
-        a11y.setName(check.as(gtk.Widget), pkg.getName());
+        a11y.setName(check.as(gtk.Widget), pkg.getTarget());
 
         gobject.Object.setData(check.as(gobject.Object), "syncing", @ptrFromInt(1));
         gtk.CheckButton.setActive(check, @intFromBool(pkg.isSelected()));
@@ -430,9 +430,10 @@ pub const PackagePage = extern struct {
         const page_ptr = gobject.Object.getData(check.as(gobject.Object), "page") orelse return;
 
         const self: *Self = @ptrCast(@alignCast(page_ptr));
+        if (pkg.isSelected()) self.deselect_other_copies(pkg);
         const p = self.priv();
         const path = p.resolver.resolve(pkg.getName());
-        p.detail.showPackage(pkg.getName(), pkg.isInstalled(), path);
+        p.detail.showPackage(pkg.getTarget(), pkg.isInstalled(), path);
         gtk.Revealer.setRevealChild(p.detail_revealer, 1);
 
         self.update_selection_ui();
@@ -537,7 +538,7 @@ pub const PackagePage = extern struct {
                 const selection_check = gobject.ext.cast(gtk.CheckButton, gtk.Grid.getChildAt(content_grid, 2, 0) orelse return) orelse return;
 
                 page.priv().check_map_grid.put(std.heap.c_allocator, pkg, selection_check) catch {};
-                a11y.setName(selection_check.as(gtk.Widget), pkg.getName());
+                a11y.setName(selection_check.as(gtk.Widget), pkg.getTarget());
 
                 const title_grid_w = gtk.Widget.getFirstChild(right_box.as(gtk.Widget)) orelse return;
                 const title_grid = gobject.ext.cast(gtk.Grid, title_grid_w) orelse return;
@@ -591,9 +592,10 @@ pub const PackagePage = extern struct {
 
         const page_ptr = gobject.Object.getData(check.as(gobject.Object), "page") orelse return;
         const self: *Self = @ptrCast(@alignCast(page_ptr));
+        if (pkg.isSelected()) self.deselect_other_copies(pkg);
         const p = self.priv();
         const path = p.resolver.resolve(pkg.getName());
-        p.detail.showPackage(pkg.getName(), pkg.isInstalled(), path);
+        p.detail.showPackage(pkg.getTarget(), pkg.isInstalled(), path);
         gtk.Revealer.setRevealChild(p.detail_revealer, 1);
         self.update_selection_ui();
     }
@@ -615,6 +617,7 @@ pub const PackagePage = extern struct {
 
         const new_state = !pkg.isSelected();
         pkg.setSelected(new_state);
+        if (new_state) self.deselect_other_copies(pkg);
 
         if (p.check_map_grid.get(pkg)) |check| {
             set_sync_active(check, new_state);
@@ -624,6 +627,25 @@ pub const PackagePage = extern struct {
         }
 
         self.update_selection_ui();
+    }
+
+    /// a transaction takes one repository copy per name, so selecting a copy
+    /// clears the others.
+    fn deselect_other_copies(self: *Self, selected: *PackageObject) void {
+        const p = self.priv();
+        const model = p.list_store.as(gio.ListModel);
+        const n = gio.ListModel.getNItems(model);
+        var i: u32 = 0;
+        while (i < n) : (i += 1) {
+            const obj = gio.ListModel.getObject(model, i) orelse continue;
+            defer obj.unref();
+            const pkg = gobject.ext.cast(PackageObject, obj) orelse continue;
+            if (pkg == selected or !pkg.isSelected()) continue;
+            if (!std.mem.eql(u8, pkg.getName(), selected.getName())) continue;
+            pkg.setSelected(false);
+            if (p.check_map_grid.get(pkg)) |check| set_sync_active(check, false);
+            if (p.check_map_column.get(pkg)) |check| set_sync_active(check, false);
+        }
     }
 
     fn set_sync_active(check: *gtk.CheckButton, active: bool) void {
@@ -717,7 +739,7 @@ pub const PackagePage = extern struct {
         const pkg = gobject.ext.cast(PackageObject, obj) orelse return;
 
         const path = p.resolver.resolve(pkg.getName());
-        p.detail.showPackage(pkg.getName(), pkg.isInstalled(), path);
+        p.detail.showPackage(pkg.getTarget(), pkg.isInstalled(), path);
         gtk.Revealer.setRevealChild(p.detail_revealer, 1);
     }
 
@@ -1033,7 +1055,7 @@ pub const PackagePage = extern struct {
             const row = gtk.Box.new(.horizontal, 8);
             gtk.Widget.setHexpand(row.as(gtk.Widget), 1);
 
-            const name_label = gtk.Label.new(pkg.getName());
+            const name_label = gtk.Label.new(pkg.getTarget());
             gtk.Widget.setHalign(name_label.as(gtk.Widget), .start);
             gtk.Widget.setHexpand(name_label.as(gtk.Widget), 1);
             gtk.Label.setXalign(name_label, 0);
@@ -1278,7 +1300,7 @@ pub const PackagePage = extern struct {
             const obj = gio.ListModel.getObject(p.list_store.as(gio.ListModel), i) orelse continue;
             const pkg = gobject.ext.cast(PackageObject, obj) orelse continue;
             if (pkg.isSelected()) {
-                names.append(std.heap.c_allocator, pkg.getName()) catch continue;
+                names.append(std.heap.c_allocator, pkg.getTarget()) catch continue;
             }
         }
         if (names.items.len == 0) return;
