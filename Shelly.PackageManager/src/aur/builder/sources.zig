@@ -423,7 +423,41 @@ fn acquireHttpSource(
     try std.Io.Dir.copyFile(.cwd(), cache_path, .cwd(), destination, self.io, .{});
 }
 
-fn cloneGitSource(
+/// Git sources whose emitted checksums are all SKIP (or moving) are validated
+/// without transferring objects. Commit pins cannot be probed: ls-remote does
+/// not expose raw commits and a dry-run fetch still transfers objects, so an
+/// all-SKIP commit pin is deliberately not existence-checked.
+pub fn probeSkippedGitRef(
+    self: *PackageBuilder,
+    operation: *op_context.Operation,
+    source: source_spec.ParsedSource,
+) !void {
+    if (source.kind != .git) return;
+    const reference = source.reference orelse {
+        try runSourceCommand(self, operation, &.{ "ls-remote", "--exit-code", "--heads", "--", source.location });
+        return;
+    };
+    switch (reference.kind) {
+        .commit => {},
+        .branch, .tag => {
+            const prefix = if (reference.kind == .branch) "refs/heads/" else "refs/tags/";
+            const full_ref = try std.fmt.allocPrint(self.allocator, "{s}{s}", .{ prefix, reference.value });
+            defer self.allocator.free(full_ref);
+            // Validate before using the name as an ls-remote pattern so an
+            // invalid ref fails instead of matching a glob.
+            try runSourceCommand(self, operation, &.{ "check-ref-format", full_ref });
+            const heads_or_tags = if (reference.kind == .branch) "--heads" else "--tags";
+            try runSourceCommand(self, operation, &.{ "ls-remote", "--exit-code", heads_or_tags, "--", source.location, full_ref });
+        },
+    }
+}
+
+const git_cache_lock_name = ".shelly-lock";
+/// Force-updated tags append shallow boundaries; past this many the entry is
+/// replaced with a fresh single-boundary shallow mirror.
+const git_shallow_boundary_limit = 64;
+
+fn acquireGitSource(
     self: *PackageBuilder,
     operation: *op_context.Operation,
     source: source_spec.ParsedSource,
@@ -434,47 +468,695 @@ fn cloneGitSource(
         &.{ self.options.source_destination, source.name },
     );
     defer self.allocator.free(cache_path);
-    const cached = std.Io.Dir.cwd().statFile(
-        self.io,
-        cache_path,
-        .{ .follow_symlinks = false },
-    ) catch |err| switch (err) {
-        error.FileNotFound => null,
-        else => return err,
+    const shallow_allowed = try shallowAcquisitionAllowed(self, operation, source);
+    try ensureGitCacheEntry(self, operation, source, cache_path, shallow_allowed);
+    materializeGitSource(self, operation, source, cache_path, destination) catch |err| {
+        if (err == error.Cancelled) return err;
+        const shallow = gitCacheIsShallow(self, operation, cache_path) catch false;
+        if (!shallow) return err;
+        // A shallow entry can fail materialization (for example a tag that
+        // does not peel to a commit). Recreate once with full history.
+        try replaceGitCacheEntry(self, operation, source, cache_path, false);
+        try materializeGitSource(self, operation, source, cache_path, destination);
     };
-    if (cached) |stat| {
-        if (stat.kind != .directory) return error.InvalidSourceCacheEntry;
-        try runSourceCommand(self, operation, &.{ "-C", cache_path, "remote", "set-url", "origin", source.location });
-        // A detached repack can delete packs while the clone below copies them.
-        try runSourceCommand(self, operation, &.{
-            "-C",
+}
+
+/// Shallow acquisition requires an enabled setting, a pinned tag with a safe
+/// ref name or a full 40-hex commit, and no lifecycle body that could read
+/// repository history. Everything else takes the full mirror path.
+fn shallowAcquisitionAllowed(
+    self: *PackageBuilder,
+    operation: *op_context.Operation,
+    source: source_spec.ParsedSource,
+) !bool {
+    if (!self.shellybuild_config.build.shallow_git) return false;
+    const reference = source.reference orelse return false;
+    if (reference.kind == .branch) return false;
+    if (requiresFullGitHistory(self)) return false;
+    if (reference.kind == .commit) return source_spec.isFullCommitSha(reference.value);
+    const full_ref = try std.fmt.allocPrint(self.allocator, "refs/tags/{s}", .{reference.value});
+    defer self.allocator.free(full_ref);
+    runSourceCommand(self, operation, &.{ "check-ref-format", full_ref }) catch |err| {
+        if (err == error.Cancelled) return err;
+        return false;
+    };
+    return true;
+}
+
+/// The scan covers every lifecycle body even when a metadata-only command
+/// will not run it, because the same cache entry may later serve a real
+/// build. It is intentionally coarse: git apply, submodule updates, and
+/// secondary clones also force full history. Static scanning cannot see git
+/// invoked by an external script or Makefile; the fallback stays conservative.
+fn requiresFullGitHistory(self: *const PackageBuilder) bool {
+    const execution = self.package_builds[0].execution orelse return false;
+    if (preludeMentionsGitOrSrcdest(execution.shared_prelude)) return true;
+    if (bodyMentionsGitOrSrcdest(execution.shared_helpers)) return true;
+    if (bodyMentionsGitOrSrcdest(execution.package_helpers)) return true;
+    if (execution.verify_step) |step| {
+        if (bodyMentionsGitOrSrcdest(step.body) or bodyMentionsGitOrSrcdest(step.expanded_body)) return true;
+    }
+    for (execution.steps) |step| {
+        if (bodyMentionsGitOrSrcdest(step.body) or bodyMentionsGitOrSrcdest(step.expanded_body)) return true;
+    }
+    return false;
+}
+
+/// The prelude redeclares top-level shell state: `declare -a` data arrays
+/// (source, depends, makedepends, options, ...) and `declare --` scalars. A
+/// `makedepends=('git')` entry is data, not an invocation, so array lines are
+/// skipped; scalars can hold a command name or fragment and are still scanned.
+fn preludeMentionsGitOrSrcdest(prelude: []const u8) bool {
+    var lines = std.mem.splitScalar(u8, prelude, '\n');
+    while (lines.next()) |line| {
+        if (std.mem.startsWith(u8, line, "declare -a ")) continue;
+        if (bodyMentionsGitOrSrcdest(line)) return true;
+    }
+    return false;
+}
+
+fn bodyMentionsGitOrSrcdest(body: []const u8) bool {
+    if (std.mem.indexOf(u8, body, "SRCDEST") != null) return true;
+    var cursor: usize = 0;
+    var quote: u8 = 0;
+    while (cursor < body.len) {
+        const character = body[cursor];
+        if (quote == 0 and character == '\\') {
+            cursor += 2;
+            continue;
+        }
+        if (quote == 0 and (character == '\'' or character == '"')) {
+            quote = character;
+            cursor += 1;
+            continue;
+        }
+        if (quote != 0) {
+            if (character == quote) {
+                quote = 0;
+                cursor += 1;
+                continue;
+            }
+            // Quoted text can still run commands (`sh -c "git describe"`), so
+            // keep scanning it; only comment handling depends on the state.
+            if (std.mem.startsWith(u8, body[cursor..], "git")) {
+                const after = cursor + "git".len;
+                const before_ok = cursor == 0 or isGitCommandBoundary(body[cursor - 1], true);
+                const after_ok = after == body.len or isGitCommandBoundary(body[after], false);
+                if (before_ok and after_ok) return true;
+            }
+            cursor += 1;
+            continue;
+        }
+        // A metadata array literal (depends=('git'), source=('git+...')) is
+        // data even inside a package function. Skip the whole literal so a
+        // quoted dependency name cannot force full history.
+        if (isLineStart(body, cursor)) {
+            if (metadataArrayLiteralEnd(body, cursor)) |end| {
+                cursor = end;
+                continue;
+            }
+        }
+        // Comments are never executed, including the ones that merely mention
+        // git. Skip to the end of the line.
+        if (character == '#' and isCommentStart(body, cursor)) {
+            cursor = std.mem.indexOfScalarPos(u8, body, cursor, '\n') orelse body.len;
+            continue;
+        }
+        if (std.mem.startsWith(u8, body[cursor..], "git")) {
+            // Command-position boundaries only: identifier characters, URL and
+            // path punctuation (git+ prefixes, git:// URLs, .git suffixes, and
+            // foo-git names) are not git invocations. /usr/bin/git still counts.
+            const before_ok = cursor == 0 or isGitCommandBoundary(body[cursor - 1], true);
+            const after = cursor + "git".len;
+            const after_ok = after == body.len or isGitCommandBoundary(body[after], false);
+            if (before_ok and after_ok) return true;
+        }
+        cursor += 1;
+    }
+    return false;
+}
+
+fn isCommentStart(body: []const u8, position: usize) bool {
+    if (position == 0) return true;
+    const before = body[position - 1];
+    return std.ascii.isWhitespace(before) or std.mem.indexOfScalar(u8, ";&|()", before) != null;
+}
+
+fn isLineStart(body: []const u8, position: usize) bool {
+    if (position == 0) return true;
+    const line_start = if (std.mem.lastIndexOfScalar(u8, body[0..position], '\n')) |index| index + 1 else 0;
+    for (body[line_start..position]) |character| {
+        if (character != ' ' and character != '\t') return false;
+    }
+    return true;
+}
+
+const checksum_algorithms = std.meta.tags(checksums.ChecksumAlgorithm);
+/// Names whose array literals carry makepkg metadata rather than commands.
+const metadata_arrays: []const []const u8 = &.{
+    "pkgbase",    "pkgname",     "source",         "depends", "makedepends", "checkdepends",
+    "optdepends", "provides",    "conflicts",      "replaces", "groups",     "license",
+    "arch",       "backup",      "options",        "noextract", "validpgpkeys", "install",
+    "changelog",
+};
+
+fn metadataArrayName(name: []const u8) bool {
+    for (metadata_arrays) |candidate| if (std.mem.eql(u8, name, candidate)) return true;
+    if (std.mem.eql(u8, name, "cksums")) return true;
+    inline for (checksum_algorithms) |algorithm| {
+        const base: []const u8 = @tagName(algorithm) ++ "sums";
+        if (name.len >= base.len and std.mem.eql(u8, name[0..base.len], base)) {
+            if (name.len == base.len or name[base.len] == '_') return true;
+        }
+    }
+    return false;
+}
+
+/// Returns the index just past a `<metadata array>=()` literal starting at
+/// `start`, or null when the text is not one or its end cannot be determined.
+/// Failing to skip only keeps the conservative full-history path.
+fn metadataArrayLiteralEnd(body: []const u8, start: usize) ?usize {
+    var cursor = start;
+    while (cursor < body.len and (body[cursor] == ' ' or body[cursor] == '\t')) cursor += 1;
+    const name_start = cursor;
+    while (cursor < body.len and (std.ascii.isAlphanumeric(body[cursor]) or body[cursor] == '_')) cursor += 1;
+    if (!metadataArrayName(body[name_start..cursor])) return null;
+    if (cursor < body.len and body[cursor] == '+') cursor += 1;
+    if (cursor >= body.len or body[cursor] != '=') return null;
+    cursor += 1;
+    if (cursor >= body.len or body[cursor] != '(') return null;
+    return shellArrayEnd(body, cursor + 1);
+}
+
+fn shellArrayEnd(body: []const u8, start: usize) ?usize {
+    var depth: usize = 1;
+    var i = start;
+    while (i < body.len) {
+        switch (body[i]) {
+            '\'' => {
+                i += 1;
+                while (i < body.len and body[i] != '\'') i += 1;
+                if (i >= body.len) return null;
+                i += 1;
+            },
+            '"' => {
+                i = shellDoubleQuotedEnd(body, i + 1) orelse return null;
+            },
+            '\\' => i += 2,
+            '#' => if (i == start or std.ascii.isWhitespace(body[i - 1])) {
+                i = std.mem.indexOfScalarPos(u8, body, i, '\n') orelse return null;
+            } else {
+                i += 1;
+            },
+            '(' => {
+                depth += 1;
+                i += 1;
+            },
+            ')' => {
+                depth -= 1;
+                if (depth == 0) return i + 1;
+                i += 1;
+            },
+            '<' => if (std.mem.startsWith(u8, body[i..], "<<")) return null else {
+                i += 1;
+            },
+            else => i += 1,
+        }
+    }
+    return null;
+}
+
+fn shellDoubleQuotedEnd(body: []const u8, start: usize) ?usize {
+    var i = start;
+    while (i < body.len) {
+        switch (body[i]) {
+            '\\' => i += 2,
+            '"' => return i + 1,
+            '$' => if (i + 1 < body.len and body[i + 1] == '(') {
+                var depth: usize = 1;
+                i += 2;
+                while (i < body.len and depth > 0) : (i += 1) {
+                    switch (body[i]) {
+                        '\\' => i += 1,
+                        '\'' => {
+                            i += 1;
+                            while (i < body.len and body[i] != '\'') i += 1;
+                            if (i >= body.len) return null;
+                        },
+                        '(' => depth += 1,
+                        ')' => depth -= 1,
+                        else => {},
+                    }
+                }
+                if (depth != 0) return null;
+            } else {
+                i += 1;
+            },
+            else => i += 1,
+        }
+    }
+    return null;
+}
+
+fn isGitCommandBoundary(character: u8, leading: bool) bool {
+    return switch (character) {
+        ' ', '\t', '\r', '\n', ';', '|', '&', '(', ')', '{', '}', '\'', '"', '`', '!', '=' => true,
+        '/' => leading,
+        else => false,
+    };
+}
+
+fn ensureGitCacheEntry(
+    self: *PackageBuilder,
+    operation: *op_context.Operation,
+    source: source_spec.ParsedSource,
+    cache_path: []const u8,
+    shallow_allowed: bool,
+) !void {
+    while (true) {
+        try operation.checkCancelled();
+        const cached = std.Io.Dir.cwd().statFile(
+            self.io,
             cache_path,
-            "-c",
-            "maintenance.autoDetach=false",
-            "-c",
-            "gc.autoDetach=false",
-            "remote",
-            "update",
-            "--prune",
-        });
-    } else {
-        var random_suffix: [8]u8 = undefined;
-        self.io.random(&random_suffix);
-        const suffix = std.fmt.bytesToHex(random_suffix, .lower);
-        const temporary_path = try std.fmt.allocPrint(
-            self.allocator,
-            "{s}.shelly-{s}.tmp",
-            .{ cache_path, suffix },
-        );
-        defer self.allocator.free(temporary_path);
-        errdefer std.Io.Dir.cwd().deleteTree(self.io, temporary_path) catch {};
-        try runSourceCommand(self, operation, &.{ "clone", "--mirror", "--", source.location, temporary_path });
-        std.Io.Dir.cwd().renamePreserve(temporary_path, std.Io.Dir.cwd(), cache_path, self.io) catch |err| switch (err) {
-            error.PathAlreadyExists => std.Io.Dir.cwd().deleteTree(self.io, temporary_path) catch {},
+            .{ .follow_symlinks = false },
+        ) catch |err| switch (err) {
+            error.FileNotFound => null,
             else => return err,
         };
+        if (cached) |stat| {
+            if (stat.kind != .directory) return error.InvalidSourceCacheEntry;
+            var lock = try lockGitCacheEntry(self, operation, cache_path);
+            defer lock.deinit(self);
+            const origin = gitCacheOriginUrl(self, operation, cache_path) catch null;
+            defer if (origin) |url| self.allocator.free(url);
+            if (origin == null or !std.mem.eql(u8, origin.?, source.location)) {
+                // Never silently repoint another package's cache entry.
+                try replaceGitCacheEntryLocked(self, operation, source, cache_path, shallow_allowed);
+                return;
+            }
+            const shallow = try gitCacheIsShallow(self, operation, cache_path);
+            if (!shallow) {
+                // A full mirror is never downgraded to shallow.
+                try refreshFullGitMirror(self, operation, source, cache_path);
+                return;
+            }
+            if (shallow_allowed) {
+                if (try gitShallowBoundaryExceeded(self, cache_path)) {
+                    try replaceGitCacheEntryLocked(self, operation, source, cache_path, true);
+                    return;
+                }
+                // Ref-targeted fetch only: the mirror refspec would delete the
+                // synthetic commit pin and pull unrelated refs.
+                fetchShallowPinnedRef(self, operation, source, cache_path) catch |err| {
+                    if (err == error.Cancelled) return err;
+                    try repairShallowCache(self, operation, source, cache_path);
+                };
+                return;
+            }
+            try repairShallowCache(self, operation, source, cache_path);
+            return;
+        }
+        if (try createGitCacheEntry(self, operation, source, cache_path, shallow_allowed)) return;
+        // Lost the creation race; loop and continue under the winner's lock.
     }
-    try materializeGitSource(self, operation, source, cache_path, destination);
+}
+
+fn refreshFullGitMirror(
+    self: *PackageBuilder,
+    operation: *op_context.Operation,
+    source: source_spec.ParsedSource,
+    cache_path: []const u8,
+) !void {
+    try runSourceCommand(self, operation, &.{ "-C", cache_path, "remote", "set-url", "origin", source.location });
+    // A detached repack can delete packs while the clone below copies them.
+    try runSourceCommand(self, operation, &.{
+        "-C",
+        cache_path,
+        "-c",
+        "maintenance.autoDetach=false",
+        "-c",
+        "gc.autoDetach=false",
+        "remote",
+        "update",
+        "--prune",
+    });
+}
+
+/// Upgrade a shallow entry to full history in place; recreate a full mirror
+/// when the server or repository cannot unshallow.
+fn repairShallowCache(
+    self: *PackageBuilder,
+    operation: *op_context.Operation,
+    source: source_spec.ParsedSource,
+    cache_path: []const u8,
+) !void {
+    runSourceCommand(self, operation, &.{
+        "-C",
+        cache_path,
+        "-c",
+        "maintenance.autoDetach=false",
+        "-c",
+        "gc.autoDetach=false",
+        "fetch",
+        "--unshallow",
+        "--prune",
+    }) catch |err| {
+        if (err == error.Cancelled) return err;
+        try replaceGitCacheEntryLocked(self, operation, source, cache_path, false);
+        return;
+    };
+    runSourceCommand(self, operation, &.{ "-C", cache_path, "config", "shelly.acquisitionMode", "full" }) catch {};
+}
+
+fn createGitCacheEntry(
+    self: *PackageBuilder,
+    operation: *op_context.Operation,
+    source: source_spec.ParsedSource,
+    cache_path: []const u8,
+    shallow_allowed: bool,
+) !bool {
+    const temporary_path = try randomCacheSiblingPath(self, cache_path);
+    defer self.allocator.free(temporary_path);
+    errdefer std.Io.Dir.cwd().deleteTree(self.io, temporary_path) catch {};
+    try std.Io.Dir.cwd().createDirPath(self.io, temporary_path);
+    if (shallow_allowed) {
+        buildShallowGitEntry(self, operation, source, temporary_path) catch |err| {
+            if (err == error.Cancelled) return err;
+            // Unsupported sha want, invalid ref, or server/client mismatch:
+            // fall back to the full mirror path.
+            std.Io.Dir.cwd().deleteTree(self.io, temporary_path) catch {};
+            try std.Io.Dir.cwd().createDirPath(self.io, temporary_path);
+            try buildFullGitMirror(self, operation, source, temporary_path);
+        };
+    } else {
+        try buildFullGitMirror(self, operation, source, temporary_path);
+    }
+    std.Io.Dir.cwd().renamePreserve(temporary_path, std.Io.Dir.cwd(), cache_path, self.io) catch |err| switch (err) {
+        error.PathAlreadyExists => {
+            std.Io.Dir.cwd().deleteTree(self.io, temporary_path) catch {};
+            return false;
+        },
+        else => return err,
+    };
+    return true;
+}
+
+fn buildFullGitMirror(
+    self: *PackageBuilder,
+    operation: *op_context.Operation,
+    source: source_spec.ParsedSource,
+    repository_path: []const u8,
+) !void {
+    try runSourceCommand(self, operation, &.{ "clone", "--mirror", "--", source.location, repository_path });
+    try runSourceCommand(self, operation, &.{ "-C", repository_path, "config", "shelly.acquisitionMode", "full" });
+}
+
+fn buildShallowGitEntry(
+    self: *PackageBuilder,
+    operation: *op_context.Operation,
+    source: source_spec.ParsedSource,
+    repository_path: []const u8,
+) !void {
+    try runSourceCommand(self, operation, &.{ "init", "--bare", repository_path });
+    try runSourceCommand(self, operation, &.{ "-C", repository_path, "config", "remote.origin.url", source.location });
+    try runSourceCommand(self, operation, &.{ "-C", repository_path, "config", "remote.origin.fetch", "+refs/*:refs/*" });
+    try runSourceCommand(self, operation, &.{ "-C", repository_path, "config", "remote.origin.mirror", "true" });
+    try fetchShallowPinnedRef(self, operation, source, repository_path);
+    try runSourceCommand(self, operation, &.{ "-C", repository_path, "config", "shelly.acquisitionMode", "shallow" });
+}
+
+fn fetchShallowPinnedRef(
+    self: *PackageBuilder,
+    operation: *op_context.Operation,
+    source: source_spec.ParsedSource,
+    repository_path: []const u8,
+) !void {
+    const reference = source.reference orelse return error.UnsupportedVcsChecksum;
+    switch (reference.kind) {
+        .branch => return error.UnsupportedVcsChecksum,
+        .tag => {
+            const refspec = try std.fmt.allocPrint(
+                self.allocator,
+                "+refs/tags/{s}:refs/tags/{s}",
+                .{ reference.value, reference.value },
+            );
+            defer self.allocator.free(refspec);
+            try runSourceCommand(self, operation, &.{ "-C", repository_path, "fetch", "--depth", "1", "--no-tags", "--", source.location, refspec });
+            const peel = try std.fmt.allocPrint(self.allocator, "refs/tags/{s}^{{commit}}", .{reference.value});
+            defer self.allocator.free(peel);
+            const peeled = try runGitCapture(self, operation, &.{ "-C", repository_path, "rev-parse", "--verify", peel });
+            defer self.allocator.free(peeled.stdout);
+            if (peeled.exit_code != 0) return error.SourceVcsFailed;
+            const commit = std.mem.trim(u8, peeled.stdout, " \t\r\n");
+            try runSourceCommand(self, operation, &.{ "-C", repository_path, "update-ref", "--no-deref", "HEAD", commit });
+        },
+        .commit => {
+            // Store the pin under refs/heads/* so materializeGitSource's clone
+            // includes it as a remote-tracking ref.
+            const refspec = try std.fmt.allocPrint(self.allocator, "+{s}:refs/heads/shelly-pin", .{reference.value});
+            defer self.allocator.free(refspec);
+            try runSourceCommand(self, operation, &.{ "-C", repository_path, "fetch", "--depth", "1", "--no-tags", "--", source.location, refspec });
+            try runSourceCommand(self, operation, &.{ "-C", repository_path, "symbolic-ref", "HEAD", "refs/heads/shelly-pin" });
+        },
+    }
+}
+
+fn replaceGitCacheEntry(
+    self: *PackageBuilder,
+    operation: *op_context.Operation,
+    source: source_spec.ParsedSource,
+    cache_path: []const u8,
+    shallow: bool,
+) !void {
+    var lock = try lockGitCacheEntry(self, operation, cache_path);
+    defer lock.deinit(self);
+    try replaceGitCacheEntryLocked(self, operation, source, cache_path, shallow);
+}
+
+/// The caller holds the entry lock. Waiters re-check lock identity after the
+/// swap and re-lock the new entry; a concurrent creator that wins the rename
+/// race keeps its complete entry.
+fn replaceGitCacheEntryLocked(
+    self: *PackageBuilder,
+    operation: *op_context.Operation,
+    source: source_spec.ParsedSource,
+    cache_path: []const u8,
+    shallow: bool,
+) !void {
+    const temporary_path = try randomCacheSiblingPath(self, cache_path);
+    defer self.allocator.free(temporary_path);
+    errdefer std.Io.Dir.cwd().deleteTree(self.io, temporary_path) catch {};
+    try std.Io.Dir.cwd().createDirPath(self.io, temporary_path);
+    if (shallow) {
+        buildShallowGitEntry(self, operation, source, temporary_path) catch |err| {
+            if (err == error.Cancelled) return err;
+            std.Io.Dir.cwd().deleteTree(self.io, temporary_path) catch {};
+            try std.Io.Dir.cwd().createDirPath(self.io, temporary_path);
+            try buildFullGitMirror(self, operation, source, temporary_path);
+        };
+    } else {
+        try buildFullGitMirror(self, operation, source, temporary_path);
+    }
+    std.Io.Dir.cwd().deleteTree(self.io, cache_path) catch |err| {
+        if (err != error.FileNotFound) return err;
+    };
+    std.Io.Dir.cwd().renamePreserve(temporary_path, std.Io.Dir.cwd(), cache_path, self.io) catch |err| switch (err) {
+        error.PathAlreadyExists => std.Io.Dir.cwd().deleteTree(self.io, temporary_path) catch {},
+        else => return err,
+    };
+}
+
+test "history gate ignores metadata arrays and finds git invocations" {
+    const full = [_][]const u8{
+        "depends=('git' 'curl')\n",
+        "makedepends=('git')\n",
+        "depends=(\n    'curl'\n    'git'\n)\n",
+        "package_x() {\n  depends=(\n    'git'\n  )\n}\n",
+        "source=('repo::git+https://example.invalid/demo.git#tag=v1')\n",
+        "sha256sums_x86_64=('SKIP')\nurl='https://github.com/example/demo'\n",
+        "_srcdir=demo-git\n",
+        "# git clone https://example.invalid/demo.git\n",
+        "  sed -i 's/x/y/' file  # see https://gitlab.example/merge_requests/4\n",
+        "echo done # not git status\n",
+        "prepare() {\n  # only gitlab links in comments\n  patch -Np1 < fix.patch\n}\n",
+    };
+    for (full) |body| try std.testing.expect(!bodyMentionsGitOrSrcdest(body));
+    const partial = [_][]const u8{
+        "git describe --tags\n",
+        "  git rev-list --count HEAD\n",
+        "/usr/bin/git apply fix.patch\n",
+        "local cmd=git\n$cmd describe\n",
+        "depends=('git') && git status\n",
+        "echo $SRCDEST\n",
+        "cat " ++ "<<'EOF'\ngit log\nEOF\n",
+        "depends=('git' 'curl')\n  git status\n",
+        "sh -c \"git describe --tags\"\n",
+        "echo '# git'\n",
+    };
+    for (partial) |body| try std.testing.expect(bodyMentionsGitOrSrcdest(body));
+    // Generated preludes declare data arrays on one line; raw `name=(...)`
+    // text is a normal body and still scans.
+    try std.testing.expect(!preludeMentionsGitOrSrcdest("declare -a depends=('git' 'curl')\n"));
+    try std.testing.expect(!preludeMentionsGitOrSrcdest("declare -a source=('git+https://example.invalid/demo.git#tag=v1')\n"));
+    try std.testing.expect(preludeMentionsGitOrSrcdest("declare -- cmd='git'\n"));
+    try std.testing.expect(preludeMentionsGitOrSrcdest("declare -- srcdest=$SRCDEST\n"));
+}
+
+fn randomCacheSiblingPath(self: *PackageBuilder, cache_path: []const u8) ![]u8 {
+    var random_suffix: [8]u8 = undefined;
+    self.io.random(&random_suffix);
+    const suffix = std.fmt.bytesToHex(random_suffix, .lower);
+    return std.fmt.allocPrint(self.allocator, "{s}.shelly-{s}.tmp", .{ cache_path, suffix });
+}
+
+const GitCacheLock = struct {
+    file: std.Io.File,
+
+    fn deinit(lock: *GitCacheLock, self: *PackageBuilder) void {
+        lock.file.unlock(self.io);
+        lock.file.close(self.io);
+    }
+};
+
+/// Exclusive advisory lock on <cache_path>/.shelly-lock (a sibling
+/// <cache_path>.lock could collide with a source named <name>.lock). The
+/// tryLock retry loop stays cancellable, and the identity re-check follows
+/// entry replacements made while waiting.
+fn lockGitCacheEntry(
+    self: *PackageBuilder,
+    operation: *op_context.Operation,
+    cache_path: []const u8,
+) !GitCacheLock {
+    const lock_path = try std.fs.path.join(self.allocator, &.{ cache_path, git_cache_lock_name });
+    defer self.allocator.free(lock_path);
+    while (true) {
+        try operation.checkCancelled();
+        const file = std.Io.Dir.cwd().createFile(self.io, lock_path, .{ .read = true, .truncate = false }) catch |err| switch (err) {
+            error.FileNotFound => return error.InvalidSourceCacheEntry,
+            else => return err,
+        };
+        while (true) {
+            operation.checkCancelled() catch |err| {
+                file.close(self.io);
+                return err;
+            };
+            const acquired = file.tryLock(self.io, .exclusive) catch |err| {
+                file.close(self.io);
+                return err;
+            };
+            if (acquired) break;
+            self.io.sleep(.fromMilliseconds(50), .awake) catch |err| {
+                file.close(self.io);
+                return err;
+            };
+        }
+        const current = std.Io.Dir.cwd().statFile(self.io, lock_path, .{ .follow_symlinks = false }) catch null;
+        const file_stat = file.stat(self.io) catch {
+            file.unlock(self.io);
+            file.close(self.io);
+            return error.InvalidSourceCacheEntry;
+        };
+        if (current == null or current.?.inode != file_stat.inode) {
+            file.unlock(self.io);
+            file.close(self.io);
+            continue;
+        }
+        return .{ .file = file };
+    }
+}
+
+fn gitCacheOriginUrl(
+    self: *PackageBuilder,
+    operation: *op_context.Operation,
+    cache_path: []const u8,
+) !?[]u8 {
+    const result = try runGitCapture(self, operation, &.{ "-C", cache_path, "config", "--get", "remote.origin.url" });
+    defer self.allocator.free(result.stdout);
+    if (result.exit_code != 0) return null;
+    const trimmed = std.mem.trim(u8, result.stdout, " \t\r\n");
+    if (trimmed.len == 0) return null;
+    return try self.allocator.dupe(u8, trimmed);
+}
+
+fn gitCacheIsShallow(
+    self: *PackageBuilder,
+    operation: *op_context.Operation,
+    cache_path: []const u8,
+) !bool {
+    // A bare cache keeps its shallow boundary file at the repository root.
+    const result = try runGitCapture(self, operation, &.{ "-C", cache_path, "rev-parse", "--is-shallow-repository" });
+    defer self.allocator.free(result.stdout);
+    if (result.exit_code != 0) return error.InvalidSourceCacheEntry;
+    return std.mem.eql(u8, std.mem.trim(u8, result.stdout, " \t\r\n"), "true");
+}
+
+fn gitShallowBoundaryExceeded(self: *PackageBuilder, cache_path: []const u8) !bool {
+    const shallow_path = try std.fs.path.join(self.allocator, &.{ cache_path, "shallow" });
+    defer self.allocator.free(shallow_path);
+    const contents = std.Io.Dir.cwd().readFileAlloc(self.io, shallow_path, self.allocator, .limited(1024 * 1024)) catch |err| switch (err) {
+        error.FileNotFound => return false,
+        error.StreamTooLong => return true,
+        else => return err,
+    };
+    defer self.allocator.free(contents);
+    var lines: usize = 0;
+    for (contents) |character| {
+        if (character == '\n') lines += 1;
+    }
+    return lines > git_shallow_boundary_limit;
+}
+
+const GitCapture = struct {
+    allocator: std.mem.Allocator,
+    stdout: std.ArrayList(u8) = .empty,
+    failed: bool = false,
+
+    fn onLine(data: ?*anyopaque, stream: process_runner.StreamKind, line: []const u8) void {
+        const capture: *GitCapture = @ptrCast(@alignCast(data.?));
+        if (stream != .stdout) return;
+        capture.stdout.appendSlice(capture.allocator, line) catch {
+            capture.failed = true;
+        };
+        capture.stdout.append(capture.allocator, '\n') catch {
+            capture.failed = true;
+        };
+    }
+};
+
+/// Like runSourceCommand but captures stdout for state queries instead of
+/// forwarding it to the build log.
+fn runGitCapture(
+    self: *PackageBuilder,
+    operation: *op_context.Operation,
+    args: []const []const u8,
+) !struct { exit_code: u8, stdout: []u8 } {
+    try operation.checkCancelled();
+    var command: std.ArrayList([]const u8) = .empty;
+    defer command.deinit(self.allocator);
+    try command.append(self.allocator, "git");
+    try command.appendSlice(self.allocator, args);
+    var capture = GitCapture{ .allocator = self.allocator };
+    defer capture.stdout.deinit(self.allocator);
+    const effective_options = try metadata.effectivePackageOptions(
+        self.allocator,
+        self.shellybuild_config.package.options,
+        self.package_builds[0].options orelse &.{},
+    );
+    defer metadata.freeOwnedStrings(self.allocator, effective_options);
+    const exit_code = try process_runner.runStreamingWithBuildEnvironmentOperation(
+        self.allocator,
+        self.io,
+        self.environ,
+        steps.buildEnvironment(self, effective_options),
+        command.items,
+        self.options.source_destination,
+        null,
+        .{ .function = GitCapture.onLine, .data = &capture },
+        operation,
+    );
+    if (self.active_log) |log| try log.ensureHealthy();
+    if (capture.failed) return error.OutOfMemory;
+    return .{ .exit_code = exit_code, .stdout = try capture.stdout.toOwnedSlice(self.allocator) };
 }
 
 fn materializeGitSource(
@@ -1156,6 +1838,6 @@ pub fn acquireSource(self: *PackageBuilder, operation: *op_context.Operation, so
     switch (source.kind) {
         .local => try copyLocalSource(self, source.location, destination),
         .http => try acquireHttpSource(self, operation, source, destination, false),
-        .git => try cloneGitSource(self, operation, source, destination),
+        .git => try acquireGitSource(self, operation, source, destination),
     }
 }
