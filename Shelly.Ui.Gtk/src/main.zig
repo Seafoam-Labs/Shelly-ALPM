@@ -243,6 +243,8 @@ test {
     _ = @import("pages/flatpak/installed_marks.zig");
     _ = @import("helpers/ui_decode.zig");
     _ = @import("helpers/saved_list.zig");
+    _ = @import("helpers/row_diff.zig");
+    _ = @import("services/package_lists.zig");
     _ = @import("helpers/flatpak_catalog_stamp.zig");
     _ = @import("helpers/flathub_collections.zig");
     _ = @import("helpers/ansi.zig");
@@ -255,6 +257,7 @@ test {
     _ = @import("g_objects/aur_package_object.zig");
     _ = @import("models/search_result.zig");
     _ = @import("g_objects/search_result_object.zig");
+    _ = @import("pages/package_page.zig");
     _ = @import("pages/transaction_page.zig");
     _ = @import("services/fwupd_enums.zig");
     _ = @import("models/fwupd.zig");

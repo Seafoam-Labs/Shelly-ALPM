@@ -4,11 +4,13 @@ const gtk = bindings.gtk;
 const glib = bindings.glib;
 const gobject = bindings.gobject;
 const support = @import("support.zig");
+const Toast = @import("../helpers/custom_ui_comps/toast.zig").Toast;
 const c_string = @import("../helpers/c_string.zig");
 const a11y = @import("../helpers/a11y.zig");
 const translations = @import("../helpers/translations.zig");
 const ShellyWindow = @import("../shelly_window.zig").ShellyWindow;
 const ShellyCli = @import("../services/shelly_cli.zig").ShellyCli;
+const package_lists = @import("../services/package_lists.zig");
 const IconResolver = @import("../services/icon_resolver.zig").IconResolver;
 const Package = @import("../models/packages.zig").Package;
 const RecommendCategory = @import("../models/recommendation.zig").RecommendCategory;
@@ -36,12 +38,17 @@ pub const RecommendPage = extern struct {
         selected_label: *gtk.Label,
         clear_button: *gtk.Button,
         install_selected_button: *gtk.Button,
+        page_overlay: *gtk.Overlay,
+        toast: *Toast,
 
         resolver: IconResolver,
         arena: ?*std.heap.ArenaAllocator,
         generation: u64,
         loaded: bool,
         loading: bool,
+        spinner_source: c_uint,
+        // hash of the sections the cards show, 0 without cards.
+        shown_hash: u64,
 
         // Packages picked up for a batch install, keyed by name. The keys are
         // owned by the c allocator because the page arena they were read from
@@ -60,12 +67,26 @@ pub const RecommendPage = extern struct {
         packages: []Package,
     };
 
+    const LoadJob = struct {
+        page: *Self,
+        generation: u64,
+        force: bool,
+        show_saved: bool,
+        load_icons: bool,
+    };
+
     const LoadResult = struct {
         page: *Self,
         categories: []CategorySection,
-        arena: *std.heap.ArenaAllocator,
+        arena: ?*std.heap.ArenaAllocator,
+        resolver: ?IconResolver,
         generation: u64,
+        // no newer listing follows this one.
+        last: bool,
+        failed: bool,
     };
+
+    const spinner_delay_ms = 300;
 
     pub const getGObjectType = gobject.ext.defineClass(Self, .{
         .name = "ShellyRecommendPage",
@@ -92,9 +113,15 @@ pub const RecommendPage = extern struct {
         const p = self.priv();
         p.loaded = false;
         p.loading = false;
+        p.spinner_source = 0;
+        p.shown_hash = 0;
         p.arena = null;
         p.generation = 0;
         p.resolver = IconResolver.init(std.heap.c_allocator);
+
+        const toast = Toast.new();
+        gtk.Overlay.addOverlay(p.page_overlay, toast.as(gtk.Widget));
+        p.toast = toast;
 
         support.connectLifecycle(Self, self);
     }
@@ -103,7 +130,7 @@ pub const RecommendPage = extern struct {
         const p = self.priv();
         if (p.loaded) return;
         p.loaded = true;
-        triggerReload(self, false);
+        triggerReload(self, false, true);
     }
 
     pub fn onUnmap(self: *Self) void {
@@ -111,6 +138,9 @@ pub const RecommendPage = extern struct {
         if (!p.loaded) return;
         p.loaded = false;
         p.generation += 1;
+        self.cancel_spinner();
+        p.loading = false;
+        p.shown_hash = 0;
 
         while (gtk.Widget.getFirstChild(p.content_box.as(gtk.Widget))) |c| {
             gtk.Box.remove(p.content_box, c);
@@ -130,120 +160,209 @@ pub const RecommendPage = extern struct {
         p.resolver = IconResolver.init(std.heap.c_allocator);
     }
 
-    fn load_worker(page: *Self, generation: u64, force: bool) void {
-        const arena_ptr = std.heap.c_allocator.create(std.heap.ArenaAllocator) catch return;
-        arena_ptr.* = std.heap.ArenaAllocator.init(std.heap.c_allocator);
-        const alloc = arena_ptr.allocator();
+    extern fn malloc_trim(pad: usize) c_int;
 
-        const p = page.priv();
-        if (runtime.shellyIconsEnabled() and !p.resolver.loaded) {
-            p.resolver.load(runtime.io, runtime.environ_map) catch {};
-        }
-
+    fn load_worker(job: LoadJob) void {
+        // a listing needs much more memory than its rows; give the rest back.
+        defer _ = malloc_trim(0);
+        const alloc = std.heap.c_allocator;
         var threaded: std.Io.Threaded = .init(alloc, .{});
         defer threaded.deinit();
-
-        const categories = if (force)
-            recommendations.reload(alloc, threaded.io(), runtime.environ_map)
-        else
-            recommendations.load(alloc, threaded.io(), runtime.environ_map);
-
         const cli = ShellyCli{ .allocator = alloc, .io = threaded.io() };
-        const parsed = cli.get_packages(false) catch {
-            post_result(page, &.{}, arena_ptr, generation);
-            return;
-        };
 
-        var installed_arena = std.heap.ArenaAllocator.init(std.heap.c_allocator);
-        defer installed_arena.deinit();
-        const ialloc = installed_arena.allocator();
-        var ithreaded: std.Io.Threaded = .init(ialloc, .{});
-        defer ithreaded.deinit();
-        const icli = ShellyCli{ .allocator = ialloc, .io = ithreaded.io() };
+        var category_arena: std.heap.ArenaAllocator = .init(alloc);
+        defer category_arena.deinit();
+        const categories = if (job.force)
+            recommendations.reload(category_arena.allocator(), threaded.io(), runtime.environ_map)
+        else
+            recommendations.load(category_arena.allocator(), threaded.io(), runtime.environ_map);
 
-        const installed = icli.get_installed_packages() catch null;
-        var installed_names: std.StringHashMapUnmanaged(void) = .empty;
-        if (installed) |inst| {
-            for (inst.value) |pkg| {
-                installed_names.put(ialloc, pkg.Name, {}) catch {};
-            }
+        var resolver: ?IconResolver = null;
+        if (job.load_icons) {
+            resolver = IconResolver.init(alloc);
+            resolver.?.load(runtime.io, runtime.environ_map) catch {};
         }
 
-        var avail: std.StringHashMapUnmanaged(*const Package) = .empty;
-        for (parsed.value) |*pkg| {
+        var slot: package_lists.Slot = undefined;
+        slot.init(false);
+        const saved = slot.read(cli);
+        defer if (saved) |list| list.deinit(alloc);
+        const saved_hash: ?u64 = if (saved) |list| list.cached.stamp else null;
+        if (job.show_saved) {
+            if (saved) |list| post_lists(job, categories, list.parsed.value, &resolver, false);
+        }
+
+        const fetched = package_lists.fetch(cli, false) catch {
+            post_result(job, &.{}, null, &resolver, true, true);
+            return;
+        };
+        defer fetched.deinit();
+        const lists = fetched.lists();
+        post_lists(job, categories, lists, &resolver, true);
+        slot.update(cli, lists, lists.hash(), saved_hash);
+    }
+
+    fn post_lists(
+        job: LoadJob,
+        categories: []const RecommendCategory,
+        lists: package_lists.PackageLists,
+        resolver: *?IconResolver,
+        last: bool,
+    ) void {
+        const arena = std.heap.c_allocator.create(std.heap.ArenaAllocator) catch return;
+        arena.* = .init(std.heap.c_allocator);
+        const sections = make_sections(arena.allocator(), categories, lists) catch {
+            free_arena(arena);
+            if (last) post_result(job, &.{}, null, resolver, true, true);
+            return;
+        };
+        // without the installed packages every card would offer an install.
+        post_result(job, sections, arena, resolver, last, lists.Installed == null);
+    }
+
+    /// the sections own their strings, so the lists can be freed after this.
+    fn make_sections(
+        alloc: std.mem.Allocator,
+        categories: []const RecommendCategory,
+        lists: package_lists.PackageLists,
+    ) ![]CategorySection {
+        var scratch: std.heap.ArenaAllocator = .init(std.heap.c_allocator);
+        defer scratch.deinit();
+
+        var installed: std.StringHashMapUnmanaged(void) = .empty;
+        if (lists.Installed) |rows| {
+            for (rows) |row| try installed.put(scratch.allocator(), row.Name, {});
+        }
+        var available: std.StringHashMapUnmanaged(*const package_lists.PackageRow) = .empty;
+        for (lists.Available) |*row| {
             // repository copies come in priority order; keep the first.
-            const entry = avail.getOrPut(alloc, pkg.Name) catch continue;
-            if (!entry.found_existing) entry.value_ptr.* = pkg;
+            const entry = try available.getOrPut(scratch.allocator(), row.Name);
+            if (!entry.found_existing) entry.value_ptr.* = row;
         }
 
         var sections: std.ArrayListUnmanaged(CategorySection) = .empty;
         for (categories) |cat| {
             var pkgs: std.ArrayListUnmanaged(Package) = .empty;
             for (cat.packages) |name| {
-                const pkg = avail.get(name) orelse continue;
-                var copy = pkg.*;
-                copy.Installed = installed_names.contains(name);
-                pkgs.append(alloc, copy) catch {};
+                const row = available.get(name) orelse continue;
+                try pkgs.append(alloc, .{
+                    .Name = try alloc.dupe(u8, row.Name),
+                    .Version = try alloc.dupe(u8, row.Version),
+                    .Description = try alloc.dupe(u8, row.Description),
+                    .Installed = installed.contains(name),
+                });
             }
             if (pkgs.items.len == 0) continue;
-            sections.append(alloc, .{ .name = cat.name, .packages = pkgs.items }) catch {};
+            try sections.append(alloc, .{ .name = try alloc.dupe(u8, cat.name), .packages = pkgs.items });
         }
+        return sections.items;
+    }
 
-        post_result(page, sections.items, arena_ptr, generation);
+    /// covers everything a card shows, so an equal hash needs no new cards.
+    fn sections_hash(sections: []const CategorySection) u64 {
+        var hasher: std.hash.Wyhash = .init(0);
+        for (sections) |section| {
+            std.hash.autoHashStrat(&hasher, section.name, .Deep);
+            std.hash.autoHash(&hasher, section.packages.len);
+            for (section.packages) |pkg| {
+                std.hash.autoHashStrat(&hasher, pkg.Name, .Deep);
+                std.hash.autoHashStrat(&hasher, pkg.Version, .Deep);
+                std.hash.autoHashStrat(&hasher, pkg.Description, .Deep);
+                std.hash.autoHash(&hasher, pkg.Installed);
+            }
+        }
+        return hasher.final();
     }
 
     fn post_result(
-        page: *Self,
+        job: LoadJob,
         categories: []CategorySection,
-        arena: *std.heap.ArenaAllocator,
-        generation: u64,
+        arena: ?*std.heap.ArenaAllocator,
+        resolver: *?IconResolver,
+        last: bool,
+        failed: bool,
     ) void {
         const result = std.heap.c_allocator.create(LoadResult) catch {
-            arena.deinit();
-            std.heap.c_allocator.destroy(arena);
+            if (arena) |a| free_arena(a);
             return;
         };
         result.* = .{
-            .page = page,
+            .page = job.page,
             .categories = categories,
             .arena = arena,
-            .generation = generation,
+            .resolver = resolver.*,
+            .generation = job.generation,
+            .last = last,
+            .failed = failed,
         };
+        resolver.* = null;
         _ = glib.idleAdd(&onLoadComplete, result);
+    }
+
+    fn free_result(result: *LoadResult) void {
+        if (result.resolver) |*resolver| resolver.deinit();
+        if (result.arena) |a| free_arena(a);
+        std.heap.c_allocator.destroy(result);
+    }
+
+    fn free_arena(arena: *std.heap.ArenaAllocator) void {
+        arena.deinit();
+        std.heap.c_allocator.destroy(arena);
     }
 
     fn onLoadComplete(data: ?*anyopaque) callconv(.c) c_int {
         const result: *LoadResult = @ptrCast(@alignCast(data.?));
+        defer free_result(result);
         const page = result.page;
         const p = page.priv();
 
-        p.loading = false;
-        gtk.Widget.setSensitive(p.refresh_button.as(gtk.Widget), 1);
+        if (result.generation != p.generation) return 0;
 
-        if (result.generation != p.generation) {
-            result.arena.deinit();
-            std.heap.c_allocator.destroy(result.arena);
-            std.heap.c_allocator.destroy(result);
+        if (result.last) {
+            p.loading = false;
+            gtk.Widget.setSensitive(p.refresh_button.as(gtk.Widget), 1);
+        }
+        if (result.resolver) |resolver| {
+            p.resolver.deinit();
+            p.resolver = resolver;
+            result.resolver = null;
+        }
+
+        // a failed reload leaves the cards as they are.
+        if (result.failed and p.shown_hash != 0) {
+            p.toast.show(.warning, translations._("Had an issue loading your packages. Check if you have a db lock."));
             return 0;
         }
-
-        if (p.arena) |a| {
-            a.deinit();
-            std.heap.c_allocator.destroy(a);
-        }
-        p.arena = result.arena;
-
         if (result.categories.len == 0) {
-            std.heap.c_allocator.destroy(result);
+            if (!result.last) return 0;
+            clear_cards(page);
+            page.cancel_spinner();
             show_empty(page);
             return 0;
         }
 
-        buildSections(page, result.categories);
-        std.heap.c_allocator.destroy(result);
+        const hash = sections_hash(result.categories);
+        if (hash == p.shown_hash) return 0;
 
+        clear_cards(page);
+        p.arena = result.arena;
+        result.arena = null;
+        p.shown_hash = hash;
+        buildSections(page, result.categories);
         hide_loading(page);
         return 0;
+    }
+
+    /// the cards point into the arena, so both go together.
+    fn clear_cards(self: *Self) void {
+        const p = self.priv();
+        while (gtk.Widget.getFirstChild(p.content_box.as(gtk.Widget))) |c| {
+            gtk.Box.remove(p.content_box, c);
+        }
+        p.checks.clearRetainingCapacity();
+        p.shown_hash = 0;
+        if (p.arena) |a| free_arena(a);
+        p.arena = null;
     }
 
     fn buildSections(self: *Self, categories: []const CategorySection) void {
@@ -414,7 +533,7 @@ pub const RecommendPage = extern struct {
         const name: []const u8 = std.mem.span(@as([*:0]const u8, @ptrCast(name_ptr)));
 
         const names = [_][]const u8{name};
-        const argv = [_][]const u8{ "install", "standard", name };
+        const argv = [_][]const u8{ "install", "standard", "--needed", name };
 
         if (support.getWindow(ShellyWindow, self)) |win| {
             win.startTransaction(.{
@@ -474,7 +593,8 @@ pub const RecommendPage = extern struct {
         }
         if (argv.items.len == 0) return argv;
 
-        try argv.insertSlice(alloc, 0, &.{ "install", "standard" });
+        // a saved listing may not know of a newer install.
+        try argv.insertSlice(alloc, 0, &.{ "install", "standard", "--needed" });
         return argv;
     }
 
@@ -570,8 +690,9 @@ pub const RecommendPage = extern struct {
         while (it.next()) |key| names.append(std.heap.c_allocator, key.*) catch break;
 
         // No installed lookup here: buildSections already pruned the
-        // selection against the data this listing was built from, and the
-        // window is locked out between that prune and this click.
+        // selection against the data this listing was built from. That can be
+        // the saved list, so a package installed elsewhere since then may
+        // still be in it until the refresh; --needed skips it.
         var argv = build_install_argv(std.heap.c_allocator, names.items, &.{}) catch return;
         defer argv.deinit(std.heap.c_allocator);
         if (argv.items.len == 0) return;
@@ -593,37 +714,56 @@ pub const RecommendPage = extern struct {
         const self: *Self = @ptrCast(@alignCast(ctx));
         const p = self.priv();
         if (!p.loaded) return;
-        triggerReload(self, false);
+        triggerReload(self, false, false);
     }
 
-    fn triggerReload(self: *Self, force: bool) void {
+    fn triggerReload(self: *Self, force: bool, show_saved: bool) void {
         const p = self.priv();
-        if (p.loading) return;
         p.loading = true;
         p.generation += 1;
         gtk.Widget.setSensitive(p.refresh_button.as(gtk.Widget), 0);
 
-        while (gtk.Widget.getFirstChild(p.content_box.as(gtk.Widget))) |c| {
-            gtk.Box.remove(p.content_box, c);
-        }
-        p.checks.clearRetainingCapacity();
-        if (p.arena) |a| {
-            a.deinit();
-            std.heap.c_allocator.destroy(a);
-            p.arena = null;
+        self.cancel_spinner();
+        if (force) {
+            clear_cards(self);
+            show_loading(self);
+        } else if (p.shown_hash == 0) {
+            p.spinner_source = glib.timeoutAdd(spinner_delay_ms, &on_spinner_delay, self);
         }
 
-        show_loading(self);
-        const thread = std.Thread.spawn(.{}, load_worker, .{ self, p.generation, force }) catch {
+        const job: LoadJob = .{
+            .page = self,
+            .generation = p.generation,
+            .force = force,
+            .show_saved = show_saved,
+            .load_icons = runtime.shellyIconsEnabled() and !p.resolver.loaded,
+        };
+        const thread = std.Thread.spawn(.{}, load_worker, .{job}) catch {
             p.loading = false;
             gtk.Widget.setSensitive(p.refresh_button.as(gtk.Widget), 1);
+            self.cancel_spinner();
+            if (p.shown_hash == 0) show_empty(self);
             return;
         };
         thread.detach();
     }
 
+    fn on_spinner_delay(data: ?*anyopaque) callconv(.c) c_int {
+        const self: *Self = @ptrCast(@alignCast(data orelse return 0));
+        self.priv().spinner_source = 0;
+        show_loading(self);
+        return 0;
+    }
+
+    fn cancel_spinner(self: *Self) void {
+        const p = self.priv();
+        if (p.spinner_source == 0) return;
+        _ = glib.Source.remove(p.spinner_source);
+        p.spinner_source = 0;
+    }
+
     fn on_refresh_clicked(self: *Self) callconv(.c) void {
-        triggerReload(self, true);
+        triggerReload(self, true, false);
     }
 
     fn show_loading(self: *Self) void {
@@ -634,6 +774,7 @@ pub const RecommendPage = extern struct {
 
     fn hide_loading(self: *Self) void {
         const p = self.priv();
+        self.cancel_spinner();
         gtk.Spinner.stop(p.loading_spinner);
         gtk.Stack.setVisibleChild(p.recommend_stack, p.list_page.as(gtk.Widget));
     }
@@ -646,6 +787,7 @@ pub const RecommendPage = extern struct {
     }
 
     const template_children = .{
+        .{ "page_overlay", @offsetOf(Private, "page_overlay") },
         .{ "refresh_button", @offsetOf(Private, "refresh_button") },
         .{ "recommend_stack", @offsetOf(Private, "recommend_stack") },
         .{ "loading_page", @offsetOf(Private, "loading_page") },
@@ -687,11 +829,12 @@ test "build_install_argv installs every selected package in one transaction" {
     var argv = try RecommendPage.build_install_argv(arena.allocator(), &.{ "firefox", "htop" }, &.{});
     defer argv.deinit(arena.allocator());
 
-    try std.testing.expectEqual(@as(usize, 4), argv.items.len);
+    try std.testing.expectEqual(@as(usize, 5), argv.items.len);
     try std.testing.expectEqualStrings("install", argv.items[0]);
     try std.testing.expectEqualStrings("standard", argv.items[1]);
-    try std.testing.expectEqualStrings("firefox", argv.items[2]);
-    try std.testing.expectEqualStrings("htop", argv.items[3]);
+    try std.testing.expectEqualStrings("--needed", argv.items[2]);
+    try std.testing.expectEqualStrings("firefox", argv.items[3]);
+    try std.testing.expectEqualStrings("htop", argv.items[4]);
 }
 
 test "build_install_argv drops packages installed since the selection" {
@@ -705,11 +848,12 @@ test "build_install_argv drops packages installed since the selection" {
     );
     defer argv.deinit(arena.allocator());
 
-    try std.testing.expectEqual(@as(usize, 4), argv.items.len);
+    try std.testing.expectEqual(@as(usize, 5), argv.items.len);
     try std.testing.expectEqualStrings("install", argv.items[0]);
     try std.testing.expectEqualStrings("standard", argv.items[1]);
-    try std.testing.expectEqualStrings("htop", argv.items[2]);
-    try std.testing.expectEqualStrings("git", argv.items[3]);
+    try std.testing.expectEqualStrings("--needed", argv.items[2]);
+    try std.testing.expectEqualStrings("htop", argv.items[3]);
+    try std.testing.expectEqualStrings("git", argv.items[4]);
 }
 
 test "build_install_argv declines to start a transaction with nothing to install" {
@@ -723,4 +867,62 @@ test "build_install_argv declines to start a transaction with nothing to install
     var all_installed = try RecommendPage.build_install_argv(arena.allocator(), &.{"htop"}, &.{"htop"});
     defer all_installed.deinit(arena.allocator());
     try std.testing.expectEqual(@as(usize, 0), all_installed.items.len);
+}
+
+test "sections hold the first copy of each listed package and its installed state" {
+    var arena: std.heap.ArenaAllocator = .init(std.testing.allocator);
+    defer arena.deinit();
+    const categories = [_]RecommendCategory{
+        .{ .name = "Tools", .packages = &.{ "foo", "missing", "bar" } },
+        .{ .name = "Empty", .packages = &.{"missing"} },
+    };
+    const lists: package_lists.PackageLists = .{
+        .Available = &.{
+            .{ .Name = "foo", .Version = "2-1", .Repository = "first", .Description = "text" },
+            .{ .Name = "foo", .Version = "1-1", .Repository = "second" },
+            .{ .Name = "bar", .Version = "3-1" },
+        },
+        .Installed = &.{.{ .Name = "bar" }},
+    };
+    const sections = try RecommendPage.make_sections(arena.allocator(), &categories, lists);
+    try std.testing.expectEqual(@as(usize, 1), sections.len);
+    try std.testing.expectEqualStrings("Tools", sections[0].name);
+    try std.testing.expectEqual(@as(usize, 2), sections[0].packages.len);
+    try std.testing.expectEqualStrings("2-1", sections[0].packages[0].Version);
+    try std.testing.expectEqualStrings("text", sections[0].packages[0].Description);
+    try std.testing.expect(!sections[0].packages[0].Installed);
+    try std.testing.expect(sections[0].packages[1].Installed);
+}
+
+test "the section hash follows what a card shows" {
+    var arena: std.heap.ArenaAllocator = .init(std.testing.allocator);
+    defer arena.deinit();
+    const categories = [_]RecommendCategory{.{ .name = "Tools", .packages = &.{"foo"} }};
+    const base: package_lists.PackageRow = .{ .Name = "foo", .Version = "1-1", .Description = "text" };
+    const hashOf = struct {
+        fn run(alloc: std.mem.Allocator, cats: []const RecommendCategory, row: package_lists.PackageRow, installed: bool) !u64 {
+            const lists: package_lists.PackageLists = .{
+                .Available = &.{row},
+                .Installed = if (installed) &.{row} else &.{},
+            };
+            return RecommendPage.sections_hash(try RecommendPage.make_sections(alloc, cats, lists));
+        }
+    }.run;
+
+    const expected = try hashOf(arena.allocator(), &categories, base, false);
+    try std.testing.expectEqual(expected, try hashOf(arena.allocator(), &categories, base, false));
+
+    var other_repository = base;
+    other_repository.Repository = "extra";
+    try std.testing.expectEqual(expected, try hashOf(arena.allocator(), &categories, other_repository, false));
+
+    var changed = base;
+    changed.Version = "2-1";
+    try std.testing.expect(expected != try hashOf(arena.allocator(), &categories, changed, false));
+    changed = base;
+    changed.Description = "other";
+    try std.testing.expect(expected != try hashOf(arena.allocator(), &categories, changed, false));
+    try std.testing.expect(expected != try hashOf(arena.allocator(), &categories, base, true));
+    const renamed = [_]RecommendCategory{.{ .name = "Other", .packages = &.{"foo"} }};
+    try std.testing.expect(expected != try hashOf(arena.allocator(), &renamed, base, false));
 }

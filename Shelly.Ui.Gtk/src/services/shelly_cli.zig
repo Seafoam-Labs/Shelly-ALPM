@@ -2,6 +2,7 @@ const std = @import("std");
 const diagnostics = @import("diagnostics");
 const Io = std.Io;
 const Package = @import("../models/packages.zig").Package;
+const PackageRow = @import("../models/packages.zig").PackageRow;
 const Remote = @import("../models/flatpak.zig").Remote;
 const Flatpak = @import("../models/flatpak.zig").Flatpak;
 const AppstreamApp = @import("../models/flatpak.zig").AppstreamApp;
@@ -137,20 +138,20 @@ pub const ShellyCli = struct {
         return try JsonPackFrame.decode(CliMessage, self.allocator, result.stdout);
     }
 
-    pub fn get_packages(self: ShellyCli, show_hidden: bool) !std.json.Parsed([]Package) {
+    pub fn get_packages(self: ShellyCli, show_hidden: bool) !std.json.Parsed([]PackageRow) {
         const result = try self.run(&.{if (show_hidden) "-Ssvw" else "-Ssv"});
         defer self.allocator.free(result.stdout);
         defer self.allocator.free(result.stderr);
 
-        return try JsonPackFrame.decode([]Package, self.allocator, result.stdout);
+        return try JsonPackFrame.decode([]PackageRow, self.allocator, result.stdout);
     }
 
-    pub fn get_installed_packages(self: ShellyCli) !std.json.Parsed([]Package) {
+    pub fn get_installed_packages(self: ShellyCli) !std.json.Parsed([]PackageRow) {
         const result = try self.run(&.{"-Ls"});
         defer self.allocator.free(result.stdout);
         defer self.allocator.free(result.stderr);
 
-        return try JsonPackFrame.decode([]Package, self.allocator, result.stdout);
+        return try JsonPackFrame.decode([]PackageRow, self.allocator, result.stdout);
     }
 
     pub fn isPackageInstalled(self: ShellyCli, name: []const u8) !bool {
