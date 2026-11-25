@@ -37,6 +37,7 @@ const NavMode = @import("models/shelly_config.zig").NavMode;
 const ShellyTabs = @import("models/shelly_config.zig").ShellyTabs;
 const translations = @import("helpers/translations.zig");
 const a11y = @import("helpers/a11y.zig");
+const project_links = @import("helpers/project_links.zig");
 const deep_link = @import("helpers/deep_link.zig");
 const ConfirmDialog = @import("dialog/page/yn_dialog.zig").ConfirmDialog;
 const PolkitDialog = @import("dialog/page/polkit_warning.zig").PolkitDialog;
@@ -67,6 +68,7 @@ pub const ShellyWindow = extern struct {
         content_stack: *gtk.Stack,
         rail: ?*gtk.Box,
         topnav: ?*gtk.Box,
+        rail_links: ?*gtk.Box,
         chevron_img: ?*gtk.Image,
         nav_buttons: std.ArrayListUnmanaged(*NavButton),
         nav_groups: std.ArrayListUnmanaged(*gtk.Label),
@@ -104,19 +106,11 @@ pub const ShellyWindow = extern struct {
         const p = self.private();
         p.rail = null;
         p.topnav = null;
+        p.rail_links = null;
         p.chevron_img = null;
         p.nav_buttons = .empty;
         p.nav_groups = .empty;
-        // The built-in theme's default layout is the mockup's expanded sidebar;
-        // system mode keeps the legacy collapsed rail.
-        p.collapsed = blk: {
-            if (runtime.config) |svc| {
-                if (svc.get()) |cfg| {
-                    break :blk cfg.ThemeMode == .system;
-                } else |_| {}
-            }
-            break :blk false;
-        };
+        p.collapsed = false;
         p.nav_mode = .sidebar;
         p.pending_nav = .sidebar;
         p.aur_slot_atoll = false;
@@ -180,22 +174,16 @@ pub const ShellyWindow = extern struct {
         theme.applyWith(self.as(gtk.Window), mode, variant);
         self.sync_nav_groups();
         self.sync_rail_width();
-        const themed = theme.isThemed();
         const p = self.private();
-        if (p.rail) |rail| {
-            const w = rail.as(gtk.Widget);
-            gtk.Widget.setMarginTop(w, if (themed) 0 else 8);
-            gtk.Widget.setMarginBottom(w, if (themed) 0 else 8);
-            gtk.Widget.setMarginStart(w, if (themed) 0 else 6);
-            gtk.Widget.setMarginEnd(w, if (themed) 0 else 6);
-        }
-        if (p.topnav) |bar| {
-            const w = bar.as(gtk.Widget);
-            gtk.Widget.setMarginTop(w, if (themed) 0 else 6);
-            gtk.Widget.setMarginBottom(w, if (themed) 0 else 6);
-            gtk.Widget.setMarginStart(w, if (themed) 0 else 6);
-            gtk.Widget.setMarginEnd(w, if (themed) 0 else 6);
-        }
+        if (p.rail) |rail| setZeroMargins(rail.as(gtk.Widget));
+        if (p.topnav) |bar| setZeroMargins(bar.as(gtk.Widget));
+    }
+
+    fn setZeroMargins(w: *gtk.Widget) void {
+        gtk.Widget.setMarginTop(w, 0);
+        gtk.Widget.setMarginBottom(w, 0);
+        gtk.Widget.setMarginStart(w, 0);
+        gtk.Widget.setMarginEnd(w, 0);
     }
 
     fn on_close_request(_: *gtk.Window, self: *ShellyWindow) callconv(.c) c_int {
@@ -359,6 +347,7 @@ pub const ShellyWindow = extern struct {
 
         const chevron = gtk.Button.new();
         gtk.Widget.addCssClass(chevron.as(gtk.Widget), "flat");
+        gtk.Widget.addCssClass(chevron.as(gtk.Widget), "nav-chevron");
         const chevron_img = gtk.Image.newFromIconName(if (p.collapsed) "go-next-symbolic" else "go-previous-symbolic");
         gtk.Widget.setSizeRequest(chevron_img.as(gtk.Widget), ICON_SLOT, -1);
         gtk.Widget.setHalign(chevron_img.as(gtk.Widget), .center);
@@ -389,11 +378,19 @@ pub const ShellyWindow = extern struct {
         const sep = gtk.Box.new(.horizontal, 0);
         gtk.Widget.setVexpand(sep.as(gtk.Widget), 1);
         gtk.Box.append(rail, sep.as(gtk.Widget));
+        if (!features.builtWithDevario) {
+            const footer = gtk.Box.new(.vertical, 0);
+            gtk.Widget.addCssClass(footer.as(gtk.Widget), "project-links-footer");
+            const links = project_links.build(if (p.collapsed) .vertical else .horizontal);
+            p.rail_links = links;
+            gtk.Box.append(footer, links.as(gtk.Widget));
+            gtk.Box.append(rail, footer.as(gtk.Widget));
+        }
         return rail;
     }
 
-    /// Uppercase section label for the themed sidebar; hidden in system mode
-    /// and while the rail is collapsed so the legacy rail is unchanged.
+    /// Uppercase section label for the themed sidebar; hidden while the rail
+    /// is collapsed.
     fn add_nav_group(self: *ShellyWindow, parent: *gtk.Box, text: [:0]const u8) void {
         const label = gtk.Label.new(text);
         gtk.Widget.addCssClass(label.as(gtk.Widget), "nav-group");
@@ -407,7 +404,7 @@ pub const ShellyWindow = extern struct {
 
     fn sync_nav_groups(self: *ShellyWindow) void {
         const p = self.private();
-        const visible = !p.collapsed and theme.isThemed();
+        const visible = !p.collapsed;
         for (p.nav_groups.items) |label| {
             gtk.Widget.setVisible(label.as(gtk.Widget), @intFromBool(visible));
         }
@@ -429,6 +426,7 @@ pub const ShellyWindow = extern struct {
         gtk.Box.append(bar, left_spacer.as(gtk.Widget));
 
         const items = gtk.Box.new(.horizontal, 0);
+        gtk.Widget.addCssClass(items.as(gtk.Widget), "nav-segment");
         gtk.Box.append(bar, items.as(gtk.Widget));
 
         if (features.builtWithRecommend) add_nav_button(self, items, stack, false, "recommend", RecommendPage.icon_name, translations._(RecommendPage.title));
@@ -445,6 +443,7 @@ pub const ShellyWindow = extern struct {
         const right_spacer = gtk.Box.new(.horizontal, 0);
         gtk.Widget.setHexpand(right_spacer.as(gtk.Widget), 1);
         gtk.Box.append(bar, right_spacer.as(gtk.Widget));
+        if (!features.builtWithDevario) gtk.Box.append(bar, project_links.build(.horizontal).as(gtk.Widget));
 
         return bar;
     }
@@ -462,16 +461,19 @@ pub const ShellyWindow = extern struct {
             if (!nb.is_rail) continue;
             gtk.Revealer.setRevealChild(nb.revealer, @intFromBool(!p.collapsed));
         }
+        if (p.rail_links) |links| {
+            gtk.Orientable.setOrientation(links.as(gtk.Orientable), if (p.collapsed) .vertical else .horizontal);
+        }
         self.sync_nav_groups();
         self.sync_rail_width();
     }
 
     /// The expanded themed sidebar matches the mockup's 232px column; the
-    /// collapsed rail and system mode keep their content-driven width.
+    /// collapsed rail keeps its content-driven width.
     fn sync_rail_width(self: *ShellyWindow) void {
         const p = self.private();
         const rail = p.rail orelse return;
-        const wide = theme.isThemed() and !p.collapsed and p.nav_mode == .sidebar;
+        const wide = !p.collapsed and p.nav_mode == .sidebar;
         gtk.Widget.setSizeRequest(rail.as(gtk.Widget), if (wide) 232 else -1, -1);
     }
 

@@ -674,18 +674,18 @@ Document any known issues that are being tracked:
 - [ ] With a config lacking `ThemeMode` (or `ThemeMode: shelly`), the window opens with the
   built-in theme: rounded window with outline, brand headerbar with circular window buttons,
   accent-filled selection pill, card toolbars, large page headings.
-- [ ] Settings → Look & Feel → Theme = "System GTK" switches live to the desktop GTK theme with
-  the default titlebar; added page headings and sidebar group labels disappear and the legacy
-  spacing returns. Switching back to "Shelly" restores the built-in look without a restart.
+- [ ] Settings → Look & Feel → Theme = "System colors" keeps the built-in design (brand
+  headerbar, page headings, sidebar group labels, spacing) and switches live to the desktop's
+  GTK 4 colors. Switching back to "Shelly" restores the Shelly palette without a restart.
 - [ ] Color variant Dark/Light applies live in Shelly mode; "Follow system" tracks the
   desktop dark preference (flip the desktop color scheme while Shelly is open and verify the
   sheet swaps without a restart).
-- [ ] The Color variant row hides while Theme = "System GTK" and returns on switching back to
-  "Shelly" with the previous selection intact; the row is already hidden on first open when the
-  config has `ThemeMode: system`. System GTK follows the desktop dark/light preference regardless
-  of the stored variant: Shelly(Dark) → System GTK on a light desktop renders light (no hidden
-  override), and switching back to Shelly restores Dark.
-- [ ] The Shelly color variant persists between reboots: set Shelly + Dark, switch to System GTK,
+- [ ] The Color variant row hides while Theme = "System colors" and returns on switching back
+  to "Shelly" with the previous selection intact; the row is already hidden on first open when
+  the config has `ThemeMode: system`. System colors take dark or light from the desktop colors
+  regardless of the stored variant: Shelly(Dark) → System colors on a light desktop renders
+  light, and switching back to Shelly restores Dark.
+- [ ] The Shelly color variant persists between reboots: set Shelly + Dark, switch to System colors,
   restart Shelly (it still follows the desktop), then switch back to Shelly and Dark is restored;
   the config's `ThemeVariant` is unchanged by the mode round-trip.
 - [ ] Collapse the sidebar with the chevron: group labels hide while collapsed and return when
@@ -705,32 +705,56 @@ Document any known issues that are being tracked:
   fill or focus ring); hovering a selected card/row keeps the tint.
 - [ ] Otherwise borderless buttons (flat, suggested/destructive, window controls, nav pills,
   chips, checked stack switcher, popover rows) carry a 1px hairline in both variants that
-  strengthens on hover/checked; button sizes match the previous build and System GTK mode
-  renders unchanged.
-- [ ] List-view column headers render as one pill bar with hairline dividers between columns
-  (not a pill per column) in both variants; per-column hover tint keeps the rounded ends.
+  strengthens on hover/checked; button sizes match the previous build.
+- [ ] List-view column headers render as one flat strip with a hairline underneath (not a pill
+  per column) in both variants, and each title sits over its column's values.
 - [ ] At 200% scale / large text, headings, cards and the settings rows do not clip.
 - [ ] On a desktop that installs a fixed dark GTK override at user priority (e.g. Pearl's
   matugen palette), the light variant still shows dark-on-light row labels and surfaces;
-  switching to System GTK restores the desktop override.
+  switching to System colors applies that palette's colors to the built-in design.
 - [ ] With the desktop set to dark, `Follow system` opens dark without touching gsettings
   (portal-driven `gtk-interface-color-scheme` on GTK >= 4.23).
-- [ ] Round-trip Theme Shelly → System GTK → Shelly several times (also with dialogs or
+- [ ] Round-trip Theme Shelly → System colors → Shelly several times (also with dialogs or
   popovers open): no crash, and the brand headerbar with circular window controls returns
   each time (headerbar is kept alive across titlebar swaps).
-- [ ] Shelly mode never consults the desktop GTK theme: set any third-party, dark-only or
-  high-contrast GTK theme (user or system priority) and the built-in theme still renders
-  exactly as designed for the selected variant, with no foreign colors leaking into any
-  widget.
-- [ ] With the desktop `gtk-theme` changed externally while Shelly is open, Shelly mode
-  keeps its pinned look; switching to System GTK immediately follows the new desktop
-  theme (the restore path re-enables backend tracking), and switching back re-pins the
-  built-in theme.
+- [ ] Settings → Look & Feel → Use System Title Bar on, then restart Shelly: the brand
+  headerbar is gone. On KDE Plasma or Hyprland the compositor draws the title bar (Hyprland
+  without decorations or a bar plugin shows none); on GNOME GTK's default header bar appears
+  with the desktop's button layout. Toggling the switch leaves the open window unchanged,
+  switching it off and restarting brings the brand headerbar back, and changing Theme or
+  Color variant leaves the choice in place. On KDE Plasma or Hyprland the main window with
+  the setting on, and the PKGBUILD review and preview windows always, show only the
+  compositor's corner rounding, with no second rounding inside it.
+- [ ] Neither mode loads the desktop GTK theme's widget styles: set any third-party,
+  dark-only or high-contrast GTK theme (user or system priority) and the built-in design
+  still renders exactly as authored. Shelly mode shows no foreign colors in any widget.
+- [ ] With the desktop `gtk-theme` changed externally while Shelly is open, both modes keep
+  the pinned built-in design.
+- [ ] System colors on Plasma: with Breeze or another Plasma color scheme applied, Shelly
+  keeps its design and uses the scheme's window, text, view, header and selection colors
+  (read from `~/.config/gtk-4.0/colors.css`). Changing the Plasma color scheme while Shelly
+  is open updates Shelly within a second.
+- [ ] System colors with a palette generator (matugen, Noctalia, or similar) that writes
+  libadwaita names to `~/.config/gtk-4.0/`: Shelly uses those colors, including the accent,
+  and follows regenerated palettes live.
+- [ ] System colors with an installed GTK 4 theme (adw-gtk3 or similar) and no user GTK 4
+  colors: Shelly keeps its design and uses the theme's colors for the desktop's dark or
+  light preference, with the portal accent over the theme's. With Plasma colors in
+  `~/.config/gtk-4.0/colors.css` as well, the Plasma colors win. Picking another GTK theme
+  while Shelly is open updates Shelly within a second, unless `GTK_THEME` is set.
+- [ ] System colors with GTK's built-in theme and no user GTK 4 colors: Shelly keeps the
+  Shelly palette for the desktop's dark or light preference, using the portal accent color
+  when the desktop sets one.
+- [ ] System colors with GTK's built-in theme and a user `gtk.css` that sets only
+  `accent_bg_color`: Shelly keeps the Shelly palette and uses that accent instead of the
+  portal accent.
+- [ ] System colors with unreadable desktop colors (text and background too close): Shelly
+  keeps the Shelly palette for the desktop's dark or light preference and logs a warning.
 
 ## Updates page redesign (docs/updates-redesign)
 
-- [ ] Updates page opens with the Pearl page heading ("Updates") and subtitle; in
-  System GTK mode the heading renders with native title paint and the same layout.
+- [ ] Updates page opens with the Pearl page heading ("Updates") and subtitle; with
+  System colors the heading keeps the same layout in the desktop's colors.
 - [ ] Source filters render as chips with per-source counts; toggling a chip filters
   the list and recomputes "N of M updates included", the total download size and the
   Upgrade button label ("Upgrade All" vs "Upgrade Selected (n)").
@@ -764,9 +788,8 @@ Document any known issues that are being tracked:
   unfinished rows read Cancelled/Not processed as before.
 - [ ] Flatpak-only and AppImage transactions drive the overall bar through their
   aggregate percentage rows without per-package byte data.
-- [ ] System GTK mode: overall card, chips, compact rows and pills render with native
-  theme colors and modest radii (no Pearl geometry); dark and light desktop themes
-  both stay legible.
+- [ ] System colors: overall card, chips, compact rows and pills keep the Pearl geometry
+  in the desktop's colors; dark and light desktop palettes both stay legible.
 - [ ] Screen reader: the overall bar announces "Overall progress" with value changes;
   per-row bars keep their package-name accessible names and status descriptions.
 - [ ] At 200% scale / large text the overall card meta wraps and compact rows ellipsize

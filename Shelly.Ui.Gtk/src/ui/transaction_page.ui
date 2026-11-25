@@ -4,6 +4,9 @@
     <property name="orientation">vertical</property>
     <property name="hexpand">true</property>
     <property name="vexpand">true</property>
+    <style>
+      <class name="transaction-page"/>
+    </style>
     <child>
       <object class="GtkOverlay" id="root_overlay">
         <property name="hexpand">true</property>
@@ -116,7 +119,7 @@
                 <child>
                   <object class="GtkProgressBar" id="overall_bar">
                     <property name="hexpand">true</property>
-                    <property name="margin-top">14</property>
+                    <property name="margin-top">16</property>
                     <property name="margin-bottom">12</property>
                   </object>
                 </child>
@@ -134,7 +137,7 @@
                   <object class="GtkBox">
                     <property name="orientation">horizontal</property>
                     <property name="spacing">8</property>
-                    <property name="margin-top">14</property>
+                    <property name="margin-top">16</property>
                     <child>
                       <object class="GtkLabel" id="phase_download">
                         <property name="label" translatable="yes">1 · Download</property>

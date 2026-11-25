@@ -8,8 +8,7 @@ pub const NavMode = enum(u8) {
     topbar = 1,
 };
 
-/// Which paint the UI uses: the built-in Pearl-style theme or the desktop's
-/// GTK theme. `system` reproduces the pre-theme rendering exactly.
+/// GTK theme colors. `system` takes the desktop's GTK 4 colors.
 pub const ThemeMode = enum(u8) {
     shelly = 0,
     system = 1,
@@ -45,6 +44,14 @@ pub const DayOfWeek = enum(u8) {
     saturday = 6,
 };
 
+/// a resized or hidden table column; `Width` -1 keeps the natural width.
+pub const TableColumn = struct {
+    Table: []const u8 = "",
+    Column: []const u8 = "",
+    Width: i32 = -1,
+    Hidden: bool = false,
+};
+
 pub const ShellyConfig = struct {
     // General
     Culture: []const u8 = "",
@@ -68,6 +75,7 @@ pub const ShellyConfig = struct {
     NavMode: NavMode = .sidebar,
     ThemeMode: ThemeMode = .shelly,
     ThemeVariant: ThemeVariant = .follow_system,
+    UseSystemTitlebar: bool = false,
     // Internal: persisted window geometry, not exposed in settings UI
     WindowLastWidth: i32 = 0,
     WindowLastHeight: i32 = 0,
@@ -98,6 +106,8 @@ pub const ShellyConfig = struct {
 
     // Search Page
     SearchShowDetailPane: bool = false,
+
+    TableColumns: []const TableColumn = &.{},
 
     // Tray
     TrayEnabled: bool = false,

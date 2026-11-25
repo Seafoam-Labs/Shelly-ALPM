@@ -56,7 +56,7 @@
                       <object class="GtkLabel" id="no_results_label">
                         <property name="label" translatable="yes">No matching applications found</property>
                         <style>
-                          <class name="title-4"/>
+                          <class name="title-3"/>
                         </style>
                       </object>
                     </child>
@@ -140,10 +140,7 @@
                 </child>
                 <child>
                   <object class="GtkBox">
-                    <property name="spacing">4</property>
-                    <style>
-                      <class name="linked"/>
-                    </style>
+                    <property name="spacing">8</property>
                     <child>
                       <object class="GtkButton" id="overlay_show_plugin_button">
                         <property name="label" translatable="yes">Addons</property>
@@ -382,18 +379,15 @@
                       <object class="GtkBox">
                         <property name="spacing">8</property>
                         <property name="orientation">horizontal</property>
-                        <property name="homogeneous">true</property>
-                        <property name="hexpand">true</property>
+                        <property name="halign">start</property>
                         <child>
                           <object class="GtkButton" id="overlay_permissions_button">
-                            <property name="hexpand">true</property>
                              <property name="label" translatable="yes">App Permissions</property>
                           </object>
                         </child>
                         <child>
                           <object class="GtkButton" id="version_history_button">
                           <property name="label" translatable="yes">Version History</property>
-                            <property name="hexpand">true</property>
                           </object>
                         </child>
                       </object>

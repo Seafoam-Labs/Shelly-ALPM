@@ -70,10 +70,10 @@ pub const PlanDialog = extern struct {
         set_summary(p, question);
         add_plan_rows(p, question.packages);
         for (question.migrations) |migration| {
-            const text = std.fmt.allocPrintSentinel(std.heap.page_allocator, "Preserve {s}: {s} → {s} ({s})", .{
+            const text = std.fmt.allocPrintSentinel(std.heap.c_allocator, "Preserve {s}: {s} → {s} ({s})", .{
                 migration.path, migration.source orelse "unowned", migration.destination, migration.origin,
             }, 0) catch continue;
-            defer std.heap.page_allocator.free(text);
+            defer std.heap.c_allocator.free(text);
             const label = gtk.Label.new(text);
             gtk.Label.setXalign(label, 0);
             gtk.Label.setWrap(label, 1);

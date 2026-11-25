@@ -1,4 +1,5 @@
 //! Tab labels, centered layout, and mouse hit testing. Navigation policy belongs to the caller.
+const commands = @import("../commands.zig");
 const std = @import("std");
 const vaxis = @import("vaxis");
 const vxfw = vaxis.vxfw;
@@ -95,6 +96,8 @@ pub const TabBar = struct {
     rich: vxfw.RichText,
     first_visible: usize = 0,
     start_col: i16 = 0,
+    right_edge: u16 = 0,
+    hover_point: ?vxfw.Point = null,
     label_row: i16 = 0,
     label_widths: []const u16 = &.{},
 
@@ -154,6 +157,7 @@ pub const TabBar = struct {
         self.label_widths = label_widths;
         const island_width: u16 = @intCast(total + padding);
         const island_col = (size.width - island_width) / 2;
+        self.right_edge = island_col + island_width;
         self.start_col = @intCast(island_col + padding / 2);
         self.label_row = if (size.height >= 3) 1 else 0;
         const surface = try vxfw.Surface.init(ctx.arena, self.widget(), size);
@@ -171,14 +175,20 @@ pub const TabBar = struct {
             }
         }
         var col: u16 = @intCast(self.start_col);
-        for (spans) |span| {
+        for (spans, label_widths) |span, label_width| {
+            var style = span.style;
+            if (self.hover_point) |point| {
+                if (point.row == self.label_row and point.col >= col and point.col - col < label_width) {
+                    style.bold = true;
+                }
+            }
             var iterator = ctx.graphemeIterator(span.text);
             while (iterator.next()) |grapheme| {
                 const text = grapheme.bytes(span.text);
                 const cells: u8 = @intCast(ctx.stringWidth(text));
                 surface.writeCell(col, @intCast(self.label_row), .{
                     .char = .{ .grapheme = text, .width = cells },
-                    .style = span.style,
+                    .style = style,
                 });
                 col += cells;
             }
@@ -192,7 +202,7 @@ pub const TabBar = struct {
         switch (event) {
             // Mouse coordinates arrive local to this surface
             .mouse => |mouse| {
-                if (mouse.button != .left or mouse.type != .press) return;
+                if (!commands.Mouse.primaryPress(mouse)) return;
                 if (mouse.row != self.label_row or mouse.col < self.start_col) return;
                 var col = self.start_col;
                 for (self.label_widths, 0..) |label_width, i| {

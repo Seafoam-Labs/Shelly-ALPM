@@ -45,6 +45,8 @@ pub fn draw(widget: vxfw.Widget, ctx: vxfw.DrawContext, fields: []const Field) A
     const arena = ctx.arena;
     const width = ctx.max.width orelse ctx.min.width;
     if (width == 0) return .{ .size = .{ .width = 0, .height = 0 }, .widget = widget, .buffer = &.{}, .children = &.{} };
+    // vaxis multiplies the surface dimensions as u16 before allocating cells.
+    const max_rows = std.math.maxInt(u16) / width;
     const columns = width >= 36;
     const label_width: u16 = if (columns) 12 else width;
     const value_col: u16 = if (columns) 14 else 0;
@@ -52,11 +54,19 @@ pub fn draw(widget: vxfw.Widget, ctx: vxfw.DrawContext, fields: []const Field) A
     var children: std.ArrayList(vxfw.SubSurface) = .empty;
     var row: u16 = 0;
     for (fields) |field| {
-        if (field.gap or (!columns and row > 0)) row += 1;
+        if (row == max_rows) break;
+        if (field.gap or (!columns and row > 0)) {
+            if (max_rows - row == 1) break;
+            row += 1;
+        }
         var label: vxfw.Text = .{ .text = field.label, .style = styles.emphasis };
-        const label_surface = try label.draw(ctx.withConstraints(.{}, .{ .width = label_width, .height = null }));
+        const label_surface = try label.draw(ctx.withConstraints(.{}, .{ .width = label_width, .height = max_rows - row }));
         try children.append(arena, .{ .origin = .{ .row = row, .col = 0 }, .surface = label_surface });
         const value_row = row + if (columns) @as(u16, 0) else label_surface.size.height;
+        if (value_row == max_rows) {
+            row = value_row;
+            break;
+        }
         const link = hyperlink(field);
         const spans = [_]vxfw.RichText.TextSpan{.{
             .text = try displayValue(arena, field),
@@ -66,7 +76,7 @@ pub fn draw(widget: vxfw.Widget, ctx: vxfw.DrawContext, fields: []const Field) A
         var value: vxfw.RichText = .{ .text = &spans, .softwrap = true };
         const value_surface = try value.draw(ctx.withConstraints(
             .{ .width = value_width },
-            .{ .width = value_width, .height = null },
+            .{ .width = value_width, .height = max_rows - value_row },
         ));
         try children.append(arena, .{ .origin = .{ .row = value_row, .col = value_col }, .surface = value_surface });
         row = @max(row + label_surface.size.height, value_row + value_surface.size.height);
@@ -85,6 +95,28 @@ pub fn draw(widget: vxfw.Widget, ctx: vxfw.DrawContext, fields: []const Field) A
         }
     }
     return surface;
+}
+
+test "oversized details stay within the vaxis surface cell limit" {
+    vxfw.DrawContext.init(.unicode);
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const text = try allocator.alloc(u8, 70_000);
+    @memset(text, 'a');
+    var pkg: @import("../models/packages.zig").Package = .{};
+    const width: u16 = 256;
+    const surface = try draw(.{ .userdata = &pkg, .drawFn = @import("packages_view.zig").drawDetails }, .{
+        .arena = allocator,
+        .min = .{},
+        .max = .{ .width = width },
+        .cell_size = .{ .width = 10, .height = 20 },
+    }, &.{
+        .{ .label = "Description", .value = text },
+        .{ .label = "Repository", .value = "core", .gap = true },
+    });
+    try std.testing.expectEqual(std.math.maxInt(u16) / width, surface.size.height);
+    try std.testing.expectEqualStrings("a", surface.buffer[14].char.grapheme);
 }
 
 test "package homepage URLs retain paths and queries while escaping terminal controls" {

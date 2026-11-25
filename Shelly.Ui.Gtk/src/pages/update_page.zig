@@ -16,6 +16,7 @@ const UpdateSource = @import("../g_objects/update_object.zig").UpdateSource;
 const ShellyWindow = @import("../shelly_window.zig").ShellyWindow;
 const translations = @import("../helpers/translations.zig");
 const runtime = @import("../services/runtime.zig");
+const features = @import("../services/build_features.zig");
 
 pub const UpdatePage = extern struct {
     parent_instance: Parent,
@@ -110,6 +111,7 @@ pub const UpdatePage = extern struct {
         _ = gtk.SignalListItemFactory.signals.bind.connect(factory, *Self, &on_row_bind, self, .{});
         gtk.ListView.setFactory(p.content_list, factory.as(gtk.ListItemFactory));
 
+        gtk.Button.setLabel(p.aur_toggle.as(gtk.Button), translations._(features.aur_source_name));
         _ = gtk.ToggleButton.signals.toggled.connect(p.native_toggle, *Self, &on_source_toggled, self, .{});
         _ = gtk.ToggleButton.signals.toggled.connect(p.aur_toggle, *Self, &on_source_toggled, self, .{});
         _ = gtk.ToggleButton.signals.toggled.connect(p.flatpak_toggle, *Self, &on_source_toggled, self, .{});
@@ -266,7 +268,7 @@ pub const UpdatePage = extern struct {
         }
         if (aur_enabled) {
             for (response.Aur) |package| {
-                updates[index] = .{ .source = .aur, .name = package.Name, .description = translations._("AUR package update"), .old_version = package.Version, .new_version = package.NewVersion, .size = package.DownloadSize };
+                updates[index] = .{ .source = .aur, .name = package.Name, .description = if (features.builtWithAtollOnly) translations._("Atoll package update") else translations._("AUR package update"), .old_version = package.Version, .new_version = package.NewVersion, .size = package.DownloadSize };
                 index += 1;
             }
         }
@@ -338,7 +340,6 @@ pub const UpdatePage = extern struct {
 
         switch (state) {
             .Loading => {
-                gtk.Label.setLabel(p.selected_label, translations._("Checking for updates…"));
                 gtk.Label.setLabel(p.download_label, "");
                 gtk.Spinner.start(p.loading_spinner);
                 gtk.Stack.setVisibleChild(p.updates_stack, p.loading_page.as(gtk.Widget));
@@ -362,7 +363,6 @@ pub const UpdatePage = extern struct {
             },
             .Fail => {
                 gtk.Label.setLabel(p.error_label, translations._("Could not check for updates."));
-                gtk.Label.setLabel(p.selected_label, translations._("Could not check for updates."));
                 gtk.Label.setLabel(p.download_label, "");
                 gtk.Spinner.stop(p.loading_spinner);
                 gtk.Stack.setVisibleChild(p.updates_stack, p.error_page.as(gtk.Widget));
@@ -370,12 +370,16 @@ pub const UpdatePage = extern struct {
                 gtk.Widget.setSensitive(p.upgrade_button.as(gtk.Widget), 0);
             },
             .NoUpdates => {
-                gtk.Label.setLabel(p.selected_label, translations._("Your system is up to date"));
                 gtk.Label.setLabel(p.download_label, "");
                 gtk.Stack.setVisibleChild(p.updates_stack, p.empty_page.as(gtk.Widget));
                 gtk.Widget.setSensitive(p.refresh_button.as(gtk.Widget), 1);
                 gtk.Widget.setSensitive(p.upgrade_button.as(gtk.Widget), 0);
             },
+        }
+        // the summary header only shows loaded updates; the stack pages
+        // explain the other states.
+        if (gtk.Widget.getParent(p.selected_label.as(gtk.Widget))) |head| {
+            gtk.Widget.setVisible(head, @intFromBool(state == .Loaded));
         }
         self.update_source_labels();
     }
@@ -404,7 +408,7 @@ pub const UpdatePage = extern struct {
         var aur_buffer: [64]u8 = undefined;
         var flatpak_buffer: [64]u8 = undefined;
         gtk.Button.setLabel(p.native_toggle.as(gtk.Button), std.fmt.bufPrintSentinel(&system_buffer, "{s} · {d}", .{ translations._("System"), system_count }, 0) catch translations._("System"));
-        gtk.Button.setLabel(p.aur_toggle.as(gtk.Button), std.fmt.bufPrintSentinel(&aur_buffer, "{s} · {d}", .{ translations._("AUR"), aur_count }, 0) catch translations._("AUR"));
+        gtk.Button.setLabel(p.aur_toggle.as(gtk.Button), std.fmt.bufPrintSentinel(&aur_buffer, "{s} · {d}", .{ translations._(features.aur_source_name), aur_count }, 0) catch translations._(features.aur_source_name));
         gtk.Button.setLabel(p.flatpak_toggle.as(gtk.Button), std.fmt.bufPrintSentinel(&flatpak_buffer, "{s} · {d}", .{ translations._("Flatpak"), flatpak_count }, 0) catch translations._("Flatpak"));
     }
 

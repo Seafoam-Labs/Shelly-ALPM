@@ -203,9 +203,9 @@ pub const DBus = struct {
         defer vt.free();
 
         const builder = glib.VariantBuilder.new(vt);
+        defer builder.unref();
         builder.add("{sv}", "session-id", glib.Variant.new("s", sid.ptr));
         const dict = builder.end();
-        _ = &builder;
 
         return glib.Variant.new("(s@a{sv})", "unix-session", dict);
     }

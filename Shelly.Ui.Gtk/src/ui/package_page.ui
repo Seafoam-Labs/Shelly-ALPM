@@ -11,38 +11,6 @@
         <property name="orientation">vertical</property>
         <property name="hexpand">true</property>
         <property name="vexpand">true</property>
-         <property name="margin-bottom">10</property>
-        <child>
-            <object class="GtkBox">
-                <property name="orientation">vertical</property>
-                <style>
-                    <class name="page-head"/>
-                    <class name="page-head-added"/>
-                </style>
-                <child>
-                    <object class="GtkLabel">
-                        <property name="label" translatable="yes">Packages</property>
-                        <property name="xalign">0</property>
-                        <property name="accessible-role">heading</property>
-                        <accessibility>
-                            <property name="level">1</property>
-                        </accessibility>
-                        <style>
-                            <class name="page-heading"/>
-                        </style>
-                    </object>
-                </child>
-                <child>
-                    <object class="GtkLabel">
-                        <property name="label" translatable="yes">Install and manage software on your system.</property>
-                        <property name="xalign">0</property>
-                        <style>
-                            <class name="page-subtitle"/>
-                        </style>
-                    </object>
-                </child>
-            </object>
-        </child>
         <child>
             <object class="GtkOverlay" id="PackageWindow">
                 <property name="hexpand">true</property>
@@ -56,49 +24,99 @@
                             <object class="GtkBox">
                                 <property name="halign">baseline</property>
                                 <property name="orientation">horizontal</property>
-                                <property name="spacing">5</property>
+                                <property name="spacing">6</property>
                                 <property name="valign">baseline-center</property>
                                 <style>
                                     <class name="toolbar-card"/>
                                 </style>
                                 <child>
-                                  <object class="GtkSearchEntry" id="search_entry">
-                                      <property name="placeholder-text" translatable="yes">Search packages...</property>
-                                      <property name="width-request">200</property>
-                                      <style>
-                                          <class name="spaced-search"/>
-                                      </style>
-                                      <child>
-                                          <object class="GtkShortcutController">
-                                              <property name="scope">managed</property>
-                                              <child>
-                                                  <object class="GtkShortcut">
-                                                      <property name="trigger">&lt;Control&gt;f</property>
-                                                      <property name="action">action(search.focus)</property>
-                                                  </object>
-                                              </child>
-                                          </object>
-                                      </child>
-                                      <accessibility>
-                                          <property name="label" translatable="yes">Search packages...</property>
-                                      </accessibility>
-                                  </object>
-                                </child>
-                                <child>
-                                    <object class="GtkDropDown" id="grouping_selection">
-                                        <property name="tooltip-text" translatable="yes">Package Group Filter</property>
-                                        <property name="enable-search">true</property>
-                                        <property name="search-match-mode">substring</property>
-                                        <property name="expression">
-                                              <lookup name='string' type="GtkStringObject"></lookup>
-                                        </property>
+                                    <object class="GtkBox">
+                                        <style>
+                                            <class name="linked"/>
+                                            <class name="search-filter"/>
+                                        </style>
+                                        <child>
+                                            <object class="GtkSearchEntry" id="search_entry">
+                                                <property name="placeholder-text" translatable="yes">Search packages...</property>
+                                                <property name="width-request">200</property>
+                                                <style>
+                                                    <class name="spaced-search"/>
+                                                </style>
+                                                <child>
+                                                    <object class="GtkShortcutController">
+                                                        <property name="scope">managed</property>
+                                                        <child>
+                                                            <object class="GtkShortcut">
+                                                                <property name="trigger">&lt;Control&gt;f</property>
+                                                                <property name="action">action(search.focus)</property>
+                                                            </object>
+                                                        </child>
+                                                    </object>
+                                                </child>
+                                                <accessibility>
+                                                    <property name="label" translatable="yes">Search packages...</property>
+                                                </accessibility>
+                                            </object>
+                                        </child>
+                                        <child>
+                                            <object class="GtkDropDown" id="grouping_selection">
+                                                <property name="tooltip-text" translatable="yes">Package Group Filter</property>
+                                                <property name="enable-search">true</property>
+                                                <property name="search-match-mode">substring</property>
+                                                <property name="expression">
+                                                <lookup name='string' type="GtkStringObject"></lookup>
+                                                </property>
+                                                <property name="show-arrow">false</property>
+                                                <property name="factory">
+                                                    <object class="GtkBuilderListItemFactory">
+                                                        <property name="bytes"><![CDATA[
+<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+  <template class="GtkListItem">
+    <property name="child">
+      <object class="GtkImage">
+        <property name="icon-name">funnel-symbolic</property>
+      </object>
+    </property>
+  </template>
+</interface>
+]]></property>
+                                                    </object>
+                                                </property>
+                                                <property name="list-factory">
+                                                    <object class="GtkBuilderListItemFactory">
+                                                        <property name="bytes"><![CDATA[
+<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+  <template class="GtkListItem">
+    <property name="child">
+      <object class="GtkLabel">
+        <property name="xalign">0</property>
+        <binding name="label">
+          <lookup name="string" type="GtkStringObject">
+            <lookup name="item">GtkListItem</lookup>
+          </lookup>
+        </binding>
+      </object>
+    </property>
+  </template>
+</interface>
+]]></property>
+                                                    </object>
+                                                </property>
+                                            </object>
+                                        </child>
                                     </object>
                                 </child>
                                 <child>
-                                    <object class="GtkCheckButton" id="installed_only_check">
-                                        <property name="label" translatable="yes">Installed Only</property>
-                                        <property name="tooltip-text" translatable="yes">Show only installed packages</property>
-                                        <signal name="toggled" handler="on_installed_only_toggled"/>
+                                    <object class="GtkMenuButton" id="options_menu">
+                                      <property name="has-frame">false</property>
+                                      <style>
+                                        <class name="options-menu"/>
+                                      </style>
+                                        <property name="icon-name">view-more-symbolic</property>
+                                        <property name="tooltip-text" translatable="yes">Additional Options</property>
+                                        <property name="popover">options_popover</property>
                                     </object>
                                 </child>
                                 <child>
@@ -107,20 +125,8 @@
                                     </object>
                                 </child>
                                 <child>
-                                    <object class="GtkMenuButton" id="cart_button">
-                                        <property name="tooltip-text" translatable="yes">Selected Packages</property>
-                                        <property name="sensitive" >true</property>
-                                        <property name="popover">cart_popover</property>
-                                        <child>
-                                            <object class="GtkLabel" id="cart_label">
-                                                <property name="label" translatable="yes">0 Selected</property>
-                                            </object>
-                                        </child>
-                                    </object>
-                                </child>
-                                <child>
                                     <object class="GtkBox">
-                                        <property name="spacing">2</property>
+                                        <property name="spacing">0</property>
                                         <style>
                                             <class name="linked"/>
                                         </style>
@@ -143,31 +149,44 @@
                                     </object>
                                 </child>
                                 <child>
-                                    <object class="GtkMenuButton" id="options_menu">
-                                        <property name="icon-name">view-more-symbolic</property>
-                                        <property name="tooltip-text" translatable="yes">Additional Options</property>
-                                        <property name="popover">options_popover</property>
-                                    </object>
-                                </child>
-                                <child>
-                                    <object class="GtkButton" id="install_button">
-                                        <property name="halign">start</property>
-                                        <property name="label" translatable="yes">Install Selected</property>
-                                        <signal name="clicked" handler="install_selected" swapped="true"/>
+                                    <object class="GtkBox" id="selection_actions">
+                                        <property name="visible">false</property>
                                         <style>
-                                            <class name="suggested-action"/>
+                                            <class name="linked"/>
                                         </style>
                                         <child>
-                                          <object class="GtkShortcutController">
-                                            <property name="scope">managed</property>
-                                            <property name="propagation-phase">capture</property>
-                                            <child>
-                                              <object class="GtkShortcut">
-                                                <property name="trigger">Return</property>
-                                                <property name="action">activate</property>
-                                              </object>
-                                            </child>
-                                          </object>
+                                            <object class="GtkMenuButton" id="cart_button">
+                                                <property name="tooltip-text" translatable="yes">Selected Packages</property>
+                                                <property name="sensitive" >true</property>
+                                                <property name="popover">cart_popover</property>
+                                                <child>
+                                                    <object class="GtkLabel" id="cart_label">
+                                                        <property name="label" translatable="yes">0 Selected</property>
+                                                    </object>
+                                                </child>
+                                            </object>
+                                        </child>
+                                        <child>
+                                            <object class="GtkButton" id="install_button">
+                                                <property name="halign">start</property>
+                                                <property name="label" translatable="yes">Install Selected</property>
+                                                <signal name="clicked" handler="install_selected" swapped="true"/>
+                                                <style>
+                                                    <class name="suggested-action"/>
+                                                </style>
+                                                <child>
+                                                  <object class="GtkShortcutController">
+                                                    <property name="scope">managed</property>
+                                                    <property name="propagation-phase">capture</property>
+                                                    <child>
+                                                      <object class="GtkShortcut">
+                                                        <property name="trigger">Return</property>
+                                                        <property name="action">activate</property>
+                                                      </object>
+                                                    </child>
+                                                  </object>
+                                                </child>
+                                            </object>
                                         </child>
                                     </object>
                                 </child>
@@ -176,6 +195,10 @@
 
                         <child>
                             <object class="GtkBox" id="views_and_detail_hbox">
+                                <property name="overflow">hidden</property>
+                                <style>
+                                  <class name="table-card"/>
+                                </style>
                                 <property name="hexpand">true</property>
                                 <property name="orientation">horizontal</property>
                                 <property name="vexpand">true</property>
@@ -304,7 +327,7 @@
                           <object class="GtkLabel" id="no_results_label">
                             <property name="label" translatable="yes">No matching packages found</property>
                             <style>
-                              <class name="title-4"/>
+                              <class name="title-3"/>
                             </style>
                           </object>
                         </child>
@@ -359,6 +382,13 @@
                     <object class="GtkCheckButton" id="upgrade_check">
                         <property name="label" translatable="yes">Perform Upgrade</property>
                         <property name="tooltip-text" translatable="yes">Perform a full system upgrade with install (-u)</property>
+                    </object>
+                </child>
+                <child>
+                    <object class="GtkCheckButton" id="installed_only_check">
+                        <property name="label" translatable="yes">Installed Only</property>
+                        <property name="tooltip-text" translatable="yes">Show only installed packages</property>
+                        <signal name="toggled" handler="on_installed_only_toggled"/>
                     </object>
                 </child>
                 <child>

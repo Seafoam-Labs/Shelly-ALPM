@@ -59,7 +59,7 @@
             </child>
             <child>
               <object class="GtkButton" id="preivew_pkg_build">
-                <property name="label" translatable="yes">Preview Pkgbuild</property>
+                <property name="label" translatable="yes">Preview PKGBUILD</property>
                  <signal name="clicked" handler="preview_package_build" swapped="true"/>
               </object>
             </child>

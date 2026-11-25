@@ -3,7 +3,7 @@ msgstr ""
 "Project-Id-Version: Polish (Shelly-ALPM)\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
 "POT-Creation-Date: 2026-11-14 01:29-0300\n"
-"PO-Revision-Date: 2026-11-18 11:50+0000\n"
+"PO-Revision-Date: 2026-11-24 17:27+0000\n"
 "Last-Translator: juliazero <juliazero2@gmail.com>\n"
 "Language-Team: Polish\n"
 "Language: pl\n"
@@ -81,7 +81,7 @@ msgid "Warnings"
 msgstr "Ostrzeżenia"
 
 msgid ""
-"These commands fetch and execute code outside of shelly and libalpm's "
+"These commands fetch and execute code outside of Shelly and libalpm's "
 "control. Review them before continuing."
 msgstr ""
 "Te polecenia pobierają i wykonują kod poza kontrolą Shelly oraz libalpm. "
@@ -283,7 +283,7 @@ msgstr "Ukryj panel szczegółów po prawej stronie"
 msgid "Information"
 msgstr "Informacje"
 
-msgid "Preview Pkgbuild"
+msgid "Preview PKGBUILD"
 msgstr "Podgląd PKGBUILD"
 
 msgid "Search the AUR"
@@ -531,15 +531,11 @@ msgstr "Odznacz wszystkie zalecane pakiety"
 msgid "Install all selected packages in one transaction"
 msgstr "Zainstaluj wszystkie wybrane pakiety w ramach jednej operacji"
 
-msgid "Loading Recommended Packages..."
-msgstr "Wczytywanie polecanych pakietów..."
+msgid "Loading recommendations…"
+msgstr "Wczytywanie polecanych pakietów…"
 
-msgid ""
-"No recommendations found. Please check your internet connection and try "
-"again."
-msgstr ""
-"Nie znaleziono polecanych pakietów. Sprawdź połączenie z internetem i "
-"spróbuj ponownie."
+msgid "Check your internet connection and try again."
+msgstr "Sprawdź połączenie z internetem i spróbuj ponownie."
 
 msgid "Shelly Search"
 msgstr "Wyszukiwarka Shelly"
@@ -614,7 +610,7 @@ msgstr "Użyj harmonogramu tygodniowego"
 msgid "Run Tray as cron"
 msgstr "Uruchamiaj ikonę zasobnika systemowego jako zadanie cron"
 
-msgid "Tray update with ui"
+msgid "Tray update with UI"
 msgstr ""
 "Użyj interfejsu użytkownika wykonując aktualizację przez ikonę zasobnika"
 
@@ -679,7 +675,7 @@ msgid "Use Symbolic Tray Icon"
 msgstr "Używaj symbolicznej ikony zasobnika systemowego"
 
 msgid ""
-"If enabled, Shelly will use a symbolic svg icon instead of the default image "
+"If enabled, Shelly will use a symbolic SVG icon instead of the default image "
 "one."
 msgstr ""
 "Jeśli ta opcja jest włączona, Shelly użyje symbolicznej ikony SVG zamiast "
@@ -822,7 +818,7 @@ msgid "Remove db.lck"
 msgstr "Usuń plik blokady db.lck"
 
 msgid ""
-"Removes the db.lck file if it was left behind by an interrupted alpm process."
+"Removes the db.lck file if it was left behind by an interrupted ALPM process."
 msgstr "Usuwa plik db.lck, jeśli pozostał po przerwanym procesie alpm."
 
 msgid "Fix Permissions"
@@ -1285,7 +1281,7 @@ msgstr "Pliki Flatpak"
 msgid "Unsupported file type. Choose a.flatpak or.flatpakref file."
 msgstr "Nieobsługiwany typ pliku. Wybierz plik .flatpak lub .flatpakref."
 
-msgid "Installing local flatpak"
+msgid "Installing local Flatpak"
 msgstr "Instalowanie lokalnego pakietu Flatpak"
 
 msgid "Could not install the selected packages."
@@ -1303,7 +1299,7 @@ msgstr "Zweryfikowano"
 msgid "Show less"
 msgstr "Pokaż mniej"
 
-msgid "Installing flatpak"
+msgid "Installing Flatpak"
 msgstr "Instalowanie pakietu Flatpak"
 
 msgid "Remove this Flatpak?"
@@ -1321,7 +1317,7 @@ msgstr "Uprawnienia"
 msgid "Available Addons"
 msgstr "Dostępne dodatki"
 
-msgid "Installing flatpak addon"
+msgid "Installing Flatpak addon"
 msgstr "Instalowanie dodatku Flatpak"
 
 msgid "Unknown developer"
@@ -1585,8 +1581,8 @@ msgstr ""
 "Przeszukuj jednocześnie standardowe repozytoria, AUR i Flatpak. Wpisz nazwę, "
 "aby rozpocząć."
 
-msgid "Could not search the selected sources."
-msgstr "Nie można przeszukać wybranych źródeł."
+msgid "Could not search the selected sources"
+msgstr "Nie można przeszukać wybranych źródeł"
 
 msgid "Installation in progress"
 msgstr "Trwa instalacja"
@@ -1965,3 +1961,162 @@ msgstr "Rozszerz boczny panel"
 
 msgid "Collapse sidebar"
 msgstr "Zwiń boczny panel"
+
+msgid "No recommendations found"
+msgstr "Nie znaleziono polecanych pakietów"
+
+msgid "System-wide"
+msgstr "Systemowy"
+
+msgid "Current user"
+msgstr "Bieżący użytkownik"
+
+msgid "Atoll package update"
+msgstr "Aktualizacja pakietu Atoll"
+
+msgid "Use System Title Bar"
+msgstr "Używaj systemowego paska tytułowego"
+
+msgid ""
+"If enabled, the desktop draws the window title bar and its buttons instead "
+"of Shelly."
+msgstr ""
+"Po włączeniu tej opcji pasek tytułowy okna i jego przyciski są rysowane "
+"przez środowisko graficzne zamiast przez Shelly."
+
+msgid "Applies after restarting Shelly."
+msgstr "Zmiana zacznie obowiązywać po zrestartowaniu Shelly."
+
+msgid "Language for Shelly's menus and messages."
+msgstr "Język menu i komunikatów Shelly."
+
+msgid "Software sources"
+msgstr "Źródła oprogramowania"
+
+msgid ""
+"Choose which kinds of software Shelly shows. You can change this at any time."
+msgstr ""
+"Wybierz rodzaje oprogramowania wyświetlane przez Shelly. Możesz to zmienić w "
+"dowolnym momencie."
+
+msgid "Enable Firmware"
+msgstr "Włącz obsługę firmware"
+
+msgid "Update device firmware such as UEFI/BIOS and peripherals"
+msgstr "Aktualizuj firmware urządzeń, np. UEFI/BIOS i urządzeń peryferyjnych"
+
+msgid "Update notifications"
+msgstr "Powiadomienia o aktualizacjach"
+
+msgid ""
+"Shelly can check for updates in the background and let you know from the "
+"system tray."
+msgstr ""
+"Shelly może sprawdzać dostępność aktualizacji w tle i informować o nich za "
+"pomocą ikony w zasobniku systemowym."
+
+msgid "Show a tray icon that checks for updates in the background."
+msgstr ""
+"Wyświetlaj ikonę w zasobniku systemowym i sprawdzaj dostępność aktualizacji "
+"w tle."
+
+msgid "Start the tray icon when you log in."
+msgstr "Uruchamiaj ikonę w zasobniku systemowym po zalogowaniu."
+
+msgid "How often the tray looks for updates."
+msgstr ""
+"Częstotliwość sprawdzania dostępności aktualizacji przez ikonę w zasobniku "
+"systemowym."
+
+msgid "Check on chosen days at a set time instead of every few hours."
+msgstr ""
+"Sprawdzaj dostępność aktualizacji w wybrane dni o określonej godzinie "
+"zamiast co kilka godzin."
+
+msgid "Days and time when Shelly checks for updates."
+msgstr "Dni i godzina sprawdzania dostępności aktualizacji przez Shelly."
+
+msgid "Check only at the scheduled time, not when the tray starts."
+msgstr ""
+"Sprawdzaj dostępność aktualizacji tylko o zaplanowanej godzinie, a nie przy "
+"uruchamianiu ikony w zasobniku systemowym."
+
+msgid ""
+"Run updates started from the tray in the Shelly window instead of a terminal."
+msgstr ""
+"Przeprowadzaj aktualizacje inicjowane z zasobnika systemowego w oknie Shelly "
+"zamiast w terminalu."
+
+msgid "Terminal that runs updates started from the tray."
+msgstr ""
+"Terminal używany do przeprowadzania aktualizacji inicjowanych z zasobnika "
+"systemowego."
+
+msgid "Appearance"
+msgstr "Wygląd"
+
+msgid "Use Shelly's colors or your desktop's colors."
+msgstr "Używaj kolorów Shelly lub środowiska graficznego."
+
+msgid "Light, dark, or follow your system."
+msgstr "Jasny, ciemny lub zgodny z ustawieniami systemu."
+
+msgid "The page Shelly opens on."
+msgstr "Strona wyświetlana po uruchomieniu Shelly."
+
+msgid "Sidebar on the left, or tabs across the top."
+msgstr "Panel boczny po lewej stronie lub karty u góry."
+
+msgid "Tray icon"
+msgstr "Ikona w zasobniku systemowym"
+
+msgid "Use your own image for the tray icon."
+msgstr "Użyj własnego obrazu jako ikony w zasobniku systemowym."
+
+msgid "Image the tray shows when updates are available."
+msgstr ""
+"Obraz ikony wyświetlanej w zasobniku systemowym, gdy dostępne są "
+"aktualizacje."
+
+msgid "Installing and removing"
+msgstr "Instalowanie i usuwanie"
+
+msgid "Skip confirmation prompts when installing, updating, or removing."
+msgstr ""
+"Pomijaj prośby o potwierdzenie podczas instalowania, aktualizowania lub "
+"usuwania."
+
+msgid "Also delete an app's configuration files when you remove it."
+msgstr ""
+"Usuwaj również pliki konfiguracyjne aplikacji podczas jej odinstalowywania."
+
+msgid "Search and AUR"
+msgstr "Wyszukiwanie i AUR"
+
+msgid "Add a page that searches every source at once."
+msgstr ""
+"Dodaj stronę umożliwiającą jednoczesne przeszukiwanie wszystkich źródeł."
+
+msgid "Browse the AUR through Seafoam Labs' Atoll service."
+msgstr "Przeglądaj AUR za pośrednictwem usługi Atoll firmy Seafoam Labs."
+
+msgid "Folder where new AppImages are saved."
+msgstr "Folder, w którym zapisywane są nowe pliki AppImage."
+
+msgid "Remove Configuration on Uninstall"
+msgstr "Usuwaj konfigurację podczas odinstalowywania"
+
+msgid "Layout"
+msgstr "Układ"
+
+msgid "Updates & Tray"
+msgstr ""
+
+msgid "Installed From"
+msgstr ""
+
+msgid "Available From"
+msgstr ""
+
+msgid "inferred"
+msgstr ""

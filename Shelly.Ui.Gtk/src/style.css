@@ -3,26 +3,26 @@
 }
 
 .welcome-screen {
-  background-color: @theme_bg_color;
+  background-color: @shelly_bg;
 }
 
 .lockout-card {
-  background-color: @theme_bg_color;
-  border-radius: 12px;
+  background-color: @shelly_bg;
+  border-radius: 16px;
 }
 
 .package-title {
-  font-weight: bold;
-  font-size: 1.2em;
+  font-weight: 600;
+  font-size: 16px;
 }
 
 .detail-section-header {
-  font-size: 1.05em;
-  font-weight: bold;
+  font-size: 14px;
+  font-weight: 600;
 }
 
 .spec-row {
-  border-bottom: 1px solid alpha(@theme_fg_color, 0.1);
+  border-bottom: 1px solid @shelly_hairline;
 }
 
 .spec-value {
@@ -30,21 +30,19 @@
 }
 
 .pill {
-  background-color: alpha(@theme_fg_color, 0.08);
-  border-radius: 12px;
+  background-color: @shelly_tint_bg;
+  border-radius: 999px;
   padding: 3px 10px;
 }
 
-.detail-title { font-size: 1.3em; font-weight: bold; }
+.detail-title { font-size: 18px; font-weight: 600; }
 .spec-value { font-weight: 600; }
 
-/* Sidebar group labels and added page headers exist only for the built-in
-   theme; services/theme.zig hides them in system mode. */
 .nav-group {
-  font-size: 0.72em;
+  font-size: 11px;
   font-weight: 600;
   letter-spacing: 1.4px;
-  color: alpha(@theme_fg_color, 0.55);
+  color: @shelly_muted_fg;
   margin: 10px 12px 6px;
 }
 
@@ -53,19 +51,18 @@
 }
 
 /* Margins live in CSS (not widget properties) so the themed sheets can
-   override them; system mode keeps the historical 10px inset. */
+   override them; this is the base 10px inset. */
 .toolbar-card {
   margin: 10px;
 }
 
-/* Settings rows: the page boxes use spacing 0; this reproduces the legacy
-   20px gap in system mode while the themed sheets swap it for hairlines. */
+/* the themed sheets swap this gap for hairlines. */
 .settings-form-row:not(:last-child) {
   margin-bottom: 20px;
 }
 
 /* Updates page insets live in CSS so the themed sheet can align them with
-   the 30px page headers; system mode keeps the historical 20px. */
+   the 30px page headers; this is the base 20px. */
 .page-body {
   margin: 20px;
 }
@@ -79,66 +76,66 @@
 }
 
 .nav-btn:hover {
-  background-color: alpha(@theme_fg_color, 0.06);
+  background-color: @shelly_hover_bg;
 }
 
 .nav-selected {
-    background-color: alpha(@theme_fg_color, 0.04);
+    background-color: @shelly_selected_bg;
 }
 
 .nav-selected label {
-  font-weight: bold;
+  font-weight: 600;
 }
 
 .transaction-page {
-  background-color: @theme_bg_color;
+  background-color: @shelly_bg;
 }
 
 .trans-header {
-  font-size: 1.05em;
-  font-weight: bold;
+  font-size: 14px;
+  font-weight: 600;
 }
 
 .pkg-card {
-  background-color: alpha(@theme_fg_color, 0.04);
-  border-radius: 10px;
+  background-color: @shelly_card_bg;
+  border-radius: 16px;
   padding: 14px 16px;
 }
 
 .utility-row {
-  background-color: alpha(@theme_fg_color, 0.04);
-  border-radius: 10px;
+  background-color: @shelly_card_bg;
+  border-radius: 16px;
   padding: 14px 16px;
 }
 
 .pkg-name {
-  font-size: 1.0em;
+  font-size: 14px;
   font-weight: 600;
 }
 
 .pkg-status {
-  font-size: 0.85em;
+  font-size: 12px;
   font-weight: 500;
-  color: alpha(@theme_fg_color, 0.6);
+  color: @shelly_secondary_fg;
   padding: 4px 12px;
-  border-radius: 6px;
-  background-color: alpha(@theme_fg_color, 0.06);
+  border-radius: 999px;
+  background-color: @shelly_tint_bg;
 }
 
 .pkg-status.status-done {
-  color: @success_color;
-  background-color: alpha(@success_color, 0.1);
+  color: @shelly_success;
+  background-color: @shelly_success_tint_bg;
 }
 
 .pkg-status.status-failed {
-  color: @error_bg_color;
-  background-color: alpha(@error_bg_color, 0.1);
+  color: @shelly_error;
+  background-color: @shelly_destructive_bg;
 }
 
 .question-layer {
-  background-color: @theme_bg_color;
-  border: 1px solid alpha(@theme_fg_color, 0.12);
-  border-radius: 12px;
+  background-color: @shelly_card_bg;
+  border: 1px solid @shelly_border;
+  border-radius: 16px;
   padding: 18px;
   box-shadow: 0 4px 16px alpha(black, 0.35);
 }
@@ -148,9 +145,9 @@
 }
 
 .toast-card {
-  background-color: alpha(@theme_fg_color, 0.92);
-  color: @theme_bg_color;
-  border-radius: 10px;
+  background-color: @shelly_card_bg;
+  color: @shelly_fg;
+  border-radius: 12px;
   padding: 10px 14px;
   box-shadow:
     0 6px 14px alpha(black, 0.20),
@@ -158,23 +155,23 @@
 }
 
 .toast-card label {
-  color: @theme_bg_color;
+  color: @shelly_fg;
 }
 
 .toast-card button {
-  color: @theme_bg_color;
+  color: @shelly_fg;
 }
 
 .toast-card.success {
-  background-color: alpha(@success_color, 0.95);
+  background-color: @shelly_success;
 }
 
 .toast-card.error {
-  background-color: alpha(@error_color, 0.95);
+  background-color: @shelly_error;
 }
 
 .toast-card.warning {
-  background-color: alpha(@warning_color, 0.95);
+  background-color: @shelly_warning;
 }
 
 .spec-expander {
@@ -195,8 +192,8 @@
 }
 
 .spec-expander label {
-    font-size: 15px;
-    font-weight: bold;
+    font-size: 14px;
+    font-weight: 600;
 }
 
 .spec-expander arrow {
@@ -213,8 +210,8 @@
 }
 
 .drop-zone.drag-hover {
-  border-color: @accent_bg_color;
-  background-color: alpha(@accent_bg_color, 0.1);
+  border-color: @shelly_accent;
+  background-color: @shelly_accent_tint_bg;
 }
 
 .dep-row-static {
@@ -227,40 +224,40 @@
 }
 
 .status-icon.success {
-  color: @success_color;
+  color: @shelly_success;
 }
 
 .status-icon.error {
-  color: @error_color;
+  color: @shelly_error;
 }
 
 .status-icon.warning {
-  color: @warning_color;
+  color: @shelly_warning;
 }
 
 /* --------------------------------------------------------------------
    Updates / transaction redesign (docs/updates-redesign).
-   Colors stay @theme_*-driven so system mode renders natively; Pearl
-   geometry for these classes lives in themes/shelly-{dark,light}.css.
+   Colors stay @theme_*-driven and follow the active palette; Pearl
+   geometry for these classes lives in themes/shelly-components.css.
    -------------------------------------------------------------------- */
 
 /* Source filter chips (GtkToggleButton) on the Updates page. */
 .chip {
   font-weight: 600;
   padding: 4px 14px;
-  border-radius: 6px;
-  background-color: alpha(@theme_fg_color, 0.06);
-  border: 1px solid alpha(@theme_fg_color, 0.12);
+  border-radius: 999px;
+  background-color: @shelly_tint_bg;
+  border: 1px solid @shelly_border;
 }
 .chip:checked {
-  background-color: alpha(@theme_selected_bg_color, 0.3);
+  background-color: @shelly_selected_bg;
   border-color: transparent;
 }
 
 /* Card wrapper, titles and action bar for the Updates page. */
 .updates-card {
-  background-color: alpha(@theme_fg_color, 0.04);
-  border-radius: 10px;
+  background-color: @shelly_card_bg;
+  border-radius: 16px;
 }
 /* The Firmware detail pane holds plain labels, so unlike the Updates card
    (whose children carry their own insets) it needs padding of its own. */
@@ -268,75 +265,82 @@
   padding: 16px 20px;
 }
 /* adw-gtk3 ships no .warning text rule, so pin the badge hue ourselves. */
+/* round the row paints to match the inset card. */
+.firmware-list > row {
+  border-radius: 12px;
+}
+.firmware-list {
+  margin-right: 6px;
+}
 .firmware-list .warning {
-  color: @warning_color;
+  color: @shelly_warning;
 }
 .updates-card-title {
   font-weight: 600;
   padding: 14px 16px 4px;
 }
 .updates-card-sub {
-  font-size: 0.85em;
-  color: alpha(@theme_fg_color, 0.6);
+  font-size: 12px;
+  color: @shelly_secondary_fg;
   padding: 0 16px 8px;
 }
 .action-bar {
   padding: 12px 16px;
 }
 .action-bar-note {
-  font-size: 0.85em;
-  color: alpha(@theme_fg_color, 0.6);
+  font-size: 12px;
+  color: @shelly_secondary_fg;
 }
 
 /* Overall transaction progress card (top of the transaction page). */
 .overall-card {
-  background-color: alpha(@theme_fg_color, 0.04);
-  border-radius: 10px;
+  background-color: @shelly_card_bg;
+  border-radius: 16px;
   padding: 16px 18px;
   margin: 0 16px 12px;
 }
 .overall-title {
-  font-size: 1.1em;
+  font-size: 16px;
   font-weight: 600;
 }
 .overall-pct {
-  font-size: 1.6em;
+  font-size: 28px;
   font-weight: 600;
-  color: @accent_color;
+  color: @shelly_accent;
 }
 .overall-meta {
-  font-size: 0.85em;
-  color: alpha(@theme_fg_color, 0.6);
+  font-size: 12px;
+  color: @shelly_secondary_fg;
 }
-.overall-card.overall-ok .overall-pct { color: @success_color; }
-.overall-card.overall-err .overall-pct { color: @error_color; }
-.overall-card.overall-warn .overall-pct { color: @warning_color; }
-.overall-card.overall-ok progressbar progress { background-color: @success_color; }
-.overall-card.overall-err progressbar progress { background-color: @error_color; }
-.overall-card.overall-warn progressbar progress { background-color: @warning_color; }
+.overall-card.overall-ok .overall-pct { color: @shelly_success; }
+.overall-card.overall-err .overall-pct { color: @shelly_error; }
+.overall-card.overall-warn .overall-pct { color: @shelly_warning; }
+.overall-card.overall-ok progressbar progress { background-color: @shelly_success; }
+.overall-card.overall-err progressbar progress { background-color: @shelly_error; }
+.overall-card.overall-warn progressbar progress { background-color: @shelly_warning; }
 
 .phase-chip {
-  font-size: 0.78em;
+  font-size: 11px;
   font-weight: 600;
   padding: 3px 10px;
-  border-radius: 6px;
-  background-color: alpha(@theme_fg_color, 0.06);
-  color: alpha(@theme_fg_color, 0.6);
+  border-radius: 999px;
+  background-color: @shelly_tint_bg;
+  color: @shelly_secondary_fg;
 }
 .phase-chip.active {
-  background-color: alpha(@theme_selected_bg_color, 0.3);
-  color: @theme_fg_color;
+  background-color: @shelly_selected_bg;
+  color: @shelly_selected_fg;
 }
 .phase-chip.done {
-  background-color: alpha(@success_color, 0.12);
-  color: @success_color;
+  background-color: @shelly_success_tint_bg;
+  color: @shelly_success;
 }
 .phase-chip.err {
-  background-color: alpha(@error_color, 0.12);
-  color: @error_color;
+  background-color: @shelly_destructive_bg;
+  color: @shelly_error;
 }
 .phase-arrow {
-  color: alpha(@theme_fg_color, 0.5);
+  color: @shelly_muted_fg;
 }
 
 /* Compact per-package transaction rows under the overall bar. */
@@ -344,14 +348,14 @@
   padding: 8px 12px;
 }
 .urow:not(:last-child) {
-  border-bottom: 1px solid alpha(@theme_fg_color, 0.06);
+  border-bottom: 1px solid @shelly_hairline;
 }
 .urow.dim {
   opacity: 0.55;
 }
 .urow-icon {
-  background-color: alpha(@accent_bg_color, 0.14);
-  color: @accent_color;
+  background-color: @shelly_accent_tint_bg;
+  color: @shelly_accent;
   border-radius: 8px;
   padding: 5px;
 }
@@ -359,35 +363,35 @@
   font-weight: 600;
 }
 .urow-sub {
-  font-size: 0.85em;
-  color: alpha(@theme_fg_color, 0.6);
+  font-size: 12px;
+  color: @shelly_secondary_fg;
 }
 .urow-percent {
-  font-size: 0.85em;
-  color: alpha(@theme_fg_color, 0.6);
+  font-size: 12px;
+  color: @shelly_secondary_fg;
 }
 .pkg-status.mini {
-  font-size: 0.75em;
+  font-size: 11px;
   padding: 3px 10px;
 }
 
 /* Slimmer progress troughs; the Pearl sheets round them into pills. */
 progressbar trough {
   min-height: 6px;
-  border-radius: 3px;
+  border-radius: 999px;
 }
 progressbar progress {
   min-height: 6px;
-  border-radius: 3px;
+  border-radius: 999px;
 }
 .bar-thin {
   min-width: 90px;
 }
 .bar-thin trough {
   min-height: 4px;
-  border-radius: 2px;
+  border-radius: 999px;
 }
 .bar-thin progress {
   min-height: 4px;
-  border-radius: 2px;
+  border-radius: 999px;
 }

@@ -18,10 +18,15 @@ const flatpak_view = @import("flatpak_view.zig");
 const footer_view = @import("footer_view.zig");
 const split_layout = @import("split_layout.zig");
 
+fn drawNavigation(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
+    return .{ .size = ctx.max.size(), .widget = .{ .userdata = ptr, .drawFn = drawNavigation }, .buffer = &.{}, .children = &.{} };
+}
+
 pub fn draw(self: *Model, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
     const arena = ctx.arena;
     const max = ctx.max.size();
     self.viewport_width = max.width;
+    self.help_button = null;
 
     // Need room for the tab bar, at least one content row and the status bar
     if (max.width == 0 or max.height < 4) {
@@ -33,6 +38,9 @@ pub fn draw(self: *Model, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
         };
     }
 
+    const footer_status = if (self.help_open) null else self.footerStatus();
+    const show_shortcuts = self.settings_state.settings.show_footer_shortcuts;
+    const footer_height: u16 = @intFromBool(show_shortcuts or footer_status != null);
     var children: std.ArrayList(vxfw.SubSurface) = .empty;
 
     const reviewing = self.overlay != null and self.overlay.? == .pkgbuild and self.operation_state.operation_question != null;
@@ -48,14 +56,14 @@ pub fn draw(self: *Model, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
         if (panel_review) {
             panel_height = @max(preferred_height, max.height / 2);
             if (max.height < navigation_height + panel_height + 5) {
-                panel_height = max.height -| (navigation_height + 1);
+                panel_height = max.height -| (navigation_height + footer_height);
                 show_browsing = false;
             }
         } else if (max.height >= navigation_height + preferred_height + 5) {
             panel_height = preferred_height;
         } else {
             navigation_height = if (max.height >= 11) 3 else 1;
-            panel_height = max.height -| (navigation_height + 1);
+            panel_height = max.height -| (navigation_height + footer_height);
             show_browsing = false;
         }
     }
@@ -68,18 +76,48 @@ pub fn draw(self: *Model, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
 
     // Navigation occupies its own rows above every page.
     const tab_bar = try self.drawTabBar(arena);
+    const command_context = self.commandContext();
+    const framed_help = navigation_height == 3;
+    const help_label = if (command_context.settings_capture or command_context.appimage_path) "" else try std.fmt.allocPrint(arena, "{s}{s} {s}{s}", .{ if (framed_help) "" else "[", try @import("../commands.zig").label(arena, .help), if (self.help_open) "Back" else "Help", if (framed_help) "" else "]" });
+    const desired_help_width = ctx.stringWidth(help_label) + @as(u16, if (framed_help) 2 else 0);
+    const bar: *@import("tab_bar.zig").TabBar = @ptrCast(@alignCast(tab_bar.userdata));
+    const active_width = for (bar.tabs, bar.rich.text) |tab, span| {
+        if (tab == self.active) break ctx.stringWidth(span.text);
+    } else ctx.stringWidth(self.active.title());
+    const tab_width = active_width + @as(usize, if (framed_help) 8 else 0);
+    const help_width: u16 = if (help_label.len > 0 and desired_help_width + 1 + tab_width <= max.width) @intCast(desired_help_width) else 0;
+    const navigation = try arena.alloc(vxfw.SubSurface, if (help_width > 0) 2 else 1);
+    bar.hover_point = self.hover_point;
+    navigation[0] = .{
+        .origin = .{ .row = 0, .col = 0 },
+        .surface = try tab_bar.draw(ctx.withConstraints(.{}, .{ .width = max.width - help_width - @intFromBool(help_width > 0), .height = navigation_height })),
+    };
+    if (help_width > 0) {
+        const col = bar.right_edge + 1;
+        self.help_button = .{ .col = col, .width = help_width, .height = navigation_height };
+        const help = try arena.create(vxfw.Text);
+        help.* = .{ .text = help_label, .softwrap = false, .style = @import("styles.zig").action };
+        const border = try arena.create(@import("border.zig"));
+        border.* = .{ .child = help.widget() };
+        const bounds: vxfw.Size = .{ .width = help_width, .height = navigation_height };
+        const help_ctx = ctx.withConstraints(bounds, .{ .width = bounds.width, .height = bounds.height });
+        navigation[1] = .{
+            .origin = .{ .row = 0, .col = @intCast(col) },
+            .surface = if (framed_help) try border.draw(help_ctx) else try help.draw(help_ctx),
+        };
+        const label_surface = if (framed_help) &navigation[1].surface.children[0].surface else &navigation[1].surface;
+        try @import("styles.zig").hoverLabel(arena, label_surface);
+    }
     try children.append(arena, .{
         .origin = .{ .row = 0, .col = 0 },
-        .surface = try tab_bar.draw(ctx.withConstraints(
-            ctx.min,
-            .{ .width = max.width, .height = navigation_height },
-        )),
+        .surface = .{ .size = .{ .width = max.width, .height = navigation_height }, .widget = .{ .userdata = self, .drawFn = drawNavigation }, .buffer = &.{}, .children = navigation },
     });
 
     const content_start = children.items.len;
-    const content_ctx = ctx.withConstraints(.{}, .{ .width = max.width, .height = max.height - content_offset - panel_height });
+    // Page layouts reserve one footer row in their height calculations.
+    const content_ctx = ctx.withConstraints(.{}, .{ .width = max.width, .height = (max.height - content_offset - panel_height) +| (1 - footer_height) });
     const content_size = content_ctx.max.size();
-    const pane_width = if (max.width >= 64) max.width - split_layout.listWidth(max.width, self.list_percent) else max.width;
+    const pane_width = if (max.width >= 64) max.width - split_layout.listWidth(max.width, self.list_percent.flatpak) else max.width;
     self.flatpak_state.screenshot_layout_available = split_layout.imagesFit(pane_width -| 2, content_size.height -| 4);
     self.help_panel.context = self.commandContext();
     if (show_browsing and self.help_open and self.active != .packages and self.active != .aur and self.active != .flatpak and self.active != .appimage and self.active != .settings) {
@@ -104,7 +142,7 @@ pub fn draw(self: *Model, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
     for (children.items[content_start..]) |*child| child.origin.row += @intCast(content_offset);
     if (panel_height > 0) if (prompt) |active_prompt| {
         try children.append(arena, .{
-            .origin = .{ .row = @intCast(max.height - panel_height - 1), .col = 0 },
+            .origin = .{ .row = @intCast(max.height - panel_height - footer_height), .col = 0 },
             .surface = if (panel_review and !self.help_open)
                 try operation_model.pkgbuildView(self).drawInPane(ctx.withConstraints(.{}, .{ .width = max.width, .height = panel_height }))
             else
@@ -118,20 +156,22 @@ pub fn draw(self: *Model, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
     if (panel_height > 0 and choosing_flatpak) {
         const choice = self.overlay.?.flatpak_install;
         try children.append(arena, .{
-            .origin = .{ .row = @intCast(max.height - panel_height - 1), .col = 0 },
+            .origin = .{ .row = @intCast(max.height - panel_height - footer_height), .col = 0 },
             .surface = try flatpak_view.drawInstallChoices(ctx.withConstraints(.{}, .{ .width = max.width, .height = panel_height }), choice.app, choice.selected),
         });
     }
 
-    var footer_context = self.commandContext();
-    if (self.help_open) {
-        footer_context.mode = .help;
-        footer_context.selected_count = 0;
+    if (footer_height > 0) {
+        var footer_context = self.commandContext();
+        if (self.help_open) {
+            footer_context.mode = .help;
+            footer_context.selected_count = 0;
+        }
+        try children.append(arena, .{
+            .origin = .{ .row = max.height - 1, .col = 0 },
+            .surface = try footer_view.draw(ctx.withConstraints(.{}, .{ .width = max.width, .height = 1 }), footer_context, footer_status, show_shortcuts),
+        });
     }
-    try children.append(arena, .{
-        .origin = .{ .row = max.height - 1, .col = 0 },
-        .surface = try footer_view.draw(ctx.withConstraints(.{}, .{ .width = max.width, .height = 1 }), footer_context, if (self.help_open) null else self.footerStatus()),
-    });
 
     // Modal overlay on top of everything
     if (!self.help_open) if (self.overlay) |overlay| {
@@ -178,14 +218,7 @@ test "tab views preserve input widgets and render without background work" {
                 .upgrade, .settings, .appimage => model.widget(),
                 .flatpak => model.flatpak_state.flatpak_field.widget(),
             };
-            var found = surface.widget.eql(input);
-            for (surface.children) |child| {
-                found = found or child.surface.widget.eql(input);
-                for (child.surface.children) |nested| {
-                    found = found or nested.surface.widget.eql(input);
-                }
-            }
-            try std.testing.expect(found);
+            try std.testing.expect(@import("pane_focus.zig").testContainsWidget(surface, input));
         }
     }
 }
@@ -262,7 +295,7 @@ test "package pages tolerate tiny terminals and repeated minimum splits" {
         model.active = tab;
         for ([_]vxfw.Size{ .{ .width = 1, .height = 4 }, .{ .width = 2, .height = 8 }, .{ .width = 27, .height = 5 }, .{ .width = 63, .height = 12 }, .{ .width = 64, .height = 24 }, .{ .width = 80, .height = 24 } }) |size| {
             for ([_]u8{ 0, 20, 40, 80, 255 }) |percent| {
-                model.list_percent = percent;
+                model.activeListPercent().* = percent;
                 var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
                 defer arena.deinit();
                 const surface = try model.widget().draw(.{ .arena = arena.allocator(), .min = .{}, .max = .{ .width = size.width, .height = size.height }, .cell_size = .{ .width = 10, .height = 20 } });

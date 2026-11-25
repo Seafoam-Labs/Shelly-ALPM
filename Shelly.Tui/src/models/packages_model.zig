@@ -9,17 +9,53 @@ const vxfw = vaxis.vxfw;
 const shelly_cli = @import("../services/shelly_cli.zig");
 const ShellyCli = shelly_cli.ShellyCli;
 const Package = @import("packages.zig").Package;
+const Selection = @import("packages.zig").Selection;
 
 const Allocator = std.mem.Allocator;
 
 const coordinator = @import("../model.zig");
 const Model = coordinator.Model;
 
+pub const SortColumn = enum { name, repository };
+
+const Sort = struct {
+    column: SortColumn,
+    descending: bool = false,
+
+    fn lessThan(sort: Sort, lhs: *const Package, rhs: *const Package) bool {
+        if (sort.column == .repository) {
+            const repository = std.ascii.orderIgnoreCase(lhs.Repository, rhs.Repository);
+            if (repository != .eq) return if (sort.descending) repository == .gt else repository == .lt;
+        }
+        const name = std.ascii.orderIgnoreCase(lhs.Name, rhs.Name);
+        if (name != .eq) return if (sort.column == .name and sort.descending) name == .gt else name == .lt;
+        const exact_name = std.mem.order(u8, lhs.Name, rhs.Name);
+        if (exact_name != .eq) return exact_name == .lt;
+        return std.mem.lessThan(u8, lhs.Repository, rhs.Repository);
+    }
+};
+
+pub fn sortBy(self: *Model, column: SortColumn) void {
+    const state = &self.packages_state;
+    const selected = selectedPackage(self);
+    const descending = if (state.sort) |previous| previous.column == column and !previous.descending else false;
+    const sort: Sort = .{ .column = column, .descending = descending };
+    state.sort = sort;
+    std.mem.sortUnstable(*const Package, state.filtered.items, sort, Sort.lessThan);
+    if (selected) |pkg| {
+        for (state.filtered.items, 0..) |item, index| {
+            if (item != pkg) continue;
+            state.list_view.jumpToItem(@intCast(index));
+            break;
+        }
+    }
+}
+
 /// Page-owned state. Worker results are published to the UI loop before use.
 pub const State = struct {
     /// All known packages, borrowed from `parsed`.
     packages: []Package = &.{},
-    selected_packages: std.ArrayList([]const u8),
+    selected_packages: std.ArrayList(Selection),
     /// Owns the package data returned by the CLI.
     parsed: ?std.json.Parsed([]Package) = null,
 
@@ -30,6 +66,7 @@ pub const State = struct {
 
     /// Packages matching `query`, in display order.
     filtered: std.ArrayList(*const Package),
+    sort: ?Sort = null,
     /// Owned by `gpa` unless empty.
     query: []const u8 = "",
     installed_only: bool = false,
@@ -134,7 +171,14 @@ pub fn loadPackages(load: *LoadState) void {
         return;
     };
     defer installed.deinit();
-    @import("packages.zig").markInstalled(alloc, parsed.value, installed.value) catch {
+    const packages = @import("packages.zig");
+    packages.markInstalled(alloc, parsed.value, installed.value) catch {
+        parsed.deinit();
+        load.failed = true;
+        return;
+    };
+    // `installed` is freed on return.
+    packages.ownInstalledOrigins(parsed.arena.allocator(), parsed.value) catch {
         parsed.deinit();
         load.failed = true;
         return;
@@ -166,10 +210,10 @@ pub fn pollLoad(self: *Model) !bool {
         self.packages_state.selected_packages = .empty;
         self.packages_state.parsed = p;
         self.packages_state.packages = p.value;
-        for (previous_selection.items) |name| {
+        for (previous_selection.items) |selection| {
             for (self.packages_state.packages) |pkg| {
-                if (std.mem.eql(u8, pkg.Name, name)) {
-                    try self.packages_state.selected_packages.append(self.gpa, pkg.Name);
+                if (selection.matches(pkg)) {
+                    try self.packages_state.selected_packages.append(self.gpa, .{ .name = pkg.Name, .repository = pkg.Repository });
                     break;
                 }
             }
@@ -194,7 +238,14 @@ pub fn pollLoad(self: *Model) !bool {
 
 pub fn packageMarked(self: *const Model, name: []const u8) bool {
     for (self.packages_state.selected_packages.items) |selected| {
-        if (std.mem.eql(u8, name, selected)) return true;
+        if (std.mem.eql(u8, name, selected.name)) return true;
+    }
+    return false;
+}
+
+pub fn packageCopyMarked(self: *const Model, pkg: Package) bool {
+    for (self.packages_state.selected_packages.items) |selected| {
+        if (selected.matches(pkg)) return true;
     }
     return false;
 }
@@ -205,15 +256,25 @@ pub fn openNativePrompt(self: *Model, action: shelly_operation.Action) !void {
 }
 
 pub fn toggleSelectedList(self: *Model) !void {
+    try togglePackageMark(self, self.packages_state.filtered.items[self.packages_state.list_view.cursor]);
+}
+
+fn togglePackageMark(self: *Model, pkg: *const Package) !void {
     try self.setNotice("");
-    const package_name = self.packages_state.filtered.items[self.packages_state.list_view.cursor].Name;
-    for (self.packages_state.selected_packages.items, 0..) |*item, index| {
-        if (std.mem.eql(u8, item.*, package_name)) {
+    for (self.packages_state.selected_packages.items, 0..) |item, index| {
+        if (item.matches(pkg.*)) {
             _ = self.packages_state.selected_packages.orderedRemove(index);
             return;
         }
     }
-    try self.packages_state.selected_packages.append(self.gpa, package_name);
+    // selecting a copy replaces another selected copy of the same name.
+    var index: usize = 0;
+    while (index < self.packages_state.selected_packages.items.len) {
+        if (std.mem.eql(u8, self.packages_state.selected_packages.items[index].name, pkg.Name)) {
+            _ = self.packages_state.selected_packages.orderedRemove(index);
+        } else index += 1;
+    }
+    try self.packages_state.selected_packages.append(self.gpa, .{ .name = pkg.Name, .repository = pkg.Repository });
 }
 
 pub fn onQueryChange(maybe_ptr: ?*anyopaque, _: *vxfw.EventContext, str: []const u8) anyerror!void {
@@ -241,6 +302,7 @@ pub fn rebuildFilter(self: *Model) Allocator.Error!void {
             try self.packages_state.filtered.append(self.gpa, pkg);
         }
     }
+    if (self.packages_state.sort) |sort| std.mem.sortUnstable(*const Package, self.packages_state.filtered.items, sort, Sort.lessThan);
     self.packages_state.list_view.item_count = @intCast(self.packages_state.filtered.items.len);
     self.packages_state.list_view.jumpToItem(0);
 }
@@ -251,18 +313,18 @@ pub fn packagesView(self: *Model) packages_view.View {
         self.packages_state.package_details_cursor = self.packages_state.list_view.cursor;
     }
     var selected_installed: usize = 0;
-    for (self.packages_state.selected_packages.items) |name| {
+    for (self.packages_state.selected_packages.items) |selection| {
         for (self.packages_state.packages) |pkg| {
-            if (std.mem.eql(u8, pkg.Name, name)) {
+            if (selection.matches(pkg)) {
                 if (pkg.Installed) selected_installed += 1;
                 break;
             }
         }
     }
     return .{
-        .list_percent = self.list_percent,
+        .list_percent = self.list_percent.packages,
+        .model = self,
         .text_field = &self.packages_state.text_field,
-        .list_view = &self.packages_state.list_view,
         .details_scroll = &self.packages_state.package_details_scroll,
         .help = if (self.help_open) &self.help_panel else null,
         .selected = selectedPackage(self),
@@ -291,13 +353,43 @@ pub fn buildPackageDetails(ptr: *const anyopaque, idx: usize, _: usize) ?vxfw.Wi
     return .{ .userdata = @constCast(pkg), .drawFn = packages_view.drawDetails };
 }
 
+pub fn focusPane(self: *Model, ctx: *vxfw.EventContext, target: commands.Mouse.FocusTarget) !void {
+    const state = &self.packages_state;
+    if (target == .details) {
+        self.overlay = .{ .package = selectedPackage(self) orelse return };
+        try ctx.requestFocus(self.widget());
+    } else {
+        operation_model.closeOverlay(self);
+        state.package_list_active = target == .results;
+        try ctx.requestFocus(state.text_field.widget());
+    }
+    ctx.redraw = true;
+}
+
+pub fn markRow(self: *Model, ctx: *vxfw.EventContext, package: *const Package) !void {
+    if (self.active != .packages or self.help_open or self.overlay != null) return;
+    if (std.mem.indexOfScalar(*const Package, self.packages_state.filtered.items, package) == null) return;
+    try togglePackageMark(self, package);
+    ctx.consumeAndRedraw();
+}
+
+pub fn selectPackageRow(self: *Model, ctx: *vxfw.EventContext, package: *const Package) !void {
+    if (self.active != .packages or self.help_open or self.overlay != null) return;
+    const state = &self.packages_state;
+    const index = std.mem.indexOfScalar(*const Package, state.filtered.items, package) orelse return;
+    state.list_view.cursor = @intCast(index);
+    state.package_list_active = true;
+    try ctx.requestFocus(state.text_field.widget());
+    ctx.consumeAndRedraw();
+}
+
 pub fn buildRow(ptr: *const anyopaque, idx: usize, _: usize) ?vxfw.Widget {
     const self: *const Model = @ptrCast(@alignCast(ptr));
     if (idx >= self.packages_state.filtered.items.len) return null;
     const pkg = self.packages_state.filtered.items[idx];
     return .{
         .userdata = @constCast(pkg),
-        .drawFn = if (packageMarked(self, pkg.Name)) packages_view.drawMarkedPackageRow else packages_view.drawPackageRow,
+        .drawFn = if (packageCopyMarked(self, pkg.*)) packages_view.drawMarkedPackageRow else packages_view.drawPackageRow,
     };
 }
 
@@ -311,6 +403,32 @@ pub fn buildSelectedRow(ptr: *const anyopaque, idx: usize, _: usize) ?vxfw.Widge
 pub fn handleKey(self: *Model, ctx: *vxfw.EventContext, key: vaxis.Key, global_command: bool) anyerror!bool {
     if (key.matches(vaxis.Key.escape, .{})) {
         self.packages_state.package_list_active = true;
+        ctx.consumeAndRedraw();
+        return true;
+    }
+    if (!global_command) {
+        const sort_column: ?SortColumn = if (commands.matches(key, .sort_package_name)) .name else if (commands.matches(key, .sort_package_repository)) .repository else null;
+        if (sort_column) |column| {
+            sortBy(self, column);
+            ctx.consumeAndRedraw();
+            return true;
+        }
+    }
+    if (commands.refreshesList(key) or commands.matches(key, .sync_packages)) {
+        if (self.operation_state.install_job == null) {
+            if (commands.refreshesList(key)) {
+                if (!self.packages_state.loading) try reloadPackages(self, ctx);
+            } else {
+                const prompt = try self.gpa.create(operation_model.SudoPrompt);
+                errdefer self.gpa.destroy(prompt);
+                prompt.* = .{
+                    .name = try self.gpa.dupe(u8, "package databases"),
+                    .backend = .standard,
+                    .action = .sync,
+                };
+                self.overlay = .{ .sudo = prompt };
+            }
+        }
         ctx.consumeAndRedraw();
         return true;
     }
@@ -476,7 +594,7 @@ test "package refresh replaces borrowed data and preserves selection" {
     , .{ .allocate = .alloc_always });
     model.packages_state.packages = model.packages_state.parsed.?.value;
     try rebuildFilter(model);
-    try model.packages_state.selected_packages.append(std.testing.allocator, model.packages_state.packages[0].Name);
+    try model.packages_state.selected_packages.append(std.testing.allocator, .{ .name = model.packages_state.packages[0].Name });
     model.packages_state.load.result = try std.json.parseFromSlice([]Package, std.testing.allocator,
         \\[{"Name":"native","Repository":"repo","Version":"2","Installed":true}]
     , .{ .allocate = .alloc_always });
@@ -484,9 +602,39 @@ test "package refresh replaces borrowed data and preserves selection" {
     model.packages_state.loading = true;
     _ = try pollLoad(model);
     try std.testing.expectEqualStrings("2", model.packages_state.packages[0].Version);
-    try std.testing.expectEqualStrings("native", model.packages_state.selected_packages.items[0]);
-    try std.testing.expect(model.packages_state.selected_packages.items[0].ptr == model.packages_state.packages[0].Name.ptr);
+    try std.testing.expectEqualStrings("native", model.packages_state.selected_packages.items[0].name);
+    try std.testing.expect(model.packages_state.selected_packages.items[0].name.ptr == model.packages_state.packages[0].Name.ptr);
     try std.testing.expectEqual(@as(u32, 0), model.packages_state.list_view.cursor);
+}
+
+test "package sort shortcuts preserve the cursor and reapply the order after filtering" {
+    const model = try Model.init(std.testing.allocator);
+    defer model.deinit();
+    var packages = [_]Package{
+        .{ .Name = "zeta", .Repository = "core" },
+        .{ .Name = "alpha", .Repository = "extra" },
+        .{ .Name = "beta", .Repository = "core" },
+    };
+    model.packages_state.packages = &packages;
+    try rebuildFilter(model);
+    var events: vxfw.EventContext = .{ .io = std.testing.io, .alloc = std.testing.allocator, .cmds = .empty };
+    defer events.cmds.deinit(std.testing.allocator);
+
+    try std.testing.expect(try handleKey(model, &events, commands.bindings.sort_package_name, false));
+    try std.testing.expectEqual(SortColumn.name, model.packages_state.sort.?.column);
+    try std.testing.expectEqualStrings("alpha", model.packages_state.filtered.items[0].Name);
+    try std.testing.expectEqual(&packages[0], selectedPackage(model).?);
+    try std.testing.expect(try handleKey(model, &events, commands.bindings.sort_package_name, false));
+    try std.testing.expectEqual(SortColumn.name, model.packages_state.sort.?.column);
+    try std.testing.expectEqualStrings("zeta", model.packages_state.filtered.items[0].Name);
+
+    try std.testing.expect(try handleKey(model, &events, commands.bindings.sort_package_repository, false));
+    try std.testing.expectEqualStrings("beta", model.packages_state.filtered.items[0].Name);
+    sortBy(model, .repository);
+    try std.testing.expectEqualStrings("alpha", model.packages_state.filtered.items[0].Name);
+    try setQuery(model, "ta");
+    try std.testing.expectEqual(@as(usize, 2), model.packages_state.filtered.items.len);
+    try std.testing.expectEqualStrings("beta", model.packages_state.filtered.items[0].Name);
 }
 
 test "installed package filters combine local text and installed state" {
@@ -505,6 +653,14 @@ test "installed package filters combine local text and installed state" {
     model.packages_state.installed_only = false;
     try rebuildFilter(model);
     try std.testing.expectEqual(@as(usize, 2), model.packages_state.filtered.items.len);
+}
+
+fn containsWidget(surface: vxfw.Surface, widget: vxfw.Widget) bool {
+    if (surface.widget.eql(widget)) return true;
+    for (surface.children) |child| {
+        if (containsWidget(child.surface, widget)) return true;
+    }
+    return false;
 }
 
 test "packages split details follow selection and remain within the page on resize" {
@@ -550,12 +706,8 @@ test "packages split details follow selection and remain within the page on resi
                 try std.testing.expectEqual(size.height - 2, child.surface.size.height);
             }
             const content_row: i17 = if (size.width >= 2 and size.height >= 8) 4 else 2;
-            if (child.origin.row == content_row) {
-                if (child.surface.widget.eql(model.packages_state.list_view.widget())) list_on_left = true;
-                for (child.surface.children) |nested| {
-                    if (nested.surface.widget.eql(model.packages_state.list_view.widget())) list_on_left = true;
-                }
-            }
+            if (child.origin.row == content_row and containsWidget(child.surface, model.packages_state.list_view.widget()))
+                list_on_left = true;
         }
         try std.testing.expectEqual(size.width >= 64, details_on_right);
         try std.testing.expectEqual(size.width >= 64, list_on_left);
@@ -692,7 +844,7 @@ test "native batch selection survives filtering and confirms mixed targets" {
     packages[0].Name = "available";
     operation_model.closeOverlay(model);
     try std.testing.expectEqual(@as(usize, 0), model.packages_state.selected_packages.items.len);
-    try model.packages_state.selected_packages.appendSlice(std.testing.allocator, &.{ "available", "installed" });
+    try model.packages_state.selected_packages.appendSlice(std.testing.allocator, &.{ .{ .name = "available" }, .{ .name = "installed" } });
     try openNativePrompt(model, .remove);
     prompt = model.overlay.?.sudo;
     try std.testing.expectEqual(@as(usize, 1), prompt.targets.len);
@@ -701,7 +853,7 @@ test "native batch selection survives filtering and confirms mixed targets" {
     try std.testing.expect(std.mem.indexOf(u8, prompt.review_text, "Remove (1): installed") != null);
     operation_model.closeOverlay(model);
     try std.testing.expectEqual(@as(usize, 0), model.packages_state.selected_packages.items.len);
-    try model.packages_state.selected_packages.append(std.testing.allocator, "available");
+    try model.packages_state.selected_packages.append(std.testing.allocator, .{ .name = "available" });
     try std.testing.expectEqual(@as(usize, 1), model.packages_state.selected_packages.items.len);
     try std.testing.expect(packageMarked(model, "available"));
     try openNativePrompt(model, .remove);
@@ -720,7 +872,7 @@ test "native batch confirmation scrolls long reviews without collecting credenti
     model.packages_state.packages = &packages;
     model.packages_state.loading = false;
     try rebuildFilter(model);
-    for (packages) |pkg| try model.packages_state.selected_packages.append(std.testing.allocator, pkg.Name);
+    for (packages) |pkg| try model.packages_state.selected_packages.append(std.testing.allocator, .{ .name = pkg.Name });
     try openNativePrompt(model, .install);
     const prompt = model.overlay.?.sudo;
     const drawn = try model.widget().draw(.{
@@ -747,7 +899,7 @@ test "native removal refreshes actual state and clears all successful selections
         defer model.deinit();
         var packages = [_]Package{ .{ .Name = "available" }, .{ .Name = "installed", .Installed = true } };
         model.packages_state.packages = &packages;
-        try model.packages_state.selected_packages.appendSlice(std.testing.allocator, &.{ "available", "installed" });
+        try model.packages_state.selected_packages.appendSlice(std.testing.allocator, &.{ .{ .name = "available" }, .{ .name = "installed" } });
         var env: std.process.Environ.Map = .init(std.testing.allocator);
         defer env.deinit();
         const job = try std.heap.page_allocator.create(shelly_operation.Operation);
@@ -776,7 +928,7 @@ test "clear selection includes filtered packages and preserves search and cursor
     model.packages_state.packages = &packages;
     model.packages_state.loading = false;
     try rebuildFilter(model);
-    try model.packages_state.selected_packages.appendSlice(std.testing.allocator, &.{ "visible", "hidden" });
+    try model.packages_state.selected_packages.appendSlice(std.testing.allocator, &.{ .{ .name = "visible" }, .{ .name = "hidden" } });
     try setQuery(model, "visible");
     var ctx: vxfw.EventContext = .{ .io = std.testing.io, .alloc = std.testing.allocator, .cmds = .empty };
     defer ctx.cmds.deinit(std.testing.allocator);
@@ -803,7 +955,7 @@ test "clear selection includes filtered packages and preserves search and cursor
     try std.testing.expect(model.packages_state.package_list_active);
     for (try commands.entries(arena.allocator(), model.commandContext())) |entry|
         try std.testing.expect(entry.id != .clear_selection);
-    try model.packages_state.selected_packages.append(std.testing.allocator, "hidden");
+    try model.packages_state.selected_packages.append(std.testing.allocator, .{ .name = "hidden" });
     commands.bindings.clear_selection = .{ .codepoint = 'k', .mods = .{ .ctrl = true } };
     try Model.typeErasedCaptureHandler(model, &ctx, .{ .key_press = .{ .codepoint = 'k', .mods = .{ .ctrl = true } } });
     try std.testing.expectEqual(@as(usize, 0), model.packages_state.selected_packages.items.len);

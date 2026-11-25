@@ -20,11 +20,15 @@ const ShellyCli = @import("../services/shelly_cli.zig").ShellyCli;
 const ShellyCommands = @import("../services/shelly_operation.zig").ShellyCommands;
 const ShellyConfig = @import("../models/shelly_config.zig").ShellyConfig;
 const Package = @import("../models/packages.zig").Package;
+const RepositoryCopy = @import("../models/packages.zig").RepositoryCopy;
+const installedCopy = @import("../models/packages.zig").installedCopy;
+const packageTarget = @import("../models/packages.zig").packageTarget;
 const runtime = @import("../services/runtime.zig");
 const translations = @import("../helpers/translations.zig");
 const a11y = @import("../helpers/a11y.zig");
 const sorters = @import("../helpers/sorters.zig");
-const installed = @import("../helpers/installed.zig");
+const installed_helpers = @import("../helpers/installed.zig");
+const table_columns = @import("../helpers/table_columns.zig");
 
 pub const ShellySearchPage = extern struct {
     parent_instance: Parent,
@@ -68,6 +72,7 @@ pub const ShellySearchPage = extern struct {
         standard_toggle: *gtk.ToggleButton,
         aur_toggle: *gtk.ToggleButton,
         flatpak_toggle: *gtk.ToggleButton,
+        source_filter_button: *gtk.MenuButton,
         show_detail_pane_check: *gtk.CheckButton,
         installed_only_check: *gtk.CheckButton,
         source_filter: *gtk.CustomFilter,
@@ -172,6 +177,12 @@ pub const ShellySearchPage = extern struct {
         gtk.SingleSelection.setCanUnselect(p.selection, 1);
 
         gtk.ColumnView.setModel(p.package_grid, p.selection.as(gtk.SelectionModel));
+        table_columns.attach(p.package_grid, "search", &.{
+            .{ .key = "select", .column = p.check_column, .hideable = false, .resizable = false },
+            .{ .key = "name", .column = p.name_column, .hideable = false },
+            .{ .key = "source", .column = p.source_column },
+            .{ .key = "version", .column = p.version_column },
+        });
 
         gtk.SortListModel.setSorter(sort_model, gtk.ColumnView.getSorter(p.package_grid));
 
@@ -261,7 +272,7 @@ pub const ShellySearchPage = extern struct {
             },
             .prompt => self.show_placeholder("system-search-symbolic", translations._("Search everywhere"), translations._("Search standard repositories, the AUR and Flatpak at once. Type a name to begin.")),
             .empty => self.show_placeholder("edit-find-symbolic", translations._("No packages found"), translations._("Try a shorter or more general keyword.")),
-            .err => self.show_placeholder("dialog-error-symbolic", translations._("Could not search the selected sources."), translations._("Check your connection and try again.")),
+            .err => self.show_placeholder("dialog-error-symbolic", translations._("Could not search the selected sources"), translations._("Check your connection and try again.")),
         }
     }
 
@@ -297,7 +308,7 @@ pub const ShellySearchPage = extern struct {
         const p = self.priv();
         switch (pkg_obj.getSource()) {
             .standard => {
-                p.standard_detail.showPackage(pkg_obj.getName(), pkg_obj.isInstalled(), null);
+                p.standard_detail.showPackage(pkg_obj.getInstallTarget(), pkg_obj.isInstalled(), null);
                 gtk.Stack.setVisibleChildName(p.detail_stack, "standard");
             },
             .aur => {
@@ -323,6 +334,7 @@ pub const ShellySearchPage = extern struct {
             fn setup(_: *gtk.SignalListItemFactory, item: *gobject.Object, _: ?*anyopaque) callconv(.c) void {
                 const cell = gobject.ext.cast(gtk.ColumnViewCell, item) orelse return;
                 const label = gtk.Label.new("");
+                gtk.Widget.addCssClass(label.as(gtk.Widget), "cell-meta");
                 gtk.Widget.setHalign(label.as(gtk.Widget), halign);
                 gtk.Label.setEllipsize(label, .end);
                 gtk.ColumnViewCell.setChild(cell, label.as(gtk.Widget));
@@ -406,7 +418,7 @@ pub const ShellySearchPage = extern struct {
                 var buf: [512]u8 = undefined;
                 const escaped = glib.markupEscapeText(pkg.getName(), -1);
                 defer glib.free(escaped);
-                const markup = std.fmt.bufPrintSentinel(&buf, "<b>{s}</b>", .{escaped}, 0) catch pkg.getName();
+                const markup = std.fmt.bufPrintSentinel(&buf, "<span weight=\"semibold\">{s}</span>", .{escaped}, 0) catch pkg.getName();
                 gtk.Label.setMarkup(name_label, markup);
                 gtk.Widget.setVisible(ood_w, @intFromBool(pkg.isOutOfDate()));
                 gtk.Widget.setVisible(installed_w, @intFromBool(pkg.isInstalled()));
@@ -440,7 +452,7 @@ pub const ShellySearchPage = extern struct {
         const check = gobject.ext.cast(gtk.CheckButton, child) orelse return;
 
         page.priv().check_map.put(std.heap.c_allocator, pkg, check) catch {};
-        a11y.setName(check.as(gtk.Widget), pkg.getName());
+        a11y.setName(check.as(gtk.Widget), if (pkg.getSource() == .standard) pkg.getInstallTarget() else pkg.getName());
         set_sync_active(check, pkg.isSelected());
     }
 
@@ -449,6 +461,25 @@ pub const ShellySearchPage = extern struct {
         const obj = gtk.ColumnViewCell.getItem(cell) orelse return;
         const pkg = gobject.ext.cast(SearchResultObject, obj) orelse return;
         _ = page.priv().check_map.remove(pkg);
+    }
+
+    /// a transaction takes one repository copy per name, so selecting a copy
+    /// clears the others.
+    fn deselect_other_copies(self: *Self, selected: *SearchResultObject) void {
+        if (selected.getSource() != .standard) return;
+        const p = self.priv();
+        const model = p.list_store.as(gio.ListModel);
+        const n = gio.ListModel.getNItems(model);
+        var i: u32 = 0;
+        while (i < n) : (i += 1) {
+            const obj = gio.ListModel.getObject(model, i) orelse continue;
+            defer obj.unref();
+            const pkg = gobject.ext.cast(SearchResultObject, obj) orelse continue;
+            if (pkg == selected or !pkg.isSelected() or pkg.getSource() != .standard) continue;
+            if (!std.mem.eql(u8, pkg.getName(), selected.getName())) continue;
+            pkg.setSelected(false);
+            if (p.check_map.get(pkg)) |check| set_sync_active(check, false);
+        }
     }
 
     fn set_sync_active(check: *gtk.CheckButton, active: bool) void {
@@ -468,6 +499,7 @@ pub const ShellySearchPage = extern struct {
 
         const page_ptr = gobject.Object.getData(check.as(gobject.Object), "page") orelse return;
         const self: *Self = @ptrCast(@alignCast(page_ptr));
+        if (pkg.isSelected()) self.deselect_other_copies(pkg);
 
         self.showDetail(pkg);
         self.update_selection_ui();
@@ -481,6 +513,7 @@ pub const ShellySearchPage = extern struct {
 
         const new_state = !pkg.isSelected();
         pkg.setSelected(new_state);
+        if (new_state) self.deselect_other_copies(pkg);
         if (p.check_map.get(pkg)) |check| set_sync_active(check, new_state);
 
         self.showDetail(pkg);
@@ -523,14 +556,12 @@ pub const ShellySearchPage = extern struct {
         const btn = p.install_button.as(gtk.Widget);
 
         gtk.Widget.removeCssClass(btn, "suggested-action");
+        gtk.Widget.setVisible(btn, @intFromBool(count > 0));
 
         if (count == 0 or p.install_running) {
             gtk.Button.setLabel(p.install_button, translations._("Install Selected"));
             gtk.Widget.setSensitive(btn, 0);
-            gtk.Widget.setTooltipText(
-                btn,
-                if (p.install_running) translations._("Installation in progress") else translations._("Select one or more packages"),
-            );
+            gtk.Widget.setTooltipText(btn, translations._("Installation in progress"));
             return;
         }
 
@@ -550,6 +581,24 @@ pub const ShellySearchPage = extern struct {
         gtk.Button.setLabel(p.standard_toggle.as(gtk.Button), std.fmt.bufPrintSentinel(&buf, "{s} \u{00b7} {d}", .{ translations._("Standard"), standard_count }, 0) catch translations._("Standard"));
         gtk.Button.setLabel(p.aur_toggle.as(gtk.Button), std.fmt.bufPrintSentinel(&buf, "{s} \u{00b7} {d}", .{ translations._(features.aur_source_name), aur_count }, 0) catch translations._(features.aur_source_name));
         gtk.Button.setLabel(p.flatpak_toggle.as(gtk.Button), std.fmt.bufPrintSentinel(&buf, "{s} \u{00b7} {d}", .{ translations._("Flatpak"), flatpak_count }, 0) catch translations._("Flatpak"));
+    }
+
+    /// marks the source filter button while an offered source is turned off,
+    /// since the toggles are out of sight in its popover.
+    fn update_filter_indicator(self: *Self) void {
+        const p = self.priv();
+        var filtered = false;
+        inline for (.{ p.standard_toggle, p.aur_toggle, p.flatpak_toggle }) |toggle| {
+            if (gtk.Widget.getVisible(toggle.as(gtk.Widget)) != 0 and gtk.ToggleButton.getActive(toggle) == 0) filtered = true;
+        }
+        const button = p.source_filter_button.as(gtk.Widget);
+        if (filtered) {
+            gtk.Widget.addCssClass(button, "filter-active");
+            gtk.Widget.setTooltipText(button, translations._("Search Sources (some sources hidden)"));
+        } else {
+            gtk.Widget.removeCssClass(button, "filter-active");
+            gtk.Widget.setTooltipText(button, translations._("Search Sources"));
+        }
     }
 
     fn reset_source_labels(self: *Self) void {
@@ -572,6 +621,7 @@ pub const ShellySearchPage = extern struct {
         gtk.ToggleButton.setActive(p.aur_toggle, @intFromBool(sources.aur));
         gtk.Widget.setVisible(p.flatpak_toggle.as(gtk.Widget), @intFromBool(sources.flatpak));
         gtk.ToggleButton.setActive(p.flatpak_toggle, @intFromBool(sources.flatpak));
+        self.update_filter_indicator();
 
         self.applyOptionsFromConfig();
         self.update_selection_ui();
@@ -619,6 +669,7 @@ pub const ShellySearchPage = extern struct {
     fn on_source_filter_toggled(_: *gtk.ToggleButton, self: *Self) callconv(.c) void {
         const p = self.priv();
         gtk.Filter.changed(p.source_filter.as(gtk.Filter), .different);
+        self.update_filter_indicator();
 
         // Results stay loaded; explain the grid when nothing is visible.
         if (gio.ListModel.getNItems(p.list_store.as(gio.ListModel)) == 0) return;
@@ -716,7 +767,7 @@ pub const ShellySearchPage = extern struct {
         var loaded_any = false;
         if (cli.list_aur_installed()) |parsed| {
             defer parsed.deinit();
-            installed.appendAurInstalledNames(std.heap.c_allocator, parsed.value, &aur_names) catch {};
+            installed_helpers.appendAurInstalledNames(std.heap.c_allocator, parsed.value, &aur_names) catch {};
             loaded_any = true;
         } else |err| {
             std.debug.print("Could not load the installed AUR-package list. {0s}\n\nTechnical details: {1s}\n", .{ diagnostics.cause(err), @errorName(err) });
@@ -725,7 +776,7 @@ pub const ShellySearchPage = extern struct {
         var flatpak_ids: std.ArrayListUnmanaged([:0]const u8) = .empty;
         if (cli.getInstalledFlatpaks()) |parsed| {
             defer parsed.deinit();
-            installed.appendFlatpakInstalledIds(std.heap.c_allocator, parsed.value, &flatpak_ids) catch {};
+            installed_helpers.appendFlatpakInstalledIds(std.heap.c_allocator, parsed.value, &flatpak_ids) catch {};
             loaded_any = true;
         } else |err| {
             std.debug.print("Could not load the installed Flatpak list. {0s}\n\nTechnical details: {1s}\n", .{ diagnostics.cause(err), @errorName(err) });
@@ -914,7 +965,7 @@ pub const ShellySearchPage = extern struct {
                         // `-Ls` lists the whole local database, foreign (AUR)
                         // packages included. They belong to the AUR source, so
                         // they would otherwise appear twice or mislabelled.
-                        if (installed.aurInstalledContains(installed_sets.aur_names, pkg.Name)) continue;
+                        if (installed_helpers.aurInstalledContains(installed_sets.aur_names, pkg.Name)) continue;
                         items.append(alloc, .{
                             .source = .standard,
                             .name = alloc.dupeSentinel(u8, pkg.Name, 0) catch continue,
@@ -958,7 +1009,7 @@ pub const ShellySearchPage = extern struct {
                         .description = if (pkg.Description) |value| alloc.dupeSentinel(u8, value, 0) catch "" else "",
                         .repository = alloc.dupeSentinel(u8, features.aur_source_name, 0) catch continue,
                         .out_of_date = pkg.OutOfDate != null,
-                        .installed = mode == .installed or installed.aurInstalledContains(installed_sets.aur_names, pkg.Name),
+                        .installed = mode == .installed or installed_helpers.aurInstalledContains(installed_sets.aur_names, pkg.Name),
                         .aur = pkg,
                     }) catch continue;
                 }
@@ -1003,7 +1054,7 @@ pub const ShellySearchPage = extern struct {
                             .description = alloc.dupeSentinel(u8, hit.summary, 0) catch continue,
                             .repository = alloc.dupeSentinel(u8, hit.remote, 0) catch continue,
                             .verified = hit.verification_verified,
-                            .installed = installed.flatpakInstalledContains(installed_sets.flatpak_ids, hit.id),
+                            .installed = installed_helpers.flatpakInstalledContains(installed_sets.flatpak_ids, hit.id),
                             .flatpak = hit,
                         }) catch continue;
                     }
@@ -1301,7 +1352,7 @@ pub const ShellySearchPage = extern struct {
         const step_title: [:0]const u8 = switch (next.source) {
             .standard => translations._("Installing packages"),
             .aur => translations._("Installing AUR packages"),
-            .flatpak => translations._("Installing flatpak"),
+            .flatpak => translations._("Installing Flatpak"),
         };
         const privileged = next.source != .flatpak;
 
@@ -1368,6 +1419,7 @@ pub const ShellySearchPage = extern struct {
         .{ "standard_toggle", @offsetOf(Private, "standard_toggle") },
         .{ "aur_toggle", @offsetOf(Private, "aur_toggle") },
         .{ "flatpak_toggle", @offsetOf(Private, "flatpak_toggle") },
+        .{ "source_filter_button", @offsetOf(Private, "source_filter_button") },
         .{ "show_detail_pane_check", @offsetOf(Private, "show_detail_pane_check") },
         .{ "installed_only_check", @offsetOf(Private, "installed_only_check") },
         .{ "detail_revealer", @offsetOf(Private, "detail_revealer") },
@@ -1405,51 +1457,101 @@ pub const ShellySearchPage = extern struct {
         packages: []const Package,
         items: *std.ArrayListUnmanaged(SearchResult),
     ) !void {
-        var seen: std.StringHashMapUnmanaged(usize) = .empty;
-        defer seen.deinit(alloc);
-        try seen.ensureTotalCapacity(alloc, @intCast(packages.len));
-
+        // one row per repository copy. an installed package with no copy keeps
+        // its own row.
+        var copies_by_name: std.StringHashMapUnmanaged(std.ArrayListUnmanaged(usize)) = .empty;
+        defer {
+            var it = copies_by_name.valueIterator();
+            while (it.next()) |list| list.deinit(alloc);
+            copies_by_name.deinit(alloc);
+        }
+        var names_with_copies: std.StringHashMapUnmanaged(void) = .empty;
+        defer names_with_copies.deinit(alloc);
         for (packages) |pkg| {
-            const is_local = std.mem.eql(u8, pkg.Repository, "local") or
-                pkg.Installed or
-                pkg.InstallDate != null;
+            if (!isInstalledRecord(pkg)) try names_with_copies.put(alloc, pkg.Name, {});
+        }
 
-            if (seen.get(pkg.Name)) |idx| {
-                if (is_local and !items.items[idx].installed) {
-                    items.items[idx].version = try alloc.dupeSentinel(u8, pkg.Version, 0);
-                    items.items[idx].repository = try alloc.dupeSentinel(u8, pkg.Repository, 0);
-                    items.items[idx].installed = true;
-                    if (pkg.Description.len > 0 and items.items[idx].description.len == 0) {
-                        items.items[idx].description = try alloc.dupeSentinel(u8, pkg.Description, 0);
-                    }
-                } else if (!is_local and items.items[idx].installed) {
-                    if (pkg.Description.len > 0 and items.items[idx].description.len == 0) {
-                        items.items[idx].description = try alloc.dupeSentinel(u8, pkg.Description, 0);
-                    }
-                }
+        var deferred: std.ArrayListUnmanaged(*const Package) = .empty;
+        defer deferred.deinit(alloc);
+        for (packages) |*pkg| {
+            const installed = isInstalledRecord(pkg.*);
+            if (installed and names_with_copies.contains(pkg.Name)) {
+                try deferred.append(alloc, pkg);
                 continue;
             }
+            const entry = try copies_by_name.getOrPut(alloc, pkg.Name);
+            if (!entry.found_existing) entry.value_ptr.* = .empty;
+            var duplicate = false;
+            for (entry.value_ptr.items) |index| {
+                if (std.mem.eql(u8, items.items[index].repository, pkg.Repository)) duplicate = true;
+            }
+            if (duplicate) continue;
 
-            const idx = items.items.len;
-            const name_z = try alloc.dupeSentinel(u8, pkg.Name, 0);
-            const target_z = try alloc.dupeSentinel(u8, pkg.Name, 0);
-            const version_z = try alloc.dupeSentinel(u8, pkg.Version, 0);
-            const desc_z = try alloc.dupeSentinel(u8, pkg.Description, 0);
-            const repo_z = try alloc.dupeSentinel(u8, pkg.Repository, 0);
-
+            const repository = if (installed) pkg.InstalledFrom orelse pkg.Repository else pkg.Repository;
+            try entry.value_ptr.append(alloc, items.items.len);
             try items.append(alloc, .{
                 .source = .standard,
-                .name = name_z,
-                .install_target = target_z,
-                .version = version_z,
-                .description = desc_z,
-                .repository = repo_z,
-                .installed = is_local,
+                .name = try alloc.dupeSentinel(u8, pkg.Name, 0),
+                .install_target = try packageTarget(alloc, pkg.Name, if (installed) "" else pkg.Repository),
+                .version = try alloc.dupeSentinel(u8, pkg.Version, 0),
+                .description = try alloc.dupeSentinel(u8, pkg.Description, 0),
+                .repository = try alloc.dupeSentinel(u8, repository, 0),
+                .installed = installed,
             });
-            seen.putAssumeCapacity(items.items[idx].name, idx);
+        }
+
+        var copies: std.ArrayListUnmanaged(RepositoryCopy) = .empty;
+        defer copies.deinit(alloc);
+        for (deferred.items) |pkg| {
+            const indexes = copies_by_name.get(pkg.Name) orelse continue;
+            copies.clearRetainingCapacity();
+            for (indexes.items) |index| try copies.append(alloc, .{ .repository = items.items[index].repository, .version = items.items[index].version });
+            const choice = installedCopy(copies.items, pkg.*) orelse continue;
+            const row = &items.items[indexes.items[choice.index]];
+            if (row.installed) continue;
+            row.installed = true;
+            row.version = try alloc.dupeSentinel(u8, pkg.Version, 0);
+            if (!choice.known) {
+                row.repository = try alloc.dupeSentinel(u8, pkg.InstalledFrom orelse pkg.Repository, 0);
+                row.install_target = try alloc.dupeSentinel(u8, pkg.Name, 0);
+            }
+            if (pkg.Description.len > 0 and row.description.len == 0) {
+                row.description = try alloc.dupeSentinel(u8, pkg.Description, 0);
+            }
         }
     }
+
+    fn isInstalledRecord(pkg: Package) bool {
+        return std.mem.eql(u8, pkg.Repository, "local") or pkg.Installed or pkg.InstallDate != null;
+    }
 };
+
+test "deduplicateStandardResults keeps repository copies and marks the installed one" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+    var items: std.ArrayListUnmanaged(SearchResult) = .empty;
+    const packages = [_]Package{
+        .{ .Name = "foo", .Version = "1-1", .Repository = "local", .Installed = true, .InstalledFrom = "second" },
+        .{ .Name = "foo", .Version = "1-1", .Repository = "first" },
+        .{ .Name = "foo", .Version = "1-1", .Repository = "second" },
+        .{ .Name = "foreign", .Version = "9-1", .Repository = "local", .Installed = true },
+        .{ .Name = "bar", .Version = "2-1", .Repository = "extra" },
+    };
+    try ShellySearchPage.deduplicateStandardResults(alloc, &packages, &items);
+    try std.testing.expectEqual(@as(usize, 4), items.items.len);
+    try std.testing.expectEqualStrings("first", items.items[0].repository);
+    try std.testing.expectEqualStrings("first/foo", items.items[0].install_target);
+    try std.testing.expect(!items.items[0].installed);
+    try std.testing.expectEqualStrings("second", items.items[1].repository);
+    try std.testing.expectEqualStrings("second/foo", items.items[1].install_target);
+    try std.testing.expect(items.items[1].installed);
+    try std.testing.expectEqualStrings("foreign", items.items[2].name);
+    try std.testing.expectEqualStrings("local", items.items[2].repository);
+    try std.testing.expectEqualStrings("foreign", items.items[2].install_target);
+    try std.testing.expect(items.items[2].installed);
+    try std.testing.expectEqualStrings("extra/bar", items.items[3].install_target);
+}
 
 test "deduplicateStandardResults prioritizes installed local package over sync package" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);

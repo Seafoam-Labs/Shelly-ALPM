@@ -227,7 +227,7 @@ pub fn dispatch(
             else
                 "Specify at least one package name. See the command help for usage.",
         );
-    if (optionEnabled(invocation, "--build-deps") and dependencyTargetCount(invocation) > 1)
+    if (optionEnabled(invocation, "--build-deps") and dependencyTargetCount(context.io, invocation) > 1)
         return try reportValidationFailure(
             context,
             invocation,
@@ -283,7 +283,7 @@ fn executeWithRunner(
     invocation: *const parser.Invocation,
     runner: anytype,
 ) anyerror!u8 {
-    if (requestsStandardUpgrade(invocation) and !invocation.globals.no_confirm) {
+    if (requestsStandardUpgrade(context.io, invocation) and !invocation.globals.no_confirm) {
         const confirmed = if (invocation.globals.ui_mode)
             try confirmStandardUpgradeUi(context, invocation.positionals)
         else
@@ -299,10 +299,10 @@ fn executeWithRunner(
         executeStandard(context, invocation, runner, opening);
 }
 
-fn requestsStandardUpgrade(invocation: *const parser.Invocation) bool {
+fn requestsStandardUpgrade(io: std.Io, invocation: *const parser.Invocation) bool {
     return std.mem.eql(u8, invocation.command.path, standard_command_path) and
         optionEnabled(invocation, "--upgrade") and
-        dependencyTargetCount(invocation) > 0;
+        dependencyTargetCount(io, invocation) > 0;
 }
 
 fn confirmStandardUpgrade(context: *runtime.RuntimeContext, targets: []const []const u8) !bool {
@@ -333,7 +333,7 @@ fn confirmStandardUpgradeWithUpdates(
         return true;
     }
 
-    try writeStandardUpgradePreview(context.stdout, updates, targets);
+    try writeStandardUpgradePreview(context.io, context.stdout, updates, targets);
     const reader = context.stdin orelse {
         try context.stdout.writeAll("Operation cancelled because confirmation input is unavailable. Run the command in an interactive terminal to review and confirm the operation.\n");
         try context.stdout.flush();
@@ -399,7 +399,7 @@ fn confirmStandardUpgradeUiWithUpdates(
 
     var preview = std.Io.Writer.Allocating.init(context.allocator);
     defer preview.deinit();
-    try writeStandardUpgradePreview(&preview.writer, updates, targets);
+    try writeStandardUpgradePreview(context.io, &preview.writer, updates, targets);
     try output.writeInfoFrame(context, preview.writer.buffered());
 
     var operation_context = PackageManager.OperationContext.init(context.allocator, context.io);
@@ -430,6 +430,7 @@ fn confirmStandardUpgradeUiWithUpdates(
 }
 
 fn writeStandardUpgradePreview(
+    io: std.Io,
     writer: *std.Io.Writer,
     updates: []const list_updates.StandardUpdate,
     targets: []const []const u8,
@@ -447,7 +448,7 @@ fn writeStandardUpgradePreview(
     }
     try writer.writeAll("Requested packages (resolved together with the upgrade):\n");
     for (targets) |target| {
-        if (classifyPackageSource(target) == .repository) try writer.print("  {s}\n", .{target});
+        if (resolvePackageSource(io, target) == .repository) try writer.print("  {s}\n", .{target});
     }
 }
 
@@ -509,7 +510,7 @@ fn runStandard(
         downloaded_paths.deinit(context.allocator);
     }
 
-    for (invocation.positionals) |value| switch (classifyPackageSource(value)) {
+    for (invocation.positionals) |value| switch (resolvePackageSource(context.io, value)) {
         .repository => |name| try repository_packages.append(context.allocator, name),
         .file => |path| try local_packages.append(context.allocator, path),
         .url => |url| {
@@ -1177,6 +1178,16 @@ fn classifyPackageSource(value: []const u8) PackageSource {
     return .{ .repository = value };
 }
 
+/// a `dir/name` that is a regular file on disk is a file, not `repo/name`.
+fn resolvePackageSource(io: std.Io, value: []const u8) PackageSource {
+    const source = classifyPackageSource(value);
+    if (source == .repository and std.mem.indexOfScalar(u8, value, '/') != null) {
+        const stat = std.Io.Dir.cwd().statFile(io, value, .{}) catch return source;
+        if (stat.kind == .file) return .{ .file = value };
+    }
+    return source;
+}
+
 fn isUrl(value: []const u8) bool {
     return startsWithIgnoreCase(value, "http://") or
         startsWithIgnoreCase(value, "https://") or
@@ -1188,7 +1199,10 @@ fn isRepositoryQualifiedName(value: []const u8) bool {
     const slash = std.mem.indexOfScalar(u8, value, '/') orelse return false;
     if (slash == 0 or slash + 1 >= value.len or std.mem.indexOfScalarPos(u8, value, slash + 1, '/') != null)
         return false;
-    if (std.fs.path.extension(value[slash + 1 ..]).len > 0) return false;
+    // names may contain dots (python-zope.interface), so only archive names are files.
+    const name = value[slash + 1 ..];
+    if (containsIgnoreCase(name, ".pkg.tar") or
+        PackageManager.local.file_inspector.isSupportedArchive(name)) return false;
     for (value) |character| {
         if (character == '/') continue;
         if (!std.ascii.isAlphanumeric(character) and
@@ -1277,12 +1291,12 @@ fn needsPackages(invocation: *const parser.Invocation) bool {
         std.mem.eql(u8, invocation.command.path, aur_command_path);
 }
 
-fn dependencyTargetCount(invocation: *const parser.Invocation) usize {
+fn dependencyTargetCount(io: std.Io, invocation: *const parser.Invocation) usize {
     if (std.mem.eql(u8, invocation.command.path, aur_command_path))
         return invocation.positionals.len;
     if (!std.mem.eql(u8, invocation.command.path, standard_command_path)) return 0;
     var count: usize = 0;
-    for (invocation.positionals) |value| switch (classifyPackageSource(value)) {
+    for (invocation.positionals) |value| switch (resolvePackageSource(io, value)) {
         .repository => count += 1,
         .file, .url => {},
     };
@@ -1776,7 +1790,7 @@ test "standard install upgrade requires confirmation unless disabled" {
         &manifest,
         &.{ "install", "standard", "--upgrade", "demo" },
     );
-    try std.testing.expect(requestsStandardUpgrade(&outcome.dispatch));
+    try std.testing.expect(requestsStandardUpgrade(std.testing.io, &outcome.dispatch));
     try std.testing.expect(!try confirmStandardUpgradeWithUpdates(&tc.context, &updates, &.{"extra-testing/filezilla"}));
     try std.testing.expect(!capture.called);
     try std.testing.expect(std.mem.indexOf(u8, tc.stdout.writer.buffered(), "extra-testing/filezilla") != null);
@@ -1812,7 +1826,7 @@ test "standard install upgrade requires confirmation unless disabled" {
         &manifest,
         &.{ "install", "standard", "--upgrade", "demo.pkg.tar.zst" },
     );
-    try std.testing.expect(!requestsStandardUpgrade(&outcome.dispatch));
+    try std.testing.expect(!requestsStandardUpgrade(std.testing.io, &outcome.dispatch));
 }
 
 test "standard install upgrade CLI skips confirmation when packages are current" {
@@ -1998,6 +2012,12 @@ test "standard source classification preserves dotted repository names files and
     try std.testing.expect(classifyPackageSource("linux") == .repository);
     try std.testing.expect(classifyPackageSource("dotnet-sdk-8.0") == .repository);
     try std.testing.expect(classifyPackageSource("./demo.pkg.tar.zst") == .file);
+    try std.testing.expect(classifyPackageSource("extra/python-zope.interface") == .repository);
+    try std.testing.expect(classifyPackageSource("core/dotnet-sdk-8.0") == .repository);
+    try std.testing.expect(classifyPackageSource("build/demo-1-1-any.pkg.tar.xz") == .file);
+    try std.testing.expect(classifyPackageSource("build/demo.tar.zst") == .file);
+    try std.testing.expect(classifyPackageSource("build/Demo-1-1-any.PKG.TAR.XZ") == .file);
+    try std.testing.expect(resolvePackageSource(std.testing.io, "shelly-test-missing-repo/linux") == .repository);
     try std.testing.expect(classifyPackageSource("demo.pkg.tar.zst") == .file);
     try std.testing.expect(classifyPackageSource("https://example.test/demo.pkg.tar.zst") == .url);
     try std.testing.expectEqualStrings("demo.pkg.tar.zst", urlFileName("https://example.test/demo.pkg.tar.zst?token=1"));

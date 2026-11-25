@@ -290,6 +290,15 @@ are confined to the libalpm implementation and its conditional reference tests.
 AUR dependency callbacks propagate errors and cancellation separately from missing
 packages.
 
+Installed package records keep `repository()` as `local` and report
+`installed()` and `installed_from()` separately. `installed_from()` is the
+repository recorded in `%INSTALLED_DB%`, or null. RLPM always reads it. libalpm
+reads it only when the linked `alpm.h` declares `alpm_pkg_get_installed_db`, as
+CachyOS's pacman does; `PackageManager.Manager.libalpm_records_installed_repository`
+reports this. The backends never guess a missing origin, since that needs the sync
+databases. The CLI guesses it only for queries that already load them, when exactly
+one repository has the installed name and version, and marks the result as inferred.
+
 Both mappings accept multiple cache directories/architectures, CacheServer,
 AssumeInstalled, ParallelDownloads (1–255), DownloadUser, download timeout and
 sandbox controls. `auto` expands using CachyOS runtime CPU/OS capabilities;

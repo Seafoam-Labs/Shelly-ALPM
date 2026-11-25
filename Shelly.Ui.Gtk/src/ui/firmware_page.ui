@@ -17,34 +17,20 @@
         <property name="orientation">horizontal</property>
         <property name="spacing">12</property>
         <style>
-          <class name="page-head"/>
+          <class name="toolbar-card"/>
         </style>
         <child>
           <object class="GtkBox">
             <property name="orientation">vertical</property>
             <property name="hexpand">true</property>
             <child>
-              <object class="GtkLabel">
-                <property name="label" translatable="yes">Firmware</property>
-                <property name="xalign">0</property>
-                <property name="accessible-role">heading</property>
-                <accessibility>
-                  <property name="level">1</property>
-                </accessibility>
-                <style>
-                  <class name="title-2"/>
-                  <class name="page-heading"/>
-                </style>
-              </object>
-            </child>
-            <child>
               <object class="GtkLabel" id="summary_label">
+                <property name="valign">center</property>
                 <property name="label" translatable="yes">Device firmware updates</property>
                 <property name="xalign">0</property>
                 <style>
                   <class name="dim-label"/>
-                  <class name="page-subtitle"/>
-                </style>
+                                  </style>
               </object>
             </child>
           </object>
@@ -87,6 +73,7 @@
         <property name="spacing">8</property>
         <style>
           <class name="toolbar-card"/>
+          <class name="toolbar-notice"/>
         </style>
         <child>
           <object class="GtkImage">
@@ -110,6 +97,7 @@
         <property name="spacing">12</property>
         <style>
           <class name="toolbar-card"/>
+          <class name="toolbar-notice"/>
         </style>
         <child>
           <object class="GtkLabel" id="progress_label">
@@ -199,9 +187,11 @@
                   <!-- Inset viewport: row hover/selection paints stay square,
                        so they must not reach the card's rounded corners. -->
                   <object class="GtkScrolledWindow">
-                    <property name="width-request">320</property>
+                    <property name="width-request">400</property>
                     <property name="vexpand">true</property>
                     <property name="hscrollbar-policy">never</property>
+                    <!-- a classic scrollbar keeps the row badges clear. -->
+                    <property name="overlay-scrolling">false</property>
                     <property name="margin-start">8</property>
                     <property name="margin-end">8</property>
                     <property name="margin-top">8</property>
@@ -447,6 +437,7 @@
                       <object class="GtkScrolledWindow" id="release_scroll">
                         <property name="vexpand">true</property>
                         <property name="hscrollbar-policy">never</property>
+                        <property name="overlay-scrolling">false</property>
                         <property name="min-content-height">160</property>
                         <child>
                           <object class="GtkListView" id="release_list">

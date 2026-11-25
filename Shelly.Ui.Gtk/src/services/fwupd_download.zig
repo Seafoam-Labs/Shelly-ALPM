@@ -160,7 +160,7 @@ fn downloadToCache(
         break :blk result.status;
     };
     if (status != .ok) {
-        log.warn("Firmware download from {0f} returned HTTP {1d}", .{ diagnostics.safe(url), @intFromEnum(status) });
+        log.warn("Firmware download from {0f} returned HTTP {1d}", .{ diagnostics.safe(url), @backingInt(status) });
         return error.DownloadFailed;
     }
 
@@ -454,7 +454,7 @@ fn fetchToFile(
     };
     file_writer.interface.flush() catch return error.FileFailed;
     if (result.status != .ok) {
-        log.warn("Firmware metadata fetch from {0f} returned HTTP {1d}", .{ diagnostics.safe(url), @intFromEnum(result.status) });
+        log.warn("Firmware metadata fetch from {0f} returned HTTP {1d}", .{ diagnostics.safe(url), @backingInt(result.status) });
         return error.DownloadFailed;
     }
     dir.rename(part, dir, base, io) catch return error.FileFailed;

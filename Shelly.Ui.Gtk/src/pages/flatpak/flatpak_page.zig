@@ -33,13 +33,13 @@ pub const FlatpakPage = extern struct {
 
     const Private = struct {
         main_content_stack: *gtk.Stack,
-        section_nav_list: *gtk.ListBox,
-        nav_install_row: *gtk.ListBoxRow,
-        nav_remove_row: *gtk.ListBoxRow,
-        nav_remote_row: *gtk.ListBoxRow,
-        nav_install_local: *gtk.ListBoxRow,
         category_list: *gtk.ListBox,
+        category_sidebar: *gtk.Widget,
         search_entry: *gtk.SearchEntry,
+        nav_install_button: *gtk.ToggleButton,
+        nav_remove_button: *gtk.ToggleButton,
+        nav_remotes_button: *gtk.ToggleButton,
+        nav_local_button: *gtk.ToggleButton,
         install_view: *FlatpakInstallView,
         local_view: *FlatpakInstallLocalView,
         remove_view: *FlatpakRemoveView,
@@ -69,19 +69,19 @@ pub const FlatpakPage = extern struct {
 
     pub fn navigateTo(self: *Self, section: Section) void {
         const p = self.priv();
-        const row: *gtk.ListBoxRow = switch (section) {
-            .install => p.nav_install_row,
-            .remove => p.nav_remove_row,
-            .remotes => p.nav_remote_row,
-            .local => p.nav_install_local,
-        };
         const name: [:0]const u8 = switch (section) {
             .install => "install",
             .remove => "remove",
             .remotes => "remotes",
             .local => "local",
         };
-        gtk.ListBox.selectRow(p.section_nav_list, row);
+        const button = switch (section) {
+            .install => p.nav_install_button,
+            .remove => p.nav_remove_button,
+            .remotes => p.nav_remotes_button,
+            .local => p.nav_local_button,
+        };
+        gtk.ToggleButton.setActive(button, 1);
         gtk.Stack.setVisibleChildName(p.main_content_stack, name);
     }
 
@@ -109,14 +109,9 @@ pub const FlatpakPage = extern struct {
 
         _ = gtk.SearchEntry.signals.search_changed.connect(p.search_entry, *Self, &onSearchChanged, self, .{});
         _ = gtk.SearchEntry.signals.activate.connect(p.search_entry, *Self, &onSearchActivate, self, .{});
-
-        _ = gtk.ListBox.signals.row_selected.connect(
-            p.section_nav_list,
-            *Self,
-            &onNavRowSelected,
-            self,
-            .{},
-        );
+        for ([_]*gtk.ToggleButton{ p.nav_install_button, p.nav_remove_button, p.nav_remotes_button, p.nav_local_button }) |b| {
+            _ = gtk.ToggleButton.signals.toggled.connect(b, *Self, &onSectionToggled, self, .{});
+        }
 
         _ = gtk.ListBox.signals.row_selected.connect(
             p.category_list,
@@ -127,7 +122,6 @@ pub const FlatpakPage = extern struct {
         );
 
         // start on Install
-        gtk.ListBox.selectRow(p.section_nav_list, p.nav_install_row);
         gtk.Stack.setVisibleChildName(p.main_content_stack, "install");
 
         gtk.ListBox.setHeaderFunc(p.category_list, &getCategoryHeader, null, null);
@@ -166,21 +160,20 @@ pub const FlatpakPage = extern struct {
         _ = gtk.Stack.addNamed(p.main_content_stack, local.as(gtk.Widget), "local");
     }
 
-    fn onNavRowSelected(_: *gtk.ListBox, row: ?*gtk.ListBoxRow, self: *Self) callconv(.c) void {
+    fn onSectionToggled(button: *gtk.ToggleButton, self: *Self) callconv(.c) void {
+        if (gtk.ToggleButton.getActive(button) == 0) return;
         const p = self.priv();
-        const r = row orelse return;
-
         const name: [:0]const u8 =
-            if (r == p.nav_install_row) "install" else if (r == p.nav_remove_row) "remove" else if (r == p.nav_remote_row) "remotes" else if (r == p.nav_install_local) "local" else return;
-
+            if (button == p.nav_install_button) "install" else if (button == p.nav_remove_button) "remove" else if (button == p.nav_remotes_button) "remotes" else "local";
         gtk.Stack.setVisibleChildName(p.main_content_stack, name);
+        gtk.Widget.setVisible(p.category_sidebar, @intFromBool(button == p.nav_install_button));
     }
 
     fn getCategoryHeader(row: *gtk.ListBoxRow, before: ?*gtk.ListBoxRow, _: ?*anyopaque) callconv(.c) void {
         const raw = gobject.Object.getData(row.as(gobject.Object), "category-index");
         if (raw == null) return;
         const index = @intFromPtr(raw) - 1;
-        const category: Category = @enumFromInt(index);
+        const category: Category = @fromBackingInt(@intCast(index));
 
         const header_text: ?[:0]const u8 = switch (category) {
             .@"All Applications" => translations._("Discover"),
@@ -211,7 +204,7 @@ pub const FlatpakPage = extern struct {
 
             std.debug.print("index: {d}\n", .{index});
 
-            const app: Category = @enumFromInt(index);
+            const app: Category = @fromBackingInt(@intCast(index));
             const p = self.priv();
             p.install_view.applyCategory(app);
         }
@@ -240,7 +233,7 @@ pub const FlatpakPage = extern struct {
 
         for (std.enums.values(Category)) |app| {
             const row = gtk.ListBoxRow.new();
-            const enum_num: usize = @intFromEnum(app);
+            const enum_num: usize = @backingInt(app);
             gobject.Object.setData(
                 row.as(gobject.Object),
                 "category-index",
@@ -321,13 +314,13 @@ pub const FlatpakPage = extern struct {
 
     const template_children = .{
         .{ "main_content_stack", @offsetOf(Private, "main_content_stack") },
-        .{ "section_nav_list", @offsetOf(Private, "section_nav_list") },
-        .{ "nav_install_row", @offsetOf(Private, "nav_install_row") },
-        .{ "nav_remove_row", @offsetOf(Private, "nav_remove_row") },
-        .{ "nav_remote_row", @offsetOf(Private, "nav_remote_row") },
-        .{ "nav_install_local", @offsetOf(Private, "nav_install_local") },
         .{ "search_entry", @offsetOf(Private, "search_entry") },
+        .{ "nav_install_button", @offsetOf(Private, "nav_install_button") },
+        .{ "nav_remove_button", @offsetOf(Private, "nav_remove_button") },
+        .{ "nav_remotes_button", @offsetOf(Private, "nav_remotes_button") },
+        .{ "nav_local_button", @offsetOf(Private, "nav_local_button") },
         .{ "category_list", @offsetOf(Private, "category_list") },
+        .{ "category_sidebar", @offsetOf(Private, "category_sidebar") },
     };
 
     pub const Class = extern struct {

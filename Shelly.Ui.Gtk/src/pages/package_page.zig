@@ -20,6 +20,7 @@ const ShellyConfig = @import("../models/shelly_config.zig").ShellyConfig;
 const ViewType = @import("../models/shelly_config.zig").ViewType;
 const RecommendCategory = @import("../models/recommendation.zig").RecommendCategory;
 const sorters = @import("../helpers/sorters.zig");
+const table_columns = @import("../helpers/table_columns.zig");
 const recommendations = @import("../services/recommendations.zig");
 const translations = @import("../helpers/translations.zig");
 const a11y = @import("../helpers/a11y.zig");
@@ -62,6 +63,7 @@ pub const PackagePage = extern struct {
         grid_view_button: *gtk.ToggleButton,
         list_view_button: *gtk.ToggleButton,
         install_button: *gtk.Button,
+        selection_actions: *gtk.Box,
         cart_items_box: *gtk.Box,
         cart_label: *gtk.Label,
         upgrade_check: *gtk.CheckButton,
@@ -152,6 +154,15 @@ pub const PackagePage = extern struct {
         gtk.SingleSelection.setCanUnselect(p.selection, 1);
 
         gtk.ColumnView.setModel(p.column_view, p.selection.as(gtk.SelectionModel));
+        // install date follows "installed only", so the page shows and hides it.
+        table_columns.attach(p.column_view, "packages", &.{
+            .{ .key = "select", .column = p.check_column, .hideable = false, .resizable = false },
+            .{ .key = "name", .column = p.name_column, .hideable = false },
+            .{ .key = "version", .column = p.version_column },
+            .{ .key = "size", .column = p.size_column },
+            .{ .key = "repository", .column = p.repository_column },
+            .{ .key = "install-date", .column = p.install_date_column, .hideable = false },
+        });
         gtk.GridView.setModel(p.grid_view, p.selection.as(gtk.SelectionModel));
 
         gtk.SortListModel.setSorter(sort_model, gtk.ColumnView.getSorter(p.column_view));
@@ -224,6 +235,7 @@ pub const PackagePage = extern struct {
     fn install_date_setup(_: *gtk.SignalListItemFactory, item: *gobject.Object, _: ?*anyopaque) callconv(.c) void {
         const cell = gobject.ext.cast(gtk.ColumnViewCell, item) orelse return;
         const label = gtk.Label.new("");
+        gtk.Widget.addCssClass(label.as(gtk.Widget), "cell-meta");
         gtk.Widget.setHalign(label.as(gtk.Widget), gtk.Align.start);
         gtk.Label.setEllipsize(label, .end);
         gtk.ColumnViewCell.setChild(cell, label.as(gtk.Widget));
@@ -243,6 +255,7 @@ pub const PackagePage = extern struct {
             fn setup(_: *gtk.SignalListItemFactory, item: *gobject.Object, _: ?*anyopaque) callconv(.c) void {
                 const cell = gobject.ext.cast(gtk.ColumnViewCell, item) orelse return;
                 const label = gtk.Label.new("");
+                gtk.Widget.addCssClass(label.as(gtk.Widget), "cell-meta");
                 gtk.Widget.setHalign(label.as(gtk.Widget), halign);
                 gtk.Label.setEllipsize(label, .end);
                 gtk.ColumnViewCell.setChild(cell, label.as(gtk.Widget));
@@ -328,7 +341,7 @@ pub const PackagePage = extern struct {
                 var buf: [512]u8 = undefined;
                 const escaped = glib.markupEscapeText(pkg.getName(), -1);
                 defer glib.free(escaped);
-                const markup = std.fmt.bufPrintSentinel(&buf, "<b>{s}</b>", .{escaped}, 0) catch pkg.getName();
+                const markup = std.fmt.bufPrintSentinel(&buf, "<span weight=\"semibold\">{s}</span>", .{escaped}, 0) catch pkg.getName();
                 gtk.Label.setMarkup(label, markup);
                 gtk.Label.setLabel(desc_label, pkg.getDescription());
                 gtk.Widget.setVisible(installed_w, @intFromBool(pkg.isInstalled()));
@@ -372,7 +385,7 @@ pub const PackagePage = extern struct {
         const check = gobject.ext.cast(gtk.CheckButton, child) orelse return;
 
         page.priv().check_map_column.put(std.heap.c_allocator, pkg, check) catch {};
-        a11y.setName(check.as(gtk.Widget), pkg.getName());
+        a11y.setName(check.as(gtk.Widget), pkg.getTarget());
 
         gobject.Object.setData(check.as(gobject.Object), "syncing", @ptrFromInt(1));
         gtk.CheckButton.setActive(check, @intFromBool(pkg.isSelected()));
@@ -399,6 +412,7 @@ pub const PackagePage = extern struct {
     fn size_setup(_: *gtk.SignalListItemFactory, item: *gobject.Object, _: ?*anyopaque) callconv(.c) void {
         const cell = gobject.ext.cast(gtk.ColumnViewCell, item) orelse return;
         const label = gtk.Label.new("");
+        gtk.Widget.addCssClass(label.as(gtk.Widget), "cell-meta");
         gtk.Widget.setHalign(label.as(gtk.Widget), gtk.Align.start);
         gtk.Label.setEllipsize(label, .end);
         gtk.ColumnViewCell.setChild(cell, label.as(gtk.Widget));
@@ -416,9 +430,10 @@ pub const PackagePage = extern struct {
         const page_ptr = gobject.Object.getData(check.as(gobject.Object), "page") orelse return;
 
         const self: *Self = @ptrCast(@alignCast(page_ptr));
+        if (pkg.isSelected()) self.deselect_other_copies(pkg);
         const p = self.priv();
         const path = p.resolver.resolve(pkg.getName());
-        p.detail.showPackage(pkg.getName(), pkg.isInstalled(), path);
+        p.detail.showPackage(pkg.getTarget(), pkg.isInstalled(), path);
         gtk.Revealer.setRevealChild(p.detail_revealer, 1);
 
         self.update_selection_ui();
@@ -503,10 +518,10 @@ pub const PackagePage = extern struct {
                 gtk.Widget.setSizeRequest(frame.as(gtk.Widget), 300, -1);
                 gtk.Widget.setHexpand(frame.as(gtk.Widget), 0);
                 gtk.Widget.setHalign(frame.as(gtk.Widget), .fill);
-                gtk.Widget.setMarginStart(frame.as(gtk.Widget), 3);
-                gtk.Widget.setMarginEnd(frame.as(gtk.Widget), 3);
-                gtk.Widget.setMarginTop(frame.as(gtk.Widget), 3);
-                gtk.Widget.setMarginBottom(frame.as(gtk.Widget), 3);
+                gtk.Widget.setMarginStart(frame.as(gtk.Widget), 4);
+                gtk.Widget.setMarginEnd(frame.as(gtk.Widget), 4);
+                gtk.Widget.setMarginTop(frame.as(gtk.Widget), 4);
+                gtk.Widget.setMarginBottom(frame.as(gtk.Widget), 4);
                 gtk.Widget.addCssClass(frame.as(gtk.Widget), "card");
 
                 gtk.ListItem.setChild(list_item, frame.as(gtk.Widget));
@@ -523,7 +538,7 @@ pub const PackagePage = extern struct {
                 const selection_check = gobject.ext.cast(gtk.CheckButton, gtk.Grid.getChildAt(content_grid, 2, 0) orelse return) orelse return;
 
                 page.priv().check_map_grid.put(std.heap.c_allocator, pkg, selection_check) catch {};
-                a11y.setName(selection_check.as(gtk.Widget), pkg.getName());
+                a11y.setName(selection_check.as(gtk.Widget), pkg.getTarget());
 
                 const title_grid_w = gtk.Widget.getFirstChild(right_box.as(gtk.Widget)) orelse return;
                 const title_grid = gobject.ext.cast(gtk.Grid, title_grid_w) orelse return;
@@ -547,7 +562,7 @@ pub const PackagePage = extern struct {
                     }
                 }
                 var name_buf: [256]u8 = undefined;
-                const markup = std.fmt.bufPrintSentinel(&name_buf, "<b>{s}</b>", .{pkg.getName()}, 0) catch pkg.getName();
+                const markup = std.fmt.bufPrintSentinel(&name_buf, "<span weight=\"semibold\">{s}</span>", .{pkg.getName()}, 0) catch pkg.getName();
                 gtk.Label.setMarkup(title_label, markup);
                 gtk.Widget.setVisible(installed_check, @intFromBool(pkg.isInstalled()));
                 gtk.Label.setLabel(desc_label, pkg.getDescription());
@@ -577,9 +592,10 @@ pub const PackagePage = extern struct {
 
         const page_ptr = gobject.Object.getData(check.as(gobject.Object), "page") orelse return;
         const self: *Self = @ptrCast(@alignCast(page_ptr));
+        if (pkg.isSelected()) self.deselect_other_copies(pkg);
         const p = self.priv();
         const path = p.resolver.resolve(pkg.getName());
-        p.detail.showPackage(pkg.getName(), pkg.isInstalled(), path);
+        p.detail.showPackage(pkg.getTarget(), pkg.isInstalled(), path);
         gtk.Revealer.setRevealChild(p.detail_revealer, 1);
         self.update_selection_ui();
     }
@@ -601,6 +617,7 @@ pub const PackagePage = extern struct {
 
         const new_state = !pkg.isSelected();
         pkg.setSelected(new_state);
+        if (new_state) self.deselect_other_copies(pkg);
 
         if (p.check_map_grid.get(pkg)) |check| {
             set_sync_active(check, new_state);
@@ -610,6 +627,25 @@ pub const PackagePage = extern struct {
         }
 
         self.update_selection_ui();
+    }
+
+    /// a transaction takes one repository copy per name, so selecting a copy
+    /// clears the others.
+    fn deselect_other_copies(self: *Self, selected: *PackageObject) void {
+        const p = self.priv();
+        const model = p.list_store.as(gio.ListModel);
+        const n = gio.ListModel.getNItems(model);
+        var i: u32 = 0;
+        while (i < n) : (i += 1) {
+            const obj = gio.ListModel.getObject(model, i) orelse continue;
+            defer obj.unref();
+            const pkg = gobject.ext.cast(PackageObject, obj) orelse continue;
+            if (pkg == selected or !pkg.isSelected()) continue;
+            if (!std.mem.eql(u8, pkg.getName(), selected.getName())) continue;
+            pkg.setSelected(false);
+            if (p.check_map_grid.get(pkg)) |check| set_sync_active(check, false);
+            if (p.check_map_column.get(pkg)) |check| set_sync_active(check, false);
+        }
     }
 
     fn set_sync_active(check: *gtk.CheckButton, active: bool) void {
@@ -703,7 +739,7 @@ pub const PackagePage = extern struct {
         const pkg = gobject.ext.cast(PackageObject, obj) orelse return;
 
         const path = p.resolver.resolve(pkg.getName());
-        p.detail.showPackage(pkg.getName(), pkg.isInstalled(), path);
+        p.detail.showPackage(pkg.getTarget(), pkg.isInstalled(), path);
         gtk.Revealer.setRevealChild(p.detail_revealer, 1);
     }
 
@@ -958,6 +994,7 @@ pub const PackagePage = extern struct {
         .{ "grouping_selection", @offsetOf(Private, "grouping_selection") },
         .{ "detail_revealer", @offsetOf(Private, "detail_revealer") },
         .{ "install_button", @offsetOf(Private, "install_button") },
+        .{ "selection_actions", @offsetOf(Private, "selection_actions") },
         .{ "cart_label", @offsetOf(Private, "cart_label") },
         .{ "cart_items_box", @offsetOf(Private, "cart_items_box") },
         .{ "upgrade_check", @offsetOf(Private, "upgrade_check") },
@@ -1018,7 +1055,7 @@ pub const PackagePage = extern struct {
             const row = gtk.Box.new(.horizontal, 8);
             gtk.Widget.setHexpand(row.as(gtk.Widget), 1);
 
-            const name_label = gtk.Label.new(pkg.getName());
+            const name_label = gtk.Label.new(pkg.getTarget());
             gtk.Widget.setHalign(name_label.as(gtk.Widget), .start);
             gtk.Widget.setHexpand(name_label.as(gtk.Widget), 1);
             gtk.Label.setXalign(name_label, 0);
@@ -1058,14 +1095,13 @@ pub const PackagePage = extern struct {
         gtk.Label.setLabel(p.cart_label, std.fmt.bufPrintSentinel(&cart_buf, "{d} {s}", .{ total, translations._("Selected") }, 0) catch translations._("0 Selected"));
 
         const btn = p.install_button.as(gtk.Widget);
+        gtk.Widget.setVisible(p.selection_actions.as(gtk.Widget), @intFromBool(total > 0));
         gtk.Widget.removeCssClass(btn, "suggested-action");
         gtk.Widget.removeCssClass(btn, "destructive-action");
 
-        if (total == 0) {
-            gtk.Button.setLabel(p.install_button, translations._("Install Selected"));
-            gtk.Widget.setSensitive(btn, 0);
-            gtk.Widget.setTooltipText(btn, null);
-        } else if (install_count > 0 and remove_count > 0) {
+        // the selection actions are hidden with nothing selected.
+        if (total == 0) return;
+        if (install_count > 0 and remove_count > 0) {
             gtk.Button.setLabel(p.install_button, translations._("Mixed selection"));
             gtk.Widget.setSensitive(btn, 0);
             gtk.Widget.setTooltipText(btn, translations._("Select only installed packages to remove, or only available ones to install."));
@@ -1264,7 +1300,7 @@ pub const PackagePage = extern struct {
             const obj = gio.ListModel.getObject(p.list_store.as(gio.ListModel), i) orelse continue;
             const pkg = gobject.ext.cast(PackageObject, obj) orelse continue;
             if (pkg.isSelected()) {
-                names.append(std.heap.c_allocator, pkg.getName()) catch continue;
+                names.append(std.heap.c_allocator, pkg.getTarget()) catch continue;
             }
         }
         if (names.items.len == 0) return;
