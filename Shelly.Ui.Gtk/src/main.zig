@@ -240,7 +240,11 @@ test {
     _ = @import("helpers/custom_ui_comps/carousel.zig");
     _ = @import("helpers/custom_ui_comps/carousel_indicator_dots.zig");
     _ = @import("pages/flatpak/flatpak_install_view.zig");
+    _ = @import("pages/flatpak/installed_marks.zig");
     _ = @import("helpers/ui_decode.zig");
+    _ = @import("helpers/saved_list.zig");
+    _ = @import("helpers/flatpak_catalog_stamp.zig");
+    _ = @import("helpers/flathub_collections.zig");
     _ = @import("helpers/ansi.zig");
     _ = @import("helpers/datetime.zig");
     _ = @import("helpers/deep_link.zig");
