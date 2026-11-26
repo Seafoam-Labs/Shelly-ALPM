@@ -21,6 +21,11 @@ pub const builtWithFwupd = !options.exclude_fwupd;
 
 pub const aur_source_name: [:0]const u8 = if (builtWithAtollOnly) "Atoll" else "AUR";
 
+/// Source name for the AUR slot at runtime, which can be either backend.
+pub fn aurSourceName(use_atoll: bool) [:0]const u8 {
+    return if (use_atoll) "Atoll" else "AUR";
+}
+
 pub fn builtWith(tab: ShellyTabs) bool {
     return switch (tab) {
         .packages, .update => true,
@@ -31,6 +36,12 @@ pub fn builtWith(tab: ShellyTabs) bool {
         .shelly_search => builtWithShellySearch,
         .firmware => builtWithFwupd,
     };
+}
+
+test "aurSourceName follows the active backend" {
+    const std = @import("std");
+    try std.testing.expectEqualStrings("Atoll", aurSourceName(true));
+    try std.testing.expectEqualStrings("AUR", aurSourceName(false));
 }
 
 test "firmware tab gating follows the exclude-fwupd build option" {

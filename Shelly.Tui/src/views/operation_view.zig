@@ -1,3 +1,4 @@
+const styles = @import("styles.zig");
 const std = @import("std");
 const Border = @import("border.zig");
 const commands = @import("../commands.zig");
@@ -9,6 +10,7 @@ const Allocator = std.mem.Allocator;
 
 /// Borrowed operation state. Password input goes directly to sudo's terminal.
 pub const View = struct {
+    owner: ?*@import("../model.zig").Model = null,
     name: []const u8,
     backend: operation.Backend = .standard,
     elevated: bool = true,
@@ -201,15 +203,53 @@ pub const Panel = struct {
     fn drawBody(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
         const self: *Panel = @ptrCast(@alignCast(ptr));
         const width = ctx.max.width orelse ctx.min.width;
-        var text: vxfw.Text = .{ .text = try self.view.body(ctx.arena, width), .softwrap = true };
+        const body = try self.view.body(ctx.arena, width);
+        var text: vxfw.Text = .{ .text = body, .softwrap = true };
+        if (self.view.state == .entering and self.view.action == .remove and (self.view.backend == .standard or self.view.backend == .aur)) {
+            if (self.view.owner) |owner| {
+                const split = std.mem.indexOfScalar(u8, body, '\n').?;
+                const label: vxfw.Text = .{ .text = body[0..split], .softwrap = true };
+                const children = try ctx.arena.alloc(vxfw.SubSurface, 2);
+                const checkbox_label = try ctx.arena.create(Checkbox);
+                checkbox_label.* = .{ .owner = owner, .label = label };
+                const checkbox = try Checkbox.draw(checkbox_label, ctx.withConstraints(.{}, .{ .width = width, .height = null }));
+                children[0] = .{ .origin = .{ .row = 0, .col = 0 }, .surface = checkbox };
+                text.text = body[split + 1 ..];
+                const targets = try text.draw(ctx.withConstraints(.{ .width = width }, .{ .width = width, .height = null }));
+                children[1] = .{ .origin = .{ .row = checkbox.size.height, .col = 0 }, .surface = targets };
+                return .{ .widget = .{ .userdata = self, .drawFn = drawBody }, .size = .{ .width = width, .height = checkbox.size.height + targets.size.height }, .buffer = &.{}, .children = children };
+            }
+        }
         return text.draw(ctx.withConstraints(.{ .width = width }, .{ .width = width, .height = null }));
+    }
+
+    const Checkbox = struct {
+        owner: *@import("../model.zig").Model,
+        label: vxfw.Text,
+
+        fn draw(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
+            const self: *Checkbox = @ptrCast(@alignCast(ptr));
+            var surface = try self.label.draw(ctx);
+            surface.widget = .{ .userdata = ptr, .drawFn = Checkbox.draw, .eventHandler = checkboxClick };
+            try styles.hoverLabel(ctx.arena, &surface);
+            return surface;
+        }
+    };
+
+    fn checkboxClick(ptr: *anyopaque, ctx: *vxfw.EventContext, event: vxfw.Event) anyerror!void {
+        const checkbox: *Checkbox = @ptrCast(@alignCast(ptr));
+
+        if (event == .mouse and commands.Mouse.primaryPress(event.mouse))
+            commands.Mouse.toggleUnusedDependencies(checkbox.owner, ctx);
     }
 
     fn drawContent(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
         const self: *Panel = @ptrCast(@alignCast(ptr));
         const view = self.view;
         const size = ctx.max.size();
-        const review_height = size.height;
+        const entering = view.state == .entering;
+        const actions = if (view.owner) |owner| owner.settings_state.settings.expanded_mouse_support and view.state != .running and size.height >= (if (entering) @as(u16, 2) else 1) else false;
+        const review_height = size.height - @as(u16, @intFromBool(actions));
         if (view.state != .entering) {
             // Upward keyboard or wheel navigation pauses following.
             if (self.scroll.scroll.pending_lines < 0) self.follow_output = false;
@@ -222,11 +262,45 @@ pub const Panel = struct {
         }
         const output = try self.scroll.draw(ctx.withConstraints(.{}, .{ .width = size.width, .height = review_height }));
         if (view.state != .entering and !self.scroll.scroll.has_more_vertical) self.follow_output = true;
-        const children = try ctx.arena.alloc(vxfw.SubSurface, 1);
+        const children = try ctx.arena.alloc(vxfw.SubSurface, if (actions) (if (entering) 3 else 2) else 1);
         children[0] = .{ .origin = .{ .row = 0, .col = 0 }, .surface = output };
+        if (actions and entering) {
+            children[1] = .{ .origin = .{ .row = review_height, .col = 0 }, .surface = try drawActionButton(ctx, view.owner.?, "[Confirm]", .confirm) };
+            children[2] = .{ .origin = .{ .row = review_height, .col = 10 }, .surface = try drawActionButton(ctx, view.owner.?, "[Cancel]", .cancel) };
+        } else if (actions) {
+            children[1] = .{ .origin = .{ .row = review_height, .col = 0 }, .surface = try drawActionButton(ctx, view.owner.?, "[Close]", .close) };
+        }
         return .{ .size = size, .widget = .{ .userdata = self, .drawFn = drawContent }, .buffer = &.{}, .children = children };
     }
 };
+
+const ActionButton = struct {
+    owner: *@import("../model.zig").Model,
+    label: []const u8,
+    action: commands.Mouse.OperationAction,
+
+    fn draw(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
+        const self: *ActionButton = @ptrCast(@alignCast(ptr));
+        var label: vxfw.Text = .{ .text = self.label, .softwrap = false, .style = @import("styles.zig").action };
+        var surface = try label.draw(ctx);
+        surface.widget = .{ .userdata = ptr, .drawFn = ActionButton.draw, .eventHandler = click };
+        try styles.hoverLabel(ctx.arena, &surface);
+        return surface;
+    }
+
+    fn click(ptr: *anyopaque, ctx: *vxfw.EventContext, event: vxfw.Event) anyerror!void {
+        const self: *ActionButton = @ptrCast(@alignCast(ptr));
+
+        if (event == .mouse and commands.Mouse.primaryPress(event.mouse))
+            try commands.Mouse.operationAction(self.owner, ctx, self.action);
+    }
+};
+
+pub fn drawActionButton(ctx: vxfw.DrawContext, owner: *@import("../model.zig").Model, label: []const u8, action: commands.Mouse.OperationAction) Allocator.Error!vxfw.Surface {
+    const button = try ctx.arena.create(ActionButton);
+    button.* = .{ .owner = owner, .label = label, .action = action };
+    return ActionButton.draw(button, ctx.withConstraints(.{}, .{ .width = @min(ctx.max.size().width, @as(u16, @intCast(label.len))), .height = 1 }));
+}
 
 test "direct sudo authentication has no password field and sanitizes terminal output" {
     var arena: std.heap.ArenaAllocator = .init(std.testing.allocator);
@@ -493,4 +567,54 @@ test "authentication normalizes PTY line endings while escaping other controls" 
     const after = try view.body(allocator, 80);
     try std.testing.expectEqualStrings("Touch sensor\n", before);
     try std.testing.expectEqualStrings(before, after);
+}
+
+test "clicking the removal option toggles it without confirming" {
+    const model_types = @import("../model.zig");
+    const operations = @import("../models/operation_model.zig");
+    vxfw.DrawContext.init(.unicode);
+    const model = try model_types.Model.init(std.testing.allocator);
+    defer model.deinit();
+    const prompt = try model.gpa.create(model_types.SudoPrompt);
+    prompt.* = .{ .name = try model.gpa.dupe(u8, "komikku"), .backend = .standard, .action = .remove };
+    model.overlay = .{ .sudo = prompt };
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+    var events: vxfw.EventContext = .{ .io = std.testing.io, .alloc = alloc, .cmds = .empty };
+    for ([_]bool{ true, false }) |checked| {
+        const surface = try prompt.panel.draw(operations.promptView(model, prompt), .{ .arena = alloc, .min = .{}, .max = .{ .width = 80, .height = 8 }, .cell_size = .{ .width = 10, .height = 20 } });
+        var hits: std.ArrayList(vxfw.HitResult) = .empty;
+        try surface.hitTest(alloc, &hits, .{ .row = 1, .col = 2 });
+        const hit = hits.getLast();
+        try hit.widget.handleEvent(&events, .mouse_enter);
+        try std.testing.expect((try hit.widget.draw(.{ .arena = alloc, .min = .{}, .max = .{ .width = 80, .height = 1 }, .cell_size = .{ .width = 10, .height = 20 } })).buffer[0].style.bold);
+        try hit.widget.handleEvent(&events, .{ .mouse = .{ .button = .left, .type = .press, .row = @intCast(hit.local.row), .col = @intCast(hit.local.col), .mods = .{} } });
+        try std.testing.expectEqual(checked, prompt.remove_unused_dependencies);
+        try std.testing.expect(prompt.state == .entering);
+    }
+}
+
+test "clicking Close dismisses each completed operation" {
+    const model_types = @import("../model.zig");
+    const operations = @import("../models/operation_model.zig");
+    vxfw.DrawContext.init(.unicode);
+    const model = try model_types.Model.init(std.testing.allocator);
+    defer model.deinit();
+    model.settings_state.settings.expanded_mouse_support = true;
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+    for ([_]model_types.SudoPrompt.State{ .succeeded, .failed, .declined }) |state| {
+        const prompt = try model.gpa.create(model_types.SudoPrompt);
+        prompt.* = .{ .name = try model.gpa.dupe(u8, "package"), .backend = .standard, .state = state };
+        model.overlay = .{ .sudo = prompt };
+        const surface = try prompt.panel.draw(operations.promptView(model, prompt), .{ .arena = alloc, .min = .{}, .max = .{ .width = 80, .height = 8 }, .cell_size = .{ .width = 10, .height = 20 } });
+        var hits: std.ArrayList(vxfw.HitResult) = .empty;
+        try surface.hitTest(alloc, &hits, .{ .row = 6, .col = 2 });
+        const hit = hits.getLast();
+        var events: vxfw.EventContext = .{ .io = std.testing.io, .alloc = alloc, .cmds = .empty };
+        try hit.widget.handleEvent(&events, .{ .mouse = .{ .button = .left, .type = .press, .row = @intCast(hit.local.row), .col = @intCast(hit.local.col), .mods = .{} } });
+        try std.testing.expect(model.overlay == null);
+    }
 }

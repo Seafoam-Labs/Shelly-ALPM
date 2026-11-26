@@ -119,10 +119,24 @@ pub fn writePackageDetail(context: *runtime.RuntimeContext, package: StandardPac
     var w = FieldWriter.init(context, "Optional Depends".len);
 
     try w.text("Name", package.name);
-    try w.text("Repository", package.repository);
+    if (package.installed) {
+        const origin = package.installed_from orelse "None";
+        const label = if (package.installed_from_inferred)
+            try std.fmt.allocPrint(context.allocator, "{s} (inferred)", .{origin})
+        else
+            origin;
+        try w.text("Installed From", label);
+    } else {
+        try w.text("Repository", package.repository);
+    }
     try w.text("Version", package.version);
     try w.text("Description", package.description);
     try w.text("URL", package.url);
+    if (package.available_from.len > 1 or (package.installed and package.available_from.len > 0)) {
+        var copies: std.ArrayList([]const u8) = .empty;
+        for (package.available_from) |entry| try copies.append(context.allocator, try std.fmt.allocPrint(context.allocator, "{s} {s}", .{ entry.repository, entry.version }));
+        try w.joined("Available From", copies.items);
+    }
 
     try w.joined("Licenses", package.licenses);
     try w.joined("Groups", package.groups);
@@ -205,6 +219,48 @@ fn detailTestContext(
         .stdout = &stdout.writer,
         .stderr = &stderr.writer,
     };
+}
+
+test "writePackageDetail shows where an installed package came from and other repository copies" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var stdout = std.Io.Writer.Allocating.init(std.testing.allocator);
+    defer stdout.deinit();
+    var stderr = std.Io.Writer.Allocating.init(std.testing.allocator);
+    defer stderr.deinit();
+    var context = detailTestContext(&arena, &stdout, &stderr);
+
+    const package: StandardPackage = .{
+        .name = "bash",
+        .repository = "local",
+        .version = "5.3-1",
+        .installed = true,
+        .installed_from = "cachyos-v3",
+        .available_from = &.{
+            .{ .repository = "cachyos-v3", .version = "5.3-1" },
+            .{ .repository = "core", .version = "5.3-1" },
+        },
+        .install_reason = "Explicit",
+    };
+    try writePackageDetail(&context, package);
+    const rendered = stdout.writer.buffered();
+    try expectField(rendered, "Installed From", "cachyos-v3");
+    try expectField(rendered, "Available From", "cachyos-v3 5.3-1, core 5.3-1");
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "Repository") == null);
+
+    stdout.clearRetainingCapacity();
+    var inferred = package;
+    inferred.installed_from_inferred = true;
+    try writePackageDetail(&context, inferred);
+    try expectField(stdout.writer.buffered(), "Installed From", "cachyos-v3 (inferred)");
+
+    stdout.clearRetainingCapacity();
+    var unknown = package;
+    unknown.installed_from = null;
+    unknown.available_from = &.{};
+    try writePackageDetail(&context, unknown);
+    try expectField(stdout.writer.buffered(), "Installed From", "None");
+    try std.testing.expect(std.mem.indexOf(u8, stdout.writer.buffered(), "Available From") == null);
 }
 
 test "writePackageDetail aligns labels and renders every standard package field" {
