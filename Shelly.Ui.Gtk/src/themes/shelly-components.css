@@ -90,6 +90,9 @@
 .shelly-root.tiled-right {
   border-radius: 0;
 }
+.shelly-root.square-corners {
+  border-radius: 0;
+}
 /* Plain labels inherit; pin them so desktop themes cannot dim row titles. */
 .shelly-root label {
   color: @shelly_fg;
