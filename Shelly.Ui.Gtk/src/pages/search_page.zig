@@ -57,6 +57,8 @@ pub const ShellySearchPage = extern struct {
         check_column: *gtk.ColumnViewColumn,
         name_column: *gtk.ColumnViewColumn,
         source_column: *gtk.ColumnViewColumn,
+        votes_column: *gtk.ColumnViewColumn,
+        popularity_column: *gtk.ColumnViewColumn,
         version_column: *gtk.ColumnViewColumn,
         standard_toggle: *gtk.ToggleButton,
         aur_toggle: *gtk.ToggleButton,
@@ -160,6 +162,8 @@ pub const ShellySearchPage = extern struct {
 
         setup_name_column(p.name_column);
         setup_text_column(p.source_column, &source_label, .start);
+        setup_number_column(p.votes_column, &votes_text);
+        setup_number_column(p.popularity_column, &popularity_text);
         setup_text_column(p.version_column, &SearchResultObject.getVersion, .start);
 
         const check_factory = gtk.SignalListItemFactory.new();
@@ -190,6 +194,8 @@ pub const ShellySearchPage = extern struct {
         attachSorter(p.check_column, sorters.boolSorter(SearchResultObject, &SearchResultObject.isSelected));
         attachSorter(p.name_column, sorters.stringSorter(SearchResultObject, &SearchResultObject.getName));
         attachSorter(p.source_column, sorters.stringSorter(SearchResultObject, &source_label));
+        attachSorter(p.votes_column, sorters.numericSorter(SearchResultObject, &SearchResultObject.getVotes));
+        attachSorter(p.popularity_column, sorters.numericSorter(SearchResultObject, &SearchResultObject.getPopularity));
         attachSorter(p.version_column, sorters.stringSorter(SearchResultObject, &SearchResultObject.getVersion));
 
         const group = gio.SimpleActionGroup.new();
@@ -364,6 +370,43 @@ pub const ShellySearchPage = extern struct {
         _ = gtk.SignalListItemFactory.signals.setup.connect(factory, ?*anyopaque, &c.setup, null, .{});
         _ = gtk.SignalListItemFactory.signals.bind.connect(factory, ?*anyopaque, &c.bind, null, .{});
         gtk.ColumnViewColumn.setFactory(column, factory.as(gtk.ListItemFactory));
+    }
+
+    fn setup_number_column(
+        column: *gtk.ColumnViewColumn,
+        comptime formatter: *const fn ([]u8, *const SearchResultObject) [:0]const u8,
+    ) void {
+        const c = struct {
+            fn setup(_: *gtk.SignalListItemFactory, item: *gobject.Object, _: ?*anyopaque) callconv(.c) void {
+                const cell = gobject.ext.cast(gtk.ColumnViewCell, item) orelse return;
+                const label = gtk.Label.new("");
+                gtk.Widget.setHalign(label.as(gtk.Widget), .start);
+                gtk.ColumnViewCell.setChild(cell, label.as(gtk.Widget));
+            }
+            fn bind(_: *gtk.SignalListItemFactory, item: *gobject.Object, _: ?*anyopaque) callconv(.c) void {
+                const cell = gobject.ext.cast(gtk.ColumnViewCell, item) orelse return;
+                const obj = gtk.ColumnViewCell.getItem(cell) orelse return;
+                const pkg = gobject.ext.cast(SearchResultObject, obj) orelse return;
+                const child = gtk.ColumnViewCell.getChild(cell) orelse return;
+                const label = gobject.ext.cast(gtk.Label, child) orelse return;
+                var buf: [32]u8 = undefined;
+                gtk.Label.setLabel(label, formatter(&buf, pkg));
+            }
+        };
+        const factory = gtk.SignalListItemFactory.new();
+        _ = gtk.SignalListItemFactory.signals.setup.connect(factory, ?*anyopaque, &c.setup, null, .{});
+        _ = gtk.SignalListItemFactory.signals.bind.connect(factory, ?*anyopaque, &c.bind, null, .{});
+        gtk.ColumnViewColumn.setFactory(column, factory.as(gtk.ListItemFactory));
+    }
+
+    fn votes_text(buf: []u8, pkg: *const SearchResultObject) [:0]const u8 {
+        if (pkg.getSource() != .aur) return "";
+        return std.fmt.bufPrintSentinel(buf, "{d}", .{pkg.getVotes()}, 0) catch "";
+    }
+
+    fn popularity_text(buf: []u8, pkg: *const SearchResultObject) [:0]const u8 {
+        if (pkg.getSource() != .aur) return "";
+        return std.fmt.bufPrintSentinel(buf, "{d:.2}", .{pkg.getPopularity()}, 0) catch "";
     }
 
     fn setup_name_column(column: *gtk.ColumnViewColumn) void {
@@ -1232,6 +1275,8 @@ pub const ShellySearchPage = extern struct {
         .{ "check_column", @offsetOf(Private, "check_column") },
         .{ "name_column", @offsetOf(Private, "name_column") },
         .{ "source_column", @offsetOf(Private, "source_column") },
+        .{ "votes_column", @offsetOf(Private, "votes_column") },
+        .{ "popularity_column", @offsetOf(Private, "popularity_column") },
         .{ "version_column", @offsetOf(Private, "version_column") },
         .{ "standard_toggle", @offsetOf(Private, "standard_toggle") },
         .{ "aur_toggle", @offsetOf(Private, "aur_toggle") },

@@ -98,6 +98,18 @@ pub const SearchResultObject = extern struct {
         return self.getResult().installed;
     }
 
+    /// AUR vote count; 0 for rows that are not AUR.
+    pub fn getVotes(self: *const Self) u32 {
+        const aur = self.getAurPackage() orelse return 0;
+        return aur.NumVotes;
+    }
+
+    /// AUR popularity score; 0 for rows that are not AUR.
+    pub fn getPopularity(self: *const Self) f64 {
+        const aur = self.getAurPackage() orelse return 0;
+        return aur.Popularity;
+    }
+
     pub fn isOutOfDate(self: *const Self) bool {
         return self.getResult().out_of_date;
     }
@@ -199,6 +211,8 @@ test "search GObject owns result data" {
     try std.testing.expect(object.isOutOfDate());
     try std.testing.expect(!object.isInstalled());
     try std.testing.expect(!object.isSelected());
+    try std.testing.expectEqual(@as(u32, 74), object.getVotes());
+    try std.testing.expectEqual(@as(f64, 1.766204), object.getPopularity());
 
     const aur = object.getAurPackage().?;
     try std.testing.expectEqual(@as(u32, 74), aur.NumVotes);
@@ -234,6 +248,8 @@ test "search GObject keeps flatpak hit data" {
     try std.testing.expectEqual(search.Source.flatpak, object.getSource());
     try std.testing.expect(object.isVerified());
     try std.testing.expect(object.getAurPackage() == null);
+    try std.testing.expectEqual(@as(u32, 0), object.getVotes());
+    try std.testing.expectEqual(@as(f64, 0), object.getPopularity());
 
     const hit = object.getFlatpakHit().?;
     try std.testing.expectEqualStrings("org.mozilla.firefox", hit.id);
@@ -249,4 +265,6 @@ test "search GObject handles defaults" {
     try std.testing.expectEqual(search.Source.standard, object.getSource());
     try std.testing.expectEqualStrings("", object.getName());
     try std.testing.expectEqualStrings("", object.getDescription());
+    try std.testing.expectEqual(@as(u32, 0), object.getVotes());
+    try std.testing.expectEqual(@as(f64, 0), object.getPopularity());
 }
