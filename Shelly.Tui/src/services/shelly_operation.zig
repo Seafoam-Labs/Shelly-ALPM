@@ -525,14 +525,15 @@ fn isFlatpak(request: OperationRequest) bool {
 }
 
 fn elevated(request: OperationRequest) bool {
+    if (request.action == .repair_database) return false;
     return !std.mem.eql(u8, request.backend, "appimage") and (!isFlatpak(request) or flatpakNeedsElevation(request.action, request.flatpak));
 }
 
 fn operationArgv(alloc: std.mem.Allocator, request: OperationRequest) ![][]const u8 {
-    if (request.action.isRepair()) {
-        const flag = if (request.action == .repair_permissions) "--fix-permissions" else "--repair-db";
-        return alloc.dupe([]const u8, &.{ request.sudo_bin, request.shelly_bin, "utility", flag, "--ui-mode" });
-    }
+    if (request.action == .repair_database)
+        return alloc.dupe([]const u8, &.{ request.shelly_bin, "utility", "--repair-db", "--ui-mode" });
+    if (request.action == .repair_permissions)
+        return alloc.dupe([]const u8, &.{ request.sudo_bin, request.shelly_bin, "utility", "--fix-permissions", "--ui-mode" });
     if (request.action.isRepositoryMutation()) {
         const adding = request.action == .repository_add;
         const prefix = [_][]const u8{ request.sudo_bin, request.shelly_bin, "utility", "repository", if (adding) "--add" else "--remove", "--ui-mode" };
@@ -622,16 +623,18 @@ fn runInstall(io: std.Io, alloc: std.mem.Allocator, request: OperationRequest, o
     var owned_session: Session = .{};
     defer owned_session.deinit(io);
     const session = request.session orelse &owned_session;
-    if (elevated(request)) session.acquire() catch {
+    // Database repair starts as the user. Cli will ask in case there is a need to elevate.
+    const use_auth_terminal = elevated(request) or request.action == .repair_database;
+    if (use_auth_terminal) session.acquire() catch {
         result.failed = true;
         result.error_detail = alloc.dupe(u8, "Another operation is using the authorization session.") catch "";
         return result;
     };
-    defer if (elevated(request)) session.release();
+    defer if (use_auth_terminal) session.release();
     var terminal: ?sudo_terminal.Terminal = null;
     var owned_launcher: ?[:0]u8 = null;
     defer if (owned_launcher) |path| alloc.free(path);
-    if (elevated(request)) {
+    if (use_auth_terminal) {
         if (request.launcher_bin == null) {
             owned_launcher = std.process.executablePathAlloc(io, alloc) catch {
                 result.failed = true;
@@ -652,7 +655,7 @@ fn runInstall(io: std.Io, alloc: std.mem.Allocator, request: OperationRequest, o
         result.error_detail = alloc.dupe(u8, "The operation was cancelled before startup.") catch "";
         return result;
     }
-    var child = (if (elevated(request)) session.spawn(io, alloc, argv, &auth_environment, &active.cancel_requested) else sudo_session.Process.spawn(io, .{
+    var child = (if (use_auth_terminal) session.spawn(io, alloc, argv, &auth_environment, &active.cancel_requested) else sudo_session.Process.spawn(io, .{
         .argv = argv,
         .environ_map = &auth_environment,
         .stdin = .pipe,
@@ -2059,7 +2062,7 @@ test "cleanup commands preserve confirmation and attach CLI targets to the revie
     try std.testing.expectEqualStrings("[system] runtime/example", targets[1]);
 }
 
-test "repairs use the existing elevated CLI utilities" {
+test "permission repair starts elevated and database repair delegates elevation to the CLI" {
     const allocator = std.testing.allocator;
     var env: std.process.Environ.Map = .init(allocator);
     defer env.deinit();
@@ -2073,9 +2076,14 @@ test "repairs use the existing elevated CLI utilities" {
         request.action = action;
         const argv = try operationArgv(allocator, request);
         defer allocator.free(argv);
-        for ([_][]const u8{ "sudo", "shelly", "utility", flag, "--ui-mode" }, argv) |expected, actual|
+        const expected_argv: []const []const u8 = if (action == .repair_permissions)
+            &.{ "sudo", "shelly", "utility", flag, "--ui-mode" }
+        else
+            &.{ "shelly", "utility", flag, "--ui-mode" };
+        try std.testing.expectEqual(expected_argv.len, argv.len);
+        for (expected_argv, argv) |expected, actual|
             try std.testing.expectEqualStrings(expected, actual);
-        try std.testing.expect(elevated(request));
+        try std.testing.expectEqual(action == .repair_permissions, elevated(request));
         try std.testing.expect(!interactive(request));
     }
 }

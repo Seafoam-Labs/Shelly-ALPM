@@ -61,7 +61,7 @@ pub const View = struct {
         else if (self.action == .purify)
             "Authenticate to prepare the cleanup plan. You can review the list before approving removal."
         else if (self.action == .repair_database)
-            "Continue only if no package manager or update check is running."
+            "Continue only if no package manager or update check is running. Removing a system database lock requires administrator authorization."
         else if (self.action == .sync)
             "Refreshes metadata from the configured system repositories."
         else if (self.backend == .appimage and self.action == .upgrade)

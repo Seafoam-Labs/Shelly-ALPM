@@ -645,6 +645,7 @@ pub fn openRepair(self: *Model, ctx: *vxfw.EventContext, action: enum { repair_p
     prompt.* = .{
         .name = try self.gpa.dupe(u8, if (action == .repair_permissions) "Shelly directory ownership" else "database locks"),
         .backend = .standard,
+        .elevated = action == .repair_permissions,
         .action = if (action == .repair_permissions) .repair_permissions else .repair_database,
     };
     self.overlay = .{ .sudo = prompt };
