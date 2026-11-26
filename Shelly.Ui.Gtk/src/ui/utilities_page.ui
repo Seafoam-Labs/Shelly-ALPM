@@ -18,38 +18,6 @@
             <property name="orientation">vertical</property>
             <property name="margin-start">30</property>
             <property name="margin-end">30</property>
-            <property name="margin-top">16</property>
-            <property name="margin-bottom">24</property>
-            <property name="spacing">16</property>
-            <child>
-              <object class="GtkBox">
-                <property name="orientation">vertical</property>
-                <property name="spacing">4</property>
-                <child>
-                  <object class="GtkLabel">
-                    <property name="label" translatable="yes">Utilities</property>
-                    <property name="accessible-role">heading</property>
-                    <accessibility>
-                      <property name="level">2</property>
-                    </accessibility>
-                    <style>
-                      <class name="title-2"/>
-                      <class name="page-heading"/>
-                    </style>
-                  </object>
-                </child>
-                <child>
-                  <object class="GtkLabel">
-                    <property name="label" translatable="yes">Maintenance and repair tools for your Shelly installation.</property>
-                    <property name="wrap">true</property>
-                    <style>
-                      <class name="dim-label"/>
-                      <class name="page-subtitle"/>
-                    </style>
-                  </object>
-                </child>
-              </object>
-            </child>
             <child>
               <object class="GtkScrolledWindow">
                 <property name="hscrollbar-policy">never</property>
@@ -59,8 +27,41 @@
                     <property name="orientation">vertical</property>
                     <property name="spacing">12</property>
                     <property name="halign">center</property>
+                    <property name="valign">center</property>
                     <property name="hexpand">true</property>
                     <property name="width-request">600</property>
+                    <property name="margin-top">24</property>
+                    <property name="margin-bottom">24</property>
+                    <child>
+                      <object class="GtkBox">
+                        <property name="orientation">vertical</property>
+                        <property name="spacing">4</property>
+                        <property name="margin-bottom">4</property>
+                        <child>
+                          <object class="GtkLabel">
+                            <property name="label" translatable="yes">Utilities</property>
+                            <property name="accessible-role">heading</property>
+                            <accessibility>
+                              <property name="level">2</property>
+                            </accessibility>
+                            <style>
+                              <class name="title-2"/>
+                              <class name="page-heading"/>
+                            </style>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkLabel">
+                            <property name="label" translatable="yes">Maintenance and repair tools for your Shelly installation.</property>
+                            <property name="wrap">true</property>
+                            <style>
+                              <class name="dim-label"/>
+                              <class name="page-subtitle"/>
+                            </style>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
                     <child>
                       <object class="GtkBox">
                         <property name="orientation">horizontal</property>
