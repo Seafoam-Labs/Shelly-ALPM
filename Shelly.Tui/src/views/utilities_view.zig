@@ -55,7 +55,7 @@ fn drawPaneContent(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.
 
 fn drawStacked(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
     const size = ctx.max.size();
-    const action_height = @min(8, @max(size.height -| 1, 1));
+    const action_height = @min(9, @max(size.height -| 1, 1));
     const children = try ctx.arena.alloc(vxfw.SubSurface, if (size.height > action_height) 2 else 1);
     children[0] = .{ .origin = .{ .row = 0, .col = 0 }, .surface = try drawActions(ptr, ctx.withConstraints(.{}, .{ .width = size.width, .height = action_height })) };
     if (children.len == 2) {
@@ -80,6 +80,7 @@ fn drawActions(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surf
         .{ .task = .flatpak_cleanup },
         .{ .heading = "Repair" },
         .{ .task = .repair_permissions },
+        .{ .task = .repair_database },
         .{ .task = .repository },
     };
     var children: std.ArrayList(vxfw.SubSurface) = .empty;
@@ -138,12 +139,13 @@ fn drawResults(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surf
     switch (state.selected) {
         .pacfiles => {},
         .repository => return drawRepositories(ptr, ctx),
-        .cleanup, .flatpak_cleanup, .repair_permissions => {
+        .cleanup, .flatpak_cleanup, .repair_permissions, .repair_database => {
             const description: vxfw.Text = .{
                 .text = switch (state.selected) {
                     .cleanup => "Review orphaned packages and corrupted cache entries before removing them. Administrator authorization is required to build the cleanup plan.",
                     .flatpak_cleanup => "Review unused Flatpak dependencies in system and user installations before removing them.",
                     .repair_permissions => "Restore your ownership of Shelly’s configuration, cache, and data directories.",
+                    .repair_database => "Remove leftover db.lck files from the configured system database and Shelly’s update-check cache.",
                     .pacfiles, .repository => unreachable,
                 },
                 .softwrap = true,

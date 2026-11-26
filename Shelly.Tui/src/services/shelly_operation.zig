@@ -17,8 +17,13 @@ pub const Action = enum {
     sync,
     purify,
     repair_permissions,
+    repair_database,
     repository_add,
     repository_remove,
+
+    pub fn isRepair(self: Action) bool {
+        return self == .repair_permissions or self == .repair_database;
+    }
 
     pub fn isRepositoryMutation(self: Action) bool {
         return self == .repository_add or self == .repository_remove;
@@ -32,6 +37,7 @@ pub const Action = enum {
             .sync => "Sync",
             .purify => "Clean",
             .repair_permissions => "Repair",
+            .repair_database => "Clear stale",
             .repository_add => "Add repository",
             .repository_remove => "Remove repository",
         };
@@ -45,6 +51,7 @@ pub const Action = enum {
             .sync => "Synchronized",
             .purify => "Cleaned",
             .repair_permissions => "Repaired",
+            .repair_database => "Checked",
             .repository_add => "Added repository",
             .repository_remove => "Removed repository",
         };
@@ -521,8 +528,9 @@ fn elevated(request: OperationRequest) bool {
 }
 
 fn operationArgv(alloc: std.mem.Allocator, request: OperationRequest) ![][]const u8 {
-    if (request.action == .repair_permissions) {
-        return alloc.dupe([]const u8, &.{ request.sudo_bin, request.shelly_bin, "utility", "--fix-permissions", "--ui-mode" });
+    if (request.action.isRepair()) {
+        const flag = if (request.action == .repair_permissions) "--fix-permissions" else "--repair-db";
+        return alloc.dupe([]const u8, &.{ request.sudo_bin, request.shelly_bin, "utility", flag, "--ui-mode" });
     }
     if (request.action.isRepositoryMutation()) {
         if (request.action == .repository_add) {
@@ -2049,21 +2057,23 @@ test "cleanup commands preserve confirmation and attach CLI targets to the revie
     try std.testing.expectEqualStrings("[system] runtime/example", targets[1]);
 }
 
-test "permission repair uses the existing elevated CLI utility" {
+test "repairs use the existing elevated CLI utilities" {
     const allocator = std.testing.allocator;
     var env: std.process.Environ.Map = .init(allocator);
     defer env.deinit();
-    const request: OperationRequest = .{
-        .action = .repair_permissions,
+    var request: OperationRequest = .{
         .shelly_bin = "shelly",
         .environ_map = &env,
-        .name = "Shelly directory ownership",
+        .name = "repair",
         .backend = "standard",
     };
-    const argv = try operationArgv(allocator, request);
-    defer allocator.free(argv);
-    for ([_][]const u8{ "sudo", "shelly", "utility", "--fix-permissions", "--ui-mode" }, argv) |expected, actual|
-        try std.testing.expectEqualStrings(expected, actual);
-    try std.testing.expect(elevated(request));
-    try std.testing.expect(!interactive(request));
+    for ([_]Action{ .repair_permissions, .repair_database }, [_][]const u8{ "--fix-permissions", "--repair-db" }) |action, flag| {
+        request.action = action;
+        const argv = try operationArgv(allocator, request);
+        defer allocator.free(argv);
+        for ([_][]const u8{ "sudo", "shelly", "utility", flag, "--ui-mode" }, argv) |expected, actual|
+            try std.testing.expectEqualStrings(expected, actual);
+        try std.testing.expect(elevated(request));
+        try std.testing.expect(!interactive(request));
+    }
 }

@@ -118,6 +118,7 @@ pub const Task = enum {
     cleanup,
     flatpak_cleanup,
     repair_permissions,
+    repair_database,
     repository,
 
     pub fn label(self: Task) []const u8 {
@@ -126,6 +127,7 @@ pub const Task = enum {
             .cleanup => "Clean standard packages",
             .flatpak_cleanup => "Clean unused Flatpaks",
             .repair_permissions => "Repair directory permissions",
+            .repair_database => "Clear stale database locks",
             .repository => "Repository",
         };
     }
@@ -217,7 +219,8 @@ fn activate(model: *Model, ctx: *vxfw.EventContext) !void {
             if (!state.selected.available(model)) return ctx.consumeEvent();
             try operation_model.startCleanup(model, ctx, if (state.selected == .cleanup) .standard else .flatpak);
         },
-        .repair_permissions => try operation_model.openPermissionRepair(model, ctx),
+        .repair_permissions => try operation_model.openRepair(model, ctx, .repair_permissions),
+        .repair_database => try operation_model.openRepair(model, ctx, .repair_database),
         .repository => try focusRepositories(model, ctx),
     }
 }
@@ -480,9 +483,16 @@ test "permission repair remains reachable with Flatpak disabled and opens a conf
 
     try model.captureEvent(&ctx, .{ .key_press = commands.bindings.cancel });
     try std.testing.expect(model.overlay == null);
+    try model.captureEvent(&ctx, .{ .key_press = commands.bindings.next });
+    try std.testing.expectEqual(Task.repair_database, model.utilities_state.selected);
+    try model.captureEvent(&ctx, .{ .key_press = commands.bindings.confirm });
+    try std.testing.expectEqual(@import("../services/shelly_operation.zig").Action.repair_database, model.overlay.?.sudo.action);
+    try std.testing.expect(model.operation_state.install_job == null);
+    try model.captureEvent(&ctx, .{ .key_press = commands.bindings.cancel });
+    try std.testing.expect(model.overlay == null);
     for (0..3) |_| try model.captureEvent(&ctx, .{ .key_press = commands.bindings.next });
     try std.testing.expectEqual(Task.repository, model.utilities_state.selected);
-    for (0..4) |_| try model.captureEvent(&ctx, .{ .key_press = commands.bindings.previous });
+    for (0..5) |_| try model.captureEvent(&ctx, .{ .key_press = commands.bindings.previous });
     try std.testing.expectEqual(Task.pacfiles, model.utilities_state.selected);
 }
 

@@ -53,6 +53,8 @@ pub const View = struct {
             else if (self.include_flatpak) "System packages and system/user Flatpaks. AUR excluded." else "Full system upgrade. AUR and Flatpak excluded."
         else if (self.action == .repair_permissions)
             "Restore your ownership of Shelly’s configuration, cache, and data directories. This requires administrator authorization."
+        else if (self.action == .repair_database)
+            "Continue only if no package manager or update check is running."
         else if (self.action == .sync)
             "Refreshes metadata from the configured system repositories."
         else if (self.backend == .appimage and self.action == .upgrade)
@@ -75,7 +77,7 @@ pub const View = struct {
             .declined => try std.fmt.allocPrint(arena, "Declined {s} for {f}.\n{s}", .{ @tagName(self.action), diagnostics.safe(self.name), if (self.action == .purify) "Cleanup was cancelled." else "Some dependency changes may already have completed." }),
             .failed => try std.fmt.allocPrint(arena, "Could not {s} {f}.\n\n{f}{s}", .{
                 switch (self.action) {
-                    .repair_permissions => "repair",
+                    .repair_permissions, .repair_database => "repair",
                     .repository_add => "add repository",
                     .repository_remove => "remove repository",
                     else => @tagName(self.action),
@@ -187,7 +189,7 @@ pub const Panel = struct {
         const title = if (view.progress.authenticating)
             "Authentication"
         else if (view.state == .entering)
-            (if (view.elevated) "Authentication" else "Confirmation")
+            (if (view.action == .repair_database) "Confirm lock removal" else if (view.elevated) "Authentication" else "Confirmation")
         else
             try std.fmt.allocPrint(ctx.arena, "{s} {f} — {s}", .{
                 view.action.verb(), diagnostics.safe(view.name),
