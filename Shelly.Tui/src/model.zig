@@ -243,6 +243,7 @@ pub const Model = struct {
                                     .select_tab => |index| try self.setTab(self.visibleTabs()[index], ctx),
                                 }
                                 try self.focusActiveTab(ctx);
+                                try utilities_model.ensurePacfiles(self, ctx);
                                 try updates_model.ensureUpdates(self, ctx);
                                 try appimage_model.ensureLoaded(self, ctx);
                                 try aur_model.ensureAur(self, ctx);
@@ -273,6 +274,7 @@ pub const Model = struct {
                         .next_tab, .previous_tab => {
                             self.switchTab(if (action == .next_tab) 1 else -1);
                             try self.focusActiveTab(ctx);
+                            try utilities_model.ensurePacfiles(self, ctx);
                             try updates_model.ensureUpdates(self, ctx);
                             try appimage_model.ensureLoaded(self, ctx);
                             try aur_model.ensureAur(self, ctx);
@@ -445,6 +447,7 @@ pub const Model = struct {
         self.settings_state.header_open = false;
         self.active = tab;
         try self.focusActiveTab(ctx);
+        try utilities_model.ensurePacfiles(self, ctx);
         try updates_model.ensureUpdates(self, ctx);
         try appimage_model.ensureLoaded(self, ctx);
         try aur_model.ensureAur(self, ctx);

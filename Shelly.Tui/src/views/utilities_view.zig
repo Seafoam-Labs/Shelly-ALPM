@@ -106,7 +106,7 @@ const ActionRow = struct {
             .softwrap = false,
             .overflow = .ellipsis,
             .width_basis = .parent,
-            .style = if (self.model.utilities_state.selected == self.task) styles.emphasis else styles.secondary,
+            .style = if (self.model.utilities_state.selected == self.task) styles.selected else styles.secondary,
         };
         var surface = try label.draw(ctx);
         surface.widget = .{ .userdata = ptr, .drawFn = draw, .eventHandler = activate };
@@ -129,16 +129,40 @@ fn drawAction(model: *Model, ctx: vxfw.DrawContext, task: Task) Allocator.Error!
 
 fn drawResults(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
     const model: *Model = @ptrCast(@alignCast(ptr));
-    const message = switch (model.utilities_state.selected) {
-        .pacfiles => model.utilities_state.message(),
-        .cleanup => "Review orphaned packages and corrupted cache entries before removing them. Administrator authorization is required to build the cleanup plan.",
-        .flatpak_cleanup => "Review unused Flatpak dependencies in system and user installations before removing them.",
-    };
-    if (message) |text| {
-        const label: vxfw.Text = .{ .text = text, .softwrap = true };
-        return label.draw(ctx);
+    const state = &model.utilities_state;
+    switch (state.selected) {
+        .pacfiles => {},
+        .cleanup, .flatpak_cleanup => {
+            const description: vxfw.Text = .{
+                .text = if (state.selected == .cleanup)
+                    "Review orphaned packages and corrupted cache entries before removing them. Administrator authorization is required to build the cleanup plan."
+                else
+                    "Review unused Flatpak dependencies in system and user installations before removing them.",
+                .softwrap = true,
+            };
+            return description.draw(ctx);
+        },
     }
-    return model.utilities_state.list.draw(ctx);
+    const size = ctx.max.size();
+    const widget: vxfw.Widget = .{ .userdata = ptr, .drawFn = drawResults };
+    if (size.width == 0 or size.height == 0) return .{ .widget = widget, .size = size, .buffer = &.{}, .children = &.{} };
+
+    const children = try ctx.arena.alloc(vxfw.SubSurface, if (size.height > 1) 2 else 1);
+    var row: u16 = 0;
+    if (children.len == 2) {
+        const description: vxfw.Text = .{ .text = "Preview .pacnew, .pacsave, and .pacorig files left by package changes.", .softwrap = true };
+        const intro = try description.draw(ctx.withConstraints(.{}, .{ .width = size.width, .height = @min(size.height - 1, 3) }));
+        children[0] = .{ .origin = .{ .row = 0, .col = 0 }, .surface = intro };
+        row = intro.size.height;
+        if (size.height - row >= 2) row += 1;
+    }
+    const body_ctx = ctx.withConstraints(.{}, .{ .width = size.width, .height = size.height - row });
+    const body = if (state.message()) |message| blk: {
+        const status: vxfw.Text = .{ .text = message, .softwrap = true };
+        break :blk try status.draw(body_ctx);
+    } else try state.list.draw(body_ctx);
+    children[children.len - 1] = .{ .origin = .{ .row = row, .col = 0 }, .surface = body };
+    return .{ .widget = widget, .size = size, .buffer = &.{}, .children = children };
 }
 
 pub fn drawPath(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
@@ -146,13 +170,13 @@ pub fn drawPath(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Sur
 }
 
 pub fn drawSelectedPath(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
-    return drawPacfilePath(ptr, ctx, styles.emphasis);
+    return drawPacfilePath(ptr, ctx, styles.selected);
 }
 
 fn drawPacfilePath(ptr: *anyopaque, ctx: vxfw.DrawContext, style: @import("vaxis").Style) Allocator.Error!vxfw.Surface {
     const path: *const []const u8 = @ptrCast(@alignCast(ptr));
-    const text: vxfw.Text = .{ .text = try @import("diagnostics").sanitizeAlloc(ctx.arena, path.*), .softwrap = true, .style = style };
-    return text.draw(ctx);
+    const text: vxfw.Text = .{ .text = try @import("diagnostics").sanitizeAlloc(ctx.arena, path.*), .softwrap = true, .width_basis = .parent, .style = style };
+    return text.draw(ctx.withConstraints(ctx.min, .{ .width = ctx.max.width orelse ctx.min.width, .height = ctx.max.height }));
 }
 
 test "utilities frames fill their allocated panes before scanning" {
@@ -169,7 +193,7 @@ test "utilities frames fill their allocated panes before scanning" {
     try std.testing.expectEqual(@as(i17, 40), children.items[1].origin.col);
 }
 
-test "selected pacfile keeps its full row and inherits terminal colors" {
+test "pacfile description stays above the full-width selected result" {
     vxfw.DrawContext.init(.unicode);
     const model = try Model.init(std.testing.allocator);
     defer model.deinit();
@@ -179,7 +203,9 @@ test "selected pacfile keeps its full row and inherits terminal colors" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const surface = try drawResults(model, .{ .arena = arena.allocator(), .min = .{}, .max = .{ .width = 40, .height = 6 }, .cell_size = .{ .width = 10, .height = 20 } });
-    const row = surface.children[0].surface;
+    try std.testing.expect(surface.children[1].origin.row > 0);
+    const row = surface.children[1].surface.children[0].surface;
     try std.testing.expectEqualStrings("/", row.buffer[0].char.grapheme);
-    try std.testing.expectEqual(styles.emphasis, row.buffer[0].style);
+    try std.testing.expectEqual(styles.selected, row.buffer[0].style);
+    try std.testing.expectEqual(@as(u16, 40), row.size.width);
 }

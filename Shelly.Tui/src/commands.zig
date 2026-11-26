@@ -551,6 +551,7 @@ pub fn entries(arena: std.mem.Allocator, context: Context) std.mem.Allocator.Err
                 try add(arena, &list, .toggle_wrap, if (context.source_wrap) "Unwrap" else "Wrap", "Toggle diff wrapping");
             } else {
                 try add(arena, &list, .confirm, context.utilities_action, context.utilities_action);
+                if (context.utilities_has_results) try add(arena, &list, .refresh, "Rescan", "Refresh the pacfile list");
                 if (context.pacfile_can_compare) try add(arena, &list, .pacfile_compare, "Diff", "Compare the selected pacfile with the active configuration");
                 try add(arena, &list, .previous, "Previous", "Move up in the active pane");
                 try add(arena, &list, .next, "Next", "Move down in the active pane");

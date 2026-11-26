@@ -173,7 +173,7 @@ pub const State = struct {
         if (self.job != null) return "Looking for pending configuration files…";
         if (self.failed) return "Could not list pending configuration files. Try again.";
         if (self.result) |result| return if (result.value.len == 0) "No pending configuration files." else null;
-        return "List .pacnew, .pacsave, and .pacorig files left by package updates or removals.";
+        return "Waiting to scan for pacfiles…";
     }
 };
 
@@ -196,7 +196,8 @@ fn activate(model: *Model, ctx: *vxfw.EventContext) !void {
     switch (state.selected) {
         .pacfiles => {
             state.results_focused = true;
-            try discover(model, ctx);
+            try ensurePacfiles(model, ctx);
+            ctx.consumeAndRedraw();
         },
         .cleanup, .flatpak_cleanup => {
             if (!state.selected.available(model)) return ctx.consumeEvent();
@@ -205,7 +206,13 @@ fn activate(model: *Model, ctx: *vxfw.EventContext) !void {
     }
 }
 
-pub fn discover(model: *Model, ctx: *vxfw.EventContext) !void {
+pub fn ensurePacfiles(model: *Model, ctx: *vxfw.EventContext) !void {
+    const state = &model.utilities_state;
+    if (model.active == .utilities and state.selected == .pacfiles and state.job == null and state.result == null and !state.failed)
+        try discover(model, ctx);
+}
+
+fn discover(model: *Model, ctx: *vxfw.EventContext) !void {
     const state = &model.utilities_state;
     if (state.job != null) return ctx.consumeEvent();
     try ctx.tick(100, model.widget());
@@ -301,7 +308,11 @@ pub fn handleKey(model: *Model, ctx: *vxfw.EventContext, key: vaxis.Key) !bool {
             return true;
         }
     }
-    if (commands.matches(key, .confirm) or (state.selected == .pacfiles and commands.matches(key, .refresh))) {
+    if (state.selected == .pacfiles and commands.matches(key, .refresh)) {
+        try discover(model, ctx);
+        return true;
+    }
+    if (commands.matches(key, .confirm)) {
         try activate(model, ctx);
         return true;
     }
@@ -318,6 +329,7 @@ pub fn handleKey(model: *Model, ctx: *vxfw.EventContext, key: vaxis.Key) !bool {
         },
         else => return false,
     }
+    try ensurePacfiles(model, ctx);
     ctx.consumeAndRedraw();
     return true;
 }
@@ -356,6 +368,7 @@ test "Utilities switches actions with keyboard and keeps results navigation sepa
     const model = try Model.init(std.testing.allocator);
     defer model.deinit();
     model.active = .utilities;
+    model.utilities_state.result = try std.json.parseFromSlice([][]const u8, std.testing.allocator, "[]", .{});
     var ctx: vxfw.EventContext = .{ .io = std.testing.io, .alloc = std.testing.allocator, .cmds = .empty };
     defer ctx.cmds.deinit(ctx.alloc);
 
@@ -370,7 +383,7 @@ test "Utilities switches actions with keyboard and keeps results navigation sepa
     try model.captureEvent(&ctx, .{ .key_press = commands.bindings.back });
     try model.captureEvent(&ctx, .{ .key_press = commands.bindings.previous });
     try std.testing.expectEqual(Task.pacfiles, model.utilities_state.selected);
-    try std.testing.expectEqualStrings("List pacfiles", model.commandContext().utilities_action);
+    try std.testing.expectEqualStrings("Browse files", model.commandContext().utilities_action);
 }
 
 test "pacfile preview shows file contents, changes, and backups without an active file" {
