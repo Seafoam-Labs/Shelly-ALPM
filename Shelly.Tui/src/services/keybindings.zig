@@ -12,7 +12,7 @@ pub const editable = [_]commands.Id{
     .previous_catalog_page,   .next_catalog_page, .previous_screenshot, .next_screenshot,
     .clear_selection,         .configure_updates, .toggle_wrap,         .narrow_view,
     .widen_view,              .toggle_hidden,     .sync_packages,       .sort_package_name,
-    .sort_package_repository,
+    .sort_package_repository, .pacfile_compare,
 };
 
 fn indexOf(id: commands.Id) ?usize {
@@ -101,6 +101,7 @@ const settings: u16 = 256;
 const preview: u16 = 512;
 const review: u16 = 1024;
 const appimages: u16 = 4096;
+const utilities: u16 = 8192;
 const lists = package_lists | aur_list | flatpak_list;
 const details = package_details | aur_details | flatpak_details;
 
@@ -112,7 +113,8 @@ fn scope(id: commands.Id) u16 {
         .configure_updates => appimages,
         .install, .remove => lists | details | appimages,
         .preview => aur_list | aur_details,
-        .refresh => updates | settings | preview,
+        .refresh => updates | settings | preview | utilities,
+        .pacfile_compare => utilities,
         .refresh_list => lists | searches | flatpak_details | appimages,
         .sync_packages, .sort_package_name, .sort_package_repository => package_lists | searches,
         .filter => lists | searches,

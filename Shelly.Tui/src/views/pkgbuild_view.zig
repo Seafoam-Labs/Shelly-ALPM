@@ -79,13 +79,21 @@ pub const Document = struct {
     }
 
     pub fn fromDiff(allocator: std.mem.Allocator, text: []const u8) !Document {
+        return fromText(allocator, text, .diff, "The files are identical.");
+    }
+
+    pub fn fromFile(allocator: std.mem.Allocator, text: []const u8) !Document {
+        return fromText(allocator, text, .plain, "This file is empty.");
+    }
+
+    fn fromText(allocator: std.mem.Allocator, text: []const u8, kind: highlight.Kind, empty_message: []const u8) !Document {
         var arena = std.heap.ArenaAllocator.init(allocator);
         errdefer arena.deinit();
         var lines: Builder = .{};
         var remaining: usize = 8 * 1024 * 1024;
         if (text.len == 0) {
-            try prose(arena.allocator(), &lines, "The files are identical.", &remaining);
-        } else try sourceStyled(arena.allocator(), &lines, text, &remaining, .diff);
+            try prose(arena.allocator(), &lines, empty_message, &remaining);
+        } else try sourceStyled(arena.allocator(), &lines, text, &remaining, kind);
         return finish(&arena, &lines);
     }
 

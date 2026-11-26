@@ -25,25 +25,32 @@ const Job = struct {
 
 const preview = @import("../views/pkgbuild_view.zig");
 
-const Diff = struct {
+const PreviewKind = enum { file, diff };
+
+const PreviewJob = struct {
+    kind: PreviewKind,
     path: []const u8,
     thread: std.Thread,
     done: std.atomic.Value(bool) = .init(false),
     result: ?preview.Document = null,
     failure: ?anyerror = null,
 
-    fn run(self: *Diff) void {
+    fn run(self: *PreviewJob) void {
         const allocator = std.heap.page_allocator;
         var threaded: std.Io.Threaded = .init(allocator, .{});
         defer threaded.deinit();
-        self.result = compare(allocator, threaded.io(), self.path) catch |err| blk: {
+        const document = switch (self.kind) {
+            .file => readPacfile(allocator, threaded.io(), self.path),
+            .diff => compare(allocator, threaded.io(), self.path),
+        };
+        self.result = document catch |err| blk: {
             self.failure = err;
             break :blk null;
         };
         self.done.store(true, .release);
     }
 
-    fn destroy(self: *Diff, allocator: std.mem.Allocator) void {
+    fn destroy(self: *PreviewJob, allocator: std.mem.Allocator) void {
         self.thread.join();
         if (self.result) |*result| result.deinit();
         allocator.free(self.path);
@@ -64,6 +71,15 @@ fn activePacfilePath(path: []const u8) ![]const u8 {
         if (!std.ascii.isDigit(byte)) return error.InvalidPacfile;
     }
     return path[0..index];
+}
+
+fn readPacfile(allocator: std.mem.Allocator, io: std.Io, path: []const u8) !preview.Document {
+    _ = try activePacfilePath(path);
+    const dir = std.Io.Dir.cwd();
+    if ((try dir.statFile(io, path, .{})).kind != .file) return error.NotRegularFile;
+    const contents = try dir.readFileAlloc(io, path, allocator, .limited(8 * 1024 * 1024));
+    defer allocator.free(contents);
+    return preview.Document.fromFile(allocator, contents);
 }
 
 fn compare(allocator: std.mem.Allocator, io: std.Io, path: []const u8) !preview.Document {
@@ -115,22 +131,22 @@ pub const State = struct {
     result: ?Pacfiles = null,
     failed: bool = false,
     list: vxfw.ScrollView,
-    diff: ?*Diff = null,
-    diff_open: bool = false,
-    diff_wrap: bool = true,
-    diff_list: vxfw.ScrollView,
-    diff_back: vxfw.Button,
+    preview_job: ?*PreviewJob = null,
+    preview_open: bool = false,
+    preview_wrap: bool = true,
+    preview_list: vxfw.ScrollView,
+    preview_back: vxfw.Button,
 
     pub fn init(model: *Model) State {
         return .{
-            .diff_list = .{ .children = .{ .builder = .{ .userdata = model, .buildFn = buildDiffRow } } },
-            .diff_back = .{ .label = "[<]", .userdata = model, .onClick = commands.Mouse.closePacfileDiff, .style = @import("../views/components/styles.zig").action_button },
+            .preview_list = .{ .children = .{ .builder = .{ .userdata = model, .buildFn = buildPreviewRow } } },
+            .preview_back = .{ .label = "[<]", .userdata = model, .onClick = commands.Mouse.closePacfilePreview, .style = @import("../views/components/styles.zig").action_button },
             .list = .{ .children = .{ .builder = .{ .userdata = model, .buildFn = buildRow } } },
         };
     }
 
     pub fn deinit(self: *State, allocator: std.mem.Allocator) void {
-        if (self.diff) |diff| diff.destroy(allocator);
+        if (self.preview_job) |job| job.destroy(allocator);
         if (self.job) |job| {
             job.thread.join();
             if (job.result) |*result| result.deinit();
@@ -170,7 +186,7 @@ fn buildRow(ptr: *const anyopaque, index: usize, _: usize) ?vxfw.Widget {
 }
 
 pub fn activateFromMouse(model: *Model, ctx: *vxfw.EventContext, task: Task) !void {
-    if (model.active != .utilities or model.help_open or model.overlay != null or model.utilities_state.diff_open or !model.settings_state.settings.expanded_mouse_support or !task.available(model)) return;
+    if (model.active != .utilities or model.help_open or model.overlay != null or model.utilities_state.preview_open or !model.settings_state.settings.expanded_mouse_support or !task.available(model)) return;
     model.utilities_state.selected = task;
     try activate(model, ctx);
 }
@@ -201,83 +217,89 @@ pub fn discover(model: *Model, ctx: *vxfw.EventContext) !void {
     ctx.consumeAndRedraw();
 }
 
-pub fn closeDiffFromMouse(ptr: ?*anyopaque, ctx: *vxfw.EventContext) !void {
+pub fn closePreviewFromMouse(ptr: ?*anyopaque, ctx: *vxfw.EventContext) !void {
     const model: *Model = @ptrCast(@alignCast(ptr orelse return));
-    if (model.active != .utilities or model.help_open or !model.utilities_state.diff_open) return;
-    model.utilities_state.diff_open = false;
+    if (model.active != .utilities or model.help_open or !model.utilities_state.preview_open) return;
+    model.utilities_state.preview_open = false;
     ctx.consumeAndRedraw();
 }
 
-fn openDiff(model: *Model, ctx: *vxfw.EventContext) !void {
+fn openPreview(model: *Model, ctx: *vxfw.EventContext, kind: PreviewKind) !void {
     const state = &model.utilities_state;
     const result = state.result orelse return;
     if (state.job != null or state.list.cursor >= result.value.len) return;
-    if (state.diff) |old| {
+    if (state.preview_job) |old| {
         if (!old.done.load(.acquire)) return ctx.consumeEvent();
         old.destroy(model.gpa);
-        state.diff = null;
+        state.preview_job = null;
     }
     const path = try model.gpa.dupe(u8, result.value[state.list.cursor]);
     errdefer model.gpa.free(path);
-    const diff = try model.gpa.create(Diff);
-    errdefer model.gpa.destroy(diff);
-    diff.* = .{ .path = path, .thread = undefined };
+    const job = try model.gpa.create(PreviewJob);
+    errdefer model.gpa.destroy(job);
+    job.* = .{ .kind = kind, .path = path, .thread = undefined };
     try ctx.tick(100, model.widget());
-    diff.thread = try std.Thread.spawn(.{}, Diff.run, .{diff});
-    state.diff = diff;
-    state.diff_open = true;
-    state.diff_list.scroll = .{};
+    job.thread = try std.Thread.spawn(.{}, PreviewJob.run, .{job});
+    state.preview_job = job;
+    state.preview_open = true;
+    state.preview_list.scroll = .{};
     ctx.consumeAndRedraw();
 }
 
-pub fn diffLoading(state: *const State) bool {
-    return if (state.diff) |diff| !diff.done.load(.acquire) else false;
+pub fn previewLoading(state: *const State) bool {
+    return if (state.preview_job) |job| !job.done.load(.acquire) else false;
 }
 
-pub fn diffView(model: *Model) preview.View {
+pub fn previewView(model: *Model) preview.View {
     const state = &model.utilities_state;
-    const diff = state.diff.?;
-    const loading = diffLoading(state);
-    const failure = if (loading) null else diff.failure;
-    state.diff_list.item_count = if (!loading and diff.result != null) @intCast(diff.result.?.lines.len) else 0;
+    const job = state.preview_job.?;
+    const loading = previewLoading(state);
+    const failure = if (loading) null else job.failure;
+    state.preview_list.item_count = if (!loading and job.result != null) @intCast(job.result.?.lines.len) else 0;
     return .{
-        .name = diff.path,
-        .title = "Pacfile diff (active → pending)",
-        .back = if (model.settings_state.settings.expanded_mouse_support) &state.diff_back else null,
-        .scroll = &state.diff_list,
-        .wrap = state.diff_wrap,
+        .name = job.path,
+        .title = if (job.kind == .diff) "Pacfile diff (active → pending)" else "Pacfile contents",
+        .back = if (model.settings_state.settings.expanded_mouse_support) &state.preview_back else null,
+        .scroll = &state.preview_list,
+        .wrap = state.preview_wrap,
         .loading = loading,
         .failure = failure,
-        .failure_text = if (failure != null and failure.? == error.FileNotFound) "A file disappeared or the diff command is unavailable." else "Could not compare the files. Check file access and ensure diff is installed.",
-        .scan_status = if (loading) "Comparing configuration files…" else "",
+        .failure_text = if (job.kind == .file) "Could not read the selected pacfile." else if (failure != null and failure.? == error.FileNotFound) "A file disappeared or the diff command is unavailable." else "Could not compare the files. Check file access and ensure diff is installed.",
+        .scan_status = if (!loading) "" else if (job.kind == .diff) "Comparing configuration files…" else "Reading pacfile…",
     };
 }
 
-fn buildDiffRow(ptr: *const anyopaque, index: usize, _: usize) ?vxfw.Widget {
+fn buildPreviewRow(ptr: *const anyopaque, index: usize, _: usize) ?vxfw.Widget {
     const model: *const Model = @ptrCast(@alignCast(ptr));
     const state = &model.utilities_state;
-    const diff = state.diff orelse return null;
-    if (!diff.done.load(.acquire)) return null;
-    if (diff.result) |*doc| return preview.rowWithWrap(doc, index, state.diff_wrap);
+    const job = state.preview_job orelse return null;
+    if (!job.done.load(.acquire)) return null;
+    if (job.result) |*doc| return preview.rowWithWrap(doc, index, state.preview_wrap);
     return null;
 }
 
 pub fn handleKey(model: *Model, ctx: *vxfw.EventContext, key: vaxis.Key) !bool {
     const state = &model.utilities_state;
-    if (state.diff_open) {
+    if (state.preview_open) {
         if (commands.closesPreview(key) or commands.matches(key, .cancel_capture)) {
-            state.diff_open = false;
+            state.preview_open = false;
         } else if (commands.matches(key, .toggle_wrap)) {
-            state.diff_wrap = !state.diff_wrap;
-            state.diff_list.scroll.left = 0;
-            state.diff_list.scroll.vertical_offset = 0;
+            state.preview_wrap = !state.preview_wrap;
+            state.preview_list.scroll.left = 0;
+            state.preview_list.scroll.vertical_offset = 0;
         } else return false;
         ctx.consumeAndRedraw();
         return true;
     }
-    if (commands.matches(key, .confirm) and state.selected == .pacfiles and state.results_focused and state.message() == null) {
-        try openDiff(model, ctx);
-        return true;
+    if (state.selected == .pacfiles and state.results_focused and state.message() == null) {
+        if (commands.matches(key, .confirm)) {
+            try openPreview(model, ctx, .file);
+            return true;
+        }
+        if (commands.matches(key, .pacfile_compare)) {
+            try openPreview(model, ctx, .diff);
+            return true;
+        }
     }
     if (commands.matches(key, .confirm) or (state.selected == .pacfiles and commands.matches(key, .refresh))) {
         try activate(model, ctx);
@@ -302,14 +324,14 @@ pub fn handleKey(model: *Model, ctx: *vxfw.EventContext, key: vaxis.Key) !bool {
 
 pub fn handleScroll(model: *Model, ctx: *vxfw.EventContext, event: vxfw.Event) !void {
     if (model.utilities_state.selected != .pacfiles or model.utilities_state.message() != null) return;
-    const list = if (model.utilities_state.diff_open) &model.utilities_state.diff_list else &model.utilities_state.list;
+    const list = if (model.utilities_state.preview_open) &model.utilities_state.preview_list else &model.utilities_state.list;
     if (event == .key_press) {
         if (!model.utilities_state.results_focused) return;
         const key = commands.scrollKey(event.key_press) orelse event.key_press;
         const page_up = key.matches(vaxis.Key.page_up, .{});
         if (page_up or key.matches(vaxis.Key.page_down, .{})) {
             const page = @max(list.last_height, 1);
-            if (model.utilities_state.diff_open) {
+            if (model.utilities_state.preview_open) {
                 const moved = if (page_up) list.scroll.linesUp(page) else list.scroll.linesDown(page);
                 if (moved) ctx.consumeAndRedraw();
             } else {
@@ -321,7 +343,7 @@ pub fn handleScroll(model: *Model, ctx: *vxfw.EventContext, event: vxfw.Event) !
             return;
         }
         // Move the selection without asking ScrollView to wrap the row in a cursor gutter.
-        if (!model.utilities_state.diff_open) {
+        if (!model.utilities_state.preview_open) {
             if (key.matches(vaxis.Key.up, .{})) return list.prevItem(ctx);
             if (key.matches(vaxis.Key.down, .{})) return list.nextItem(ctx);
         }
@@ -351,7 +373,7 @@ test "Utilities switches actions with keyboard and keeps results navigation sepa
     try std.testing.expectEqualStrings("List pacfiles", model.commandContext().utilities_action);
 }
 
-test "pacfile comparison shows changes and handles a missing active file" {
+test "pacfile preview shows file contents, changes, and backups without an active file" {
     const io = std.testing.io;
     const allocator = std.testing.allocator;
     var tmp = std.testing.tmpDir(.{});
@@ -364,6 +386,9 @@ test "pacfile comparison shows changes and handles a missing active file" {
     defer allocator.free(pacnew);
     const pacsave = try tmp.dir.realPathFileAlloc(io, "removed.conf.pacsave", allocator);
     defer allocator.free(pacsave);
+    var contents = try readPacfile(allocator, io, pacnew);
+    defer contents.deinit();
+    try std.testing.expect(std.mem.endsWith(u8, contents.lines[0], "setting=new"));
     var changed = compare(allocator, io, pacnew) catch |err| switch (err) {
         error.FileNotFound => return error.SkipZigTest, // diff may be absent on a build host.
         else => return err,

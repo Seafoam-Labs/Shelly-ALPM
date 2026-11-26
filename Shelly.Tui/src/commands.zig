@@ -33,7 +33,7 @@ pub const Mouse = struct {
 
     pub const SettingsTarget = union(enum) { control: usize, header: usize };
     pub const BindingTarget = union(enum) { binding: usize, scroll_down: bool, save, cancel };
-    pub const closePacfileDiff = @import("models/utilities_model.zig").closeDiffFromMouse;
+    pub const closePacfilePreview = @import("models/utilities_model.zig").closePreviewFromMouse;
     pub const activateUtility = @import("models/utilities_model.zig").activateFromMouse;
     pub const editBinding = @import("models/settings_model.zig").editBindingFromMouse;
     pub const activateSetting = @import("models/settings_model.zig").onSettingsAction;
@@ -92,6 +92,7 @@ pub const Id = enum {
     mark,
     clear_selection,
     toggle_wrap,
+    pacfile_compare,
     categories,
     previous_catalog_page,
     next_catalog_page,
@@ -147,6 +148,7 @@ pub const Bindings = struct {
     previous_screenshot: vaxis.Key = .{ .codepoint = '[' },
     next_screenshot: vaxis.Key = .{ .codepoint = ']' },
     categories: vaxis.Key = .{ .codepoint = 'g', .mods = .{ .ctrl = true } },
+    pacfile_compare: vaxis.Key = .{ .codepoint = 'd' },
     toggle_wrap: vaxis.Key = .{ .codepoint = 'w' },
     clear_selection: vaxis.Key = .{ .codepoint = 'x', .mods = .{ .ctrl = true } },
     install: vaxis.Key = .{ .codepoint = 'i' },
@@ -401,7 +403,8 @@ pub const Context = struct {
     utilities_action: []const u8 = "",
     utilities_has_results: bool = false,
     utilities_results: bool = false,
-    pacfile_diff: bool = false,
+    pacfile_preview: bool = false,
+    pacfile_can_compare: bool = false,
     removal_confirmation: bool = false,
     appimage_source: bool = false,
     appimage_configure_selected: bool = false,
@@ -541,18 +544,19 @@ pub fn entries(arena: std.mem.Allocator, context: Context) std.mem.Allocator.Err
             if (context.mode == .flatpak or context.installed_only or context.catalog_available) try add(arena, &list, .refresh_list, "Refresh", "Refresh the current package list");
         },
         .utilities => {
-            if (context.pacfile_diff) {
+            if (context.pacfile_preview) {
                 try add(arena, &list, .close, "Back", "Return to pacfile results");
                 try add(arena, &list, .previous, "Scroll up", "Scroll the diff up");
                 try add(arena, &list, .next, "Scroll down", "Scroll the diff down");
                 try add(arena, &list, .toggle_wrap, if (context.source_wrap) "Unwrap" else "Wrap", "Toggle diff wrapping");
             } else {
                 try add(arena, &list, .confirm, context.utilities_action, context.utilities_action);
+                if (context.pacfile_can_compare) try add(arena, &list, .pacfile_compare, "Diff", "Compare the selected pacfile with the active configuration");
                 try add(arena, &list, .previous, "Previous", "Move up in the active pane");
                 try add(arena, &list, .next, "Next", "Move down in the active pane");
                 if (context.utilities_has_results) try add(arena, &list, if (context.utilities_results) .back else .details, if (context.utilities_results) "Actions" else "Details", "Switch between actions and results");
             }
-            if (context.utilities_results or context.pacfile_diff) {
+            if (context.utilities_results or context.pacfile_preview) {
                 try add(arena, &list, .page_up, "Page up", "Move up by a page");
                 try add(arena, &list, .page_down, "Page down", "Move down by a page");
             }

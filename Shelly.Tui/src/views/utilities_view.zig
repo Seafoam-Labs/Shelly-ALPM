@@ -12,10 +12,10 @@ pub fn appendContent(model: *Model, ctx: vxfw.DrawContext, children: *std.ArrayL
     const size = ctx.max.size();
     const height = size.height -| 2;
     if (height == 0 or size.width == 0) return;
-    if (model.utilities_state.diff_open) {
+    if (model.utilities_state.preview_open) {
         try children.append(ctx.arena, .{
             .origin = .{ .row = 1, .col = 0 },
-            .surface = try @import("../models/utilities_model.zig").diffView(model).drawInPane(ctx.withConstraints(.{}, .{ .width = size.width, .height = height })),
+            .surface = try @import("../models/utilities_model.zig").previewView(model).drawInPane(ctx.withConstraints(.{}, .{ .width = size.width, .height = height })),
         });
         return;
     }

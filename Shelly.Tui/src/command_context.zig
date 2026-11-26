@@ -135,9 +135,10 @@ pub fn resolve(self: *Model) commands.Context {
         .utilities => {
             context.mode = .utilities;
             const state = &self.utilities_state;
-            context.pacfile_diff = state.diff_open;
-            context.source_wrap = state.diff_wrap;
-            context.utilities_action = if (state.selected == .pacfiles and state.results_focused and state.message() == null) "Compare" else state.selected.label();
+            context.pacfile_preview = state.preview_open;
+            context.source_wrap = state.preview_wrap;
+            context.pacfile_can_compare = state.selected == .pacfiles and state.results_focused and state.message() == null;
+            context.utilities_action = if (context.pacfile_can_compare) "View file" else state.selected.label();
             context.utilities_has_results = self.utilities_state.selected == .pacfiles;
             context.utilities_results = self.utilities_state.results_focused;
         },
