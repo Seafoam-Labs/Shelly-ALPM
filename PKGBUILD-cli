@@ -2,7 +2,7 @@
 
 pkgbase=shelly-cli
 pkgname=('shelly-cli' 'shelly-cli-flatpak-backend')
-pkgver=3.4.2
+pkgver='3.4.2.r5640.gc279248'
 pkgrel=1
 arch=('x86_64')
 url='https://github.com/Seafoam-Labs/Shelly-ALPM'
@@ -30,7 +30,7 @@ makedepends+=('binutils' "${_shelly_native_depends[@]}")
 source=("${pkgname}::git+https://github.com/Seafoam-Labs/Shelly-ALPM.git#branch=development"
         'shellybuild.conf')
 sha256sums=('SKIP'
-            '4126da205e91a3ba3b15453c2aeade92f67e16e3386a52aae32fbd3f2e4af9cc')
+            '14822fabf00c21937d4df2e634d95e1c2d1666ec211ab9d0531f688909208f56')
 conflicts=('shelly' 'shelly-git' 'shelly-bin')
 
 pkgver() {

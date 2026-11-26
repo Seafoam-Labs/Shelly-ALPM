@@ -26,10 +26,10 @@ source=("${pkgname}-${pkgver}.tar.gz::https://github.com/Seafoam-Labs/Shelly-ALP
         'shelly-flatpak-integrate'
         'com.shellyorg.shelly.policy')
 
-sha256sums=('9f0041713d366610efb66d16fc2717dd5a655c1fc688617731187425f904be01'
-            '4126da205e91a3ba3b15453c2aeade92f67e16e3386a52aae32fbd3f2e4af9cc'
-            '4b7cb0e42eb322de9eb616d22ca05823f91d178db5b8b67497d497ed495aca9c'
-            'cf0dc0a6d1865b9010054b36941e7bf4d445c3e7549219889f07ab08283c5c0f'
+sha256sums=('824e923a96e0d78a245bbe7df35bb5c4fc96329384aafa084285f7cfd214b94c'
+            '14822fabf00c21937d4df2e634d95e1c2d1666ec211ab9d0531f688909208f56'
+            'ad0faff77a0a0fa68944e96b2c27dc1312d4f30758b7cee4525b23cab6b0013f'
+            'f565c20b37066e5dd42e165f65b6002cb60308aa07ed62a8df06af10d7fddf8d'
             '07bca40395c180578450c523ea052b036aa8197d8a871efcce55f937c101c323'
             '17ce8b6518c7141c0ff4089756bffe72ba51071bcac8addcb56170c206dc570d')
 # GitHub replaces "+" with "-" in archive top-level directory names.
