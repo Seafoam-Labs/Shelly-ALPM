@@ -1987,3 +1987,9 @@ msgstr ""
 
 msgid "Updates & Tray"
 msgstr ""
+
+msgid "Rounded Window Corners"
+msgstr ""
+
+msgid "If enabled, Shelly rounds the corners of the windows it draws. A desktop that draws the title bar sets its own corners."
+msgstr ""

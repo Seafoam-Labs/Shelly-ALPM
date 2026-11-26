@@ -1618,6 +1618,55 @@
                                         </child>
                                       </object>
                                     </child>
+                                    <child>
+                                      <object class="GtkBox">
+                                        <property name="orientation">horizontal</property>
+                                        <property name="spacing">16</property>
+                                        <style>
+                                          <class name="settings-form-row"/>
+                                        </style>
+                                        <child>
+                                          <object class="GtkBox">
+                                            <property name="orientation">vertical</property>
+                                            <property name="spacing">2</property>
+                                            <property name="hexpand">true</property>
+                                            <property name="valign">center</property>
+                                            <child>
+                                              <object class="GtkLabel">
+                                                <property name="label" translatable="yes">Rounded Window Corners</property>
+                                                <property name="halign">start</property>
+                                                <property name="xalign">0</property>
+                                                <property name="wrap">true</property>
+                                                <style>
+                                                  <class name="settings-row-title"/>
+                                                </style>
+                                              </object>
+                                            </child>
+                                            <child>
+                                              <object class="GtkLabel">
+                                                <property name="label" translatable="yes">If enabled, Shelly rounds the corners of the windows it draws. A desktop that draws the title bar sets its own corners.</property>
+                                                <property name="halign">start</property>
+                                                <property name="xalign">0</property>
+                                                <property name="wrap">true</property>
+                                                <style>
+                                                  <class name="settings-row-subtitle"/>
+                                                </style>
+                                              </object>
+                                            </child>
+                                          </object>
+                                        </child>
+                                        <child>
+                                          <object class="GtkSwitch" id="rounded_corners_switch">
+                                            <property name="halign">end</property>
+                                            <property name="valign">center</property>
+                                            <accessibility>
+                                              <property name="label" translatable="yes">Rounded Window Corners</property>
+                                              <property name="description" translatable="yes">If enabled, Shelly rounds the corners of the windows it draws. A desktop that draws the title bar sets its own corners.</property>
+                                            </accessibility>
+                                          </object>
+                                        </child>
+                                      </object>
+                                    </child>
                                   </object>
                                 </child>
                               </object>
