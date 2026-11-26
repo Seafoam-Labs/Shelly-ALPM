@@ -137,6 +137,16 @@
                       </object>
                     </child>
                     <child>
+                      <object class="GtkColumnViewColumn" id="votes_column">
+                        <property name="title" translatable="yes">Votes</property>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkColumnViewColumn" id="popularity_column">
+                        <property name="title" translatable="yes">Popularity</property>
+                      </object>
+                    </child>
+                    <child>
                       <object class="GtkColumnViewColumn" id="version_column">
                         <property name="title" translatable="yes">Version</property>
                         <property name="expand">true</property>

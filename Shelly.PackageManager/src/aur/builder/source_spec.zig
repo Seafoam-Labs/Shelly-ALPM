@@ -17,6 +17,14 @@ pub const GitReference = struct {
     }
 };
 
+/// True only for a full 40-character hexadecimal object name. Abbreviated
+/// commit pins cannot be fetched as shallow wants and take the full path.
+pub fn isFullCommitSha(value: []const u8) bool {
+    if (value.len != 40) return false;
+    for (value) |character| if (!std.ascii.isHex(character)) return false;
+    return true;
+}
+
 pub const ParsedSource = struct {
     name: []u8,
     location: []u8,
@@ -374,6 +382,16 @@ test "detached source pairing handles exact renamed and compressed payload names
     const exact_pairing = try findDetachedPayload(&with_exact, &with_exact[1]);
     try std.testing.expectEqual(@as(usize, 2), exact_pairing.source.index);
     try std.testing.expectEqual(@as(?SignatureCompression, null), exact_pairing.compression);
+}
+
+test "isFullCommitSha accepts only 40 hex characters" {
+    try std.testing.expect(isFullCommitSha("0123456789abcdef0123456789abcdef01234567"));
+    try std.testing.expect(isFullCommitSha("ABCDEF0123456789abcdef0123456789abcdef01"));
+    try std.testing.expect(!isFullCommitSha("0123456"));
+    try std.testing.expect(!isFullCommitSha("0123456789abcdef0123456789abcdef0123456"));
+    try std.testing.expect(!isFullCommitSha("0123456789abcdef0123456789abcdef012345678"));
+    try std.testing.expect(!isFullCommitSha("0123456789abcdef0123456789abcdef0123456g"));
+    try std.testing.expect(!isFullCommitSha(""));
 }
 
 test "sourceBasename strips query, trailing slash, and git suffix" {

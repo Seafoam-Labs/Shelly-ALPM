@@ -64,6 +64,24 @@ pub const AppImageManager = struct {
         return std.ascii.eqlIgnoreCase(std.fs.path.extension(file_path), ".AppImage");
     }
 
+    /// Whether `location` already lives inside the install directory under a
+    /// name that differs from the canonical destination (see #2263). The
+    /// comparison uses resolved paths, so it also holds when the caller
+    /// passed a relative path from inside the install directory or when the
+    /// install directory itself is a symlink.
+    fn sourceIsAdoptableInPlace(self: AppImageManager, location: []const u8, dest_path: []const u8) bool {
+        var location_buf: [std.Io.Dir.max_path_bytes]u8 = undefined;
+        var dest_buf: [std.Io.Dir.max_path_bytes]u8 = undefined;
+        const location_len = std.Io.Dir.cwd().realPathFile(self.io, location, &location_buf) catch return false;
+        const dest_len = std.Io.Dir.cwd().realPathFile(self.io, dest_path, &dest_buf) catch return false;
+        const canonical_location = location_buf[0..location_len];
+        const canonical_dest = dest_buf[0..dest_len];
+        if (std.mem.eql(u8, canonical_location, canonical_dest)) return false;
+        const location_dir = std.fs.path.dirname(canonical_location) orelse return false;
+        const dest_dir = std.fs.path.dirname(canonical_dest) orelse return false;
+        return std.mem.eql(u8, location_dir, dest_dir);
+    }
+
     pub fn installAppImage(self: AppImageManager, location: []const u8) !bool {
         try ensureNonRootMutation();
         var operation_scope = events.OperationScope.init(self.operation_context, self.dispatcher, .install, location);
@@ -175,6 +193,17 @@ pub const AppImageManager = struct {
             self.emitStatusFmt(.warning, "Could not remove the backup for the requested package at the backup path. {0s} The backup remains on disk.\n\nTechnical details: {1s}", .{ diagnostics.cause(err), @errorName(err) });
         };
         self.refreshDesktopCachesBestEffort(content.icon_source != null);
+
+        // The source already lived in the install directory (see #2263), so
+        // the copy above left a case-only duplicate behind. The install has
+        // succeeded, so the original is redundant: remove it and keep only
+        // the canonical file the database now points at. A failed install
+        // never reaches this point, so the user's only copy is never at risk.
+        if (self.sourceIsAdoptableInPlace(location, dest_path)) {
+            std.Io.Dir.cwd().deleteFile(self.io, location) catch |err| {
+                self.emitStatusFmt(.warning, "Could not remove the duplicate AppImage for the requested package from the install directory. {0s} The original file remains beside the installed copy.\n\nTechnical details: {1s}", .{ diagnostics.cause(err), @errorName(err) });
+            };
+        }
 
         self.emitStatusFmt(.success, "Installed AppImage {s}.", .{app_name});
         operation_scope.finish(.success);
@@ -2434,6 +2463,92 @@ test "installAppImage atomically replaces a validated AppImage" {
     defer std.testing.allocator.free(desktop);
     try std.testing.expect(std.mem.indexOf(u8, desktop, installed_path) != null);
     try std.testing.expect(std.mem.indexOf(u8, desktop, ".shelly-install-") == null);
+}
+
+test "installAppImage adopts an AppImage already in the install directory" {
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    var path_buf: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const len = try tmp.dir.realPath(std.testing.io, &path_buf);
+    const root = try std.testing.allocator.dupe(u8, path_buf[0..len]);
+    defer std.testing.allocator.free(root);
+    const install_dir = try std.fs.path.join(std.testing.allocator, &.{ root, "install" });
+    defer std.testing.allocator.free(install_dir);
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, install_dir);
+
+    // The source already lives in the install directory under a lowercase
+    // extension and is not yet in the local database (see #2263).
+    const source_path = try std.fs.path.join(std.testing.allocator, &.{ install_dir, "Editor.appimage" });
+    defer std.testing.allocator.free(source_path);
+    const installed_path = try std.fs.path.join(std.testing.allocator, &.{ install_dir, "Editor.AppImage" });
+    defer std.testing.allocator.free(installed_path);
+    const db_path = try std.fs.path.join(std.testing.allocator, &.{ root, "config", "appimages.db" });
+    defer std.testing.allocator.free(db_path);
+    try writeTestAppImageDb(source_path, validTestAppImage);
+    var environ = try createTestAppImageEnviron(std.testing.allocator, root);
+    defer environ.block.deinit(std.testing.allocator);
+    const manager = AppImageManager{
+        .allocator = std.testing.allocator,
+        .io = std.testing.io,
+        .environ = environ,
+        .install_directory = install_dir,
+        .local_db_path = db_path,
+    };
+
+    try std.testing.expect(try manager.installAppImage(source_path));
+
+    // Exactly one file remains, under the canonical casing, and the local
+    // database points at it.
+    try expectOnlyInstalledAppImage(install_dir, "Editor.AppImage");
+    const installed = try readTestAppImageDb(std.testing.allocator, installed_path);
+    defer std.testing.allocator.free(installed);
+    try std.testing.expectEqualStrings(validTestAppImage, installed);
+    const app_images = try manager.getAppImagesFromLocalDb();
+    defer manager.freeAppImages(app_images);
+    try std.testing.expectEqual(@as(usize, 1), app_images.len);
+    try std.testing.expectEqualStrings(installed_path, app_images[0].path);
+}
+
+test "installAppImage keeps an AppImage already installed under the canonical name" {
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    var path_buf: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const len = try tmp.dir.realPath(std.testing.io, &path_buf);
+    const root = try std.testing.allocator.dupe(u8, path_buf[0..len]);
+    defer std.testing.allocator.free(root);
+    const install_dir = try std.fs.path.join(std.testing.allocator, &.{ root, "install" });
+    defer std.testing.allocator.free(install_dir);
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, install_dir);
+
+    // The source is already the canonical file in the install directory and
+    // is not yet in the local database: installing it must keep that file.
+    const source_path = try std.fs.path.join(std.testing.allocator, &.{ install_dir, "Editor.AppImage" });
+    defer std.testing.allocator.free(source_path);
+    const db_path = try std.fs.path.join(std.testing.allocator, &.{ root, "config", "appimages.db" });
+    defer std.testing.allocator.free(db_path);
+    try writeTestAppImageDb(source_path, validTestAppImage);
+    var environ = try createTestAppImageEnviron(std.testing.allocator, root);
+    defer environ.block.deinit(std.testing.allocator);
+    const manager = AppImageManager{
+        .allocator = std.testing.allocator,
+        .io = std.testing.io,
+        .environ = environ,
+        .install_directory = install_dir,
+        .local_db_path = db_path,
+    };
+
+    try std.testing.expect(try manager.installAppImage(source_path));
+
+    try expectOnlyInstalledAppImage(install_dir, "Editor.AppImage");
+    const installed = try readTestAppImageDb(std.testing.allocator, source_path);
+    defer std.testing.allocator.free(installed);
+    try std.testing.expectEqualStrings(validTestAppImage, installed);
+    const app_images = try manager.getAppImagesFromLocalDb();
+    defer manager.freeAppImages(app_images);
+    try std.testing.expectEqual(@as(usize, 1), app_images.len);
+    try std.testing.expectEqualStrings(source_path, app_images[0].path);
 }
 
 test "installAppImage follows a symlinked install directory" {

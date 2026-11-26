@@ -359,6 +359,12 @@ pub const FirmwarePage = extern struct {
         metadata_stale: bool,
     };
 
+    fn load_failure(backend: fwupd.Backend, alloc: std.mem.Allocator) fwupd.Failure {
+        // a missing system bus or memory leaves no reason behind.
+        const f = backend.lastFailure() orelse return .{ .kind = .unknown, .message = "" };
+        return .{ .kind = f.kind, .message = alloc.dupe(u8, f.message) catch "" };
+    }
+
     fn load_worker(page: *Self, generation: u64) void {
         const arena = c_alloc.create(std.heap.ArenaAllocator) catch return;
         arena.* = std.heap.ArenaAllocator.init(c_alloc);
@@ -366,11 +372,7 @@ pub const FirmwarePage = extern struct {
         const backend = page.priv().backend;
         const env = page.priv().env;
         const data = collectLoad(backend, alloc) catch {
-            var failure: ?fwupd.Failure = null;
-            if (backend.lastFailure()) |f| {
-                failure = .{ .kind = f.kind, .message = alloc.dupe(u8, f.message) catch "" };
-            }
-            post_result(page, arena, generation, null, failure, false);
+            post_result(page, arena, generation, null, load_failure(backend, alloc), false);
             return;
         };
         // Stale-metadata check for the automatic on-load refresh; the manual
@@ -2491,6 +2493,19 @@ test "firmware collectLoad filters updatable devices and attaches badges" {
     try testing.expect(data.badges[0].has_upgrade);
     try testing.expectEqualStrings("2.0", data.badges[0].latest_version);
     try testing.expect(data.badges[1].has_upgrade);
+}
+
+test "a load that fails without a recorded reason still has a failure to show" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    var fake = fwupd.FakeBackend{};
+    const unknown = FirmwarePage.load_failure(fake.backend(), arena.allocator());
+    try testing.expectEqual(enums.Error.unknown, unknown.kind);
+
+    fake.failure = .{ .kind = .not_supported, .message = "no" };
+    const recorded = FirmwarePage.load_failure(fake.backend(), arena.allocator());
+    try testing.expectEqual(enums.Error.not_supported, recorded.kind);
+    try testing.expectEqualStrings("no", recorded.message);
 }
 
 test "firmware collectLoad degrades badge errors and propagates connect failures" {
