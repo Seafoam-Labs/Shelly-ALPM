@@ -725,6 +725,11 @@ Document any known issues that are being tracked:
   Color variant leaves the choice in place. On KDE Plasma or Hyprland the main window with
   the setting on, and the PKGBUILD review and preview windows always, show only the
   compositor's corner rounding, with no second rounding inside it.
+- [ ] Settings → Look & Feel → Rounded Window Corners off: with Shelly's own title bar the
+  main window turns square at once, without a restart, and PKGBUILD review and preview
+  windows opened afterwards are square too. Switching it on rounds the main window again.
+  With the setting on, maximizing, going fullscreen or tiling (KDE Plasma quick tile, GNOME
+  half-screen) squares the corners, and restoring the window rounds them again.
 - [ ] Neither mode loads the desktop GTK theme's widget styles: set any third-party,
   dark-only or high-contrast GTK theme (user or system priority) and the built-in design
   still renders exactly as authored. Shelly mode shows no foreign colors in any widget.
