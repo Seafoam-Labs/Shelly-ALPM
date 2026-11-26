@@ -664,9 +664,6 @@ pub const UpdatePage = extern struct {
         const aur = gtk.ToggleButton.getActive(p.aur_toggle) != 0;
         const standard = gtk.ToggleButton.getActive(p.native_toggle) != 0;
 
-        const argv = ShellyCommands.upgrade(std.heap.c_allocator, flatpak, aur, standard) catch return;
-        defer std.mem.Allocator.free(std.heap.c_allocator, argv);
-
         var names: std.ArrayListUnmanaged([]const u8) = .empty;
         defer names.deinit(std.heap.c_allocator);
         var details: std.ArrayListUnmanaged([]const u8) = .empty;
@@ -674,15 +671,25 @@ pub const UpdatePage = extern struct {
             for (details.items) |detail| std.heap.c_allocator.free(detail);
             details.deinit(std.heap.c_allocator);
         }
+        var skipped_aur: std.ArrayListUnmanaged([]const u8) = .empty;
+        defer skipped_aur.deinit(std.heap.c_allocator);
 
         const Selection = struct {
             names: *std.ArrayListUnmanaged([]const u8),
             details: *std.ArrayListUnmanaged([]const u8),
+            skipped_aur: *std.ArrayListUnmanaged([]const u8),
+            failed: bool = false,
         };
-        var selection: Selection = .{ .names = &names, .details = &details };
+        var selection: Selection = .{ .names = &names, .details = &details, .skipped_aur = &skipped_aur };
         self.forEachActiveUpdate(&selection, struct {
             fn cb(sel: *Selection, pkg: *UpdateObject) void {
-                if (!Self.isIncluded(pkg)) return;
+                if (!Self.isIncluded(pkg)) {
+                    if (pkg.getSource() == .aur)
+                        sel.skipped_aur.append(std.heap.c_allocator, pkg.getName()) catch {
+                            sel.failed = true;
+                        };
+                    return;
+                }
                 const detail = std.fmt.allocPrintSentinel(std.heap.c_allocator, "{s} → {s} · {s}", .{ pkg.getOldVersion(), pkg.getNewVersion(), pkg.getSize() }, 0) catch return;
                 sel.names.append(std.heap.c_allocator, pkg.getName()) catch {
                     std.heap.c_allocator.free(detail);
@@ -694,7 +701,11 @@ pub const UpdatePage = extern struct {
                 };
             }
         }.cb);
-        if (names.items.len == 0) return;
+        // an incomplete skip list would upgrade unchecked packages
+        if (selection.failed or names.items.len == 0) return;
+
+        const argv = ShellyCommands.upgrade(std.heap.c_allocator, flatpak, aur, standard, skipped_aur.items) catch return;
+        defer std.mem.Allocator.free(std.heap.c_allocator, argv);
 
         if (support.getWindow(ShellyWindow, self)) |win| {
             win.startTransaction(.{

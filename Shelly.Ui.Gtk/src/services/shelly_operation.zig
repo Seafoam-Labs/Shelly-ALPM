@@ -300,14 +300,19 @@ pub const ShellyCommands = struct {
         return argv.toOwnedSlice(alloc);
     }
 
-    pub fn upgrade(alloc: std.mem.Allocator, flatpak: bool, aur: bool, standard: bool) ![]const []const u8 {
+    pub fn upgrade(alloc: std.mem.Allocator, flatpak: bool, aur: bool, standard: bool, skipped_aur: []const []const u8) ![]const []const u8 {
         var argv: std.ArrayListUnmanaged([]const u8) = .empty;
+        errdefer argv.deinit(alloc);
 
         try argv.append(alloc, "upgrade");
         try argv.append(alloc, "all");
         if (!flatpak) try argv.append(alloc, "--no-flatpak");
         if (!aur) try argv.append(alloc, "--no-aur");
         if (!standard) try argv.append(alloc, "--no-repo");
+        if (aur) for (skipped_aur) |name| {
+            try argv.append(alloc, "--skip-aur");
+            try argv.append(alloc, name);
+        };
         return argv.toOwnedSlice(alloc);
     }
 
@@ -1050,6 +1055,17 @@ test "appimage install argv relies on the CLI config for the install path" {
     const argv = try ShellyCommands.install_appimage(std.testing.allocator, "/tmp/NiceApp.AppImage");
     defer std.testing.allocator.free(argv);
     try std.testing.expectEqualSlices([]const u8, &.{ "install", "appimage", "/tmp/NiceApp.AppImage" }, argv);
+}
+
+test "upgrade argv skips unselected AUR packages only while AUR is enabled" {
+    const skipped = [_][]const u8{ "foo-git", "bar" };
+    const argv = try ShellyCommands.upgrade(std.testing.allocator, true, true, true, &skipped);
+    defer std.testing.allocator.free(argv);
+    try std.testing.expectEqualSlices([]const u8, &.{ "upgrade", "all", "--skip-aur", "foo-git", "--skip-aur", "bar" }, argv);
+
+    const no_aur = try ShellyCommands.upgrade(std.testing.allocator, false, false, true, &skipped);
+    defer std.testing.allocator.free(no_aur);
+    try std.testing.expectEqualSlices([]const u8, &.{ "upgrade", "all", "--no-flatpak", "--no-aur" }, no_aur);
 }
 
 test "appimage upgrade argv invokes the CLI update check" {
