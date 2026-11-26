@@ -80,6 +80,19 @@
 .shelly-root:not(.csd) {
   border-radius: 0;
 }
+/* gtk's theme squares these states, but this sheet loads above it. */
+.shelly-root.maximized,
+.shelly-root.fullscreen,
+.shelly-root.tiled,
+.shelly-root.tiled-top,
+.shelly-root.tiled-bottom,
+.shelly-root.tiled-left,
+.shelly-root.tiled-right {
+  border-radius: 0;
+}
+.shelly-root.square-corners {
+  border-radius: 0;
+}
 /* Plain labels inherit; pin them so desktop themes cannot dim row titles. */
 .shelly-root label {
   color: @shelly_fg;

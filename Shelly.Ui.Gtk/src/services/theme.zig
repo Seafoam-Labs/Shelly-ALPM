@@ -172,6 +172,7 @@ pub fn applyWith(win: *gtk.Window, mode: ThemeMode, variant: ThemeVariant) void 
     }
     applyDesktopCss(display, desktop_css);
     gtk.Widget.addCssClass(widget, "shelly-root");
+    applyCorners(widget);
     applyTitlebar(win);
     setDarkHint(dark);
     ensureWatchers();
@@ -196,6 +197,21 @@ fn applyTitlebar(win: *gtk.Window) void {
     // GTK falls back to its default header bar, which follows the desktop's
     // button layout.
     gtk.Window.setTitlebar(win, if (enabled) null else ensureHeaderBar().as(gtk.Widget));
+}
+
+/// read on every apply, so the switch works without a restart.
+pub fn applyCorners(widget: *gtk.Widget) void {
+    var rounded = true;
+    if (runtime.config) |svc| {
+        if (svc.get()) |cfg| {
+            rounded = cfg.RoundedWindowCorners;
+        } else |_| {}
+    }
+    if (rounded) {
+        gtk.Widget.removeCssClass(widget, "square-corners");
+    } else {
+        gtk.Widget.addCssClass(widget, "square-corners");
+    }
 }
 
 const DesktopResult = struct {

@@ -17,12 +17,14 @@ const AurPackageDetail = @import("aur_package_detail.zig").PackageDetail;
 const ConfirmDialog = @import("../dialog/page/yn_dialog.zig").ConfirmDialog;
 const ShellyWindow = @import("../shelly_window.zig").ShellyWindow;
 const ShellyCli = @import("../services/shelly_cli.zig").ShellyCli;
+const AtollApiService = @import("../services/atoll_api.zig").AtollApiService;
 const ShellyCommands = @import("../services/shelly_operation.zig").ShellyCommands;
 const ShellyConfig = @import("../models/shelly_config.zig").ShellyConfig;
 const Package = @import("../models/packages.zig").Package;
 const RepositoryCopy = @import("../models/packages.zig").RepositoryCopy;
 const installedCopy = @import("../models/packages.zig").installedCopy;
 const packageTarget = @import("../models/packages.zig").packageTarget;
+const AurPackage = @import("../models/aur_package.zig").AurPackage;
 const runtime = @import("../services/runtime.zig");
 const translations = @import("../helpers/translations.zig");
 const a11y = @import("../helpers/a11y.zig");
@@ -78,6 +80,8 @@ pub const ShellySearchPage = extern struct {
         check_column: *gtk.ColumnViewColumn,
         name_column: *gtk.ColumnViewColumn,
         source_column: *gtk.ColumnViewColumn,
+        votes_column: *gtk.ColumnViewColumn,
+        popularity_column: *gtk.ColumnViewColumn,
         version_column: *gtk.ColumnViewColumn,
         standard_toggle: *gtk.ToggleButton,
         aur_toggle: *gtk.ToggleButton,
@@ -100,6 +104,7 @@ pub const ShellySearchPage = extern struct {
         show_detail_pane: bool,
         installed_only: bool,
         installed_cache: InstalledCache,
+        use_atoll: bool,
         install_running: bool,
         last_query: [256]u8,
         last_query_len: usize,
@@ -161,20 +166,12 @@ pub const ShellySearchPage = extern struct {
         p.show_detail_pane = false;
         p.installed_only = false;
         p.installed_cache = .{};
+        p.use_atoll = features.builtWithAtollOnly;
         p.install_running = false;
         p.generation = 0;
         p.last_query_len = 0;
         p.check_map = .empty;
         p.pending_installs = .empty;
-
-        if (features.builtWithAtollOnly) {
-            const search_hint = translations._("Search standard repositories, Atoll and Flatpak");
-            gtk.SearchEntry.setPlaceholderText(p.search_entry, search_hint);
-            a11y.setName(p.search_entry.as(gtk.Widget), search_hint);
-            gtk.Button.setLabel(p.aur_toggle.as(gtk.Button), translations._(features.aur_source_name));
-            gtk.Widget.setTooltipText(p.aur_toggle.as(gtk.Widget), translations._("Show results from Atoll"));
-            gtk.Label.setLabel(p.placeholder_subtitle, translations._("Search the standard repositories, Atoll, and Flatpak all at once. Type a name to begin."));
-        }
 
         p.list_store = gio.ListStore.new(SearchResultObject.getGObjectType());
 
@@ -202,6 +199,8 @@ pub const ShellySearchPage = extern struct {
 
         setup_name_column(p.name_column);
         setup_text_column(p.source_column, &source_label, .start);
+        setup_number_column(p.votes_column, &votes_text);
+        setup_number_column(p.popularity_column, &popularity_text);
         setup_text_column(p.version_column, &SearchResultObject.getVersion, .start);
 
         const check_factory = gtk.SignalListItemFactory.new();
@@ -232,6 +231,8 @@ pub const ShellySearchPage = extern struct {
         attachSorter(p.check_column, sorters.boolSorter(SearchResultObject, &SearchResultObject.isSelected));
         attachSorter(p.name_column, sorters.stringSorter(SearchResultObject, &SearchResultObject.getName));
         attachSorter(p.source_column, sorters.stringSorter(SearchResultObject, &source_label));
+        attachSorter(p.votes_column, sorters.numericSorter(SearchResultObject, &SearchResultObject.getVotes));
+        attachSorter(p.popularity_column, sorters.numericSorter(SearchResultObject, &SearchResultObject.getPopularity));
         attachSorter(p.version_column, sorters.stringSorter(SearchResultObject, &SearchResultObject.getVersion));
 
         const group = gio.SimpleActionGroup.new();
@@ -284,7 +285,7 @@ pub const ShellySearchPage = extern struct {
                 gtk.Widget.setVisible(p.placeholder_box.as(gtk.Widget), 0);
                 gtk.Spinner.stop(p.loading_spinner);
             },
-            .prompt => self.show_placeholder("system-search-symbolic", translations._("Search everywhere"), translations._("Search standard repositories, the AUR and Flatpak at once. Type a name to begin.")),
+            .prompt => self.show_placeholder("system-search-symbolic", translations._("Search everywhere"), aurPromptSubtitle(self.priv().use_atoll)),
             .empty => self.show_placeholder("edit-find-symbolic", translations._("No packages found"), translations._("Try a shorter or more general keyword.")),
             .err => self.show_placeholder("dialog-error-symbolic", translations._("Could not search the selected sources"), translations._("Check your connection and try again.")),
         }
@@ -303,9 +304,50 @@ pub const ShellySearchPage = extern struct {
     fn source_label(pkg: *const SearchResultObject) [:0]const u8 {
         return switch (pkg.getSource()) {
             .standard => translations._("Standard"),
-            .aur => translations._(features.aur_source_name),
+            .aur => pkg.getRepository(),
             .flatpak => translations._("Flatpak"),
         };
+    }
+
+    fn aurPromptSubtitle(use_atoll: bool) [:0]const u8 {
+        return if (use_atoll)
+            translations._("Search the standard repositories, Atoll, and Flatpak all at once. Type a name to begin.")
+        else
+            translations._("Search the standard repositories, the AUR, and Flatpak all at once. Type a name to begin.");
+    }
+
+    fn aurSearchHint(use_atoll: bool) [:0]const u8 {
+        return if (use_atoll)
+            translations._("Search standard repositories, Atoll and Flatpak")
+        else
+            translations._("Search standard repositories, AUR and Flatpak");
+    }
+
+    /// Applies every piece of text and the detail link base that name the AUR backend.
+    fn refreshAurText(self: *Self, use_atoll: bool) void {
+        const p = self.priv();
+        p.use_atoll = use_atoll;
+
+        const name = translations._(features.aurSourceName(use_atoll));
+        gtk.Button.setLabel(p.aur_toggle.as(gtk.Button), name);
+        gtk.Widget.setTooltipText(
+            p.aur_toggle.as(gtk.Widget),
+            if (use_atoll)
+                translations._("Show results from Atoll")
+            else
+                translations._("Show results from the Arch User Repository"),
+        );
+
+        const hint = aurSearchHint(use_atoll);
+        gtk.SearchEntry.setPlaceholderText(p.search_entry, hint);
+        a11y.setName(p.search_entry.as(gtk.Widget), hint);
+        gtk.Label.setLabel(p.placeholder_subtitle, aurPromptSubtitle(use_atoll));
+
+        p.aur_detail.setSourceLabel(name);
+        p.aur_detail.setLinkBase(if (use_atoll)
+            AtollApiService.base_url ++ "/package/"
+        else
+            AurPackageDetail.default_link_base);
     }
 
     fn on_selection_changed(_: *gobject.Object, _: *gobject.ParamSpec, self: *Self) callconv(.c) void {
@@ -366,6 +408,43 @@ pub const ShellySearchPage = extern struct {
         _ = gtk.SignalListItemFactory.signals.setup.connect(factory, ?*anyopaque, &c.setup, null, .{});
         _ = gtk.SignalListItemFactory.signals.bind.connect(factory, ?*anyopaque, &c.bind, null, .{});
         gtk.ColumnViewColumn.setFactory(column, factory.as(gtk.ListItemFactory));
+    }
+
+    fn setup_number_column(
+        column: *gtk.ColumnViewColumn,
+        comptime formatter: *const fn ([]u8, *const SearchResultObject) [:0]const u8,
+    ) void {
+        const c = struct {
+            fn setup(_: *gtk.SignalListItemFactory, item: *gobject.Object, _: ?*anyopaque) callconv(.c) void {
+                const cell = gobject.ext.cast(gtk.ColumnViewCell, item) orelse return;
+                const label = gtk.Label.new("");
+                gtk.Widget.setHalign(label.as(gtk.Widget), .start);
+                gtk.ColumnViewCell.setChild(cell, label.as(gtk.Widget));
+            }
+            fn bind(_: *gtk.SignalListItemFactory, item: *gobject.Object, _: ?*anyopaque) callconv(.c) void {
+                const cell = gobject.ext.cast(gtk.ColumnViewCell, item) orelse return;
+                const obj = gtk.ColumnViewCell.getItem(cell) orelse return;
+                const pkg = gobject.ext.cast(SearchResultObject, obj) orelse return;
+                const child = gtk.ColumnViewCell.getChild(cell) orelse return;
+                const label = gobject.ext.cast(gtk.Label, child) orelse return;
+                var buf: [32]u8 = undefined;
+                gtk.Label.setLabel(label, formatter(&buf, pkg));
+            }
+        };
+        const factory = gtk.SignalListItemFactory.new();
+        _ = gtk.SignalListItemFactory.signals.setup.connect(factory, ?*anyopaque, &c.setup, null, .{});
+        _ = gtk.SignalListItemFactory.signals.bind.connect(factory, ?*anyopaque, &c.bind, null, .{});
+        gtk.ColumnViewColumn.setFactory(column, factory.as(gtk.ListItemFactory));
+    }
+
+    fn votes_text(buf: []u8, pkg: *const SearchResultObject) [:0]const u8 {
+        if (pkg.getSource() != .aur) return "";
+        return std.fmt.bufPrintSentinel(buf, "{d}", .{pkg.getVotes()}, 0) catch "";
+    }
+
+    fn popularity_text(buf: []u8, pkg: *const SearchResultObject) [:0]const u8 {
+        if (pkg.getSource() != .aur) return "";
+        return std.fmt.bufPrintSentinel(buf, "{d:.2}", .{pkg.getPopularity()}, 0) catch "";
     }
 
     fn setup_name_column(column: *gtk.ColumnViewColumn) void {
@@ -607,7 +686,7 @@ pub const ShellySearchPage = extern struct {
         const p = self.priv();
         var buf: [64]u8 = undefined;
         gtk.Button.setLabel(p.standard_toggle.as(gtk.Button), std.fmt.bufPrintSentinel(&buf, "{s} \u{00b7} {d}", .{ translations._("Standard"), standard_count }, 0) catch translations._("Standard"));
-        gtk.Button.setLabel(p.aur_toggle.as(gtk.Button), std.fmt.bufPrintSentinel(&buf, "{s} \u{00b7} {d}", .{ translations._(features.aur_source_name), aur_count }, 0) catch translations._(features.aur_source_name));
+        gtk.Button.setLabel(p.aur_toggle.as(gtk.Button), std.fmt.bufPrintSentinel(&buf, "{s} \u{00b7} {d}", .{ translations._(features.aurSourceName(p.use_atoll)), aur_count }, 0) catch translations._(features.aurSourceName(p.use_atoll)));
         gtk.Button.setLabel(p.flatpak_toggle.as(gtk.Button), std.fmt.bufPrintSentinel(&buf, "{s} \u{00b7} {d}", .{ translations._("Flatpak"), flatpak_count }, 0) catch translations._("Flatpak"));
     }
 
@@ -632,7 +711,7 @@ pub const ShellySearchPage = extern struct {
     fn reset_source_labels(self: *Self) void {
         const p = self.priv();
         gtk.Button.setLabel(p.standard_toggle.as(gtk.Button), translations._("Standard"));
-        gtk.Button.setLabel(p.aur_toggle.as(gtk.Button), translations._(features.aur_source_name));
+        gtk.Button.setLabel(p.aur_toggle.as(gtk.Button), translations._(features.aurSourceName(p.use_atoll)));
         gtk.Button.setLabel(p.flatpak_toggle.as(gtk.Button), translations._("Flatpak"));
     }
 
@@ -642,6 +721,7 @@ pub const ShellySearchPage = extern struct {
         p.loaded = true;
 
         const sources = enabledSources();
+        self.refreshAurText(sources.atoll);
 
         gtk.ToggleButton.setActive(p.standard_toggle, 1);
         // Disabled sources are neither queried nor offered in the filter.
@@ -896,9 +976,22 @@ pub const ShellySearchPage = extern struct {
         standard: bool = true,
         aur: bool = false,
         flatpak: bool = false,
+        atoll: bool = false,
     };
 
     const LoadMode = enum { search, installed };
+
+    /// Atoll replaces the AUR backend, so the worker is told which one runs
+    /// instead of reading the config itself.
+    fn atollBackendActive() bool {
+        // Atoll-only builds hide the toggle, so a stale AtollAurEnabled must
+        // not send them back to the CLI backend.
+        if (features.builtWithAtollOnly) return true;
+        if (!features.builtWithAtoll) return false;
+        const svc = runtime.config orelse return false;
+        const cfg = svc.get() catch return false;
+        return cfg.AtollAurEnabled;
+    }
 
     fn enabledSources() Sources {
         var sources = Sources{};
@@ -908,6 +1001,7 @@ pub const ShellySearchPage = extern struct {
                 sources.flatpak = cfg.FlatPackEnabled;
             } else |_| {}
         }
+        sources.atoll = atollBackendActive();
         return sources;
     }
 
@@ -917,6 +1011,7 @@ pub const ShellySearchPage = extern struct {
         gio.ListStore.removeAll(p.list_store);
         // A new load drops the selection, so the old row's preview goes too.
         gtk.Revealer.setRevealChild(p.detail_revealer, 0);
+        self.refreshAurText(sources.atoll);
         self.update_selection_ui();
         self.reset_source_labels();
         self.set_state(.loading);
@@ -949,7 +1044,7 @@ pub const ShellySearchPage = extern struct {
 
         for (0..3) |i| {
             if (!slots[i].enabled) continue;
-            threads[i] = std.Thread.spawn(.{}, source_worker, .{ &slots[i], query_buf, query_len, tags[i], installed_sets, mode }) catch null;
+            threads[i] = std.Thread.spawn(.{}, source_worker, .{ &slots[i], query_buf, query_len, tags[i], sources.atoll, installed_sets, mode }) catch null;
         }
         for (threads) |maybe_thread| {
             if (maybe_thread) |thread| thread.join();
@@ -995,6 +1090,7 @@ pub const ShellySearchPage = extern struct {
         query_buf: *[256]u8,
         query_len: usize,
         source: Source,
+        use_atoll: bool,
         installed_sets: InstalledSnapshot,
         mode: LoadMode,
     ) void {
@@ -1047,29 +1143,34 @@ pub const ShellySearchPage = extern struct {
                 }
             },
             .aur => {
-                const parsed = if (mode == .installed)
-                    cli.list_aur_installed() catch |err| {
+                const repository = translations._(features.aurSourceName(use_atoll));
+                const aur_start = items.items.len;
+                if (mode == .installed) {
+                    const parsed = cli.list_aur_installed() catch |err| {
                         std.debug.print("Could not load the installed AUR-package list. {0s}\n\nTechnical details: {1s}\n", .{ diagnostics.cause(err), @errorName(err) });
                         return;
-                    }
-                else
-                    cli.search_aur(query) catch |err| {
+                    };
+                    appendAurResults(alloc, parsed.value, repository, &items);
+                } else if (use_atoll) {
+                    var atoll = AtollApiService.init(alloc, threaded.io());
+                    defer atoll.deinit();
+                    const packages = atoll.search(query, .relevance) catch |err| {
+                        std.debug.print("Could not search Atoll. {0s}\n\nTechnical details: {1s}\n", .{ diagnostics.cause(err), @errorName(err) });
+                        return;
+                    };
+                    appendAurResults(alloc, packages, repository, &items);
+                } else {
+                    const parsed = cli.search_aur(query) catch |err| {
                         std.debug.print("Could not search the AUR. {0s}\n\nTechnical details: {1s}\n", .{ diagnostics.cause(err), @errorName(err) });
                         return;
                     };
-                for (parsed.value) |pkg| {
-                    items.append(alloc, .{
-                        .source = .aur,
-                        .name = alloc.dupeSentinel(u8, pkg.Name, 0) catch continue,
-                        .install_target = alloc.dupeSentinel(u8, pkg.Name, 0) catch continue,
-                        .version = alloc.dupeSentinel(u8, pkg.Version, 0) catch continue,
-                        .description = if (pkg.Description) |value| alloc.dupeSentinel(u8, value, 0) catch "" else "",
-                        .repository = alloc.dupeSentinel(u8, features.aur_source_name, 0) catch continue,
-                        .out_of_date = pkg.OutOfDate != null,
-                        .installed = mode == .installed or aurInstalledContains(installed_sets.aur_names, pkg.Name),
-                        .aur = pkg,
-                    }) catch continue;
+                    appendAurResults(alloc, parsed.value, repository, &items);
                 }
+                // Installed state is backend-independent: mark whatever the
+                // active backend returned against the installed AUR names,
+                // and mark the installed listing itself.
+                for (items.items[aur_start..]) |*item| item.installed =
+                    mode == .installed or aurInstalledContains(installed_sets.aur_names, item.name);
             },
             .flatpak => {
                 if (mode == .installed) {
@@ -1121,6 +1222,27 @@ pub const ShellySearchPage = extern struct {
 
         slot.items = items.items;
         slot.ok = true;
+    }
+
+    /// Both backends return AUR metadata, so rows map the same way for either.
+    fn appendAurResults(
+        alloc: std.mem.Allocator,
+        packages: []const AurPackage,
+        repository: [:0]const u8,
+        items: *std.ArrayListUnmanaged(SearchResult),
+    ) void {
+        for (packages) |pkg| {
+            items.append(alloc, .{
+                .source = .aur,
+                .name = alloc.dupeSentinel(u8, pkg.Name, 0) catch continue,
+                .install_target = alloc.dupeSentinel(u8, pkg.Name, 0) catch continue,
+                .version = alloc.dupeSentinel(u8, pkg.Version, 0) catch continue,
+                .description = if (pkg.Description) |value| alloc.dupeSentinel(u8, value, 0) catch "" else "",
+                .repository = alloc.dupeSentinel(u8, repository, 0) catch continue,
+                .out_of_date = pkg.OutOfDate != null,
+                .aur = pkg,
+            }) catch continue;
+        }
     }
 
     fn dupeResult(alloc: std.mem.Allocator, item: SearchResult) !SearchResult {
@@ -1546,6 +1668,8 @@ pub const ShellySearchPage = extern struct {
         .{ "check_column", @offsetOf(Private, "check_column") },
         .{ "name_column", @offsetOf(Private, "name_column") },
         .{ "source_column", @offsetOf(Private, "source_column") },
+        .{ "votes_column", @offsetOf(Private, "votes_column") },
+        .{ "popularity_column", @offsetOf(Private, "popularity_column") },
         .{ "version_column", @offsetOf(Private, "version_column") },
         .{ "standard_toggle", @offsetOf(Private, "standard_toggle") },
         .{ "aur_toggle", @offsetOf(Private, "aur_toggle") },
@@ -1684,6 +1808,40 @@ test "deduplicateStandardResults keeps repository copies and marks the installed
     try std.testing.expectEqualStrings("foreign", items.items[2].install_target);
     try std.testing.expect(items.items[2].installed);
     try std.testing.expectEqualStrings("extra/bar", items.items[3].install_target);
+}
+
+test "appendAurResults maps AUR metadata into rows for either backend" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+
+    const packages = [_]AurPackage{
+        .{
+            .Id = 1,
+            .Name = "kate-git",
+            .PackageBaseId = 2,
+            .PackageBase = "kate-git",
+            .Version = "26.07.70-1",
+            .Description = "Advanced text editor",
+            .NumVotes = 6,
+            .Popularity = 0,
+            .FirstSubmitted = 1,
+            .LastModified = 2,
+            .UrlPath = "/cgit/aur.git/snapshot/kate-git.tar.gz",
+        },
+    };
+
+    var items: std.ArrayListUnmanaged(SearchResult) = .empty;
+    ShellySearchPage.appendAurResults(alloc, &packages, "Atoll", &items);
+
+    try std.testing.expectEqual(@as(usize, 1), items.items.len);
+    try std.testing.expectEqual(Source.aur, items.items[0].source);
+    try std.testing.expectEqualStrings("kate-git", items.items[0].name);
+    try std.testing.expectEqualStrings("kate-git", items.items[0].install_target);
+    try std.testing.expectEqualStrings("Advanced text editor", items.items[0].description);
+    try std.testing.expectEqualStrings("Atoll", items.items[0].repository);
+    try std.testing.expect(!items.items[0].out_of_date);
+    try std.testing.expectEqualStrings("kate-git", items.items[0].aur.?.Name);
 }
 
 test "deduplicateStandardResults prioritizes installed local package over sync package" {
