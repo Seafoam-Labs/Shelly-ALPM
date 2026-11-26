@@ -94,6 +94,7 @@ pub const Model = struct {
     gpa: Allocator,
     list_percent: std.enums.EnumFieldStruct(Tab, u8, 40) = .{ .aur = 30 },
     viewport_width: ?u16 = null,
+    utilities_split_visible: bool = false,
 
     active: Tab = .packages,
     visible_tabs: [Tab.all.len]Tab = undefined,
@@ -209,8 +210,9 @@ pub const Model = struct {
                     self.help_open = !self.help_open;
                     return ctx.consumeAndRedraw();
                 }
-                if (!self.help_open and operation_model.operationPrompt(self) == null and self.operation_state.review_prompt == null and (self.active == .packages or self.active == .aur or self.active == .flatpak or self.active == .appimage or self.active == .settings) and (self.overlay == null or self.overlay.? == .package or self.overlay.? == .aur or self.overlay.? == .flatpak)) {
+                if (!self.help_open and operation_model.operationPrompt(self) == null and self.operation_state.review_prompt == null and self.canResizeActiveSplit() and (self.overlay == null or self.overlay.? == .package or self.overlay.? == .aur or self.overlay.? == .flatpak)) {
                     if (commands.matches(key, .narrow_view) or commands.matches(key, .widen_view)) {
+                        if (self.active == .utilities and try utilities_model.handleKey(self, ctx, key)) return;
                         const percent = self.activeListPercent();
                         percent.* = @import("views/components/split_layout.zig").resize(self.viewport_width, percent.*, commands.matches(key, .widen_view)) orelse return ctx.consumeEvent();
                         return ctx.consumeAndRedraw();
@@ -411,6 +413,14 @@ pub const Model = struct {
     pub fn activeListPercent(self: *Model) *u8 {
         return switch (self.active) {
             inline else => |tab| &@field(self.list_percent, @tagName(tab)),
+        };
+    }
+
+    fn canResizeActiveSplit(self: *const Model) bool {
+        return switch (self.active) {
+            .packages, .aur, .flatpak, .appimage, .settings => true,
+            .utilities => self.utilities_split_visible and !self.utilities_state.preview_open and self.utilities_state.repositories.editing == null,
+            .upgrade => false,
         };
     }
 
@@ -787,6 +797,45 @@ test "panel resizing keeps pages independent, respects bounds, and preserves set
     try model.captureEvent(&events, .{ .key_press = commands.bindings.widen_view });
     try std.testing.expectEqual(@as(u8, 45), model.activeListPercent().*);
     try std.testing.expectEqual(selected, model.settings_state.settings_selected);
+}
+
+test "Utilities resize shortcuts apply only to a visible split outside repository text entry" {
+    const model = try Model.init(std.testing.allocator);
+    defer model.deinit();
+    model.active = .utilities;
+    var events: vxfw.EventContext = .{ .io = std.testing.io, .alloc = std.testing.allocator, .cmds = .empty };
+    defer events.cmds.deinit(std.testing.allocator);
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const draw: vxfw.DrawContext = .{ .arena = arena.allocator(), .min = .{}, .max = .{ .width = 100, .height = 24 }, .cell_size = .{ .width = 10, .height = 20 } };
+    const widen: vxfw.Event = .{ .key_press = commands.bindings.widen_view };
+    const narrow: vxfw.Event = .{ .key_press = commands.bindings.narrow_view };
+
+    const before = try model.widget().draw(draw);
+    try std.testing.expectEqual(@as(u16, 40), before.children[1].surface.size.width);
+    try model.captureEvent(&events, widen);
+    const after = try model.widget().draw(draw);
+    try std.testing.expectEqual(@as(u16, 45), after.children[1].surface.size.width);
+    try model.captureEvent(&events, narrow);
+    try std.testing.expectEqual(@as(u8, 40), model.list_percent.utilities);
+    try std.testing.expectEqual(@as(u8, 40), model.list_percent.settings);
+
+    model.utilities_state.preview_open = true;
+    try model.captureEvent(&events, widen);
+    try std.testing.expectEqual(@as(u8, 40), model.list_percent.utilities);
+    model.utilities_state.preview_open = false;
+
+    model.utilities_state.selected = .repository;
+    model.utilities_state.repositories.editing = .name;
+    try model.captureEvent(&events, widen);
+    try std.testing.expectEqual(@as(u8, 40), model.list_percent.utilities);
+    model.utilities_state.repositories.editing = null;
+
+    for ([_]vxfw.Size{ .{ .width = 79, .height = 24 }, .{ .width = 100, .height = 12 } }) |size| {
+        _ = try model.widget().draw(draw.withConstraints(.{}, .{ .width = size.width, .height = size.height }));
+        try model.captureEvent(&events, widen);
+        try std.testing.expectEqual(@as(u8, 40), model.list_percent.utilities);
+    }
 }
 
 test "quit is blocked across pages and help until the operation is collected" {

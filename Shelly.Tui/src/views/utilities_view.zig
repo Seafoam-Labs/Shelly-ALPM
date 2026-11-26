@@ -26,6 +26,7 @@ pub fn appendContent(model: *Model, ctx: vxfw.DrawContext, children: *std.ArrayL
         try appendPane(ctx, children, .{ .row = 1, .col = 0 }, .{ .width = size.width, .height = height }, "Utilities", .{ .userdata = model, .drawFn = drawStacked });
         return;
     }
+    model.utilities_split_visible = true;
     const list_width = split_layout.listWidth(size.width, model.list_percent.utilities);
     try appendPane(ctx, children, .{ .row = 1, .col = 0 }, .{ .width = list_width, .height = height }, "Utilities", .{ .userdata = model, .drawFn = drawActions });
     try appendPane(ctx, children, .{ .row = 1, .col = list_width }, .{ .width = size.width - list_width, .height = height }, "Details", .{ .userdata = model, .drawFn = drawResults });

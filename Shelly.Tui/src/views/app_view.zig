@@ -26,6 +26,7 @@ pub fn draw(self: *Model, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
     const arena = ctx.arena;
     const max = ctx.max.size();
     self.viewport_width = max.width;
+    self.utilities_split_visible = false;
     self.help_button = null;
 
     // Need room for the tab bar, at least one content row and the status bar
