@@ -1,5 +1,6 @@
 const std = @import("std");
 const vaxis = @import("vaxis");
+const RepositoryField = @import("../models/utilities_model.zig").RepositoryField;
 const RepositoryControl = @import("../models/utilities_model.zig").RepositoryControl;
 const vxfw = @import("vaxis").vxfw;
 const Model = @import("../model.zig").Model;
@@ -68,7 +69,7 @@ fn drawStacked(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surf
 
 fn drawActions(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
     const size = ctx.max.size();
-    const widget: vxfw.Widget = .{ .userdata = ptr, .drawFn = drawActions };
+    const widget: vxfw.Widget = .{ .userdata = ptr, .drawFn = drawActions, .eventHandler = focusActions };
     if (size.width == 0 or size.height == 0) return .{ .size = size, .widget = widget, .buffer = &.{}, .children = &.{} };
     const line_ctx = ctx.withConstraints(.{}, .{ .width = size.width, .height = 1 });
     const model: *Model = @ptrCast(@alignCast(ptr));
@@ -101,6 +102,16 @@ fn drawActions(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surf
     return .{ .size = size, .widget = widget, .buffer = &.{}, .children = children.items };
 }
 
+fn focusActions(ptr: *anyopaque, ctx: *vxfw.EventContext, event: vxfw.Event) anyerror!void {
+    if (event == .mouse and commands.Mouse.primaryPress(event.mouse))
+        commands.Mouse.focusUtilityPane(@ptrCast(@alignCast(ptr)), ctx, false);
+}
+
+fn focusResults(ptr: *anyopaque, ctx: *vxfw.EventContext, event: vxfw.Event) anyerror!void {
+    if (event == .mouse and commands.Mouse.primaryPress(event.mouse))
+        commands.Mouse.focusUtilityPane(@ptrCast(@alignCast(ptr)), ctx, true);
+}
+
 const ActionRow = struct {
     model: *Model,
     task: Task,
@@ -116,7 +127,7 @@ const ActionRow = struct {
         };
         var surface = try label.draw(ctx);
         surface.widget = .{ .userdata = ptr, .drawFn = draw, .eventHandler = activate };
-        if (self.model.settings_state.settings.expanded_mouse_support) try styles.hoverLabel(ctx.arena, &surface);
+        try styles.hoverLabel(ctx.arena, &surface);
         return surface;
     }
 
@@ -154,24 +165,30 @@ fn drawResults(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surf
         },
     }
     const size = ctx.max.size();
-    const widget: vxfw.Widget = .{ .userdata = ptr, .drawFn = drawResults };
+    const widget: vxfw.Widget = .{ .userdata = ptr, .drawFn = drawResults, .eventHandler = focusResults };
     if (size.width == 0 or size.height == 0) return .{ .widget = widget, .size = size, .buffer = &.{}, .children = &.{} };
 
-    const children = try ctx.arena.alloc(vxfw.SubSurface, if (size.height > 1) 2 else 1);
+    var children: std.ArrayList(vxfw.SubSurface) = .empty;
     var row: u16 = 0;
-    if (children.len == 2) {
+    if (size.height > 1) {
         const intro = try drawDescription(ctx, "Preview .pacnew, .pacsave, and .pacorig files left by package changes.");
-        children[0] = .{ .origin = .{ .row = 0, .col = 0 }, .surface = intro };
+        try children.append(ctx.arena, .{ .origin = .{ .row = 0, .col = 0 }, .surface = intro });
         row = intro.size.height;
         if (size.height - row >= 2) row += 1;
     }
-    const body_ctx = ctx.withConstraints(.{}, .{ .width = size.width, .height = size.height - row });
-    const body = if (state.message()) |message| blk: {
-        const status: vxfw.Text = .{ .text = message, .softwrap = true };
+    const message = state.message();
+    const buttons = message == null and model.settings_state.settings.expanded_mouse_support and size.height - row >= 2 and size.width >= 16;
+    const body_ctx = ctx.withConstraints(.{}, .{ .width = size.width, .height = size.height - row - @as(u16, @intFromBool(buttons)) });
+    const body = if (message) |status_message| blk: {
+        const status: vxfw.Text = .{ .text = status_message, .softwrap = true };
         break :blk try status.draw(body_ctx);
-    } else try state.list.draw(body_ctx);
-    children[children.len - 1] = .{ .origin = .{ .row = row, .col = 0 }, .surface = body };
-    return .{ .widget = widget, .size = size, .buffer = &.{}, .children = children };
+    } else try drawClickableResults(model, body_ctx, .pacfiles, &state.list);
+    try children.append(ctx.arena, .{ .origin = .{ .row = row, .col = 0 }, .surface = body });
+    if (buttons) {
+        try appendUtilityButton(model, ctx, &children, size.height - 1, 0, "[Preview]", .{ .preview_diff = false });
+        try appendUtilityButton(model, ctx, &children, size.height - 1, 10, "[Diff]", .{ .preview_diff = true });
+    }
+    return .{ .widget = widget, .size = size, .buffer = &.{}, .children = children.items };
 }
 
 fn drawDescription(ctx: vxfw.DrawContext, text: []const u8) Allocator.Error!vxfw.Surface {
@@ -181,17 +198,51 @@ fn drawDescription(ctx: vxfw.DrawContext, text: []const u8) Allocator.Error!vxfw
 }
 
 pub fn drawPath(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
-    return drawPacfilePath(ptr, ctx, styles.secondary);
+    return drawPacfilePath(ptr, ctx, false);
 }
 
 pub fn drawSelectedPath(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
-    return drawPacfilePath(ptr, ctx, styles.selected);
+    return drawPacfilePath(ptr, ctx, true);
 }
 
-fn drawPacfilePath(ptr: *anyopaque, ctx: vxfw.DrawContext, style: @import("vaxis").Style) Allocator.Error!vxfw.Surface {
+fn drawPacfilePath(ptr: *anyopaque, ctx: vxfw.DrawContext, selected: bool) Allocator.Error!vxfw.Surface {
     const path: *const []const u8 = @ptrCast(@alignCast(ptr));
-    const text: vxfw.Text = .{ .text = try @import("diagnostics").sanitizeAlloc(ctx.arena, path.*), .softwrap = true, .width_basis = .parent, .style = style };
-    return text.draw(ctx.withConstraints(ctx.min, .{ .width = ctx.max.width orelse ctx.min.width, .height = ctx.max.height }));
+    const text: vxfw.Text = .{ .text = try @import("diagnostics").sanitizeAlloc(ctx.arena, path.*), .softwrap = true, .width_basis = .parent, .style = if (selected) styles.selected else styles.secondary };
+    var surface = try text.draw(ctx.withConstraints(ctx.min, .{ .width = ctx.max.width orelse ctx.min.width, .height = ctx.max.height }));
+    surface.widget = .{ .userdata = ptr, .drawFn = if (selected) drawSelectedPath else drawPath };
+    return surface;
+}
+
+const ResultRow = struct {
+    model: *Model,
+    task: Task,
+    name: []const u8,
+
+    fn draw(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
+        const self: *ResultRow = @ptrCast(@alignCast(ptr));
+        return drawPath(@ptrCast(&self.name), ctx);
+    }
+
+    fn click(ptr: *anyopaque, ctx: *vxfw.EventContext, event: vxfw.Event) anyerror!void {
+        if (event != .mouse or !commands.Mouse.primaryPress(event.mouse)) return;
+        const self: *ResultRow = @ptrCast(@alignCast(ptr));
+        commands.Mouse.selectUtilityResult(self.model, ctx, self.task, self.name);
+    }
+};
+
+fn drawClickableResults(model: *Model, ctx: vxfw.DrawContext, task: Task, list: *vxfw.ScrollView) Allocator.Error!vxfw.Surface {
+    var surface = try list.draw(ctx);
+    const children = try ctx.arena.dupe(vxfw.SubSurface, surface.children);
+    for (children) |*child| {
+        if (child.surface.widget.drawFn != drawPath and child.surface.widget.drawFn != drawSelectedPath) continue;
+        const name: *const []const u8 = @ptrCast(@alignCast(child.surface.widget.userdata));
+        const row = try ctx.arena.create(ResultRow);
+        row.* = .{ .model = model, .task = task, .name = try ctx.arena.dupe(u8, name.*) };
+        child.surface.widget = .{ .userdata = row, .drawFn = ResultRow.draw, .eventHandler = ResultRow.click };
+        try styles.hoverLabel(ctx.arena, &child.surface);
+    }
+    surface.children = children;
+    return surface;
 }
 
 test "utilities frames fill their allocated panes before scanning" {
@@ -225,24 +276,59 @@ test "pacfile description stays above the full-width selected result" {
     try std.testing.expectEqual(@as(u16, 40), row.size.width);
 }
 
+test "utility result clicks select wrapped paths and return focus to the action pane" {
+    vxfw.DrawContext.init(.unicode);
+    const model = try Model.init(std.testing.allocator);
+    defer model.deinit();
+    model.active = .utilities;
+    model.utilities_state.result = try std.json.parseFromSlice([][]const u8, model.gpa,
+        \\["/etc/first.pacnew","/etc/a-long-configuration-name.pacsave"]
+    , .{ .allocate = .alloc_always });
+    model.utilities_state.list.item_count = 2;
+    var arena = std.heap.ArenaAllocator.init(model.gpa);
+    defer arena.deinit();
+    const draw_ctx: vxfw.DrawContext = .{ .arena = arena.allocator(), .min = .{}, .max = .{ .width = 20, .height = 6 }, .cell_size = .{ .width = 10, .height = 20 } };
+    const surface = try drawClickableResults(model, draw_ctx, .pacfiles, &model.utilities_state.list);
+    const second = surface.children[1];
+    try std.testing.expect(second.surface.size.height > 1);
+    var hits: std.ArrayList(vxfw.HitResult) = .empty;
+    try surface.hitTest(arena.allocator(), &hits, .{ .row = @intCast(second.origin.row + 1), .col = 0 });
+    var events: vxfw.EventContext = .{ .io = std.testing.io, .alloc = arena.allocator(), .cmds = .empty };
+    const click: vxfw.Event = .{ .mouse = .{ .row = 0, .col = 0, .button = .left, .type = .press, .mods = .{} } };
+    try hits.items[hits.items.len - 1].widget.handleEvent(&events, click);
+    try std.testing.expectEqual(@as(u32, 1), model.utilities_state.list.cursor);
+    try std.testing.expect(model.utilities_state.results_focused);
+    const actions = try drawActions(model, draw_ctx);
+    try actions.widget.handleEvent(&events, click);
+    try std.testing.expect(!model.utilities_state.results_focused);
+}
+
 fn drawRepositories(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
     const model: *Model = @ptrCast(@alignCast(ptr));
     const state = &model.utilities_state.repositories;
     const size = ctx.max.size();
-    const widget: vxfw.Widget = .{ .userdata = ptr, .drawFn = drawRepositories };
+    const widget: vxfw.Widget = .{ .userdata = ptr, .drawFn = drawRepositories, .eventHandler = focusResults };
     if (size.width == 0 or size.height == 0) return .{ .widget = widget, .size = size, .buffer = &.{}, .children = &.{} };
     var children: std.ArrayList(vxfw.SubSurface) = .empty;
     if (state.editing) |field| {
-        if (size.height == 1) {
-            try children.append(ctx.arena, .{ .origin = .{ .row = 0, .col = 0 }, .surface = try state.field(field).draw(ctx) });
-        } else if (size.height < 5) {
-            try drawRepositoryField(ctx, &children, 0, if (field == .name) "Repository name" else "Server URL", state.field(field), true);
+        const show_buttons = model.settings_state.settings.expanded_mouse_support and size.width >= 17 and size.height >= 3;
+        const show_message = size.height > 2 and state.message.len != 0;
+        const footer_height = @as(u16, @intFromBool(show_buttons)) + @as(u16, @intFromBool(show_message));
+        const fields_height = size.height - footer_height;
+        if (fields_height == 1) {
+            try appendRepositoryField(model, ctx, &children, 0, field, true, 1);
+        } else if (fields_height < 4) {
+            try appendRepositoryField(model, ctx, &children, 0, field, true, 2);
         } else {
-            try drawRepositoryField(ctx, &children, 0, "Repository name", &state.name, field == .name);
-            try drawRepositoryField(ctx, &children, 2, "Server URL", &state.url, field == .url);
+            try appendRepositoryField(model, ctx, &children, 0, .name, field == .name, 2);
+            try appendRepositoryField(model, ctx, &children, 2, .url, field == .url, 2);
         }
-        if (size.height > 2 and state.message.len != 0)
-            try appendRepositoryLine(ctx, &children, size.height - 1, state.message, styles.emphasis);
+        if (show_message)
+            try appendRepositoryLine(ctx, &children, fields_height, state.message, styles.emphasis);
+        if (show_buttons) {
+            try appendUtilityButton(model, ctx, &children, size.height - 1, 0, "[Review]", .{ .repository = .review });
+            try appendUtilityButton(model, ctx, &children, size.height - 1, 9, "[Cancel]", .{ .repository = .back });
+        }
     } else {
         var row: u16 = 0;
         if (size.height >= 2) {
@@ -258,23 +344,52 @@ fn drawRepositories(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw
         if (row < size.height and state.selected() != null) {
             const show_buttons = model.settings_state.settings.expanded_mouse_support and state.job == null and size.width >= 22 and size.height - row >= 2;
             const list_height = size.height - row - @as(u16, @intFromBool(show_buttons));
-            try children.append(ctx.arena, .{ .origin = .{ .row = row, .col = 0 }, .surface = try state.list.draw(ctx.withConstraints(.{}, .{ .width = size.width, .height = list_height })) });
+            try children.append(ctx.arena, .{ .origin = .{ .row = row, .col = 0 }, .surface = try drawClickableResults(model, ctx.withConstraints(.{}, .{ .width = size.width, .height = list_height }), .repository, &state.list) });
             if (show_buttons) {
-                try appendRepositoryButton(model, ctx, &children, size.height - 1, 0, "[Add]", .add);
-                try appendRepositoryButton(model, ctx, &children, size.height - 1, 6, "[Remove]", .remove);
+                try appendUtilityButton(model, ctx, &children, size.height - 1, 0, "[Add]", .{ .repository = .add });
+                try appendUtilityButton(model, ctx, &children, size.height - 1, 6, "[Remove]", .{ .repository = .remove });
             }
         } else if (row < size.height and model.settings_state.settings.expanded_mouse_support and state.job == null and size.width >= 5) {
-            try appendRepositoryButton(model, ctx, &children, size.height - 1, 0, "[Add]", .add);
+            try appendUtilityButton(model, ctx, &children, size.height - 1, 0, "[Add]", .{ .repository = .add });
         }
     }
     return .{ .widget = widget, .size = size, .buffer = &.{}, .children = children.items };
 }
 
-fn drawRepositoryField(ctx: vxfw.DrawContext, children: *std.ArrayList(vxfw.SubSurface), row: u16, label: []const u8, field: *vxfw.TextField, active: bool) Allocator.Error!void {
-    try appendRepositoryLine(ctx, children, row, label, if (active) styles.selected else styles.emphasis);
+const RepositoryInput = struct {
+    model: *Model,
+    field: RepositoryField,
+    active: bool,
+
+    fn draw(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
+        const self: *RepositoryInput = @ptrCast(@alignCast(ptr));
+        const size = ctx.max.size();
+        var children: std.ArrayList(vxfw.SubSurface) = .empty;
+        if (size.height == 2) {
+            const label = if (self.field == .name) "Repository name" else "Server URL";
+            try appendRepositoryLine(ctx, &children, 0, label, if (self.active) styles.selected else styles.emphasis);
+        }
+        const input = self.model.utilities_state.repositories.field(self.field);
+        try children.append(ctx.arena, .{
+            .origin = .{ .row = size.height - 1, .col = 0 },
+            .surface = try input.draw(ctx.withConstraints(.{}, .{ .width = size.width, .height = 1 })),
+        });
+        return .{ .size = size, .widget = .{ .userdata = ptr, .drawFn = draw, .eventHandler = click }, .buffer = &.{}, .children = children.items };
+    }
+
+    fn click(ptr: *anyopaque, ctx: *vxfw.EventContext, event: vxfw.Event) anyerror!void {
+        if (event != .mouse or !commands.Mouse.primaryPress(event.mouse)) return;
+        const self: *RepositoryInput = @ptrCast(@alignCast(ptr));
+        try commands.Mouse.repositoryControl(self.model, ctx, .{ .focus_field = self.field });
+    }
+};
+
+fn appendRepositoryField(model: *Model, ctx: vxfw.DrawContext, children: *std.ArrayList(vxfw.SubSurface), row: u16, field: RepositoryField, active: bool, height: u16) Allocator.Error!void {
+    const input = try ctx.arena.create(RepositoryInput);
+    input.* = .{ .model = model, .field = field, .active = active };
     try children.append(ctx.arena, .{
-        .origin = .{ .row = row + 1, .col = 0 },
-        .surface = try field.draw(ctx.withConstraints(.{}, .{ .width = ctx.max.size().width, .height = 1 })),
+        .origin = .{ .row = row, .col = 0 },
+        .surface = try RepositoryInput.draw(input, ctx.withConstraints(.{}, .{ .width = ctx.max.size().width, .height = height })),
     });
 }
 
@@ -286,13 +401,15 @@ fn appendRepositoryLine(ctx: vxfw.DrawContext, children: *std.ArrayList(vxfw.Sub
     });
 }
 
-const RepositoryButton = struct {
+const UtilityButton = struct {
+    const Action = union(enum) { repository: RepositoryControl, preview_diff: bool };
+
     owner: *Model,
     label: []const u8,
-    action: RepositoryControl,
+    action: Action,
 
     fn drawWidget(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
-        const self: *RepositoryButton = @ptrCast(@alignCast(ptr));
+        const self: *UtilityButton = @ptrCast(@alignCast(ptr));
         const text: vxfw.Text = .{ .text = self.label, .style = styles.action, .softwrap = false };
         var surface = try text.draw(ctx);
         surface.widget = .{ .userdata = ptr, .drawFn = drawWidget, .eventHandler = click };
@@ -302,17 +419,20 @@ const RepositoryButton = struct {
 
     fn click(ptr: *anyopaque, ctx: *vxfw.EventContext, event: vxfw.Event) anyerror!void {
         if (event != .mouse or !commands.Mouse.primaryPress(event.mouse)) return;
-        const self: *RepositoryButton = @ptrCast(@alignCast(ptr));
-        try commands.Mouse.repositoryControl(self.owner, ctx, self.action);
+        const self: *UtilityButton = @ptrCast(@alignCast(ptr));
+        switch (self.action) {
+            .repository => |action| try commands.Mouse.repositoryControl(self.owner, ctx, action),
+            .preview_diff => |diff| try commands.Mouse.previewPacfile(self.owner, ctx, diff),
+        }
     }
 };
 
-fn appendRepositoryButton(model: *Model, ctx: vxfw.DrawContext, children: *std.ArrayList(vxfw.SubSurface), row: u16, col: u16, label: []const u8, action: RepositoryControl) Allocator.Error!void {
-    const button = try ctx.arena.create(RepositoryButton);
+fn appendUtilityButton(model: *Model, ctx: vxfw.DrawContext, children: *std.ArrayList(vxfw.SubSurface), row: u16, col: u16, label: []const u8, action: UtilityButton.Action) Allocator.Error!void {
+    const button = try ctx.arena.create(UtilityButton);
     button.* = .{ .owner = model, .label = label, .action = action };
     try children.append(ctx.arena, .{
         .origin = .{ .row = row, .col = col },
-        .surface = try RepositoryButton.drawWidget(button, ctx.withConstraints(.{}, .{ .width = @intCast(label.len), .height = 1 })),
+        .surface = try UtilityButton.drawWidget(button, ctx.withConstraints(.{}, .{ .width = @intCast(label.len), .height = 1 })),
     });
 }
 

@@ -322,6 +322,7 @@ pub fn pkgbuildView(self: *Model) pkgbuild_view.View {
         .loading = self.operation_state.pkgbuild_job != null and self.operation_state.operation_question == null,
         .failure = self.operation_state.pkgbuild_failure,
         .review = self.operation_state.operation_question != null,
+        .cleanup_review = if (self.operation_state.review_prompt) |prompt| prompt.action == .purify else false,
         .pkgbuild_review = if (self.operation_state.operation_question) |message| message.value.question == .pkgbuild else false,
         .transaction_review = if (self.operation_state.operation_question) |message| message.value.question == .transaction else false,
         .optional_dependencies = if (self.operation_state.operation_question) |message| message.value.question == .select_many else false,
@@ -624,7 +625,7 @@ pub fn startCleanup(self: *Model, ctx: *vxfw.EventContext, backend: OperationBac
     errdefer self.gpa.destroy(prompt);
     prompt.* = .{ .name = name, .backend = backend, .action = .purify, .elevated = backend == .standard };
     try ctx.requestFocus(self.widget());
-    try confirmPrompt(self, ctx, prompt);
+    if (backend != .standard) try confirmPrompt(self, ctx, prompt);
     self.overlay = .{ .sudo = prompt };
     ctx.consumeAndRedraw();
 }
@@ -675,6 +676,14 @@ pub fn runMouseOperationAction(self: *Model, ctx: *vxfw.EventContext, action: co
     switch (action) {
         .confirm, .cancel => {
             const prompt = operationPrompt(self) orelse return;
+            if (action == .cancel and prompt.action == .purify and prompt.state == .running) {
+                const job = self.operation_state.install_job orelse return;
+                if (!job.snapshot(runtime.io).authenticating) return;
+                job.sendAuthentication(runtime.io, "\x03") catch {
+                    try self.setNotice("Could not interrupt sudo authentication.");
+                };
+                return ctx.consumeAndRedraw();
+            }
             if (prompt.state != .entering) return;
             if (action == .cancel) {
                 closeOverlay(self);
@@ -920,6 +929,20 @@ pub fn handleReviewMouse(self: *Model, ctx: *vxfw.EventContext, event: vxfw.Even
         try self.operation_state.dependency_choices.handleEvent(ctx, event);
         syncProviderSelection(self);
     } else try self.operation_state.pkgbuild_scroll.handleEvent(ctx, event);
+}
+
+test "standard cleanup can be cancelled before launching the CLI" {
+    const model = try Model.init(std.testing.allocator);
+    defer model.deinit();
+    var ctx: vxfw.EventContext = .{ .io = std.testing.io, .alloc = model.gpa, .cmds = .empty };
+    defer ctx.cmds.deinit(model.gpa);
+
+    try startCleanup(model, &ctx, .standard);
+    try std.testing.expectEqual(SudoPrompt.State.entering, model.overlay.?.sudo.state);
+    try std.testing.expect(model.operation_state.install_job == null);
+    try runMouseOperationAction(model, &ctx, .cancel);
+    try std.testing.expect(model.overlay == null);
+    try std.testing.expect(model.operation_state.install_job == null);
 }
 
 test "operation panel reserves one third of the terminal across stages" {

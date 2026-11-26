@@ -201,10 +201,73 @@ fn buildRow(ptr: *const anyopaque, index: usize, _: usize) ?vxfw.Widget {
     return .{ .userdata = @ptrCast(&result.value[index]), .drawFn = if (selected) utilities_view.drawSelectedPath else utilities_view.drawPath };
 }
 
+fn acceptsMouse(model: *const Model) bool {
+    return model.active == .utilities and !model.help_open and model.overlay == null and !model.utilities_state.preview_open;
+}
+
 pub fn activateFromMouse(model: *Model, ctx: *vxfw.EventContext, task: Task) !void {
-    if (model.active != .utilities or model.help_open or model.overlay != null or model.utilities_state.preview_open or model.utilities_state.repositories.editing != null or !model.settings_state.settings.expanded_mouse_support or !task.available(model)) return;
-    model.utilities_state.selected = task;
-    try activate(model, ctx);
+    if (!acceptsMouse(model) or model.utilities_state.repositories.editing != null or !task.available(model)) return;
+    const state = &model.utilities_state;
+    if (state.selected == task and !state.results_focused and model.settings_state.settings.expanded_mouse_support) {
+        return activate(model, ctx);
+    }
+    state.selected = task;
+    state.results_focused = false;
+    try ensureSelected(model, ctx);
+    ctx.consumeAndRedraw();
+}
+
+test "utility click selects before opening an operation" {
+    const model = try Model.init(std.testing.allocator);
+    defer model.deinit();
+    model.active = .utilities;
+    model.settings_state.settings.expanded_mouse_support = true;
+    model.utilities_state.results_focused = true;
+    var ctx: vxfw.EventContext = .{ .io = std.testing.io, .alloc = model.gpa, .cmds = .empty };
+    defer ctx.cmds.deinit(model.gpa);
+
+    try activateFromMouse(model, &ctx, .repair_database);
+    try std.testing.expectEqual(Task.repair_database, model.utilities_state.selected);
+    try std.testing.expect(!model.utilities_state.results_focused);
+    try std.testing.expect(model.overlay == null);
+
+    try activateFromMouse(model, &ctx, .repair_database);
+    try std.testing.expectEqual(.repair_database, model.overlay.?.sudo.action);
+    try std.testing.expect(model.operation_state.install_job == null);
+}
+
+pub fn focusPaneFromMouse(model: *Model, ctx: *vxfw.EventContext, results: bool) void {
+    if (!acceptsMouse(model) or model.utilities_state.repositories.editing != null) return;
+    const state = &model.utilities_state;
+    if (results and state.selected != .pacfiles and state.selected != .repository) return;
+    state.results_focused = results;
+    ctx.consumeAndRedraw();
+}
+
+pub fn selectResultFromMouse(model: *Model, ctx: *vxfw.EventContext, task: Task, name: []const u8) void {
+    if (!acceptsMouse(model)) return;
+    const state = &model.utilities_state;
+    if (state.selected != task or state.repositories.editing != null) return;
+    const names = switch (task) {
+        .pacfiles => state.result orelse return,
+        .repository => state.repositories.names orelse return,
+        else => return,
+    };
+    for (names.value, 0..) |item, index| {
+        if (!std.mem.eql(u8, item, name)) continue;
+        const list = if (task == .pacfiles) &state.list else &state.repositories.list;
+        list.cursor = @intCast(index);
+        state.results_focused = true;
+        return ctx.consumeAndRedraw();
+    }
+}
+
+pub fn previewFromMouse(model: *Model, ctx: *vxfw.EventContext, diff: bool) !void {
+    if (!acceptsMouse(model) or !model.settings_state.settings.expanded_mouse_support) return;
+    const state = &model.utilities_state;
+    if (state.selected != .pacfiles or state.message() != null) return;
+    state.results_focused = true;
+    try openPreview(model, ctx, if (diff) .diff else .file);
 }
 
 fn activate(model: *Model, ctx: *vxfw.EventContext) !void {
@@ -496,7 +559,7 @@ test "permission repair remains reachable with Flatpak disabled and opens a conf
     try std.testing.expectEqual(Task.pacfiles, model.utilities_state.selected);
 }
 
-const RepositoryField = enum { name, url };
+pub const RepositoryField = enum { name, url };
 
 const RepositoryState = struct {
     editing: ?RepositoryField = null,
@@ -643,12 +706,20 @@ fn focusRepositories(model: *Model, ctx: *vxfw.EventContext) !void {
     ctx.consumeAndRedraw();
 }
 
-pub const RepositoryControl = enum { add, remove, refresh, back };
+pub const RepositoryControl = union(enum) { add, remove, refresh, back, review, focus_field: RepositoryField };
 
 pub fn repositoryControl(model: *Model, ctx: *vxfw.EventContext, action: RepositoryControl) !void {
     const state = &model.utilities_state.repositories;
     if (model.active != .utilities or model.help_open or model.overlay != null or model.utilities_state.selected != .repository) return;
     switch (action) {
+        .focus_field => |field| {
+            if (state.editing == null) return;
+            try focusRepositoryField(state, ctx, field);
+        },
+        .review => {
+            if (state.editing == null) return;
+            try submitRepository(model, ctx);
+        },
         .back => {
             if (state.editing != null) {
                 try ctx.requestFocus(model.widget());
@@ -731,11 +802,13 @@ fn submitRepository(model: *Model, ctx: *vxfw.EventContext) !void {
     }
     if (!std.mem.startsWith(u8, url, "https://") and !std.mem.startsWith(u8, url, "http://") and !std.mem.startsWith(u8, url, "file://")) {
         state.message = "Enter an HTTPS, HTTP, or file URL.";
+        try focusRepositoryField(state, ctx, .url);
         return;
     }
     for (url) |byte| {
         if (byte <= ' ' or byte == 0x7f or byte == '#') {
             state.message = "Server URLs must be a single line without spaces or comments.";
+            try focusRepositoryField(state, ctx, .url);
             return;
         }
     }

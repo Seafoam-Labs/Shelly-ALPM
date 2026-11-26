@@ -343,6 +343,7 @@ pub const View = struct {
     loading: bool,
     failure: ?anyerror,
     review: bool = false,
+    cleanup_review: bool = false,
     pkgbuild_review: bool = false,
     transaction_review: bool = false,
     wrap: bool = true,
@@ -363,6 +364,7 @@ pub const View = struct {
                 if (commands.matches(key, .confirm)) return .approve;
                 return null;
             }
+            if (self.cleanup_review and (commands.matches(key, .cancel) or commands.matches(key, .cancel_capture))) return .decline;
             return switch (commands.review(key) orelse return null) {
                 .approve => .approve,
                 .decline => .decline,
@@ -455,9 +457,9 @@ pub const View = struct {
                 .origin = .{ .row = inner_height - 1, .col = 0 },
                 .surface = try buttons.drawActionButton(ctx, owner, if (self.choices) "[Confirm]" else "[Approve]", .approve),
             });
-            if (!self.choices and inner_width >= 19) try children.append(ctx.arena, .{
+            if (!self.choices and inner_width >= (if (self.cleanup_review) @as(u16, 18) else 19)) try children.append(ctx.arena, .{
                 .origin = .{ .row = inner_height - 1, .col = 10 },
-                .surface = try buttons.drawActionButton(ctx, owner, "[Decline]", .decline),
+                .surface = try buttons.drawActionButton(ctx, owner, if (self.cleanup_review) "[Cancel]" else "[Decline]", .decline),
             });
         }
         const content: vxfw.Surface = .{

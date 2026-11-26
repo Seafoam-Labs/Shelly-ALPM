@@ -58,6 +58,8 @@ pub const View = struct {
             else if (self.include_flatpak) "System packages and system/user Flatpaks. AUR excluded." else "Full system upgrade. AUR and Flatpak excluded."
         else if (self.action == .repair_permissions)
             "Restore your ownership of Shelly’s configuration, cache, and data directories. This requires administrator authorization."
+        else if (self.action == .purify)
+            "Authenticate to prepare the cleanup plan. You can review the list before approving removal."
         else if (self.action == .repair_database)
             "Continue only if no package manager or update check is running."
         else if (self.action == .sync)
@@ -194,7 +196,7 @@ pub const Panel = struct {
         const title = if (view.progress.authenticating)
             "Authentication"
         else if (view.state == .entering)
-            (if (view.action == .repair_database) "Confirm lock removal" else if (view.elevated) "Authentication" else "Confirmation")
+            (if (view.action == .repair_database) "Confirm lock removal" else if (view.action == .purify) "Confirm cleanup" else if (view.elevated) "Authentication" else "Confirmation")
         else
             try std.fmt.allocPrint(ctx.arena, "{s} {f} — {s}", .{
                 view.action.verb(), diagnostics.safe(view.name),
@@ -267,7 +269,8 @@ pub const Panel = struct {
         const view = self.view;
         const size = ctx.max.size();
         const entering = view.state == .entering;
-        const actions = if (view.owner) |owner| owner.settings_state.settings.expanded_mouse_support and view.state != .running and size.height >= (if (entering) @as(u16, 2) else 1) else false;
+        const cancel_auth = view.action == .purify and view.state == .running and view.progress.authenticating;
+        const actions = if (view.owner) |owner| owner.settings_state.settings.expanded_mouse_support and (view.state != .running or cancel_auth) and size.height >= (if (entering) @as(u16, 2) else 1) else false;
         const review_height = size.height - @as(u16, @intFromBool(actions));
         if (view.state != .entering) {
             // Upward keyboard or wheel navigation pauses following.
@@ -287,7 +290,7 @@ pub const Panel = struct {
             children[1] = .{ .origin = .{ .row = review_height, .col = 0 }, .surface = try drawActionButton(ctx, view.owner.?, "[Confirm]", .confirm) };
             children[2] = .{ .origin = .{ .row = review_height, .col = 10 }, .surface = try drawActionButton(ctx, view.owner.?, "[Cancel]", .cancel) };
         } else if (actions) {
-            children[1] = .{ .origin = .{ .row = review_height, .col = 0 }, .surface = try drawActionButton(ctx, view.owner.?, "[Close]", .close) };
+            children[1] = .{ .origin = .{ .row = review_height, .col = 0 }, .surface = try drawActionButton(ctx, view.owner.?, if (cancel_auth) "[Cancel]" else "[Close]", if (cancel_auth) .cancel else .close) };
         }
         return .{ .size = size, .widget = .{ .userdata = self, .drawFn = drawContent }, .buffer = &.{}, .children = children };
     }
