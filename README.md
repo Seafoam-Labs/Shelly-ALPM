@@ -412,7 +412,11 @@ The path defaults to `./PKGBUILD`. Shelly downloads missing sources, preserves
 existing checksum algorithms and `SKIP` entries, and updates generic and
 architecture-specific arrays. Recipes without checksum arrays get SHA-256.
 Pinned Git tags/commits use deterministic archive checksums; moving references
-use `SKIP`. Existing cached downloads are reused; remove a cached file first
+use `SKIP`. Git sources whose every selected checksum is `SKIP` (including
+moving references) are not downloaded: Shelly only probes that the branch or
+tag still exists with `git ls-remote`, without transferring objects. Commit
+pins cannot be probed this way and are not existence-checked when skipped.
+Existing cached downloads are reused; remove a cached file first
 when intentionally refreshing a URL whose contents changed.
 
 Both files are staged before publication. Metadata uses the same native
