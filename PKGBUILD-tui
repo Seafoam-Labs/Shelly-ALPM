@@ -1,7 +1,7 @@
 # Maintainer: Zoey Bauer <zoey.erin.bauer@gmail.com>
 
 pkgname=shelly-tui
-pkgver=3.4.1
+pkgver=3.4.2
 pkgrel=1
 pkgdesc='Terminal interface for the Shelly CLI'
 arch=('x86_64')
@@ -29,7 +29,7 @@ sha256sums=('SKIP')
 pkgver() {
   cd "${srcdir}/${pkgname}"
 
-  printf '3.4.1r%s.g%s' \
+  printf '3.4.2r%s.g%s' \
     "$(git rev-list --count HEAD)" \
     "$(git rev-parse --short=7 HEAD)"
 }
