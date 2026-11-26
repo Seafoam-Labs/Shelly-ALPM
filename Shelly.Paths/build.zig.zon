@@ -1,7 +1,7 @@
 .{
     .name = .shelly_paths,
     .fingerprint = 0x17bb4b09edf397c,
-    .version = "3.4.1",
+    .version = "3.4.2",
     .minimum_zig_version = "0.17.1",
     .paths = .{ "build.zig", "build.zig.zon", "src" },
 }

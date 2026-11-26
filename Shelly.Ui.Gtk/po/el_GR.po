@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Shelly-ALPM / Shelly: GTK\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-11-13 22:42-0500\n"
+"POT-Creation-Date: 2026-11-25 23:30-0500\n"
 "PO-Revision-Date: 2026-08-05 17:02+0300\n"
 "Last-Translator: CozyKernel <antwnhs.mpl@gmail.com>\n"
 "Language-Team: \n"
@@ -113,9 +113,6 @@ msgstr "Παράβλεψη"
 msgid "AppImage"
 msgstr "AppImage"
 
-msgid "Install and integrate AppImage bundles."
-msgstr ""
-
 msgid "Search..."
 msgstr "Αναζήτηση..."
 
@@ -203,11 +200,11 @@ msgstr "Κατάργηση"
 msgid "AUR"
 msgstr "AUR"
 
-msgid "Build and install packages from the Arch User Repository."
-msgstr ""
-
 msgid "Search the AUR by name or keyword"
 msgstr "Αναζήτηση στο AUR κατά όνομα ή λέξη-κλειδί"
+
+msgid "Additional Options"
+msgstr "Πρόσθετες επιλογές"
 
 msgid "Search By"
 msgstr ""
@@ -218,17 +215,14 @@ msgstr "Μόνο εγκατεστημένα"
 msgid "Show only installed packages"
 msgstr "Εμφάνιση μόνο εγκατεστημένων πακέτων"
 
-msgid "Previous page"
+msgid "Page 1 of 1"
 msgstr ""
 
-msgid "Page 1 of 1"
+msgid "Previous page"
 msgstr ""
 
 msgid "Next page"
 msgstr ""
-
-msgid "Additional Options"
-msgstr "Πρόσθετες επιλογές"
 
 msgid "Install Selected"
 msgstr "Εγκατάσταση επιλεγμένων"
@@ -275,6 +269,62 @@ msgstr "Αναζήτηση στο AUR"
 msgid "The AUR has no browsable index. Type a package name to begin."
 msgstr ""
 
+msgid "Firmware"
+msgstr ""
+
+msgid "Device firmware updates"
+msgstr ""
+
+msgid "Refresh metadata and check devices again"
+msgstr ""
+
+msgid "Check Again"
+msgstr "Έλεγχος ξανά"
+
+#| msgid "Checking for updates…"
+msgid "Looking for devices…"
+msgstr ""
+
+#| msgid "Installing AppImage"
+msgid "Installing firmware…"
+msgstr ""
+
+msgid "Select a device to see its firmware releases"
+msgstr ""
+
+msgid "Loading releases…"
+msgstr ""
+
+msgid "Current version"
+msgstr ""
+
+msgid "Minimum version"
+msgstr ""
+
+msgid "Latest update"
+msgstr ""
+
+msgid "Branch"
+msgstr ""
+
+#| msgid "No summary available"
+msgid "No releases available"
+msgstr ""
+
+#| msgid "No packages found"
+msgid "No devices found"
+msgstr ""
+
+msgid "Devices that support firmware updates will appear here."
+msgstr ""
+
+msgid "Could not load firmware devices."
+msgstr ""
+
+#| msgid "Check Again"
+msgid "Try Again"
+msgstr ""
+
 msgid "Install a local Flatpak"
 msgstr "Εγκατάσταση τοπικού flatpak"
 
@@ -294,11 +344,11 @@ msgstr "Επιλογή αρχείου…"
 msgid "Install for"
 msgstr "Εγκατάσταση σαν"
 
-msgid "system"
-msgstr "σύστημα"
+msgid "System-wide"
+msgstr ""
 
-msgid "user"
-msgstr "χρήστης"
+msgid "Current user"
+msgstr ""
 
 msgid "Install"
 msgstr "Εγκατάσταση"
@@ -345,14 +395,8 @@ msgstr "Ιστορικό εκδόσεων"
 msgid "Flatpak"
 msgstr "Flatpak"
 
-msgid "Manage Flatpak applications and remotes."
-msgstr ""
-
 msgid "Search packages..."
 msgstr "Αναζήτηση πακέτων..."
-
-msgid "Browse"
-msgstr "Περιήγηση"
 
 msgid "Manage"
 msgstr "Διαχείριση"
@@ -389,6 +433,12 @@ msgstr "π.χ., https://flathub.org/repo/flathub.flatpakrepo"
 
 msgid "Scope"
 msgstr "Εμβέλεια"
+
+msgid "user"
+msgstr "χρήστης"
+
+msgid "system"
+msgstr "σύστημα"
 
 msgid "Show Runtimes"
 msgstr "Εμφάνιση περιβαλλόντων εκτέλεσης"
@@ -429,26 +479,20 @@ msgstr "Ενέργειες πακέτου"
 msgid "Package"
 msgstr "Πακέτο"
 
-msgid "Packages"
-msgstr "Πακέτα"
-
-msgid "Install and manage software on your system."
-msgstr ""
-
 msgid "Package Group Filter"
 msgstr "Φίλτρο ομάδων πακέτων"
-
-msgid "Selected Packages"
-msgstr "Επιλεγμένα πακέτα"
-
-msgid "0 Selected"
-msgstr "0 Επιλεγμένα"
 
 msgid "Grid View"
 msgstr "Προβολή πλέγματος"
 
 msgid "List View"
 msgstr "Προβολή λίστας"
+
+msgid "Selected Packages"
+msgstr "Επιλεγμένα πακέτα"
+
+msgid "0 Selected"
+msgstr "0 Επιλεγμένα"
 
 msgid "Size"
 msgstr "Μέγεθος"
@@ -494,44 +538,46 @@ msgstr "Εμφάνιση μόνο πακέτων εξαρτήσεων"
 msgid "Recommended"
 msgstr "Προτεινόμενα"
 
-msgid "Recommended Packages"
-msgstr "Προτεινόμενα Πακέτα"
-
-msgid "Curated suggestions from Seafoam Labs"
-msgstr "Επιλεγμένες προτάσεις από τη Seafoam Labs"
-
-msgid "Refresh the recommended packages list from the network"
-msgstr "Ανανέωση της λίστας προτεινόμενων πακέτων από το δίκτυο"
-
 msgid "Clear selection"
 msgstr ""
 
 msgid "Deselect all recommended packages"
 msgstr ""
 
+msgid "Refresh the recommended packages list from the network"
+msgstr "Ανανέωση της λίστας προτεινόμενων πακέτων από το δίκτυο"
+
 msgid "Install all selected packages in one transaction"
 msgstr ""
 
-#, fuzzy
 msgid "Loading recommendations…"
-msgstr "Φόρτωση προτεινόμενων πακέτων..."
+msgstr ""
 
-#, fuzzy
+msgid "No recommendations found"
+msgstr ""
+
 msgid "Check your internet connection and try again."
 msgstr ""
-"Δεν βρέθηκαν προτάσεις. Παρακαλούμε ελέγξτε τη σύνδεσή σας στο διαδίκτυο και "
-"δοκιμάστε ξανά."
 
 msgid "Shelly Search"
 msgstr "Αναζήτηση Shelly"
 
-msgid "Search"
-msgstr ""
-
-msgid "Search across every enabled backend."
-msgstr ""
-
 msgid "Search standard repositories, AUR and Flatpak"
+msgstr ""
+
+#| msgid "Select Your Sources"
+msgid "Search Sources"
+msgstr ""
+
+msgid "Source"
+msgstr ""
+
+msgid "Search everywhere"
+msgstr ""
+
+msgid ""
+"Search the standard repositories, the AUR, and Flatpak all at once. Type a "
+"name to begin."
 msgstr ""
 
 msgid "Standard"
@@ -546,70 +592,95 @@ msgstr ""
 msgid "Show results from the configured Flatpak remotes"
 msgstr ""
 
-msgid "Source"
-msgstr ""
-
-msgid "Search everywhere"
-msgstr ""
-
-msgid ""
-"Search the standard repositories, the AUR, and Flatpak all at once. Type a "
-"name to begin."
-msgstr ""
-
 msgid "Settings"
 msgstr "Ρυθμίσεις"
-
-msgid "Make Shelly feel at home on your desktop."
-msgstr ""
 
 msgid "General"
 msgstr "Γενικά"
 
+msgid "Language"
+msgstr "Γλώσσα"
+
+msgid "Language for Shelly's menus and messages."
+msgstr ""
+
+msgid "Software sources"
+msgstr ""
+
+msgid ""
+"Choose which kinds of software Shelly shows. You can change this at any time."
+msgstr ""
+
 msgid "Enable AUR"
 msgstr "Ενεργοποίηση AUR"
 
-msgid "Language"
-msgstr "Γλώσσα"
+msgid "Arch User Repository community packages"
+msgstr "Πακέτα κοινότητας Arch User Repository"
 
 msgid "Enable Flatpak"
 msgstr "Ενεργοποίηση Flatpak"
 
-msgid "Enable Recommended"
-msgstr "Ενεργοποίηση Προτεινόμενων"
+msgid "Sandboxed universal Linux applications"
+msgstr "Απομονωμένες (Sandboxed) καθολικές εφαρμογές Linux"
 
 msgid "Enable AppImage"
 msgstr "Ενεργοποίηση AppImage"
 
+msgid "Portable self-contained application bundles"
+msgstr "Φορητά, αυτοτελή πακέτα εφαρμογών"
+
+msgid "Enable Firmware"
+msgstr ""
+
+msgid "Update device firmware such as UEFI/BIOS and peripherals"
+msgstr ""
+
+msgid "Enable Recommended"
+msgstr "Ενεργοποίηση Προτεινόμενων"
+
+msgid "Curated picks from Shelly"
+msgstr ""
+
+msgid "Updates & Tray"
+msgstr ""
+
+msgid "Update notifications"
+msgstr ""
+
+msgid ""
+"Shelly can check for updates in the background and let you know from the "
+"system tray."
+msgstr ""
+
 msgid "Enable Tray Icon"
 msgstr "Ενεργοποίηση εικονιδίου περιοχής ειδοποιήσεων"
+
+msgid "Show a tray icon that checks for updates in the background."
+msgstr ""
 
 msgid "Add Tray To Auto Start"
 msgstr "Αυτόματη εκκίνηση εικονιδίου tray"
 
-msgid "Use weekly schedule"
-msgstr "Χρήση εβδομαδιαίου προγράμματος"
-
-msgid "Run Tray as cron"
-msgstr ""
-
-msgid "Tray update with UI"
-msgstr ""
-
-msgid "Update terminal"
-msgstr ""
-
-msgid "Terminal command"
-msgstr ""
-
-msgid "Custom update terminal command"
+msgid "Start the tray icon when you log in."
 msgstr ""
 
 msgid "Tray Check Interval (Hours)"
 msgstr "Διάστημα ελέγχου εικονιδίου tray (ώρες)"
 
+msgid "How often the tray looks for updates."
+msgstr ""
+
+msgid "Use weekly schedule"
+msgstr "Χρήση εβδομαδιαίου προγράμματος"
+
+msgid "Check on chosen days at a set time instead of every few hours."
+msgstr ""
+
 msgid "Weekly Schedule"
 msgstr "Εβδομαδιαίο πρόγραμμα"
+
+msgid "Days and time when Shelly checks for updates."
+msgstr ""
 
 msgid "Sun"
 msgstr "Κυρ"
@@ -638,18 +709,33 @@ msgstr "Ώρα ενημέρωσης (24ωρη):"
 msgid ":"
 msgstr ":"
 
-msgid "Look & Feel"
-msgstr "Εμφάνιση & Αίσθηση"
+msgid "Run Tray as cron"
+msgstr ""
 
-msgid "Icons Enabled"
-msgstr "Ενεργοποίηση εικονιδίων"
+msgid "Check only at the scheduled time, not when the tray starts."
+msgstr ""
+
+msgid "Tray update with UI"
+msgstr ""
 
 msgid ""
-"If enabled, Shelly will use appstream icons in the package list and details "
-"pages."
+"Run updates started from the tray in the Shelly window instead of a terminal."
 msgstr ""
-"Αν ενεργοποιηθεί, το Shelly θα χρησιμοποιεί εικονίδια appstream στη λίστα "
-"πακέτων και στις σελίδες λεπτομερειών."
+
+msgid "Update terminal"
+msgstr ""
+
+msgid "Terminal that runs updates started from the tray."
+msgstr ""
+
+msgid "Terminal command"
+msgstr ""
+
+msgid "Custom update terminal command"
+msgstr ""
+
+msgid "Tray icon"
+msgstr ""
 
 msgid "Use Symbolic Tray Icon"
 msgstr "Χρήση συμβολικού εικονιδίου στην περιοχή ειδοποιήσεων"
@@ -664,6 +750,9 @@ msgstr ""
 msgid "Tray Icon"
 msgstr "Εικονίδιο περιοχής ειδοποιήσεων"
 
+msgid "Use your own image for the tray icon."
+msgstr ""
+
 msgid "Select File"
 msgstr "Επιλογή αρχείου"
 
@@ -673,50 +762,118 @@ msgstr "Καθαρισμός"
 msgid "Tray Updates Icon"
 msgstr "Εικονίδιο ενημερώσεων στο tray"
 
-msgid "Default page"
-msgstr "Προεπιλεγμένη σελίδα"
+msgid "Image the tray shows when updates are available."
+msgstr ""
 
-msgid "Navigation style"
-msgstr "Μέθοδος πλοήγησης"
+msgid "Look & Feel"
+msgstr "Εμφάνιση & Αίσθηση"
+
+msgid "Appearance"
+msgstr ""
 
 msgid "Theme"
+msgstr ""
+
+msgid "Use Shelly's colors or your desktop's colors."
 msgstr ""
 
 msgid "Color variant"
 msgstr ""
 
+msgid "Light, dark, or follow your system."
+msgstr ""
+
+msgid "Icons Enabled"
+msgstr "Ενεργοποίηση εικονιδίων"
+
+msgid ""
+"If enabled, Shelly will use appstream icons in the package list and details "
+"pages."
+msgstr ""
+"Αν ενεργοποιηθεί, το Shelly θα χρησιμοποιεί εικονίδια appstream στη λίστα "
+"πακέτων και στις σελίδες λεπτομερειών."
+
+msgid "Layout"
+msgstr ""
+
+msgid "Default page"
+msgstr "Προεπιλεγμένη σελίδα"
+
+msgid "The page Shelly opens on."
+msgstr ""
+
+msgid "Navigation style"
+msgstr "Μέθοδος πλοήγησης"
+
+msgid "Sidebar on the left, or tabs across the top."
+msgstr ""
+
+msgid "Use System Title Bar"
+msgstr ""
+
+msgid ""
+"If enabled, the desktop draws the window title bar and its buttons instead "
+"of Shelly."
+msgstr ""
+
+msgid "Applies after restarting Shelly."
+msgstr ""
+
+msgid "Rounded Window Corners"
+msgstr ""
+
+msgid ""
+"If enabled, Shelly rounds the corners of the windows it draws. A desktop "
+"that draws the title bar sets its own corners."
+msgstr ""
+
 msgid "Advanced"
 msgstr "Για προχωρημένους"
 
-msgid "Remove Cache on Uninstall"
-msgstr "Κατάργηση της προσωρινής μνήμης κατά την απεγκατάσταση"
+msgid "Installing and removing"
+msgstr ""
 
 msgid "No Confirm"
 msgstr "Χωρίς επιβεβαίωση"
 
+msgid "Skip confirmation prompts when installing, updating, or removing."
+msgstr ""
+
+msgid "Remove Configuration on Uninstall"
+msgstr ""
+
+msgid "Also delete an app's configuration files when you remove it."
+msgstr ""
+
+msgid "Search and AUR"
+msgstr ""
+
 msgid "Enable Shelly Search"
 msgstr "Ενεργοποίηση αναζήτησης Shelly"
 
+msgid "Add a page that searches every source at once."
+msgstr ""
+
 msgid "Enable Atoll Powered AUR"
+msgstr ""
+
+msgid "Browse the AUR through Seafoam Labs' Atoll service."
+msgstr ""
+
+msgid "Always Recheck AppImage Updates on Upgrade All"
+msgstr ""
+
+msgid "When off, Upgrade All runs only when the AppImage page shows updates."
 msgstr ""
 
 msgid "AppImage Install Path"
 msgstr "Διαδρομή εγκατάστασης AppImage"
 
+msgid "Folder where new AppImages are saved."
+msgstr ""
+
 msgid "Select Directory"
 msgstr "Επιλογή φακέλου"
-
-msgid "v0.0.0"
-msgstr "v0.0.0"
-
-msgid "GitHub"
-msgstr "GitHub"
-
-msgid "Community fluxer"
-msgstr "Κοινότητα fluxer"
-
-msgid "Sponsor"
-msgstr "Χορηγός"
 
 msgid "View Changelog"
 msgstr "Προβολή αρχείου αλλαγών"
@@ -736,9 +893,6 @@ msgstr ""
 msgid "Update"
 msgstr "Ενημέρωση"
 
-msgid "Updates"
-msgstr ""
-
 msgid "7 of 7 updates included"
 msgstr "Περιλαμβάνονται 7 από τις 7 ενημερώσεις"
 
@@ -747,9 +901,6 @@ msgstr "Σύστημα"
 
 msgid "Check all enabled sources again"
 msgstr "Έλεγχος όλων των ενεργοποιημένων πηγών ξανά"
-
-msgid "Check Again"
-msgstr "Έλεγχος ξανά"
 
 msgid "Available updates"
 msgstr ""
@@ -842,18 +993,6 @@ msgid ""
 msgstr ""
 "Επιλέξτε ποιες πηγές πακέτων θέλετε να περιηγηθείτε. Μπορείτε πάντα να το "
 "αλλάξετε αυτό αργότερα στις ρυθμίσεις."
-
-msgid "Arch User Repository community packages"
-msgstr "Πακέτα κοινότητας Arch User Repository"
-
-msgid "Sandboxed universal Linux applications"
-msgstr "Απομονωμένες (Sandboxed) καθολικές εφαρμογές Linux"
-
-msgid "Portable self-contained application bundles"
-msgstr "Φορητά, αυτοτελή πακέτα εφαρμογών"
-
-msgid "Curated picks from Shelly"
-msgstr ""
 
 msgid "Look and Feel"
 msgstr "Eμφάνιση και Aίσθηση"
@@ -1033,11 +1172,226 @@ msgstr ""
 msgid "Dismiss"
 msgstr "Παράβλεψη"
 
+msgid "Reset Columns"
+msgstr ""
+
+msgid "Internal error"
+msgstr ""
+
+msgid "Installed newer firmware version"
+msgstr ""
+
+msgid "Installed same firmware version"
+msgstr ""
+
+msgid "Already set to be installed offline"
+msgstr ""
+
+msgid "Failed to get authentication"
+msgstr ""
+
+msgid "Failed to read from device"
+msgstr ""
+
+msgid "Failed to write to the device"
+msgstr ""
+
+#| msgid "Install for"
+msgid "Invalid file format"
+msgstr ""
+
+msgid "No matching device exists"
+msgstr ""
+
+msgid "Nothing to do"
+msgstr ""
+
+msgid "Action was not possible"
+msgstr ""
+
+msgid "Signature was invalid"
+msgstr ""
+
+msgid "AC power was required"
+msgstr ""
+
+#| msgid "Permissions"
+msgid "Permission was denied"
+msgstr ""
+
+msgid "User has configured their system in a broken way"
+msgstr ""
+
+msgid "The system battery level is too low"
+msgstr ""
+
+msgid "User needs to do an action to complete the update"
+msgstr ""
+
+msgid "Failed to get authentication: credentials expired"
+msgstr ""
+
+msgid "The firmware data is invalid"
+msgstr ""
+
+#| msgid "Operation failed"
+msgid "The operation timed out"
+msgstr ""
+
+msgid "The device is busy; try again in a moment"
+msgstr ""
+
+msgid "The device could not be reached"
+msgstr ""
+
+#| msgid "Unknown developer"
+msgid "Unknown error"
+msgstr ""
+
+#| msgid "Unknown"
+msgid "Unknown state"
+msgstr ""
+
+msgid "Idle"
+msgstr ""
+
+msgid "Loading a resource"
+msgstr ""
+
+msgid "Decompressing firmware"
+msgstr ""
+
+msgid "Restarting the device"
+msgstr ""
+
+msgid "Writing to a device"
+msgstr ""
+
+msgid "Verifying (reading) a device"
+msgstr ""
+
+msgid "Scheduling an offline update"
+msgstr ""
+
+#| msgid "Downloading"
+msgid "A file is downloading"
+msgstr ""
+
+msgid "Reading from a device"
+msgstr ""
+
+msgid "Erasing a device"
+msgstr ""
+
+msgid "Waiting for authentication"
+msgstr ""
+
+msgid "The device is busy"
+msgstr ""
+
+msgid "The daemon is shutting down"
+msgstr ""
+
+msgid "Waiting for user action"
+msgstr ""
+
+#| msgid "Required By"
+msgid "requires"
+msgstr ""
+
+msgid "The device has a problem that prevents updates"
+msgstr ""
+
+msgid "System power is too low to perform the update"
+msgstr ""
+
+msgid "Device is unreachable, or out of wireless range"
+msgstr ""
+
+msgid "Device battery power is too low"
+msgstr ""
+
+msgid "Device is waiting for the update to be applied"
+msgstr ""
+
+msgid "Device requires AC power to be connected"
+msgstr ""
+
+msgid "Device cannot be used while the lid is closed"
+msgstr ""
+
+msgid "Device is emulated"
+msgstr ""
+
+msgid "The firmware license is missing"
+msgstr ""
+
+msgid "Another process is blocking firmware updates"
+msgstr ""
+
+#| msgid "Package is already installed"
+msgid "Device is already being updated"
+msgstr ""
+
+#| msgid "Devices"
+msgid "Device is in use"
+msgstr ""
+
+msgid "Device cannot be used while there are no displays plugged in"
+msgstr ""
+
+msgid "A higher-priority connection to this device is in use"
+msgstr ""
+
+msgid "The device is signed with an insecure key"
+msgstr ""
+
+msgid "Device firmware is locked"
+msgstr ""
+
+msgid ""
+"The update will continue when the device USB cable has been unplugged and "
+"then re-inserted."
+msgstr ""
+
+msgid "Press unlock on the device to continue the update process."
+msgstr ""
+
+msgid "The update will continue when the device USB cable has been unplugged."
+msgstr ""
+
+msgid ""
+"The update will continue when the device USB cable has been re-inserted."
+msgstr ""
+
+msgid ""
+"Do not turn off your computer or remove the AC adaptor until you are sure "
+"the update has completed."
+msgstr ""
+
+msgid "Unplug and replug the device, to continue the update process."
+msgstr ""
+
+msgid ""
+"The update will continue when the device power cable has been unplugged and "
+"then re-inserted."
+msgstr ""
+
+#| msgid "Systemd startup service added."
+msgid "Please restart the fwupd service."
+msgstr ""
+
+msgid "The device needs your attention to continue the update."
+msgstr ""
+
 msgid "None"
 msgstr "Κανένα"
 
 msgid "Static URL"
 msgstr "Στατικό URL"
+
+msgid "GitHub"
+msgstr "GitHub"
 
 msgid "GitLab"
 msgstr "GitLab"
@@ -1082,6 +1436,9 @@ msgstr ""
 msgid "Installing AppImage"
 msgstr "Εγκατάσταση AppImage"
 
+msgid "Could not read the AppImage update setting."
+msgstr ""
+
 msgid "No AppImages need to be upgraded"
 msgstr "Δεν χρειάζεται αναβάθμιση κανένα AppImage"
 
@@ -1104,9 +1461,6 @@ msgstr ""
 
 msgid "Saving update configuration"
 msgstr "Aποθήκευση ρυθμίσεων ενημέρωσης"
-
-msgid "Configuration files will be kept."
-msgstr "Τα αρχεία ρυθμίσεων θα διατηρηθούν."
 
 msgid "Remove this AppImage?"
 msgstr "Να αφαιρεθεί αυτό το AppImage;"
@@ -1150,14 +1504,11 @@ msgstr "Επισημάνθηκε ως παρωχημένο"
 msgid "Installed"
 msgstr "Εγκατεστημένο"
 
-msgid "Remove Selected"
-msgstr "Κατάργηση επιλεγμένων"
-
-msgid "Select one or more packages"
-msgstr "Επιλέξτε ένα ή περισσότερα πακέτα"
-
 msgid "Package(s)"
 msgstr "Πακέτο(α)"
+
+msgid "Remove Selected"
+msgstr "Κατάργηση επιλεγμένων"
 
 msgid "Page"
 msgstr ""
@@ -1221,6 +1572,277 @@ msgstr ""
 "πακέτου για να ξεκινήσετε."
 
 msgid "Could not search the configured AUR service."
+msgstr ""
+
+#| msgid "Downloading"
+msgid "Downloading…"
+msgstr ""
+
+#| msgid "Devices"
+msgid "devices"
+msgstr ""
+
+#| msgid "Update Available"
+msgid "updates available"
+msgstr ""
+
+msgid "Firmware devices"
+msgstr ""
+
+msgid "Battery too low: connect AC power before updating firmware"
+msgstr ""
+
+msgid "Firmware metadata is out of date. Use {s} to refresh."
+msgstr ""
+
+msgid "The firmware service stopped. Use Check Again to reconnect."
+msgstr ""
+
+msgid "Metadata refresh failed"
+msgstr ""
+
+msgid ""
+"Could not refresh the firmware catalog. Check your network connection and "
+"try again."
+msgstr ""
+
+msgid "View on LVFS"
+msgstr ""
+
+msgid "Update {s} to version {s}?"
+msgstr ""
+
+msgid "Downgrade {s} to version {s}?"
+msgstr ""
+
+msgid "Reinstall {s} version {s}?"
+msgstr ""
+
+msgid "The device will remain usable for the duration of the update."
+msgstr ""
+
+msgid "The device will be unavailable during this action."
+msgstr ""
+
+#| msgid "Download Size"
+msgid "Download size: {s}"
+msgstr ""
+
+msgid "Estimated install time: {s} seconds"
+msgstr ""
+
+#| msgid "Update Available"
+msgid "Update device"
+msgstr ""
+
+#| msgid "Downgrading"
+msgid "Downgrade device"
+msgstr ""
+
+#| msgid "Reinstall"
+msgid "Reinstall device"
+msgstr ""
+
+#| msgid "Install for"
+msgid "Install firmware"
+msgstr ""
+
+msgid "Switch firmware branch?"
+msgstr ""
+
+msgid ""
+"This firmware is not supplied by {s}. Installing it may damage your hardware "
+"or void your warranty."
+msgstr ""
+
+msgid ""
+"This firmware comes from a different branch. Installing it may damage your "
+"hardware or void your warranty."
+msgstr ""
+
+msgid "Switch Branch"
+msgstr ""
+
+msgid "You may lose all your data without recovery keys"
+msgstr ""
+
+msgid ""
+"Updating this firmware may invalidate the secrets that unlock your encrypted "
+"drives. Make sure you have the recovery keys for all your encrypted drives "
+"before continuing."
+msgstr ""
+
+msgid "I have recovery keys for all my encrypted drives"
+msgstr ""
+
+msgid "Continue"
+msgstr ""
+
+msgid "Failed to install firmware"
+msgstr ""
+
+msgid "Could not start the installation"
+msgstr ""
+
+msgid "Could not reach the firmware service"
+msgstr ""
+
+msgid "The firmware source for this release is unavailable"
+msgstr ""
+
+msgid "This release has no download location"
+msgstr ""
+
+msgid "This release provides no checksums, so it cannot be verified"
+msgstr ""
+
+msgid "The release checksum is invalid"
+msgstr ""
+
+msgid "The downloaded firmware failed verification"
+msgstr ""
+
+msgid "The firmware download failed"
+msgstr ""
+
+msgid "Could not access the firmware cache"
+msgstr ""
+
+#| msgid "Updates included"
+msgid "Update complete"
+msgstr ""
+
+#| msgid "Devices"
+msgid "Device request"
+msgstr ""
+
+msgid "OK"
+msgstr ""
+
+msgid "Restart to complete this update"
+msgstr ""
+
+msgid "Shutdown to complete this update"
+msgstr ""
+
+msgid ""
+"You must restart your device to complete the update. Make sure your device "
+"is plugged in or fully charged. Save your files before you restart to avoid "
+"losing data."
+msgstr ""
+
+msgid ""
+"You must shut down your device to complete the update. Save your files "
+"before you shut down to avoid losing data."
+msgstr ""
+
+msgid "Automatic restart is not available on this system."
+msgstr ""
+
+msgid "Automatic shutdown is not available on this system."
+msgstr ""
+
+msgid "Restart now"
+msgstr ""
+
+msgid "Shut down now"
+msgstr ""
+
+msgid "Restart later"
+msgstr ""
+
+msgid "Shut down later"
+msgstr ""
+
+#| msgid "Cancelled"
+msgid "Restart cancelled"
+msgstr ""
+
+msgid "Shutdown cancelled"
+msgstr ""
+
+msgid ""
+"The restart was cancelled. Restart later to complete the firmware update."
+msgstr ""
+
+msgid ""
+"The shutdown was cancelled. Shut down later to complete the firmware update."
+msgstr ""
+
+#| msgid "Operation failed"
+msgid "Restart failed"
+msgstr ""
+
+#| msgid "Operation failed"
+msgid "Shutdown failed"
+msgstr ""
+
+msgid "The system did not accept the request. You can try again later."
+msgstr ""
+
+msgid "End of life"
+msgstr ""
+
+msgid "Unsigned payload"
+msgstr ""
+
+msgid "Resolve the device problems before updating"
+msgstr ""
+
+msgid "An update is in progress"
+msgstr ""
+
+msgid "Locked"
+msgstr ""
+
+msgid "Needs bootloader"
+msgstr ""
+
+msgid "Needs restart"
+msgstr ""
+
+msgid "Needs shutdown"
+msgstr ""
+
+msgid "Needs activation"
+msgstr ""
+
+msgid "Usable during the update"
+msgstr ""
+
+msgid "Affects full-disk encryption"
+msgstr ""
+
+msgid "Low priority"
+msgstr ""
+
+msgid "Medium priority"
+msgstr ""
+
+msgid "High priority"
+msgstr ""
+
+msgid "Critical priority"
+msgstr ""
+
+#| msgid "Downgrading"
+msgid "Downgrade"
+msgstr ""
+
+msgid "Blocked"
+msgstr ""
+
+msgid "This release requires approval before it can be installed"
+msgstr ""
+
+msgid "This version is blocked on this device"
+msgstr ""
+
+#| msgid "Community fluxer"
+msgid "Community supported"
+msgstr ""
+
+msgid "Alternate branch"
 msgstr ""
 
 msgid "Choose a Flatpak file"
@@ -1435,11 +2057,20 @@ msgstr ""
 msgid "Loading..."
 msgstr "Φόρτωση..."
 
+msgid "inferred"
+msgstr ""
+
+msgid "Installed From"
+msgstr ""
+
 msgid "Build Date"
 msgstr "Ημερομηνία δημιουργίας"
 
 msgid "Install Reason"
 msgstr "Λόγος Εγκατάστασης"
+
+msgid "Available From"
+msgstr ""
 
 msgid "Provides"
 msgstr "Παρέχει"
@@ -1510,10 +2141,7 @@ msgstr "Εγκατάσταση πακέτων"
 msgid "Select package for batch installation"
 msgstr ""
 
-msgid "Search standard repositories, Atoll and Flatpak"
-msgstr ""
-
-msgid "Show results from Atoll"
+msgid "Could not search the selected sources"
 msgstr ""
 
 msgid ""
@@ -1521,15 +2149,16 @@ msgid ""
 "name to begin."
 msgstr ""
 
-msgid ""
-"Search standard repositories, the AUR and Flatpak at once. Type a name to "
-"begin."
+msgid "Search standard repositories, Atoll and Flatpak"
 msgstr ""
 
-msgid "Could not search the selected sources"
+msgid "Show results from Atoll"
 msgstr ""
 
 msgid "Installation in progress"
+msgstr ""
+
+msgid "Search Sources (some sources hidden)"
 msgstr ""
 
 msgid "No sources selected"
@@ -1561,10 +2190,17 @@ msgstr ""
 msgid "Installing AppImage support"
 msgstr ""
 
+#| msgid "Installing Flatpak"
+msgid "Installing Firmware support"
+msgstr ""
+
 msgid "Could not start installing Flatpak support."
 msgstr ""
 
 msgid "Could not start installing AppImage support."
+msgstr ""
+
+msgid "Could not start installing Firmware support."
 msgstr ""
 
 msgid "Could not install Flatpak support."
@@ -1573,10 +2209,16 @@ msgstr ""
 msgid "Could not install AppImage support."
 msgstr ""
 
+msgid "Could not install Firmware support."
+msgstr ""
+
 msgid "Flatpak support enabled"
 msgstr ""
 
 msgid "AppImage support enabled"
+msgstr ""
+
+msgid "Firmware support enabled"
 msgstr ""
 
 msgid "No changelog entries found"
@@ -1629,7 +2271,8 @@ msgstr "Η υπηρεσία εκκίνησης Systemd καταργήθηκε."
 msgid "AUR enabled"
 msgstr "AUR ενεργοποιημένο"
 
-msgid "System GTK"
+#| msgid "System bus"
+msgid "System colors"
 msgstr ""
 
 msgid "Follow system"
@@ -1691,6 +2334,9 @@ msgstr ""
 
 msgid "Custom…"
 msgstr ""
+
+msgid "Packages"
+msgstr "Πακέτα"
 
 msgid "Pending"
 msgstr "Σε εκκρεμότητα"
@@ -1828,6 +2474,9 @@ msgstr ""
 msgid "System package update"
 msgstr "Ενημέρωση πακέτου συστήματος"
 
+msgid "Atoll package update"
+msgstr ""
+
 msgid "AUR package update"
 msgstr "Ενημέρωση πακέτου AUR"
 
@@ -1884,7 +2533,18 @@ msgstr ""
 "εγκατεστημένο λογισμικό σας. Τα δεδομένα των πακέτων λαμβάνονται από "
 "εξωτερικές πηγές."
 
+msgid "Installing Flatpak, AppImage and Firmware support"
+msgstr ""
+
 msgid "Installing Flatpak and AppImage support"
+msgstr ""
+
+#| msgid "Installing Flatpak"
+msgid "Installing Flatpak and Firmware support"
+msgstr ""
+
+#| msgid "Installing AppImage"
+msgid "Installing AppImage and Firmware support"
 msgstr ""
 
 msgid "BROWSE"
@@ -1897,139 +2557,4 @@ msgid "Expand sidebar"
 msgstr ""
 
 msgid "Collapse sidebar"
-msgstr ""
-
-msgid "No recommendations found"
-msgstr ""
-
-msgid "System-wide"
-msgstr ""
-
-msgid "Current user"
-msgstr ""
-
-msgid "Atoll package update"
-msgstr ""
-
-msgid "Use System Title Bar"
-msgstr ""
-
-msgid "If enabled, the desktop draws the window title bar and its buttons instead of Shelly."
-msgstr ""
-
-msgid "Applies after restarting Shelly."
-msgstr ""
-
-msgid "Language for Shelly's menus and messages."
-msgstr ""
-
-msgid "Software sources"
-msgstr ""
-
-msgid "Choose which kinds of software Shelly shows. You can change this at any time."
-msgstr ""
-
-msgid "Enable Firmware"
-msgstr ""
-
-msgid "Update device firmware such as UEFI/BIOS and peripherals"
-msgstr ""
-
-msgid "Update notifications"
-msgstr ""
-
-msgid "Shelly can check for updates in the background and let you know from the system tray."
-msgstr ""
-
-msgid "Show a tray icon that checks for updates in the background."
-msgstr ""
-
-msgid "Start the tray icon when you log in."
-msgstr ""
-
-msgid "How often the tray looks for updates."
-msgstr ""
-
-msgid "Check on chosen days at a set time instead of every few hours."
-msgstr ""
-
-msgid "Days and time when Shelly checks for updates."
-msgstr ""
-
-msgid "Check only at the scheduled time, not when the tray starts."
-msgstr ""
-
-msgid "Run updates started from the tray in the Shelly window instead of a terminal."
-msgstr ""
-
-msgid "Terminal that runs updates started from the tray."
-msgstr ""
-
-msgid "Appearance"
-msgstr ""
-
-msgid "Use Shelly's colors or your desktop's colors."
-msgstr ""
-
-msgid "Light, dark, or follow your system."
-msgstr ""
-
-msgid "The page Shelly opens on."
-msgstr ""
-
-msgid "Sidebar on the left, or tabs across the top."
-msgstr ""
-
-msgid "Tray icon"
-msgstr ""
-
-msgid "Use your own image for the tray icon."
-msgstr ""
-
-msgid "Image the tray shows when updates are available."
-msgstr ""
-
-msgid "Installing and removing"
-msgstr ""
-
-msgid "Skip confirmation prompts when installing, updating, or removing."
-msgstr ""
-
-msgid "Also delete an app's configuration files when you remove it."
-msgstr ""
-
-msgid "Search and AUR"
-msgstr ""
-
-msgid "Add a page that searches every source at once."
-msgstr ""
-
-msgid "Browse the AUR through Seafoam Labs' Atoll service."
-msgstr ""
-
-msgid "Folder where new AppImages are saved."
-msgstr ""
-
-msgid "Remove Configuration on Uninstall"
-msgstr ""
-
-msgid "Layout"
-msgstr ""
-
-msgid "Updates & Tray"
-msgstr ""
-
-msgid "Installed From"
-msgstr ""
-
-msgid "Available From"
-msgstr ""
-
-msgid "inferred"
-msgstr ""
-
-msgid "Rounded Window Corners"
-msgstr ""
-
-msgid "If enabled, Shelly rounds the corners of the windows it draws. A desktop that draws the title bar sets its own corners."
 msgstr ""
