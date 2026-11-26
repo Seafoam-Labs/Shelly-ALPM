@@ -51,6 +51,8 @@ pub const View = struct {
             if (self.include_aur)
                 if (self.include_flatpak) "System packages, AUR, and system/user Flatpaks. PKGBUILDs require review." else "System packages and AUR. Flatpak disabled or unavailable. PKGBUILDs require review."
             else if (self.include_flatpak) "System packages and system/user Flatpaks. AUR excluded." else "Full system upgrade. AUR and Flatpak excluded."
+        else if (self.action == .repair_permissions)
+            "Restore your ownership of Shelly’s configuration, cache, and data directories. This requires administrator authorization."
         else if (self.action == .sync)
             "Refreshes metadata from the configured system repositories."
         else if (self.backend == .appimage and self.action == .upgrade)
@@ -72,7 +74,7 @@ pub const View = struct {
             .succeeded => try std.fmt.allocPrint(arena, "{s} {f} successfully.{s}", .{ self.action.completed(), diagnostics.safe(self.name), if (self.refresh_pending) "\nRefreshing package state…" else "" }),
             .declined => try std.fmt.allocPrint(arena, "Declined {s} for {f}.\n{s}", .{ @tagName(self.action), diagnostics.safe(self.name), if (self.action == .purify) "Cleanup was cancelled." else "Some dependency changes may already have completed." }),
             .failed => try std.fmt.allocPrint(arena, "Could not {s} {f}.\n\n{f}{s}", .{
-                @tagName(self.action),                                                                           diagnostics.safe(self.name),
+                if (self.action == .repair_permissions) "repair" else @tagName(self.action),                     diagnostics.safe(self.name),
                 diagnostics.safe(if (self.detail.len > 0) self.detail else "Shelly returned no error details."), if (self.combined) "\nSome sources may already have completed. Package state will be refreshed." else "",
             }),
         };

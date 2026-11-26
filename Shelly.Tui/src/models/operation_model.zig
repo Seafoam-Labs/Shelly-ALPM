@@ -489,7 +489,7 @@ pub fn closeOverlay(self: *Model) void {
     if (self.overlay) |overlay| {
         switch (overlay) {
             .sudo => |prompt| {
-                if (prompt.action != .purify and (prompt.backend == .standard or prompt.backend == .aur)) resetPackageSelection(self);
+                if (prompt.action != .purify and prompt.action != .repair_permissions and (prompt.backend == .standard or prompt.backend == .aur)) resetPackageSelection(self);
                 prompt.deinit(self.gpa);
                 if (self.notice.len > 0) self.gpa.free(self.notice);
                 self.notice = "";
@@ -621,6 +621,19 @@ pub fn startCleanup(self: *Model, ctx: *vxfw.EventContext, backend: OperationBac
     prompt.* = .{ .name = name, .backend = backend, .action = .purify, .elevated = backend == .standard };
     try ctx.requestFocus(self.widget());
     try confirmPrompt(self, ctx, prompt);
+    self.overlay = .{ .sudo = prompt };
+    ctx.consumeAndRedraw();
+}
+
+pub fn openPermissionRepair(self: *Model, ctx: *vxfw.EventContext) !void {
+    if (self.overlay != null or self.operation_state.install_job != null) return ctx.consumeEvent();
+    const prompt = try self.gpa.create(SudoPrompt);
+    errdefer self.gpa.destroy(prompt);
+    prompt.* = .{
+        .name = try self.gpa.dupe(u8, "Shelly directory ownership"),
+        .backend = .standard,
+        .action = .repair_permissions,
+    };
     self.overlay = .{ .sudo = prompt };
     ctx.consumeAndRedraw();
 }
@@ -760,7 +773,7 @@ pub fn pollInstall(self: *Model) !bool {
         @import("updates_model.zig").invalidate(self);
     }
     const is_flatpak = std.mem.eql(u8, job.request.backend, "flatpak");
-    if (!is_flatpak and !is_appimage) {
+    if (!is_flatpak and !is_appimage and job.request.action != .repair_permissions) {
         aur_model.invalidateInstalledCache(self);
         if (self.settings_state.settings.aur_enabled) self.aur_state.refresh_aur_after_operation = true;
     }
@@ -797,7 +810,7 @@ pub fn pollInstall(self: *Model) !bool {
             }
         }
     }
-    if (self.packages_state.installed_only) try packages_model.rebuildFilter(self);
+    if (self.packages_state.installed_only and job.request.action != .repair_permissions) try packages_model.rebuildFilter(self);
     // Reflect the outcome in the sudo prompt if it is still open
     if (self.overlay) |overlay| {
         switch (overlay) {

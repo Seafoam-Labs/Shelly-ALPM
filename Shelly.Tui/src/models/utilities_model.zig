@@ -110,12 +110,14 @@ pub const Task = enum {
     pacfiles,
     cleanup,
     flatpak_cleanup,
+    repair_permissions,
 
     pub fn label(self: Task) []const u8 {
         return switch (self) {
             .pacfiles => "List pacfiles",
             .cleanup => "Clean standard packages",
             .flatpak_cleanup => "Clean unused Flatpaks",
+            .repair_permissions => "Repair directory permissions",
         };
     }
 
@@ -203,6 +205,7 @@ fn activate(model: *Model, ctx: *vxfw.EventContext) !void {
             if (!state.selected.available(model)) return ctx.consumeEvent();
             try @import("operation_model.zig").startCleanup(model, ctx, if (state.selected == .cleanup) .standard else .flatpak);
         },
+        .repair_permissions => try @import("operation_model.zig").openPermissionRepair(model, ctx),
     }
 }
 
@@ -323,9 +326,15 @@ pub fn handleKey(model: *Model, ctx: *vxfw.EventContext, key: vaxis.Key) !bool {
         vaxis.Key.up, vaxis.Key.down => {
             if (state.results_focused) return false;
             const tasks = std.enums.values(Task);
-            const index = @backingInt(state.selected);
-            const next = if (direction.codepoint == vaxis.Key.up) index -| 1 else @min(index + 1, tasks.len - 1);
-            if (tasks[next].available(model)) state.selected = tasks[next];
+            const up = direction.codepoint == vaxis.Key.up;
+            var index: usize = @backingInt(state.selected);
+            while (if (up) index > 0 else index < tasks.len - 1) {
+                index = if (up) index - 1 else index + 1;
+                if (tasks[index].available(model)) {
+                    state.selected = tasks[index];
+                    break;
+                }
+            }
         },
         else => return false,
     }
@@ -425,4 +434,29 @@ test "pacfile preview shows file contents, changes, and backups without an activ
     try std.testing.expect(std.mem.indexOf(u8, rotated_lines, "-setting=old") != null);
     try std.testing.expect(std.mem.indexOf(u8, rotated_lines, "+setting=backup") != null);
     try std.testing.expectError(error.InvalidPacfile, activePacfilePath("/etc/app.conf.pacsave.old"));
+}
+
+test "permission repair remains reachable with Flatpak disabled and opens a confirmation" {
+    const model = try Model.init(std.testing.allocator);
+    defer model.deinit();
+    model.active = .utilities;
+    model.settings_state.settings.flatpak_enabled = false;
+    model.utilities_state.selected = .cleanup;
+    model.utilities_state.result = try std.json.parseFromSlice([][]const u8, std.testing.allocator, "[]", .{});
+    var ctx: vxfw.EventContext = .{ .io = std.testing.io, .alloc = std.testing.allocator, .cmds = .empty };
+    defer ctx.cmds.deinit(ctx.alloc);
+    try model.captureEvent(&ctx, .{ .key_press = commands.bindings.next });
+    try std.testing.expectEqual(Task.repair_permissions, model.utilities_state.selected);
+    try model.captureEvent(&ctx, .{ .key_press = commands.bindings.confirm });
+    const prompt = model.overlay.?.sudo;
+    try std.testing.expectEqual(@import("../services/shelly_operation.zig").Action.repair_permissions, prompt.action);
+    try std.testing.expectEqual(@TypeOf(prompt.state).entering, prompt.state);
+    try std.testing.expect(model.operation_state.install_job == null);
+
+    try model.captureEvent(&ctx, .{ .key_press = commands.bindings.cancel });
+    try std.testing.expect(model.overlay == null);
+    for (0..3) |_| try model.captureEvent(&ctx, .{ .key_press = commands.bindings.next });
+    try std.testing.expectEqual(Task.repair_permissions, model.utilities_state.selected);
+    for (0..4) |_| try model.captureEvent(&ctx, .{ .key_press = commands.bindings.previous });
+    try std.testing.expectEqual(Task.pacfiles, model.utilities_state.selected);
 }

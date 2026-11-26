@@ -16,6 +16,7 @@ pub const Action = enum {
     upgrade,
     sync,
     purify,
+    repair_permissions,
 
     pub fn verb(self: Action) []const u8 {
         return switch (self) {
@@ -24,6 +25,7 @@ pub const Action = enum {
             .upgrade => "Upgrade",
             .sync => "Sync",
             .purify => "Clean",
+            .repair_permissions => "Repair",
         };
     }
 
@@ -34,6 +36,7 @@ pub const Action = enum {
             .upgrade => "Upgraded",
             .sync => "Synchronized",
             .purify => "Cleaned",
+            .repair_permissions => "Repaired",
         };
     }
 };
@@ -506,6 +509,9 @@ fn elevated(request: OperationRequest) bool {
 }
 
 fn operationArgv(alloc: std.mem.Allocator, request: OperationRequest) ![][]const u8 {
+    if (request.action == .repair_permissions) {
+        return alloc.dupe([]const u8, &.{ request.sudo_bin, request.shelly_bin, "utility", "--fix-permissions", "--ui-mode" });
+    }
     const package_backend = std.mem.eql(u8, request.backend, "standard") or std.mem.eql(u8, request.backend, "aur");
     if (request.action == .purify and !std.mem.eql(u8, request.backend, "standard") and !isFlatpak(request)) return error.UnsupportedCleanupBackend;
     if (request.action == .sync and !std.mem.eql(u8, request.backend, "standard")) return error.UnsupportedSyncBackend;
@@ -2022,4 +2028,23 @@ test "cleanup commands preserve confirmation and attach CLI targets to the revie
     try std.testing.expectEqual(@as(usize, 2), targets.len);
     try std.testing.expectEqualStrings("[user] runtime/demo", targets[0]);
     try std.testing.expectEqualStrings("[system] runtime/example", targets[1]);
+}
+
+test "permission repair uses the existing elevated CLI utility" {
+    const allocator = std.testing.allocator;
+    var env: std.process.Environ.Map = .init(allocator);
+    defer env.deinit();
+    const request: OperationRequest = .{
+        .action = .repair_permissions,
+        .shelly_bin = "shelly",
+        .environ_map = &env,
+        .name = "Shelly directory ownership",
+        .backend = "standard",
+    };
+    const argv = try operationArgv(allocator, request);
+    defer allocator.free(argv);
+    for ([_][]const u8{ "sudo", "shelly", "utility", "--fix-permissions", "--ui-mode" }, argv) |expected, actual|
+        try std.testing.expectEqualStrings(expected, actual);
+    try std.testing.expect(elevated(request));
+    try std.testing.expect(!interactive(request));
 }
