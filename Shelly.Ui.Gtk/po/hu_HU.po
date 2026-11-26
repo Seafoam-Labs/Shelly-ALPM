@@ -1843,115 +1843,115 @@ msgid "Applies after restarting Shelly."
 msgstr "A Shelly újraindítása után lép érvénybe."
 
 msgid "Language for Shelly's menus and messages."
-msgstr ""
+msgstr "A Shelly menüinek és üzeneteinek nyelve."
 
 msgid "Software sources"
-msgstr ""
+msgstr "Szoftverforrások"
 
 msgid "Choose which kinds of software Shelly shows. You can change this at any time."
-msgstr ""
+msgstr "Válassza ki, hogy a Shelly milyen típusú szoftvereket jelenítsen meg. A beállítás bármikor módosítható."
 
 msgid "Enable Firmware"
-msgstr ""
+msgstr "Firmware engedélyezése"
 
 msgid "Update device firmware such as UEFI/BIOS and peripherals"
-msgstr ""
+msgstr "Eszközök firmware-ének frissítése, például az UEFI/BIOS és a perifériák esetében"
 
 msgid "Update notifications"
-msgstr ""
+msgstr "Frissítési értesítések"
 
 msgid "Shelly can check for updates in the background and let you know from the system tray."
-msgstr ""
+msgstr "A Shelly a háttérben is kereshet frissítéseket, és értesítést küldhet azok elérhetőségéről a rendszertálcán keresztül."
 
 msgid "Show a tray icon that checks for updates in the background."
-msgstr ""
+msgstr "Frissítéseket a háttérben kereső tálcaikon megjelenítése."
 
 msgid "Start the tray icon when you log in."
-msgstr ""
+msgstr "Tálcaikon automatikus indítása bejelentkezéskor."
 
 msgid "How often the tray looks for updates."
-msgstr ""
+msgstr "A tálca frissítéskeresésének gyakorisága."
 
 msgid "Check on chosen days at a set time instead of every few hours."
-msgstr ""
+msgstr "Frissítések keresése a kiválasztott napokon, meghatározott időpontban, néhány óránkénti ellenőrzés helyett."
 
 msgid "Days and time when Shelly checks for updates."
-msgstr ""
+msgstr "A frissítések keresésének napjai és időpontja."
 
 msgid "Check only at the scheduled time, not when the tray starts."
-msgstr ""
+msgstr "Ellenőrzés csak az ütemezett időpontban, ne a tálca indításakor."
 
 msgid "Run updates started from the tray in the Shelly window instead of a terminal."
-msgstr ""
+msgstr "A tálcáról indított frissítések futtatása terminál helyett a Shelly ablakában."
 
 msgid "Terminal that runs updates started from the tray."
-msgstr ""
+msgstr "A tálcáról indított frissítéseket futtató terminál."
 
 msgid "Appearance"
-msgstr ""
+msgstr "Megjelenés"
 
 msgid "Use Shelly's colors or your desktop's colors."
-msgstr ""
+msgstr "A Shelly vagy az asztali környezet színeinek használata."
 
 msgid "Light, dark, or follow your system."
-msgstr ""
+msgstr "Világos, sötét vagy a rendszer beállításainak követése."
 
 msgid "The page Shelly opens on."
-msgstr ""
+msgstr "A Shelly indításkor megnyíló oldal."
 
 msgid "Sidebar on the left, or tabs across the top."
-msgstr ""
+msgstr "Bal oldali oldalsáv vagy felül elhelyezkedő lapfülek."
 
 msgid "Tray icon"
-msgstr ""
+msgstr "Tálcaikon"
 
 msgid "Use your own image for the tray icon."
-msgstr ""
+msgstr "Saját kép használata a tálcaikonhoz."
 
 msgid "Image the tray shows when updates are available."
-msgstr ""
+msgstr "A tálcán megjelenő kép, amikor frissítések érhetők el."
 
 msgid "Installing and removing"
-msgstr ""
+msgstr "Telepítés és eltávolítás"
 
 msgid "Skip confirmation prompts when installing, updating, or removing."
-msgstr ""
+msgstr "Megerősítést kérő párbeszédablakok kihagyása telepítés, frissítés és eltávolítás során."
 
 msgid "Also delete an app's configuration files when you remove it."
-msgstr ""
+msgstr "Az alkalmazás eltávolításakor a hozzá tartozó beállításfájlok is törlődnek."
 
 msgid "Search and AUR"
-msgstr ""
+msgstr "Keresés és AUR"
 
 msgid "Add a page that searches every source at once."
-msgstr ""
+msgstr "Olyan oldal hozzáadása, amely egyszerre keres az összes forrásban."
 
 msgid "Browse the AUR through Seafoam Labs' Atoll service."
-msgstr ""
+msgstr "Az AUR böngészése a Seafoam Labs Atoll szolgáltatásán keresztül."
 
 msgid "Folder where new AppImages are saved."
-msgstr ""
+msgstr "Az új AppImage-fájlok mentési mappája."
 
 msgid "Remove Configuration on Uninstall"
-msgstr ""
+msgstr "Beállítások törlése az eltávolítás során"
 
 msgid "Layout"
-msgstr ""
+msgstr "Elrendezés"
 
 msgid "Updates & Tray"
-msgstr ""
+msgstr "Frissítések és tálca"
 
 msgid "Installed From"
-msgstr ""
+msgstr "Telepítve innen"
 
 msgid "Available From"
-msgstr ""
+msgstr "Elérhető innen"
 
 msgid "inferred"
-msgstr ""
+msgstr "kiköveztetett"
 
 msgid "Rounded Window Corners"
-msgstr ""
+msgstr "Lekerekített ablaksarkok"
 
 msgid "If enabled, Shelly rounds the corners of the windows it draws. A desktop that draws the title bar sets its own corners."
-msgstr ""
+msgstr "Ha engedélyezve van, a Shelly lekerekíti az általa megjelenített ablakok sarkait. A címsort megjelenítő asztali környezet saját maga állítja be a sarkok lekerekítését."
