@@ -3,7 +3,7 @@ msgstr ""
 "Project-Id-Version: Hungarian (Shelly-ALPM)\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
 "POT-Creation-Date: 2026-11-25 23:30-0500\n"
-"PO-Revision-Date: 2026-11-14 16:51+0100\n"
+"PO-Revision-Date: 2026-11-21 20:08+0100\n"
 "Last-Translator: ghostofsparta222\n"
 "Language-Team: Hungarian\n"
 "Language: hu_HU\n"
@@ -299,11 +299,9 @@ msgstr ""
 msgid "Check Again"
 msgstr "Újbóli ellenőrzés"
 
-#| msgid "Checking for updates…"
 msgid "Looking for devices…"
 msgstr ""
 
-#| msgid "Installing AppImage"
 msgid "Installing firmware…"
 msgstr ""
 
@@ -325,22 +323,18 @@ msgstr ""
 msgid "Branch"
 msgstr ""
 
-#| msgid "No summary available"
 msgid "No releases available"
 msgstr ""
 
-#| msgid "No packages found"
 msgid "No devices found"
 msgstr ""
 
 msgid "Devices that support firmware updates will appear here."
 msgstr ""
 
-#| msgid "Could not load the release notes."
 msgid "Could not load firmware devices."
 msgstr ""
 
-#| msgid "Check Again"
 msgid "Try Again"
 msgstr ""
 
@@ -364,10 +358,10 @@ msgid "Install for"
 msgstr "Telepítés célja"
 
 msgid "System-wide"
-msgstr ""
+msgstr "Rendszerszintű"
 
 msgid "Current user"
-msgstr ""
+msgstr "Jelenlegi felhasználó"
 
 msgid "Install"
 msgstr "Telepítés"
@@ -570,13 +564,13 @@ msgid "Install all selected packages in one transaction"
 msgstr "Az összes kijelölt csomag telepítése egyetlen műveletben"
 
 msgid "Loading recommendations…"
-msgstr ""
+msgstr "Ajánlott csomagok betöltése…"
 
 msgid "No recommendations found"
-msgstr ""
+msgstr "Nincsenek ajánlott csomagok"
 
 msgid "Check your internet connection and try again."
-msgstr ""
+msgstr "Ellenőrizze az internetkapcsolatot, majd próbálja újra."
 
 msgid "Shelly Search"
 msgstr "Shelly-keresés"
@@ -584,7 +578,6 @@ msgstr "Shelly-keresés"
 msgid "Search standard repositories, AUR and Flatpak"
 msgstr "Keresés az AUR és Flatpak szabványos tárolóiban"
 
-#| msgid "Select Your Sources"
 msgid "Search Sources"
 msgstr ""
 
@@ -743,7 +736,6 @@ msgid ""
 "Run updates started from the tray in the Shelly window instead of a terminal."
 msgstr ""
 
-#| msgid "Update Strategy"
 msgid "Update terminal"
 msgstr ""
 
@@ -831,15 +823,17 @@ msgid "Sidebar on the left, or tabs across the top."
 msgstr ""
 
 msgid "Use System Title Bar"
-msgstr ""
+msgstr "Rendszercímsor használata"
 
 msgid ""
 "If enabled, the desktop draws the window title bar and its buttons instead "
 "of Shelly."
 msgstr ""
+"Ha engedélyezve van, az asztali környezet a Shelly helyett az ablak címsorát "
+"és annak gombjait jeleníti meg."
 
 msgid "Applies after restarting Shelly."
-msgstr ""
+msgstr "A Shelly újraindítása után lép érvénybe."
 
 msgid "Rounded Window Corners"
 msgstr ""
@@ -906,11 +900,9 @@ msgstr "Kimenet váltása"
 msgid "Done"
 msgstr "Kész"
 
-#| msgid "Download"
 msgid "1 · Download"
 msgstr ""
 
-#| msgid "Install"
 msgid "2 · Install"
 msgstr ""
 
@@ -926,7 +918,6 @@ msgstr "Rendszer"
 msgid "Check all enabled sources again"
 msgstr "Az összes engedélyezett forrás újbóli ellenőrzése"
 
-#| msgid "Available Updates"
 msgid "Available updates"
 msgstr ""
 
@@ -1235,11 +1226,9 @@ msgstr ""
 msgid "Failed to write to the device"
 msgstr ""
 
-#| msgid "Install for"
 msgid "Invalid file format"
 msgstr ""
 
-#| msgid "No device access"
 msgid "No matching device exists"
 msgstr ""
 
@@ -1252,11 +1241,9 @@ msgstr ""
 msgid "Signature was invalid"
 msgstr ""
 
-#| msgid "polkit is required"
 msgid "AC power was required"
 msgstr ""
 
-#| msgid "Permissions"
 msgid "Permission was denied"
 msgstr ""
 
@@ -1275,7 +1262,6 @@ msgstr ""
 msgid "The firmware data is invalid"
 msgstr ""
 
-#| msgid "Operation failed"
 msgid "The operation timed out"
 msgstr ""
 
@@ -1285,18 +1271,15 @@ msgstr ""
 msgid "The device could not be reached"
 msgstr ""
 
-#| msgid "Unknown developer"
 msgid "Unknown error"
 msgstr ""
 
-#| msgid "Unknown"
 msgid "Unknown state"
 msgstr ""
 
 msgid "Idle"
 msgstr ""
 
-#| msgid "Loading packages"
 msgid "Loading a resource"
 msgstr ""
 
@@ -1315,7 +1298,6 @@ msgstr ""
 msgid "Scheduling an offline update"
 msgstr ""
 
-#| msgid "Downloading"
 msgid "A file is downloading"
 msgstr ""
 
@@ -1337,7 +1319,6 @@ msgstr ""
 msgid "Waiting for user action"
 msgstr ""
 
-#| msgid "Required By"
 msgid "requires"
 msgstr ""
 
@@ -1371,11 +1352,9 @@ msgstr ""
 msgid "Another process is blocking firmware updates"
 msgstr ""
 
-#| msgid "Package is already installed"
 msgid "Device is already being updated"
 msgstr ""
 
-#| msgid "Devices"
 msgid "Device is in use"
 msgstr ""
 
@@ -1419,7 +1398,6 @@ msgid ""
 "then re-inserted."
 msgstr ""
 
-#| msgid "Systemd startup service added."
 msgid "Please restart the fwupd service."
 msgstr ""
 
@@ -1484,7 +1462,6 @@ msgstr "Csak AppImage-fájlok telepíthetők"
 msgid "Installing AppImage"
 msgstr "AppImage telepítése"
 
-#| msgid "Could not install AppImage support."
 msgid "Could not read the AppImage update setting."
 msgstr ""
 
@@ -1624,15 +1601,12 @@ msgstr ""
 msgid "Could not search the configured AUR service."
 msgstr "Nem sikerült keresni a beállított AUR-szolgáltatásban."
 
-#| msgid "Downloading"
 msgid "Downloading…"
 msgstr ""
 
-#| msgid "Devices"
 msgid "devices"
 msgstr ""
 
-#| msgid "Update Available"
 msgid "updates available"
 msgstr ""
 
@@ -1674,26 +1648,21 @@ msgstr ""
 msgid "The device will be unavailable during this action."
 msgstr ""
 
-#| msgid "Download Size"
 msgid "Download size: {s}"
 msgstr ""
 
 msgid "Estimated install time: {s} seconds"
 msgstr ""
 
-#| msgid "Update Available"
 msgid "Update device"
 msgstr ""
 
-#| msgid "Downgraded"
 msgid "Downgrade device"
 msgstr ""
 
-#| msgid "Reinstalled"
 msgid "Reinstall device"
 msgstr ""
 
-#| msgid "Install for"
 msgid "Install firmware"
 msgstr ""
 
@@ -1731,11 +1700,9 @@ msgstr ""
 msgid "Failed to install firmware"
 msgstr ""
 
-#| msgid "Could not start the requested operation."
 msgid "Could not start the installation"
 msgstr ""
 
-#| msgid "Could not search the configured AUR service."
 msgid "Could not reach the firmware service"
 msgstr ""
 
@@ -1757,15 +1724,12 @@ msgstr ""
 msgid "The firmware download failed"
 msgstr ""
 
-#| msgid "Could not load the release notes."
 msgid "Could not access the firmware cache"
 msgstr ""
 
-#| msgid "Updates included"
 msgid "Update complete"
 msgstr ""
 
-#| msgid "Devices"
 msgid "Device request"
 msgstr ""
 
@@ -1807,11 +1771,9 @@ msgstr ""
 msgid "Shut down later"
 msgstr ""
 
-#| msgid "Operation cancelled"
 msgid "Restart cancelled"
 msgstr ""
 
-#| msgid "Operation cancelled"
 msgid "Shutdown cancelled"
 msgstr ""
 
@@ -1823,11 +1785,9 @@ msgid ""
 "The shutdown was cancelled. Shut down later to complete the firmware update."
 msgstr ""
 
-#| msgid "Operation failed"
 msgid "Restart failed"
 msgstr ""
 
-#| msgid "Operation failed"
 msgid "Shutdown failed"
 msgstr ""
 
@@ -1843,7 +1803,6 @@ msgstr ""
 msgid "Resolve the device problems before updating"
 msgstr ""
 
-#| msgid "Installation in progress"
 msgid "An update is in progress"
 msgstr ""
 
@@ -1880,7 +1839,6 @@ msgstr ""
 msgid "Critical priority"
 msgstr ""
 
-#| msgid "Downgraded"
 msgid "Downgrade"
 msgstr ""
 
@@ -1893,7 +1851,6 @@ msgstr ""
 msgid "This version is blocked on this device"
 msgstr ""
 
-#| msgid "Community fluxer"
 msgid "Community supported"
 msgstr ""
 
@@ -2255,7 +2212,6 @@ msgstr "Flatpak-támogatás telepítése"
 msgid "Installing AppImage support"
 msgstr "AppImage-támogatás telepítése"
 
-#| msgid "Installing AppImage support"
 msgid "Installing Firmware support"
 msgstr ""
 
@@ -2265,7 +2221,6 @@ msgstr "Nem sikerült elindítani a Flatpak-támogatás telepítését."
 msgid "Could not start installing AppImage support."
 msgstr "Nem sikerült elindítani az AppImage-támogatás telepítését."
 
-#| msgid "Could not start installing AppImage support."
 msgid "Could not start installing Firmware support."
 msgstr ""
 
@@ -2275,7 +2230,6 @@ msgstr "Nem sikerült telepíteni a Flatpak-támogatást."
 msgid "Could not install AppImage support."
 msgstr "Nem sikerült telepíteni az AppImage-támogatást."
 
-#| msgid "Could not install AppImage support."
 msgid "Could not install Firmware support."
 msgstr ""
 
@@ -2285,7 +2239,6 @@ msgstr "Flatpak-támogatás engedélyezve"
 msgid "AppImage support enabled"
 msgstr "AppImage-támogatás engedélyezve"
 
-#| msgid "AppImage support enabled"
 msgid "Firmware support enabled"
 msgstr ""
 
@@ -2345,11 +2298,9 @@ msgstr "A systemd automatikus indítási szolgáltatása eltávolítva."
 msgid "AUR enabled"
 msgstr "AUR engedélyezve"
 
-#| msgid "System files"
 msgid "System colors"
 msgstr ""
 
-#| msgid "system"
 msgid "Follow system"
 msgstr ""
 
@@ -2404,7 +2355,6 @@ msgstr "Türkçe"
 msgid "中文（简体）"
 msgstr "中文（简体）"
 
-#| msgid "Default page"
 msgid "Default (auto-detect)"
 msgstr ""
 
@@ -2444,7 +2394,6 @@ msgstr "Megszakítva"
 msgid "Cancelled"
 msgstr "Megszakítva"
 
-#| msgid "Installation in progress"
 msgid "Overall progress"
 msgstr ""
 
@@ -2496,26 +2445,21 @@ msgstr "Lemezterület ellenőrzése"
 msgid "Preparing transaction"
 msgstr ""
 
-#| msgid "Loading packages"
 msgid "Downloading packages"
 msgstr ""
 
-#| msgid "About"
 msgid "about"
 msgstr ""
 
 msgid "s left"
 msgstr ""
 
-#| msgid "No packages found"
 msgid "packages downloaded"
 msgstr ""
 
-#| msgid "Not processed"
 msgid "packages processed"
 msgstr ""
 
-#| msgid "Transaction Completed"
 msgid "Completed"
 msgstr ""
 
@@ -2561,7 +2505,7 @@ msgid "System package update"
 msgstr "Rendszercsomag frissítése"
 
 msgid "Atoll package update"
-msgstr ""
+msgstr "Atoll-csomag frissítése"
 
 msgid "AUR package update"
 msgstr "AUR-csomag frissítése"
@@ -2578,15 +2522,12 @@ msgstr "frissítéseket tartalmaz"
 msgid "Updates included"
 msgstr "Frissítéseket tartalmaz"
 
-#| msgid "Download Size"
 msgid "No download required"
 msgstr ""
 
-#| msgid "download"
 msgid "Total download:"
 msgstr ""
 
-#| msgid "0 Selected"
 msgid "Upgrade Selected"
 msgstr ""
 
@@ -2621,18 +2562,15 @@ msgstr ""
 "Az Ajánlott funkció a telepített szoftverek alapján válogatott csomagokat "
 "javasol. A csomagadatok külső forrásokból származnak."
 
-#| msgid "Installing Flatpak and AppImage support"
 msgid "Installing Flatpak, AppImage and Firmware support"
 msgstr ""
 
 msgid "Installing Flatpak and AppImage support"
 msgstr "Flatpak- és AppImage-támogatás telepítése"
 
-#| msgid "Installing Flatpak and AppImage support"
 msgid "Installing Flatpak and Firmware support"
 msgstr ""
 
-#| msgid "Installing AppImage support"
 msgid "Installing AppImage and Firmware support"
 msgstr ""
 
@@ -2647,3 +2585,43 @@ msgstr "Oldalsáv kibontása"
 
 msgid "Collapse sidebar"
 msgstr "Oldalsáv összecsukása"
+
+#~ msgid "Browse"
+#~ msgstr "Tallózás"
+
+#~ msgid "Recommended Packages"
+#~ msgstr "Ajánlott csomagok"
+
+#~ msgid "Curated suggestions from Seafoam Labs"
+#~ msgstr "A Seafoam Labs válogatott javaslatai"
+
+#~ msgid "Remove Cache on Uninstall"
+#~ msgstr "Gyorsítótár törlése eltávolításkor"
+
+#~ msgid "v0.0.0"
+#~ msgstr "v0.0.0"
+
+#~ msgid "Community fluxer"
+#~ msgstr "Fluxer-közösség"
+
+#~ msgid "Sponsor"
+#~ msgstr "Támogató"
+
+#~ msgid "Available Updates"
+#~ msgstr "Elérhető frissítések"
+
+#~ msgid "Configuration files will be kept."
+#~ msgstr "A beállításfájlok megmaradnak."
+
+#~ msgid "Select one or more packages"
+#~ msgstr "Válasszon ki egy vagy több csomagot"
+
+#~ msgid ""
+#~ "Search standard repositories, the AUR and Flatpak at once. Type a name to "
+#~ "begin."
+#~ msgstr ""
+#~ "Keresés a hivatalos tárolókban, az AUR-ban és a Flatpakben egyszerre. "
+#~ "Írjon be egy nevet a kezdéshez."
+
+#~ msgid "Main menu"
+#~ msgstr "Főmenü"
