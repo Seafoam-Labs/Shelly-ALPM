@@ -630,8 +630,16 @@ pub fn startCleanup(self: *Model, ctx: *vxfw.EventContext, backend: OperationBac
     ctx.consumeAndRedraw();
 }
 
+fn databaseRepairBlocked(self: *Model) !bool {
+    const aur_job = self.aur_state.aur_job;
+    if (self.updates_state.updates_job == null and !(aur_job != null and aur_job.?.installed_only)) return false;
+    try self.setNotice("Lock removal was blocked. Retry after the background database check finishes.");
+    return true;
+}
+
 pub fn openRepair(self: *Model, ctx: *vxfw.EventContext, action: enum { repair_permissions, repair_database }) !void {
     if (self.overlay != null or self.operation_state.install_job != null) return ctx.consumeEvent();
+    if (action == .repair_database and try databaseRepairBlocked(self)) return ctx.consumeAndRedraw();
     const prompt = try self.gpa.create(SudoPrompt);
     errdefer self.gpa.destroy(prompt);
     prompt.* = .{
@@ -667,6 +675,7 @@ pub fn openRepositoryPrompt(self: *Model, ctx: *vxfw.EventContext, name: []const
 }
 
 fn confirmPrompt(self: *Model, ctx: *vxfw.EventContext, prompt: *SudoPrompt) !void {
+    if (prompt.action == .repair_database and try databaseRepairBlocked(self)) return ctx.consumeAndRedraw();
     try startElevatedInstall(self, ctx, prompt);
     prompt.state = .running;
 }
@@ -929,6 +938,37 @@ pub fn handleReviewMouse(self: *Model, ctx: *vxfw.EventContext, event: vxfw.Even
         try self.operation_state.dependency_choices.handleEvent(ctx, event);
         syncProviderSelection(self);
     } else try self.operation_state.pkgbuild_scroll.handleEvent(ctx, event);
+}
+
+test "lock removal checks for preview database users when opened and confirmed" {
+    const model = try Model.init(std.testing.allocator);
+    defer model.deinit();
+    var ctx: vxfw.EventContext = .{ .io = std.testing.io, .alloc = model.gpa, .cmds = .empty };
+    defer ctx.cmds.deinit(model.gpa);
+    var updates: @import("updates_model.zig").UpdatesJob = .{};
+    model.updates_state.updates_job = &updates;
+    defer model.updates_state.updates_job = null;
+    try openRepair(model, &ctx, .repair_database);
+    try std.testing.expect(model.overlay == null);
+    try std.testing.expect(model.footerStatus() != null);
+
+    model.updates_state.updates_job = null;
+    try openRepair(model, &ctx, .repair_database);
+    const prompt = operationPrompt(model).?;
+    prompt.panel.ready = true;
+
+    model.updates_state.updates_job = &updates;
+    try handleSudoKey(model, prompt, &ctx, commands.bindings.confirm);
+    try std.testing.expectEqual(SudoPrompt.State.entering, prompt.state);
+    try std.testing.expect(model.operation_state.install_job == null);
+
+    model.updates_state.updates_job = null;
+    var installed_aur: aur_model.AurSearchJob = .{ .installed_only = true };
+    model.aur_state.aur_job = &installed_aur;
+    defer model.aur_state.aur_job = null;
+    try runMouseOperationAction(model, &ctx, .confirm);
+    try std.testing.expectEqual(SudoPrompt.State.entering, prompt.state);
+    try std.testing.expect(model.operation_state.install_job == null);
 }
 
 test "standard cleanup can be cancelled before launching the CLI" {

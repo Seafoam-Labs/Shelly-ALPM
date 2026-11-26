@@ -360,11 +360,11 @@ pub const Model = struct {
                     try flatpak_model.startFlatpak(self, ctx);
                     self.flatpak_state.refresh_flatpak_after_operation = false;
                 }
-                if (self.updates_state.refresh_updates_after_operation and self.updates_state.updates_job == null) {
+                if (!installing and self.updates_state.refresh_updates_after_operation and self.updates_state.updates_job == null) {
                     try updates_model.startUpdates(self, ctx);
                     self.updates_state.refresh_updates_after_operation = false;
                 }
-                if (self.aur_state.refresh_aur_after_operation and self.aur_state.aur_job == null) {
+                if (!installing and self.aur_state.refresh_aur_after_operation and self.aur_state.aur_job == null) {
                     if (aur_model.catalogActive(self) or self.aur_state.aur_installed_only or self.aur_state.aur_query.len > 0) try aur_model.startAurSearch(self, ctx, self.aur_state.aur_query);
                     self.aur_state.refresh_aur_after_operation = false;
                 }
