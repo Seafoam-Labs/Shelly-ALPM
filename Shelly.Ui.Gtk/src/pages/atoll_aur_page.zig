@@ -19,6 +19,8 @@ const AurPackageDetail = @import("aur_package_detail.zig").PackageDetail;
 const translations = @import("../helpers/translations.zig");
 const a11y = @import("../helpers/a11y.zig");
 const sorters = @import("../helpers/sorters.zig");
+const appendAurInstalledNames = @import("../helpers/installed.zig").appendAurInstalledNames;
+const aurInstalledContains = @import("../helpers/installed.zig").aurInstalledContains;
 const table_columns = @import("../helpers/table_columns.zig");
 
 pub const AtollAurPage = extern struct {
@@ -102,6 +104,8 @@ pub const AtollAurPage = extern struct {
         keep_rows: bool = false,
         index_page: u32 = 0,
         index_total_pages: u32 = 0,
+        installed_names: []const []const u8 = &.{},
+        all_installed: bool = false,
     };
 
     pub const getGObjectType = gobject.ext.defineClass(Self, .{
@@ -673,7 +677,7 @@ pub const AtollAurPage = extern struct {
                     post_failure(page, arena_ptr, generation, keep_rows);
                     return;
                 };
-                post_index_result(page, index, arena_ptr, generation, keep_rows);
+                post_index_result(page, index, arena_ptr, generation, keep_rows, fetchInstalledNames(alloc, ShellyCli{ .allocator = alloc, .io = threaded.io() }));
             },
             .search => {
                 var atoll = AtollApiService.init(alloc, threaded.io());
@@ -689,7 +693,8 @@ pub const AtollAurPage = extern struct {
                     post_failure(page, arena_ptr, generation, keep_rows);
                     return;
                 };
-                post_result(page, packages, arena_ptr, generation, keep_rows);
+                const cli = ShellyCli{ .allocator = alloc, .io = threaded.io() };
+                post_result(page, packages, arena_ptr, generation, keep_rows, fetchInstalledNames(alloc, cli), false);
             },
             .installed => {
                 const cli = ShellyCli{ .allocator = alloc, .io = threaded.io() };
@@ -698,9 +703,20 @@ pub const AtollAurPage = extern struct {
                     post_failure(page, arena_ptr, generation, keep_rows);
                     return;
                 };
-                post_result(page, parsed.value, arena_ptr, generation, keep_rows);
+                post_result(page, parsed.value, arena_ptr, generation, keep_rows, &.{}, true);
             },
         }
+    }
+
+    fn fetchInstalledNames(alloc: std.mem.Allocator, cli: ShellyCli) []const []const u8 {
+        const parsed = cli.list_aur_installed() catch |err| {
+            std.debug.print("aur_installed failed: {t}\n", .{err});
+            return &.{};
+        };
+        defer parsed.deinit();
+        var names: std.ArrayListUnmanaged([:0]const u8) = .empty;
+        appendAurInstalledNames(alloc, parsed.value, &names) catch {};
+        return names.items;
     }
 
     fn post_result(
@@ -709,8 +725,10 @@ pub const AtollAurPage = extern struct {
         arena: *std.heap.ArenaAllocator,
         generation: u64,
         keep_rows: bool,
+        installed_names: []const []const u8,
+        all_installed: bool,
     ) void {
-        post(page, packages, arena, generation, keep_rows, 0, 0);
+        post(page, packages, arena, generation, keep_rows, 0, 0, installed_names, all_installed);
     }
 
     fn post_index_result(
@@ -719,8 +737,9 @@ pub const AtollAurPage = extern struct {
         arena: *std.heap.ArenaAllocator,
         generation: u64,
         keep_rows: bool,
+        installed_names: []const []const u8,
     ) void {
-        post(page, index.packages, arena, generation, keep_rows, index.page, index.total_pages);
+        post(page, index.packages, arena, generation, keep_rows, index.page, index.total_pages, installed_names, false);
     }
 
     fn post(
@@ -731,6 +750,8 @@ pub const AtollAurPage = extern struct {
         keep_rows: bool,
         index_page: u32,
         index_total_pages: u32,
+        installed_names: []const []const u8,
+        all_installed: bool,
     ) void {
         const result = std.heap.c_allocator.create(LoadResult) catch {
             arena.deinit();
@@ -745,6 +766,8 @@ pub const AtollAurPage = extern struct {
             .keep_rows = keep_rows,
             .index_page = index_page,
             .index_total_pages = index_total_pages,
+            .installed_names = installed_names,
+            .all_installed = all_installed,
         };
         _ = glib.idleAdd(&onLoadComplete, result);
     }
@@ -815,6 +838,16 @@ pub const AtollAurPage = extern struct {
 
         if (result.keep_rows) {
             aur_rows.update(p.list_store, p.selection, result.packages);
+            // Rows the diff rebuilt still need the marks the loader would have given them.
+            const model = p.list_store.as(gio.ListModel);
+            const n = gio.ListModel.getNItems(model);
+            var row: c_uint = 0;
+            while (row < n) : (row += 1) {
+                const object = gio.ListModel.getObject(model, row) orelse continue;
+                defer object.unref();
+                const pkg = gobject.ext.cast(AurPackageObject, object) orelse continue;
+                pkg.setInstalled(result.all_installed or aurInstalledContains(result.installed_names, pkg.getName()));
+            }
             page.update_selection_ui();
             page.end_load();
             finish(result);
@@ -828,6 +861,7 @@ pub const AtollAurPage = extern struct {
         var i: usize = 0;
         for (result.packages[result.index..end]) |d| {
             const pkg = AurPackageObject.new(d) catch continue;
+            pkg.setInstalled(result.all_installed or aurInstalledContains(result.installed_names, d.Name));
             batch[i] = pkg.as(gobject.Object);
             i += 1;
         }

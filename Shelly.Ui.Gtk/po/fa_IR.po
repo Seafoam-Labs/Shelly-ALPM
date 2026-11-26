@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Shelly-ALPM / Shelly: UI\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
-"POT-Creation-Date: 2026-11-13 22:42-0500\n"
+"POT-Creation-Date: 2026-11-25 23:30-0500\n"
 "PO-Revision-Date: 2026-06-29 21:36+0330\n"
 "Last-Translator: Sohrab Behdani <behdanisohrab@proton.me>\n"
 "Language-Team: fa\n"
@@ -115,9 +115,6 @@ msgstr ""
 msgid "AppImage"
 msgstr "AppImage"
 
-msgid "Install and integrate AppImage bundles."
-msgstr ""
-
 msgid "Search..."
 msgstr "جست‌وجو...."
 
@@ -203,11 +200,11 @@ msgstr "حذف"
 msgid "AUR"
 msgstr "AUR"
 
-msgid "Build and install packages from the Arch User Repository."
-msgstr ""
-
 msgid "Search the AUR by name or keyword"
 msgstr ""
+
+msgid "Additional Options"
+msgstr "تنظیمات بیشتر"
 
 msgid "Search By"
 msgstr ""
@@ -218,17 +215,14 @@ msgstr ""
 msgid "Show only installed packages"
 msgstr ""
 
-msgid "Previous page"
+msgid "Page 1 of 1"
 msgstr ""
 
-msgid "Page 1 of 1"
+msgid "Previous page"
 msgstr ""
 
 msgid "Next page"
 msgstr ""
-
-msgid "Additional Options"
-msgstr "تنظیمات بیشتر"
 
 msgid "Install Selected"
 msgstr "نصب انتخاب شده"
@@ -275,6 +269,59 @@ msgstr ""
 msgid "The AUR has no browsable index. Type a package name to begin."
 msgstr ""
 
+msgid "Firmware"
+msgstr ""
+
+msgid "Device firmware updates"
+msgstr ""
+
+msgid "Refresh metadata and check devices again"
+msgstr ""
+
+msgid "Check Again"
+msgstr ""
+
+msgid "Looking for devices…"
+msgstr ""
+
+msgid "Installing firmware…"
+msgstr ""
+
+msgid "Select a device to see its firmware releases"
+msgstr ""
+
+msgid "Loading releases…"
+msgstr ""
+
+msgid "Current version"
+msgstr ""
+
+msgid "Minimum version"
+msgstr ""
+
+msgid "Latest update"
+msgstr ""
+
+msgid "Branch"
+msgstr ""
+
+#| msgid "No description available."
+msgid "No releases available"
+msgstr ""
+
+#| msgid "No changelog entries found"
+msgid "No devices found"
+msgstr ""
+
+msgid "Devices that support firmware updates will appear here."
+msgstr ""
+
+msgid "Could not load firmware devices."
+msgstr ""
+
+msgid "Try Again"
+msgstr ""
+
 msgid "Install a local Flatpak"
 msgstr ""
 
@@ -292,11 +339,11 @@ msgstr ""
 msgid "Install for"
 msgstr ""
 
-msgid "system"
-msgstr "سامانه"
+msgid "System-wide"
+msgstr ""
 
-msgid "user"
-msgstr "کاربر"
+msgid "Current user"
+msgstr ""
 
 msgid "Install"
 msgstr "نصب"
@@ -343,14 +390,8 @@ msgstr "تاریخچه نگارش"
 msgid "Flatpak"
 msgstr "فلت‌پک"
 
-msgid "Manage Flatpak applications and remotes."
-msgstr ""
-
 msgid "Search packages..."
 msgstr "جست‌جوی بسته‌ها..."
-
-msgid "Browse"
-msgstr ""
 
 msgid "Manage"
 msgstr "مدیریت"
@@ -387,6 +428,12 @@ msgstr "برای مثال: https://flathub.org/repo/flathub.flatpakrepo"
 
 msgid "Scope"
 msgstr "دامنه"
+
+msgid "user"
+msgstr "کاربر"
+
+msgid "system"
+msgstr "سامانه"
 
 msgid "Show Runtimes"
 msgstr "نمایش پیش‌نیازها"
@@ -427,26 +474,20 @@ msgstr ""
 msgid "Package"
 msgstr ""
 
-msgid "Packages"
-msgstr "بسته‌ها"
-
-msgid "Install and manage software on your system."
-msgstr ""
-
 msgid "Package Group Filter"
 msgstr "صافی گروه بسته‌ها"
-
-msgid "Selected Packages"
-msgstr "بسته‌های انتخاب شده"
-
-msgid "0 Selected"
-msgstr "0 انتخاب شده"
 
 msgid "Grid View"
 msgstr "نمای شبکه‌ای"
 
 msgid "List View"
 msgstr "نمای لیست"
+
+msgid "Selected Packages"
+msgstr "بسته‌های انتخاب شده"
+
+msgid "0 Selected"
+msgstr "0 انتخاب شده"
 
 msgid "Size"
 msgstr "اندازه"
@@ -492,44 +533,46 @@ msgstr ""
 msgid "Recommended"
 msgstr "پیشنهاد شده‌ها"
 
-msgid "Recommended Packages"
-msgstr ""
-
-msgid "Curated suggestions from Seafoam Labs"
-msgstr ""
-
-msgid "Refresh the recommended packages list from the network"
-msgstr ""
-
 msgid "Clear selection"
 msgstr ""
 
 msgid "Deselect all recommended packages"
 msgstr ""
 
+msgid "Refresh the recommended packages list from the network"
+msgstr ""
+
 msgid "Install all selected packages in one transaction"
 msgstr ""
 
-#, fuzzy
 msgid "Loading recommendations…"
-msgstr "درحال بارگزاری بسته‌های پیشنهادی..."
+msgstr ""
 
-#, fuzzy
+msgid "No recommendations found"
+msgstr ""
+
 msgid "Check your internet connection and try again."
 msgstr ""
-"هیچ پیشنهادی یافت نشد. لطفاً اتصال اینترنت خود را بررسی کنید و دوباره تلاش "
-"کنید."
 
 msgid "Shelly Search"
 msgstr "جست‌جوگر Shelly"
 
-msgid "Search"
-msgstr ""
-
-msgid "Search across every enabled backend."
-msgstr ""
-
 msgid "Search standard repositories, AUR and Flatpak"
+msgstr ""
+
+#| msgid "Search packages..."
+msgid "Search Sources"
+msgstr ""
+
+msgid "Source"
+msgstr ""
+
+msgid "Search everywhere"
+msgstr ""
+
+msgid ""
+"Search the standard repositories, the AUR, and Flatpak all at once. Type a "
+"name to begin."
 msgstr ""
 
 msgid "Standard"
@@ -544,70 +587,95 @@ msgstr ""
 msgid "Show results from the configured Flatpak remotes"
 msgstr ""
 
-msgid "Source"
-msgstr ""
-
-msgid "Search everywhere"
-msgstr ""
-
-msgid ""
-"Search the standard repositories, the AUR, and Flatpak all at once. Type a "
-"name to begin."
-msgstr ""
-
 msgid "Settings"
 msgstr "تنظیمات"
-
-msgid "Make Shelly feel at home on your desktop."
-msgstr ""
 
 msgid "General"
 msgstr "عمومی"
 
+msgid "Language"
+msgstr "زبان"
+
+msgid "Language for Shelly's menus and messages."
+msgstr ""
+
+msgid "Software sources"
+msgstr ""
+
+msgid ""
+"Choose which kinds of software Shelly shows. You can change this at any time."
+msgstr ""
+
 msgid "Enable AUR"
 msgstr "فعال کردن AUR"
 
-msgid "Language"
-msgstr "زبان"
+msgid "Arch User Repository community packages"
+msgstr ""
 
 msgid "Enable Flatpak"
 msgstr "فعال‌کردن فلت‌پک"
 
-msgid "Enable Recommended"
+msgid "Sandboxed universal Linux applications"
 msgstr ""
 
 msgid "Enable AppImage"
 msgstr "فعال‌کردن AppImage"
 
+msgid "Portable self-contained application bundles"
+msgstr ""
+
+msgid "Enable Firmware"
+msgstr ""
+
+msgid "Update device firmware such as UEFI/BIOS and peripherals"
+msgstr ""
+
+msgid "Enable Recommended"
+msgstr ""
+
+msgid "Curated picks from Shelly"
+msgstr ""
+
+msgid "Updates & Tray"
+msgstr ""
+
+msgid "Update notifications"
+msgstr ""
+
+msgid ""
+"Shelly can check for updates in the background and let you know from the "
+"system tray."
+msgstr ""
+
 msgid "Enable Tray Icon"
 msgstr "فعال کردن نماد سینی"
+
+msgid "Show a tray icon that checks for updates in the background."
+msgstr ""
 
 msgid "Add Tray To Auto Start"
 msgstr "افزودن نماد سینی به اجرای اولیه"
 
-msgid "Use weekly schedule"
-msgstr "استفاده از زمان‌بندی هفتگی"
-
-msgid "Run Tray as cron"
-msgstr ""
-
-msgid "Tray update with UI"
-msgstr ""
-
-msgid "Update terminal"
-msgstr ""
-
-msgid "Terminal command"
-msgstr ""
-
-msgid "Custom update terminal command"
+msgid "Start the tray icon when you log in."
 msgstr ""
 
 msgid "Tray Check Interval (Hours)"
 msgstr "فاصلهٔ بررسی در سینی (ساعت)"
 
+msgid "How often the tray looks for updates."
+msgstr ""
+
+msgid "Use weekly schedule"
+msgstr "استفاده از زمان‌بندی هفتگی"
+
+msgid "Check on chosen days at a set time instead of every few hours."
+msgstr ""
+
 msgid "Weekly Schedule"
 msgstr "زمان‌بندی هفتگی"
+
+msgid "Days and time when Shelly checks for updates."
+msgstr ""
 
 msgid "Sun"
 msgstr "یک‌شنبه"
@@ -636,18 +704,33 @@ msgstr "زمان به‌روزسانی (۲۴ ساعته):"
 msgid ":"
 msgstr ""
 
-msgid "Look & Feel"
-msgstr "ظاهر"
+msgid "Run Tray as cron"
+msgstr ""
 
-msgid "Icons Enabled"
-msgstr "فعال‌سازی نمادها"
+msgid "Check only at the scheduled time, not when the tray starts."
+msgstr ""
+
+msgid "Tray update with UI"
+msgstr ""
 
 msgid ""
-"If enabled, Shelly will use appstream icons in the package list and details "
-"pages."
+"Run updates started from the tray in the Shelly window instead of a terminal."
 msgstr ""
-"در صورت فعال بودن، Shelly در فهرست بسته‌ها و صفحات جزئیات از نماد‌های "
-"AppStream استفاده خواهد کرد."
+
+msgid "Update terminal"
+msgstr ""
+
+msgid "Terminal that runs updates started from the tray."
+msgstr ""
+
+msgid "Terminal command"
+msgstr ""
+
+msgid "Custom update terminal command"
+msgstr ""
+
+msgid "Tray icon"
+msgstr ""
 
 msgid "Use Symbolic Tray Icon"
 msgstr "استفاده از نماد نمادین در سینی"
@@ -662,6 +745,9 @@ msgstr ""
 msgid "Tray Icon"
 msgstr "نماد سینی"
 
+msgid "Use your own image for the tray icon."
+msgstr ""
+
 msgid "Select File"
 msgstr "پروندهٔ انتخابی"
 
@@ -671,50 +757,118 @@ msgstr "پاک‌کردن"
 msgid "Tray Updates Icon"
 msgstr "نماد به‌روزرسانی سینی"
 
-msgid "Default page"
-msgstr "صفحه پیش‌فرض"
+msgid "Image the tray shows when updates are available."
+msgstr ""
 
-msgid "Navigation style"
+msgid "Look & Feel"
+msgstr "ظاهر"
+
+msgid "Appearance"
 msgstr ""
 
 msgid "Theme"
 msgstr ""
 
+msgid "Use Shelly's colors or your desktop's colors."
+msgstr ""
+
 msgid "Color variant"
+msgstr ""
+
+msgid "Light, dark, or follow your system."
+msgstr ""
+
+msgid "Icons Enabled"
+msgstr "فعال‌سازی نمادها"
+
+msgid ""
+"If enabled, Shelly will use appstream icons in the package list and details "
+"pages."
+msgstr ""
+"در صورت فعال بودن، Shelly در فهرست بسته‌ها و صفحات جزئیات از نماد‌های "
+"AppStream استفاده خواهد کرد."
+
+msgid "Layout"
+msgstr ""
+
+msgid "Default page"
+msgstr "صفحه پیش‌فرض"
+
+msgid "The page Shelly opens on."
+msgstr ""
+
+msgid "Navigation style"
+msgstr ""
+
+msgid "Sidebar on the left, or tabs across the top."
+msgstr ""
+
+msgid "Use System Title Bar"
+msgstr ""
+
+msgid ""
+"If enabled, the desktop draws the window title bar and its buttons instead "
+"of Shelly."
+msgstr ""
+
+msgid "Applies after restarting Shelly."
+msgstr ""
+
+msgid "Rounded Window Corners"
+msgstr ""
+
+msgid ""
+"If enabled, Shelly rounds the corners of the windows it draws. A desktop "
+"that draws the title bar sets its own corners."
 msgstr ""
 
 msgid "Advanced"
 msgstr "پیشرفته"
 
-msgid "Remove Cache on Uninstall"
-msgstr "پاکسازی پرونده‌های نهفته در هنگام حذف"
+msgid "Installing and removing"
+msgstr ""
 
 msgid "No Confirm"
 msgstr "بدون تأیید"
 
+msgid "Skip confirmation prompts when installing, updating, or removing."
+msgstr ""
+
+msgid "Remove Configuration on Uninstall"
+msgstr ""
+
+msgid "Also delete an app's configuration files when you remove it."
+msgstr ""
+
+msgid "Search and AUR"
+msgstr ""
+
 msgid "Enable Shelly Search"
 msgstr "فعال‌سازی جست‌جوی Shelly"
 
+msgid "Add a page that searches every source at once."
+msgstr ""
+
 msgid "Enable Atoll Powered AUR"
+msgstr ""
+
+msgid "Browse the AUR through Seafoam Labs' Atoll service."
+msgstr ""
+
+msgid "Always Recheck AppImage Updates on Upgrade All"
+msgstr ""
+
+msgid "When off, Upgrade All runs only when the AppImage page shows updates."
 msgstr ""
 
 msgid "AppImage Install Path"
 msgstr "مسیر نصب AppImage"
 
-msgid "Select Directory"
-msgstr "انتخاب مسیر"
-
-msgid "v0.0.0"
+msgid "Folder where new AppImages are saved."
 msgstr ""
 
-msgid "GitHub"
-msgstr "گیت‌هاب"
-
-msgid "Community fluxer"
-msgstr "فلوکسر جامعه"
-
-msgid "Sponsor"
-msgstr "حامی"
+msgid "Select Directory"
+msgstr "انتخاب مسیر"
 
 msgid "View Changelog"
 msgstr "مشاهده تغییرات"
@@ -734,9 +888,6 @@ msgstr ""
 msgid "Update"
 msgstr ""
 
-msgid "Updates"
-msgstr ""
-
 msgid "7 of 7 updates included"
 msgstr ""
 
@@ -744,9 +895,6 @@ msgid "System"
 msgstr "سامانه"
 
 msgid "Check all enabled sources again"
-msgstr ""
-
-msgid "Check Again"
 msgstr ""
 
 msgid "Available updates"
@@ -837,18 +985,6 @@ msgstr ""
 msgid ""
 "Choose which package sources you want to browse. You can always change this "
 "later in settings."
-msgstr ""
-
-msgid "Arch User Repository community packages"
-msgstr ""
-
-msgid "Sandboxed universal Linux applications"
-msgstr ""
-
-msgid "Portable self-contained application bundles"
-msgstr ""
-
-msgid "Curated picks from Shelly"
 msgstr ""
 
 msgid "Look and Feel"
@@ -1027,11 +1163,222 @@ msgstr ""
 msgid "Dismiss"
 msgstr ""
 
+msgid "Reset Columns"
+msgstr ""
+
+msgid "Internal error"
+msgstr ""
+
+msgid "Installed newer firmware version"
+msgstr ""
+
+msgid "Installed same firmware version"
+msgstr ""
+
+msgid "Already set to be installed offline"
+msgstr ""
+
+msgid "Failed to get authentication"
+msgstr ""
+
+msgid "Failed to read from device"
+msgstr ""
+
+msgid "Failed to write to the device"
+msgstr ""
+
+msgid "Invalid file format"
+msgstr ""
+
+msgid "No matching device exists"
+msgstr ""
+
+msgid "Nothing to do"
+msgstr ""
+
+msgid "Action was not possible"
+msgstr ""
+
+msgid "Signature was invalid"
+msgstr ""
+
+msgid "AC power was required"
+msgstr ""
+
+#| msgid "App Permissions"
+msgid "Permission was denied"
+msgstr ""
+
+msgid "User has configured their system in a broken way"
+msgstr ""
+
+msgid "The system battery level is too low"
+msgstr ""
+
+msgid "User needs to do an action to complete the update"
+msgstr ""
+
+msgid "Failed to get authentication: credentials expired"
+msgstr ""
+
+msgid "The firmware data is invalid"
+msgstr ""
+
+msgid "The operation timed out"
+msgstr ""
+
+msgid "The device is busy; try again in a moment"
+msgstr ""
+
+msgid "The device could not be reached"
+msgstr ""
+
+#| msgid "Unknown"
+msgid "Unknown error"
+msgstr ""
+
+#| msgid "Unknown"
+msgid "Unknown state"
+msgstr ""
+
+msgid "Idle"
+msgstr ""
+
+msgid "Loading a resource"
+msgstr ""
+
+msgid "Decompressing firmware"
+msgstr ""
+
+msgid "Restarting the device"
+msgstr ""
+
+msgid "Writing to a device"
+msgstr ""
+
+msgid "Verifying (reading) a device"
+msgstr ""
+
+msgid "Scheduling an offline update"
+msgstr ""
+
+msgid "A file is downloading"
+msgstr ""
+
+msgid "Reading from a device"
+msgstr ""
+
+msgid "Erasing a device"
+msgstr ""
+
+msgid "Waiting for authentication"
+msgstr ""
+
+msgid "The device is busy"
+msgstr ""
+
+msgid "The daemon is shutting down"
+msgstr ""
+
+msgid "Waiting for user action"
+msgstr ""
+
+#| msgid "Required By"
+msgid "requires"
+msgstr ""
+
+msgid "The device has a problem that prevents updates"
+msgstr ""
+
+msgid "System power is too low to perform the update"
+msgstr ""
+
+msgid "Device is unreachable, or out of wireless range"
+msgstr ""
+
+msgid "Device battery power is too low"
+msgstr ""
+
+msgid "Device is waiting for the update to be applied"
+msgstr ""
+
+msgid "Device requires AC power to be connected"
+msgstr ""
+
+msgid "Device cannot be used while the lid is closed"
+msgstr ""
+
+msgid "Device is emulated"
+msgstr ""
+
+msgid "The firmware license is missing"
+msgstr ""
+
+msgid "Another process is blocking firmware updates"
+msgstr ""
+
+#| msgid "Package is already installed"
+msgid "Device is already being updated"
+msgstr ""
+
+msgid "Device is in use"
+msgstr ""
+
+msgid "Device cannot be used while there are no displays plugged in"
+msgstr ""
+
+msgid "A higher-priority connection to this device is in use"
+msgstr ""
+
+msgid "The device is signed with an insecure key"
+msgstr ""
+
+msgid "Device firmware is locked"
+msgstr ""
+
+msgid ""
+"The update will continue when the device USB cable has been unplugged and "
+"then re-inserted."
+msgstr ""
+
+msgid "Press unlock on the device to continue the update process."
+msgstr ""
+
+msgid "The update will continue when the device USB cable has been unplugged."
+msgstr ""
+
+msgid ""
+"The update will continue when the device USB cable has been re-inserted."
+msgstr ""
+
+msgid ""
+"Do not turn off your computer or remove the AC adaptor until you are sure "
+"the update has completed."
+msgstr ""
+
+msgid "Unplug and replug the device, to continue the update process."
+msgstr ""
+
+msgid ""
+"The update will continue when the device power cable has been unplugged and "
+"then re-inserted."
+msgstr ""
+
+#| msgid "Systemd startup service added."
+msgid "Please restart the fwupd service."
+msgstr ""
+
+msgid "The device needs your attention to continue the update."
+msgstr ""
+
 msgid "None"
 msgstr "هیچ‌کدام"
 
 msgid "Static URL"
 msgstr ""
+
+msgid "GitHub"
+msgstr "گیت‌هاب"
 
 msgid "GitLab"
 msgstr "گیت‌لب"
@@ -1076,6 +1423,9 @@ msgstr ""
 msgid "Installing AppImage"
 msgstr ""
 
+msgid "Could not read the AppImage update setting."
+msgstr ""
+
 msgid "No AppImages need to be upgraded"
 msgstr "هیچ AppImageای نیاز به به‌روزرسانی ندارد"
 
@@ -1097,9 +1447,6 @@ msgid "Saving AppImage environment"
 msgstr ""
 
 msgid "Saving update configuration"
-msgstr ""
-
-msgid "Configuration files will be kept."
 msgstr ""
 
 msgid "Remove this AppImage?"
@@ -1144,14 +1491,11 @@ msgstr ""
 msgid "Installed"
 msgstr "نصب شده‌ها"
 
-msgid "Remove Selected"
-msgstr "حذف انتخاب شده"
-
-msgid "Select one or more packages"
-msgstr ""
-
 msgid "Package(s)"
 msgstr ""
+
+msgid "Remove Selected"
+msgstr "حذف انتخاب شده"
 
 msgid "Page"
 msgstr ""
@@ -1211,6 +1555,270 @@ msgid "The AUR has no browsable index — type a package name to begin."
 msgstr ""
 
 msgid "Could not search the configured AUR service."
+msgstr ""
+
+#| msgid "Download"
+msgid "Downloading…"
+msgstr ""
+
+msgid "devices"
+msgstr ""
+
+#| msgid "No description available."
+msgid "updates available"
+msgstr ""
+
+msgid "Firmware devices"
+msgstr ""
+
+msgid "Battery too low: connect AC power before updating firmware"
+msgstr ""
+
+msgid "Firmware metadata is out of date. Use {s} to refresh."
+msgstr ""
+
+msgid "The firmware service stopped. Use Check Again to reconnect."
+msgstr ""
+
+msgid "Metadata refresh failed"
+msgstr ""
+
+msgid ""
+"Could not refresh the firmware catalog. Check your network connection and "
+"try again."
+msgstr ""
+
+msgid "View on LVFS"
+msgstr ""
+
+msgid "Update {s} to version {s}?"
+msgstr ""
+
+msgid "Downgrade {s} to version {s}?"
+msgstr ""
+
+msgid "Reinstall {s} version {s}?"
+msgstr ""
+
+msgid "The device will remain usable for the duration of the update."
+msgstr ""
+
+msgid "The device will be unavailable during this action."
+msgstr ""
+
+#| msgid "Download"
+msgid "Download size: {s}"
+msgstr ""
+
+msgid "Estimated install time: {s} seconds"
+msgstr ""
+
+msgid "Update device"
+msgstr ""
+
+msgid "Downgrade device"
+msgstr ""
+
+#| msgid "Install Selected"
+msgid "Reinstall device"
+msgstr ""
+
+#| msgid "Install AppImage"
+msgid "Install firmware"
+msgstr ""
+
+msgid "Switch firmware branch?"
+msgstr ""
+
+msgid ""
+"This firmware is not supplied by {s}. Installing it may damage your hardware "
+"or void your warranty."
+msgstr ""
+
+msgid ""
+"This firmware comes from a different branch. Installing it may damage your "
+"hardware or void your warranty."
+msgstr ""
+
+msgid "Switch Branch"
+msgstr ""
+
+msgid "You may lose all your data without recovery keys"
+msgstr ""
+
+msgid ""
+"Updating this firmware may invalidate the secrets that unlock your encrypted "
+"drives. Make sure you have the recovery keys for all your encrypted drives "
+"before continuing."
+msgstr ""
+
+msgid "I have recovery keys for all my encrypted drives"
+msgstr ""
+
+msgid "Continue"
+msgstr ""
+
+msgid "Failed to install firmware"
+msgstr ""
+
+msgid "Could not start the installation"
+msgstr ""
+
+msgid "Could not reach the firmware service"
+msgstr ""
+
+msgid "The firmware source for this release is unavailable"
+msgstr ""
+
+msgid "This release has no download location"
+msgstr ""
+
+msgid "This release provides no checksums, so it cannot be verified"
+msgstr ""
+
+msgid "The release checksum is invalid"
+msgstr ""
+
+msgid "The downloaded firmware failed verification"
+msgstr ""
+
+msgid "The firmware download failed"
+msgstr ""
+
+msgid "Could not access the firmware cache"
+msgstr ""
+
+#| msgid "Update Strategy"
+msgid "Update complete"
+msgstr ""
+
+msgid "Device request"
+msgstr ""
+
+msgid "OK"
+msgstr ""
+
+msgid "Restart to complete this update"
+msgstr ""
+
+msgid "Shutdown to complete this update"
+msgstr ""
+
+msgid ""
+"You must restart your device to complete the update. Make sure your device "
+"is plugged in or fully charged. Save your files before you restart to avoid "
+"losing data."
+msgstr ""
+
+msgid ""
+"You must shut down your device to complete the update. Save your files "
+"before you shut down to avoid losing data."
+msgstr ""
+
+msgid "Automatic restart is not available on this system."
+msgstr ""
+
+msgid "Automatic shutdown is not available on this system."
+msgstr ""
+
+msgid "Restart now"
+msgstr ""
+
+msgid "Shut down now"
+msgstr ""
+
+msgid "Restart later"
+msgstr ""
+
+msgid "Shut down later"
+msgstr ""
+
+msgid "Restart cancelled"
+msgstr ""
+
+msgid "Shutdown cancelled"
+msgstr ""
+
+msgid ""
+"The restart was cancelled. Restart later to complete the firmware update."
+msgstr ""
+
+msgid ""
+"The shutdown was cancelled. Shut down later to complete the firmware update."
+msgstr ""
+
+msgid "Restart failed"
+msgstr ""
+
+msgid "Shutdown failed"
+msgstr ""
+
+msgid "The system did not accept the request. You can try again later."
+msgstr ""
+
+msgid "End of life"
+msgstr ""
+
+msgid "Unsigned payload"
+msgstr ""
+
+msgid "Resolve the device problems before updating"
+msgstr ""
+
+msgid "An update is in progress"
+msgstr ""
+
+msgid "Locked"
+msgstr ""
+
+msgid "Needs bootloader"
+msgstr ""
+
+msgid "Needs restart"
+msgstr ""
+
+msgid "Needs shutdown"
+msgstr ""
+
+msgid "Needs activation"
+msgstr ""
+
+msgid "Usable during the update"
+msgstr ""
+
+msgid "Affects full-disk encryption"
+msgstr ""
+
+msgid "Low priority"
+msgstr ""
+
+msgid "Medium priority"
+msgstr ""
+
+msgid "High priority"
+msgstr ""
+
+msgid "Critical priority"
+msgstr ""
+
+#| msgid "Download"
+msgid "Downgrade"
+msgstr ""
+
+msgid "Blocked"
+msgstr ""
+
+msgid "This release requires approval before it can be installed"
+msgstr ""
+
+msgid "This version is blocked on this device"
+msgstr ""
+
+#| msgid "Community fluxer"
+msgid "Community supported"
+msgstr ""
+
+msgid "Alternate branch"
 msgstr ""
 
 msgid "Choose a Flatpak file"
@@ -1425,10 +2033,19 @@ msgstr ""
 msgid "Loading..."
 msgstr "درحال بارگذاری...."
 
+msgid "inferred"
+msgstr ""
+
+msgid "Installed From"
+msgstr ""
+
 msgid "Build Date"
 msgstr "تاریخ ساخت"
 
 msgid "Install Reason"
+msgstr ""
+
+msgid "Available From"
 msgstr ""
 
 msgid "Provides"
@@ -1498,10 +2115,7 @@ msgstr ""
 msgid "Select package for batch installation"
 msgstr ""
 
-msgid "Search standard repositories, Atoll and Flatpak"
-msgstr ""
-
-msgid "Show results from Atoll"
+msgid "Could not search the selected sources"
 msgstr ""
 
 msgid ""
@@ -1509,15 +2123,16 @@ msgid ""
 "name to begin."
 msgstr ""
 
-msgid ""
-"Search standard repositories, the AUR and Flatpak at once. Type a name to "
-"begin."
+msgid "Search standard repositories, Atoll and Flatpak"
 msgstr ""
 
-msgid "Could not search the selected sources"
+msgid "Show results from Atoll"
 msgstr ""
 
 msgid "Installation in progress"
+msgstr ""
+
+msgid "Search Sources (some sources hidden)"
 msgstr ""
 
 msgid "No sources selected"
@@ -1549,10 +2164,16 @@ msgstr ""
 msgid "Installing AppImage support"
 msgstr ""
 
+msgid "Installing Firmware support"
+msgstr ""
+
 msgid "Could not start installing Flatpak support."
 msgstr ""
 
 msgid "Could not start installing AppImage support."
+msgstr ""
+
+msgid "Could not start installing Firmware support."
 msgstr ""
 
 msgid "Could not install Flatpak support."
@@ -1561,10 +2182,16 @@ msgstr ""
 msgid "Could not install AppImage support."
 msgstr ""
 
+msgid "Could not install Firmware support."
+msgstr ""
+
 msgid "Flatpak support enabled"
 msgstr ""
 
 msgid "AppImage support enabled"
+msgstr ""
+
+msgid "Firmware support enabled"
 msgstr ""
 
 msgid "No changelog entries found"
@@ -1617,7 +2244,8 @@ msgstr "سرویس اجرای اولیه سیستم‌دی حذف شد."
 msgid "AUR enabled"
 msgstr ""
 
-msgid "System GTK"
+#| msgid "System"
+msgid "System colors"
 msgstr ""
 
 msgid "Follow system"
@@ -1679,6 +2307,9 @@ msgstr ""
 
 msgid "Custom…"
 msgstr ""
+
+msgid "Packages"
+msgstr "بسته‌ها"
 
 msgid "Pending"
 msgstr ""
@@ -1816,6 +2447,9 @@ msgstr ""
 msgid "System package update"
 msgstr ""
 
+msgid "Atoll package update"
+msgstr ""
+
 msgid "AUR package update"
 msgstr ""
 
@@ -1869,7 +2503,16 @@ msgid ""
 "software. Package data is fetched from external sources."
 msgstr ""
 
+msgid "Installing Flatpak, AppImage and Firmware support"
+msgstr ""
+
 msgid "Installing Flatpak and AppImage support"
+msgstr ""
+
+msgid "Installing Flatpak and Firmware support"
+msgstr ""
+
+msgid "Installing AppImage and Firmware support"
 msgstr ""
 
 msgid "BROWSE"
@@ -1882,139 +2525,4 @@ msgid "Expand sidebar"
 msgstr ""
 
 msgid "Collapse sidebar"
-msgstr ""
-
-msgid "No recommendations found"
-msgstr ""
-
-msgid "System-wide"
-msgstr ""
-
-msgid "Current user"
-msgstr ""
-
-msgid "Atoll package update"
-msgstr ""
-
-msgid "Use System Title Bar"
-msgstr ""
-
-msgid "If enabled, the desktop draws the window title bar and its buttons instead of Shelly."
-msgstr ""
-
-msgid "Applies after restarting Shelly."
-msgstr ""
-
-msgid "Language for Shelly's menus and messages."
-msgstr ""
-
-msgid "Software sources"
-msgstr ""
-
-msgid "Choose which kinds of software Shelly shows. You can change this at any time."
-msgstr ""
-
-msgid "Enable Firmware"
-msgstr ""
-
-msgid "Update device firmware such as UEFI/BIOS and peripherals"
-msgstr ""
-
-msgid "Update notifications"
-msgstr ""
-
-msgid "Shelly can check for updates in the background and let you know from the system tray."
-msgstr ""
-
-msgid "Show a tray icon that checks for updates in the background."
-msgstr ""
-
-msgid "Start the tray icon when you log in."
-msgstr ""
-
-msgid "How often the tray looks for updates."
-msgstr ""
-
-msgid "Check on chosen days at a set time instead of every few hours."
-msgstr ""
-
-msgid "Days and time when Shelly checks for updates."
-msgstr ""
-
-msgid "Check only at the scheduled time, not when the tray starts."
-msgstr ""
-
-msgid "Run updates started from the tray in the Shelly window instead of a terminal."
-msgstr ""
-
-msgid "Terminal that runs updates started from the tray."
-msgstr ""
-
-msgid "Appearance"
-msgstr ""
-
-msgid "Use Shelly's colors or your desktop's colors."
-msgstr ""
-
-msgid "Light, dark, or follow your system."
-msgstr ""
-
-msgid "The page Shelly opens on."
-msgstr ""
-
-msgid "Sidebar on the left, or tabs across the top."
-msgstr ""
-
-msgid "Tray icon"
-msgstr ""
-
-msgid "Use your own image for the tray icon."
-msgstr ""
-
-msgid "Image the tray shows when updates are available."
-msgstr ""
-
-msgid "Installing and removing"
-msgstr ""
-
-msgid "Skip confirmation prompts when installing, updating, or removing."
-msgstr ""
-
-msgid "Also delete an app's configuration files when you remove it."
-msgstr ""
-
-msgid "Search and AUR"
-msgstr ""
-
-msgid "Add a page that searches every source at once."
-msgstr ""
-
-msgid "Browse the AUR through Seafoam Labs' Atoll service."
-msgstr ""
-
-msgid "Folder where new AppImages are saved."
-msgstr ""
-
-msgid "Remove Configuration on Uninstall"
-msgstr ""
-
-msgid "Layout"
-msgstr ""
-
-msgid "Updates & Tray"
-msgstr ""
-
-msgid "Installed From"
-msgstr ""
-
-msgid "Available From"
-msgstr ""
-
-msgid "inferred"
-msgstr ""
-
-msgid "Rounded Window Corners"
-msgstr ""
-
-msgid "If enabled, Shelly rounds the corners of the windows it draws. A desktop that draws the title bar sets its own corners."
 msgstr ""
