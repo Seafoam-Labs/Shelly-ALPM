@@ -557,6 +557,9 @@ pub const Model = struct {
     /// Source loading and query errors belong to their page, not shortcut hints.
     pub fn footerStatus(self: *const Model) ?[]const u8 {
         if (self.quit_blocked_notice and self.operation_state.install_job != null) return "Operation in progress. Wait for it to finish before quitting.  ";
+        if (self.active == .utilities and self.overlay == null and !self.help_open) {
+            if (utilities_model.previewRetryStatus(&self.utilities_state)) |status| return status;
+        }
         return if (self.notice.len > 0) self.notice else null;
     }
 

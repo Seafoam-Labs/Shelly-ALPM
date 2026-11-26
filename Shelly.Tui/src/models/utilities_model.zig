@@ -147,6 +147,7 @@ pub const State = struct {
     list: vxfw.ScrollView,
     preview_job: ?*PreviewJob = null,
     preview_open: bool = false,
+    waiting_to_retry_preview: bool = false,
     preview_wrap: bool = true,
     preview_list: vxfw.ScrollView,
     preview_back: vxfw.Button,
@@ -323,7 +324,10 @@ fn openPreview(model: *Model, ctx: *vxfw.EventContext, kind: PreviewKind) !void 
     const result = state.result orelse return;
     if (state.job != null or state.list.cursor >= result.value.len) return;
     if (state.preview_job) |old| {
-        if (!old.done.load(.acquire)) return ctx.consumeEvent();
+        if (!old.done.load(.acquire)) {
+            state.waiting_to_retry_preview = true;
+            return ctx.consumeAndRedraw();
+        }
         old.destroy(model.gpa);
         state.preview_job = null;
     }
@@ -335,6 +339,7 @@ fn openPreview(model: *Model, ctx: *vxfw.EventContext, kind: PreviewKind) !void 
     try ctx.tick(100, model.widget());
     job.thread = try std.Thread.spawn(.{}, PreviewJob.run, .{job});
     state.preview_job = job;
+    state.waiting_to_retry_preview = false;
     state.preview_open = true;
     state.preview_list.scroll = .{};
     ctx.consumeAndRedraw();
@@ -342,6 +347,46 @@ fn openPreview(model: *Model, ctx: *vxfw.EventContext, kind: PreviewKind) !void 
 
 pub fn previewLoading(state: *const State) bool {
     return if (state.preview_job) |job| !job.done.load(.acquire) else false;
+}
+
+pub fn previewRetryStatus(state: *const State) ?[]const u8 {
+    if (!state.waiting_to_retry_preview or state.selected != .pacfiles) return null;
+    return if (previewLoading(state))
+        "Previous preview is still finishing…"
+    else
+        "Ready. Open the selected preview again.";
+}
+
+test "a second preview reports when a stalled worker finishes and can be retried" {
+    const model = try Model.init(std.testing.allocator);
+    defer model.deinit();
+    const state = &model.utilities_state;
+    state.result = try std.json.parseFromSlice([][]const u8, model.gpa,
+        \\["/first.pacnew","/second.pacsave"]
+    , .{ .allocate = .alloc_always });
+    const job = try model.gpa.create(PreviewJob);
+    job.* = .{ .kind = .diff, .path = try model.gpa.dupe(u8, "/first.pacnew"), .thread = undefined };
+    var release: std.Io.Event = .unset;
+    job.thread = try std.Thread.spawn(.{}, struct {
+        fn run(worker: *PreviewJob, gate: *std.Io.Event) void {
+            gate.waitUncancelable(std.testing.io);
+            worker.done.store(true, .release);
+        }
+    }.run, .{ job, &release });
+    state.preview_job = job;
+    defer release.set(std.testing.io);
+    state.list.cursor = 1;
+    var ctx: vxfw.EventContext = .{ .io = std.testing.io, .alloc = model.gpa, .cmds = .empty };
+    defer ctx.cmds.deinit(model.gpa);
+    try openPreview(model, &ctx, .file);
+    try std.testing.expectEqualStrings("Previous preview is still finishing…", previewRetryStatus(state).?);
+    release.set(std.testing.io);
+    while (!job.done.load(.acquire)) std.atomic.spinLoopHint();
+    try std.testing.expectEqualStrings("Ready. Open the selected preview again.", previewRetryStatus(state).?);
+    try openPreview(model, &ctx, .file);
+    try std.testing.expect(state.preview_open);
+    try std.testing.expectEqualStrings("/second.pacsave", state.preview_job.?.path);
+    try std.testing.expect(previewRetryStatus(state) == null);
 }
 
 pub fn previewView(model: *Model) preview.View {
