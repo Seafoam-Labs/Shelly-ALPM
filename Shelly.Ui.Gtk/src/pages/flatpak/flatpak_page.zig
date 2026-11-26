@@ -306,11 +306,8 @@ pub const FlatpakPage = extern struct {
         };
     }
 
-    pub fn onUnmap(self: *Self) void {
-        const p = self.priv();
-        if (!p.loaded) return;
-        p.loaded = false;
-    }
+    // the rows stay, so the chosen category stays selected.
+    pub fn onUnmap(_: *Self) void {}
 
     const template_children = .{
         .{ "main_content_stack", @offsetOf(Private, "main_content_stack") },

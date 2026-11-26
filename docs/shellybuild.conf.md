@@ -34,6 +34,7 @@ check = true
 ccache = false
 distcc = false
 distcc_hosts = []
+shallow_git = true
 extra_path = []
 
 [build.env]
@@ -66,6 +67,8 @@ extra_write = []
 
 Flag and host arrays are joined with spaces only when a child process is launched. `ccache` prepends `/usr/lib/ccache/bin` to `PATH`; `distcc` prepends `/usr/lib/distcc/bin` and exports `DISTCC_HOSTS`. Shelly does not install those tools.
 
+`shallow_git` (default `true`) lets the builder acquire pinned `#tag=`/`#commit=` git sources as shallow bare mirrors that fetch only the selected tree, instead of full history. It applies only when no lifecycle step, helper, prelude, or `verify()` body mentions `git` or `$SRCDEST`; moving/branch references and history-reading recipes always use full mirrors. The scan is intentionally coarse (`git apply`, submodule updates, and secondary clones also force full history) and cannot see git invoked by external scripts or Makefiles. Set `shallow_git = false` to force full mirrors for every git source. Existing full mirrors are never downgraded; a shallow entry needed by a history-reading recipe is unshallowed or rebuilt with full history. Servers that reject shallow commit wants fall back to a full mirror automatically.
+
 Supported package options are `strip`, `docs`, `libtool`, `staticlibs`, `emptydirs`, `zipman`, `purge`, `debug`, `lto`, `autodeps`, `buildflags`, and `makeflags`. Content tidy operations currently implement stripping and standard purge cleanup.
 
 `purge` is enabled by default. Before writing package metadata and the archive, it removes `usr/info/dir` and `usr/share/info/dir` relative to `$pkgdir`, plus non-directory entries named `.packlist` or matching `*.pod` anywhere in that package tree. Directories are preserved, and cleanup does not follow symlinks. PKGBUILD `options=('!purge')` disables this cleanup, including when set inside a split-package function. Purge runs independently of `strip`, so `!strip` does not disable it. Custom `PURGE_TARGETS` and makepkg shell configuration are not read by the native builder. This behavior also applies to `shelly build --isolated`.
@@ -83,6 +86,12 @@ With the sandbox enabled, Shelly creates the configured source cache if needed
 and grants it read/write access, including when it is outside the build tree.
 Packages downloading auxiliary sources should use `SRCDEST` consistently when
 building and packaging instead of assuming those files are in `$PWD`.
+
+Git cache entries are keyed by source name and may be shallow bare mirrors
+(see `[build] shallow_git`), not full clones: they exist for acquisition and
+checksumming, not for recipe inspection, and `$SRCDEST` contents can be
+shallow. A recipe that needs repository history must not assume a cached git
+entry contains it.
 
 ## Package architecture
 
@@ -298,7 +307,7 @@ Configured `check` is the default for in-process builds. `--check` explicitly en
 
 - `build` contains collision-resistant package-base work roots. `$srcdir`, `$pkgdir`, temporary extraction trees, and `.BUILDINFO`'s `builddir` use this location.
 - `packages` receives atomically committed binary package archives.
-- `sources` stores reusable HTTP files and Git mirrors. HTTP entries are downloaded to temporary siblings and renamed into place; checksum failures discard and reacquire an entry. Git mirrors refresh before local materialization.
+- `sources` stores reusable HTTP files and Git mirrors. HTTP entries are downloaded to temporary siblings and renamed into place; checksum failures discard and reacquire an entry. Git entries are full mirrors or shallow pinned-ref caches (`[build] shallow_git`), refreshed before local materialization and never downgraded from full to shallow.
 - `logs` receives mandatory build logs.
 
 The reviewed checkout remains `$startdir`. Local PKGBUILD sources and `verify()` exposure use that reviewed directory and are not copied into the shared cache.
@@ -311,7 +320,11 @@ The reviewed checkout remains `$startdir`. Local PKGBUILD sources and `verify()`
 - `extra_read` grants read access to additional absolute paths, for builds that legitimately read user state (`~/.cargo`, `~/.cache/ccache`, npm or Gradle caches).
 - `extra_write` grants read-write access to additional absolute paths.
 
-Steps always keep access to the build work directory, `$startdir`, `/usr`, `/etc`, `/opt`, `/proc`, `/sys`, `/tmp`, and the common `/dev` nodes toolchains open. The orchestrator itself is not sandboxed: source downloads, package assembly, log writing, and GPG signing run outside the policy, so the keyring never enters the allow-list.
+Steps always keep access to the build work directory, `$startdir`, `/usr`, `/etc`, `/opt`, `/proc`, `/sys`, `/tmp`, and the common `/dev` nodes toolchains open. The target of `/etc/resolv.conf` is readable when present.
+
+Steps also get `GIT_CONFIG_GLOBAL=/dev/null`, and `CCACHE_DISABLE=1` when `build.ccache` is off; `build.env` overrides both. To use ccache, enable `build.ccache`, add its cache to `extra_write`, and set `CCACHE_DIR` in `build.env`.
+
+The orchestrator itself is not sandboxed: source downloads, package assembly, log writing, and GPG signing run outside the policy, so the keyring never enters the allow-list.
 
 Known limitations: `/tmp` is the shared host tmpfs rather than a private mount, `/proc` visibility is unchanged from an unsandboxed build, and networking is not restricted. A sandboxed step that fails writes a `[sandbox]` hint line into the build log pointing at `extra_read` / `extra_write`.
 

@@ -21,6 +21,11 @@ const ShellyWindow = @import("../../shelly_window.zig").ShellyWindow;
 const ShellyCommands = @import("../../services/shelly_operation.zig").ShellyCommands;
 const Category = @import("../../models/flatpak.zig").Category;
 const FlatHubApiService = @import("../../services/flathub_api.zig").FlatHubApiService;
+const FlathubCollections = @import("../../helpers/flathub_collections.zig").FlathubCollections;
+const saved_list = @import("../../helpers/saved_list.zig");
+const catalog_stamp = @import("../../helpers/flatpak_catalog_stamp.zig");
+const installed_marks = @import("installed_marks.zig");
+const features = @import("../../services/build_features.zig");
 const PermissionsDialog = @import("../../dialog/page/permissions.zig").PermissionsDialog;
 const AddonsDialog = @import("../../dialog/page/addons.zig").AddonsDialog;
 const VersionHistoryDialog = @import("../../dialog/page/version_history.zig").VersionHistoryDialog;
@@ -33,6 +38,7 @@ const a11y = @import("../../helpers/a11y.zig");
 const deep_link = @import("../../helpers/deep_link.zig");
 
 extern fn g_get_user_data_dir() [*:0]const u8;
+extern fn g_get_user_cache_dir() [*:0]const u8;
 extern fn g_file_test(filename: [*:0]const u8, flags: c_uint) c_int;
 extern fn g_strndup(str: [*]const u8, len: usize) [*:0]u8;
 extern fn malloc_trim(pad: usize) c_int;
@@ -45,6 +51,8 @@ pub const FlatpakInstallView = extern struct {
 
     const resource_path = "/com/shellyorg/shelly/ui/flatpak/flatpak_install_view.ui";
     const batch_size = 128;
+    /// a list that loads sooner never shows the spinner.
+    const spinner_delay_ms = 300;
 
     const Private = struct {
         content_stack: *gtk.Stack,
@@ -80,10 +88,23 @@ pub const FlatpakInstallView = extern struct {
         filter: ?*gtk.CustomFilter,
         selection: ?*gtk.SingleSelection,
         selected_app: ?*AppstreamAppObject,
-        selected_app_position: c_uint,
+        /// the status icons of the rows drawn now.
+        row_icons: std.AutoHashMapUnmanaged(*AppstreamAppObject, *gtk.Image),
 
         loaded: bool,
         catalog_ready: bool,
+        catalog_loading: bool,
+        /// a background catalog refresh has not reported back yet.
+        refreshing: bool,
+        /// the catalog the shown rows came from.
+        shown_stamp: u64,
+        /// a newer catalog was not shown, to leave the user's place alone.
+        catalog_stale: bool,
+        /// answers to older installed queries are ignored.
+        installed_generation: u64,
+        collections: ?*FlathubCollections,
+        collections_loading: bool,
+        spinner_source: c_uint,
         pending_app_id: [256]u8,
         pending_app_id_len: usize,
         disposed: bool,
@@ -102,14 +123,33 @@ pub const FlatpakInstallView = extern struct {
     const LoadResult = struct {
         page: *Self,
         generation: u64,
-        arena: ?*std.heap.ArenaAllocator = null,
+        /// null in a refresh when the shown catalog is still current.
         parsed: ?std.json.Parsed([]flatpak.AppstreamApp) = null,
+        stamp: u64 = 0,
         next_index: usize = 0,
-        trending_set: std.StringHashMapUnmanaged(void) = .empty,
-        popular_set: std.StringHashMapUnmanaged(void) = .empty,
-        recently_updated_set: std.StringHashMapUnmanaged(void) = .empty,
-        recently_added_set: std.StringHashMapUnmanaged(void) = .empty,
+        /// rows a refresh builds before replacing the shown ones.
+        objects: std.ArrayList(*gobject.Object) = .empty,
         failed: bool = false,
+    };
+
+    const InstalledResult = struct {
+        page: *Self,
+        generation: u64,
+        installed_generation: u64,
+        parsed: ?std.json.Parsed([]Flatpak) = null,
+    };
+
+    const LoadJob = struct {
+        /// null when the rows of an earlier visit are still shown.
+        catalog: ?*LoadResult,
+        installed: *InstalledResult,
+        refresh: *LoadResult,
+        shown_stamp: u64,
+    };
+
+    const CollectionsLoad = struct {
+        page: *Self,
+        collections: *FlathubCollections,
     };
     const ScreenshotLoad = struct {
         page: *Self,
@@ -168,8 +208,17 @@ pub const FlatpakInstallView = extern struct {
         p.model = null;
         p.filter = null;
         p.selection = null;
+        p.row_icons = .empty;
         p.selected_app = null;
         p.catalog_ready = false;
+        p.catalog_loading = false;
+        p.refreshing = false;
+        p.shown_stamp = 0;
+        p.catalog_stale = false;
+        p.installed_generation = 0;
+        p.collections = null;
+        p.collections_loading = false;
+        p.spinner_source = 0;
         p.pending_app_id_len = 0;
         p.loaded = false;
         p.disposed = false;
@@ -196,9 +245,9 @@ pub const FlatpakInstallView = extern struct {
         const p = self.priv();
         if (p.loaded) return;
         p.loaded = true;
-        p.catalog_ready = false;
         p.load_generation +%= 1;
         self.loadApps(p.load_generation);
+        self.loadCollections();
     }
 
     pub fn onUnmap(self: *Self) void {
@@ -206,11 +255,17 @@ pub const FlatpakInstallView = extern struct {
         if (!p.loaded) return;
         p.loaded = false;
         p.load_generation +%= 1;
-        p.catalog_ready = false;
+        p.catalog_loading = false;
+        p.refreshing = false;
+        self.cancelSpinner();
         p.pending_app_id_len = 0;
         gtk.Widget.setVisible(p.loading_overlay.as(gtk.Widget), 0);
         self.showList();
-        if (p.model) |model| gio.ListStore.removeAll(model);
+        // a half-filled or outdated list is loaded again on the next visit.
+        if (!p.catalog_ready or p.catalog_stale) {
+            p.catalog_ready = false;
+            if (p.model) |model| gio.ListStore.removeAll(model);
+        }
         _ = malloc_trim(0);
     }
 
@@ -305,7 +360,7 @@ pub const FlatpakInstallView = extern struct {
                 gtk.ListItem.setChild(list_item, frame.as(gtk.Widget));
             }
 
-            fn bind(_: *gtk.SignalListItemFactory, item: *gobject.Object, _: *Self) callconv(.c) void {
+            fn bind(_: *gtk.SignalListItemFactory, item: *gobject.Object, page: *Self) callconv(.c) void {
                 const list_item = gobject.ext.cast(gtk.ListItem, item) orelse return;
                 const object = gobject.ext.cast(AppstreamAppObject, gtk.ListItem.getItem(list_item) orelse return) orelse return;
                 const frame = gobject.ext.cast(gtk.Frame, gtk.ListItem.getChild(list_item) orelse return) orelse return;
@@ -324,24 +379,43 @@ pub const FlatpakInstallView = extern struct {
                 gtk.Label.setMarkup(name_label, markup);
                 gtk.Label.setLabel(summary_label, object.getSummary());
 
-                if (object.isInstalled()) {
-                    gtk.Image.setFromIconName(status_icon, "object-select-symbolic");
-                    gtk.Widget.setTooltipText(status_icon.as(gtk.Widget), translations._("Installed"));
-                    a11y.setName(status_icon.as(gtk.Widget), translations._("Installed"));
-                    gtk.Widget.setVisible(status_icon.as(gtk.Widget), 1);
-                } else {
-                    gtk.Image.setFromIconName(status_icon, "security-high-symbolic");
-                    gtk.Widget.setTooltipText(status_icon.as(gtk.Widget), translations._("Verified"));
-                    a11y.setName(status_icon.as(gtk.Widget), translations._("Verified"));
-                    gtk.Widget.setVisible(status_icon.as(gtk.Widget), @intFromBool(object.isVerified()));
-                }
+                showRowStatus(status_icon, object);
+                page.priv().row_icons.put(std.heap.c_allocator, object, status_icon) catch {};
                 setAppIcon(icon, object);
+            }
+
+            fn unbind(_: *gtk.SignalListItemFactory, item: *gobject.Object, page: *Self) callconv(.c) void {
+                const list_item = gobject.ext.cast(gtk.ListItem, item) orelse return;
+                const object = gobject.ext.cast(AppstreamAppObject, gtk.ListItem.getItem(list_item) orelse return) orelse return;
+                const child = gtk.ListItem.getChild(list_item) orelse return;
+                const icon = page.priv().row_icons.get(object) orelse return;
+                // another row may have been bound to the app since.
+                if (gtk.Widget.isAncestor(icon.as(gtk.Widget), child) != 0) _ = page.priv().row_icons.remove(object);
             }
         };
         _ = gtk.SignalListItemFactory.signals.setup.connect(factory, *Self, &callbacks.setup, self, .{});
         _ = gtk.SignalListItemFactory.signals.bind.connect(factory, *Self, &callbacks.bind, self, .{});
+        _ = gtk.SignalListItemFactory.signals.unbind.connect(factory, *Self, &callbacks.unbind, self, .{});
         gtk.GridView.setFactory(p.list_flatpaks, factory.as(gtk.ListItemFactory));
         factory.as(gobject.Object).unref();
+    }
+
+    fn showRowStatus(icon: *gtk.Image, app: *AppstreamAppObject) void {
+        if (app.isInstalled()) {
+            gtk.Image.setFromIconName(icon, "object-select-symbolic");
+            gtk.Widget.setTooltipText(icon.as(gtk.Widget), translations._("Installed"));
+            a11y.setName(icon.as(gtk.Widget), translations._("Installed"));
+            gtk.Widget.setVisible(icon.as(gtk.Widget), 1);
+        } else {
+            gtk.Image.setFromIconName(icon, "security-high-symbolic");
+            gtk.Widget.setTooltipText(icon.as(gtk.Widget), translations._("Verified"));
+            a11y.setName(icon.as(gtk.Widget), translations._("Verified"));
+            gtk.Widget.setVisible(icon.as(gtk.Widget), @intFromBool(app.isVerified()));
+        }
+    }
+
+    pub fn redraw(self: *Self, app: *AppstreamAppObject) void {
+        if (self.priv().row_icons.get(app)) |icon| showRowStatus(icon, app);
     }
 
     fn onAppActivated(_: *gtk.GridView, position: c_uint, self: *Self) callconv(.c) void {
@@ -350,7 +424,9 @@ pub const FlatpakInstallView = extern struct {
         std.debug.print("position: {}", .{position});
         defer item.unref();
         const app = gobject.ext.cast(AppstreamAppObject, item) orelse return;
-        self.showDetails(app, position);
+        // the user picked another app, so a late refresh must not replace it.
+        self.priv().pending_app_id_len = 0;
+        self.showDetails(app);
     }
 
     fn onBackClicked(_: *gtk.Button, self: *Self) callconv(.c) void {
@@ -481,19 +557,19 @@ pub const FlatpakInstallView = extern struct {
     }
 
     /// Technically this could introduce issues in the future with a non-global lockout
-    /// The index could change when selected setting the wrong page
+    /// The shown app could change during a transaction, marking the wrong one
     /// Would need a refactor when we get there
     /// But okay for now as that is a larger WIP item
     fn setOverlayInstallState(self: *Self, installed: bool) void {
-        const selection = self.priv().selection orelse return;
-
-        const item: *gobject.Object = @ptrCast(@alignCast(gio.ListModel.getItem(selection.as(gio.ListModel), self.priv().selected_app_position) orelse return));
-        defer item.unref();
-        const app = gobject.ext.cast(AppstreamAppObject, item) orelse return;
+        const p = self.priv();
+        p.installed_generation +%= 1;
+        // rows can move while details are open, so use the app, not its place.
+        const app = p.selected_app orelse return;
         app.setInstalled(installed);
+        self.redraw(app);
 
-        gtk.Widget.setVisible(self.priv().overlay_install_button.as(gtk.Widget), if (installed) 0 else 1);
-        gtk.Widget.setVisible(self.priv().overlay_uninstall_button.as(gtk.Widget), if (installed) 1 else 0);
+        gtk.Widget.setVisible(p.overlay_install_button.as(gtk.Widget), if (installed) 0 else 1);
+        gtk.Widget.setVisible(p.overlay_uninstall_button.as(gtk.Widget), if (installed) 1 else 0);
     }
 
     fn onRemoteSelected(_: *gobject.Object, _: *gobject.ParamSpec, self: *Self) callconv(.c) void {
@@ -627,8 +703,9 @@ pub const FlatpakInstallView = extern struct {
         p.search_len = 0;
         if (p.filter) |f| gtk.Filter.changed(f.as(gtk.Filter), .different);
         if (p.catalog_ready) {
-            _ = self.resolveAppById(app_id);
-            return;
+            self.updateCollectionWait();
+            // the refresh may still bring in an app published after the shown catalog.
+            if (self.resolveAppById(app_id) or (p.loaded and !p.refreshing)) return;
         }
         if (app_id.len == 0 or app_id.len > p.pending_app_id.len)
             return;
@@ -661,7 +738,7 @@ pub const FlatpakInstallView = extern struct {
             if (!std.mem.eql(u8, app.getId(), app_id))
                 continue;
 
-            self.showDetails(app, position);
+            self.showDetails(app);
             return true;
         }
 
@@ -683,14 +760,14 @@ pub const FlatpakInstallView = extern struct {
         // The bytes remain valid for the duration of resolveAppById().
         p.pending_app_id_len = 0;
 
-        _ = self.resolveAppById(app_id);
+        // a catalog without the app may be about to be refreshed.
+        if (!self.resolveAppById(app_id) and p.refreshing) p.pending_app_id_len = app_id.len;
     }
 
-    fn showDetails(self: *Self, app: *AppstreamAppObject, position: c_uint) void {
+    fn showDetails(self: *Self, app: *AppstreamAppObject) void {
         const p = self.priv();
         self.clearDetails();
         p.selected_app = app;
-        p.selected_app_position = position;
         _ = app.as(gobject.Object).ref();
 
         gtk.Label.setLabel(p.overlay_name_label, if (app.getName().len > 0) app.getName() else app.getId());
@@ -1188,7 +1265,9 @@ pub const FlatpakInstallView = extern struct {
         const p = self.priv();
         const selection = p.selection orelse return;
         const loaded = if (p.model) |m| gio.ListModel.getNItems(m.as(gio.ListModel)) else 0;
-        const visible = loaded > 0 and gio.ListModel.getNItems(selection.as(gio.ListModel)) == 0;
+        // without an answer from flathub the status text says so instead.
+        const waiting = self.missingCollection();
+        const visible = loaded > 0 and !waiting and gio.ListModel.getNItems(selection.as(gio.ListModel)) == 0;
         gtk.Widget.setVisible(p.no_results_overlay.as(gtk.Widget), @intFromBool(visible));
 
         if (p.search_entry) |entry| {
@@ -1206,6 +1285,8 @@ pub const FlatpakInstallView = extern struct {
         p.category = category;
         self.showList();
         if (p.filter) |filter| gtk.Filter.changed(filter.as(gtk.Filter), .different);
+        self.updateNoResults();
+        self.updateCollectionWait();
     }
 
     fn setAppIcon(icon: *gtk.Image, object: *AppstreamAppObject) void {
@@ -1233,113 +1314,204 @@ pub const FlatpakInstallView = extern struct {
 
     fn loadApps(self: *Self, generation: u64) void {
         const p = self.priv();
-        if (p.model) |model| gio.ListStore.removeAll(model);
-        gtk.Label.setLabel(p.loading_label, translations._("Loading Flatpak Data..."));
-        gtk.Widget.setVisible(p.loading_spinner.as(gtk.Widget), 1);
-        gtk.Spinner.start(p.loading_spinner);
-        gtk.Widget.setVisible(p.loading_overlay.as(gtk.Widget), 1);
-        p.catalog_ready = false;
-        const result = std.heap.c_allocator.create(LoadResult) catch {
+        const model = p.model orelse return;
+        const keep = p.catalog_ready and gio.ListModel.getNItems(model.as(gio.ListModel)) > 0;
+        self.hideStatus();
+        if (!keep) {
+            gio.ListStore.removeAll(model);
+            p.catalog_ready = false;
+        }
+        p.catalog_stale = false;
+
+        const job = self.createLoadJob(generation, keep) catch {
             p.pending_app_id_len = 0;
-            self.showStatus(translations._("Could not load Flatpak applications because Shelly ran out of memory. Close other applications and try again."), false);
+            if (!keep) self.showStatus(translations._("Could not load Flatpak applications because Shelly ran out of memory. Close other applications and try again."), false);
             return;
         };
-        result.* = .{ .page = self, .generation = generation };
-        _ = self.as(gobject.Object).ref();
-
-        const thread = std.Thread.spawn(.{}, loadWorker, .{result}) catch {
-            self.as(gobject.Object).unref();
-            std.heap.c_allocator.destroy(result);
-            p.catalog_ready = false;
+        p.refreshing = true;
+        if (keep) {
+            self.updateCollectionWait();
+        } else {
+            p.catalog_loading = true;
+            p.spinner_source = glib.timeoutAdd(spinner_delay_ms, &onSpinnerDelay, self);
+        }
+        const thread = std.Thread.spawn(.{}, loadWorker, .{job}) catch {
+            if (job.catalog) |catalog| cleanupResult(catalog);
+            cleanupInstalled(job.installed);
+            cleanupResult(job.refresh);
+            p.catalog_loading = false;
+            p.refreshing = false;
             p.pending_app_id_len = 0;
-            self.showStatus(translations._("Could not start loading Flatpak applications."), false);
+            if (!keep) self.showStatus(translations._("Could not start loading Flatpak applications."), false);
             return;
         };
         thread.detach();
     }
 
-    fn loadWorker(result: *LoadResult) void {
-        const arena = std.heap.c_allocator.create(std.heap.ArenaAllocator) catch {
-            result.failed = true;
-            _ = glib.idleAdd(&loadComplete, result);
-            return;
-        };
-        arena.* = std.heap.ArenaAllocator.init(std.heap.c_allocator);
-        result.arena = arena;
-        const alloc = arena.allocator();
+    /// every result is allocated up front, so the worker can always report each.
+    fn createLoadJob(self: *Self, generation: u64, keep: bool) error{OutOfMemory}!LoadJob {
+        const p = self.priv();
+        const alloc = std.heap.c_allocator;
+        const catalog: ?*LoadResult = if (keep) null else try alloc.create(LoadResult);
+        errdefer if (catalog) |result| alloc.destroy(result);
+        const installed = try alloc.create(InstalledResult);
+        errdefer alloc.destroy(installed);
+        const refresh = try alloc.create(LoadResult);
 
-        var threaded: std.Io.Threaded = .init(std.heap.c_allocator, .{});
+        if (catalog) |result| {
+            result.* = .{ .page = self, .generation = generation };
+            _ = self.as(gobject.Object).ref();
+        }
+        installed.* = .{ .page = self, .generation = generation, .installed_generation = p.installed_generation };
+        _ = self.as(gobject.Object).ref();
+        refresh.* = .{ .page = self, .generation = generation };
+        _ = self.as(gobject.Object).ref();
+        return .{ .catalog = catalog, .installed = installed, .refresh = refresh, .shown_stamp = p.shown_stamp };
+    }
+
+    fn loadWorker(job: LoadJob) void {
+        const alloc = std.heap.c_allocator;
+        var threaded: std.Io.Threaded = .init(alloc, .{});
         defer threaded.deinit();
         const io = threaded.io();
-
         const cli: ShellyCli = .{ .allocator = alloc, .io = io };
-        cli.sync_remote_appstream_flatpak() catch {};
-        std.log.debug("sync_remote_appstream_flatpak completed", .{});
-        result.parsed = cli.getRemoteAppstreamApps() catch {
-            result.failed = true;
-            _ = glib.idleAdd(&loadComplete, result);
-            return;
-        };
 
-        const icli = ShellyCli{ .allocator = alloc, .io = threaded.io() };
-        const installed = icli.getInstalledFlatpaks() catch null;
-
-        if (installed) |inst| {
-            defer inst.deinit();
-
-            var installed_map: std.StringHashMapUnmanaged(void) = .empty;
-            defer installed_map.deinit(alloc);
-
-            for (inst.value) |pkg| {
-                installed_map.put(alloc, pkg.Name, {}) catch {};
+        var paths: CatalogPaths = undefined;
+        paths.init();
+        var shown = job.shown_stamp;
+        var usable = true;
+        if (job.catalog) |catalog| {
+            catalog.parsed = savedCatalog(cli, &paths, &shown);
+            if (catalog.parsed == null) {
+                shown = paths.stamp(io);
+                catalog.parsed = listCatalog(cli, &paths, shown);
             }
+            usable = if (catalog.parsed) |parsed| parsed.value.len > 0 else false;
+            if (!usable) {
+                // nothing to show yet, so wait for the first sync.
+                cli.sync_remote_appstream_flatpak() catch {};
+                if (catalog.parsed) |parsed| parsed.deinit();
+                shown = paths.stamp(io);
+                catalog.parsed = listCatalog(cli, &paths, shown);
+            }
+            catalog.failed = catalog.parsed == null;
+            catalog.stamp = shown;
+            _ = glib.idleAdd(&loadComplete, catalog);
+        }
 
-            if (result.parsed) |parsed| {
-                for (parsed.value) |*app| {
-                    if (installed_map.contains(app.Name))
-                        app.Installed = true;
+        // the rows do not wait for this answer.
+        job.installed.parsed = cli.getInstalledFlatpaks() catch null;
+        _ = glib.idleAdd(&installedComplete, job.installed);
+
+        if (usable) {
+            cli.sync_remote_appstream_flatpak() catch {};
+            const current = paths.stamp(io);
+            if (current != shown) {
+                job.refresh.parsed = listCatalog(cli, &paths, current);
+                job.refresh.stamp = current;
+                if (job.refresh.parsed) |parsed| {
+                    // the next visit refreshes again rather than losing the marks now.
+                    if (!markInstalled(cli, parsed.value)) {
+                        parsed.deinit();
+                        job.refresh.parsed = null;
+                    }
                 }
             }
         }
-
-        var flathub = FlatHubApiService.init(std.heap.c_allocator, io);
-        defer flathub.deinit();
-
-        result.trending_set = collectionSet(alloc, &flathub, .trending);
-        result.popular_set = collectionSet(alloc, &flathub, .popular);
-        result.recently_updated_set = collectionSet(alloc, &flathub, .recently_updated);
-        result.recently_added_set = collectionSet(alloc, &flathub, .recently_added);
-
-        _ = glib.idleAdd(&loadComplete, result);
+        _ = glib.idleAdd(&refreshComplete, job.refresh);
     }
 
-    fn collectionSet(alloc: std.mem.Allocator, flathub: *FlatHubApiService, which: AppstreamAppObject.Collection) std.StringHashMapUnmanaged(void) {
-        const ids = switch (which) {
-            .trending => flathub.getCollectionTrending(1, 20),
-            .popular => flathub.getCollectionPopular(1, 20),
-            .recently_updated => flathub.getCollectionRecentlyUpdated(1, 20),
-            .recently_added => flathub.getCollectionRecentlyAdded(1, 20),
-        } catch return .empty;
+    const Installation = struct {
+        root: []const u8 = "",
+        config: []const u8 = "",
+        root_buffer: [std.fs.max_path_bytes]u8 = undefined,
+        config_buffer: [std.fs.max_path_bytes]u8 = undefined,
 
-        var set: std.StringHashMapUnmanaged(void) = .empty;
-        set.ensureTotalCapacity(alloc, @intCast(ids.len)) catch return .empty;
-        for (ids) |id| {
-            const owned = alloc.dupe(u8, id) catch continue;
-            set.putAssumeCapacity(owned, {});
+        fn init(self: *Installation, base: []const u8) void {
+            self.root = std.fmt.bufPrint(&self.root_buffer, "{s}/appstream", .{base}) catch "";
+            self.config = std.fmt.bufPrint(&self.config_buffer, "{s}/repo/config", .{base}) catch "";
         }
-        return set;
+    };
+
+    const CatalogPaths = struct {
+        user: Installation = .{},
+        system: Installation = .{},
+        cache: []const u8 = "",
+        cache_buffer: [std.fs.max_path_bytes]u8 = undefined,
+
+        fn init(self: *CatalogPaths) void {
+            self.* = .{};
+            var buffer: [std.fs.max_path_bytes]u8 = undefined;
+            const home = std.fmt.bufPrint(&buffer, "{s}/flatpak", .{g_get_user_data_dir()}) catch "";
+            self.user.init(catalog_stamp.baseDir(environ("FLATPAK_USER_DIR"), home));
+            self.system.init(catalog_stamp.baseDir(environ("FLATPAK_SYSTEM_DIR"), "/var/lib/flatpak"));
+            self.cache = std.fmt.bufPrint(&self.cache_buffer, "{s}/shelly/flatpak-catalog", .{g_get_user_cache_dir()}) catch "";
+        }
+
+        fn environ(name: [*:0]const u8) ?[]const u8 {
+            return std.mem.span(std.c.getenv(name) orelse return null);
+        }
+
+        fn stamp(self: *const CatalogPaths, io: std.Io) u64 {
+            return catalog_stamp.read(
+                io,
+                &.{ self.system.root, self.user.root },
+                &.{ self.system.config, self.user.config },
+            );
+        }
+    };
+
+    /// the list saved by an earlier visit, which may be older than the catalog.
+    fn savedCatalog(cli: ShellyCli, paths: *const CatalogPaths, stamp: *u64) ?std.json.Parsed([]flatpak.AppstreamApp) {
+        const saved = saved_list.read(cli.allocator, cli.io, paths.cache, "flatpak", features.version) orelse return null;
+        defer saved.deinit(cli.allocator);
+        const parsed = ShellyCli.parseAppstreamApps(cli.allocator, saved.json) catch return null;
+        if (parsed.value.len == 0) {
+            parsed.deinit();
+            return null;
+        }
+        stamp.* = saved.stamp;
+        return parsed;
+    }
+
+    fn listCatalog(cli: ShellyCli, paths: *const CatalogPaths, stamp: u64) ?std.json.Parsed([]flatpak.AppstreamApp) {
+        const json = cli.getRemoteAppstreamJson() catch return null;
+        defer cli.allocator.free(json);
+        const parsed = ShellyCli.parseAppstreamApps(cli.allocator, json) catch return null;
+        saved_list.write(cli.io, paths.cache, "flatpak", features.version, stamp, json) catch |err|
+            std.log.warn("Could not save the Flatpak catalog: {s}", .{@errorName(err)});
+        return parsed;
+    }
+
+    fn markInstalled(cli: ShellyCli, apps: []flatpak.AppstreamApp) bool {
+        const installed = cli.getInstalledFlatpaks() catch return false;
+        defer installed.deinit();
+
+        var names: std.StringHashMapUnmanaged(void) = .empty;
+        defer names.deinit(cli.allocator);
+        for (installed.value) |pkg| names.put(cli.allocator, pkg.Name, {}) catch {};
+        for (apps) |*app| {
+            if (names.contains(app.Name)) app.Installed = true;
+        }
+        return true;
+    }
+
+    /// true while the page that asked for this load is still showing it.
+    fn isCurrent(result: *const LoadResult) bool {
+        const p = result.page.priv();
+        return !p.disposed and p.loaded and p.load_generation == result.generation;
     }
 
     fn loadComplete(data: ?*anyopaque) callconv(.c) c_int {
         const result: *LoadResult = @ptrCast(@alignCast(data orelse return 0));
         const page = result.page;
         const p = page.priv();
-        if (p.disposed or !p.loaded or p.load_generation != result.generation) {
+        if (!isCurrent(result)) {
             cleanupResult(result);
             return 0;
         }
         if (result.failed or result.parsed == null) {
-            p.catalog_ready = false;
+            p.catalog_loading = false;
             p.pending_app_id_len = 0;
             page.showStatus(translations._("Could not load Flatpak applications from the selected remote."), false);
             cleanupResult(result);
@@ -1349,42 +1521,263 @@ pub const FlatpakInstallView = extern struct {
         const apps = result.parsed.?.value;
         const end = @min(result.next_index + batch_size, apps.len);
         const model = p.model orelse {
-            p.catalog_ready = false;
+            p.catalog_loading = false;
             p.pending_app_id_len = 0;
             cleanupResult(result);
             return 0;
         };
         for (apps[result.next_index..end]) |app| {
             const object = AppstreamAppObject.new(app) catch continue;
-
-            var membership: AppstreamAppObject.Membership = .{};
-            if (result.trending_set.contains(app.Id)) membership.insert(.trending);
-            if (result.popular_set.contains(app.Id)) membership.insert(.popular);
-            if (result.recently_updated_set.contains(app.Id)) membership.insert(.recently_updated);
-            if (result.recently_added_set.contains(app.Id)) membership.insert(.recently_added);
-            object.setMembership(membership);
-
+            if (p.collections) |collections| object.setMembership(collections.membership(app.Id));
             gio.ListStore.append(model, object.as(gobject.Object));
             object.as(gobject.Object).unref();
         }
         result.next_index = end;
+        if (end > 0) page.hideStatus();
         if (end < apps.len) return 1;
 
+        p.catalog_loading = false;
+        p.catalog_ready = true;
+        p.shown_stamp = result.stamp;
         if (gio.ListModel.getNItems(model.as(gio.ListModel)) == 0) {
-            p.catalog_ready = true;
             p.pending_app_id_len = 0;
             page.showStatus(translations._("No Flatpak applications are available."), false);
         } else {
-            p.catalog_ready = true;
-            gtk.Spinner.stop(p.loading_spinner);
-            gtk.Widget.setVisible(p.loading_overlay.as(gtk.Widget), 0);
+            page.hideStatus();
+            page.updateNoResults();
+            page.updateCollectionWait();
             page.openPendingApp();
         }
         cleanupResult(result);
         return 0;
     }
 
+    fn installedComplete(data: ?*anyopaque) callconv(.c) c_int {
+        const result: *InstalledResult = @ptrCast(@alignCast(data orelse return 0));
+        const page = result.page;
+        const p = page.priv();
+        const current = !p.disposed and p.loaded and p.load_generation == result.generation;
+        // the first list is still being filled.
+        if (current and p.catalog_loading) return 1;
+        if (current and p.installed_generation == result.installed_generation) {
+            if (result.parsed) |parsed| page.applyInstalled(parsed.value);
+        }
+        cleanupInstalled(result);
+        return 0;
+    }
+
+    fn applyInstalled(self: *Self, installed: []const Flatpak) void {
+        const p = self.priv();
+        installed_marks.apply(std.heap.c_allocator, p.model orelse return, installed, self) catch return;
+        const app = p.selected_app orelse return;
+        gtk.Widget.setVisible(p.overlay_install_button.as(gtk.Widget), @intFromBool(!app.isInstalled()));
+        gtk.Widget.setVisible(p.overlay_uninstall_button.as(gtk.Widget), @intFromBool(app.isInstalled()));
+    }
+
+    fn refreshComplete(data: ?*anyopaque) callconv(.c) c_int {
+        const result: *LoadResult = @ptrCast(@alignCast(data orelse return 0));
+        const page = result.page;
+        const p = page.priv();
+        if (!isCurrent(result)) {
+            cleanupResult(result);
+            return 0;
+        }
+        // the first list is still being filled.
+        if (p.catalog_loading) return 1;
+
+        if (result.parsed) |parsed| {
+            const end = @min(result.next_index + batch_size, parsed.value.len);
+            for (parsed.value[result.next_index..end]) |app| {
+                const object = AppstreamAppObject.new(app) catch continue;
+                result.objects.append(std.heap.c_allocator, object.as(gobject.Object)) catch object.as(gobject.Object).unref();
+            }
+            result.next_index = end;
+            if (end < parsed.value.len) return 1;
+            page.replaceCatalog(result.objects.items, result.stamp);
+        }
+
+        p.refreshing = false;
+        page.openPendingApp();
+        cleanupResult(result);
+        return 0;
+    }
+
+    /// swaps in refreshed rows, unless that would move the user's place in the
+    /// list. the next visit reads the new catalog anyway.
+    fn replaceCatalog(self: *Self, objects: []const *gobject.Object, stamp: u64) void {
+        const p = self.priv();
+        const model = p.model orelse return;
+        p.catalog_stale = true;
+        if (gtk.Stack.getVisibleChild(p.content_stack) != p.list_overlay.as(gtk.Widget)) return;
+        if (p.pending_app_id_len == 0 and self.listInUse()) return;
+
+        for (objects) |object| {
+            const app = gobject.ext.cast(AppstreamAppObject, object) orelse continue;
+            if (p.collections) |collections| app.setMembership(collections.membership(app.getId()));
+        }
+        const old = gio.ListModel.getNItems(model.as(gio.ListModel));
+        gio.ListStore.splice(model, 0, old, @constCast(objects.ptr), @intCast(objects.len));
+        p.catalog_stale = false;
+        p.shown_stamp = stamp;
+        if (objects.len == 0) self.showStatus(translations._("No Flatpak applications are available."), false);
+        self.updateNoResults();
+    }
+
+    fn listInUse(self: *Self) bool {
+        const list = self.priv().list_flatpaks;
+        if (gtk.Widget.getStateFlags(list.as(gtk.Widget)).focus_within) return true;
+        const adjustment = gtk.Scrollable.getVadjustment(list.as(gtk.Scrollable)) orelse return false;
+        return gtk.Adjustment.getValue(adjustment) > 0;
+    }
+
+    fn collectionOf(category: Category) ?AppstreamAppObject.Collection {
+        return switch (category) {
+            .@"Most Wanted" => .trending,
+            .Recommended => .popular,
+            .@"Recently Updated" => .recently_updated,
+            .@"Recently Added" => .recently_added,
+            else => null,
+        };
+    }
+
+    /// true when the category needs a flathub answer that never arrived.
+    fn missingCollection(self: *Self) bool {
+        const p = self.priv();
+        const which = collectionOf(p.category) orelse return false;
+        const collections = p.collections orelse return true;
+        return !collections.has(which);
+    }
+
+    /// shows the spinner while a collection filter waits for its first answer.
+    fn updateCollectionWait(self: *Self) void {
+        const p = self.priv();
+        if (!p.catalog_ready) return;
+        const model = p.model orelse return;
+        if (gio.ListModel.getNItems(model.as(gio.ListModel)) == 0) return;
+        if (!self.missingCollection())
+            self.hideStatus()
+        else if (p.collections_loading)
+            self.showStatus(translations._("Loading Flatpak Data..."), true)
+        else
+            self.showStatus(translations._("Check your internet connection and try again."), false);
+    }
+
+    fn loadCollections(self: *Self) void {
+        const p = self.priv();
+        // flathub sets no deadline on a request, so never queue a second fetch
+        // behind a stalled one.
+        if (p.collections_loading) return;
+        const load = std.heap.c_allocator.create(CollectionsLoad) catch return;
+        const collections = std.heap.c_allocator.create(FlathubCollections) catch {
+            std.heap.c_allocator.destroy(load);
+            return;
+        };
+        collections.* = .init(std.heap.c_allocator);
+        load.* = .{ .page = self, .collections = collections };
+        _ = self.as(gobject.Object).ref();
+
+        p.collections_loading = true;
+        const thread = std.Thread.spawn(.{}, collectionsWorker, .{load}) catch {
+            p.collections_loading = false;
+            self.as(gobject.Object).unref();
+            destroyCollections(collections);
+            std.heap.c_allocator.destroy(load);
+            return;
+        };
+        thread.detach();
+    }
+
+    fn collectionsWorker(load: *CollectionsLoad) void {
+        const alloc = std.heap.c_allocator;
+        var threaded: std.Io.Threaded = .init(alloc, .{});
+        defer threaded.deinit();
+
+        var flathub = FlatHubApiService.init(alloc, threaded.io());
+        defer flathub.deinit();
+        for (std.enums.values(AppstreamAppObject.Collection)) |which| {
+            const ids = switch (which) {
+                .trending => flathub.getCollectionTrending(1, 20),
+                .popular => flathub.getCollectionPopular(1, 20),
+                .recently_updated => flathub.getCollectionRecentlyUpdated(1, 20),
+                .recently_added => flathub.getCollectionRecentlyAdded(1, 20),
+            } catch continue;
+            defer {
+                for (ids) |id| alloc.free(id);
+                alloc.free(ids);
+            }
+            load.collections.add(which, ids) catch {};
+        }
+        _ = glib.idleAdd(&collectionsComplete, load);
+    }
+
+    fn collectionsComplete(data: ?*anyopaque) callconv(.c) c_int {
+        const load: *CollectionsLoad = @ptrCast(@alignCast(data orelse return 0));
+        const page = load.page;
+        const p = page.priv();
+        p.collections_loading = false;
+        // a failed fetch keeps the last answer.
+        if (p.disposed or load.collections.isEmpty()) {
+            destroyCollections(load.collections);
+        } else {
+            if (p.collections) |old| {
+                load.collections.keepMissing(old) catch {};
+                destroyCollections(old);
+            }
+            p.collections = load.collections;
+            page.applyCollections();
+        }
+        if (!p.disposed) page.updateCollectionWait();
+        page.as(gobject.Object).unref();
+        std.heap.c_allocator.destroy(load);
+        return 0;
+    }
+
+    fn applyCollections(self: *Self) void {
+        const p = self.priv();
+        const collections = p.collections orelse return;
+        const model = (p.model orelse return).as(gio.ListModel);
+        var position: c_uint = 0;
+        while (position < gio.ListModel.getNItems(model)) : (position += 1) {
+            const item: *gobject.Object = @ptrCast(@alignCast(gio.ListModel.getItem(model, position) orelse continue));
+            defer item.unref();
+            const app = gobject.ext.cast(AppstreamAppObject, item) orelse continue;
+            app.setMembership(collections.membership(app.getId()));
+        }
+        // the other filters do not read membership, so leave their rows alone.
+        if (collectionOf(p.category) == null) return;
+        if (p.filter) |filter| gtk.Filter.changed(filter.as(gtk.Filter), .different);
+        self.updateNoResults();
+    }
+
+    fn destroyCollections(collections: *FlathubCollections) void {
+        collections.deinit();
+        std.heap.c_allocator.destroy(collections);
+    }
+
+    fn onSpinnerDelay(data: ?*anyopaque) callconv(.c) c_int {
+        const self: *Self = @ptrCast(@alignCast(data orelse return 0));
+        const p = self.priv();
+        p.spinner_source = 0;
+        if (p.catalog_loading) self.showStatus(translations._("Loading Flatpak Data..."), true);
+        return 0;
+    }
+
+    fn cancelSpinner(self: *Self) void {
+        const p = self.priv();
+        if (p.spinner_source == 0) return;
+        _ = glib.Source.remove(p.spinner_source);
+        p.spinner_source = 0;
+    }
+
+    fn hideStatus(self: *Self) void {
+        self.cancelSpinner();
+        const p = self.priv();
+        gtk.Spinner.stop(p.loading_spinner);
+        gtk.Widget.setVisible(p.loading_overlay.as(gtk.Widget), 0);
+    }
+
     fn showStatus(self: *Self, message: [:0]const u8, spinning: bool) void {
+        self.cancelSpinner();
         const p = self.priv();
         gtk.Label.setLabel(p.loading_label, message);
         gtk.Widget.setVisible(p.loading_spinner.as(gtk.Widget), @intFromBool(spinning));
@@ -1392,12 +1785,16 @@ pub const FlatpakInstallView = extern struct {
         gtk.Widget.setVisible(p.loading_overlay.as(gtk.Widget), 1);
     }
 
+    fn cleanupInstalled(result: *InstalledResult) void {
+        if (result.parsed) |parsed| parsed.deinit();
+        result.page.as(gobject.Object).unref();
+        std.heap.c_allocator.destroy(result);
+    }
+
     fn cleanupResult(result: *LoadResult) void {
-        if (result.parsed) |*parsed| parsed.deinit();
-        if (result.arena) |arena| {
-            arena.deinit();
-            std.heap.c_allocator.destroy(arena);
-        }
+        if (result.parsed) |parsed| parsed.deinit();
+        for (result.objects.items) |object| object.unref();
+        result.objects.deinit(std.heap.c_allocator);
         result.page.as(gobject.Object).unref();
         std.heap.c_allocator.destroy(result);
     }
@@ -1413,9 +1810,12 @@ pub const FlatpakInstallView = extern struct {
             p.loaded = false;
             p.load_generation +%= 1;
 
+            self.cancelSpinner();
             self.clearDetails();
             gtk.GridView.setModel(p.list_flatpaks, null);
             gtk.GridView.setFactory(p.list_flatpaks, null);
+            p.row_icons.deinit(std.heap.c_allocator);
+            p.row_icons = .empty;
             if (p.selection) |selection| {
                 selection.as(gobject.Object).unref();
                 p.selection = null;
@@ -1428,6 +1828,10 @@ pub const FlatpakInstallView = extern struct {
                 gio.ListStore.removeAll(model);
                 model.as(gobject.Object).unref();
                 p.model = null;
+            }
+            if (p.collections) |collections| {
+                destroyCollections(collections);
+                p.collections = null;
             }
         }
         gobject.ext.as(gobject.Object.Class, Class.parent).f_dispose.?(object);

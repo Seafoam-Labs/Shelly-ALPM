@@ -22,6 +22,7 @@ const PlanDialog = @import("../dialog/page/plan.zig").PlanDialog;
 const ProviderDialog = @import("../dialog/page/provider.zig").ProviderDialog;
 const translations = @import("../helpers/translations.zig");
 const size_helper = @import("../helpers/size_converts.zig").SizeConverter;
+const packageName = @import("../models/packages.zig").packageName;
 
 const log = std.log.scoped(.transaction_page);
 
@@ -346,7 +347,8 @@ pub const TransactionPage = extern struct {
         setLabel(p.title_label, request.title);
 
         for (request.packages, 0..) |name, i| {
-            const owned = alloc.dupeSentinel(u8, name, 0) catch continue;
+            // backend events use bare names, so key rows by name.
+            const owned = alloc.dupeSentinel(u8, packageName(name), 0) catch continue;
             const detail: ?[]const u8 = if (request.details) |details|
                 (if (i < details.len and details[i].len > 0) details[i] else null)
             else

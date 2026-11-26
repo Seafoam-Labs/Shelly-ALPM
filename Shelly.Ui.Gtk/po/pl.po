@@ -3,7 +3,7 @@ msgstr ""
 "Project-Id-Version: Polish (Shelly-ALPM)\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
 "POT-Creation-Date: 2026-11-14 01:29-0300\n"
-"PO-Revision-Date: 2026-11-18 11:50+0000\n"
+"PO-Revision-Date: 2026-11-24 17:27+0000\n"
 "Last-Translator: juliazero <juliazero2@gmail.com>\n"
 "Language-Team: Polish\n"
 "Language: pl\n"
@@ -531,15 +531,11 @@ msgstr "Odznacz wszystkie zalecane pakiety"
 msgid "Install all selected packages in one transaction"
 msgstr "Zainstaluj wszystkie wybrane pakiety w ramach jednej operacji"
 
-#, fuzzy
 msgid "Loading recommendations…"
-msgstr "Wczytywanie polecanych pakietów..."
+msgstr "Wczytywanie polecanych pakietów…"
 
-#, fuzzy
 msgid "Check your internet connection and try again."
-msgstr ""
-"Nie znaleziono polecanych pakietów. Sprawdź połączenie z internetem i "
-"spróbuj ponownie."
+msgstr "Sprawdź połączenie z internetem i spróbuj ponownie."
 
 msgid "Shelly Search"
 msgstr "Wyszukiwarka Shelly"
@@ -1967,121 +1963,166 @@ msgid "Collapse sidebar"
 msgstr "Zwiń boczny panel"
 
 msgid "No recommendations found"
-msgstr ""
+msgstr "Nie znaleziono polecanych pakietów"
 
 msgid "System-wide"
-msgstr ""
+msgstr "Systemowy"
 
 msgid "Current user"
-msgstr ""
+msgstr "Bieżący użytkownik"
 
 msgid "Atoll package update"
-msgstr ""
+msgstr "Aktualizacja pakietu Atoll"
 
 msgid "Use System Title Bar"
-msgstr ""
+msgstr "Używaj systemowego paska tytułowego"
 
-msgid "If enabled, the desktop draws the window title bar and its buttons instead of Shelly."
+msgid ""
+"If enabled, the desktop draws the window title bar and its buttons instead "
+"of Shelly."
 msgstr ""
+"Po włączeniu tej opcji pasek tytułowy okna i jego przyciski są rysowane "
+"przez środowisko graficzne zamiast przez Shelly."
 
 msgid "Applies after restarting Shelly."
-msgstr ""
+msgstr "Zmiana zacznie obowiązywać po zrestartowaniu Shelly."
 
 msgid "Language for Shelly's menus and messages."
-msgstr ""
+msgstr "Język menu i komunikatów Shelly."
 
 msgid "Software sources"
-msgstr ""
+msgstr "Źródła oprogramowania"
 
-msgid "Choose which kinds of software Shelly shows. You can change this at any time."
+msgid ""
+"Choose which kinds of software Shelly shows. You can change this at any time."
 msgstr ""
+"Wybierz rodzaje oprogramowania wyświetlane przez Shelly. Możesz to zmienić w "
+"dowolnym momencie."
 
 msgid "Enable Firmware"
-msgstr ""
+msgstr "Włącz obsługę firmware"
 
 msgid "Update device firmware such as UEFI/BIOS and peripherals"
-msgstr ""
+msgstr "Aktualizuj firmware urządzeń, np. UEFI/BIOS i urządzeń peryferyjnych"
 
 msgid "Update notifications"
-msgstr ""
+msgstr "Powiadomienia o aktualizacjach"
 
-msgid "Shelly can check for updates in the background and let you know from the system tray."
+msgid ""
+"Shelly can check for updates in the background and let you know from the "
+"system tray."
 msgstr ""
+"Shelly może sprawdzać dostępność aktualizacji w tle i informować o nich za "
+"pomocą ikony w zasobniku systemowym."
 
 msgid "Show a tray icon that checks for updates in the background."
 msgstr ""
+"Wyświetlaj ikonę w zasobniku systemowym i sprawdzaj dostępność aktualizacji "
+"w tle."
 
 msgid "Start the tray icon when you log in."
-msgstr ""
+msgstr "Uruchamiaj ikonę w zasobniku systemowym po zalogowaniu."
 
 msgid "How often the tray looks for updates."
 msgstr ""
+"Częstotliwość sprawdzania dostępności aktualizacji przez ikonę w zasobniku "
+"systemowym."
 
 msgid "Check on chosen days at a set time instead of every few hours."
 msgstr ""
+"Sprawdzaj dostępność aktualizacji w wybrane dni o określonej godzinie "
+"zamiast co kilka godzin."
 
 msgid "Days and time when Shelly checks for updates."
-msgstr ""
+msgstr "Dni i godzina sprawdzania dostępności aktualizacji przez Shelly."
 
 msgid "Check only at the scheduled time, not when the tray starts."
 msgstr ""
+"Sprawdzaj dostępność aktualizacji tylko o zaplanowanej godzinie, a nie przy "
+"uruchamianiu ikony w zasobniku systemowym."
 
-msgid "Run updates started from the tray in the Shelly window instead of a terminal."
+msgid ""
+"Run updates started from the tray in the Shelly window instead of a terminal."
 msgstr ""
+"Przeprowadzaj aktualizacje inicjowane z zasobnika systemowego w oknie Shelly "
+"zamiast w terminalu."
 
 msgid "Terminal that runs updates started from the tray."
 msgstr ""
+"Terminal używany do przeprowadzania aktualizacji inicjowanych z zasobnika "
+"systemowego."
 
 msgid "Appearance"
-msgstr ""
+msgstr "Wygląd"
 
 msgid "Use Shelly's colors or your desktop's colors."
-msgstr ""
+msgstr "Używaj kolorów Shelly lub środowiska graficznego."
 
 msgid "Light, dark, or follow your system."
-msgstr ""
+msgstr "Jasny, ciemny lub zgodny z ustawieniami systemu."
 
 msgid "The page Shelly opens on."
-msgstr ""
+msgstr "Strona wyświetlana po uruchomieniu Shelly."
 
 msgid "Sidebar on the left, or tabs across the top."
-msgstr ""
+msgstr "Panel boczny po lewej stronie lub karty u góry."
 
 msgid "Tray icon"
-msgstr ""
+msgstr "Ikona w zasobniku systemowym"
 
 msgid "Use your own image for the tray icon."
-msgstr ""
+msgstr "Użyj własnego obrazu jako ikony w zasobniku systemowym."
 
 msgid "Image the tray shows when updates are available."
 msgstr ""
+"Obraz ikony wyświetlanej w zasobniku systemowym, gdy dostępne są "
+"aktualizacje."
 
 msgid "Installing and removing"
-msgstr ""
+msgstr "Instalowanie i usuwanie"
 
 msgid "Skip confirmation prompts when installing, updating, or removing."
 msgstr ""
+"Pomijaj prośby o potwierdzenie podczas instalowania, aktualizowania lub "
+"usuwania."
 
 msgid "Also delete an app's configuration files when you remove it."
 msgstr ""
+"Usuwaj również pliki konfiguracyjne aplikacji podczas jej odinstalowywania."
 
 msgid "Search and AUR"
-msgstr ""
+msgstr "Wyszukiwanie i AUR"
 
 msgid "Add a page that searches every source at once."
 msgstr ""
+"Dodaj stronę umożliwiającą jednoczesne przeszukiwanie wszystkich źródeł."
 
 msgid "Browse the AUR through Seafoam Labs' Atoll service."
-msgstr ""
+msgstr "Przeglądaj AUR za pośrednictwem usługi Atoll firmy Seafoam Labs."
 
 msgid "Folder where new AppImages are saved."
-msgstr ""
+msgstr "Folder, w którym zapisywane są nowe pliki AppImage."
 
 msgid "Remove Configuration on Uninstall"
-msgstr ""
+msgstr "Usuwaj konfigurację podczas odinstalowywania"
 
 msgid "Layout"
-msgstr ""
+msgstr "Układ"
 
 msgid "Updates & Tray"
+msgstr ""
+
+msgid "Installed From"
+msgstr ""
+
+msgid "Available From"
+msgstr ""
+
+msgid "inferred"
+msgstr ""
+
+msgid "Rounded Window Corners"
+msgstr ""
+
+msgid "If enabled, Shelly rounds the corners of the windows it draws. A desktop that draws the title bar sets its own corners."
 msgstr ""
