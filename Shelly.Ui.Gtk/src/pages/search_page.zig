@@ -21,10 +21,10 @@ const AtollApiService = @import("../services/atoll_api.zig").AtollApiService;
 const ShellyCommands = @import("../services/shelly_operation.zig").ShellyCommands;
 const ShellyConfig = @import("../models/shelly_config.zig").ShellyConfig;
 const Package = @import("../models/packages.zig").Package;
+const AurPackage = @import("../models/aur_package.zig").AurPackage;
 const RepositoryCopy = @import("../models/packages.zig").RepositoryCopy;
 const installedCopy = @import("../models/packages.zig").installedCopy;
 const packageTarget = @import("../models/packages.zig").packageTarget;
-const AurPackage = @import("../models/aur_package.zig").AurPackage;
 const runtime = @import("../services/runtime.zig");
 const translations = @import("../helpers/translations.zig");
 const a11y = @import("../helpers/a11y.zig");
@@ -87,6 +87,7 @@ pub const ShellySearchPage = extern struct {
         aur_toggle: *gtk.ToggleButton,
         flatpak_toggle: *gtk.ToggleButton,
         source_filter_button: *gtk.MenuButton,
+        search_by_selection: *gtk.DropDown,
         show_detail_pane_check: *gtk.CheckButton,
         run_checks_check: *gtk.CheckButton,
         installed_only_check: *gtk.CheckButton,
@@ -119,6 +120,20 @@ pub const ShellySearchPage = extern struct {
         items: []SearchResult = &.{},
         arena: ?*std.heap.ArenaAllocator = null,
     };
+
+    /// The AUR search order offered by Atoll. The order is the dropdown's
+    /// index, so `searchByAt` is the only place that maps one to the other.
+    const search_by_options = [_]struct { by: AtollApiService.By, label: [:0]const u8 }{
+        .{ .by = .relevance, .label = "Best Match" },
+        .{ .by = .name, .label = "Name" },
+        .{ .by = .provides, .label = "Provides" },
+        .{ .by = .words, .label = "Words" },
+    };
+
+    pub fn searchByAt(index: usize) AtollApiService.By {
+        if (index >= search_by_options.len) return .relevance;
+        return search_by_options[index].by;
+    }
 
     const LoadResult = struct {
         page: *Self,
@@ -215,6 +230,15 @@ pub const ShellySearchPage = extern struct {
         _ = gtk.ToggleButton.signals.toggled.connect(p.standard_toggle, *Self, &on_source_filter_toggled, self, .{});
         _ = gtk.ToggleButton.signals.toggled.connect(p.aur_toggle, *Self, &on_source_filter_toggled, self, .{});
         _ = gtk.ToggleButton.signals.toggled.connect(p.flatpak_toggle, *Self, &on_source_filter_toggled, self, .{});
+
+        const by_list = gtk.StringList.new(null);
+        for (search_by_options) |item| {
+            gtk.StringList.append(by_list, translations._(item.label));
+        }
+        gtk.DropDown.setModel(p.search_by_selection, by_list.as(gio.ListModel));
+        by_list.as(gobject.Object).unref();
+        gtk.DropDown.setSelected(p.search_by_selection, 0);
+        _ = gobject.Object.signals.notify.connect(p.search_by_selection.as(gobject.Object), *Self, &on_search_by_notify, self, .{ .detail = "selected" });
 
         const standard_detail = StandardPackageDetail.new();
         p.standard_detail = standard_detail;
@@ -727,6 +751,9 @@ pub const ShellySearchPage = extern struct {
         // Disabled sources are neither queried nor offered in the filter.
         gtk.Widget.setVisible(p.aur_toggle.as(gtk.Widget), @intFromBool(sources.aur));
         gtk.ToggleButton.setActive(p.aur_toggle, @intFromBool(sources.aur));
+        // Only the AUR source has an ordering to pick, so the selector is dead
+        // when the AUR source is off even if Atoll itself is active.
+        gtk.Widget.setVisible(p.search_by_selection.as(gtk.Widget), @intFromBool(sources.atoll and sources.aur));
         gtk.Widget.setVisible(p.flatpak_toggle.as(gtk.Widget), @intFromBool(sources.flatpak));
         gtk.ToggleButton.setActive(p.flatpak_toggle, @intFromBool(sources.flatpak));
         self.update_filter_indicator();
@@ -977,6 +1004,7 @@ pub const ShellySearchPage = extern struct {
         aur: bool = false,
         flatpak: bool = false,
         atoll: bool = false,
+        search_by: AtollApiService.By = .relevance,
     };
 
     const LoadMode = enum { search, installed };
@@ -1005,8 +1033,10 @@ pub const ShellySearchPage = extern struct {
         return sources;
     }
 
-    fn start_load(self: *Self, sources: Sources, mode: LoadMode) void {
+    fn start_load(self: *Self, sources_in: Sources, mode: LoadMode) void {
         const p = self.priv();
+        var sources = sources_in;
+        sources.search_by = self.selectedBy();
         p.generation += 1;
         gio.ListStore.removeAll(p.list_store);
         // A new load drops the selection, so the old row's preview goes too.
@@ -1044,7 +1074,7 @@ pub const ShellySearchPage = extern struct {
 
         for (0..3) |i| {
             if (!slots[i].enabled) continue;
-            threads[i] = std.Thread.spawn(.{}, source_worker, .{ &slots[i], query_buf, query_len, tags[i], sources.atoll, installed_sets, mode }) catch null;
+            threads[i] = std.Thread.spawn(.{}, source_worker, .{ &slots[i], query_buf, query_len, tags[i], sources.atoll, sources.search_by, installed_sets, mode }) catch null;
         }
         for (threads) |maybe_thread| {
             if (maybe_thread) |thread| thread.join();
@@ -1091,6 +1121,7 @@ pub const ShellySearchPage = extern struct {
         query_len: usize,
         source: Source,
         use_atoll: bool,
+        search_by: AtollApiService.By,
         installed_sets: InstalledSnapshot,
         mode: LoadMode,
     ) void {
@@ -1154,7 +1185,7 @@ pub const ShellySearchPage = extern struct {
                 } else if (use_atoll) {
                     var atoll = AtollApiService.init(alloc, threaded.io());
                     defer atoll.deinit();
-                    const packages = atoll.search(query, .relevance) catch |err| {
+                    const packages = atoll.search(query, search_by) catch |err| {
                         std.debug.print("Could not search Atoll. {0s}\n\nTechnical details: {1s}\n", .{ diagnostics.cause(err), @errorName(err) });
                         return;
                     };
@@ -1395,6 +1426,17 @@ pub const ShellySearchPage = extern struct {
         // Clearing the entry is equivalent to activating an empty query, so
         // route it through the same handler instead of duplicating its reset.
         self.on_search_activate();
+    }
+
+    fn selectedBy(self: *Self) AtollApiService.By {
+        const idx = gtk.DropDown.getSelected(self.priv().search_by_selection);
+        return searchByAt(idx);
+    }
+
+    fn on_search_by_notify(_: *gobject.Object, _: *gobject.ParamSpec, self: *Self) callconv(.c) void {
+        const p = self.priv();
+        if (p.last_query_len == 0) return;
+        self.start_load(enabledSources(), .search);
     }
 
     fn on_install_clicked(self: *Self) callconv(.c) void {
@@ -1675,6 +1717,7 @@ pub const ShellySearchPage = extern struct {
         .{ "aur_toggle", @offsetOf(Private, "aur_toggle") },
         .{ "flatpak_toggle", @offsetOf(Private, "flatpak_toggle") },
         .{ "source_filter_button", @offsetOf(Private, "source_filter_button") },
+        .{ "search_by_selection", @offsetOf(Private, "search_by_selection") },
         .{ "show_detail_pane_check", @offsetOf(Private, "show_detail_pane_check") },
         .{ "installed_only_check", @offsetOf(Private, "installed_only_check") },
         .{ "run_checks_check", @offsetOf(Private, "run_checks_check") },
@@ -1783,33 +1826,6 @@ pub const ShellySearchPage = extern struct {
     }
 };
 
-test "deduplicateStandardResults keeps repository copies and marks the installed one" {
-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena.deinit();
-    const alloc = arena.allocator();
-    var items: std.ArrayListUnmanaged(SearchResult) = .empty;
-    const packages = [_]Package{
-        .{ .Name = "foo", .Version = "1-1", .Repository = "local", .Installed = true, .InstalledFrom = "second" },
-        .{ .Name = "foo", .Version = "1-1", .Repository = "first" },
-        .{ .Name = "foo", .Version = "1-1", .Repository = "second" },
-        .{ .Name = "foreign", .Version = "9-1", .Repository = "local", .Installed = true },
-        .{ .Name = "bar", .Version = "2-1", .Repository = "extra" },
-    };
-    try ShellySearchPage.deduplicateStandardResults(alloc, &packages, &items);
-    try std.testing.expectEqual(@as(usize, 4), items.items.len);
-    try std.testing.expectEqualStrings("first", items.items[0].repository);
-    try std.testing.expectEqualStrings("first/foo", items.items[0].install_target);
-    try std.testing.expect(!items.items[0].installed);
-    try std.testing.expectEqualStrings("second", items.items[1].repository);
-    try std.testing.expectEqualStrings("second/foo", items.items[1].install_target);
-    try std.testing.expect(items.items[1].installed);
-    try std.testing.expectEqualStrings("foreign", items.items[2].name);
-    try std.testing.expectEqualStrings("local", items.items[2].repository);
-    try std.testing.expectEqualStrings("foreign", items.items[2].install_target);
-    try std.testing.expect(items.items[2].installed);
-    try std.testing.expectEqualStrings("extra/bar", items.items[3].install_target);
-}
-
 test "appendAurResults maps AUR metadata into rows for either backend" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
@@ -1842,6 +1858,33 @@ test "appendAurResults maps AUR metadata into rows for either backend" {
     try std.testing.expectEqualStrings("Atoll", items.items[0].repository);
     try std.testing.expect(!items.items[0].out_of_date);
     try std.testing.expectEqualStrings("kate-git", items.items[0].aur.?.Name);
+}
+
+test "deduplicateStandardResults keeps repository copies and marks the installed one" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+    var items: std.ArrayListUnmanaged(SearchResult) = .empty;
+    const packages = [_]Package{
+        .{ .Name = "foo", .Version = "1-1", .Repository = "local", .Installed = true, .InstalledFrom = "second" },
+        .{ .Name = "foo", .Version = "1-1", .Repository = "first" },
+        .{ .Name = "foo", .Version = "1-1", .Repository = "second" },
+        .{ .Name = "foreign", .Version = "9-1", .Repository = "local", .Installed = true },
+        .{ .Name = "bar", .Version = "2-1", .Repository = "extra" },
+    };
+    try ShellySearchPage.deduplicateStandardResults(alloc, &packages, &items);
+    try std.testing.expectEqual(@as(usize, 4), items.items.len);
+    try std.testing.expectEqualStrings("first", items.items[0].repository);
+    try std.testing.expectEqualStrings("first/foo", items.items[0].install_target);
+    try std.testing.expect(!items.items[0].installed);
+    try std.testing.expectEqualStrings("second", items.items[1].repository);
+    try std.testing.expectEqualStrings("second/foo", items.items[1].install_target);
+    try std.testing.expect(items.items[1].installed);
+    try std.testing.expectEqualStrings("foreign", items.items[2].name);
+    try std.testing.expectEqualStrings("local", items.items[2].repository);
+    try std.testing.expectEqualStrings("foreign", items.items[2].install_target);
+    try std.testing.expect(items.items[2].installed);
+    try std.testing.expectEqualStrings("extra/bar", items.items[3].install_target);
 }
 
 test "deduplicateStandardResults prioritizes installed local package over sync package" {
@@ -1930,6 +1973,14 @@ test "deduplicateStandardResults handles empty package slice" {
     var items: std.ArrayListUnmanaged(SearchResult) = .empty;
     try ShellySearchPage.deduplicateStandardResults(alloc, &.{}, &items);
     try std.testing.expectEqual(@as(usize, 0), items.items.len);
+}
+
+test "searchByAt maps dropdown index to Atoll search order" {
+    try std.testing.expectEqual(AtollApiService.By.relevance, ShellySearchPage.searchByAt(0));
+    try std.testing.expectEqual(AtollApiService.By.name, ShellySearchPage.searchByAt(1));
+    try std.testing.expectEqual(AtollApiService.By.provides, ShellySearchPage.searchByAt(2));
+    try std.testing.expectEqual(AtollApiService.By.words, ShellySearchPage.searchByAt(3));
+    try std.testing.expectEqual(AtollApiService.By.relevance, ShellySearchPage.searchByAt(99));
 }
 
 test "removeStandardArgv maps config to CLI flags in order" {
