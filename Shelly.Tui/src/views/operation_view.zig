@@ -21,6 +21,7 @@ pub const View = struct {
     target: ?operation.FlatpakTarget = null,
     action: operation.Action = .install,
     remove_unused_dependencies: bool = false,
+    skip_repository_sync: bool = false,
     state: enum { entering, running, succeeded, failed, declined },
     review: []const u8 = "",
     detail: []const u8 = "",
@@ -39,6 +40,10 @@ pub const View = struct {
                 targets,
             });
         }
+        if (self.action.isRepositoryMutation()) return std.fmt.allocPrint(arena, "[{s}] Skip database refresh\n{s}", .{
+            if (self.skip_repository_sync) "x" else " ",
+            std.mem.trim(u8, self.review, "\r\n"),
+        });
         if (self.review.len > 0) return std.mem.trim(u8, self.review, "\r\n");
         const target = if (self.target) |value|
             try std.fmt.allocPrint(arena, "\nScope: {s}\nRemote: {f}\nBranch: {f}\nArchitecture: {f}", .{
@@ -216,13 +221,15 @@ pub const Panel = struct {
         const width = ctx.max.width orelse ctx.min.width;
         const body = try self.view.body(ctx.arena, width);
         var text: vxfw.Text = .{ .text = body, .softwrap = true };
-        if (self.view.state == .entering and self.view.action == .remove and (self.view.backend == .standard or self.view.backend == .aur)) {
+        if (self.view.state == .entering and (self.view.action.isRepositoryMutation() or
+            (self.view.action == .remove and (self.view.backend == .standard or self.view.backend == .aur))))
+        {
             if (self.view.owner) |owner| {
                 const split = std.mem.indexOfScalar(u8, body, '\n').?;
                 const label: vxfw.Text = .{ .text = body[0..split], .softwrap = true };
                 const children = try ctx.arena.alloc(vxfw.SubSurface, 2);
                 const checkbox_label = try ctx.arena.create(Checkbox);
-                checkbox_label.* = .{ .owner = owner, .label = label };
+                checkbox_label.* = .{ .owner = owner, .label = label, .repository = self.view.action.isRepositoryMutation() };
                 const checkbox = try Checkbox.draw(checkbox_label, ctx.withConstraints(.{}, .{ .width = width, .height = null }));
                 children[0] = .{ .origin = .{ .row = 0, .col = 0 }, .surface = checkbox };
                 text.text = body[split + 1 ..];
@@ -237,6 +244,7 @@ pub const Panel = struct {
     const Checkbox = struct {
         owner: *@import("../model.zig").Model,
         label: vxfw.Text,
+        repository: bool,
 
         fn draw(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
             const self: *Checkbox = @ptrCast(@alignCast(ptr));
@@ -250,8 +258,8 @@ pub const Panel = struct {
     fn checkboxClick(ptr: *anyopaque, ctx: *vxfw.EventContext, event: vxfw.Event) anyerror!void {
         const checkbox: *Checkbox = @ptrCast(@alignCast(ptr));
 
-        if (event == .mouse and commands.Mouse.primaryPress(event.mouse))
-            commands.Mouse.toggleUnusedDependencies(checkbox.owner, ctx);
+        if (event != .mouse or !commands.Mouse.primaryPress(event.mouse)) return;
+        if (checkbox.repository) commands.Mouse.toggleRepositorySync(checkbox.owner, ctx) else commands.Mouse.toggleUnusedDependencies(checkbox.owner, ctx);
     }
 
     fn drawContent(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {

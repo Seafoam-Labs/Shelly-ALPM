@@ -70,6 +70,7 @@ pub const SudoPrompt = struct {
     backend: OperationBackend,
     action: shelly_operation.Action = .install,
     remove_unused_dependencies: bool = false,
+    skip_repository_sync: bool = false,
     elevated: bool = true,
     include_flatpak: bool = true,
     include_aur: bool = true,
@@ -107,6 +108,7 @@ pub const SudoPrompt = struct {
             .review = self.review_text,
             .action = self.action,
             .remove_unused_dependencies = self.remove_unused_dependencies,
+            .skip_repository_sync = self.skip_repository_sync,
             .detail = self.detail,
             .progress = self.progress,
             .state = switch (self.state) {
@@ -649,7 +651,7 @@ pub fn openRepositoryPrompt(self: *Model, ctx: *vxfw.EventContext, name: []const
     const owned_url = if (url) |server| try self.gpa.dupe(u8, server) else null;
     errdefer if (owned_url) |server| self.gpa.free(server);
     const review = if (owned_url) |server|
-        try std.fmt.allocPrint(self.gpa, "Add repository {f}?\n\nServer: {f}\nShelly will refresh the package databases after adding it.", .{ @import("diagnostics").safe(name), @import("diagnostics").safe(server) })
+        try std.fmt.allocPrint(self.gpa, "Add repository {f}?\n\nServer: {f}", .{ @import("diagnostics").safe(name), @import("diagnostics").safe(server) })
     else
         try std.fmt.allocPrint(self.gpa, "Remove repository {f}?\n\nShelly edits the main configuration file. If this repository is defined in an included file, it may remain configured.", .{@import("diagnostics").safe(name)});
     prompt.* = .{
@@ -700,6 +702,13 @@ pub fn toggleUnusedDependencies(self: *Model, ctx: *vxfw.EventContext) void {
     ctx.consumeAndRedraw();
 }
 
+pub fn toggleRepositorySync(self: *Model, ctx: *vxfw.EventContext) void {
+    const prompt = operationPrompt(self) orelse return;
+    if (self.help_open or prompt.state != .entering or !prompt.action.isRepositoryMutation()) return;
+    prompt.skip_repository_sync = !prompt.skip_repository_sync;
+    ctx.consumeAndRedraw();
+}
+
 pub fn handleSudoKey(self: *Model, prompt: *SudoPrompt, ctx: *vxfw.EventContext, key: vaxis.Key) anyerror!void {
     if (prompt.state == .running) if (self.operation_state.install_job) |job| {
         if (job.snapshot(runtime.io).authenticating) {
@@ -711,6 +720,9 @@ pub fn handleSudoKey(self: *Model, prompt: *SudoPrompt, ctx: *vxfw.EventContext,
     };
     if (prompt.state == .entering and (prompt.backend == .standard or prompt.backend == .aur) and prompt.action == .remove and commands.matches(key, .mark)) {
         return toggleUnusedDependencies(self, ctx);
+    }
+    if (prompt.state == .entering and prompt.action.isRepositoryMutation() and commands.matches(key, .mark)) {
+        return toggleRepositorySync(self, ctx);
     }
     switch (try prompt.panel.handleKey(promptView(self, prompt), ctx, key)) {
         .none => {},
@@ -750,6 +762,7 @@ pub fn startElevatedInstall(self: *Model, ctx: *vxfw.EventContext, prompt: *Sudo
         .environ_map = runtime.environ_map,
         .name = prompt.name,
         .repository_url = prompt.repository_url,
+        .skip_repository_sync = prompt.skip_repository_sync,
         .targets = prompt.targets,
         .action = prompt.action,
         .remove_unused_dependencies = prompt.remove_unused_dependencies,
@@ -840,7 +853,13 @@ pub fn pollInstall(self: *Model) !bool {
     if (job.request.action.isRepositoryMutation()) {
         self.updates_state.refresh_after_upgrade = true;
         self.updates_state.refresh_updates_after_operation = true;
-        try self.utilities_state.repositories.verifyAfterOperation(self.gpa, job.request.name, job.request.action == .repository_add);
+        // A refresh can fail after the configuration was written. Reload the list
+        // without expecting a failed transaction to have applied the change.
+        try self.utilities_state.repositories.verifyAfterOperation(
+            self.gpa,
+            job.request.name,
+            if (failed or completed.declined) null else job.request.action == .repository_add,
+        );
     }
     // Reflect the outcome in the sudo prompt if it is still open
     if (self.overlay) |overlay| {

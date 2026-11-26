@@ -97,6 +97,7 @@ pub const OperationRequest = struct {
     environ_map: *const std.process.Environ.Map,
     name: []const u8,
     repository_url: ?[]const u8 = null,
+    skip_repository_sync: bool = false,
     targets: []const []const u8 = &.{},
     backend: []const u8,
     launcher_bin: ?[]const u8 = null,
@@ -533,11 +534,12 @@ fn operationArgv(alloc: std.mem.Allocator, request: OperationRequest) ![][]const
         return alloc.dupe([]const u8, &.{ request.sudo_bin, request.shelly_bin, "utility", flag, "--ui-mode" });
     }
     if (request.action.isRepositoryMutation()) {
-        if (request.action == .repository_add) {
-            const url = request.repository_url orelse return error.MissingRepositoryUrl;
-            return alloc.dupe([]const u8, &.{ request.sudo_bin, request.shelly_bin, "utility", "repository", "--add", "--ui-mode", "--", request.name, url });
-        }
-        return alloc.dupe([]const u8, &.{ request.sudo_bin, request.shelly_bin, "utility", "repository", "--remove", "--ui-mode", "--", request.name });
+        const adding = request.action == .repository_add;
+        const prefix = [_][]const u8{ request.sudo_bin, request.shelly_bin, "utility", "repository", if (adding) "--add" else "--remove", "--ui-mode" };
+        const options: []const []const u8 = if (request.skip_repository_sync) &.{"--no-sync"} else &.{};
+        const target = [_][]const u8{ "--", request.name };
+        const url: []const []const u8 = if (adding) &.{request.repository_url orelse return error.MissingRepositoryUrl} else &.{};
+        return std.mem.concat(alloc, []const u8, &.{ &prefix, options, &target, url });
     }
     const package_backend = std.mem.eql(u8, request.backend, "standard") or std.mem.eql(u8, request.backend, "aur");
     if (request.action == .purify and !std.mem.eql(u8, request.backend, "standard") and !isFlatpak(request)) return error.UnsupportedCleanupBackend;
@@ -2075,5 +2077,34 @@ test "repairs use the existing elevated CLI utilities" {
             try std.testing.expectEqualStrings(expected, actual);
         try std.testing.expect(elevated(request));
         try std.testing.expect(!interactive(request));
+    }
+}
+
+test "repository refresh is skipped only when requested" {
+    const allocator = std.testing.allocator;
+    var env: std.process.Environ.Map = .init(allocator);
+    defer env.deinit();
+    var request: OperationRequest = .{
+        .shelly_bin = "shelly",
+        .environ_map = &env,
+        .name = "custom",
+        .backend = "standard",
+        .repository_url = "https://example.invalid/$repo",
+    };
+    for ([_]Action{ .repository_add, .repository_remove }, [_][]const u8{ "--add", "--remove" }) |action, flag| {
+        request.action = action;
+        for ([_]bool{ false, true }) |skip| {
+            request.skip_repository_sync = skip;
+            const argv = try operationArgv(allocator, request);
+            defer allocator.free(argv);
+            try std.testing.expectEqualStrings(flag, argv[4]);
+            try std.testing.expectEqualStrings("--ui-mode", argv[5]);
+            if (skip) try std.testing.expectEqualStrings("--no-sync", argv[6]);
+            const separator: usize = if (skip) 7 else 6;
+            try std.testing.expectEqualStrings("--", argv[separator]);
+            try std.testing.expectEqualStrings(request.name, argv[separator + 1]);
+            if (action == .repository_add) try std.testing.expectEqualStrings(request.repository_url.?, argv[separator + 2]);
+            try std.testing.expectEqual(separator + (if (action == .repository_add) @as(usize, 3) else 2), argv.len);
+        }
     }
 }

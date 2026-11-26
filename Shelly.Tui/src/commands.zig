@@ -59,6 +59,7 @@ pub const Mouse = struct {
     pub const sortPackages = @import("models/packages_model.zig").sortBy;
     pub const OperationAction = enum { confirm, cancel, close, approve, decline };
     pub const operationAction = @import("models/operation_model.zig").runMouseOperationAction;
+    pub const toggleRepositorySync = @import("models/operation_model.zig").toggleRepositorySync;
     pub const toggleUnusedDependencies = @import("models/operation_model.zig").toggleUnusedDependencies;
     pub const selectDependency = @import("models/operation_model.zig").selectDependencyFromMouse;
     pub const navigateReview = @import("models/operation_model.zig").handleReviewMouse;
@@ -410,6 +411,7 @@ pub const Context = struct {
     pacfile_preview: bool = false,
     pacfile_can_compare: bool = false,
     removal_confirmation: bool = false,
+    repository_confirmation: bool = false,
     appimage_source: bool = false,
     appimage_configure_selected: bool = false,
     appimage_path: bool = false,
@@ -626,6 +628,7 @@ pub fn entries(arena: std.mem.Allocator, context: Context) std.mem.Allocator.Err
             }
         },
         .authentication, .confirmation => {
+            if (context.repository_confirmation) try add(arena, &list, .mark, "Toggle refresh", "Toggle skipping the package database refresh");
             if (context.removal_confirmation) try add(arena, &list, .mark, "Toggle", "Toggle removal of unused dependencies");
             try add(arena, &list, .confirm, "Run", "Confirm and run the operation");
             try add(arena, &list, .cancel, "Back", "Dismiss confirmation without starting the operation");

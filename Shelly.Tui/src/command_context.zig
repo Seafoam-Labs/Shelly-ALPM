@@ -19,6 +19,7 @@ pub fn resolve(self: *Model) commands.Context {
         context.scrollable = prompt.panel.scroll.scroll.has_more_vertical or
             prompt.panel.scroll.scroll.top > 0 or prompt.panel.scroll.scroll.vertical_offset != 0;
         context.authenticating = prompt.progress.authenticating;
+        context.repository_confirmation = prompt.state == .entering and prompt.action.isRepositoryMutation();
         context.removal_confirmation = prompt.state == .entering and (prompt.backend == .standard or prompt.backend == .aur) and prompt.action == .remove;
         return context;
     }

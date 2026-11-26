@@ -506,7 +506,7 @@ const RepositoryState = struct {
     names: ?StringList = null,
     job: ?*Job = null,
     message: []const u8 = "",
-    verification: ?struct { name: []const u8, should_exist: bool } = null,
+    verification: ?struct { name: []const u8, should_exist: ?bool } = null,
 
     pub fn init(model: *Model, allocator: Allocator) RepositoryState {
         return .{
@@ -528,7 +528,7 @@ const RepositoryState = struct {
         self.url.deinit();
     }
 
-    pub fn verifyAfterOperation(self: *RepositoryState, allocator: Allocator, name: []const u8, should_exist: bool) !void {
+    pub fn verifyAfterOperation(self: *RepositoryState, allocator: Allocator, name: []const u8, should_exist: ?bool) !void {
         const owned = try allocator.dupe(u8, name);
         if (self.verification) |previous| allocator.free(previous.name);
         self.verification = .{ .name = owned, .should_exist = should_exist };
@@ -603,6 +603,10 @@ pub fn pollRepositories(model: *Model, ctx: *vxfw.EventContext) !void {
     if (state.verification) |verification| {
         defer model.gpa.free(verification.name);
         state.verification = null;
+        const should_exist = verification.should_exist orelse {
+            state.message = if (state.names == null) "Could not reload repositories." else "";
+            return;
+        };
         const warning = if (state.names) |names| blk: {
             var present = false;
             for (names.value) |name| {
@@ -611,13 +615,13 @@ pub fn pollRepositories(model: *Model, ctx: *vxfw.EventContext) !void {
                     break;
                 }
             }
-            break :blk if (present == verification.should_exist) null else if (present)
+            break :blk if (present == should_exist) null else if (present)
                 "Repository is still configured. Check the included configuration files."
             else
                 "The added repository is missing from the configuration.";
         } else "Could not reload the repository list to verify the change.";
 
-        state.message = warning orelse if (verification.should_exist) "Repository is configured." else "Repository is no longer configured.";
+        state.message = warning orelse if (should_exist) "Repository is configured." else "Repository is no longer configured.";
         if (warning) |message| {
             if (operation_model.operationPrompt(model)) |prompt| {
                 if (prompt.state == .succeeded and prompt.action.isRepositoryMutation()) {

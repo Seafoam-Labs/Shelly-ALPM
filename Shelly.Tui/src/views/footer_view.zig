@@ -22,7 +22,7 @@ pub fn draw(ctx: vxfw.DrawContext, context: commands.Context, status: ?[]const u
             .narrow_view, .widen_view, .sort_package_name, .sort_package_repository => continue,
             else => {},
         }
-        if ((entry.id == .mark and context.mode != .answers and !context.removal_confirmation) or (context.mode == .search and (entry.id == .install or entry.id == .remove))) continue;
+        if ((entry.id == .mark and context.mode != .answers and !context.removal_confirmation and !context.repository_confirmation) or (context.mode == .search and (entry.id == .install or entry.id == .remove))) continue;
         if (entry.id == .next) continue;
         if (context.mode == .settings and (entry.id == .save_settings or entry.id == .refresh)) continue;
         // Keep alternative bindings in help instead of repeating actions.
