@@ -1,4 +1,6 @@
 const std = @import("std");
+const vaxis = @import("vaxis");
+const RepositoryControl = @import("../models/utilities_model.zig").RepositoryControl;
 const vxfw = @import("vaxis").vxfw;
 const Model = @import("../model.zig").Model;
 const Task = @import("../models/utilities_model.zig").Task;
@@ -53,7 +55,7 @@ fn drawPaneContent(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.
 
 fn drawStacked(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
     const size = ctx.max.size();
-    const action_height = @min(7, @max(size.height -| 1, 1));
+    const action_height = @min(8, @max(size.height -| 1, 1));
     const children = try ctx.arena.alloc(vxfw.SubSurface, if (size.height > action_height) 2 else 1);
     children[0] = .{ .origin = .{ .row = 0, .col = 0 }, .surface = try drawActions(ptr, ctx.withConstraints(.{}, .{ .width = size.width, .height = action_height })) };
     if (children.len == 2) {
@@ -78,6 +80,7 @@ fn drawActions(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surf
         .{ .task = .flatpak_cleanup },
         .{ .heading = "Repair" },
         .{ .task = .repair_permissions },
+        .{ .task = .repository },
     };
     var children: std.ArrayList(vxfw.SubSurface) = .empty;
     if (size.height < rows.len) {
@@ -134,13 +137,14 @@ fn drawResults(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surf
     const state = &model.utilities_state;
     switch (state.selected) {
         .pacfiles => {},
+        .repository => return drawRepositories(ptr, ctx),
         .cleanup, .flatpak_cleanup, .repair_permissions => {
             const description: vxfw.Text = .{
                 .text = switch (state.selected) {
                     .cleanup => "Review orphaned packages and corrupted cache entries before removing them. Administrator authorization is required to build the cleanup plan.",
                     .flatpak_cleanup => "Review unused Flatpak dependencies in system and user installations before removing them.",
                     .repair_permissions => "Restore your ownership of Shelly’s configuration, cache, and data directories.",
-                    .pacfiles => unreachable,
+                    .pacfiles, .repository => unreachable,
                 },
                 .softwrap = true,
             };
@@ -154,8 +158,7 @@ fn drawResults(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surf
     const children = try ctx.arena.alloc(vxfw.SubSurface, if (size.height > 1) 2 else 1);
     var row: u16 = 0;
     if (children.len == 2) {
-        const description: vxfw.Text = .{ .text = "Preview .pacnew, .pacsave, and .pacorig files left by package changes.", .softwrap = true };
-        const intro = try description.draw(ctx.withConstraints(.{}, .{ .width = size.width, .height = @min(size.height - 1, 3) }));
+        const intro = try drawDescription(ctx, "Preview .pacnew, .pacsave, and .pacorig files left by package changes.");
         children[0] = .{ .origin = .{ .row = 0, .col = 0 }, .surface = intro };
         row = intro.size.height;
         if (size.height - row >= 2) row += 1;
@@ -167,6 +170,12 @@ fn drawResults(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surf
     } else try state.list.draw(body_ctx);
     children[children.len - 1] = .{ .origin = .{ .row = row, .col = 0 }, .surface = body };
     return .{ .widget = widget, .size = size, .buffer = &.{}, .children = children };
+}
+
+fn drawDescription(ctx: vxfw.DrawContext, text: []const u8) Allocator.Error!vxfw.Surface {
+    const size = ctx.max.size();
+    const description: vxfw.Text = .{ .text = text, .softwrap = true };
+    return description.draw(ctx.withConstraints(.{}, .{ .width = size.width, .height = @min(size.height - 1, 3) }));
 }
 
 pub fn drawPath(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
@@ -212,4 +221,114 @@ test "pacfile description stays above the full-width selected result" {
     try std.testing.expectEqualStrings("/", row.buffer[0].char.grapheme);
     try std.testing.expectEqual(styles.selected, row.buffer[0].style);
     try std.testing.expectEqual(@as(u16, 40), row.size.width);
+}
+
+fn drawRepositories(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
+    const model: *Model = @ptrCast(@alignCast(ptr));
+    const state = &model.utilities_state.repositories;
+    const size = ctx.max.size();
+    const widget: vxfw.Widget = .{ .userdata = ptr, .drawFn = drawRepositories };
+    if (size.width == 0 or size.height == 0) return .{ .widget = widget, .size = size, .buffer = &.{}, .children = &.{} };
+    var children: std.ArrayList(vxfw.SubSurface) = .empty;
+    if (state.editing) |field| {
+        if (size.height == 1) {
+            try children.append(ctx.arena, .{ .origin = .{ .row = 0, .col = 0 }, .surface = try state.field(field).draw(ctx) });
+        } else if (size.height < 5) {
+            try drawRepositoryField(ctx, &children, 0, if (field == .name) "Repository name" else "Server URL", state.field(field), true);
+        } else {
+            try drawRepositoryField(ctx, &children, 0, "Repository name", &state.name, field == .name);
+            try drawRepositoryField(ctx, &children, 2, "Server URL", &state.url, field == .url);
+        }
+        if (size.height > 2 and state.message.len != 0)
+            try appendRepositoryLine(ctx, &children, size.height - 1, state.message, styles.emphasis);
+    } else {
+        var row: u16 = 0;
+        if (size.height >= 2) {
+            const intro = try drawDescription(ctx, "List, add and remove repository entries.");
+            try children.append(ctx.arena, .{ .origin = .{ .row = row, .col = 0 }, .surface = intro });
+            row = intro.size.height;
+            if (size.height - row >= 2) row += 1;
+        }
+        if (row < size.height and state.message.len != 0 and (size.height - row > 1 or state.selected() == null)) {
+            try appendRepositoryLine(ctx, &children, row, state.message, styles.secondary);
+            row += 1;
+        }
+        if (row < size.height and state.selected() != null) {
+            const show_buttons = model.settings_state.settings.expanded_mouse_support and state.job == null and size.width >= 22 and size.height - row >= 2;
+            const list_height = size.height - row - @as(u16, @intFromBool(show_buttons));
+            try children.append(ctx.arena, .{ .origin = .{ .row = row, .col = 0 }, .surface = try state.list.draw(ctx.withConstraints(.{}, .{ .width = size.width, .height = list_height })) });
+            if (show_buttons) {
+                try appendRepositoryButton(model, ctx, &children, size.height - 1, 0, "[Add]", .add);
+                try appendRepositoryButton(model, ctx, &children, size.height - 1, 6, "[Remove]", .remove);
+            }
+        } else if (row < size.height and model.settings_state.settings.expanded_mouse_support and state.job == null and size.width >= 5) {
+            try appendRepositoryButton(model, ctx, &children, size.height - 1, 0, "[Add]", .add);
+        }
+    }
+    return .{ .widget = widget, .size = size, .buffer = &.{}, .children = children.items };
+}
+
+fn drawRepositoryField(ctx: vxfw.DrawContext, children: *std.ArrayList(vxfw.SubSurface), row: u16, label: []const u8, field: *vxfw.TextField, active: bool) Allocator.Error!void {
+    try appendRepositoryLine(ctx, children, row, label, if (active) styles.selected else styles.emphasis);
+    try children.append(ctx.arena, .{
+        .origin = .{ .row = row + 1, .col = 0 },
+        .surface = try field.draw(ctx.withConstraints(.{}, .{ .width = ctx.max.size().width, .height = 1 })),
+    });
+}
+
+fn appendRepositoryLine(ctx: vxfw.DrawContext, children: *std.ArrayList(vxfw.SubSurface), row: u16, text: []const u8, style: vaxis.Style) Allocator.Error!void {
+    const label: vxfw.Text = .{ .text = text, .style = style, .width_basis = .parent, .softwrap = false, .overflow = .ellipsis };
+    try children.append(ctx.arena, .{
+        .origin = .{ .row = row, .col = 0 },
+        .surface = try label.draw(ctx.withConstraints(.{}, .{ .width = ctx.max.size().width, .height = 1 })),
+    });
+}
+
+const RepositoryButton = struct {
+    owner: *Model,
+    label: []const u8,
+    action: RepositoryControl,
+
+    fn drawWidget(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
+        const self: *RepositoryButton = @ptrCast(@alignCast(ptr));
+        const text: vxfw.Text = .{ .text = self.label, .style = styles.action, .softwrap = false };
+        var surface = try text.draw(ctx);
+        surface.widget = .{ .userdata = ptr, .drawFn = drawWidget, .eventHandler = click };
+        try styles.hoverLabel(ctx.arena, &surface);
+        return surface;
+    }
+
+    fn click(ptr: *anyopaque, ctx: *vxfw.EventContext, event: vxfw.Event) anyerror!void {
+        if (event != .mouse or !commands.Mouse.primaryPress(event.mouse)) return;
+        const self: *RepositoryButton = @ptrCast(@alignCast(ptr));
+        try commands.Mouse.repositoryControl(self.owner, ctx, self.action);
+    }
+};
+
+fn appendRepositoryButton(model: *Model, ctx: vxfw.DrawContext, children: *std.ArrayList(vxfw.SubSurface), row: u16, col: u16, label: []const u8, action: RepositoryControl) Allocator.Error!void {
+    const button = try ctx.arena.create(RepositoryButton);
+    button.* = .{ .owner = model, .label = label, .action = action };
+    try children.append(ctx.arena, .{
+        .origin = .{ .row = row, .col = col },
+        .surface = try RepositoryButton.drawWidget(button, ctx.withConstraints(.{}, .{ .width = @intCast(label.len), .height = 1 })),
+    });
+}
+
+test "repositories keep the Utilities split and render their description above the list" {
+    vxfw.DrawContext.init(.unicode);
+    const model = try Model.init(std.testing.allocator);
+    defer model.deinit();
+    model.utilities_state.selected = .repository;
+    model.utilities_state.repositories.names = try std.json.parseFromSlice([][]const u8, model.gpa, "[\"core\"]", .{ .allocate = .alloc_always });
+    model.utilities_state.repositories.list.item_count = 1;
+    var arena = std.heap.ArenaAllocator.init(model.gpa);
+    defer arena.deinit();
+    const ctx: vxfw.DrawContext = .{ .arena = arena.allocator(), .min = .{}, .max = .{ .width = 100, .height = 24 }, .cell_size = .{ .width = 10, .height = 20 } };
+    var panes: std.ArrayList(vxfw.SubSurface) = .empty;
+    try appendContent(model, ctx, &panes);
+    try std.testing.expectEqual(@as(usize, 2), panes.items.len);
+    const details = try drawResults(model, ctx);
+    try std.testing.expectEqual(@as(usize, 2), details.children.len);
+    try std.testing.expect(details.children[1].origin.row > 0);
+    try std.testing.expectEqualStrings("c", details.children[1].surface.children[0].surface.buffer[0].char.grapheme);
 }

@@ -74,8 +74,15 @@ pub const View = struct {
             .succeeded => try std.fmt.allocPrint(arena, "{s} {f} successfully.{s}", .{ self.action.completed(), diagnostics.safe(self.name), if (self.refresh_pending) "\nRefreshing package state…" else "" }),
             .declined => try std.fmt.allocPrint(arena, "Declined {s} for {f}.\n{s}", .{ @tagName(self.action), diagnostics.safe(self.name), if (self.action == .purify) "Cleanup was cancelled." else "Some dependency changes may already have completed." }),
             .failed => try std.fmt.allocPrint(arena, "Could not {s} {f}.\n\n{f}{s}", .{
-                if (self.action == .repair_permissions) "repair" else @tagName(self.action),                     diagnostics.safe(self.name),
-                diagnostics.safe(if (self.detail.len > 0) self.detail else "Shelly returned no error details."), if (self.combined) "\nSome sources may already have completed. Package state will be refreshed." else "",
+                switch (self.action) {
+                    .repair_permissions => "repair",
+                    .repository_add => "add repository",
+                    .repository_remove => "remove repository",
+                    else => @tagName(self.action),
+                },
+                diagnostics.safe(self.name),
+                diagnostics.safe(if (self.detail.len > 0) self.detail else "Shelly returned no error details."),
+                if (self.combined) "\nSome sources may already have completed. Package state will be refreshed." else "",
             }),
         };
         const progress = if (if (self.state == .running) self.progress.percent else null) |reported| blk: {

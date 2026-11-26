@@ -128,7 +128,7 @@ pub const Model = struct {
             .aur_state = aur_model.init(gpa, model),
             .flatpak_state = flatpak_model.init(gpa, model),
             .updates_state = updates_model.init(gpa, model),
-            .utilities_state = utilities_model.State.init(model),
+            .utilities_state = utilities_model.State.init(model, gpa),
             .operation_state = operation_model.init(gpa, model),
         };
         return model;
@@ -182,6 +182,7 @@ pub const Model = struct {
     pub fn captureEvent(self: *Model, ctx: *vxfw.EventContext, event: vxfw.Event) anyerror!void {
         if (try appimage_model.captureSource(self, ctx, event)) return;
         if (try appimage_model.captureInstall(self, ctx, event)) return;
+        if (event == .paste and try utilities_model.pasteRepository(self, ctx, event.paste)) return;
         switch (event) {
             .key_press => |key| {
                 if (try settings_model.captureBinding(self, ctx, key)) return;
@@ -243,7 +244,7 @@ pub const Model = struct {
                                     .select_tab => |index| try self.setTab(self.visibleTabs()[index], ctx),
                                 }
                                 try self.focusActiveTab(ctx);
-                                try utilities_model.ensurePacfiles(self, ctx);
+                                try utilities_model.ensureSelected(self, ctx);
                                 try updates_model.ensureUpdates(self, ctx);
                                 try appimage_model.ensureLoaded(self, ctx);
                                 try aur_model.ensureAur(self, ctx);
@@ -274,7 +275,7 @@ pub const Model = struct {
                         .next_tab, .previous_tab => {
                             self.switchTab(if (action == .next_tab) 1 else -1);
                             try self.focusActiveTab(ctx);
-                            try utilities_model.ensurePacfiles(self, ctx);
+                            try utilities_model.ensureSelected(self, ctx);
                             try updates_model.ensureUpdates(self, ctx);
                             try appimage_model.ensureLoaded(self, ctx);
                             try aur_model.ensureAur(self, ctx);
@@ -336,6 +337,7 @@ pub const Model = struct {
                 try appimage_model.ensureLoaded(self, ctx);
                 updates_model.pollUpdates(self);
                 self.utilities_state.poll(self.gpa);
+                try utilities_model.pollRepositories(self, ctx);
                 try updates_model.ensureUpdates(self, ctx);
                 try aur_model.ensureAur(self, ctx);
                 try flatpak_model.pollFlatpak(self);
@@ -364,7 +366,7 @@ pub const Model = struct {
                     if (aur_model.catalogActive(self) or self.aur_state.aur_installed_only or self.aur_state.aur_query.len > 0) try aur_model.startAurSearch(self, ctx, self.aur_state.aur_query);
                     self.aur_state.refresh_aur_after_operation = false;
                 }
-                if ((self.appimage_state.source_draft != null and self.appimage_state.source_draft.?.save_job != null) or self.appimage_state.install_closing != null or (self.appimage_state.install_form != null and self.appimage_state.install_form.?.job != null) or self.appimage_state.load != null or self.utilities_state.job != null or utilities_model.previewLoading(&self.utilities_state) or loading or installing or self.packages_state.loading or self.updates_state.updates_job != null or self.operation_state.pkgbuild_job != null or self.flatpak_state.flatpak_job != null or self.flatpak_state.flatpak_probe_job != null) {
+                if ((self.appimage_state.source_draft != null and self.appimage_state.source_draft.?.save_job != null) or self.appimage_state.install_closing != null or (self.appimage_state.install_form != null and self.appimage_state.install_form.?.job != null) or self.appimage_state.load != null or self.utilities_state.job != null or self.utilities_state.repositories.job != null or utilities_model.previewLoading(&self.utilities_state) or loading or installing or self.packages_state.loading or self.updates_state.updates_job != null or self.operation_state.pkgbuild_job != null or self.flatpak_state.flatpak_job != null or self.flatpak_state.flatpak_probe_job != null) {
                     try ctx.tick(100, self.widget());
                 }
                 return ctx.consumeAndRedraw();
@@ -447,7 +449,7 @@ pub const Model = struct {
         self.settings_state.header_open = false;
         self.active = tab;
         try self.focusActiveTab(ctx);
-        try utilities_model.ensurePacfiles(self, ctx);
+        try utilities_model.ensureSelected(self, ctx);
         try updates_model.ensureUpdates(self, ctx);
         try appimage_model.ensureLoaded(self, ctx);
         try aur_model.ensureAur(self, ctx);
@@ -476,6 +478,9 @@ pub const Model = struct {
     /// Search and results share the field widget. Preserve their logical focus on dismissal.
     pub fn restoreTabFocus(self: *Model, ctx: *vxfw.EventContext) !void {
         if (self.active == .appimage) if (self.appimage_state.install_form) |form| return ctx.requestFocus(if (form.editing_path) form.field.widget() else self.widget());
+        if (self.active == .utilities and self.utilities_state.selected == .repository) {
+            if (self.utilities_state.repositories.editing) |field| return ctx.requestFocus(self.utilities_state.repositories.field(field).widget());
+        }
         switch (self.active) {
             .packages => try ctx.requestFocus(self.packages_state.text_field.widget()),
             .aur => try ctx.requestFocus(self.aur_state.aur_field.widget()),

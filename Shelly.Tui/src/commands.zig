@@ -34,6 +34,7 @@ pub const Mouse = struct {
     pub const SettingsTarget = union(enum) { control: usize, header: usize };
     pub const BindingTarget = union(enum) { binding: usize, scroll_down: bool, save, cancel };
     pub const closePacfilePreview = @import("models/utilities_model.zig").closePreviewFromMouse;
+    pub const repositoryControl = @import("models/utilities_model.zig").repositoryControl;
     pub const activateUtility = @import("models/utilities_model.zig").activateFromMouse;
     pub const editBinding = @import("models/settings_model.zig").editBindingFromMouse;
     pub const activateSetting = @import("models/settings_model.zig").onSettingsAction;
@@ -401,6 +402,9 @@ pub fn scrollsOperation(key: vaxis.Key) bool {
 pub const Mode = enum { appimage, search, packages, details, aur, flatpak, updates, utilities, settings, authentication, confirmation, running, result, review, preview_document, answers, choice, help };
 pub const Context = struct {
     utilities_action: []const u8 = "",
+    repositories: bool = false,
+    repository_editing: bool = false,
+    repository_selected: bool = false,
     utilities_has_results: bool = false,
     utilities_results: bool = false,
     pacfile_preview: bool = false,
@@ -544,7 +548,21 @@ pub fn entries(arena: std.mem.Allocator, context: Context) std.mem.Allocator.Err
             if (context.mode == .flatpak or context.installed_only or context.catalog_available) try add(arena, &list, .refresh_list, "Refresh", "Refresh the current package list");
         },
         .utilities => {
-            if (context.pacfile_preview) {
+            if (context.repositories) {
+                if (context.repository_editing) {
+                    try add(arena, &list, .confirm, "Continue", "Advance to the server URL or review the new repository");
+                    try add(arena, &list, .cancel_capture, "Cancel", "Back to the repository list");
+                } else if (!context.utilities_results) {
+                    try add(arena, &list, .details, "Repositories", "Focus the repository list");
+                    try add(arena, &list, .previous, "Previous", "Select the previous Utility");
+                    try add(arena, &list, .next, "Next", "Select the next Utility");
+                } else {
+                    try add(arena, &list, .install, "Add", "Add a repository");
+                    if (context.repository_selected) try add(arena, &list, .remove, "Remove", "Review removal of the selected repository");
+                    try add(arena, &list, .refresh_list, "Refresh", "Reload configured repositories");
+                    try add(arena, &list, .back, "Actions", "Focus the Utilities actions");
+                }
+            } else if (context.pacfile_preview) {
                 try add(arena, &list, .close, "Back", "Return to pacfile results");
                 try add(arena, &list, .previous, "Scroll up", "Scroll the diff up");
                 try add(arena, &list, .next, "Scroll down", "Scroll the diff down");
@@ -557,7 +575,7 @@ pub fn entries(arena: std.mem.Allocator, context: Context) std.mem.Allocator.Err
                 try add(arena, &list, .next, "Next", "Move down in the active pane");
                 if (context.utilities_has_results) try add(arena, &list, if (context.utilities_results) .back else .details, if (context.utilities_results) "Actions" else "Details", "Switch between actions and results");
             }
-            if (context.utilities_results or context.pacfile_preview) {
+            if (!context.repository_editing and (context.utilities_results or context.pacfile_preview)) {
                 try add(arena, &list, .page_up, "Page up", "Move up by a page");
                 try add(arena, &list, .page_down, "Page down", "Move down by a page");
             }

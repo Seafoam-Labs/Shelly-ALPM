@@ -65,6 +65,7 @@ pub const SudoPrompt = struct {
     name: []const u8,
     targets: []const []const u8 = &.{},
     review_text: []const u8 = "",
+    repository_url: ?[]const u8 = null,
     panel: operation_view.Panel = .{},
     backend: OperationBackend,
     action: shelly_operation.Action = .install,
@@ -86,6 +87,7 @@ pub const SudoPrompt = struct {
         gpa.free(self.name);
         for (self.targets) |target| gpa.free(target);
         if (self.targets.len > 0) gpa.free(self.targets);
+        if (self.repository_url) |url| gpa.free(url);
         if (self.review_text.len > 0) gpa.free(self.review_text);
         if (self.flatpak_target) |target| target.deinit(gpa);
         if (self.detail.len > 0) gpa.free(self.detail);
@@ -489,7 +491,7 @@ pub fn closeOverlay(self: *Model) void {
     if (self.overlay) |overlay| {
         switch (overlay) {
             .sudo => |prompt| {
-                if (prompt.action != .purify and prompt.action != .repair_permissions and (prompt.backend == .standard or prompt.backend == .aur)) resetPackageSelection(self);
+                if (prompt.action != .purify and prompt.action != .repair_permissions and !prompt.action.isRepositoryMutation() and (prompt.backend == .standard or prompt.backend == .aur)) resetPackageSelection(self);
                 prompt.deinit(self.gpa);
                 if (self.notice.len > 0) self.gpa.free(self.notice);
                 self.notice = "";
@@ -638,6 +640,29 @@ pub fn openPermissionRepair(self: *Model, ctx: *vxfw.EventContext) !void {
     ctx.consumeAndRedraw();
 }
 
+pub fn openRepositoryPrompt(self: *Model, ctx: *vxfw.EventContext, name: []const u8, url: ?[]const u8) !void {
+    if (self.overlay != null or self.operation_state.install_job != null) return ctx.consumeEvent();
+    const prompt = try self.gpa.create(SudoPrompt);
+    errdefer self.gpa.destroy(prompt);
+    const owned_name = try self.gpa.dupe(u8, name);
+    errdefer self.gpa.free(owned_name);
+    const owned_url = if (url) |server| try self.gpa.dupe(u8, server) else null;
+    errdefer if (owned_url) |server| self.gpa.free(server);
+    const review = if (owned_url) |server|
+        try std.fmt.allocPrint(self.gpa, "Add repository {f}?\n\nServer: {f}\nShelly will refresh the package databases after adding it.", .{ @import("diagnostics").safe(name), @import("diagnostics").safe(server) })
+    else
+        try std.fmt.allocPrint(self.gpa, "Remove repository {f}?\n\nShelly edits the main configuration file. If this repository is defined in an included file, it may remain configured.", .{@import("diagnostics").safe(name)});
+    prompt.* = .{
+        .name = owned_name,
+        .repository_url = owned_url,
+        .review_text = review,
+        .backend = .standard,
+        .action = if (url != null) .repository_add else .repository_remove,
+    };
+    self.overlay = .{ .sudo = prompt };
+    ctx.consumeAndRedraw();
+}
+
 fn confirmPrompt(self: *Model, ctx: *vxfw.EventContext, prompt: *SudoPrompt) !void {
     try startElevatedInstall(self, ctx, prompt);
     prompt.state = .running;
@@ -724,6 +749,7 @@ pub fn startElevatedInstall(self: *Model, ctx: *vxfw.EventContext, prompt: *Sudo
         .session = &self.operation_state.sudo_session,
         .environ_map = runtime.environ_map,
         .name = prompt.name,
+        .repository_url = prompt.repository_url,
         .targets = prompt.targets,
         .action = prompt.action,
         .remove_unused_dependencies = prompt.remove_unused_dependencies,
@@ -811,6 +837,11 @@ pub fn pollInstall(self: *Model) !bool {
         }
     }
     if (self.packages_state.installed_only and job.request.action != .repair_permissions) try packages_model.rebuildFilter(self);
+    if (job.request.action.isRepositoryMutation()) {
+        self.updates_state.refresh_after_upgrade = true;
+        self.updates_state.refresh_updates_after_operation = true;
+        try self.utilities_state.repositories.verifyAfterOperation(self.gpa, job.request.name, job.request.action == .repository_add);
+    }
     // Reflect the outcome in the sudo prompt if it is still open
     if (self.overlay) |overlay| {
         switch (overlay) {

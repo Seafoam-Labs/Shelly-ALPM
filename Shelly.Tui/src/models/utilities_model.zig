@@ -3,14 +3,17 @@ const std = @import("std");
 const vaxis = @import("vaxis");
 const vxfw = vaxis.vxfw;
 const Model = @import("../model.zig").Model;
+const operation_model = @import("operation_model.zig");
 const commands = @import("../commands.zig");
+const Allocator = std.mem.Allocator;
 const ShellyCli = @import("../services/shelly_cli.zig").ShellyCli;
 const utilities_view = @import("../views/utilities_view.zig");
 
-const Pacfiles = std.json.Parsed([][]const u8);
+const StringList = std.json.Parsed([][]const u8);
 const Job = struct {
-    thread: std.Thread,
-    result: ?Pacfiles = null,
+    kind: enum { pacfiles, repositories },
+    thread: std.Thread = undefined,
+    result: ?StringList = null,
     done: std.atomic.Value(bool) = .init(false),
 
     fn run(self: *Job) void {
@@ -18,7 +21,11 @@ const Job = struct {
         var threaded: std.Io.Threaded = .init(allocator, .{});
         defer threaded.deinit();
         const cli: ShellyCli = .{ .allocator = allocator, .io = threaded.io() };
-        self.result = cli.get_pacfiles() catch null;
+        const result = switch (self.kind) {
+            .pacfiles => cli.get_pacfiles(),
+            .repositories => cli.getRepositories(),
+        };
+        self.result = result catch null;
         self.done.store(true, .release);
     }
 };
@@ -111,6 +118,7 @@ pub const Task = enum {
     cleanup,
     flatpak_cleanup,
     repair_permissions,
+    repository,
 
     pub fn label(self: Task) []const u8 {
         return switch (self) {
@@ -118,6 +126,7 @@ pub const Task = enum {
             .cleanup => "Clean standard packages",
             .flatpak_cleanup => "Clean unused Flatpaks",
             .repair_permissions => "Repair directory permissions",
+            .repository => "Repository",
         };
     }
 
@@ -127,10 +136,11 @@ pub const Task = enum {
 };
 
 pub const State = struct {
+    repositories: RepositoryState,
     selected: Task = .pacfiles,
     results_focused: bool = false,
     job: ?*Job = null,
-    result: ?Pacfiles = null,
+    result: ?StringList = null,
     failed: bool = false,
     list: vxfw.ScrollView,
     preview_job: ?*PreviewJob = null,
@@ -139,8 +149,9 @@ pub const State = struct {
     preview_list: vxfw.ScrollView,
     preview_back: vxfw.Button,
 
-    pub fn init(model: *Model) State {
+    pub fn init(model: *Model, allocator: std.mem.Allocator) State {
         return .{
+            .repositories = RepositoryState.init(model, allocator),
             .preview_list = .{ .children = .{ .builder = .{ .userdata = model, .buildFn = buildPreviewRow } } },
             .preview_back = .{ .label = "[<]", .userdata = model, .onClick = commands.Mouse.closePacfilePreview, .style = @import("../views/components/styles.zig").action_button },
             .list = .{ .children = .{ .builder = .{ .userdata = model, .buildFn = buildRow } } },
@@ -148,6 +159,7 @@ pub const State = struct {
     }
 
     pub fn deinit(self: *State, allocator: std.mem.Allocator) void {
+        self.repositories.deinit(allocator);
         if (self.preview_job) |job| job.destroy(allocator);
         if (self.job) |job| {
             job.thread.join();
@@ -188,7 +200,7 @@ fn buildRow(ptr: *const anyopaque, index: usize, _: usize) ?vxfw.Widget {
 }
 
 pub fn activateFromMouse(model: *Model, ctx: *vxfw.EventContext, task: Task) !void {
-    if (model.active != .utilities or model.help_open or model.overlay != null or model.utilities_state.preview_open or !model.settings_state.settings.expanded_mouse_support or !task.available(model)) return;
+    if (model.active != .utilities or model.help_open or model.overlay != null or model.utilities_state.preview_open or model.utilities_state.repositories.editing != null or !model.settings_state.settings.expanded_mouse_support or !task.available(model)) return;
     model.utilities_state.selected = task;
     try activate(model, ctx);
 }
@@ -203,13 +215,19 @@ fn activate(model: *Model, ctx: *vxfw.EventContext) !void {
         },
         .cleanup, .flatpak_cleanup => {
             if (!state.selected.available(model)) return ctx.consumeEvent();
-            try @import("operation_model.zig").startCleanup(model, ctx, if (state.selected == .cleanup) .standard else .flatpak);
+            try operation_model.startCleanup(model, ctx, if (state.selected == .cleanup) .standard else .flatpak);
         },
-        .repair_permissions => try @import("operation_model.zig").openPermissionRepair(model, ctx),
+        .repair_permissions => try operation_model.openPermissionRepair(model, ctx),
+        .repository => try focusRepositories(model, ctx),
     }
 }
 
-pub fn ensurePacfiles(model: *Model, ctx: *vxfw.EventContext) !void {
+pub fn ensureSelected(model: *Model, ctx: *vxfw.EventContext) !void {
+    if (model.active == .utilities and model.utilities_state.selected == .repository) return ensureRepositories(model, ctx);
+    try ensurePacfiles(model, ctx);
+}
+
+fn ensurePacfiles(model: *Model, ctx: *vxfw.EventContext) !void {
     const state = &model.utilities_state;
     if (model.active == .utilities and state.selected == .pacfiles and state.job == null and state.result == null and !state.failed)
         try discover(model, ctx);
@@ -221,7 +239,7 @@ fn discover(model: *Model, ctx: *vxfw.EventContext) !void {
     try ctx.tick(100, model.widget());
     const job = try model.gpa.create(Job);
     errdefer model.gpa.destroy(job);
-    job.* = .{ .thread = undefined };
+    job.* = .{ .kind = .pacfiles };
     job.thread = try std.Thread.spawn(.{}, Job.run, .{job});
     state.job = job;
     ctx.consumeAndRedraw();
@@ -290,6 +308,8 @@ fn buildPreviewRow(ptr: *const anyopaque, index: usize, _: usize) ?vxfw.Widget {
 
 pub fn handleKey(model: *Model, ctx: *vxfw.EventContext, key: vaxis.Key) !bool {
     const state = &model.utilities_state;
+    if (state.selected == .repository and (state.results_focused or state.repositories.editing != null))
+        return handleRepositoryKey(model, ctx, key);
     if (state.preview_open) {
         if (commands.closesPreview(key) or commands.matches(key, .cancel_capture)) {
             state.preview_open = false;
@@ -322,7 +342,7 @@ pub fn handleKey(model: *Model, ctx: *vxfw.EventContext, key: vaxis.Key) !bool {
     const direction = commands.scrollKey(key) orelse return false;
     switch (direction.codepoint) {
         vaxis.Key.left => state.results_focused = false,
-        vaxis.Key.right => state.results_focused = state.selected == .pacfiles,
+        vaxis.Key.right => state.results_focused = state.selected == .pacfiles or state.selected == .repository,
         vaxis.Key.up, vaxis.Key.down => {
             if (state.results_focused) return false;
             const tasks = std.enums.values(Task);
@@ -338,14 +358,18 @@ pub fn handleKey(model: *Model, ctx: *vxfw.EventContext, key: vaxis.Key) !bool {
         },
         else => return false,
     }
-    try ensurePacfiles(model, ctx);
+    try ensureSelected(model, ctx);
     ctx.consumeAndRedraw();
     return true;
 }
 
 pub fn handleScroll(model: *Model, ctx: *vxfw.EventContext, event: vxfw.Event) !void {
-    if (model.utilities_state.selected != .pacfiles or model.utilities_state.message() != null) return;
-    const list = if (model.utilities_state.preview_open) &model.utilities_state.preview_list else &model.utilities_state.list;
+    const state = &model.utilities_state;
+    const list = switch (state.selected) {
+        .pacfiles => if (state.message() != null) return else if (state.preview_open) &state.preview_list else &state.list,
+        .repository => if (state.repositories.selected() != null and state.repositories.editing == null) &state.repositories.list else return,
+        else => return,
+    };
     if (event == .key_press) {
         if (!model.utilities_state.results_focused) return;
         const key = commands.scrollKey(event.key_press) orelse event.key_press;
@@ -442,6 +466,7 @@ test "permission repair remains reachable with Flatpak disabled and opens a conf
     model.active = .utilities;
     model.settings_state.settings.flatpak_enabled = false;
     model.utilities_state.selected = .cleanup;
+    model.utilities_state.repositories.names = try std.json.parseFromSlice([][]const u8, model.gpa, "[]", .{});
     model.utilities_state.result = try std.json.parseFromSlice([][]const u8, std.testing.allocator, "[]", .{});
     var ctx: vxfw.EventContext = .{ .io = std.testing.io, .alloc = std.testing.allocator, .cmds = .empty };
     defer ctx.cmds.deinit(ctx.alloc);
@@ -456,7 +481,329 @@ test "permission repair remains reachable with Flatpak disabled and opens a conf
     try model.captureEvent(&ctx, .{ .key_press = commands.bindings.cancel });
     try std.testing.expect(model.overlay == null);
     for (0..3) |_| try model.captureEvent(&ctx, .{ .key_press = commands.bindings.next });
-    try std.testing.expectEqual(Task.repair_permissions, model.utilities_state.selected);
+    try std.testing.expectEqual(Task.repository, model.utilities_state.selected);
     for (0..4) |_| try model.captureEvent(&ctx, .{ .key_press = commands.bindings.previous });
     try std.testing.expectEqual(Task.pacfiles, model.utilities_state.selected);
+}
+
+const RepositoryField = enum { name, url };
+
+const RepositoryState = struct {
+    editing: ?RepositoryField = null,
+    name: vxfw.TextField,
+    url: vxfw.TextField,
+    list: vxfw.ScrollView,
+    names: ?StringList = null,
+    job: ?*Job = null,
+    message: []const u8 = "",
+    verification: ?struct { name: []const u8, should_exist: bool } = null,
+
+    pub fn init(model: *Model, allocator: Allocator) RepositoryState {
+        return .{
+            .name = vxfw.TextField.init(allocator),
+            .url = vxfw.TextField.init(allocator),
+            .list = .{ .children = .{ .builder = .{ .userdata = model, .buildFn = buildRepositoryRow } } },
+        };
+    }
+
+    pub fn deinit(self: *RepositoryState, allocator: Allocator) void {
+        if (self.job) |job| {
+            job.thread.join();
+            if (job.result) |*names| names.deinit();
+            allocator.destroy(job);
+        }
+        if (self.names) |*names| names.deinit();
+        if (self.verification) |verification| allocator.free(verification.name);
+        self.name.deinit();
+        self.url.deinit();
+    }
+
+    pub fn verifyAfterOperation(self: *RepositoryState, allocator: Allocator, name: []const u8, should_exist: bool) !void {
+        const owned = try allocator.dupe(u8, name);
+        if (self.verification) |previous| allocator.free(previous.name);
+        self.verification = .{ .name = owned, .should_exist = should_exist };
+        self.message = "Checking repository configuration…";
+    }
+
+    pub fn field(self: *RepositoryState, which: RepositoryField) *vxfw.TextField {
+        return if (which == .name) &self.name else &self.url;
+    }
+
+    pub fn selected(self: *const RepositoryState) ?[]const u8 {
+        const names = self.names orelse return null;
+        if (self.list.cursor >= names.value.len) return null;
+        return names.value[self.list.cursor];
+    }
+};
+
+fn buildRepositoryRow(ptr: *const anyopaque, index: usize, cursor: usize) ?vxfw.Widget {
+    const model: *const Model = @ptrCast(@alignCast(ptr));
+    const names = model.utilities_state.repositories.names orelse return null;
+    if (index >= names.value.len) return null;
+    return .{ .userdata = @ptrCast(&names.value[index]), .drawFn = if (index == cursor and model.utilities_state.results_focused) utilities_view.drawSelectedPath else utilities_view.drawPath };
+}
+
+fn ensureRepositories(model: *Model, ctx: *vxfw.EventContext) !void {
+    const state = &model.utilities_state.repositories;
+    if (state.names == null and state.message.len == 0) try refreshRepositories(model, ctx);
+}
+
+fn refreshRepositories(model: *Model, ctx: *vxfw.EventContext) !void {
+    const state = &model.utilities_state.repositories;
+    if (state.job != null) return;
+    try ctx.tick(100, model.widget());
+    const job = try model.gpa.create(Job);
+    errdefer model.gpa.destroy(job);
+    job.* = .{ .kind = .repositories };
+    job.thread = try std.Thread.spawn(.{}, Job.run, .{job});
+    state.job = job;
+    state.message = if (state.verification != null) "Checking repository configuration…" else "Loading repositories…";
+    ctx.consumeAndRedraw();
+}
+
+pub fn pollRepositories(model: *Model, ctx: *vxfw.EventContext) !void {
+    const state = &model.utilities_state.repositories;
+    const job = state.job orelse {
+        if (state.verification != null) try refreshRepositories(model, ctx);
+        return;
+    };
+    if (!job.done.load(.acquire)) return;
+    job.thread.join();
+    state.job = null;
+    defer model.gpa.destroy(job);
+
+    const previous = state.selected();
+    if (job.result) |names| {
+        state.list.cursor = 0;
+        if (previous) |name| {
+            for (names.value, 0..) |item, index| {
+                if (std.mem.eql(u8, item, name)) {
+                    state.list.cursor = @intCast(index);
+                    break;
+                }
+            }
+        }
+    }
+    if (state.names) |*old| old.deinit();
+    state.names = job.result;
+    state.list.item_count = if (state.names) |names| @intCast(names.value.len) else 0;
+    state.list.scroll = .{};
+    if (state.list.item_count.? > 0) state.list.ensureScroll();
+
+    if (state.verification) |verification| {
+        defer model.gpa.free(verification.name);
+        state.verification = null;
+        const warning = if (state.names) |names| blk: {
+            var present = false;
+            for (names.value) |name| {
+                if (std.mem.eql(u8, name, verification.name)) {
+                    present = true;
+                    break;
+                }
+            }
+            break :blk if (present == verification.should_exist) null else if (present)
+                "Repository is still configured. Check the included configuration files."
+            else
+                "The added repository is missing from the configuration.";
+        } else "Could not reload the repository list to verify the change.";
+
+        state.message = warning orelse if (verification.should_exist) "Repository is configured." else "Repository is no longer configured.";
+        if (warning) |message| {
+            if (operation_model.operationPrompt(model)) |prompt| {
+                if (prompt.state == .succeeded and prompt.action.isRepositoryMutation()) {
+                    const detail = try model.gpa.dupe(u8, message);
+                    if (prompt.detail.len != 0) model.gpa.free(prompt.detail);
+                    prompt.detail = detail;
+                    prompt.state = .failed;
+                }
+            }
+        }
+    } else {
+        state.message = if (state.names == null) "Could not load repositories." else if (state.list.item_count.? == 0) "No repositories are configured." else "";
+    }
+}
+
+fn focusRepositories(model: *Model, ctx: *vxfw.EventContext) !void {
+    model.utilities_state.results_focused = true;
+    try ensureRepositories(model, ctx);
+    ctx.consumeAndRedraw();
+}
+
+pub const RepositoryControl = enum { add, remove, refresh, back };
+
+pub fn repositoryControl(model: *Model, ctx: *vxfw.EventContext, action: RepositoryControl) !void {
+    const state = &model.utilities_state.repositories;
+    if (model.active != .utilities or model.help_open or model.overlay != null or model.utilities_state.selected != .repository) return;
+    switch (action) {
+        .back => {
+            if (state.editing != null) {
+                try ctx.requestFocus(model.widget());
+                state.editing = null;
+                state.message = "";
+            } else model.utilities_state.results_focused = false;
+        },
+        .refresh => try refreshRepositories(model, ctx),
+        .add, .remove => {
+            if (state.job != null or state.verification != null or model.operation_state.install_job != null) return ctx.consumeEvent();
+            model.utilities_state.results_focused = true;
+            if (action == .remove) {
+                if (state.selected()) |name| try operation_model.openRepositoryPrompt(model, ctx, name, null);
+            } else {
+                state.name.clearRetainingCapacity();
+                state.url.clearRetainingCapacity();
+                state.message = "";
+                try focusRepositoryField(state, ctx, .name);
+            }
+        },
+    }
+    ctx.consumeAndRedraw();
+}
+
+fn handleRepositoryKey(model: *Model, ctx: *vxfw.EventContext, key: vaxis.Key) !bool {
+    const state = &model.utilities_state.repositories;
+    if (state.editing != null) {
+        if (commands.matches(key, .cancel_capture)) {
+            try repositoryControl(model, ctx, .back);
+            return true;
+        } else if (key.matches(vaxis.Key.tab, .{})) {
+            try focusRepositoryField(state, ctx, if (state.editing.? == .name) .url else .name);
+        } else if (commands.matches(key, .confirm)) {
+            if (state.editing.? == .name) try focusRepositoryField(state, ctx, .url) else try submitRepository(model, ctx);
+        } else {
+            state.message = "";
+            try state.field(state.editing.?).handleEvent(ctx, .{ .key_press = key });
+        }
+        ctx.consumeAndRedraw();
+        return true;
+    }
+
+    if (commands.matches(key, .back) or commands.matches(key, .close) or commands.matches(key, .cancel_capture)) {
+        try repositoryControl(model, ctx, .back);
+    } else if (commands.matches(key, .install)) {
+        try repositoryControl(model, ctx, .add);
+    } else if (commands.matches(key, .remove)) {
+        try repositoryControl(model, ctx, .remove);
+    } else if (commands.matches(key, .refresh_list)) {
+        try repositoryControl(model, ctx, .refresh);
+    } else return false;
+    return true;
+}
+
+fn focusRepositoryField(state: *RepositoryState, ctx: *vxfw.EventContext, which: RepositoryField) !void {
+    try ctx.requestFocus(state.field(which).widget());
+    state.editing = which;
+}
+
+pub fn pasteRepository(model: *Model, ctx: *vxfw.EventContext, text: []const u8) !bool {
+    const state = &model.utilities_state.repositories;
+    if (model.active != .utilities or model.utilities_state.selected != .repository or model.help_open or model.overlay != null) return false;
+    const editing = state.editing orelse return false;
+    try state.field(editing).insertSliceAtCursor(text);
+    ctx.consumeAndRedraw();
+    return true;
+}
+
+fn submitRepository(model: *Model, ctx: *vxfw.EventContext) !void {
+    const state = &model.utilities_state.repositories;
+    const name = try state.name.buf.dupe();
+    defer model.gpa.free(name);
+    const url = try state.url.buf.dupe();
+    defer model.gpa.free(url);
+
+    if (!validRepositoryName(name)) {
+        state.message = "Enter a repository name using letters, numbers, dots, underscores, or hyphens.";
+        try focusRepositoryField(state, ctx, .name);
+        return;
+    }
+    if (!std.mem.startsWith(u8, url, "https://") and !std.mem.startsWith(u8, url, "http://") and !std.mem.startsWith(u8, url, "file://")) {
+        state.message = "Enter an HTTPS, HTTP, or file URL.";
+        return;
+    }
+    for (url) |byte| {
+        if (byte <= ' ' or byte == 0x7f or byte == '#') {
+            state.message = "Server URLs must be a single line without spaces or comments.";
+            return;
+        }
+    }
+    try operation_model.openRepositoryPrompt(model, ctx, name, url);
+    state.editing = null;
+}
+
+fn validRepositoryName(name: []const u8) bool {
+    if (name.len == 0 or name[0] == '-' or std.ascii.eqlIgnoreCase(name, "options") or
+        std.mem.eql(u8, name, ".") or std.mem.eql(u8, name, "..")) return false;
+    for (name) |byte| {
+        if (!std.ascii.isAlphanumeric(byte) and std.mem.indexOfScalar(u8, "._-", byte) == null) return false;
+    }
+    return true;
+}
+
+test "repository removal names the selected entry and warns before starting sudo" {
+    const model = try Model.init(std.testing.allocator);
+    defer model.deinit();
+    model.active = .utilities;
+    model.utilities_state.selected = .repository;
+    model.utilities_state.results_focused = true;
+    model.utilities_state.repositories.names = try std.json.parseFromSlice([][]const u8, model.gpa, "[\"core\",\"included-test\"]", .{ .allocate = .alloc_always });
+    model.utilities_state.repositories.list.item_count = 2;
+    var ctx: vxfw.EventContext = .{ .io = std.testing.io, .alloc = model.gpa, .cmds = .empty };
+    defer ctx.cmds.deinit(model.gpa);
+    try Model.typeErasedEventHandler(model, &ctx, .{ .key_press = commands.bindings.next });
+    try model.captureEvent(&ctx, .{ .key_press = commands.bindings.remove });
+    const prompt = model.overlay.?.sudo;
+    try std.testing.expectEqualStrings("included-test", prompt.name);
+    try std.testing.expect(std.mem.indexOf(u8, prompt.review_text, "included file") != null);
+    try std.testing.expect(prompt.state == .entering);
+    try std.testing.expect(model.operation_state.install_job == null);
+}
+
+test "repository add reviews the literal server URL and rejects config line injection" {
+    const model = try Model.init(std.testing.allocator);
+    defer model.deinit();
+    model.active = .utilities;
+    model.utilities_state.selected = .repository;
+    model.utilities_state.results_focused = true;
+    var ctx: vxfw.EventContext = .{ .io = std.testing.io, .alloc = model.gpa, .cmds = .empty };
+    defer ctx.cmds.deinit(model.gpa);
+    try model.captureEvent(&ctx, .{ .key_press = commands.bindings.install });
+    try std.testing.expect(try pasteRepository(model, &ctx, "custom"));
+    try model.captureEvent(&ctx, .{ .key_press = commands.bindings.confirm });
+    try std.testing.expect(try pasteRepository(model, &ctx, "https://example.invalid/\nSigLevel = Never"));
+    try model.captureEvent(&ctx, .{ .key_press = commands.bindings.confirm });
+    try std.testing.expect(model.overlay == null);
+    model.utilities_state.repositories.url.clearRetainingCapacity();
+    try std.testing.expect(try pasteRepository(model, &ctx, "https://example.invalid/$repo/$arch"));
+    try model.captureEvent(&ctx, .{ .key_press = commands.bindings.confirm });
+    const prompt = model.overlay.?.sudo;
+    try std.testing.expectEqualStrings("custom", prompt.name);
+    try std.testing.expectEqualStrings("https://example.invalid/$repo/$arch", prompt.repository_url.?);
+    try std.testing.expect(model.operation_state.install_job == null);
+}
+
+test "read-back catches a repository still present after reported removal" {
+    const model = try Model.init(std.testing.allocator);
+    defer model.deinit();
+    model.active = .utilities;
+    model.utilities_state.selected = .repository;
+    model.utilities_state.results_focused = true;
+    var ctx: vxfw.EventContext = .{ .io = std.testing.io, .alloc = model.gpa, .cmds = .empty };
+    defer ctx.cmds.deinit(model.gpa);
+    try operation_model.openRepositoryPrompt(model, &ctx, "included-test", null);
+    model.overlay.?.sudo.state = .succeeded;
+    try model.utilities_state.repositories.verifyAfterOperation(model.gpa, "included-test", false);
+    const names = try std.json.parseFromSlice([][]const u8, model.gpa, "[\"included-test\"]", .{ .allocate = .alloc_always });
+    const job = try model.gpa.create(Job);
+    job.* = .{
+        .kind = .repositories,
+        .thread = try std.Thread.spawn(.{}, struct {
+            fn finish() void {}
+        }.finish, .{}),
+        .result = names,
+        .done = .init(true),
+    };
+    model.utilities_state.repositories.job = job;
+    try pollRepositories(model, &ctx);
+    try std.testing.expect(model.overlay.?.sudo.state == .failed);
+    try std.testing.expectEqualStrings("Repository is still configured. Check the included configuration files.", model.overlay.?.sudo.detail);
+    try std.testing.expectEqualStrings("included-test", model.utilities_state.repositories.selected().?);
 }

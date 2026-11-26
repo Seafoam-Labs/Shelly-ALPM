@@ -125,6 +125,13 @@ pub const ShellyCli = struct {
         return std.json.parseFromSlice([][]const u8, self.allocator, result.stdout, .{ .allocate = .alloc_always });
     }
 
+    pub fn getRepositories(self: ShellyCli) !std.json.Parsed([][]const u8) {
+        const result = try self.run(&.{ "utility", "repository", "--list" });
+        defer self.allocator.free(result.stdout);
+        defer self.allocator.free(result.stderr);
+        return decodeQuery([][]const u8, self.allocator, result.stdout, false);
+    }
+
     fn runPreviewQuery(self: ShellyCli, args: []const []const u8) !RunResult {
         preview_query_mutex.lockUncancelable(self.io);
         defer preview_query_mutex.unlock(self.io);

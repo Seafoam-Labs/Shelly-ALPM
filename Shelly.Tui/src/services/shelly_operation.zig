@@ -17,6 +17,12 @@ pub const Action = enum {
     sync,
     purify,
     repair_permissions,
+    repository_add,
+    repository_remove,
+
+    pub fn isRepositoryMutation(self: Action) bool {
+        return self == .repository_add or self == .repository_remove;
+    }
 
     pub fn verb(self: Action) []const u8 {
         return switch (self) {
@@ -26,6 +32,8 @@ pub const Action = enum {
             .sync => "Sync",
             .purify => "Clean",
             .repair_permissions => "Repair",
+            .repository_add => "Add repository",
+            .repository_remove => "Remove repository",
         };
     }
 
@@ -37,6 +45,8 @@ pub const Action = enum {
             .sync => "Synchronized",
             .purify => "Cleaned",
             .repair_permissions => "Repaired",
+            .repository_add => "Added repository",
+            .repository_remove => "Removed repository",
         };
     }
 };
@@ -79,6 +89,7 @@ pub const OperationRequest = struct {
     shelly_bin: []const u8,
     environ_map: *const std.process.Environ.Map,
     name: []const u8,
+    repository_url: ?[]const u8 = null,
     targets: []const []const u8 = &.{},
     backend: []const u8,
     launcher_bin: ?[]const u8 = null,
@@ -442,6 +453,7 @@ pub const Operation = struct {
         self.request.sudo_bin = try alloc.dupe(u8, request.sudo_bin);
         self.request.shelly_bin = try alloc.dupe(u8, request.shelly_bin);
         self.request.name = try alloc.dupe(u8, request.name);
+        if (request.repository_url) |url| self.request.repository_url = try alloc.dupe(u8, url);
         const targets = try alloc.alloc([]const u8, request.targets.len);
         for (request.targets, targets) |source, *target| target.* = try alloc.dupe(u8, source);
         self.request.targets = targets;
@@ -511,6 +523,13 @@ fn elevated(request: OperationRequest) bool {
 fn operationArgv(alloc: std.mem.Allocator, request: OperationRequest) ![][]const u8 {
     if (request.action == .repair_permissions) {
         return alloc.dupe([]const u8, &.{ request.sudo_bin, request.shelly_bin, "utility", "--fix-permissions", "--ui-mode" });
+    }
+    if (request.action.isRepositoryMutation()) {
+        if (request.action == .repository_add) {
+            const url = request.repository_url orelse return error.MissingRepositoryUrl;
+            return alloc.dupe([]const u8, &.{ request.sudo_bin, request.shelly_bin, "utility", "repository", "--add", "--ui-mode", "--", request.name, url });
+        }
+        return alloc.dupe([]const u8, &.{ request.sudo_bin, request.shelly_bin, "utility", "repository", "--remove", "--ui-mode", "--", request.name });
     }
     const package_backend = std.mem.eql(u8, request.backend, "standard") or std.mem.eql(u8, request.backend, "aur");
     if (request.action == .purify and !std.mem.eql(u8, request.backend, "standard") and !isFlatpak(request)) return error.UnsupportedCleanupBackend;
@@ -722,7 +741,7 @@ fn runInstall(io: std.Io, alloc: std.mem.Allocator, request: OperationRequest, o
             if (plan.value.len != 0 and !stream.cleanup_reviewed) stream.failed = true;
         } else stream.failed = true;
     }
-    const missing_completion = (request.action == .upgrade or request.action == .sync or interactive(request)) and (!stream.transaction_done or stream.transaction_depth != 0);
+    const missing_completion = (request.action == .upgrade or request.action == .sync or request.action.isRepositoryMutation() or interactive(request)) and (!stream.transaction_done or stream.transaction_depth != 0);
     if (term != .exited or term.exited != 0 or read_failed or stream.failed or stream.transaction_cancelled or missing_completion or result.declined) {
         const detail = if (stream.transaction_cancelled)
             "The operation was cancelled. Refresh package state before retrying."

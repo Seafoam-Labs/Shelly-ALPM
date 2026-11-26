@@ -134,6 +134,13 @@ pub fn resolve(self: *Model) commands.Context {
         },
         .utilities => {
             context.mode = .utilities;
+            if (self.utilities_state.selected == .repository) {
+                context.repositories = true;
+                context.repository_editing = self.utilities_state.repositories.editing != null;
+                context.repository_selected = self.utilities_state.repositories.selected() != null;
+                context.utilities_results = self.utilities_state.results_focused;
+                return context;
+            }
             const state = &self.utilities_state;
             context.pacfile_preview = state.preview_open;
             context.source_wrap = state.preview_wrap;
