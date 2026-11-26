@@ -107,6 +107,9 @@ pub const base_read_only_paths: []const []const u8 = &.{
 /// tmpfs, so this remains host-visible. `/dev/null` is writable as well so
 /// `> /dev/null` redirection works.
 pub const base_read_write_paths: []const []const u8 = &.{ "/tmp", "/dev/null" };
+/// skipped when missing. the rule follows the symlink, so resolvers that read
+/// resolv.conf themselves can reach its target under /run.
+pub const base_optional_read_only_paths: []const []const u8 = &.{"/etc/resolv.conf"};
 
 const RulesetAttr = extern struct {
     handled_access_fs: u64,
@@ -136,6 +139,7 @@ pub fn abiVersion() u32 {
 pub const Policy = struct {
     read_write_paths: []const []const u8,
     read_only_paths: []const []const u8,
+    optional_read_only_paths: []const []const u8 = &.{},
 };
 
 /// Applies the Landlock policy to the calling process. Irreversible and
@@ -159,9 +163,11 @@ pub fn applyPolicy(allocator: std.mem.Allocator, policy: Policy) (SandboxError |
     defer _ = std.os.linux.close(ruleset_fd);
 
     for (policy.read_write_paths) |path|
-        try addPathRule(allocator, ruleset_fd, full_mask, path);
+        try addPathRule(allocator, ruleset_fd, full_mask, path, false);
     for (policy.read_only_paths) |path|
-        try addPathRule(allocator, ruleset_fd, read_only_access, path);
+        try addPathRule(allocator, ruleset_fd, read_only_access, path, false);
+    for (policy.optional_read_only_paths) |path|
+        try addPathRule(allocator, ruleset_fd, read_only_access, path, true);
 
     const restrict_rc = std.os.linux.syscall2(.landlock_restrict_self, @intCast(ruleset_fd), 0);
     if (std.os.linux.errno(restrict_rc) != .SUCCESS) return error.SandboxRestrictFailed;
@@ -172,11 +178,16 @@ fn addPathRule(
     ruleset_fd: i32,
     allowed_access: u64,
     path: []const u8,
+    optional: bool,
 ) (SandboxError || error{OutOfMemory})!void {
     const path_z = try allocator.dupeSentinel(u8, path, 0);
     defer allocator.free(path_z);
     const fd_rc = std.os.linux.open(path_z.ptr, .{ .PATH = true, .CLOEXEC = true }, 0);
-    if (std.os.linux.errno(fd_rc) != .SUCCESS) return error.SandboxPathUnopenable;
+    switch (std.os.linux.errno(fd_rc)) {
+        .SUCCESS => {},
+        .NOENT, .NOTDIR => if (optional) return else return error.SandboxPathUnopenable,
+        else => return error.SandboxPathUnopenable,
+    }
     const parent_fd: i32 = @intCast(fd_rc);
     defer _ = std.os.linux.close(parent_fd);
     var rule = PathBeneathAttr{

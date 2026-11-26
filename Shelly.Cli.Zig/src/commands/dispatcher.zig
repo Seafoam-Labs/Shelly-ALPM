@@ -29,6 +29,7 @@ pub fn dispatch(
     invocation: *const parser.Invocation,
 ) !u8 {
     if (try config.dispatch(context, invocation)) |exit_code| return exit_code;
+    if (try utility.dispatchManifestOutput(context, invocation)) |exit_code| return exit_code;
     try native_backend.apply(context);
     if (try search_install.dispatch(context, invocation)) |exit_code| return exit_code;
     if (try upgrade.dispatch(context, invocation)) |exit_code| return exit_code;

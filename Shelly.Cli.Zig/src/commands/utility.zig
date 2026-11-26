@@ -66,6 +66,22 @@ pub fn dispatch(
     return try execute(context, invocation, operation, Real{});
 }
 
+/// docs and completions need no config, so packaging can run them in a
+/// sandboxed build step.
+pub fn dispatchManifestOutput(
+    context: *runtime.RuntimeContext,
+    invocation: *const parser.Invocation,
+) !?u8 {
+    if (!std.mem.eql(u8, invocation.command.path, command_path)) return null;
+    const selection = selectOperation(invocation);
+    if (selection != .operation) return null;
+    return switch (selection.operation) {
+        .docs => try generateDocs(context),
+        .completions => |shell| try generateCompletions(context, shell),
+        else => null,
+    };
+}
+
 fn execute(
     context: *runtime.RuntimeContext,
     invocation: *const parser.Invocation,

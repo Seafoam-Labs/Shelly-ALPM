@@ -74,12 +74,13 @@ else
     # A saved choice from a different build must remain visible and repairable.
     printf '%s\n' '{"NativePackageBackend":"libalpm"}' > "$XDG_CONFIG_HOME/shelly/config.json"
     [[ $("$cli" config get NativePackageBackend) == libalpm ]]
-    if "$cli" utility --completions bash > "$stage/error" 2>&1; then exit 1; fi
+    # Docs and completions skip the backend, so probe with a read-only command.
+    if "$cli" list standard > "$stage/error" 2>&1; then exit 1; fi
     grep -q 'BackendUnavailable' "$stage/error"
 fi
 for invalid in '"unknown"' '42' 'null'; do
     printf '{"NativePackageBackend":%s}\n' "$invalid" > "$XDG_CONFIG_HOME/shelly/config.json"
-    if "$cli" utility --completions bash > "$stage/error" 2>&1; then exit 1; fi
+    if "$cli" list standard > "$stage/error" 2>&1; then exit 1; fi
     grep -q 'InvalidBackend' "$stage/error"
     "$cli" config set NativePackageBackend rlpm > /dev/null
     [[ $("$cli" config get NativePackageBackend) == rlpm ]]

@@ -80,8 +80,31 @@ pub fn generate(self: *PackageBuilder, operation: *Operation, evaluated: *const 
             var source = try source_spec.ParsedSource.parse(allocator, raw);
             defer source.deinit(allocator);
             const destination = try std.fmt.allocPrint(scratch, "{s}/{d}-{d}", .{ staging, group_index, index });
-            try sources.acquireSource(self, operation, source, destination);
             const moving = source.kind == .git and (source.reference == null or source.reference.?.kind == .branch);
+            // Git sources whose every selected digest is SKIP (or moving) are
+            // not acquired, archived, or hashed; a ref probe still validates
+            // branch/tag existence. HTTP and local sources keep acquiring.
+            var needs_download = source.kind != .git;
+            if (source.kind == .git and !moving) {
+                for (algorithms, 0..) |_, a| {
+                    if (!selected[a]) continue;
+                    const previous = evaluated.arrays.get(sum_names[a]) orelse &.{};
+                    if (index >= previous.len or !std.ascii.eqlIgnoreCase(previous[index], "SKIP")) {
+                        needs_download = true;
+                        break;
+                    }
+                }
+            }
+            if (!needs_download) {
+                try sources.probeSkippedGitRef(self, operation, source);
+                for (algorithms, 0..) |_, a| {
+                    if (!selected[a]) continue;
+                    if (index > 0) try output[a].writer.writeAll("\n            ");
+                    try output[a].writer.writeAll("'SKIP'");
+                }
+                continue;
+            }
+            try sources.acquireSource(self, operation, source, destination);
             var prepared = source_spec.PreparedSource{ .source = source, .destination = destination, .index = index };
             const archive_path = if (source.kind == .git and !moving) try sources.gitChecksumArchive(self, operation, &prepared) else null;
             defer if (archive_path) |path| {
