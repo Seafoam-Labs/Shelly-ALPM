@@ -1,10 +1,12 @@
 const std = @import("std");
+const aur_rows = @import("aur_rows.zig");
 const bindings = @import("Shelly_Ui_Gtk");
 const gtk = bindings.gtk;
 const gio = bindings.gio;
 const glib = bindings.glib;
 const gobject = bindings.gobject;
 const support = @import("support.zig");
+const Toast = @import("../helpers/custom_ui_comps/toast.zig").Toast;
 const AurPackageObject = @import("../g_objects/aur_package_object.zig").AurPackageObject;
 const ConfirmDialog = @import("../dialog/page/yn_dialog.zig").ConfirmDialog;
 const ShellyWindow = @import("../shelly_window.zig").ShellyWindow;
@@ -38,6 +40,7 @@ pub const AtollAurPage = extern struct {
         installed_toggle: *gtk.CheckButton,
         install_button: *gtk.Button,
         grid_overlay: *gtk.Overlay,
+        toast: *Toast,
         loading_box: *gtk.Box,
         loading_spinner: *gtk.Spinner,
         placeholder_box: *gtk.Box,
@@ -63,6 +66,8 @@ pub const AtollAurPage = extern struct {
         show_detail_pane: bool,
         arena: ?*std.heap.ArenaAllocator,
         generation: u64,
+        // every row of the current view is in the list.
+        rows_complete: bool,
         loaded: bool,
         loading: bool,
         applying_config: bool,
@@ -96,6 +101,7 @@ pub const AtollAurPage = extern struct {
         generation: u64,
         index: usize = 0,
         failed: bool = false,
+        keep_rows: bool = false,
         index_page: u32 = 0,
         index_total_pages: u32 = 0,
         installed_names: []const []const u8 = &.{},
@@ -130,6 +136,7 @@ pub const AtollAurPage = extern struct {
         p.applying_config = false;
         p.arena = null;
         p.generation = 0;
+        p.rows_complete = false;
         p.installed_mode = false;
         p.mode = .browse;
         p.search_by = .relevance;
@@ -200,6 +207,10 @@ pub const AtollAurPage = extern struct {
         gtk.Widget.insertActionGroup(self.as(gtk.Widget), "search", group.as(gio.ActionGroup));
 
         self.update_selection_ui();
+        const toast = Toast.new();
+        gtk.Overlay.addOverlay(p.grid_overlay, toast.as(gtk.Widget));
+        p.toast = toast;
+
         support.connectLifecycle(Self, self);
     }
 
@@ -560,7 +571,7 @@ pub const AtollAurPage = extern struct {
         // The page is the focus stop, so a page switch lands on its group name
         // and Tab reaches the search entry from there.
         _ = a11y.focusFirst(self.as(gtk.Widget));
-        restore_current_view(self);
+        restore_current_view(self, true);
     }
 
     fn applyOptionsFromConfig(self: *Self) void {
@@ -599,7 +610,8 @@ pub const AtollAurPage = extern struct {
         p.loaded = false;
 
         p.generation += 1;
-        gio.ListStore.removeAll(p.list_store);
+        self.clear_selection();
+        if (!p.rows_complete) gio.ListStore.removeAll(p.list_store);
 
         if (p.arena) |a| {
             a.deinit();
@@ -610,19 +622,23 @@ pub const AtollAurPage = extern struct {
         _ = malloc_trim(0);
     }
 
-    fn start_load(self: *Self, mode: Mode) void {
+    fn start_load(self: *Self, mode: Mode, keep_rows: bool) void {
         const p = self.priv();
         p.mode = mode;
         p.search_by = self.selectedBy();
         p.generation += 1;
         p.loading = true;
-        gio.ListStore.removeAll(p.list_store);
+        const keep = keep_rows and p.rows_complete;
+        if (!keep) {
+            p.rows_complete = false;
+            gio.ListStore.removeAll(p.list_store);
+        }
         self.update_selection_ui();
         self.update_pager();
-        self.set_state(.loading);
+        if (!keep) self.set_state(.loading);
 
-        const thread = std.Thread.spawn(.{}, load_worker, .{ self, p.generation, mode }) catch {
-            self.set_state(.err);
+        const thread = std.Thread.spawn(.{}, load_worker, .{ self, p.generation, mode, keep }) catch {
+            if (!keep) self.set_state(.err);
             self.end_load();
             return;
         };
@@ -637,7 +653,7 @@ pub const AtollAurPage = extern struct {
         }
     }
 
-    fn load_worker(page: *Self, generation: u64, mode: Mode) void {
+    fn load_worker(page: *Self, generation: u64, mode: Mode, keep_rows: bool) void {
         const arena_ptr = std.heap.c_allocator.create(std.heap.ArenaAllocator) catch return;
         arena_ptr.* = std.heap.ArenaAllocator.init(std.heap.c_allocator);
         const alloc = arena_ptr.allocator();
@@ -658,10 +674,10 @@ pub const AtollAurPage = extern struct {
                     index_order,
                 ) catch |err| {
                     std.debug.print("atoll_index failed: {t}\n", .{err});
-                    post_failure(page, arena_ptr, generation);
+                    post_failure(page, arena_ptr, generation, keep_rows);
                     return;
                 };
-                post_index_result(page, index, arena_ptr, generation, fetchInstalledNames(alloc, ShellyCli{ .allocator = alloc, .io = threaded.io() }));
+                post_index_result(page, index, arena_ptr, generation, keep_rows, fetchInstalledNames(alloc, ShellyCli{ .allocator = alloc, .io = threaded.io() }));
             },
             .search => {
                 var atoll = AtollApiService.init(alloc, threaded.io());
@@ -669,25 +685,25 @@ pub const AtollAurPage = extern struct {
 
                 const p = page.priv();
                 const query = alloc.dupe(u8, p.last_query[0..p.last_query_len]) catch {
-                    post_failure(page, arena_ptr, generation);
+                    post_failure(page, arena_ptr, generation, keep_rows);
                     return;
                 };
                 const packages = atoll.search(query, p.search_by) catch |err| {
                     std.debug.print("atoll_search failed: {t}\n", .{err});
-                    post_failure(page, arena_ptr, generation);
+                    post_failure(page, arena_ptr, generation, keep_rows);
                     return;
                 };
                 const cli = ShellyCli{ .allocator = alloc, .io = threaded.io() };
-                post_result(page, packages, arena_ptr, generation, fetchInstalledNames(alloc, cli), false);
+                post_result(page, packages, arena_ptr, generation, keep_rows, fetchInstalledNames(alloc, cli), false);
             },
             .installed => {
                 const cli = ShellyCli{ .allocator = alloc, .io = threaded.io() };
                 const parsed = cli.list_aur_installed() catch |err| {
                     std.debug.print("aur_installed failed: {t}\n", .{err});
-                    post_failure(page, arena_ptr, generation);
+                    post_failure(page, arena_ptr, generation, keep_rows);
                     return;
                 };
-                post_result(page, parsed.value, arena_ptr, generation, &.{}, true);
+                post_result(page, parsed.value, arena_ptr, generation, keep_rows, &.{}, true);
             },
         }
     }
@@ -708,10 +724,11 @@ pub const AtollAurPage = extern struct {
         packages: []AurPackage,
         arena: *std.heap.ArenaAllocator,
         generation: u64,
+        keep_rows: bool,
         installed_names: []const []const u8,
         all_installed: bool,
     ) void {
-        post(page, packages, arena, generation, 0, 0, installed_names, all_installed);
+        post(page, packages, arena, generation, keep_rows, 0, 0, installed_names, all_installed);
     }
 
     fn post_index_result(
@@ -719,9 +736,10 @@ pub const AtollAurPage = extern struct {
         index: AtollApiService.IndexPage,
         arena: *std.heap.ArenaAllocator,
         generation: u64,
+        keep_rows: bool,
         installed_names: []const []const u8,
     ) void {
-        post(page, index.packages, arena, generation, index.page, index.total_pages, installed_names, false);
+        post(page, index.packages, arena, generation, keep_rows, index.page, index.total_pages, installed_names, false);
     }
 
     fn post(
@@ -729,6 +747,7 @@ pub const AtollAurPage = extern struct {
         packages: []AurPackage,
         arena: *std.heap.ArenaAllocator,
         generation: u64,
+        keep_rows: bool,
         index_page: u32,
         index_total_pages: u32,
         installed_names: []const []const u8,
@@ -744,6 +763,7 @@ pub const AtollAurPage = extern struct {
             .packages = packages,
             .arena = arena,
             .generation = generation,
+            .keep_rows = keep_rows,
             .index_page = index_page,
             .index_total_pages = index_total_pages,
             .installed_names = installed_names,
@@ -752,7 +772,7 @@ pub const AtollAurPage = extern struct {
         _ = glib.idleAdd(&onLoadComplete, result);
     }
 
-    fn post_failure(page: *Self, arena: *std.heap.ArenaAllocator, generation: u64) void {
+    fn post_failure(page: *Self, arena: *std.heap.ArenaAllocator, generation: u64, keep_rows: bool) void {
         const result = std.heap.c_allocator.create(LoadResult) catch {
             arena.deinit();
             std.heap.c_allocator.destroy(arena);
@@ -763,6 +783,7 @@ pub const AtollAurPage = extern struct {
             .packages = &.{},
             .arena = arena,
             .generation = generation,
+            .keep_rows = keep_rows,
             .failed = true,
         };
         _ = glib.idleAdd(&onLoadComplete, result);
@@ -785,6 +806,13 @@ pub const AtollAurPage = extern struct {
         }
 
         if (result.failed) {
+            // the rows on screen are better than an error in their place.
+            if (result.keep_rows) {
+                p.toast.show(.warning, translations._("Could not reach Atoll"));
+                page.end_load();
+                finish(result);
+                return 0;
+            }
             page.set_state(.err);
             page.update_selection_ui();
             page.end_load();
@@ -799,7 +827,27 @@ pub const AtollAurPage = extern struct {
         page.update_pager();
 
         if (result.packages.len == 0) {
+            p.rows_complete = false;
+            gio.ListStore.removeAll(p.list_store);
             page.set_state(.empty);
+            page.update_selection_ui();
+            page.end_load();
+            finish(result);
+            return 0;
+        }
+
+        if (result.keep_rows) {
+            aur_rows.update(p.list_store, p.selection, result.packages);
+            // Rows the diff rebuilt still need the marks the loader would have given them.
+            const model = p.list_store.as(gio.ListModel);
+            const n = gio.ListModel.getNItems(model);
+            var row: c_uint = 0;
+            while (row < n) : (row += 1) {
+                const object = gio.ListModel.getObject(model, row) orelse continue;
+                defer object.unref();
+                const pkg = gobject.ext.cast(AurPackageObject, object) orelse continue;
+                pkg.setInstalled(result.all_installed or aurInstalledContains(result.installed_names, pkg.getName()));
+            }
             page.update_selection_ui();
             page.end_load();
             finish(result);
@@ -823,6 +871,7 @@ pub const AtollAurPage = extern struct {
 
         result.index = end;
         if (result.index < result.packages.len) return 1;
+        p.rows_complete = true;
 
         page.set_state(.results);
         page.update_selection_ui();
@@ -853,7 +902,7 @@ pub const AtollAurPage = extern struct {
         if (text.len == 0) {
             p.last_query_len = 0;
             p.current_page = 1;
-            self.start_load(.browse);
+            self.start_load(.browse, false);
             return;
         }
 
@@ -861,18 +910,18 @@ pub const AtollAurPage = extern struct {
         @memcpy(p.last_query[0..len], text[0..len]);
         p.last_query_len = len;
 
-        self.start_load(.search);
+        self.start_load(.search, false);
     }
 
-    fn restore_current_view(self: *Self) void {
+    fn restore_current_view(self: *Self, keep_rows: bool) void {
         const p = self.priv();
 
         if (p.installed_mode) {
-            self.start_load(.installed);
+            self.start_load(.installed, keep_rows);
         } else if (p.last_query_len > 0) {
-            self.start_load(.search);
+            self.start_load(.search, keep_rows);
         } else {
-            self.start_load(.browse);
+            self.start_load(.browse, keep_rows);
         }
     }
 
@@ -900,26 +949,26 @@ pub const AtollAurPage = extern struct {
         const p = self.priv();
         if (p.current_page <= 1) return;
         p.current_page -= 1;
-        self.start_load(.browse);
+        self.start_load(.browse, false);
     }
 
     fn on_next_page(self: *Self) callconv(.c) void {
         const p = self.priv();
         if (p.total_pages != 0 and p.current_page >= p.total_pages) return;
         p.current_page += 1;
-        self.start_load(.browse);
+        self.start_load(.browse, false);
     }
 
     fn on_installed_toggled(self: *Self) callconv(.c) void {
         const p = self.priv();
         p.installed_mode = gtk.CheckButton.getActive(p.installed_toggle) != 0;
-        restore_current_view(self);
+        restore_current_view(self, false);
     }
 
     fn on_search_by_notify(_: *gobject.Object, _: *gobject.ParamSpec, self: *Self) callconv(.c) void {
         const p = self.priv();
         if (p.mode != .search or p.last_query_len == 0) return;
-        self.start_load(.search);
+        self.start_load(.search, false);
     }
 
     fn selectedBy(self: *Self) AtollApiService.By {
@@ -1035,7 +1084,7 @@ pub const AtollAurPage = extern struct {
         const self: *AtollAurPage = @ptrCast(@alignCast(ctx));
         if (!success) return;
         self.clear_selection();
-        restore_current_view(self);
+        restore_current_view(self, true);
     }
 
     const template_children = .{
