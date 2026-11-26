@@ -1195,7 +1195,7 @@ pub const Manager = struct {
                 const owned_name = try self.allocator.dupe(u8, package_name);
                 failures.append(self.allocator, .{
                     .package_name = owned_name,
-                    .reason = "The build for the requested package produced no matching package archive in the build output directory. Check the package() output and expected package names in the build details.",
+                    .reason = "The build for the requested package produced no matching package archive. Check the package() output and expected package names in the build details.",
                 }) catch |err| {
                     self.allocator.free(owned_name);
                     return err;
@@ -1578,7 +1578,7 @@ pub const Manager = struct {
         defer package_builder.deinitArtifacts(self.allocator, artifacts);
         self.raisePackageProgress(.aur_build_done, package_name, 1, 1, "");
         if (artifacts.len == 0) {
-            self.raisePackageProgress(.aur_package_failed, package_name, 1, 1, "The build for the requested package produced no matching package archive in the build output directory. Check the package() output and expected package names in the build details.");
+            self.raisePackageProgress(.aur_package_failed, package_name, 1, 1, "The build for the requested package produced no matching package archive. Check the package() output and expected package names in the build details.");
             return error.NoBuiltPackages;
         }
         self.raisePackageProgress(.aur_install_start, package_name, 1, 1, "");
@@ -1706,7 +1706,7 @@ pub const Manager = struct {
         defer package_builder.deinitArtifacts(self.allocator, artifacts);
         self.raisePackageProgress(.aur_build_done, dependency.package_name, 1, 1, "");
         if (artifacts.len == 0) {
-            self.raisePackageProgress(.aur_package_failed, dependency.package_name, 1, 1, "The build for the requested package produced no matching package archive in the build output directory. Check the package() output and expected package names in the build details.");
+            self.raisePackageProgress(.aur_package_failed, dependency.package_name, 1, 1, "The build for the requested package produced no matching package archive. Check the package() output and expected package names in the build details.");
             return error.NoBuiltPackages;
         }
         self.raisePackageProgress(.aur_install_start, dependency.package_name, 1, 1, "Installing AUR dependency");
@@ -1772,7 +1772,9 @@ pub const Manager = struct {
         self.raisePackageProgress(.aur_cleanup_start, package_name, current, total, "Removing build-only dependencies");
         var recoverable_errors = self.alpm.dispatcher.beginRecoverableErrors("Could not remove the build-only dependencies. Review the remaining dependencies before removing them manually.");
         defer recoverable_errors.deinit();
-        self.removeRepoPackages(installed.items, .{}, true, .already_approved) catch {};
+        // Recurse like pacman -Rs so dependencies that came in with the
+        // build-only packages and are needed by nothing else go too.
+        self.removeRepoPackages(installed.items, .{ .recurse = true }, true, .already_approved) catch {};
         self.raisePackageProgress(.aur_cleanup_done, package_name, current, total, "");
     }
 
@@ -2157,13 +2159,22 @@ pub const Manager = struct {
         requested_names: []const []const u8,
         historical: bool,
     ) ![]package_builder.BuildArtifact {
-        return self.buildPreparedPackageImpl(prepared, requested_names, historical) catch |err| {
+        const artifacts = self.buildPreparedPackageImpl(prepared, requested_names, historical) catch |err| {
             try self.checkCancelled();
             if (err == error.PkgbuildReviewDeclined) {
                 if (self.upgrade_reviews) |reviews| try reviews.decline(prepared.package_base);
             }
             return err;
         };
+        // an empty result keeps its own message. a partial one would install
+        // fewer packages than requested and still report success.
+        if (artifacts.len > 0) for (requested_names) |name| {
+            if (!artifactsContain(artifacts, name)) {
+                package_builder.deinitArtifacts(self.allocator, artifacts);
+                return error.RequestedPackageNotBuilt;
+            }
+        };
+        return artifacts;
     }
 
     fn buildPreparedPackageImpl(
@@ -2348,6 +2359,16 @@ pub const Manager = struct {
         // standalone build destination redirect the coordinator's exports.
         if (self.use_isolated)
             try arguments.appendSlice(self.allocator, &.{ "--package-destination", prepared.cache_path });
+        // sources share the cache, so ask the child what it built.
+        var report_directory: ?[]u8 = null;
+        defer if (report_directory) |directory| self.removeArtifactReportDirectory(directory);
+        var report_path: ?[]u8 = null;
+        defer if (report_path) |path| self.allocator.free(path);
+        if (!self.use_isolated) {
+            report_directory = try self.createArtifactReportDirectory();
+            report_path = try std.fs.path.join(self.allocator, &.{ report_directory.?, "artifacts" });
+            try arguments.appendSlice(self.allocator, &.{ "--artifact-report", report_path.? });
+        }
 
         // The isolated child is a privileged coordinator. It drops privileges
         // for review and runs lifecycle functions only in the guest.
@@ -2378,9 +2399,34 @@ pub const Manager = struct {
         );
         if (exit_code != 0) return error.BuildFailed;
 
+        if (report_path) |path| {
+            // the folder is the user's, so read as them: a planted symlink
+            // gets only their access and a fifo times out instead of hanging.
+            var report = try self.runAsInvokingUser(&.{ "cat", "--", path }, null, 30);
+            defer report.deinit(self.allocator);
+            if (report.exit_code != 0) return error.InvalidArtifactReport;
+            return artifactsFromReport(self.allocator, report.stdout, requested_names);
+        }
         const paths = try self.selectBuiltPackageFiles(prepared.cache_path, requested_names);
         defer builder.deinitPaths(self.allocator, paths);
         return artifactsFromPaths(self.allocator, paths, requested_names);
+    }
+
+    /// user-owned so the unprivileged build child can write the report.
+    fn createArtifactReportDirectory(self: *Self) ![]u8 {
+        var result = try self.runAsInvokingUser(&.{ "mktemp", "-d", "-p", "/tmp", artifact_report_prefix["/tmp/".len..] ++ "XXXXXXXXXX" }, null, null);
+        defer result.deinit(self.allocator);
+        if (result.exit_code != 0) return error.CallerOperationFailed;
+        const directory = std.mem.trim(u8, result.stdout, " \t\r\n");
+        // rm -rf runs on this path later, so accept only mktemp's own folder.
+        if (!isArtifactReportDirectory(directory)) return error.CallerOperationFailed;
+        return self.allocator.dupe(u8, directory);
+    }
+
+    fn removeArtifactReportDirectory(self: *Self, directory: []u8) void {
+        defer self.allocator.free(directory);
+        var result = self.runAsInvokingUser(&.{ "rm", "-rf", "--", directory }, null, null) catch return;
+        result.deinit(self.allocator);
     }
 
     fn ensureSourcePgpKeys(
@@ -2883,7 +2929,8 @@ pub const Manager = struct {
             var remote = try self.runAsInvokingUser(&.{ "git", "-C", cache_path, "remote", "get-url", "origin" }, null, null);
             defer remote.deinit(self.allocator);
             if (remote.exit_code == 0 and std.mem.eql(u8, std.mem.trim(u8, remote.stdout, " \t\r\n"), expected_remote)) {
-                var pull = try self.runAsInvokingUser(&.{ "git", "-C", cache_path, "pull", "--ff-only" }, null, null);
+                // pull.rebase in the user's config would refuse a dirty checkout.
+                var pull = try self.runAsInvokingUser(&.{ "git", "-C", cache_path, "pull", "--ff-only", "--no-rebase" }, null, null);
                 defer pull.deinit(self.allocator);
                 clone_needed = pull.exit_code != 0;
             }
@@ -2948,6 +2995,12 @@ pub const Manager = struct {
             }
         } else |_| {}
 
+        // remove only this pkgbase's old builds. downloaded or tracked
+        // .pkg.tar.* sources stay in the cache.
+        const srcinfo_path = try std.fs.path.join(self.allocator, &.{ cache_path, ".SRCINFO" });
+        defer self.allocator.free(srcinfo_path);
+        var info = srcinfo.parseFile(self.allocator, self.io(), srcinfo_path) catch return;
+        defer info.deinit(self.allocator);
         var directory = std.Io.Dir.cwd().openDir(self.io(), cache_path, .{ .iterate = true }) catch return;
         defer directory.close(self.io());
         var iterator = directory.iterate();
@@ -2957,7 +3010,11 @@ pub const Manager = struct {
             stale_paths.deinit(self.allocator);
         }
         while (try iterator.next(self.io())) |entry| {
-            if (entry.kind != .file or !builder.isPackageArchiveArtifact(entry.name)) continue;
+            if (entry.kind != .file) continue;
+            const built = for (info.package_names) |name| {
+                if (builder.isBuiltPackageFileFor(entry.name, name)) break true;
+            } else false;
+            if (!built) continue;
             try stale_paths.append(self.allocator, try std.fs.path.join(self.allocator, &.{ cache_path, entry.name }));
         }
         for (stale_paths.items) |path| {
@@ -3611,6 +3668,7 @@ fn buildFailureReason(err: anyerror) []const u8 {
         error.InvokingUserUnavailable => "Could not identify a regular user to run the build. Start Shelly from your regular user session and allow Shelly to request administrator privileges when needed.",
         error.ReviewedPkgbuildChanged, error.ReviewedCheckoutChanged => "The reviewed checkout or PKGBUILD inputs changed before the build started. Review the current checkout and source files again, then restart the build.",
         error.Cancelled => "Operation cancelled.",
+        error.RequestedPackageNotBuilt => "The build did not produce every requested package from this package base. Check the package() functions and supported architectures in the build details.",
         else => "Could not build the requested package. See the build details for the failed stage and command output.",
     };
 }
@@ -3654,6 +3712,12 @@ fn artifactPaths(
     return paths;
 }
 
+fn artifactsContain(artifacts: []const package_builder.BuildArtifact, package_name: []const u8) bool {
+    for (artifacts) |artifact|
+        if (std.mem.eql(u8, artifact.package_name, package_name)) return true;
+    return false;
+}
+
 fn artifactsFromPaths(
     allocator: std.mem.Allocator,
     paths: []const []const u8,
@@ -3681,15 +3745,58 @@ fn artifactsFromPaths(
     return artifacts;
 }
 
+/// parses the build child's `name \t path` lines and keeps requested members.
+const artifact_report_prefix = "/tmp/shelly-aur-artifacts.";
+
+fn isArtifactReportDirectory(path: []const u8) bool {
+    if (!std.mem.startsWith(u8, path, artifact_report_prefix)) return false;
+    const suffix = path[artifact_report_prefix.len..];
+    if (suffix.len != 10) return false;
+    for (suffix) |char| if (!std.ascii.isAlphanumeric(char)) return false;
+    return true;
+}
+
+fn artifactsFromReport(
+    allocator: std.mem.Allocator,
+    contents: []const u8,
+    requested_names: []const []const u8,
+) ![]package_builder.BuildArtifact {
+    var artifacts: std.ArrayList(package_builder.BuildArtifact) = .empty;
+    errdefer {
+        for (artifacts.items) |artifact| artifact.deinit(allocator);
+        artifacts.deinit(allocator);
+    }
+    var lines = std.mem.splitScalar(u8, contents, '\n');
+    while (lines.next()) |line| {
+        if (line.len == 0) continue;
+        const separator = std.mem.indexOfScalar(u8, line, '\t') orelse return error.InvalidArtifactReport;
+        const package_name = line[0..separator];
+        const path = line[separator + 1 ..];
+        if (package_name.len == 0 or !std.fs.path.isAbsolute(path)) return error.InvalidArtifactReport;
+        // the user-run build can rewrite the report.
+        if (!builder.isBuiltPackageFileFor(std.fs.path.basename(path), package_name)) return error.InvalidArtifactReport;
+        if (!containsConst(requested_names, package_name)) continue;
+        const owned_path = try allocator.dupeSentinel(u8, path, 0);
+        errdefer allocator.free(owned_path);
+        const owned_name = try allocator.dupe(u8, package_name);
+        errdefer allocator.free(owned_name);
+        try artifacts.append(allocator, .{ .path = owned_path, .package_name = owned_name });
+    }
+    return artifacts.toOwnedSlice(allocator);
+}
+
 fn packageNameForArtifact(path: []const u8, requested_names: []const []const u8) ?[]const u8 {
     const file_name = std.fs.path.basename(path);
-    var match: ?[]const u8 = null;
-    for (requested_names) |name| {
-        if (file_name.len <= name.len or file_name[name.len] != '-' or
-            !std.mem.startsWith(u8, file_name, name)) continue;
-        if (match == null or name.len > match.?.len) match = name;
-    }
-    return match;
+    for (requested_names) |name|
+        if (builder.isBuiltPackageFileFor(file_name, name)) return name;
+    return null;
+}
+
+test "AUR artifact labels use the exact package file name" {
+    const names: []const []const u8 = &.{ "foo-bar", "foo-bar-1" };
+    try std.testing.expectEqualStrings("foo-bar", packageNameForArtifact("/cache/foo-bar-1-1-any.pkg.tar.zst", names).?);
+    try std.testing.expectEqualStrings("foo-bar-1", packageNameForArtifact("/cache/foo-bar-1-2-3-any.pkg.tar.zst", names).?);
+    try std.testing.expect(packageNameForArtifact("/cache/foo-bar-debug-1-1-any.pkg.tar.zst", names) == null);
 }
 
 fn forwardBuildLine(data: ?*anyopaque, stream: builder.StreamKind, line: []const u8) void {
@@ -4297,6 +4404,143 @@ test "AUR isolated builds execute the coordinator and propagate failure without 
     defer dependencies.aur.deinit(allocator);
     try dependencies.aur.append(allocator, .{ .prepared = prepared, .role = .build });
     try std.testing.expectError(error.IsolatedAurDependencyUnsupported, manager.installCollection(&dependencies));
+}
+
+test "AUR build preparation removes old builds but keeps package sources" {
+    const allocator = std.testing.allocator;
+    const io = std.testing.io;
+    var paths = try createAurManagerFixturePaths(allocator, io);
+    defer paths.deinit(allocator);
+    try createAurFixtureRepository(allocator, io, paths.remote_root, "demo", null);
+    var manager = try initFixtureAurManager(allocator, &paths, paths.remote_root);
+    defer manager.deinit();
+    _ = try manager.cachePkgbase("demo", "demo");
+    const Approval = struct {
+        fn answer(_: ?*anyopaque, _: PkgbuildDiffRequest) bool {
+            return true;
+        }
+    };
+    manager.setPkgbuildApprovalHandler(.{ .function = Approval.answer });
+    var prepared = try manager.preparePackageForBuild("demo", null);
+    defer prepared.deinit(allocator);
+    const cache_path = prepared.cache_path;
+    const kept = [_][]const u8{ "demo-1.pkg.tar.zst", "other-1-1-any.pkg.tar.zst" };
+    const removed = [_][]const u8{ "demo-1-1-any.pkg.tar.zst", "demo-1-1-any.pkg.tar.zst.sig" };
+    for (kept ++ removed) |name| {
+        const path = try std.fs.path.join(allocator, &.{ cache_path, name });
+        defer allocator.free(path);
+        try writeFixtureFile(io, path, "", false);
+    }
+    try manager.prepareBuildDirectory(cache_path);
+    for (kept) |name| {
+        const path = try std.fs.path.join(allocator, &.{ cache_path, name });
+        defer allocator.free(path);
+        try std.Io.Dir.cwd().access(io, path, .{});
+    }
+    for (removed) |name| {
+        const path = try std.fs.path.join(allocator, &.{ cache_path, name });
+        defer allocator.free(path);
+        try std.testing.expectError(error.FileNotFound, std.Io.Dir.cwd().access(io, path, .{}));
+    }
+}
+
+test "AUR builds fail when a requested split package is missing" {
+    const allocator = std.testing.allocator;
+    const io = std.testing.io;
+    var paths = try createAurManagerFixturePaths(allocator, io);
+    defer paths.deinit(allocator);
+    try createAurFixtureRepository(allocator, io, paths.remote_root, "demo", null);
+    var manager = try initFixtureAurManager(allocator, &paths, paths.remote_root);
+    defer manager.deinit();
+    _ = try manager.cachePkgbase("demo", "demo");
+    const Approval = struct {
+        fn answer(_: ?*anyopaque, _: PkgbuildDiffRequest) bool {
+            return true;
+        }
+    };
+    manager.setPkgbuildApprovalHandler(.{ .function = Approval.answer });
+    var prepared = try manager.preparePackageForBuild("demo", null);
+    defer prepared.deinit(allocator);
+    const command_path = try std.fs.path.join(allocator, &.{ paths.root, "fake-makepkg" });
+    defer allocator.free(command_path);
+    try writeFixtureFile(io, command_path, "#!/bin/sh\n: > demo-1-1-any.pkg.tar.zst\n", true);
+    manager.makepkg_command = try allocator.dupe(u8, command_path);
+    try std.testing.expectError(error.RequestedPackageNotBuilt, manager.buildPreparedPackage(&prepared, &.{ "demo", "demo-docs" }, false));
+}
+
+test "AUR command builds install only reported artifacts, not downloaded package sources" {
+    // non-isolated command builds run the child as the invoking user, which
+    // root without one (as in CI containers) does not have.
+    if (std.c.geteuid() == 0) return error.SkipZigTest;
+    const allocator = std.testing.allocator;
+    const io = std.testing.io;
+    var paths = try createAurManagerFixturePaths(allocator, io);
+    defer paths.deinit(allocator);
+    try createAurFixtureRepository(allocator, io, paths.remote_root, "demo", null);
+    var manager = try initFixtureAurManager(allocator, &paths, paths.remote_root);
+    defer manager.deinit();
+    _ = try manager.cachePkgbase("demo", "demo");
+    const Approval = struct {
+        fn answer(_: ?*anyopaque, _: PkgbuildDiffRequest) bool {
+            return true;
+        }
+    };
+    manager.setPkgbuildApprovalHandler(.{ .function = Approval.answer });
+    var prepared = try manager.preparePackageForBuild("demo", null);
+    defer prepared.deinit(allocator);
+    const command_path = try std.fs.path.join(allocator, &.{ paths.root, "fake-build-child" });
+    defer allocator.free(command_path);
+    try writeFixtureFile(io, command_path,
+        \\#!/bin/sh
+        \\set -eu
+        \\report=
+        \\while [ $# -gt 0 ]; do
+        \\  if [ "$1" = --artifact-report ]; then report=$2; fi
+        \\  shift
+        \\done
+        \\: > demo-1-linux-x86_64.pkg.tar.zst
+        \\: > demo-1-1-any.pkg.tar.zst
+        \\dirname "$report" > report.dir
+        \\printf 'demo\t%s/demo-1-1-any.pkg.tar.zst\ndemo-docs\t%s/demo-docs-1-1-any.pkg.tar.zst\n' "$(pwd)" "$(pwd)" > "$report"
+        \\
+    , true);
+    manager.build_command = try allocator.dupe(u8, command_path);
+    const artifacts = try manager.buildPreparedPackage(&prepared, &.{"demo"}, false);
+    defer package_builder.deinitArtifacts(allocator, artifacts);
+    try std.testing.expectEqual(@as(usize, 1), artifacts.len);
+    try std.testing.expectEqualStrings("demo", artifacts[0].package_name);
+    try std.testing.expect(std.mem.endsWith(u8, artifacts[0].path, "/demo-1-1-any.pkg.tar.zst"));
+
+    const report_dir_path = try std.fs.path.join(allocator, &.{ prepared.cache_path, "report.dir" });
+    defer allocator.free(report_dir_path);
+    const report_dir = try std.Io.Dir.cwd().readFileAlloc(io, report_dir_path, allocator, .limited(4096));
+    defer allocator.free(report_dir);
+    try std.testing.expect(report_dir.len > 1);
+    try std.testing.expectError(error.FileNotFound, std.Io.Dir.cwd().access(io, std.mem.trimEnd(u8, report_dir, "\n"), .{}));
+}
+
+test "AUR artifact report folders accept only mktemp's folder" {
+    try std.testing.expect(isArtifactReportDirectory("/tmp/shelly-aur-artifacts.aB3dE5gH7j"));
+    try std.testing.expect(!isArtifactReportDirectory("/"));
+    try std.testing.expect(!isArtifactReportDirectory("/home/demo"));
+    try std.testing.expect(!isArtifactReportDirectory("/tmp/shelly-aur-artifacts."));
+    try std.testing.expect(!isArtifactReportDirectory("/tmp/shelly-aur-artifacts.aB3dE5gH7"));
+    try std.testing.expect(!isArtifactReportDirectory("/tmp/shelly-aur-artifacts.aB3dE5gH7jk"));
+    try std.testing.expect(!isArtifactReportDirectory("/tmp/shelly-aur-artifacts./../../hom"));
+    try std.testing.expect(!isArtifactReportDirectory("/tmp/shelly-aur-artifacts.aB3dE5gH7j/x"));
+}
+
+test "AUR artifact reports keep requested members and reject malformed lines" {
+    const allocator = std.testing.allocator;
+    const artifacts = try artifactsFromReport(allocator, "demo\t/cache/demo-1-1-any.pkg.tar.zst\ndemo-docs\t/cache/demo-docs-1-1-any.pkg.tar.zst\n", &.{"demo-docs"});
+    defer package_builder.deinitArtifacts(allocator, artifacts);
+    try std.testing.expectEqual(@as(usize, 1), artifacts.len);
+    try std.testing.expectEqualStrings("demo-docs", artifacts[0].package_name);
+    try std.testing.expectEqualStrings("/cache/demo-docs-1-1-any.pkg.tar.zst", artifacts[0].path);
+    try std.testing.expectError(error.InvalidArtifactReport, artifactsFromReport(allocator, "demo /cache/demo.pkg.tar.zst\n", &.{"demo"}));
+    try std.testing.expectError(error.InvalidArtifactReport, artifactsFromReport(allocator, "demo\tdemo.pkg.tar.zst\n", &.{"demo"}));
+    try std.testing.expectError(error.InvalidArtifactReport, artifactsFromReport(allocator, "demo\t/var/cache/pacman/pkg/sudo-1.9-1-x86_64.pkg.tar.zst\n", &.{"demo"}));
+    try std.testing.expectError(error.InvalidArtifactReport, artifactsFromReport(allocator, "demo\t/cache/demo-1.pkg.tar.zst\n", &.{"demo"}));
 }
 
 test "AUR isolated dependencies never enter the host transaction" {
@@ -7352,6 +7596,115 @@ test "build-only dependencies are removed after a failed build" {
     const failpkg_z = try allocator.dupeSentinel(u8, "failpkg", 0);
     defer allocator.free(failpkg_z);
     try std.testing.expect(!manager.alpm.is_package_installed(failpkg_z));
+}
+
+test "build-only dependencies are removed after a failed build together with their own dependencies" {
+    const allocator = std.testing.allocator;
+    const io = std.testing.io;
+    var temporary = std.testing.tmpDir(.{});
+    defer temporary.cleanup();
+    const root = try temporary.dir.realPathFileAlloc(io, ".", allocator);
+    defer allocator.free(root);
+
+    const remote_root = try std.fs.path.join(allocator, &.{ root, "remotes" });
+    defer allocator.free(remote_root);
+    const cache_root = try std.fs.path.join(allocator, &.{ root, "cache" });
+    defer allocator.free(cache_root);
+    const alpm_root = try std.fs.path.join(allocator, &.{ root, "alpm-root" });
+    defer allocator.free(alpm_root);
+    const db_path = try std.fs.path.join(allocator, &.{ root, "db" });
+    defer allocator.free(db_path);
+    const package_cache = try std.fs.path.join(allocator, &.{ root, "packages" });
+    defer allocator.free(package_cache);
+    for ([_][]const u8{ remote_root, cache_root, alpm_root, db_path, package_cache }) |path|
+        try std.Io.Dir.cwd().createDirPath(io, path);
+
+    // The build-only tool pulls in a library of its own, as cmake pulls in
+    // cppdap and rhash. Nothing else needs the library after the build.
+    try createAurFixtureRepository(allocator, io, remote_root, "makedep-lib", null);
+    try createAurFixtureRepository(allocator, io, remote_root, "makedep-tool", "makedep-lib");
+
+    const failpkg_remote = try std.fs.path.join(allocator, &.{ remote_root, "failpkg.git" });
+    defer allocator.free(failpkg_remote);
+    try std.Io.Dir.cwd().createDirPath(io, failpkg_remote);
+    const failpkg_pkgbuild = try std.fs.path.join(allocator, &.{ failpkg_remote, "PKGBUILD" });
+    defer allocator.free(failpkg_pkgbuild);
+    try writeFixtureFile(io, failpkg_pkgbuild,
+        \\pkgname=failpkg
+        \\pkgver=1
+        \\pkgrel=1
+        \\arch=('any')
+        \\makedepends=('makedep-tool')
+        \\package() { :; }
+    , false);
+    const failpkg_srcinfo = try std.fs.path.join(allocator, &.{ failpkg_remote, ".SRCINFO" });
+    defer allocator.free(failpkg_srcinfo);
+    try writeFixtureFile(io, failpkg_srcinfo, "pkgbase = failpkg\n\tpkgver = 1\n\tpkgrel = 1\n\tarch = any\n\tmakedepends = makedep-tool\n\tpkgname = failpkg\n", false);
+    try runFixtureCommand(allocator, io, &.{ "git", "init" }, failpkg_remote);
+    try runFixtureCommand(allocator, io, &.{ "git", "config", "user.email", "shelly-tests@example.invalid" }, failpkg_remote);
+    try runFixtureCommand(allocator, io, &.{ "git", "config", "user.name", "Shelly Tests" }, failpkg_remote);
+    try runFixtureCommand(allocator, io, &.{ "git", "add", "PKGBUILD", ".SRCINFO" }, failpkg_remote);
+    try runFixtureCommand(allocator, io, &.{ "git", "commit", "-m", "fixture" }, failpkg_remote);
+
+    // The fake makepkg packages the tool and its library, recording the
+    // tool's dependency in .PKGINFO, and fails for everything else.
+    const fake_makepkg_path = try std.fs.path.join(allocator, &.{ root, "fake-makepkg" });
+    defer allocator.free(fake_makepkg_path);
+    try writeFixtureFile(io, fake_makepkg_path,
+        \\#!/bin/sh
+        \\name=$(sed -n 's/^pkgname=//p' PKGBUILD)
+        \\case $name in
+        \\  makedep-lib) depend= ;;
+        \\  makedep-tool) depend='depend = makedep-lib\n' ;;
+        \\  *) exit 1 ;;
+        \\esac
+        \\printf "pkgname = $name\npkgbase = $name\npkgver = 1-1\npkgdesc = fixture\nurl = https://example.invalid\nbuilddate = 1700000000\npackager = Shelly Tests\nsize = 0\narch = any\n$depend" > .PKGINFO
+        \\tar -czf "$name-1-1-any.pkg.tar.gz" .PKGINFO
+        \\rm -f .PKGINFO
+    , true);
+
+    const config_path = try std.fs.path.join(allocator, &.{ root, "pacman.conf" });
+    defer allocator.free(config_path);
+    const config = try std.fmt.allocPrint(
+        allocator,
+        "[options]\nArchitecture = auto\nSigLevel = Never\nRootDir = {s}\nDBPath = {s}\nCacheDir = {s}\n",
+        .{ alpm_root, db_path, package_cache },
+    );
+    defer allocator.free(config);
+    try writeFixtureFile(io, config_path, config, false);
+
+    var operation_context = operation_api.OperationContext.init(allocator, io);
+    defer operation_context.deinit();
+    operation_context.setQuestionHandler(.{
+        .function = struct {
+            fn answer(_: ?*anyopaque, question: operation_api.Question) operation_api.QuestionResponse {
+                return switch (question.kind) {
+                    .review_changes, .confirm_transaction => .accepted,
+                    else => .default,
+                };
+            }
+        }.answer,
+    });
+
+    var manager = try Manager.init(allocator, std.testing.environ, .{
+        .config_path = config_path,
+        .cache_root = cache_root,
+        .aur_git_base_url = remote_root,
+        .makepkg_command = fake_makepkg_path,
+    });
+    defer manager.deinit();
+    manager.alpm.disable_transaction_hooks();
+    manager.setOperationContext(&operation_context);
+    defer manager.setOperationContext(null);
+    for ([_][]const u8{ "failpkg", "makedep-tool", "makedep-lib" }) |name|
+        _ = try manager.cachePkgbase(name, name);
+    try manager.bin_variant_cache.put(try allocator.dupe(u8, "makedep-tool"), null);
+    try manager.bin_variant_cache.put(try allocator.dupe(u8, "makedep-lib"), null);
+
+    try std.testing.expectError(error.BuildFailed, manager.installPackages(&.{"failpkg"}));
+
+    for ([_][:0]const u8{ "makedep-tool", "makedep-lib", "failpkg" }) |name|
+        try std.testing.expect(!manager.alpm.is_package_installed(name));
 }
 
 test "AUR operation-hooked public APIs compile" {

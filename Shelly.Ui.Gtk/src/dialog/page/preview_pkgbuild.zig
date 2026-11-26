@@ -1,6 +1,7 @@
 const std = @import("std");
 const diagnostics = @import("diagnostics");
 const translations = @import("../../helpers/translations.zig");
+const theme = @import("../../services/theme.zig");
 const bindings = @import("Shelly_Ui_Gtk");
 const gtk = bindings.gtk;
 const gio = bindings.gio;
@@ -73,6 +74,7 @@ pub const PkgbuildReviewDialog = extern struct {
 
     fn init(self: *Self, _: *Class) callconv(.c) void {
         gtk.Widget.initTemplate(self.as(gtk.Widget));
+        theme.applyCorners(self.as(gtk.Widget));
         const p = self.priv();
         p.generation = 0;
         p.arena = null;
@@ -440,8 +442,8 @@ pub const PkgbuildReviewDialog = extern struct {
             defer glib.free(escaped_hook);
 
             var title_buffer: [512]u8 = undefined;
-            const severity_color = if (std.mem.eql(u8, warning.severity, "Critical")) "#c01c28" else "#e5a50a";
-            const title_markup = std.fmt.bufPrintSentinel(&title_buffer, "<b><span foreground=\"{s}\">{s} {s} {s}</span></b>", .{ severity_color, escaped_tool, used_in, escaped_hook }, 0) catch null;
+            const title_start = gtk.TextIter.getOffset(&iter);
+            const title_markup = std.fmt.bufPrintSentinel(&title_buffer, "<span weight=\"semibold\">{s} {s} {s}</span>", .{ escaped_tool, used_in, escaped_hook }, 0) catch null;
 
             if (title_markup) |markup| {
                 gtk.TextBuffer.insertMarkup(buffer, &iter, markup, -1);
@@ -452,6 +454,7 @@ pub const PkgbuildReviewDialog = extern struct {
                 gtk.TextBuffer.insert(buffer, &iter, " ", 1);
                 gtk.TextBuffer.insert(buffer, &iter, warning.hook, @intCast(warning.hook.len));
             }
+            theme.applyRoleTag(view, if (std.mem.eql(u8, warning.severity, "Critical")) .@"error" else .warning, title_start, &iter);
 
             if (warning.message.len > 0) {
                 gtk.TextBuffer.insert(buffer, &iter, "\n", 1);

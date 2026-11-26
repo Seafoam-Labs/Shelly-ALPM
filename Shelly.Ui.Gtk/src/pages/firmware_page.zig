@@ -359,6 +359,12 @@ pub const FirmwarePage = extern struct {
         metadata_stale: bool,
     };
 
+    fn load_failure(backend: fwupd.Backend, alloc: std.mem.Allocator) fwupd.Failure {
+        // a missing system bus or memory leaves no reason behind.
+        const f = backend.lastFailure() orelse return .{ .kind = .unknown, .message = "" };
+        return .{ .kind = f.kind, .message = alloc.dupe(u8, f.message) catch "" };
+    }
+
     fn load_worker(page: *Self, generation: u64) void {
         const arena = c_alloc.create(std.heap.ArenaAllocator) catch return;
         arena.* = std.heap.ArenaAllocator.init(c_alloc);
@@ -366,11 +372,7 @@ pub const FirmwarePage = extern struct {
         const backend = page.priv().backend;
         const env = page.priv().env;
         const data = collectLoad(backend, alloc) catch {
-            var failure: ?fwupd.Failure = null;
-            if (backend.lastFailure()) |f| {
-                failure = .{ .kind = f.kind, .message = alloc.dupe(u8, f.message) catch "" };
-            }
-            post_result(page, arena, generation, null, failure, false);
+            post_result(page, arena, generation, null, load_failure(backend, alloc), false);
             return;
         };
         // Stale-metadata check for the automatic on-load refresh; the manual
@@ -1407,8 +1409,8 @@ pub const FirmwarePage = extern struct {
             .confirm => {
                 const name = escapeMarkup(alloc, state.device.name);
                 const version = escapeMarkup(alloc, state.release.version);
-                const name_bold = alloc.print("<b>{s}</b>", .{name}) catch name;
-                const version_bold = alloc.print("<b>{s}</b>", .{version}) catch version;
+                const name_bold = alloc.print("<span weight=\"semibold\">{s}</span>", .{name}) catch name;
+                const version_bold = alloc.print("<span weight=\"semibold\">{s}</span>", .{version}) catch version;
                 const template: []const u8 = switch (classification) {
                     .upgrade => translations._("Update {s} to version {s}?"),
                     .downgrade => translations._("Downgrade {s} to version {s}?"),
@@ -2493,6 +2495,19 @@ test "firmware collectLoad filters updatable devices and attaches badges" {
     try testing.expect(data.badges[1].has_upgrade);
 }
 
+test "a load that fails without a recorded reason still has a failure to show" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    var fake = fwupd.FakeBackend{};
+    const unknown = FirmwarePage.load_failure(fake.backend(), arena.allocator());
+    try testing.expectEqual(enums.Error.unknown, unknown.kind);
+
+    fake.failure = .{ .kind = .not_supported, .message = "no" };
+    const recorded = FirmwarePage.load_failure(fake.backend(), arena.allocator());
+    try testing.expectEqual(enums.Error.not_supported, recorded.kind);
+    try testing.expectEqualStrings("no", recorded.message);
+}
+
 test "firmware collectLoad degrades badge errors and propagates connect failures" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
@@ -2852,9 +2867,14 @@ test "firmware detail link follows fetched releases and hides on reset" {
     lvfs_releases[0] = .{ .version = "1.1", .remote_id = "lvfs", .appstream_id = "com.lenovo.ThinkPadR2LET.firmware", .trust_flags = enums.TrustFlags.is_upgrade };
     const lvfs_result = try c_alloc.create(FirmwarePage.DetailResult);
     lvfs_result.* = .{
-        .page = page, .arena = lvfs_arena, .generation = 7, .token = 3,
-        .device_id = try c_alloc.dupe(u8, "dev1"), .device_version = try c_alloc.dupe(u8, "1.0"),
-        .releases = lvfs_releases, .failure = null,
+        .page = page,
+        .arena = lvfs_arena,
+        .generation = 7,
+        .token = 3,
+        .device_id = try c_alloc.dupe(u8, "dev1"),
+        .device_version = try c_alloc.dupe(u8, "1.0"),
+        .releases = lvfs_releases,
+        .failure = null,
     };
     try testing.expectEqual(@as(c_int, 0), FirmwarePage.on_detail_complete(lvfs_result));
     try testing.expectEqual(@as(c_int, 1), gtk.Widget.getVisible(p.detail_link.as(gtk.Widget)));
@@ -2870,9 +2890,14 @@ test "firmware detail link follows fetched releases and hides on reset" {
     local_releases[0] = .{ .version = "1.2", .remote_id = "local", .appstream_id = "org.local.fw" };
     const local_result = try c_alloc.create(FirmwarePage.DetailResult);
     local_result.* = .{
-        .page = page, .arena = local_arena, .generation = 7, .token = 3,
-        .device_id = try c_alloc.dupe(u8, "dev1"), .device_version = try c_alloc.dupe(u8, "1.0"),
-        .releases = local_releases, .failure = null,
+        .page = page,
+        .arena = local_arena,
+        .generation = 7,
+        .token = 3,
+        .device_id = try c_alloc.dupe(u8, "dev1"),
+        .device_version = try c_alloc.dupe(u8, "1.0"),
+        .releases = local_releases,
+        .failure = null,
     };
     try testing.expectEqual(@as(c_int, 0), FirmwarePage.on_detail_complete(local_result));
     try testing.expectEqual(@as(c_int, 0), gtk.Widget.getVisible(p.detail_link.as(gtk.Widget)));
@@ -2886,9 +2911,14 @@ test "firmware detail link follows fetched releases and hides on reset" {
     fail_arena.* = std.heap.ArenaAllocator.init(testing.allocator);
     const fail_result = try c_alloc.create(FirmwarePage.DetailResult);
     fail_result.* = .{
-        .page = page, .arena = fail_arena, .generation = 7, .token = 3,
-        .device_id = try c_alloc.dupe(u8, "dev1"), .device_version = try c_alloc.dupe(u8, "1.0"),
-        .releases = null, .failure = .{ .kind = .internal, .message = "" },
+        .page = page,
+        .arena = fail_arena,
+        .generation = 7,
+        .token = 3,
+        .device_id = try c_alloc.dupe(u8, "dev1"),
+        .device_version = try c_alloc.dupe(u8, "1.0"),
+        .releases = null,
+        .failure = .{ .kind = .internal, .message = "" },
     };
     try testing.expectEqual(@as(c_int, 0), FirmwarePage.on_detail_complete(fail_result));
     try testing.expectEqual(@as(c_int, 0), gtk.Widget.getVisible(p.detail_link.as(gtk.Widget)));

@@ -139,6 +139,8 @@ pub const OwnedPackage = struct {
     optional_for_value: [][:0]u8,
     build_date_value: i64,
     install_date_value: ?i64,
+    installed_value: bool = false,
+    installed_from_value: ?[:0]u8 = null,
 
     pub fn init(allocator: std.mem.Allocator, package: anytype) std.mem.Allocator.Error!OwnedPackage {
         return package.toOwned(allocator, .{});
@@ -185,6 +187,7 @@ pub const OwnedPackage = struct {
         if (self.description_value) |value| allocator.free(value);
         if (self.url_value) |value| allocator.free(value);
         if (self.repository_value) |value| allocator.free(value);
+        if (self.installed_from_value) |value| allocator.free(value);
         allocator.free(self.file_name_value);
         freeStrings(allocator, self.replaces_value);
         freeStrings(allocator, self.licenses_value);
@@ -289,6 +292,14 @@ pub const OwnedPackage = struct {
 
     pub fn install_date(self: OwnedPackage) ?i64 {
         return self.install_date_value;
+    }
+
+    pub fn installed(self: OwnedPackage) bool {
+        return self.installed_value;
+    }
+
+    pub fn installed_from(self: OwnedPackage) ?[:0]const u8 {
+        return self.installed_from_value;
     }
 };
 

@@ -2,7 +2,7 @@
 # Maintainer: Caroline Snyder <hirpeng@gmail.com>
 pkgbase=shelly-bin
 pkgname=('shelly-bin' 'shelly-flatpak-backend-bin')
-pkgver=3.4.1
+pkgver=3.4.2
 pkgrel=1
 arch=('x86_64')
 url="https://github.com/Seafoam-Labs/Shelly-ALPM"
@@ -27,21 +27,23 @@ source=(
     'com.shellyorg.shelly.desktop'
     'com.shellyorg.shelly-notifications.desktop'
     'shelly-flatpak-integrate'
+    'com.shellyorg.shelly.policy'
 )
 
-sha256sums=('9b2f0a9ef97ab695f072735109ae813aab44f374ae34ecd9ac8e8ca0a44756cd'
-            '8c6899b77ef45d094d18b6b42273263dcc4dee43ae5b6b9ca685fb0d48d45c84'
+sha256sums=('11dd8805a45f2b98fd7fefb08bbe1229c16f6f53a5b41bdb2b28b4b405964469'
+            'b0e9b5b566732f5457df89c0157111e7febe6b9cd157f5f4bece5a0292aaa280'
             'cfec9274ece30407404b3c41187c465c68f1a6017394ac31c0be937d06f8a850'
             '27eb0cf269296254f45c68c88a27b0e43817bb6107db8e7edb87ea030730bf25'
             '4126da205e91a3ba3b15453c2aeade92f67e16e3386a52aae32fbd3f2e4af9cc'
             '4b7cb0e42eb322de9eb616d22ca05823f91d178db5b8b67497d497ed495aca9c'
             'cf0dc0a6d1865b9010054b36941e7bf4d445c3e7549219889f07ab08283c5c0f'
-            '07bca40395c180578450c523ea052b036aa8197d8a871efcce55f937c101c323')
+            '07bca40395c180578450c523ea052b036aa8197d8a871efcce55f937c101c323'
+            '17ce8b6518c7141c0ff4089756bffe72ba51071bcac8addcb56170c206dc570d')
 
 package_shelly-bin() {
   pkgdesc="Shelly: A Modern Arch Package Manager (prebuilt binary)"
-  provides=('shelly')
-  conflicts=('shelly' 'shelly-git')
+  provides=("shelly=${pkgver}" "shelly-tui=${pkgver}")
+  conflicts=('shelly' 'shelly-git' 'shelly-tui' 'shelly-tui-git')
   backup=('etc/shellybuild.conf')
   depends=(
       "${_shelly_native_depends[@]}"
@@ -58,9 +60,9 @@ package_shelly-bin() {
       'curl'
       'sqlite'
       'dconf'
+      'polkit'
       'gnupg'
       'zstd'
-      'json-glib'
   )
   optdepends=(
       "${_shelly_native_optdepends[@]}"
@@ -94,6 +96,8 @@ package_shelly-bin() {
   # Install Shelly.Cli binary
   install -Dm755 "$srcdir/shelly" "$pkgdir/usr/bin/shelly"
 
+  install -Dm755 "$srcdir/shelly-tui" "$pkgdir/usr/bin/shelly-tui"
+
   # Install Shelly.Key binary
   install -Dm755 "$srcdir/shelly-key" "$pkgdir/usr/bin/shelly-key"
   install -Dm644 "$srcdir/shellybuild.conf" "$pkgdir/etc/shellybuild.conf"
@@ -104,30 +108,9 @@ package_shelly-bin() {
   install -Dm644 "$srcdir/com.shellyorg.shelly-notifications.desktop" \
     "$pkgdir/usr/share/applications/com.shellyorg.shelly-notifications.desktop"
 
-  # Ensure the polkit directory exists
-  install -m0755 -d "${pkgdir}"/usr/share/polkit-1/actions
-
   # Install Polkit policy for privileged Shelly CLI execution via pkexec
-  cat <<'EOF' | install -Dm644 /dev/stdin "$pkgdir/usr/share/polkit-1/actions/com.shellyorg.shelly.policy"
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE policyconfig PUBLIC "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
- "http://www.freedesktop.org/standards/PolicyKit/1.0/policyconfig.dtd">
-<policyconfig>
-  <vendor>Shelly</vendor>
-  <vendor_url>https://github.com/Seafoam-Labs/Shelly-ALPM</vendor_url>
-  <action id="com.shellyorg.shelly.pkexec.cli">
-    <description>Run Shelly CLI as administrator</description>
-    <message>Run Shelly CLI with administrator privileges.</message>
-    <icon_name>shelly</icon_name>
-    <defaults>
-      <allow_any>auth_admin</allow_any>
-      <allow_inactive>auth_admin</allow_inactive>
-      <allow_active>auth_admin_keep</allow_active>
-    </defaults>
-    <annotate key="org.freedesktop.policykit.exec.path">/usr/bin/shelly</annotate>
-  </action>
-</policyconfig>
-EOF
+  install -Dm644 "$srcdir/com.shellyorg.shelly.policy" \
+    "$pkgdir/usr/share/polkit-1/actions/com.shellyorg.shelly.policy"
 
   # Install icon
   install -Dm644 "$srcdir/shellylogo.png" "$pkgdir/usr/share/icons/hicolor/256x256/apps/shelly.png"
@@ -136,6 +119,8 @@ EOF
 
   install -Dm644 "$srcdir/shellylogo-tray.png" "$pkgdir/usr/share/icons/hicolor/256x256/apps/shelly-tray.png"
   install -Dm644 "$srcdir/shellylogo-update.png" "$pkgdir/usr/share/icons/hicolor/256x256/apps/shelly-update.png"
+
+  install -Dm644 "$srcdir/shelly.bash" "$pkgdir/usr/share/bash-completion/completions/shelly"
 
   # Install fish shell completions
   install -Dm644 "$srcdir/shelly.fish" "$pkgdir/usr/share/fish/vendor_completions.d/shelly.fish"
@@ -150,10 +135,10 @@ EOF
   install -Dm644 "$srcdir/shelly.1" "$pkgdir/usr/share/man/man1/shelly.1"
 
   # Install translations
-if [ -d "$srcdir/locale" ] && [ -n "$(ls -A "$srcdir/locale" 2>/dev/null)" ]; then
+  if [ -d "$srcdir/locale" ]; then
     install -d "$pkgdir/usr/share/locale"
-    cp -r "$srcdir/locale/."/* "$pkgdir/usr/share/locale/" 2>/dev/null || true
-fi
+    cp -r -- "$srcdir/locale/." "$pkgdir/usr/share/locale/"
+  fi
 
   # Install Flatpak integration script
   install -Dm755 "$srcdir/shelly-flatpak-integrate" \

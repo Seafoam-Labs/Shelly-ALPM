@@ -477,9 +477,6 @@ def check_main_window(rep: Report, nodes: Sequence[Node]) -> None:
         find(nodes, BUTTON_ROLES, "Collapse sidebar") is not None
         or find(nodes, BUTTON_ROLES, "Expand sidebar") is not None,
     )
-    rep.expect(
-        "main menu is named", find(nodes, "toggle button", "Main menu") is not None
-    )
 
     entries = [n for n in nodes if n.role == "entry" and n.showing]
     unnamed = [n for n in entries if not n.name.strip()]

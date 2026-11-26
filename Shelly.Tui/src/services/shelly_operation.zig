@@ -14,12 +14,14 @@ pub const Action = enum {
     install,
     remove,
     upgrade,
+    sync,
 
     pub fn verb(self: Action) []const u8 {
         return switch (self) {
             .install => "Install",
             .remove => "Remove",
             .upgrade => "Upgrade",
+            .sync => "Sync",
         };
     }
 
@@ -28,6 +30,7 @@ pub const Action = enum {
             .install => "Installed",
             .remove => "Removed",
             .upgrade => "Upgraded",
+            .sync => "Synchronized",
         };
     }
 };
@@ -65,6 +68,7 @@ pub fn flatpakNeedsElevation(action: Action, target: ?FlatpakTarget) bool {
 
 pub const OperationRequest = struct {
     action: Action = .install,
+    remove_unused_dependencies: bool = false,
     sudo_bin: []const u8 = "sudo",
     shelly_bin: []const u8,
     environ_map: *const std.process.Environ.Map,
@@ -440,7 +444,8 @@ pub const OperationResult = struct {
 };
 
 fn interactive(request: OperationRequest) bool {
-    return (std.mem.eql(u8, request.backend, "aur") and request.action != .remove) or isFlatpak(request) or combined(request);
+    return (request.action == .remove and request.remove_unused_dependencies and (std.mem.eql(u8, request.backend, "standard") or std.mem.eql(u8, request.backend, "aur"))) or
+        (std.mem.eql(u8, request.backend, "aur") and request.action != .remove) or isFlatpak(request) or combined(request);
 }
 
 fn combined(request: OperationRequest) bool {
@@ -457,10 +462,11 @@ fn elevated(request: OperationRequest) bool {
 
 fn operationArgv(alloc: std.mem.Allocator, request: OperationRequest) ![][]const u8 {
     const package_backend = std.mem.eql(u8, request.backend, "standard") or std.mem.eql(u8, request.backend, "aur");
-    if (request.targets.len > 0 and (!package_backend or request.action == .upgrade))
+    if (request.action == .sync and !std.mem.eql(u8, request.backend, "standard")) return error.UnsupportedSyncBackend;
+    if (request.targets.len > 0 and (!package_backend or request.action == .upgrade or request.action == .sync))
         return error.UnsupportedBatchAction;
     if (std.mem.eql(u8, request.backend, "all") and request.action != .upgrade) return error.UnsupportedCombinedAction;
-    const keep_dependencies = request.action == .remove and std.mem.eql(u8, request.backend, "standard");
+    const native_removal = request.action == .remove and std.mem.eql(u8, request.backend, "standard");
     if (request.action == .upgrade and !std.mem.eql(u8, request.backend, "standard") and !std.mem.eql(u8, request.backend, "aur") and !isFlatpak(request) and !std.mem.eql(u8, request.backend, "appimage") and !combined(request))
         return error.UnsupportedUpgradeSource;
     if (isFlatpak(request) and request.action != .upgrade) {
@@ -473,7 +479,7 @@ fn operationArgv(alloc: std.mem.Allocator, request: OperationRequest) ![][]const
         try argv.append(alloc, request.sudo_bin);
     }
     try argv.appendSlice(alloc, &.{ request.shelly_bin, @tagName(request.action), request.backend });
-    if (request.action != .upgrade) {
+    if (request.action == .install or request.action == .remove) {
         if (request.targets.len > 0) try argv.appendSlice(alloc, request.targets) else try argv.append(alloc, request.name);
     }
     if (isFlatpak(request) and request.action == .install) {
@@ -490,9 +496,10 @@ fn operationArgv(alloc: std.mem.Allocator, request: OperationRequest) ![][]const
         if (!request.include_aur) try argv.append(alloc, "--no-aur");
         if (!request.include_flatpak) try argv.append(alloc, "--no-flatpak");
     }
-    if (!interactive(request)) try argv.append(alloc, "--no-confirm");
+    if (request.action != .sync and !interactive(request)) try argv.append(alloc, "--no-confirm");
     try argv.append(alloc, "--ui-mode");
-    if (keep_dependencies) try argv.append(alloc, "--no-cascade");
+    if (native_removal) try argv.append(alloc, if (request.remove_unused_dependencies) "--cascade" else "--no-cascade");
+    if (request.action == .remove and std.mem.eql(u8, request.backend, "aur") and request.remove_unused_dependencies) try argv.append(alloc, "--cascade");
     return argv.toOwnedSlice(alloc);
 }
 
@@ -657,7 +664,7 @@ fn runInstall(io: std.Io, alloc: std.mem.Allocator, request: OperationRequest, o
         result.declined = op.user_declined;
         if (op.expected_answer != null) stream.failed = true;
     }
-    const missing_completion = (request.action == .upgrade or interactive(request)) and (!stream.transaction_done or stream.transaction_depth != 0);
+    const missing_completion = (request.action == .upgrade or request.action == .sync or interactive(request)) and (!stream.transaction_done or stream.transaction_depth != 0);
     if (term != .exited or term.exited != 0 or read_failed or stream.failed or stream.transaction_cancelled or missing_completion or result.declined) {
         const detail = if (stream.transaction_cancelled)
             "The operation was cancelled. Refresh package state before retrying."
@@ -1509,6 +1516,24 @@ test "settings disable AUR and Flatpak in combined upgrade arguments" {
     try std.testing.expect(aur and flatpak and appimage);
 }
 
+test "native sync runs elevated without package operands" {
+    const allocator = std.testing.allocator;
+    var env: std.process.Environ.Map = .init(allocator);
+    defer env.deinit();
+    const argv = try operationArgv(allocator, .{
+        .action = .sync,
+        .shelly_bin = "shelly",
+        .sudo_bin = "sudo",
+        .environ_map = &env,
+        .name = "package databases",
+        .backend = "standard",
+    });
+    defer allocator.free(argv);
+    const expected = [_][]const u8{ "sudo", "shelly", "sync", "standard", "--ui-mode" };
+    try std.testing.expectEqual(expected.len, argv.len);
+    for (expected, argv) |want, actual| try std.testing.expectEqualStrings(want, actual);
+}
+
 test "native batch operands stay separate in a single install or removal command" {
     var env: std.process.Environ.Map = .init(std.testing.allocator);
     defer env.deinit();
@@ -1529,6 +1554,24 @@ test "native batch operands stay separate in a single install or removal command
         try std.testing.expectEqualStrings("--no-confirm", argv[6]);
         if (action == .remove) try std.testing.expectEqualStrings("--no-cascade", argv[argv.len - 1]);
     }
+}
+
+test "native dependency cleanup requests transaction review" {
+    const allocator = std.testing.allocator;
+    var env: std.process.Environ.Map = .init(allocator);
+    defer env.deinit();
+    const argv = try operationArgv(allocator, .{
+        .action = .remove,
+        .shelly_bin = "shelly",
+        .environ_map = &env,
+        .name = "editor",
+        .backend = "standard",
+        .remove_unused_dependencies = true,
+    });
+    defer allocator.free(argv);
+    const expected = [_][]const u8{ "sudo", "shelly", "remove", "standard", "editor", "--ui-mode", "--cascade" };
+    try std.testing.expectEqual(expected.len, argv.len);
+    for (expected, argv) |want, actual| try std.testing.expectEqualStrings(want, actual);
 }
 
 test "AUR batch install retains separate operands and interactive review" {
@@ -1586,6 +1629,7 @@ test "AUR single and batch removal retain CLI dependency defaults" {
 }
 
 test "private sudo terminal captures fingerprint prompts and keeps credentials out of reviews" {
+    try sudo_terminal.skipWithoutTerminal();
     const fixture = @import("auth_test_options");
     for ([_][]const u8{ "terminal", "fingerprint", "cached", "wrong" }) |mode| {
         var env: std.process.Environ.Map = .init(std.testing.allocator);
@@ -1690,6 +1734,7 @@ test "cancellation before worker startup is remembered without launching sudo" {
 }
 
 test "cancellation between spawn and PID publication terminates the exact pending process" {
+    try sudo_terminal.skipWithoutTerminal();
     const fixture = @import("auth_test_options");
     var env: std.process.Environ.Map = .init(std.testing.allocator);
     defer env.deinit();
@@ -1732,6 +1777,7 @@ test "immediate operation shutdown does not wait for a future password prompt" {
 }
 
 test "successive operations retain the real terminal session used by sudo timestamps" {
+    try sudo_terminal.skipWithoutTerminal();
     const fixture = @import("auth_test_options");
     var env: std.process.Environ.Map = .init(std.testing.allocator);
     defer env.deinit();
@@ -1794,6 +1840,7 @@ test "successive operations retain the real terminal session used by sudo timest
 }
 
 test "private terminal authentication can be interrupted without protocol input" {
+    try sudo_terminal.skipWithoutTerminal();
     const fixture = @import("auth_test_options");
     var env: std.process.Environ.Map = .init(std.testing.allocator);
     defer env.deinit();

@@ -10,17 +10,17 @@
       <object class="GtkFrame">
         <property name="halign">center</property>
         <property name="valign">center</property>
-        <property name="width-request">460</property>
+        <property name="width-request">440</property>
         <style>
           <class name="lockout-card"/>
         </style>
         <child>
           <object class="GtkBox">
             <property name="orientation">vertical</property>
-            <property name="spacing">18</property>
+            <property name="spacing">20</property>
             <property name="margin-start">24</property>
             <property name="margin-end">24</property>
-            <property name="margin-top">26</property>
+            <property name="margin-top">24</property>
             <property name="margin-bottom">24</property>
             <child>
               <object class="GtkBox">

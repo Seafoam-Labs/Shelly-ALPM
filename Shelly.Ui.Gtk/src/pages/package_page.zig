@@ -6,6 +6,7 @@ const gio = bindings.gio;
 const glib = bindings.glib;
 const gobject = bindings.gobject;
 const support = @import("support.zig");
+const Toast = @import("../helpers/custom_ui_comps/toast.zig").Toast;
 const PackageObject = @import("../g_objects/package_object.zig").PackageObject;
 const ConfirmDialog = @import("../dialog/page/yn_dialog.zig").ConfirmDialog;
 const ShellyWindow = @import("../shelly_window.zig").ShellyWindow;
@@ -14,6 +15,8 @@ const SizeConverter = @import("../helpers/size_converts.zig").SizeConverter;
 const IconResolver = @import("../services/icon_resolver.zig").IconResolver;
 const Package = @import("../models/packages.zig").Package;
 const repositoryPackageList = @import("../models/packages.zig").repositoryPackageList;
+const package_lists = @import("../services/package_lists.zig");
+const row_diff = @import("../helpers/row_diff.zig");
 const runtime = @import("../services/runtime.zig");
 const c_string = @import("../helpers/c_string.zig");
 const ShellyConfig = @import("../models/shelly_config.zig").ShellyConfig;
@@ -71,7 +74,6 @@ pub const PackagePage = extern struct {
         show_explicit_only_check: *gtk.CheckButton,
         show_depends_only_check: *gtk.CheckButton,
         show_detail_pane_check: *gtk.CheckButton,
-        arena: ?*std.heap.ArenaAllocator,
         selected_group: [64]u8,
         selected_group_len: usize,
         generation: u64,
@@ -84,6 +86,13 @@ pub const PackagePage = extern struct {
         check_map_grid: std.AutoHashMapUnmanaged(*PackageObject, *gtk.CheckButton),
         check_map_column: std.AutoHashMapUnmanaged(*PackageObject, *gtk.CheckButton),
         loaded: bool,
+        // rows of a listing are still being added.
+        filling: bool,
+        /// rows are being replaced, so selection changes are not the user's.
+        refreshing: bool,
+        page_overlay: *gtk.Overlay,
+        toast: *Toast,
+        spinner_source: c_uint,
         applying_config: bool,
         resolver: IconResolver,
         search_text: [256]u8,
@@ -95,14 +104,45 @@ pub const PackagePage = extern struct {
         var offset: c_int = 0;
     };
 
+    const LoadJob = struct {
+        page: *Self,
+        generation: u64,
+        show_hidden: bool,
+        show_saved: bool,
+        load_icons: bool,
+    };
+
     const LoadResult = struct {
         page: *Self,
-        packages: []Package,
-        groups: []const []const u8,
-        arena: *std.heap.ArenaAllocator,
+        packages: []Package = &.{},
+        groups: []const []const u8 = &.{},
+        arena: std.heap.ArenaAllocator,
+        resolver: ?IconResolver = null,
         generation: u64,
         index: usize = 0,
+        failed: bool = false,
+        no_installed: bool = false,
+
+        fn create(job: LoadJob) ?*LoadResult {
+            const result = std.heap.c_allocator.create(LoadResult) catch return null;
+            result.* = .{
+                .page = job.page,
+                .arena = .init(std.heap.c_allocator),
+                .generation = job.generation,
+            };
+            return result;
+        }
+
+        fn destroy(result: *LoadResult) void {
+            if (result.resolver) |*resolver| resolver.deinit();
+            result.arena.deinit();
+            std.heap.c_allocator.destroy(result);
+        }
     };
+
+    const spinner_delay_ms = 300;
+    // above this many changed rows the whole list is replaced.
+    const max_changed_rows = 500;
 
     pub const getGObjectType = gobject.ext.defineClass(Self, .{
         .name = "ShellyPackagePage",
@@ -129,7 +169,9 @@ pub const PackagePage = extern struct {
         const p = self.priv();
         p.loaded = false;
         p.applying_config = false;
-        p.arena = null;
+        p.refreshing = false;
+        p.filling = false;
+        p.spinner_source = 0;
         p.generation = 0;
         p.show_installed_only = false;
         p.show_explicit_only = false;
@@ -137,6 +179,10 @@ pub const PackagePage = extern struct {
         p.show_detail_pane = false;
         p.check_map_grid = .empty;
         p.check_map_column = .empty;
+
+        const toast = Toast.new();
+        gtk.Overlay.addOverlay(p.page_overlay, toast.as(gtk.Widget));
+        p.toast = toast;
 
         const detail = PackageDetail.new();
         p.detail = detail;
@@ -341,7 +387,7 @@ pub const PackagePage = extern struct {
                 var buf: [512]u8 = undefined;
                 const escaped = glib.markupEscapeText(pkg.getName(), -1);
                 defer glib.free(escaped);
-                const markup = std.fmt.bufPrintSentinel(&buf, "<b>{s}</b>", .{escaped}, 0) catch pkg.getName();
+                const markup = std.fmt.bufPrintSentinel(&buf, "<span weight=\"semibold\">{s}</span>", .{escaped}, 0) catch pkg.getName();
                 gtk.Label.setMarkup(label, markup);
                 gtk.Label.setLabel(desc_label, pkg.getDescription());
                 gtk.Widget.setVisible(installed_w, @intFromBool(pkg.isInstalled()));
@@ -385,7 +431,7 @@ pub const PackagePage = extern struct {
         const check = gobject.ext.cast(gtk.CheckButton, child) orelse return;
 
         page.priv().check_map_column.put(std.heap.c_allocator, pkg, check) catch {};
-        a11y.setName(check.as(gtk.Widget), pkg.getName());
+        a11y.setName(check.as(gtk.Widget), pkg.getTarget());
 
         gobject.Object.setData(check.as(gobject.Object), "syncing", @ptrFromInt(1));
         gtk.CheckButton.setActive(check, @intFromBool(pkg.isSelected()));
@@ -430,9 +476,10 @@ pub const PackagePage = extern struct {
         const page_ptr = gobject.Object.getData(check.as(gobject.Object), "page") orelse return;
 
         const self: *Self = @ptrCast(@alignCast(page_ptr));
+        if (pkg.isSelected()) self.deselect_other_copies(pkg);
         const p = self.priv();
         const path = p.resolver.resolve(pkg.getName());
-        p.detail.showPackage(pkg.getName(), pkg.isInstalled(), path);
+        p.detail.showPackage(pkg.getTarget(), pkg.isInstalled(), path);
         gtk.Revealer.setRevealChild(p.detail_revealer, 1);
 
         self.update_selection_ui();
@@ -517,10 +564,10 @@ pub const PackagePage = extern struct {
                 gtk.Widget.setSizeRequest(frame.as(gtk.Widget), 300, -1);
                 gtk.Widget.setHexpand(frame.as(gtk.Widget), 0);
                 gtk.Widget.setHalign(frame.as(gtk.Widget), .fill);
-                gtk.Widget.setMarginStart(frame.as(gtk.Widget), 3);
-                gtk.Widget.setMarginEnd(frame.as(gtk.Widget), 3);
-                gtk.Widget.setMarginTop(frame.as(gtk.Widget), 3);
-                gtk.Widget.setMarginBottom(frame.as(gtk.Widget), 3);
+                gtk.Widget.setMarginStart(frame.as(gtk.Widget), 4);
+                gtk.Widget.setMarginEnd(frame.as(gtk.Widget), 4);
+                gtk.Widget.setMarginTop(frame.as(gtk.Widget), 4);
+                gtk.Widget.setMarginBottom(frame.as(gtk.Widget), 4);
                 gtk.Widget.addCssClass(frame.as(gtk.Widget), "card");
 
                 gtk.ListItem.setChild(list_item, frame.as(gtk.Widget));
@@ -537,7 +584,7 @@ pub const PackagePage = extern struct {
                 const selection_check = gobject.ext.cast(gtk.CheckButton, gtk.Grid.getChildAt(content_grid, 2, 0) orelse return) orelse return;
 
                 page.priv().check_map_grid.put(std.heap.c_allocator, pkg, selection_check) catch {};
-                a11y.setName(selection_check.as(gtk.Widget), pkg.getName());
+                a11y.setName(selection_check.as(gtk.Widget), pkg.getTarget());
 
                 const title_grid_w = gtk.Widget.getFirstChild(right_box.as(gtk.Widget)) orelse return;
                 const title_grid = gobject.ext.cast(gtk.Grid, title_grid_w) orelse return;
@@ -561,7 +608,7 @@ pub const PackagePage = extern struct {
                     }
                 }
                 var name_buf: [256]u8 = undefined;
-                const markup = std.fmt.bufPrintSentinel(&name_buf, "<b>{s}</b>", .{pkg.getName()}, 0) catch pkg.getName();
+                const markup = std.fmt.bufPrintSentinel(&name_buf, "<span weight=\"semibold\">{s}</span>", .{pkg.getName()}, 0) catch pkg.getName();
                 gtk.Label.setMarkup(title_label, markup);
                 gtk.Widget.setVisible(installed_check, @intFromBool(pkg.isInstalled()));
                 gtk.Label.setLabel(desc_label, pkg.getDescription());
@@ -591,9 +638,10 @@ pub const PackagePage = extern struct {
 
         const page_ptr = gobject.Object.getData(check.as(gobject.Object), "page") orelse return;
         const self: *Self = @ptrCast(@alignCast(page_ptr));
+        if (pkg.isSelected()) self.deselect_other_copies(pkg);
         const p = self.priv();
         const path = p.resolver.resolve(pkg.getName());
-        p.detail.showPackage(pkg.getName(), pkg.isInstalled(), path);
+        p.detail.showPackage(pkg.getTarget(), pkg.isInstalled(), path);
         gtk.Revealer.setRevealChild(p.detail_revealer, 1);
         self.update_selection_ui();
     }
@@ -615,6 +663,7 @@ pub const PackagePage = extern struct {
 
         const new_state = !pkg.isSelected();
         pkg.setSelected(new_state);
+        if (new_state) self.deselect_other_copies(pkg);
 
         if (p.check_map_grid.get(pkg)) |check| {
             set_sync_active(check, new_state);
@@ -624,6 +673,25 @@ pub const PackagePage = extern struct {
         }
 
         self.update_selection_ui();
+    }
+
+    /// a transaction takes one repository copy per name, so selecting a copy
+    /// clears the others.
+    fn deselect_other_copies(self: *Self, selected: *PackageObject) void {
+        const p = self.priv();
+        const model = p.list_store.as(gio.ListModel);
+        const n = gio.ListModel.getNItems(model);
+        var i: u32 = 0;
+        while (i < n) : (i += 1) {
+            const obj = gio.ListModel.getObject(model, i) orelse continue;
+            defer obj.unref();
+            const pkg = gobject.ext.cast(PackageObject, obj) orelse continue;
+            if (pkg == selected or !pkg.isSelected()) continue;
+            if (!std.mem.eql(u8, pkg.getName(), selected.getName())) continue;
+            pkg.setSelected(false);
+            if (p.check_map_grid.get(pkg)) |check| set_sync_active(check, false);
+            if (p.check_map_column.get(pkg)) |check| set_sync_active(check, false);
+        }
     }
 
     fn set_sync_active(check: *gtk.CheckButton, active: bool) void {
@@ -709,6 +777,11 @@ pub const PackagePage = extern struct {
     }
 
     fn on_selection_changed(_: *gobject.Object, _: *gobject.ParamSpec, self: *Self) callconv(.c) void {
+        if (self.priv().refreshing) return;
+        self.show_selected();
+    }
+
+    fn show_selected(self: *Self) void {
         const p = self.priv();
         const obj = gtk.SingleSelection.getSelectedItem(p.selection) orelse {
             gtk.Revealer.setRevealChild(p.detail_revealer, 0);
@@ -717,7 +790,7 @@ pub const PackagePage = extern struct {
         const pkg = gobject.ext.cast(PackageObject, obj) orelse return;
 
         const path = p.resolver.resolve(pkg.getName());
-        p.detail.showPackage(pkg.getName(), pkg.isInstalled(), path);
+        p.detail.showPackage(pkg.getTarget(), pkg.isInstalled(), path);
         gtk.Revealer.setRevealChild(p.detail_revealer, 1);
     }
 
@@ -731,6 +804,7 @@ pub const PackagePage = extern struct {
         } else {
             const model = gtk.DropDown.getModel(p.grouping_selection) orelse return;
             const obj = gio.ListModel.getObject(model, idx) orelse return;
+            defer obj.unref();
             const so = gobject.ext.cast(gtk.StringObject, obj) orelse return;
             const s = std.mem.span(gtk.StringObject.getString(so));
             const len = @min(s.len, p.selected_group.len);
@@ -746,15 +820,12 @@ pub const PackagePage = extern struct {
         if (p.loaded) return;
         applyOptionsFromConfig(self);
         p.loaded = true;
-        p.generation += 1;
-        show_loading(self);
         self.update_selection_ui();
         // The page is the focus stop, so a page switch lands on its group name
         // and Tab reaches the search entry from there.
         _ = a11y.focusFirst(self.as(gtk.Widget));
-        const thread = std.Thread.spawn(.{}, load_worker, .{ self, p.generation, p.show_hidden }) catch return;
         gtk.Widget.setVisible(p.no_results_overlay.as(gtk.Widget), 0);
-        thread.detach();
+        self.start_load(true);
     }
 
     fn applyOptionsFromConfig(self: *Self) void {
@@ -800,6 +871,8 @@ pub const PackagePage = extern struct {
         if (!p.loaded) return;
         p.loaded = false;
         p.generation += 1;
+        p.filling = false;
+        self.cancel_spinner();
 
         gio.ListStore.removeAll(p.list_store);
 
@@ -808,132 +881,383 @@ pub const PackagePage = extern struct {
         p.check_map_column.deinit(std.heap.c_allocator);
         p.check_map_column = .empty;
 
-        if (p.arena) |a| {
-            a.deinit();
-            std.heap.c_allocator.destroy(a);
-            p.arena = null;
-        }
-
         p.resolver.deinit();
         p.resolver = IconResolver.init(std.heap.c_allocator);
 
         _ = malloc_trim(0);
     }
 
-    fn load_worker(page: *Self, generation: u64, show_hidden: bool) void {
-        const arena_ptr = std.heap.c_allocator.create(std.heap.ArenaAllocator) catch return;
-        arena_ptr.* = std.heap.ArenaAllocator.init(std.heap.c_allocator);
-        const alloc = arena_ptr.allocator();
-        const p = page.priv();
-        if (runtime.shellyIconsEnabled() and !p.resolver.loaded) {
-            p.resolver.load(runtime.io, runtime.environ_map) catch {};
+    /// `show_saved` shows the list kept from an earlier visit until the new one is there.
+    fn start_load(self: *Self, show_saved: bool) void {
+        const p = self.priv();
+        p.generation += 1;
+        p.filling = false;
+        gtk.Widget.setVisible(p.error_label.as(gtk.Widget), 0);
+        if (gio.ListModel.getNItems(p.list_store.as(gio.ListModel)) == 0) {
+            self.cancel_spinner();
+            gtk.Widget.setVisible(p.loading_overlay.as(gtk.Widget), 0);
+            p.spinner_source = glib.timeoutAdd(spinner_delay_ms, &on_spinner_delay, self);
         }
-        var threaded: std.Io.Threaded = .init(alloc, .{});
-        defer threaded.deinit();
-
-        const cli = ShellyCli{ .allocator = alloc, .io = threaded.io() };
-        const parsed = cli.get_packages(show_hidden) catch |err| {
-            std.debug.print("Could not load the standard-package list. {0s}\n\nTechnical details: {1s}\n", .{ diagnostics.cause(err), @errorName(err) });
-            arena_ptr.deinit();
-            std.heap.c_allocator.destroy(arena_ptr);
+        const job: LoadJob = .{
+            .page = self,
+            .generation = p.generation,
+            .show_hidden = p.show_hidden,
+            .show_saved = show_saved,
+            .load_icons = runtime.shellyIconsEnabled() and !p.resolver.loaded,
+        };
+        const thread = std.Thread.spawn(.{}, load_worker, .{job}) catch {
+            self.load_failed();
             return;
         };
-
-        const icli = ShellyCli{ .allocator = alloc, .io = threaded.io() };
-        const installed = icli.get_installed_packages() catch null;
-
-        const packages = repositoryPackageList(alloc, parsed.value, if (installed) |inst| inst.value else null) catch {
-            arena_ptr.deinit();
-            std.heap.c_allocator.destroy(arena_ptr);
-            return;
-        };
-
-        var set: std.StringHashMapUnmanaged(void) = .empty;
-        for (packages) |pkg| {
-            for (pkg.Groups) |g| set.put(alloc, g, {}) catch {};
-        }
-        var list: std.ArrayListUnmanaged([]const u8) = .empty;
-        var it = set.keyIterator();
-        while (it.next()) |k| list.append(alloc, k.*) catch {};
-
-        post_result(page, packages, list.items, arena_ptr, generation);
+        thread.detach();
     }
 
-    fn post_result(
-        page: *Self,
-        packages: []Package,
-        groups: []const []const u8,
-        arena: *std.heap.ArenaAllocator,
-        generation: u64,
-    ) void {
-        const result = std.heap.c_allocator.create(LoadResult) catch {
-            arena.deinit();
-            std.heap.c_allocator.destroy(arena);
+    fn load_worker(job: LoadJob) void {
+        // a listing needs much more memory than its rows; give the rest back.
+        defer _ = malloc_trim(0);
+        const alloc = std.heap.c_allocator;
+        var threaded: std.Io.Threaded = .init(alloc, .{});
+        defer threaded.deinit();
+        const cli = ShellyCli{ .allocator = alloc, .io = threaded.io() };
+
+        var resolver: ?IconResolver = null;
+        if (job.load_icons) {
+            resolver = IconResolver.init(alloc);
+            resolver.?.load(runtime.io, runtime.environ_map) catch {};
+        }
+
+        var slot: package_lists.Slot = undefined;
+        slot.init(job.show_hidden);
+
+        const saved = slot.read(cli);
+        defer if (saved) |list| list.deinit(alloc);
+        const saved_hash: ?u64 = if (saved) |list| list.cached.stamp else null;
+        if (job.show_saved) {
+            if (saved) |list| post_lists(job, list.parsed.value, &resolver);
+        }
+
+        const fetched = package_lists.fetch(cli, job.show_hidden) catch |err| {
+            std.debug.print("Could not load the standard-package list. {0s}\n\nTechnical details: {1s}\n", .{ diagnostics.cause(err), @errorName(err) });
+            post_failure(job, &resolver);
             return;
         };
-        result.* = .{
-            .page = page,
-            .packages = packages,
-            .groups = groups,
-            .arena = arena,
-            .generation = generation,
+        defer fetched.deinit();
+        const lists = fetched.lists();
+        const hash = lists.hash();
+        if (!job.show_saved or saved_hash != hash) post_lists(job, lists, &resolver);
+        if (resolver) |*unused| unused.deinit();
+        slot.update(cli, lists, hash, saved_hash);
+    }
+
+    fn post_lists(job: LoadJob, lists: package_lists.PackageLists, resolver: *?IconResolver) void {
+        const result = LoadResult.create(job) orelse return;
+        fill_result(result, lists) catch {
+            result.destroy();
+            post_failure(job, resolver);
+            return;
         };
+        result.no_installed = lists.Installed == null;
+        result.resolver = resolver.*;
+        resolver.* = null;
         _ = glib.idleAdd(&onLoadComplete, result);
+    }
+
+    fn post_failure(job: LoadJob, resolver: *?IconResolver) void {
+        if (resolver.*) |*unused| unused.deinit();
+        resolver.* = null;
+        const result = LoadResult.create(job) orelse return;
+        result.failed = true;
+        _ = glib.idleAdd(&onLoadComplete, result);
+    }
+
+    /// the result owns its strings, so the lists can be freed after this.
+    fn fill_result(result: *LoadResult, lists: package_lists.PackageLists) !void {
+        const alloc = result.arena.allocator();
+        var scratch: std.heap.ArenaAllocator = .init(std.heap.c_allocator);
+        defer scratch.deinit();
+
+        const available = try toPackages(scratch.allocator(), lists.Available);
+        const installed = if (lists.Installed) |rows| try toPackages(scratch.allocator(), rows) else null;
+        result.packages = try repositoryPackageList(alloc, available, installed);
+
+        var set: std.StringHashMapUnmanaged(void) = .empty;
+        var groups: std.ArrayListUnmanaged([]const u8) = .empty;
+        for (result.packages) |*pkg| {
+            pkg.Name = try alloc.dupe(u8, pkg.Name);
+            pkg.Version = try alloc.dupe(u8, pkg.Version);
+            pkg.Description = try alloc.dupe(u8, pkg.Description);
+            pkg.Repository = try alloc.dupe(u8, pkg.Repository);
+            if (pkg.InstallDate) |date| pkg.InstallDate = try alloc.dupe(u8, date);
+            const names = try alloc.alloc([]const u8, pkg.Groups.len);
+            for (pkg.Groups, names) |group, *name| {
+                const entry = try set.getOrPut(scratch.allocator(), group);
+                if (!entry.found_existing) {
+                    entry.key_ptr.* = try alloc.dupe(u8, group);
+                    try groups.append(alloc, entry.key_ptr.*);
+                }
+                name.* = entry.key_ptr.*;
+            }
+            pkg.Groups = names;
+        }
+        result.groups = groups.items;
+    }
+
+    fn toPackages(alloc: std.mem.Allocator, rows: []const package_lists.PackageRow) ![]Package {
+        const packages = try alloc.alloc(Package, rows.len);
+        for (rows, packages) |row, *package| package.* = row.package();
+        return packages;
     }
 
     fn onLoadComplete(data: ?*anyopaque) callconv(.c) c_int {
         const result: *LoadResult = @ptrCast(@alignCast(data.?));
-        const p = result.page.priv();
+        const self = result.page;
+        const p = self.priv();
         if (result.generation != p.generation) {
-            result.arena.deinit();
-            std.heap.c_allocator.destroy(result.arena);
-            std.heap.c_allocator.destroy(result);
+            result.destroy();
             return 0;
         }
 
         if (result.index == 0) {
-            gio.ListStore.removeAll(p.list_store);
+            // the saved list is still being added; wait for its last row.
+            if (p.filling) return 1;
 
+            // without the installed packages the rows on screen are better.
+            const shown = gio.ListModel.getNItems(p.list_store.as(gio.ListModel)) > 0;
+            if (result.failed or (result.no_installed and shown)) {
+                self.load_failed();
+                result.destroy();
+                return 0;
+            }
+            if (result.resolver) |resolver| {
+                p.resolver.deinit();
+                p.resolver = resolver;
+                result.resolver = null;
+            }
+            if (gio.ListModel.getNItems(p.list_store.as(gio.ListModel)) > 0) {
+                self.refresh_rows(result);
+                result.destroy();
+                return 0;
+            }
+            p.filling = true;
             p.check_map_grid.clearAndFree(std.heap.c_allocator);
             p.check_map_column.clearAndFree(std.heap.c_allocator);
-
-            const strings = gtk.StringList.new(null);
-            gtk.StringList.append(strings, "Any");
-            for (result.groups) |g| {
-                var buf: [128]u8 = undefined;
-                gtk.StringList.append(strings, c_string.cstr(&buf, g));
-            }
-            gtk.DropDown.setModel(p.grouping_selection, strings.as(gio.ListModel));
-            strings.as(gobject.Object).unref();
-            gtk.DropDown.setSelected(p.grouping_selection, 0);
+            self.set_groups(result.groups);
         }
 
         const batch_size = 500;
         const end = @min(result.index + batch_size, result.packages.len);
+        var batch: [batch_size]*gobject.Object = undefined;
         const n = end - result.index;
-        var batch: [500]*gobject.Object = undefined;
-        var i: usize = 0;
-        for (result.packages[result.index..end]) |d| {
-            const pkg = PackageObject.new(d);
-            batch[i] = pkg.as(gobject.Object);
-            i += 1;
+        for (result.packages[result.index..end], batch[0..n]) |d, *object| {
+            object.* = PackageObject.new(d).as(gobject.Object);
         }
         const pos = gio.ListModel.getNItems(p.list_store.as(gio.ListModel));
         gio.ListStore.splice(p.list_store, pos, 0, &batch, @intCast(n));
         for (batch[0..n]) |o| o.unref();
+
+        const first = result.index == 0;
         result.index = end;
+        if (first) hide_loading(self);
         if (result.index < result.packages.len) return 1;
 
-        const page = result.page;
-        result.arena.deinit();
-        std.heap.c_allocator.destroy(result.arena);
-        std.heap.c_allocator.destroy(result);
-
-        _ = gtk.SelectionModel.selectItem(p.selection.as(gtk.SelectionModel), 0, 1);
-
-        hide_loading(page);
-
+        p.filling = false;
+        result.destroy();
+        if (gtk.SingleSelection.getSelectedItem(p.selection) == null)
+            _ = gtk.SelectionModel.selectItem(p.selection.as(gtk.SelectionModel), 0, 1);
+        self.update_no_results();
         return 0;
+    }
+
+    const RowContext = struct {
+        model: *gio.ListModel,
+        packages: []const Package,
+
+        pub fn sameRow(self: RowContext, i: usize) bool {
+            const object = gio.ListModel.getObject(self.model, @intCast(i)) orelse return false;
+            defer object.unref();
+            const pkg = gobject.ext.cast(PackageObject, object) orelse return false;
+            return std.mem.eql(u8, pkg.getName(), self.packages[i].Name);
+        }
+
+        pub fn unchanged(self: RowContext, i: usize) bool {
+            const object = gio.ListModel.getObject(self.model, @intCast(i)) orelse return false;
+            defer object.unref();
+            const pkg = gobject.ext.cast(PackageObject, object) orelse return false;
+            return pkg.matches(self.packages[i]);
+        }
+    };
+
+    /// puts a new listing in place of the rows on screen. what is selected stays
+    /// selected as long as its target is still listed.
+    fn refresh_rows(self: *Self, result: *LoadResult) void {
+        const p = self.priv();
+        const alloc = std.heap.c_allocator;
+        const model = p.list_store.as(gio.ListModel);
+        const old_len = gio.ListModel.getNItems(model);
+
+        var shown: ?[:0]u8 = null;
+        defer if (shown) |target| alloc.free(target);
+        if (gtk.SingleSelection.getSelectedItem(p.selection)) |item| {
+            if (gobject.ext.cast(PackageObject, item)) |pkg| shown = alloc.dupeSentinel(u8, pkg.getTarget(), 0) catch null;
+        }
+
+        const pane_row: ?*PackageObject = if (gtk.Revealer.getRevealChild(p.detail_revealer) != 0) self.find_row(p.detail.rootTarget()) else null;
+        defer if (pane_row) |pkg| pkg.as(gobject.Object).unref();
+
+        p.refreshing = true;
+        const context: RowContext = .{ .model = model, .packages = result.packages };
+        const changed = row_diff.changedRows(alloc, old_len, result.packages.len, max_changed_rows, context) catch null;
+        if (changed) |rows| {
+            defer alloc.free(rows);
+            for (rows) |row| self.replace_row(row, result.packages[row]);
+        } else {
+            self.replace_all(old_len, result.packages);
+        }
+        self.set_groups(result.groups);
+
+        if (shown) |target| {
+            if (gtk.SingleSelection.getSelectedItem(p.selection) == null) self.select_target(target);
+        }
+        p.refreshing = false;
+        if (pane_row) |old| self.refresh_pane(old);
+        self.update_selection_ui();
+        hide_loading(self);
+    }
+
+    /// the pane can show a ticked package that is not the selected row.
+    fn refresh_pane(self: *Self, old: *PackageObject) void {
+        const p = self.priv();
+        const pkg = self.find_row(old.getTarget()) orelse return self.show_selected();
+        defer pkg.as(gobject.Object).unref();
+        if (pkg == old) return;
+        p.detail.refreshPackage(pkg.getTarget(), pkg.isInstalled(), p.resolver.resolve(pkg.getName()));
+    }
+
+    fn find_row(self: *Self, target: []const u8) ?*PackageObject {
+        const model = self.priv().list_store.as(gio.ListModel);
+        const n = gio.ListModel.getNItems(model);
+        var i: c_uint = 0;
+        while (i < n) : (i += 1) {
+            const object = gio.ListModel.getObject(model, i) orelse continue;
+            if (gobject.ext.cast(PackageObject, object)) |pkg| {
+                if (std.mem.eql(u8, pkg.getTarget(), target)) return pkg;
+            }
+            object.unref();
+        }
+        return null;
+    }
+
+    fn replace_row(self: *Self, row: usize, package: Package) void {
+        const store = self.priv().list_store;
+        const old_object = gio.ListModel.getObject(store.as(gio.ListModel), @intCast(row)) orelse return;
+        defer old_object.unref();
+        const old = gobject.ext.cast(PackageObject, old_object) orelse return;
+        const new_row = PackageObject.new(package);
+        defer new_row.as(gobject.Object).unref();
+        new_row.setSelected(old.isSelected() and std.mem.eql(u8, old.getTarget(), new_row.getTarget()) and old.isInstalled() == new_row.isInstalled());
+        var objects = [_]*gobject.Object{new_row.as(gobject.Object)};
+        gio.ListStore.splice(store, @intCast(row), 1, &objects, 1);
+    }
+
+    fn replace_all(self: *Self, old_len: c_uint, packages: []const Package) void {
+        const store = self.priv().list_store;
+        const model = store.as(gio.ListModel);
+        const alloc = std.heap.c_allocator;
+        const objects = alloc.alloc(*gobject.Object, packages.len) catch return;
+        defer alloc.free(objects);
+
+        // the old rows own these targets until the splice; the value is the installed state.
+        var selected: std.StringHashMapUnmanaged(bool) = .empty;
+        defer selected.deinit(alloc);
+        var i: c_uint = 0;
+        while (i < old_len) : (i += 1) {
+            const object = gio.ListModel.getObject(model, i) orelse continue;
+            defer object.unref();
+            const pkg = gobject.ext.cast(PackageObject, object) orelse continue;
+            if (pkg.isSelected()) selected.put(alloc, pkg.getTarget(), pkg.isInstalled()) catch {};
+        }
+
+        for (packages, objects) |package, *object| {
+            const pkg = PackageObject.new(package);
+            if (selected.get(pkg.getTarget())) |installed| pkg.setSelected(installed == pkg.isInstalled());
+            object.* = pkg.as(gobject.Object);
+        }
+        gio.ListStore.splice(store, 0, old_len, objects.ptr, @intCast(objects.len));
+        for (objects) |object| object.unref();
+    }
+
+    fn select_target(self: *Self, target: []const u8) void {
+        const p = self.priv();
+        const model = p.selection.as(gio.ListModel);
+        const n = gio.ListModel.getNItems(model);
+        var i: c_uint = 0;
+        while (i < n) : (i += 1) {
+            const object = gio.ListModel.getObject(model, i) orelse continue;
+            defer object.unref();
+            const pkg = gobject.ext.cast(PackageObject, object) orelse continue;
+            if (!std.mem.eql(u8, pkg.getTarget(), target)) continue;
+            _ = gtk.SelectionModel.selectItem(p.selection.as(gtk.SelectionModel), i, 1);
+            return;
+        }
+    }
+
+    /// the chosen group stays chosen while it is listed.
+    fn set_groups(self: *Self, groups: []const []const u8) void {
+        const p = self.priv();
+        if (self.groups_shown(groups)) return;
+
+        var chosen_buffer: [64]u8 = undefined;
+        const chosen = chosen_buffer[0..p.selected_group_len];
+        @memcpy(chosen, p.selected_group[0..p.selected_group_len]);
+
+        const strings = gtk.StringList.new(null);
+        defer strings.as(gobject.Object).unref();
+        gtk.StringList.append(strings, "Any");
+        for (groups) |g| {
+            var buf: [128]u8 = undefined;
+            gtk.StringList.append(strings, c_string.cstr(&buf, g));
+        }
+        gtk.DropDown.setModel(p.grouping_selection, strings.as(gio.ListModel));
+        gtk.DropDown.setSelected(p.grouping_selection, group_position(groups, chosen));
+    }
+
+    fn groups_shown(self: *Self, groups: []const []const u8) bool {
+        const model = gtk.DropDown.getModel(self.priv().grouping_selection) orelse return false;
+        if (gio.ListModel.getNItems(model) != groups.len + 1) return false;
+        for (groups, 1..) |group, position| {
+            const object = gio.ListModel.getObject(model, @intCast(position)) orelse return false;
+            defer object.unref();
+            const string = gobject.ext.cast(gtk.StringObject, object) orelse return false;
+            var buf: [128]u8 = undefined;
+            if (!std.mem.eql(u8, std.mem.span(gtk.StringObject.getString(string)), c_string.cstr(&buf, group))) return false;
+        }
+        return true;
+    }
+
+    /// rows already on screen stay, with a notice; without any there is only the error.
+    fn load_failed(self: *Self) void {
+        const p = self.priv();
+        self.cancel_spinner();
+        gtk.Spinner.setSpinning(p.loading_spinner, 0);
+        gtk.Widget.setVisible(p.loading_spinner.as(gtk.Widget), 0);
+        const empty = gio.ListModel.getNItems(p.list_store.as(gio.ListModel)) == 0;
+        gtk.Widget.setVisible(p.error_label.as(gtk.Widget), @intFromBool(empty));
+        gtk.Widget.setVisible(p.loading_overlay.as(gtk.Widget), @intFromBool(empty));
+        if (!empty) p.toast.show(.warning, translations._("Had an issue loading your packages. Check if you have a db lock."));
+    }
+
+    fn on_spinner_delay(data: ?*anyopaque) callconv(.c) c_int {
+        const self: *Self = @ptrCast(@alignCast(data orelse return 0));
+        self.priv().spinner_source = 0;
+        show_loading(self);
+        return 0;
+    }
+
+    fn cancel_spinner(self: *Self) void {
+        const p = self.priv();
+        if (p.spinner_source == 0) return;
+        _ = glib.Source.remove(p.spinner_source);
+        p.spinner_source = 0;
     }
 
     fn show_loading(self: *Self) void {
@@ -946,12 +1270,14 @@ pub const PackagePage = extern struct {
 
     fn hide_loading(self: *Self) void {
         const p = self.priv();
+        self.cancel_spinner();
         gtk.Spinner.setSpinning(p.loading_spinner, 0);
         gtk.Widget.setVisible(p.loading_overlay.as(gtk.Widget), 0);
         self.update_no_results();
     }
 
     const template_children = .{
+        .{ "PackageWindow", @offsetOf(Private, "page_overlay") },
         .{ "package_column_view", @offsetOf(Private, "column_view") },
         .{ "name_column", @offsetOf(Private, "name_column") },
         .{ "version_column", @offsetOf(Private, "version_column") },
@@ -1019,6 +1345,7 @@ pub const PackagePage = extern struct {
         var i: u32 = 0;
         while (i < n) : (i += 1) {
             const obj = gio.ListModel.getObject(model, i) orelse continue;
+            defer obj.unref();
             const pkg = gobject.ext.cast(PackageObject, obj) orelse continue;
             if (!pkg.isSelected()) continue;
 
@@ -1033,7 +1360,7 @@ pub const PackagePage = extern struct {
             const row = gtk.Box.new(.horizontal, 8);
             gtk.Widget.setHexpand(row.as(gtk.Widget), 1);
 
-            const name_label = gtk.Label.new(pkg.getName());
+            const name_label = gtk.Label.new(pkg.getTarget());
             gtk.Widget.setHalign(name_label.as(gtk.Widget), .start);
             gtk.Widget.setHexpand(name_label.as(gtk.Widget), 1);
             gtk.Label.setXalign(name_label, 0);
@@ -1054,7 +1381,8 @@ pub const PackagePage = extern struct {
 
             gtk.Button.setChild(row_btn, row.as(gtk.Widget));
 
-            gobject.Object.setData(row_btn.as(gobject.Object), "pkg", pkg);
+            // the entry outlives the row when the page is left.
+            gobject.Object.setDataFull(row_btn.as(gobject.Object), "pkg", obj.ref(), &releaseObject);
             gobject.Object.setData(row_btn.as(gobject.Object), "page", self);
             _ = gtk.Button.signals.clicked.connect(row_btn, ?*anyopaque, &on_cart_item_clicked, null, .{});
 
@@ -1096,6 +1424,11 @@ pub const PackagePage = extern struct {
         }
     }
 
+    fn releaseObject(data: ?*anyopaque) callconv(.c) void {
+        const object: *gobject.Object = @ptrCast(@alignCast(data orelse return));
+        object.unref();
+    }
+
     fn on_cart_item_clicked(button: *gtk.Button, _: ?*anyopaque) callconv(.c) void {
         const pkg_ptr = gobject.Object.getData(button.as(gobject.Object), "pkg") orelse return;
         const pkg: *PackageObject = @ptrCast(@alignCast(pkg_ptr));
@@ -1123,6 +1456,7 @@ pub const PackagePage = extern struct {
         var i: u32 = 0;
         while (i < n) : (i += 1) {
             const obj = gio.ListModel.getObject(model, i) orelse continue;
+            defer obj.unref();
             const pkg = gobject.ext.cast(PackageObject, obj) orelse continue;
             if (!pkg.isSelected()) continue;
             if (pkg.isInstalled()) remove_count += 1 else install_count += 1;
@@ -1163,7 +1497,7 @@ pub const PackagePage = extern struct {
         const active = gtk.CheckButton.getActive(check) != 0;
         p.show_hidden = active;
         updateConfigField(.PackageInstallShowHidden, active);
-        if (p.loaded) self.reload();
+        if (p.loaded) self.start_load(true);
     }
 
     fn on_installed_only_toggled(check: *gtk.CheckButton, self: *Self) callconv(.c) void {
@@ -1227,6 +1561,7 @@ pub const PackagePage = extern struct {
         var i: u32 = 0;
         while (i < n) : (i += 1) {
             const obj = gio.ListModel.getObject(p.list_store.as(gio.ListModel), i) orelse continue;
+            defer obj.unref();
             const pkg = gobject.ext.cast(PackageObject, obj) orelse continue;
             if (pkg.isSelected()) {
                 names.append(std.heap.c_allocator, pkg.getName()) catch continue;
@@ -1276,21 +1611,16 @@ pub const PackagePage = extern struct {
         var i: u32 = 0;
         while (i < n) : (i += 1) {
             const obj = gio.ListModel.getObject(p.list_store.as(gio.ListModel), i) orelse continue;
+            defer obj.unref();
             const pkg = gobject.ext.cast(PackageObject, obj) orelse continue;
             if (pkg.isSelected()) {
-                names.append(std.heap.c_allocator, pkg.getName()) catch continue;
+                names.append(std.heap.c_allocator, pkg.getTarget()) catch continue;
             }
         }
         if (names.items.len == 0) return;
 
-        var argv: std.ArrayListUnmanaged([]const u8) = .empty;
+        var argv = install_argv(std.heap.c_allocator, names.items, gtk.CheckButton.getActive(p.upgrade_check) != 0) catch return;
         defer argv.deinit(std.heap.c_allocator);
-        argv.append(std.heap.c_allocator, "install") catch return;
-        argv.append(std.heap.c_allocator, "standard") catch return;
-        for (names.items) |name| argv.append(std.heap.c_allocator, name) catch return;
-        if (gtk.CheckButton.getActive(p.upgrade_check) != 0) {
-            argv.append(std.heap.c_allocator, "--upgrade") catch return;
-        }
 
         if (support.getWindow(ShellyWindow, self)) |win| {
             win.startTransaction(.{
@@ -1314,19 +1644,47 @@ pub const PackagePage = extern struct {
         var i: u32 = 0;
         while (i < n) : (i += 1) {
             const obj = gio.ListModel.getObject(model, i) orelse continue;
+            defer obj.unref();
             const pkg = gobject.ext.cast(PackageObject, obj) orelse continue;
+            if (!pkg.isSelected()) continue;
             pkg.setSelected(false);
+            if (p.check_map_grid.get(pkg)) |check| set_sync_active(check, false);
+            if (p.check_map_column.get(pkg)) |check| set_sync_active(check, false);
         }
 
         self.update_selection_ui();
-        self.reload();
-    }
-
-    fn reload(self: *Self) void {
-        const p = self.priv();
-        p.generation += 1;
-        show_loading(self);
-        const thread = std.Thread.spawn(.{}, load_worker, .{ self, p.generation, p.show_hidden }) catch return;
-        thread.detach();
+        if (p.loaded) self.start_load(false);
     }
 };
+
+/// the place of the chosen group in the list, where 0 is "Any".
+fn group_position(groups: []const []const u8, chosen: []const u8) c_uint {
+    for (groups, 1..) |g, position| {
+        if (std.mem.eql(u8, g, chosen)) return @intCast(position);
+    }
+    return 0;
+}
+
+fn install_argv(alloc: std.mem.Allocator, names: []const []const u8, upgrade: bool) !std.ArrayListUnmanaged([]const u8) {
+    var argv: std.ArrayListUnmanaged([]const u8) = .empty;
+    errdefer argv.deinit(alloc);
+    // a saved listing may not know of a newer install.
+    try argv.appendSlice(alloc, &.{ "install", "standard", "--needed" });
+    try argv.appendSlice(alloc, names);
+    if (upgrade) try argv.append(alloc, "--upgrade");
+    return argv;
+}
+
+test "installs skip packages that are already up to date" {
+    var argv = try install_argv(std.testing.allocator, &.{ "core/foo", "extra/bar" }, true);
+    defer argv.deinit(std.testing.allocator);
+    const expected = [_][]const u8{ "install", "standard", "--needed", "core/foo", "extra/bar", "--upgrade" };
+    try std.testing.expectEqual(expected.len, argv.items.len);
+    for (expected, argv.items) |want, got| try std.testing.expectEqualStrings(want, got);
+}
+
+test "a group that is gone does not hand the filter to a similar name" {
+    try std.testing.expectEqual(@as(c_uint, 2), group_position(&.{ "plasma-meta", "plasma" }, "plasma"));
+    try std.testing.expectEqual(@as(c_uint, 0), group_position(&.{ "kde", "plasma-meta" }, "plasma"));
+    try std.testing.expectEqual(@as(c_uint, 0), group_position(&.{ "kde", "plasma" }, ""));
+}
