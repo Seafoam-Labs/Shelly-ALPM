@@ -412,7 +412,9 @@ pub const View = struct {
         const note_height: u16 = if (note_text.len > 0) 1 else 0;
         const body_start: u16 = @intFromBool(self.back != null);
         const actions = if (self.choice_owner) |owner| owner.settings_state.settings.expanded_mouse_support and self.review and inner_width >= 10 and inner_height >= 3 else false;
-        const body_height = inner_height - body_start - note_height - @as(u16, @intFromBool(actions));
+        const stack_cleanup_actions = actions and self.cleanup_review and !self.choices and inner_width < 18;
+        const action_height: u16 = if (stack_cleanup_actions) 2 else @intFromBool(actions);
+        const body_height = inner_height -| (body_start + note_height + action_height);
         var children: std.ArrayList(vxfw.SubSurface) = .empty;
         if (self.back) |back| try children.append(ctx.arena, .{
             .origin = .{ .row = 0, .col = 0 },
@@ -437,7 +439,7 @@ pub const View = struct {
                 .origin = .{ .row = @intCast(body_start + prompt_surface.size.height), .col = 0 },
                 .surface = try self.drawChoices(ctx.withConstraints(.{}, .{ .width = inner_width, .height = body_height -| prompt_surface.size.height })),
             });
-        } else {
+        } else if (body_height > 0) {
             try children.append(ctx.arena, .{
                 .origin = .{ .row = body_start, .col = 0 },
                 .surface = try self.scroll.draw(ctx.withConstraints(.{}, .{ .width = inner_width, .height = body_height })),
@@ -446,7 +448,7 @@ pub const View = struct {
         if (note_height > 0) {
             var note: vxfw.Text = .{ .text = note_text, .softwrap = false };
             try children.append(ctx.arena, .{
-                .origin = .{ .row = @intCast(body_start + body_height), .col = 0 },
+                .origin = .{ .row = @min(body_start + body_height, inner_height - action_height -| 1), .col = 0 },
                 .surface = try note.draw(ctx.withConstraints(.{}, .{ .width = inner_width, .height = note_height })),
             });
         }
@@ -454,11 +456,11 @@ pub const View = struct {
             const buttons = @import("operation_view.zig");
             const owner = self.choice_owner.?;
             try children.append(ctx.arena, .{
-                .origin = .{ .row = inner_height - 1, .col = 0 },
+                .origin = .{ .row = inner_height - action_height, .col = 0 },
                 .surface = try buttons.drawActionButton(ctx, owner, if (self.choices) "[Confirm]" else "[Approve]", .approve),
             });
-            if (!self.choices and inner_width >= (if (self.cleanup_review) @as(u16, 18) else 19)) try children.append(ctx.arena, .{
-                .origin = .{ .row = inner_height - 1, .col = 10 },
+            if (!self.choices and (self.cleanup_review or inner_width >= 19)) try children.append(ctx.arena, .{
+                .origin = .{ .row = inner_height - 1, .col = if (stack_cleanup_actions) 0 else 10 },
                 .surface = try buttons.drawActionButton(ctx, owner, if (self.cleanup_review) "[Cancel]" else "[Decline]", .decline),
             });
         }
@@ -980,4 +982,28 @@ test "review distinguishes no findings from unavailable scans without adding sca
     defer preview.deinit();
     try std.testing.expectEqual(@as(usize, 1), preview.lines.len);
     try std.testing.expect(std.mem.startsWith(u8, preview.lines[0], "    1"));
+}
+
+test "narrow cleanup review exposes both mouse buttons" {
+    vxfw.DrawContext.init(.unicode);
+    const model = try @import("../model.zig").Model.init(std.testing.allocator);
+    defer model.deinit();
+    model.settings_state.settings.expanded_mouse_support = true;
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var scroll: vxfw.ScrollView = .{ .children = .{ .slice = &.{} } };
+    const view: View = .{ .name = "cleanup", .scroll = &scroll, .loading = false, .failure = null, .review = true, .cleanup_review = true, .choice_owner = model };
+    const surface = try view.drawInPane(.{ .arena = allocator, .min = .{}, .max = .{ .width = 12, .height = 5 }, .cell_size = .{ .width = 10, .height = 20 } });
+    const content = surface.children[0].surface;
+    const buttons = content.children[content.children.len - 2 ..];
+    for (buttons, [_]u16{ 2, 3 }, [_][]const u8{ "[Approve]", "[Cancel]" }) |button, hit_row, label| {
+        var hits: std.ArrayList(vxfw.HitResult) = .empty;
+        try surface.hitTest(allocator, &hits, .{ .row = hit_row, .col = 1 });
+        const hit = hits.getLast().widget;
+        try std.testing.expect(hit.eventHandler != null);
+        try std.testing.expectEqual(button.surface.widget.userdata, hit.userdata);
+        for (label, button.surface.buffer[0..label.len]) |character, cell|
+            try std.testing.expectEqualSlices(u8, &.{character}, cell.char.grapheme);
+    }
 }

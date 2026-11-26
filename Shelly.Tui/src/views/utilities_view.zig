@@ -69,7 +69,7 @@ fn drawStacked(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surf
 
 fn drawActions(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
     const size = ctx.max.size();
-    const widget: vxfw.Widget = .{ .userdata = ptr, .drawFn = drawActions, .eventHandler = focusActions };
+    var widget: vxfw.Widget = .{ .userdata = ptr, .drawFn = drawActions, .eventHandler = focusActions };
     if (size.width == 0 or size.height == 0) return .{ .size = size, .widget = widget, .buffer = &.{}, .children = &.{} };
     const line_ctx = ctx.withConstraints(.{}, .{ .width = size.width, .height = 1 });
     const model: *Model = @ptrCast(@alignCast(ptr));
@@ -86,7 +86,21 @@ fn drawActions(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surf
     };
     var children: std.ArrayList(vxfw.SubSurface) = .empty;
     if (size.height < rows.len) {
-        try children.append(ctx.arena, .{ .origin = .{ .row = 0, .col = 0 }, .surface = try drawAction(model, line_ctx, model.utilities_state.selected) });
+        widget.eventHandler = navigateCompactActions;
+        var available: [std.enums.values(Task).len]Task = undefined;
+        var count: usize = 0;
+        var selected: usize = 0;
+        for (std.enums.values(Task)) |task| {
+            if (!task.available(model)) continue;
+            if (task == model.utilities_state.selected) selected = count;
+            available[count] = task;
+            count += 1;
+        }
+        const visible = @min(count, size.height);
+        const start = (selected + 1) -| visible;
+        for (available[start..][0..visible], 0..) |task, row| {
+            try children.append(ctx.arena, .{ .origin = .{ .row = @intCast(row), .col = 0 }, .surface = try drawAction(model, line_ctx, task) });
+        }
     } else {
         for (rows) |row| {
             const surface = switch (row) {
@@ -100,6 +114,14 @@ fn drawActions(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surf
         }
     }
     return .{ .size = size, .widget = widget, .buffer = &.{}, .children = children.items };
+}
+
+fn navigateCompactActions(ptr: *anyopaque, ctx: *vxfw.EventContext, event: vxfw.Event) anyerror!void {
+    if (event == .mouse) switch (event.mouse.button) {
+        .wheel_up, .wheel_down => return commands.Mouse.moveUtilityFocus(@ptrCast(@alignCast(ptr)), ctx, event.mouse.button == .wheel_up),
+        else => {},
+    };
+    try focusActions(ptr, ctx, event);
 }
 
 fn focusActions(ptr: *anyopaque, ctx: *vxfw.EventContext, event: vxfw.Event) anyerror!void {

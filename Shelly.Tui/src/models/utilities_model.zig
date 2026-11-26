@@ -372,6 +372,27 @@ fn buildPreviewRow(ptr: *const anyopaque, index: usize, _: usize) ?vxfw.Widget {
     return null;
 }
 
+pub fn moveActionFromMouse(model: *Model, ctx: *vxfw.EventContext, up: bool) !void {
+    if (!acceptsMouse(model) or model.utilities_state.repositories.editing != null) return;
+    model.utilities_state.results_focused = false;
+    moveAction(model, up);
+    try ensureSelected(model, ctx);
+    ctx.consumeAndRedraw();
+}
+
+fn moveAction(model: *Model, up: bool) void {
+    const state = &model.utilities_state;
+    const tasks = std.enums.values(Task);
+    var index: usize = @backingInt(state.selected);
+    while (if (up) index > 0 else index < tasks.len - 1) {
+        index = if (up) index - 1 else index + 1;
+        if (tasks[index].available(model)) {
+            state.selected = tasks[index];
+            break;
+        }
+    }
+}
+
 pub fn handleKey(model: *Model, ctx: *vxfw.EventContext, key: vaxis.Key) !bool {
     const state = &model.utilities_state;
     if (state.selected == .repository and (state.results_focused or state.repositories.editing != null))
@@ -411,16 +432,7 @@ pub fn handleKey(model: *Model, ctx: *vxfw.EventContext, key: vaxis.Key) !bool {
         vaxis.Key.right => state.results_focused = state.selected == .pacfiles or state.selected == .repository,
         vaxis.Key.up, vaxis.Key.down => {
             if (state.results_focused) return false;
-            const tasks = std.enums.values(Task);
-            const up = direction.codepoint == vaxis.Key.up;
-            var index: usize = @backingInt(state.selected);
-            while (if (up) index > 0 else index < tasks.len - 1) {
-                index = if (up) index - 1 else index + 1;
-                if (tasks[index].available(model)) {
-                    state.selected = tasks[index];
-                    break;
-                }
-            }
+            moveAction(model, direction.codepoint == vaxis.Key.up);
         },
         else => return false,
     }

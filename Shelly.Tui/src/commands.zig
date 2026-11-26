@@ -38,6 +38,7 @@ pub const Mouse = struct {
     pub const focusUtilityPane = @import("models/utilities_model.zig").focusPaneFromMouse;
     pub const selectUtilityResult = @import("models/utilities_model.zig").selectResultFromMouse;
     pub const previewPacfile = @import("models/utilities_model.zig").previewFromMouse;
+    pub const moveUtilityFocus = @import("models/utilities_model.zig").moveActionFromMouse;
     pub const activateUtility = @import("models/utilities_model.zig").activateFromMouse;
     pub const editBinding = @import("models/settings_model.zig").editBindingFromMouse;
     pub const activateSetting = @import("models/settings_model.zig").onSettingsAction;
