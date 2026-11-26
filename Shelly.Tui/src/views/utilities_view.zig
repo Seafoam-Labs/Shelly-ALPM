@@ -199,14 +199,18 @@ fn drawResults(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surf
         if (size.height - row >= 2) row += 1;
     }
     const message = state.message();
-    const buttons = message == null and model.settings_state.settings.expanded_mouse_support and size.height - row >= 2 and size.width >= 16;
-    const body_ctx = ctx.withConstraints(.{}, .{ .width = size.width, .height = size.height - row - @as(u16, @intFromBool(buttons)) });
+    const show_actions = model.settings_state.settings.expanded_mouse_support and size.height - row >= 2;
+    const retry = show_actions and state.failed and state.job == null and size.width >= "[Retry]".len;
+    const buttons = show_actions and message == null and size.width >= 16;
+    const body_ctx = ctx.withConstraints(.{}, .{ .width = size.width, .height = size.height - row - @as(u16, @intFromBool(buttons or retry)) });
     const body = if (message) |status_message| blk: {
         const status: vxfw.Text = .{ .text = status_message, .softwrap = true };
         break :blk try status.draw(body_ctx);
     } else try drawClickableResults(model, body_ctx, .pacfiles, &state.list);
     try children.append(ctx.arena, .{ .origin = .{ .row = row, .col = 0 }, .surface = body });
-    if (buttons) {
+    if (retry) {
+        try appendUtilityButton(model, ctx, &children, size.height - 1, 0, "[Retry]", .retry);
+    } else if (buttons) {
         try appendUtilityButton(model, ctx, &children, size.height - 1, 0, "[Preview]", .{ .preview_diff = false });
         try appendUtilityButton(model, ctx, &children, size.height - 1, 10, "[Diff]", .{ .preview_diff = true });
     }
@@ -424,7 +428,7 @@ fn appendRepositoryLine(ctx: vxfw.DrawContext, children: *std.ArrayList(vxfw.Sub
 }
 
 const UtilityButton = struct {
-    const Action = union(enum) { repository: RepositoryControl, preview_diff: bool };
+    const Action = union(enum) { repository: RepositoryControl, preview_diff: bool, retry };
 
     owner: *Model,
     label: []const u8,
@@ -444,6 +448,7 @@ const UtilityButton = struct {
         const self: *UtilityButton = @ptrCast(@alignCast(ptr));
         switch (self.action) {
             .repository => |action| try commands.Mouse.repositoryControl(self.owner, ctx, action),
+            .retry => try commands.Mouse.retryPacfiles(self.owner, ctx),
             .preview_diff => |diff| try commands.Mouse.previewPacfile(self.owner, ctx, diff),
         }
     }

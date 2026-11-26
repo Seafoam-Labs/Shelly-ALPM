@@ -37,6 +37,7 @@ pub const Mouse = struct {
     pub const repositoryControl = @import("models/utilities_model.zig").repositoryControl;
     pub const focusUtilityPane = @import("models/utilities_model.zig").focusPaneFromMouse;
     pub const selectUtilityResult = @import("models/utilities_model.zig").selectResultFromMouse;
+    pub const retryPacfiles = @import("models/utilities_model.zig").retryPacfilesFromMouse;
     pub const previewPacfile = @import("models/utilities_model.zig").previewFromMouse;
     pub const moveUtilityFocus = @import("models/utilities_model.zig").moveActionFromMouse;
     pub const activateUtility = @import("models/utilities_model.zig").activateFromMouse;

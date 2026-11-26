@@ -210,6 +210,7 @@ pub fn activateFromMouse(model: *Model, ctx: *vxfw.EventContext, task: Task) !vo
     if (!acceptsMouse(model) or model.utilities_state.repositories.editing != null or !task.available(model)) return;
     const state = &model.utilities_state;
     if (state.selected == task and !state.results_focused and model.settings_state.settings.expanded_mouse_support) {
+        if (task == .pacfiles and state.failed) return retryPacfilesFromMouse(model, ctx);
         return activate(model, ctx);
     }
     state.selected = task;
@@ -261,6 +262,12 @@ pub fn selectResultFromMouse(model: *Model, ctx: *vxfw.EventContext, task: Task,
         state.results_focused = true;
         return ctx.consumeAndRedraw();
     }
+}
+
+pub fn retryPacfilesFromMouse(model: *Model, ctx: *vxfw.EventContext) !void {
+    const state = &model.utilities_state;
+    if (!acceptsMouse(model) or !model.settings_state.settings.expanded_mouse_support or state.selected != .pacfiles or !state.failed) return;
+    try discover(model, ctx);
 }
 
 pub fn previewFromMouse(model: *Model, ctx: *vxfw.EventContext, diff: bool) !void {
