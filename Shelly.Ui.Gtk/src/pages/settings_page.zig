@@ -105,6 +105,7 @@ pub const ShellySettingsPage = extern struct {
         theme_mode_drop: *gtk.DropDown,
         theme_variant_drop: *gtk.DropDown,
         system_titlebar_switch: *gtk.Switch,
+        rounded_corners_switch: *gtk.Switch,
 
         // Advanced
         remove_cache_switch: *gtk.Switch,
@@ -285,6 +286,7 @@ pub const ShellySettingsPage = extern struct {
             p.shelly_icons_switch,
             p.symbolic_tray_switch,
             p.system_titlebar_switch,
+            p.rounded_corners_switch,
             p.tray_cron_switch,
             p.no_confirm_switch,
             p.shelly_search_switch,
@@ -1268,6 +1270,7 @@ pub const ShellySettingsPage = extern struct {
         .{ "theme_mode_drop", @offsetOf(Private, "theme_mode_drop") },
         .{ "theme_variant_drop", @offsetOf(Private, "theme_variant_drop") },
         .{ "system_titlebar_switch", @offsetOf(Private, "system_titlebar_switch") },
+        .{ "rounded_corners_switch", @offsetOf(Private, "rounded_corners_switch") },
 
         // Advanced
         .{ "remove_cache_switch", @offsetOf(Private, "remove_cache_switch") },
@@ -1681,6 +1684,7 @@ fn applyConfig(p: *ShellySettingsPage.Private, cfg: *ShellyConfig) void {
     gtk.DropDown.setSelected(p.theme_mode_drop, themeModeIndex(cfg.ThemeMode));
     gtk.DropDown.setSelected(p.theme_variant_drop, themeVariantIndex(cfg.ThemeVariant));
     setSwitch(p.system_titlebar_switch, cfg.UseSystemTitlebar);
+    setSwitch(p.rounded_corners_switch, cfg.RoundedWindowCorners);
     gtk.DropDown.setSelected(p.language_drop, languageIndex(cfg.Culture));
 
     setButtonLabel(p.tray_icon_button, std.heap.c_allocator, cfg.TrayIconPath, translations._("Select Icon"));
@@ -1779,6 +1783,7 @@ fn collectIntoConfig(p: *ShellySettingsPage.Private, allocator: std.mem.Allocato
         cfg.ThemeVariant = theme_variant_entries[theme_variant_idx].value;
     }
     cfg.UseSystemTitlebar = getSwitch(p.system_titlebar_switch);
+    cfg.RoundedWindowCorners = getSwitch(p.rounded_corners_switch);
 
     // Advanced
     cfg.NoConfirm = getSwitch(p.no_confirm_switch);

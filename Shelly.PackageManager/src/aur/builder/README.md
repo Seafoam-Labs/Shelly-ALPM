@@ -62,9 +62,13 @@ produce no SRCINFO; an unwritable PKGBUILD is an error in this mode.
 and invokes the same native metadata path used by `--makesrcinfo`. It retains
 architecture-specific source arrays, existing algorithms, and explicit `SKIP`
 entries, with SHA-256 as the default. Checksum acquisition skips old integrity
-checks and extraction. If `pkgver()` exists, normal source verification and
-preparation run against the updated sums, followed by a second checksum update
-for the final version's sources. `build()`, `check()`, and package functions do
+checks and extraction. Git sources whose every selected digest is `SKIP` (or
+moving) are not acquired: a `git ls-remote` probe validates branch/tag existence
+without object transfer, while skipped commit pins are not existence-checked
+(`ls-remote` cannot see raw commits). If `pkgver()` exists, normal source
+verification and preparation run against the updated sums, followed by a second
+checksum update for the final version's sources; that pass prepares every
+source, including skipped ones. `build()`, `check()`, and package functions do
 not run. Newly selected local sources can be hashed after a version change;
 automation using `--review-digest` still rejects changes to the reviewed file set.
 
@@ -164,7 +168,7 @@ or cancelled extraction discards staging and preserves the previous source tree.
 | `metadata.zig` | **Metadata + option helpers.** makepkg option merging (`effectivePackageOptions`, `!option` semantics), `pkgver` validation, ownership-safe replacement of optional strings/arrays, and application of runtime-captured package metadata onto the parsed PKGBUILD (`applyPackageMetadata`). |
 | `security.zig` | **Privilege guards.** Non-root effective-UID policy, `prctl(NO_NEW_PRIVS)` process lockdown (`setNoNewPrivs` is shared with the sandbox wrapper), randomized unique work directories, and `narrowBuilderError` (anyerror → `BuilderErrors`). |
 | `sandbox.zig` | **Landlock step confinement.** Raw Landlock syscalls (ruleset create/add-rule/restrict-self), the ABI probe, the base and per-build allow-list, the `__sandbox-exec` wrapper protocol (`parseWrapperArguments`/`buildWrappedCommand`), and their unit tests. Steps re-execute through the CLI wrapper so only the untrusted bash children are confined. |
-| `sources.zig` | **Source pipeline.** Copies local files, downloads HTTP sources into the cache, mirror-clones git sources, verifies checksums and PGP signatures (including compressed `.sig` payloads), runs the optional `verify()` step, and safely extracts archives into the staging tree (path traversal, symlink, and size limits). |
+| `sources.zig` | **Source pipeline.** Copies local files, downloads HTTP sources into the cache, acquires git sources as full mirrors or shallow pinned-ref caches (`[build] shallow_git`, history-mention gate, advisory cache locking, full-mirror fallback), probes all-SKIP git refs with `ls-remote`, verifies checksums and PGP signatures (including compressed `.sig` payloads), runs the optional `verify()` step, and safely extracts archives into the staging tree (path traversal, symlink, and size limits). |
 | `steps.zig` | **Step execution.** Build-directory validation, build logging, lifecycle Bash execution, and atomic sandboxed capture of the base PKGBUILD's scalar and indexed-array state. Scalar and array set/unset records are NUL-delimited, validated, and bounded before becoming parser overrides. Also owns messaging/virtual-metadata preludes, stream forwarding, `pkgver()` capture, and package-metadata capture. |
 | `package_file.zig` | **Package assembly.** `tidy`/strip handling, `.PKGINFO` and `.BUILDINFO` writers (including soname expansion of bare `*.so` provides/depends), install-script/changelog placement from reviewed contents, `.MTREE` generation, archive creation via the Shelly archive writer, detached OpenPGP signing, and rollback cleanup. |
 | `soname.zig` | **Soname expansion.** Native ELF dynamic-section reader (class, `ET_DYN`, `DT_SONAME`, `DT_NEEDED`) and makepkg-compatible versioning of bare `*.so` provides/depends from the packaged payload, reproducing makepkg's libprovides/libdepends step. Unresolvable entries stay bare with makepkg's warnings; identical versioned entries are deduplicated. |

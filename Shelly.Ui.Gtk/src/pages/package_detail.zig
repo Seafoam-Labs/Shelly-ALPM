@@ -117,6 +117,23 @@ pub const PackageDetail = extern struct {
         updateNav(self);
     }
 
+    /// the package the pane was opened for, below any dependency it moved to.
+    pub fn rootTarget(self: *Self) []const u8 {
+        const p = self.priv();
+        if (p.nav_stack.items.len > 0) return p.nav_stack.items[0];
+        return p.pending_name[0..p.pending_len];
+    }
+
+    /// shows that package's new state, unless the pane moved to a dependency.
+    pub fn refreshPackage(self: *Self, name: []const u8, is_installed: bool, icon_path: ?[:0]const u8) void {
+        const p = self.priv();
+        if (p.nav_stack.items.len > 0) {
+            p.base_installed = is_installed;
+            return;
+        }
+        self.showPackage(name, is_installed, icon_path);
+    }
+
     fn showPackageInternal(self: *Self, name: []const u8, is_installed: bool, icon_path: ?[:0]const u8) void {
         const p = self.priv();
         const len = @min(name.len, p.pending_name.len);

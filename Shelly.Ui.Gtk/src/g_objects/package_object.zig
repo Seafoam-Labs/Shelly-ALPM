@@ -131,6 +131,23 @@ pub const PackageObject = extern struct {
         self.priv().selected = v;
     }
 
+    /// whether the row would look and act the same when built from `package`.
+    pub fn matches(self: *Self, package: Package) bool {
+        const p = self.priv();
+        if (!std.mem.eql(u8, p.name, package.Name)) return false;
+        if (!std.mem.eql(u8, p.version, package.Version)) return false;
+        if (!std.mem.eql(u8, p.repository, package.Repository)) return false;
+        if (!std.mem.eql(u8, p.description, package.Description)) return false;
+        if (!std.mem.eql(u8, p.install_date, package.InstallDate orelse "")) return false;
+        if (p.installed_size != package.InstalledSize) return false;
+        if (p.installed != package.Installed or p.explicit != package.Explicit) return false;
+        if (p.groups.len != package.Groups.len) return false;
+        for (p.groups, package.Groups) |old, new_group| {
+            if (!std.mem.eql(u8, old, new_group)) return false;
+        }
+        return true;
+    }
+
     pub fn getGroups(self: *Self) []const [:0]const u8 {
         return self.priv().groups;
     }
@@ -154,3 +171,37 @@ pub const PackageObject = extern struct {
         }
     };
 };
+
+test "a package object matches only the package it was made from" {
+    const package: Package = .{
+        .Name = "foo",
+        .Version = "1-1",
+        .Repository = "core",
+        .Description = "text",
+        .Groups = &.{ "base", "devel" },
+        .InstallDate = "2026-11-25",
+        .InstalledSize = 7,
+        .Installed = true,
+        .Explicit = true,
+    };
+    const object = PackageObject.new(package);
+    defer object.as(gobject.Object).unref();
+    try std.testing.expect(object.matches(package));
+
+    inline for (.{
+        .{ "Name", "bar" },
+        .{ "Version", "1-2" },
+        .{ "Repository", "extra" },
+        .{ "Description", "other" },
+        .{ "InstallDate", null },
+        .{ "InstalledSize", 8 },
+        .{ "Installed", false },
+        .{ "Explicit", false },
+        .{ "Groups", &[_][]const u8{"base"} },
+        .{ "Groups", &[_][]const u8{ "base", "other" } },
+    }) |change| {
+        var changed = package;
+        @field(changed, change[0]) = change[1];
+        try std.testing.expect(!object.matches(changed));
+    }
+}

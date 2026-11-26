@@ -30,6 +30,35 @@ pub const Package = struct {
     AvailableFrom: []const RepositoryVersion = &.{},
 };
 
+/// the part of a listed package the pages read. `package` fills the rest in.
+pub const PackageRow = struct {
+    Name: []const u8 = "",
+    Version: []const u8 = "",
+    Description: []const u8 = "",
+    Repository: []const u8 = "",
+    Groups: []const []const u8 = &.{},
+    InstallReason: []const u8 = "",
+    InstallDate: ?[]const u8 = null,
+    InstalledSize: i64 = 0,
+    InstalledFrom: ?[]const u8 = null,
+    InstalledFromInferred: bool = false,
+
+    pub fn package(self: PackageRow) Package {
+        return .{
+            .Name = self.Name,
+            .Version = self.Version,
+            .Description = self.Description,
+            .Repository = self.Repository,
+            .Groups = self.Groups,
+            .InstallReason = self.InstallReason,
+            .InstallDate = self.InstallDate,
+            .InstalledSize = self.InstalledSize,
+            .InstalledFrom = self.InstalledFrom,
+            .InstalledFromInferred = self.InstalledFromInferred,
+        };
+    }
+};
+
 pub const RepositoryVersion = struct {
     Repository: []const u8 = "",
     Version: []const u8 = "",
@@ -330,4 +359,23 @@ test "package model preserves optional dependency installation state" {
 
     try std.testing.expectEqual(@as(usize, 2), parsed.value.OptDepends.len);
     try std.testing.expectEqualSlices(bool, &.{ true, false }, parsed.value.OptDependsInstalled);
+}
+
+test "a package row keeps every field the pages read" {
+    const row: PackageRow = .{
+        .Name = "foo",
+        .Version = "1-1",
+        .Description = "text",
+        .Repository = "core",
+        .Groups = &.{"base"},
+        .InstallReason = "Explicit",
+        .InstallDate = "2026-11-25",
+        .InstalledSize = 7,
+        .InstalledFrom = "core",
+        .InstalledFromInferred = true,
+    };
+    const pkg = row.package();
+    inline for (comptime std.meta.fieldNames(PackageRow)) |name| {
+        try std.testing.expectEqualDeep(@field(row, name), @field(pkg, name));
+    }
 }
