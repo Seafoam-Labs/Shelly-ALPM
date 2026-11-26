@@ -1629,6 +1629,7 @@ test "AUR single and batch removal retain CLI dependency defaults" {
 }
 
 test "private sudo terminal captures fingerprint prompts and keeps credentials out of reviews" {
+    try sudo_terminal.skipWithoutTerminal();
     const fixture = @import("auth_test_options");
     for ([_][]const u8{ "terminal", "fingerprint", "cached", "wrong" }) |mode| {
         var env: std.process.Environ.Map = .init(std.testing.allocator);
@@ -1733,6 +1734,7 @@ test "cancellation before worker startup is remembered without launching sudo" {
 }
 
 test "cancellation between spawn and PID publication terminates the exact pending process" {
+    try sudo_terminal.skipWithoutTerminal();
     const fixture = @import("auth_test_options");
     var env: std.process.Environ.Map = .init(std.testing.allocator);
     defer env.deinit();
@@ -1775,6 +1777,7 @@ test "immediate operation shutdown does not wait for a future password prompt" {
 }
 
 test "successive operations retain the real terminal session used by sudo timestamps" {
+    try sudo_terminal.skipWithoutTerminal();
     const fixture = @import("auth_test_options");
     var env: std.process.Environ.Map = .init(std.testing.allocator);
     defer env.deinit();
@@ -1837,6 +1840,7 @@ test "successive operations retain the real terminal session used by sudo timest
 }
 
 test "private terminal authentication can be interrupted without protocol input" {
+    try sudo_terminal.skipWithoutTerminal();
     const fixture = @import("auth_test_options");
     var env: std.process.Environ.Map = .init(std.testing.allocator);
     defer env.deinit();

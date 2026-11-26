@@ -80,6 +80,19 @@
 .shelly-root:not(.csd) {
   border-radius: 0;
 }
+/* gtk's theme squares these states, but this sheet loads above it. */
+.shelly-root.maximized,
+.shelly-root.fullscreen,
+.shelly-root.tiled,
+.shelly-root.tiled-top,
+.shelly-root.tiled-bottom,
+.shelly-root.tiled-left,
+.shelly-root.tiled-right {
+  border-radius: 0;
+}
+.shelly-root.square-corners {
+  border-radius: 0;
+}
 /* Plain labels inherit; pin them so desktop themes cannot dim row titles. */
 .shelly-root label {
   color: @shelly_fg;
@@ -312,6 +325,50 @@
 .shelly-root .settings-form-row:not(:first-child) {
   border-top: 1px solid @shelly_hairline;
 }
+/* settings sections: a heading, an optional line of help, then a card. */
+.shelly-root .settings-page-body {
+  /* Room for the floating save button under the last row. */
+  padding: 8px 4px 88px;
+}
+/* End the scrollbar track above the floating save button (20px margin plus
+   40px height), so a click near its bottom cannot land on save. */
+.shelly-root .settings-overlay scrolledwindow > scrollbar.vertical {
+  margin-bottom: 68px;
+}
+/* Narrow enough to sit in the margin beside the 640px column. Matches the
+   theme's button selectors so its padding and shadow are not overridden. */
+.shelly-root button.suggested-action.settings-save {
+  min-width: 0;
+  padding: 0 20px;
+  min-height: 40px;
+  border-radius: 20px;
+  box-shadow: inset 0 0 0 1px @shelly_accent_ring, 0 4px 14px alpha(black, 0.3);
+}
+.shelly-root .settings-group-title {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0 4px;
+}
+.shelly-root .settings-group-description {
+  color: @shelly_secondary_fg;
+  font-size: 12px;
+  margin: 0 4px 4px;
+}
+.shelly-root .settings-row-title {
+  font-size: 14px;
+}
+.shelly-root .settings-row-subtitle {
+  color: @shelly_secondary_fg;
+  font-size: 12px;
+}
+/* software sources wear the same icons as their pages in the navigation. */
+.shelly-root .settings-row-icon {
+  min-width: 36px;
+  min-height: 36px;
+  border-radius: 12px;
+  background: alpha(@shelly_accent, 0.14);
+  color: @shelly_accent;
+}
 .shelly-root stackswitcher button:checked {
   background: @shelly_selected_bg;
   border-color: @shelly_selected_ring;
@@ -319,11 +376,6 @@
 .shelly-root stackswitcher button:checked label {
   color: @shelly_selected_fg;
   font-weight: 600;
-}
-.shelly-root .settings-footer {
-  border-top: 1px solid @shelly_hairline;
-  padding: 12px 24px;
-  background: @shelly_root_bg;
 }
 
 /* Buttons: generic pill first, specific overrides after */
@@ -471,6 +523,9 @@
 }
 
 /* Navigation */
+.shelly-root .nav-chevron {
+  padding: 0 12px;
+}
 .shelly-root .nav-btn {
   border-radius: 12px;
   min-height: 44px;
@@ -525,6 +580,33 @@
 }
 .shelly-root .project-links > button.link image {
   color: inherit;
+}
+/* Settings version in the bottom-left corner; opens the changelog. An
+   accent pill so it reads as clickable. */
+.shelly-root button.version-link {
+  min-height: 24px;
+  padding: 1px 10px;
+  border: 1px solid alpha(@shelly_accent, 0.45);
+  border-radius: 999px;
+  background: alpha(@shelly_accent, 0.08);
+  box-shadow: none;
+  font-size: 12px;
+  font-weight: 600;
+  color: @shelly_accent;
+}
+.shelly-root button.version-link label {
+  color: inherit;
+}
+.shelly-root button.version-link:hover {
+  border-color: @shelly_accent;
+  background: alpha(@shelly_accent, 0.18);
+}
+.shelly-root button.version-link:active {
+  background: alpha(@shelly_accent, 0.26);
+}
+.shelly-root button.version-link:focus-visible {
+  outline: 2px solid @shelly_accent;
+  outline-offset: -2px;
 }
 
 .shelly-root .nav-segment {

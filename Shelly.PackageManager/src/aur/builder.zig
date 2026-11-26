@@ -719,13 +719,12 @@ pub fn selectBuiltPackageFilesForNames(
         if (!isBuiltPackageFile(entry.name)) continue;
 
         // Split-package names may prefix one another (for example `demo` and
-        // `demo-docs`). Classifying against the longest known package name
-        // prevents selecting an unrequested sibling as `demo`.
+        // `demo-docs`). The exact name check keeps them apart.
         var matched_name: ?[]const u8 = null;
         for (package_names) |name| {
-            if (entry.name.len <= name.len or entry.name[name.len] != '-' or
-                !std.mem.startsWith(u8, entry.name, name)) continue;
-            if (matched_name == null or name.len > matched_name.?.len) matched_name = name;
+            if (!isBuiltPackageFileFor(entry.name, name)) continue;
+            matched_name = name;
+            break;
         }
         const package = matched_name orelse continue;
         var requested = false;
@@ -744,6 +743,21 @@ pub fn selectBuiltPackageFilesForNames(
 pub fn isBuiltPackageFile(file_name: []const u8) bool {
     return isPackageArchiveArtifact(file_name) and
         !std.mem.endsWith(u8, file_name, ".sig");
+}
+
+/// only `<name>-<pkgver>-<pkgrel>-<arch>.pkg.tar.*`, not downloaded sources.
+pub fn isBuiltPackageFileFor(file_name: []const u8, package_name: []const u8) bool {
+    if (file_name.len <= package_name.len or file_name[package_name.len] != '-' or
+        !std.mem.startsWith(u8, file_name, package_name)) return false;
+    const rest = file_name[package_name.len + 1 ..];
+    const end = std.mem.indexOf(u8, rest, ".pkg.tar.") orelse return false;
+    var fields = std.mem.splitScalar(u8, rest[0..end], '-');
+    var count: usize = 0;
+    while (fields.next()) |field| {
+        if (field.len == 0) return false;
+        count += 1;
+    }
+    return count == 3;
 }
 
 pub fn isPackageArchiveArtifact(file_name: []const u8) bool {
@@ -1087,6 +1101,24 @@ test "built package selection mirrors split-package and stale-output safeguards"
     defer deinitPaths(std.testing.allocator, no_match);
     try std.testing.expectEqual(@as(usize, 0), no_match.len);
 
+    // prebuilt source from a -bin PKGBUILD
+    var prebuilt = std.testing.tmpDir(.{});
+    defer prebuilt.cleanup();
+    try prebuilt.dir.writeFile(std.testing.io, .{ .sub_path = "sunshine-beta-bin-2026.1120.223208.pkg.tar.zst", .data = "" });
+    try prebuilt.dir.writeFile(std.testing.io, .{ .sub_path = "sunshine-beta-bin-2026.1120.223208-1-x86_64.pkg.tar.zst", .data = "" });
+    const prebuilt_path = try prebuilt.dir.realPathFileAlloc(std.testing.io, ".", std.testing.allocator);
+    defer std.testing.allocator.free(prebuilt_path);
+    const built_only = try selectBuiltPackageFiles(std.testing.allocator, std.testing.io, prebuilt_path, "sunshine-beta-bin");
+    defer deinitPaths(std.testing.allocator, built_only);
+    try std.testing.expectEqual(@as(usize, 1), built_only.len);
+    try std.testing.expect(std.mem.endsWith(u8, built_only[0], "sunshine-beta-bin-2026.1120.223208-1-x86_64.pkg.tar.zst"));
+
+    try std.testing.expect(isBuiltPackageFileFor("demo-1:2.0-3-any.pkg.tar.zst", "demo"));
+    try std.testing.expect(!isBuiltPackageFileFor("demo-docs-1-1-any.pkg.tar.zst", "demo"));
+    try std.testing.expect(!isBuiltPackageFileFor("demo-1--any.pkg.tar.zst", "demo"));
+    try std.testing.expect(!isBuiltPackageFileFor("demo-debug-1-1-x86_64.pkg.tar.zst", "demo"));
+    try std.testing.expect(isBuiltPackageFileFor("foo-bar-1-1-any.pkg.tar.zst", "foo-bar"));
+    try std.testing.expect(!isBuiltPackageFileFor("foo-bar-1-1-any.pkg.tar.zst", "foo-bar-1"));
     try std.testing.expect(isBuiltPackageFile("demo.pkg.tar.zst"));
     try std.testing.expect(!isBuiltPackageFile("demo.pkg.tar.zst.sig"));
     try std.testing.expect(isPackageArchiveArtifact("demo.pkg.tar.zst.sig"));

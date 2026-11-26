@@ -68,6 +68,7 @@ pub const PkgbuildReviewDialog = extern struct {
 
     fn init(self: *Self, _: *Class) callconv(.c) void {
         gtk.Widget.initTemplate(self.as(gtk.Widget));
+        theme.applyCorners(self.as(gtk.Widget));
         const p = self.priv();
         p.on_response = null;
         p.ctx = null;

@@ -26,6 +26,9 @@ pub const BuildConfiguration = struct {
     ccache: bool,
     distcc: bool,
     distcc_hosts: []const []const u8,
+    /// Acquire pinned tag/commit git sources as shallow bare mirrors when no
+    /// lifecycle body reads repository history. False forces full mirrors.
+    shallow_git: bool,
     extra_path: []const []const u8 = &.{},
     env: []const EnvironmentAssignment = &.{},
 };
@@ -77,6 +80,7 @@ const BuildLayer = struct {
     ccache: ?bool = null,
     distcc: ?bool = null,
     distcc_hosts: ?[]const []const u8 = null,
+    shallow_git: ?bool = null,
     extra_path: ?[]const []const u8 = null,
     env: ?toml.Table = null,
 };
@@ -184,6 +188,7 @@ pub const ShellyBuildConfiguration = struct {
                 .ccache = false,
                 .distcc = false,
                 .distcc_hosts = &.{},
+                .shallow_git = true,
             },
             .package = .{
                 .packager = "Unknown Packager",
@@ -243,6 +248,7 @@ pub const ShellyBuildConfiguration = struct {
             if (build.ccache) |value| self.build.ccache = value;
             if (build.distcc) |value| self.build.distcc = value;
             if (build.distcc_hosts) |value| self.build.distcc_hosts = try duplicateStrings(allocator, value);
+            if (build.shallow_git) |value| self.build.shallow_git = value;
             if (build.extra_path) |value| self.build.extra_path = try duplicateStrings(allocator, value);
             if (build.env) |table| {
                 const assignments = try allocator.alloc(EnvironmentAssignment, table.count());
@@ -407,7 +413,7 @@ fn validateKnownKeys(allocator: std.mem.Allocator, content: []const u8, diagnost
     }
 }
 
-const build_keys: []const []const u8 = &.{ "carch", "chost", "cppflags", "cflags", "cxxflags", "ldflags", "ltoflags", "makeflags", "check", "ccache", "distcc", "distcc_hosts", "extra_path", "env" };
+const build_keys: []const []const u8 = &.{ "carch", "chost", "cppflags", "cflags", "cxxflags", "ldflags", "ltoflags", "makeflags", "check", "ccache", "distcc", "distcc_hosts", "shallow_git", "extra_path", "env" };
 const package_keys: []const []const u8 = &.{ "packager", "extension", "carch", "compression_level", "options", "strip_binaries", "strip_shared", "strip_static", "sign", "sign_key" };
 const destination_keys: []const []const u8 = &.{ "build", "packages", "sources", "logs" };
 const sandbox_keys: []const []const u8 = &.{ "enabled", "extra_read", "extra_write" };
@@ -484,6 +490,7 @@ test "shellybuild compiled defaults are safe and complete" {
     try std.testing.expect(config.build.check);
     try std.testing.expect(!config.build.ccache);
     try std.testing.expect(!config.build.distcc);
+    try std.testing.expect(config.build.shallow_git);
     try std.testing.expectEqualStrings(".pkg.tar.zst", config.package.extension);
     try std.testing.expect(!config.package.sign);
     try expectOptionalUnset(config.package.sign_key);
@@ -519,6 +526,20 @@ test "shellybuild comment-only sections do not override compiled defaults" {
     try expectOptionalUnset(config.destinations.packages);
     try expectOptionalUnset(config.destinations.sources);
     try expectOptionalUnset(config.destinations.logs);
+}
+
+test "shellybuild shallow_git defaults true and merges by layer" {
+    const allocator = std.testing.allocator;
+    const system = try ShellyBuildConfiguration.initFromBuffers(allocator, "[build]\nshallow_git = false\n", null);
+    defer system.deinit();
+    try std.testing.expect(!system.build.shallow_git);
+    const inherited = try ShellyBuildConfiguration.initFromBuffers(allocator, "[build]\nshallow_git = false\n", "[build]\ncheck = false\n");
+    defer inherited.deinit();
+    try std.testing.expect(!inherited.build.shallow_git);
+    const overridden = try ShellyBuildConfiguration.initFromBuffers(allocator, "[build]\nshallow_git = false\n", "[build]\nshallow_git = true\n");
+    defer overridden.deinit();
+    try std.testing.expect(overridden.build.shallow_git);
+    try std.testing.expectError(error.InvalidConfiguration, ShellyBuildConfiguration.initFromBuffers(allocator, "[build]\nshallow_git = 'yes'\n", null));
 }
 
 test "shellybuild compression presets merge without changing omitted defaults" {

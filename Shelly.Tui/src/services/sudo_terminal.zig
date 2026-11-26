@@ -98,6 +98,12 @@ pub const Terminal = struct {
     }
 };
 
+/// sandboxed builds can deny the pty that terminal tests need.
+pub fn skipWithoutTerminal() !void {
+    const terminal = Terminal.open() catch return error.SkipZigTest;
+    terminal.close();
+}
+
 /// Called only by the fresh, unprivileged session supervisor.
 pub fn claim(path: [:0]const u8) !c_int {
     if (!std.mem.startsWith(u8, path, "/dev/pts/")) return error.InvalidTerminalArguments;
@@ -111,6 +117,7 @@ pub fn claim(path: [:0]const u8) !c_int {
 }
 
 test "private terminal disables echo and accepts input independently" {
+    try skipWithoutTerminal();
     const terminal = try Terminal.open();
     defer terminal.close();
     try std.testing.expect(std.mem.startsWith(u8, terminal.name(), "/dev/pts/"));
@@ -123,6 +130,7 @@ test "private terminal disables echo and accepts input independently" {
 }
 
 test "private terminal refuses input when echo is enabled" {
+    try skipWithoutTerminal();
     const terminal = try Terminal.open();
     defer terminal.close();
     var modes: linux.termios = std.mem.zeroes(linux.termios);
@@ -138,6 +146,7 @@ test "private terminal refuses input when echo is enabled" {
 }
 
 test "reused terminal restores hidden input and discards queued credentials" {
+    try skipWithoutTerminal();
     const terminal = try Terminal.open();
     defer terminal.close();
     try terminal.write("stale\n");
