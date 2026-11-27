@@ -19,6 +19,8 @@ const AurPackageDetail = @import("aur_package_detail.zig").PackageDetail;
 const translations = @import("../helpers/translations.zig");
 const a11y = @import("../helpers/a11y.zig");
 const sorters = @import("../helpers/sorters.zig");
+const appendAurInstalledNames = @import("../helpers/installed.zig").appendAurInstalledNames;
+const aurInstalledContains = @import("../helpers/installed.zig").aurInstalledContains;
 const table_columns = @import("../helpers/table_columns.zig");
 
 pub const AurPage = extern struct {
@@ -79,6 +81,8 @@ pub const AurPage = extern struct {
         generation: u64,
         index: usize = 0,
         failed: bool = false,
+        installed_names: []const []const u8 = &.{},
+        all_installed: bool = false,
         keep_rows: bool = false,
     };
 
@@ -640,10 +644,29 @@ pub const AurPage = extern struct {
             },
         };
 
-        post_result(page, parsed.value, arena_ptr, generation, keep_rows);
+        post_result(page, parsed.value, arena_ptr, generation, keep_rows, if (mode == .installed) &.{} else fetchInstalledNames(alloc, cli), mode == .installed);
     }
 
-    fn post_result(page: *Self, packages: []AurPackage, arena: *std.heap.ArenaAllocator, generation: u64, keep_rows: bool) void {
+    fn fetchInstalledNames(alloc: std.mem.Allocator, cli: ShellyCli) []const []const u8 {
+        const parsed = cli.list_aur_installed() catch |err| {
+            std.debug.print("Could not load the installed AUR-package list. {0s}\n\nTechnical details: {1s}\n", .{ diagnostics.cause(err), @errorName(err) });
+            return &.{};
+        };
+        defer parsed.deinit();
+        var names: std.ArrayListUnmanaged([:0]const u8) = .empty;
+        appendAurInstalledNames(alloc, parsed.value, &names) catch {};
+        return names.items;
+    }
+
+    fn post_result(
+        page: *Self,
+        packages: []AurPackage,
+        arena: *std.heap.ArenaAllocator,
+        generation: u64,
+        keep_rows: bool,
+        installed_names: []const []const u8,
+        all_installed: bool,
+    ) void {
         const result = std.heap.c_allocator.create(LoadResult) catch {
             arena.deinit();
             std.heap.c_allocator.destroy(arena);
@@ -655,6 +678,8 @@ pub const AurPage = extern struct {
             .arena = arena,
             .generation = generation,
             .keep_rows = keep_rows,
+            .installed_names = installed_names,
+            .all_installed = all_installed,
         };
         _ = glib.idleAdd(&onLoadComplete, result);
     }
@@ -716,6 +741,16 @@ pub const AurPage = extern struct {
 
         if (result.keep_rows) {
             aur_rows.update(p.list_store, p.selection, result.packages);
+            // Rows the diff rebuilt still need the marks the loader would have given them.
+            const model = p.list_store.as(gio.ListModel);
+            const n = gio.ListModel.getNItems(model);
+            var row: c_uint = 0;
+            while (row < n) : (row += 1) {
+                const object = gio.ListModel.getObject(model, row) orelse continue;
+                defer object.unref();
+                const pkg = gobject.ext.cast(AurPackageObject, object) orelse continue;
+                pkg.setInstalled(result.all_installed or aurInstalledContains(result.installed_names, pkg.getName()));
+            }
             page.update_selection_ui();
             finish(result);
             return 0;
@@ -728,6 +763,7 @@ pub const AurPage = extern struct {
         var i: usize = 0;
         for (result.packages[result.index..end]) |d| {
             const pkg = AurPackageObject.new(d) catch continue;
+            pkg.setInstalled(result.all_installed or aurInstalledContains(result.installed_names, d.Name));
             batch[i] = pkg.as(gobject.Object);
             i += 1;
         }
