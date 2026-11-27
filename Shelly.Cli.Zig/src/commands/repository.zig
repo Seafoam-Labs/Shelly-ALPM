@@ -14,12 +14,32 @@ const command_path = "shelly utility repository";
 const Action = enum { add, remove, list };
 
 const Real = struct {
+    fn keyStatus(_: Real, context: *runtime.RuntimeContext, fingerprint: []const u8) !KeyStatus {
+        var arena = std.heap.ArenaAllocator.init(context.allocator);
+        defer arena.deinit();
+        const allocator = arena.allocator();
+        const directory = try context.packageKeyringDirectory(allocator);
+        const result = try std.process.run(allocator, context.io, .{
+            .argv = &.{ "gpg", "--homedir", directory, "--batch", "--no-tty", "--with-colons", "--list-keys" },
+            .stdout_limit = .limited(4 * 1024 * 1024),
+            .stderr_limit = .limited(64 * 1024),
+            .timeout = .{ .duration = .{ .raw = .fromSeconds(15), .clock = .awake } },
+        });
+        if (exitCode(result.term) != 0) return error.KeyringLookupFailed;
+        return listedKeyStatus(result.stdout, fingerprint);
+    }
+
+    fn receive(_: Real, context: *runtime.RuntimeContext, fingerprint: []const u8, ui_mode: bool) !u8 {
+        return runShellyKey(context, &.{ "shelly-key", "--recv-keys", fingerprint }, ui_mode);
+    }
+
     fn lsign(
         _: Real,
         context: *runtime.RuntimeContext,
         key: []const u8,
+        ui_mode: bool,
     ) !u8 {
-        return runShellyKey(context, &.{ "shelly-key", "--lsign-key", key });
+        return runShellyKey(context, &.{ "shelly-key", "--lsign-key", key }, ui_mode);
     }
 
     fn list(
@@ -150,6 +170,7 @@ fn executeMutation(
     const name = invocation.positionals[0];
     const url: ?[]const u8 = if (invocation.positionals.len > 1) invocation.positionals[1] else null;
     const lsign_key = optionValue(invocation, "--lsign-key");
+    const signing_key = optionValue(invocation, "--signing-key");
 
     var operation_context = PackageManager.OperationContext.init(context.allocator, context.io);
     context.attachTransactionLog(&operation_context);
@@ -164,8 +185,23 @@ fn executeMutation(
 
     // 1) Locally sign the key first, before writing any configuration.
     if (action == .add) {
+        if (signing_key) |fingerprint| {
+            prepareSigningKey(context, runner, fingerprint, invocation.globals.ui_mode) catch |err| {
+                const reason = switch (err) {
+                    error.KeyringLookupFailed => "Could not inspect the package-signing keyring.",
+                    error.KeyReceiveFailed => "Could not receive the requested key. Check the fingerprint and the configured keyserver.",
+                    error.KeyFingerprintMismatch => "The requested primary fingerprint was not found after import. No key was signed.",
+                    error.UnusableSigningKey => "The requested key is revoked, expired, disabled, or cannot sign packages.",
+                    error.KeySignFailed => "Could not locally sign the requested key.",
+                    error.KeyNotTrusted => "The requested key is still not trusted after local signing.",
+                };
+                const message = try std.fmt.allocPrint(context.allocator, "{s}\n\nFingerprint: {f}\nTechnical details: {t}", .{ reason, diagnostics.safe(fingerprint), err });
+                defer context.allocator.free(message);
+                return reportFailure(context, invocation, message);
+            };
+        }
         if (lsign_key) |key| {
-            const lsign_code = runner.lsign(context, key) catch |err| {
+            const lsign_code = runner.lsign(context, key, invocation.globals.ui_mode) catch |err| {
                 const message = try std.fmt.allocPrint(
                     context.allocator,
                     "Could not locally sign repository key {0f}. {1s} Review the keyring command output before trying again.\n\nTechnical details: {2s}",
@@ -229,6 +265,66 @@ fn executeMutation(
     return 0;
 }
 
+const KeyStatus = enum { missing, untrusted, trusted, unusable };
+const KeySetupError = error{
+    KeyringLookupFailed,
+    KeyReceiveFailed,
+    KeyFingerprintMismatch,
+    UnusableSigningKey,
+    KeySignFailed,
+    KeyNotTrusted,
+};
+
+fn listedKeyStatus(listing: []const u8, fingerprint: []const u8) KeyStatus {
+    var primary: ?KeyStatus = null;
+    var lines = std.mem.tokenizeScalar(u8, listing, '\n');
+    while (lines.next()) |line| {
+        var fields = std.mem.splitScalar(u8, line, ':');
+        const kind = fields.next().?;
+        if (std.mem.eql(u8, kind, "pub")) {
+            const validity = fields.next() orelse "";
+            for (0..9) |_| _ = fields.next();
+            const capabilities = fields.next() orelse "";
+            primary = if (std.mem.indexOfScalar(u8, capabilities, 'S') == null or
+                std.mem.indexOfScalar(u8, capabilities, 'D') != null or
+                validity.len != 1 or std.mem.indexOfScalar(u8, "redi", validity[0]) != null)
+                .unusable
+            else if (std.mem.eql(u8, validity, "f") or std.mem.eql(u8, validity, "u"))
+                .trusted
+            else
+                .untrusted;
+        } else if (std.mem.eql(u8, kind, "fpr")) {
+            if (primary) |status| {
+                for (0..8) |_| _ = fields.next();
+                if (std.ascii.eqlIgnoreCase(fields.next() orelse "", fingerprint)) return status;
+            }
+            primary = null; // Only the primary fingerprint can authorize trust.
+        } else if (std.mem.eql(u8, kind, "sub")) {
+            primary = null;
+        }
+    }
+    return .missing;
+}
+
+fn prepareSigningKey(context: *runtime.RuntimeContext, runner: anytype, fingerprint: []const u8, ui_mode: bool) KeySetupError!void {
+    var status = runner.keyStatus(context, fingerprint) catch return error.KeyringLookupFailed;
+    if (status == .missing) {
+        const code = runner.receive(context, fingerprint, ui_mode) catch return error.KeyReceiveFailed;
+        if (code != 0) return error.KeyReceiveFailed;
+        status = runner.keyStatus(context, fingerprint) catch return error.KeyringLookupFailed;
+    }
+    switch (status) {
+        .trusted => return,
+        .missing => return error.KeyFingerprintMismatch,
+        .unusable => return error.UnusableSigningKey,
+        .untrusted => {},
+    }
+    const code = runner.lsign(context, fingerprint, ui_mode) catch return error.KeySignFailed;
+    if (code != 0) return error.KeySignFailed;
+    const signed = runner.keyStatus(context, fingerprint) catch return error.KeyringLookupFailed;
+    if (signed != .trusted) return error.KeyNotTrusted;
+}
+
 fn validationMessage(invocation: *const parser.Invocation) ?[]const u8 {
     var selected_count: usize = 0;
     inline for (.{ "--add", "--remove", "--list" }) |name| {
@@ -238,6 +334,15 @@ fn validationMessage(invocation: *const parser.Invocation) ?[]const u8 {
         return "Choose exactly one of --add, --remove, or --list.";
 
     const action = selectedAction(invocation).?;
+    if (optionValue(invocation, "--signing-key")) |fingerprint| {
+        if (action != .add or optionValue(invocation, "--lsign-key") != null)
+            return "--signing-key is only for --add and cannot be combined with --lsign-key.";
+        if (fingerprint.len != 40 and fingerprint.len != 64)
+            return "--signing-key requires a full OpenPGP fingerprint.";
+        for (fingerprint) |digit| {
+            if (!std.ascii.isHex(digit)) return "--signing-key requires a full OpenPGP fingerprint.";
+        }
+    }
     return switch (action) {
         .list => null,
         .add, .remove => blk: {
@@ -428,6 +533,7 @@ fn syncReal(
 fn runShellyKey(
     context: *runtime.RuntimeContext,
     arguments: []const []const u8,
+    ui_mode: bool,
 ) !u8 {
     var arena = std.heap.ArenaAllocator.init(context.allocator);
     defer arena.deinit();
@@ -437,7 +543,8 @@ fn runShellyKey(
     var child = try std.process.spawn(context.io, .{
         .argv = key_arguments,
         .stdin = .inherit,
-        .stdout = .inherit,
+        // Keep human-readable keyring output out of the UI's framed stream.
+        .stdout = if (ui_mode) .ignore else .inherit,
         .stderr = .inherit,
     });
     errdefer child.kill(context.io);
@@ -447,7 +554,7 @@ fn runShellyKey(
 fn exitCode(term: std.process.Child.Term) u8 {
     return switch (term) {
         .exited => |code| code,
-        .signal => |signal| @truncate(128 + @intFromEnum(signal)),
+        .signal => |signal| @truncate(128 + @backingInt(signal)),
         .stopped, .unknown => 1,
     };
 }
@@ -627,7 +734,13 @@ test "repository add surfaces lsign failures before writing config" {
 }
 
 const TestRunner = struct {
-    fn lsign(_: TestRunner, _: *runtime.RuntimeContext, _: []const u8) !u8 {
+    fn keyStatus(_: TestRunner, _: *runtime.RuntimeContext, _: []const u8) !KeyStatus {
+        return .trusted;
+    }
+    fn receive(_: TestRunner, _: *runtime.RuntimeContext, _: []const u8, _: bool) !u8 {
+        return 0;
+    }
+    fn lsign(_: TestRunner, _: *runtime.RuntimeContext, _: []const u8, _: bool) !u8 {
         return 0;
     }
     fn list(_: TestRunner, _: *runtime.RuntimeContext, _: *PackageManager.OperationContext) !std.ArrayList([]const u8) {
@@ -641,6 +754,9 @@ const TestCapture = struct {
     names: []const []const u8 = &.{},
     configured: bool = true,
     lsign_code: u8 = 0,
+    key_statuses: []const KeyStatus = &.{},
+    key_checks: usize = 0,
+    received_key: ?[]const u8 = null,
 
     lsign_key: ?[]const u8 = null,
     lsign_before_mutate: bool = false,
@@ -650,7 +766,18 @@ const TestCapture = struct {
     sync_called: bool = false,
     manager_inits: usize = 0,
 
-    fn lsign(self: *TestCapture, _: *runtime.RuntimeContext, key: []const u8) !u8 {
+    fn keyStatus(self: *TestCapture, _: *runtime.RuntimeContext, _: []const u8) !KeyStatus {
+        if (self.key_checks >= self.key_statuses.len) return error.UnexpectedKeyringLookup;
+        defer self.key_checks += 1;
+        return self.key_statuses[self.key_checks];
+    }
+
+    fn receive(self: *TestCapture, _: *runtime.RuntimeContext, key: []const u8, _: bool) !u8 {
+        self.received_key = key;
+        return 0;
+    }
+
+    fn lsign(self: *TestCapture, _: *runtime.RuntimeContext, key: []const u8, _: bool) !u8 {
         self.lsign_key = key;
         self.lsign_before_mutate = self.mutate_action == null;
         return self.lsign_code;
@@ -684,3 +811,48 @@ const TestCapture = struct {
         self.sync_called = true;
     }
 };
+
+test "repository signing checks trust before changing configuration" {
+    var tc: test_support.TestContext = .{};
+    tc.init();
+    defer tc.deinit();
+    const fingerprint = "0123456789ABCDEF0123456789ABCDEF01234567";
+    const invocation = try parseInvocation(tc.arena.allocator(), &.{
+        "utility", "repository", "--add", "--signing-key", fingerprint, "--", "custom", "https://example.invalid",
+    });
+    const cases = [_]struct { statuses: []const KeyStatus, receive: bool, sign: bool, success: bool }{
+        .{ .statuses = &.{.trusted}, .receive = false, .sign = false, .success = true },
+        .{ .statuses = &.{ .untrusted, .trusted }, .receive = false, .sign = true, .success = true },
+        .{ .statuses = &.{ .missing, .untrusted, .trusted }, .receive = true, .sign = true, .success = true },
+        .{ .statuses = &.{ .missing, .missing }, .receive = true, .sign = false, .success = false },
+        .{ .statuses = &.{.unusable}, .receive = false, .sign = false, .success = false },
+        .{ .statuses = &.{ .untrusted, .untrusted }, .receive = false, .sign = true, .success = false },
+    };
+    for (cases) |case| {
+        var capture: TestCapture = .{ .key_statuses = case.statuses };
+        try std.testing.expectEqual(@as(?u8, if (case.success) 0 else 1), try dispatchWithRunner(&tc.context, &invocation, &capture));
+        try std.testing.expectEqual(case.receive, capture.received_key != null);
+        if (capture.received_key) |key| try std.testing.expectEqualStrings(fingerprint, key);
+        try std.testing.expectEqual(case.sign, capture.lsign_key != null);
+        if (capture.lsign_key) |key| try std.testing.expectEqualStrings(fingerprint, key);
+        try std.testing.expectEqual(case.success, capture.mutate_action != null);
+        try std.testing.expectEqual(case.success, capture.sync_called);
+    }
+}
+
+test "keyring lookup matches the full primary fingerprint and reads trust and usability" {
+    const primary = "0123456789ABCDEF0123456789ABCDEF01234567";
+    const subkey = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+    const listing =
+        "pub:f:255:22:0123456789ABCDEF:1700000000::::::cSC:::::ed25519:::0:\n" ++
+        "fpr:::::::::" ++ primary ++ ":\n" ++
+        "sub:f:255:22:AAAAAAAAAAAAAAAA:1700000000::::::s:::::ed25519:::\n" ++
+        "fpr:::::::::" ++ subkey ++ ":\n";
+    try std.testing.expectEqual(KeyStatus.trusted, listedKeyStatus(listing, primary));
+    try std.testing.expectEqual(KeyStatus.missing, listedKeyStatus(listing, subkey));
+    var modified = listing[0..listing.len].*;
+    modified[4] = '-';
+    try std.testing.expectEqual(KeyStatus.untrusted, listedKeyStatus(&modified, primary));
+    modified[4] = 'r';
+    try std.testing.expectEqual(KeyStatus.unusable, listedKeyStatus(&modified, primary));
+}

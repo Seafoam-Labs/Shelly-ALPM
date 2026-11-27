@@ -59,6 +59,24 @@ pub const Panel = struct {
         };
         try lines.appendSlice(arena, &.{ heading, "" });
         switch (self.context.mode) {
+            .utilities => if (self.context.repositories) {
+                try lines.appendSlice(arena, &.{
+                    "Adding a repository",
+                    "",
+                    "Use a mirror for your distro and architecture. Follow the repository's guide",
+                    "for the full fingerprint and any required keyring package. Leave the",
+                    "fingerprint blank to keep existing trust.",
+                    "",
+                    "After adding",
+                    "",
+                    "Installs and updates still use your signature policy. If refresh fails,",
+                    "the entry may be saved. Fix the error and refresh again.",
+                    "",
+                    "Shelly edits its active config: /etc/shelly.conf by default on Devario",
+                    "or /etc/pacman.conf with the pacman profile.",
+                    "",
+                });
+            },
             .search, .packages, .aur, .flatpak, .details => {
                 try lines.appendSlice(arena, &.{
                     "Vim navigation",

@@ -97,6 +97,7 @@ pub const OperationRequest = struct {
     environ_map: *const std.process.Environ.Map,
     name: []const u8,
     repository_url: ?[]const u8 = null,
+    repository_fingerprint: ?[]const u8 = null,
     skip_repository_sync: bool = false,
     targets: []const []const u8 = &.{},
     backend: []const u8,
@@ -462,6 +463,7 @@ pub const Operation = struct {
         self.request.shelly_bin = try alloc.dupe(u8, request.shelly_bin);
         self.request.name = try alloc.dupe(u8, request.name);
         if (request.repository_url) |url| self.request.repository_url = try alloc.dupe(u8, url);
+        if (request.repository_fingerprint) |fingerprint| self.request.repository_fingerprint = try alloc.dupe(u8, fingerprint);
         const targets = try alloc.alloc([]const u8, request.targets.len);
         for (request.targets, targets) |source, *target| target.* = try alloc.dupe(u8, source);
         self.request.targets = targets;
@@ -538,9 +540,13 @@ fn operationArgv(alloc: std.mem.Allocator, request: OperationRequest) ![][]const
         const adding = request.action == .repository_add;
         const prefix = [_][]const u8{ request.sudo_bin, request.shelly_bin, "utility", "repository", if (adding) "--add" else "--remove", "--ui-mode" };
         const options: []const []const u8 = if (request.skip_repository_sync) &.{"--no-sync"} else &.{};
+        const signing: []const []const u8 = if (adding and request.repository_fingerprint != null)
+            &.{ "--signing-key", request.repository_fingerprint.? }
+        else
+            &.{};
         const target = [_][]const u8{ "--", request.name };
         const url: []const []const u8 = if (adding) &.{request.repository_url orelse return error.MissingRepositoryUrl} else &.{};
-        return std.mem.concat(alloc, []const u8, &.{ &prefix, options, &target, url });
+        return std.mem.concat(alloc, []const u8, &.{ &prefix, options, signing, &target, url });
     }
     const package_backend = std.mem.eql(u8, request.backend, "standard") or std.mem.eql(u8, request.backend, "aur");
     if (request.action == .purify and !std.mem.eql(u8, request.backend, "standard") and !isFlatpak(request)) return error.UnsupportedCleanupBackend;
@@ -2088,7 +2094,7 @@ test "permission repair starts elevated and database repair delegates elevation 
     }
 }
 
-test "repository refresh is skipped only when requested" {
+test "repository key setup and refresh options are passed only when applicable" {
     const allocator = std.testing.allocator;
     var env: std.process.Environ.Map = .init(allocator);
     defer env.deinit();
@@ -2103,12 +2109,18 @@ test "repository refresh is skipped only when requested" {
         request.action = action;
         for ([_]bool{ false, true }) |skip| {
             request.skip_repository_sync = skip;
+            request.repository_fingerprint = if (skip) "0123456789ABCDEF0123456789ABCDEF01234567" else null;
             const argv = try operationArgv(allocator, request);
             defer allocator.free(argv);
             try std.testing.expectEqualStrings(flag, argv[4]);
             try std.testing.expectEqualStrings("--ui-mode", argv[5]);
             if (skip) try std.testing.expectEqualStrings("--no-sync", argv[6]);
-            const separator: usize = if (skip) 7 else 6;
+            var separator: usize = if (skip) 7 else 6;
+            if (action == .repository_add and request.repository_fingerprint != null) {
+                try std.testing.expectEqualStrings("--signing-key", argv[separator]);
+                try std.testing.expectEqualStrings(request.repository_fingerprint.?, argv[separator + 1]);
+                separator += 2;
+            }
             try std.testing.expectEqualStrings("--", argv[separator]);
             try std.testing.expectEqualStrings(request.name, argv[separator + 1]);
             if (action == .repository_add) try std.testing.expectEqualStrings(request.repository_url.?, argv[separator + 2]);

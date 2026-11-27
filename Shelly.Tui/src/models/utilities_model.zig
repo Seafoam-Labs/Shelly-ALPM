@@ -623,12 +623,13 @@ test "permission repair remains reachable with Flatpak disabled and opens a conf
     try std.testing.expectEqual(Task.pacfiles, model.utilities_state.selected);
 }
 
-pub const RepositoryField = enum { name, url };
+pub const RepositoryField = enum { name, url, fingerprint };
 
 const RepositoryState = struct {
     editing: ?RepositoryField = null,
     name: vxfw.TextField,
     url: vxfw.TextField,
+    fingerprint: vxfw.TextField,
     list: vxfw.ScrollView,
     names: ?StringList = null,
     job: ?*Job = null,
@@ -639,6 +640,7 @@ const RepositoryState = struct {
         return .{
             .name = vxfw.TextField.init(allocator),
             .url = vxfw.TextField.init(allocator),
+            .fingerprint = vxfw.TextField.init(allocator),
             .list = .{ .children = .{ .builder = .{ .userdata = model, .buildFn = buildRepositoryRow } } },
         };
     }
@@ -653,6 +655,7 @@ const RepositoryState = struct {
         if (self.verification) |verification| allocator.free(verification.name);
         self.name.deinit();
         self.url.deinit();
+        self.fingerprint.deinit();
     }
 
     pub fn verifyAfterOperation(self: *RepositoryState, allocator: Allocator, name: []const u8, should_exist: ?bool) !void {
@@ -663,7 +666,11 @@ const RepositoryState = struct {
     }
 
     pub fn field(self: *RepositoryState, which: RepositoryField) *vxfw.TextField {
-        return if (which == .name) &self.name else &self.url;
+        return switch (which) {
+            .name => &self.name,
+            .url => &self.url,
+            .fingerprint => &self.fingerprint,
+        };
     }
 
     pub fn selected(self: *const RepositoryState) ?[]const u8 {
@@ -796,10 +803,11 @@ pub fn repositoryControl(model: *Model, ctx: *vxfw.EventContext, action: Reposit
             if (state.job != null or state.verification != null or model.operation_state.install_job != null) return ctx.consumeEvent();
             model.utilities_state.results_focused = true;
             if (action == .remove) {
-                if (state.selected()) |name| try operation_model.openRepositoryPrompt(model, ctx, name, null);
+                if (state.selected()) |name| try operation_model.openRepositoryPrompt(model, ctx, name, null, null);
             } else {
                 state.name.clearRetainingCapacity();
                 state.url.clearRetainingCapacity();
+                state.fingerprint.clearRetainingCapacity();
                 state.message = "";
                 try focusRepositoryField(state, ctx, .name);
             }
@@ -810,17 +818,25 @@ pub fn repositoryControl(model: *Model, ctx: *vxfw.EventContext, action: Reposit
 
 fn handleRepositoryKey(model: *Model, ctx: *vxfw.EventContext, key: vaxis.Key) !bool {
     const state = &model.utilities_state.repositories;
-    if (state.editing != null) {
+    if (state.editing) |field| {
         if (commands.matches(key, .cancel_capture)) {
             try repositoryControl(model, ctx, .back);
             return true;
         } else if (key.matches(vaxis.Key.tab, .{})) {
-            try focusRepositoryField(state, ctx, if (state.editing.? == .name) .url else .name);
+            try focusRepositoryField(state, ctx, switch (field) {
+                .name => .url,
+                .url => .fingerprint,
+                .fingerprint => .name,
+            });
         } else if (commands.matches(key, .confirm)) {
-            if (state.editing.? == .name) try focusRepositoryField(state, ctx, .url) else try submitRepository(model, ctx);
+            switch (field) {
+                .name => try focusRepositoryField(state, ctx, .url),
+                .url => try focusRepositoryField(state, ctx, .fingerprint),
+                .fingerprint => try submitRepository(model, ctx),
+            }
         } else {
             state.message = "";
-            try state.field(state.editing.?).handleEvent(ctx, .{ .key_press = key });
+            try state.field(field).handleEvent(ctx, .{ .key_press = key });
         }
         ctx.consumeAndRedraw();
         return true;
@@ -858,6 +874,9 @@ fn submitRepository(model: *Model, ctx: *vxfw.EventContext) !void {
     defer model.gpa.free(name);
     const url = try state.url.buf.dupe();
     defer model.gpa.free(url);
+    const fingerprint_input = try state.fingerprint.buf.dupe();
+    defer model.gpa.free(fingerprint_input);
+    const fingerprint = std.mem.trim(u8, fingerprint_input, " \t");
 
     if (!validRepositoryName(name)) {
         state.message = "Enter a repository name using letters, numbers, dots, underscores, or hyphens.";
@@ -876,8 +895,19 @@ fn submitRepository(model: *Model, ctx: *vxfw.EventContext) !void {
             return;
         }
     }
-    try operation_model.openRepositoryPrompt(model, ctx, name, url);
+    if (fingerprint.len != 0 and !validFingerprint(fingerprint)) {
+        state.message = "Enter a full signing-key fingerprint (40 or 64 hex digits), or leave it blank.";
+        try focusRepositoryField(state, ctx, .fingerprint);
+        return;
+    }
+    try operation_model.openRepositoryPrompt(model, ctx, name, url, if (fingerprint.len != 0) fingerprint else null);
     state.editing = null;
+}
+
+fn validFingerprint(fingerprint: []const u8) bool {
+    if (fingerprint.len != 40 and fingerprint.len != 64) return false;
+    for (fingerprint) |digit| if (!std.ascii.isHex(digit)) return false;
+    return true;
 }
 
 fn validRepositoryName(name: []const u8) bool {
@@ -921,13 +951,23 @@ test "repository add reviews the literal server URL and rejects config line inje
     try model.captureEvent(&ctx, .{ .key_press = commands.bindings.confirm });
     try std.testing.expect(try pasteRepository(model, &ctx, "https://example.invalid/\nSigLevel = Never"));
     try model.captureEvent(&ctx, .{ .key_press = commands.bindings.confirm });
+    try model.captureEvent(&ctx, .{ .key_press = commands.bindings.confirm });
     try std.testing.expect(model.overlay == null);
     model.utilities_state.repositories.url.clearRetainingCapacity();
     try std.testing.expect(try pasteRepository(model, &ctx, "https://example.invalid/$repo/$arch"));
     try model.captureEvent(&ctx, .{ .key_press = commands.bindings.confirm });
+    try std.testing.expect(try pasteRepository(model, &ctx, "DEADBEEF"));
+    try model.captureEvent(&ctx, .{ .key_press = commands.bindings.confirm });
+    try std.testing.expect(model.overlay == null);
+    model.utilities_state.repositories.fingerprint.clearRetainingCapacity();
+    const fingerprint = "0123456789ABCDEF0123456789ABCDEF01234567";
+    try std.testing.expect(try pasteRepository(model, &ctx, fingerprint));
+    try model.captureEvent(&ctx, .{ .key_press = commands.bindings.confirm });
     const prompt = model.overlay.?.sudo;
     try std.testing.expectEqualStrings("custom", prompt.name);
     try std.testing.expectEqualStrings("https://example.invalid/$repo/$arch", prompt.repository_url.?);
+    try std.testing.expectEqualStrings(fingerprint, prompt.repository_fingerprint.?);
+    try std.testing.expect(std.mem.indexOf(u8, prompt.review_text, fingerprint) != null);
     try std.testing.expect(model.operation_state.install_job == null);
 }
 
@@ -939,7 +979,7 @@ test "read-back catches a repository still present after reported removal" {
     model.utilities_state.results_focused = true;
     var ctx: vxfw.EventContext = .{ .io = std.testing.io, .alloc = model.gpa, .cmds = .empty };
     defer ctx.cmds.deinit(model.gpa);
-    try operation_model.openRepositoryPrompt(model, &ctx, "included-test", null);
+    try operation_model.openRepositoryPrompt(model, &ctx, "included-test", null, null);
     model.overlay.?.sudo.state = .succeeded;
     try model.utilities_state.repositories.verifyAfterOperation(model.gpa, "included-test", false);
     const names = try std.json.parseFromSlice([][]const u8, model.gpa, "[\"included-test\"]", .{ .allocate = .alloc_always });

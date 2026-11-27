@@ -557,7 +557,7 @@ pub fn entries(arena: std.mem.Allocator, context: Context) std.mem.Allocator.Err
         .utilities => {
             if (context.repositories) {
                 if (context.repository_editing) {
-                    try add(arena, &list, .confirm, "Continue", "Advance to the server URL or review the new repository");
+                    try add(arena, &list, .confirm, "Continue", "Advance through the repository fields or review the addition");
                     try add(arena, &list, .cancel_capture, "Cancel", "Back to the repository list");
                 } else if (!context.utilities_results) {
                     try add(arena, &list, .details, "Repositories", "Focus the repository list");

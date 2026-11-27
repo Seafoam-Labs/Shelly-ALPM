@@ -66,6 +66,7 @@ pub const SudoPrompt = struct {
     targets: []const []const u8 = &.{},
     review_text: []const u8 = "",
     repository_url: ?[]const u8 = null,
+    repository_fingerprint: ?[]const u8 = null,
     panel: operation_view.Panel = .{},
     backend: OperationBackend,
     action: shelly_operation.Action = .install,
@@ -89,6 +90,7 @@ pub const SudoPrompt = struct {
         for (self.targets) |target| gpa.free(target);
         if (self.targets.len > 0) gpa.free(self.targets);
         if (self.repository_url) |url| gpa.free(url);
+        if (self.repository_fingerprint) |fingerprint| gpa.free(fingerprint);
         if (self.review_text.len > 0) gpa.free(self.review_text);
         if (self.flatpak_target) |target| target.deinit(gpa);
         if (self.detail.len > 0) gpa.free(self.detail);
@@ -652,7 +654,7 @@ pub fn openRepair(self: *Model, ctx: *vxfw.EventContext, action: enum { repair_p
     ctx.consumeAndRedraw();
 }
 
-pub fn openRepositoryPrompt(self: *Model, ctx: *vxfw.EventContext, name: []const u8, url: ?[]const u8) !void {
+pub fn openRepositoryPrompt(self: *Model, ctx: *vxfw.EventContext, name: []const u8, url: ?[]const u8, fingerprint: ?[]const u8) !void {
     if (self.overlay != null or self.operation_state.install_job != null) return ctx.consumeEvent();
     const prompt = try self.gpa.create(SudoPrompt);
     errdefer self.gpa.destroy(prompt);
@@ -660,13 +662,20 @@ pub fn openRepositoryPrompt(self: *Model, ctx: *vxfw.EventContext, name: []const
     errdefer self.gpa.free(owned_name);
     const owned_url = if (url) |server| try self.gpa.dupe(u8, server) else null;
     errdefer if (owned_url) |server| self.gpa.free(server);
+    const owned_fingerprint = if (fingerprint) |key| try self.gpa.dupe(u8, key) else null;
+    errdefer if (owned_fingerprint) |key| self.gpa.free(key);
+    const safe = @import("diagnostics").safe;
     const review = if (owned_url) |server|
-        try std.fmt.allocPrint(self.gpa, "Add repository {f}?\n\nServer: {f}", .{ @import("diagnostics").safe(name), @import("diagnostics").safe(server) })
+        if (owned_fingerprint) |key|
+            try std.fmt.allocPrint(self.gpa, "Add repository {f}?\nServer: {f}\nSigning key: {s}\nConfirm only if this fingerprint matches the repository's official instructions. Shelly will import and locally sign this key if needed. This grants trust in the package keyring.", .{ safe(name), safe(server), key })
+        else
+            try std.fmt.allocPrint(self.gpa, "Add repository {f}?\nServer: {f}\nConfigure only: no signing key will be imported or trusted.", .{ safe(name), safe(server) })
     else
         try std.fmt.allocPrint(self.gpa, "Remove repository {f}?\n\nShelly edits the main configuration file. If this repository is defined in an included file, it may remain configured.", .{@import("diagnostics").safe(name)});
     prompt.* = .{
         .name = owned_name,
         .repository_url = owned_url,
+        .repository_fingerprint = owned_fingerprint,
         .review_text = review,
         .backend = .standard,
         .action = if (url != null) .repository_add else .repository_remove,
@@ -781,6 +790,7 @@ pub fn startElevatedInstall(self: *Model, ctx: *vxfw.EventContext, prompt: *Sudo
         .environ_map = runtime.environ_map,
         .name = prompt.name,
         .repository_url = prompt.repository_url,
+        .repository_fingerprint = prompt.repository_fingerprint,
         .skip_repository_sync = prompt.skip_repository_sync,
         .targets = prompt.targets,
         .action = prompt.action,

@@ -344,11 +344,12 @@ fn drawRepositories(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw
         const fields_height = size.height - footer_height;
         if (fields_height == 1) {
             try appendRepositoryField(model, ctx, &children, 0, field, true, 1);
-        } else if (fields_height < 4) {
+        } else if (fields_height < 6) {
             try appendRepositoryField(model, ctx, &children, 0, field, true, 2);
         } else {
             try appendRepositoryField(model, ctx, &children, 0, .name, field == .name, 2);
             try appendRepositoryField(model, ctx, &children, 2, .url, field == .url, 2);
+            try appendRepositoryField(model, ctx, &children, 4, .fingerprint, field == .fingerprint, 2);
         }
         if (show_message)
             try appendRepositoryLine(ctx, &children, fields_height, state.message, styles.emphasis);
@@ -359,7 +360,7 @@ fn drawRepositories(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw
     } else {
         var row: u16 = 0;
         if (size.height >= 2) {
-            const intro = try drawDescription(ctx, "List, add and remove repository entries.");
+            const intro = try drawDescription(ctx, "Manage repositories. Some require separate keyring setup; see Help.");
             try children.append(ctx.arena, .{ .origin = .{ .row = row, .col = 0 }, .surface = intro });
             row = intro.size.height;
             if (size.height - row >= 2) row += 1;
@@ -393,7 +394,11 @@ const RepositoryInput = struct {
         const size = ctx.max.size();
         var children: std.ArrayList(vxfw.SubSurface) = .empty;
         if (size.height == 2) {
-            const label = if (self.field == .name) "Repository name" else "Server URL";
+            const label = switch (self.field) {
+                .name => "Repository name",
+                .url => "Repository mirror URL",
+                .fingerprint => "Key fingerprint (optional)",
+            };
             try appendRepositoryLine(ctx, &children, 0, label, if (self.active) styles.selected else styles.emphasis);
         }
         const input = self.model.utilities_state.repositories.field(self.field);
