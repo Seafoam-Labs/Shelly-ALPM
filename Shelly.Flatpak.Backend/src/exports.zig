@@ -315,12 +315,13 @@ fn uninstallInstalled(
     const result = if (args.value.scope) |scope| direct: {
         const id = try allocator.dupeSentinel(u8, args.value.name_or_id, 0);
         defer allocator.free(id);
-        break :direct try manager.uninstall_flatpak(
+        break :direct try manager.uninstall_flatpak_from_installation(
             id,
             scopeFromWire(scope),
+            args.value.installation_id,
             args.value.remove_unused,
         );
-    } else try manager.uninstall_installed_flatpak(
+    } else if (args.value.installation_id != null) return error.InvalidInstallationScope else try manager.uninstall_installed_flatpak(
         args.value.name_or_id,
         args.value.remove_unused,
     );
@@ -406,6 +407,7 @@ fn listInstalledApplications(
         .kind = kindFromNative(value.kind),
         .installed_size = value.installed_size,
         .scope = scopeToWire(value.scope),
+        .installation_id = value.installation_id,
         .eol = value.eol,
         .eol_rebase = value.eol_rebase,
     };
@@ -445,6 +447,7 @@ fn findInstalled(state: *State, request: wire.RequestEnvelope) ![]u8 {
         .kind = kindFromNative(application.kind),
         .installed_size = application.installed_size,
         .scope = scopeToWire(application.scope),
+        .installation_id = application.installation_id,
         .eol = application.eol,
         .eol_rebase = application.eol_rebase,
     } else null;

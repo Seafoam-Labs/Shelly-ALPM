@@ -186,6 +186,9 @@ The one-time `shelly upgrade all --no-flatpak` flag also skips Flatpak.
 This preference can be used together with `DisableAppImageUpdateCheck`.
 
 Flatpak removal accepts mutually exclusive `--user` and `--system` flags; omitting both keeps automatic installation lookup.
+Use a full `kind/ID/architecture/branch` reference to remove one exact installed
+copy. `--installation <id>` selects a named system installation and cannot be
+combined with `--user`.
 
 ## Upgrade cache cleaning
 

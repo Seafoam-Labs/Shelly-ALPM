@@ -41,6 +41,7 @@ pub const FlatpakTarget = struct {
     arch: []const u8 = "",
     branch: []const u8 = "",
     reference: []const u8 = "",
+    installation_id: []const u8 = "",
     kind: flatpak_models.FlatpakKind = .app,
 
     pub fn clone(self: FlatpakTarget, alloc: std.mem.Allocator) !FlatpakTarget {
@@ -52,11 +53,13 @@ pub const FlatpakTarget = struct {
         result.branch = if (self.branch.len > 0) try alloc.dupe(u8, self.branch) else "";
         errdefer if (result.branch.len > 0) alloc.free(result.branch);
         result.reference = if (self.reference.len > 0) try alloc.dupe(u8, self.reference) else "";
+        errdefer if (result.reference.len > 0) alloc.free(result.reference);
+        result.installation_id = if (self.installation_id.len > 0) try alloc.dupe(u8, self.installation_id) else "";
         return result;
     }
 
     pub fn deinit(self: FlatpakTarget, alloc: std.mem.Allocator) void {
-        inline for (.{ "remote", "arch", "branch", "reference" }) |field| {
+        inline for (.{ "remote", "arch", "branch", "reference", "installation_id" }) |field| {
             if (@field(self, field).len > 0) alloc.free(@field(self, field));
         }
     }
@@ -471,6 +474,7 @@ fn operationArgv(alloc: std.mem.Allocator, request: OperationRequest) ![][]const
         return error.UnsupportedUpgradeSource;
     if (isFlatpak(request) and request.action != .upgrade) {
         const target = request.flatpak orelse return error.MissingFlatpakTarget;
+        if (target.installation_id.len > 0 and target.scope != .system) return error.InvalidInstallationScope;
         if (request.action == .install and (target.remote.len == 0 or target.arch.len > 0)) return error.UnsupportedFlatpakInstallTarget;
     }
     var argv: std.ArrayList([]const u8) = .empty;
@@ -480,7 +484,7 @@ fn operationArgv(alloc: std.mem.Allocator, request: OperationRequest) ![][]const
     }
     try argv.appendSlice(alloc, &.{ request.shelly_bin, @tagName(request.action), request.backend });
     if (request.action == .install or request.action == .remove) {
-        if (request.targets.len > 0) try argv.appendSlice(alloc, request.targets) else try argv.append(alloc, request.name);
+        if (request.targets.len > 0) try argv.appendSlice(alloc, request.targets) else try argv.append(alloc, if (isFlatpak(request) and request.action == .remove and request.flatpak.?.reference.len > 0) request.flatpak.?.reference else request.name);
     }
     if (isFlatpak(request) and request.action == .install) {
         const target = request.flatpak.?;
@@ -489,8 +493,11 @@ fn operationArgv(alloc: std.mem.Allocator, request: OperationRequest) ![][]const
         if (target.branch.len > 0) try argv.appendSlice(alloc, &.{ "--branch", target.branch });
         if (target.kind == .runtime) try argv.append(alloc, "--runtime");
     }
-    if (isFlatpak(request) and request.action == .remove)
+    if (isFlatpak(request) and request.action == .remove) {
         try argv.append(alloc, if (request.flatpak.?.scope == .user) "--user" else "--system");
+        if (request.flatpak.?.installation_id.len > 0)
+            try argv.appendSlice(alloc, &.{ "--installation", request.flatpak.?.installation_id });
+    }
     if (combined(request)) {
         if (!request.include_appimage) try argv.append(alloc, "--no-appimage");
         if (!request.include_aur) try argv.append(alloc, "--no-aur");
@@ -1435,14 +1442,35 @@ test "operation Flatpak arguments preserve install and removal scope and keep us
     try std.testing.expectError(error.MissingFlatpakTarget, operationArgv(allocator, request));
 }
 
+test "Flatpak removal preserves the exact runtime ref and named installation" {
+    var env: std.process.Environ.Map = .init(std.testing.allocator);
+    defer env.deinit();
+    var request: OperationRequest = .{
+        .shelly_bin = "shelly",
+        .environ_map = &env,
+        .action = .remove,
+        .name = "org.example.Platform",
+        .backend = "flatpak",
+        .flatpak = .{ .scope = .system, .kind = .runtime, .reference = "runtime/org.example.Platform/aarch64/24.08", .installation_id = "extra" },
+    };
+    const argv = try operationArgv(std.testing.allocator, request);
+    defer std.testing.allocator.free(argv);
+    const expected = [_][]const u8{ "sudo", "shelly", "remove", "flatpak", "runtime/org.example.Platform/aarch64/24.08", "--system", "--installation", "extra", "--ui-mode" };
+    try std.testing.expectEqual(expected.len, argv.len);
+    for (expected, argv) |want, actual| try std.testing.expectEqualStrings(want, actual);
+    request.flatpak.?.scope = .user;
+    try std.testing.expectError(error.InvalidInstallationScope, operationArgv(std.testing.allocator, request));
+}
+
 test "operation Flatpak target owns its reference fields" {
     const allocator = std.testing.allocator;
     var remote = [_]u8{ 't', 'e', 's', 't' };
-    const copy = try (FlatpakTarget{ .scope = .user, .remote = &remote, .arch = "x86_64", .branch = "beta", .reference = "app/org.example.App/x86_64/beta" }).clone(allocator);
+    const copy = try (FlatpakTarget{ .scope = .system, .remote = &remote, .arch = "x86_64", .branch = "beta", .reference = "app/org.example.App/x86_64/beta", .installation_id = "extra" }).clone(allocator);
     defer copy.deinit(allocator);
     remote[0] = 'X';
     try std.testing.expectEqualStrings("test", copy.remote);
     try std.testing.expectEqualStrings("app/org.example.App/x86_64/beta", copy.reference);
+    try std.testing.expectEqualStrings("extra", copy.installation_id);
 }
 
 test "operation combined upgrade is interactive and respects AppImage inclusion" {

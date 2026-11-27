@@ -319,15 +319,26 @@ pub const Manager = struct {
         scope: types.Scope,
         remove_unused: bool,
     ) !bool {
+        return self.uninstall_flatpak_from_installation(flatpak_id, scope, null, remove_unused);
+    }
+
+    pub fn uninstall_flatpak_from_installation(
+        self: Manager,
+        reference: []const u8,
+        scope: types.Scope,
+        installation_id: ?[]const u8,
+        remove_unused: bool,
+    ) !bool {
         return self.callBool(
             wire.Method.uninstall_installed,
             wire.UninstallInstalledArguments{
-                .name_or_id = flatpak_id,
+                .name_or_id = reference,
                 .scope = scope.toWire(),
+                .installation_id = installation_id,
                 .remove_unused = remove_unused,
             },
             .remove,
-            flatpak_id,
+            reference,
         );
     }
 

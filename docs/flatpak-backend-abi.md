@@ -24,7 +24,7 @@ CLI / UI
 PackageManager-owned Flatpak facade and owned domain values
     |
     v
-strict JSON schema 2 over C ABI 1
+strict JSON schema 3 over C ABI 1
     |
     v
 libshelly-flatpak-backend.so.1
@@ -113,9 +113,9 @@ state. Both sides unsubscribe borrowed cancellation handlers and drain any
 callbacks that were already snapshotted before destroying the backend handle
 or its `GCancellable`.
 
-## Wire schema 2
+## Wire schema 3
 
-Messages are UTF-8 JSON and are limited to 16 MiB. Schema 2 is strict:
+Messages are UTF-8 JSON and are limited to 16 MiB. Schema 3 is strict:
 duplicate fields, unknown fields, missing required fields, invalid enum tags,
 truncated JSON, and oversized messages are rejected.
 
@@ -123,7 +123,7 @@ Request:
 
 ```json
 {
-  "schema": 2,
+  "schema": 3,
   "operation_id": 42,
   "method": "list_installed",
   "arguments": {
@@ -136,7 +136,7 @@ Success:
 
 ```json
 {
-  "schema": 2,
+  "schema": 3,
   "operation_id": 42,
   "result": []
 }
@@ -146,7 +146,7 @@ Failure:
 
 ```json
 {
-  "schema": 2,
+  "schema": 3,
   "operation_id": 42,
   "error": {
     "code": "flatpak.not_found",
@@ -172,7 +172,7 @@ which avoids callback reentrancy through loader state.
 
 ## Operations
 
-Schema 2 covers:
+Schema 3 covers:
 
 - install by ref, `.flatpakref`, or bundle;
 - update, uninstall, repair, upgrade-all, and unused-runtime removal;
@@ -238,3 +238,14 @@ An incompatible C table change requires all of the following in one release:
 An incompatible wire change also increments `schema_version`. Do not add a
 field that older strict decoders would reject while continuing to label the
 message with the older schema version.
+
+## schema 3 removal identity
+
+Schema 3 adds optional `installation_id` to installed-application records and
+uninstall arguments. Installed frontends pass the canonical
+`kind/ID/architecture/branch` reference and selected system installation ID.
+Explicit targets never retry another reference or installation.
+
+The C ABI and SONAME remain at 1. Clients and backends must be updated together;
+schema 2 messages are rejected before operations execute. No unknown-field
+compatibility bypass is used.

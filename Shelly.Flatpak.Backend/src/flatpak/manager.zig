@@ -21,6 +21,7 @@ pub const InstalledApplication = struct {
     kind: i32,
     installed_size: u64,
     scope: flatpak.Scope,
+    installation_id: ?[:0]u8 = null,
     eol: ?[:0]u8 = null,
     eol_rebase: ?[:0]u8 = null,
 
@@ -33,6 +34,7 @@ pub const InstalledApplication = struct {
         allocator.free(self.version);
         allocator.free(self.latest_commit);
         allocator.free(self.origin);
+        if (self.installation_id) |value| allocator.free(value);
         if (self.eol) |value| allocator.free(value);
         if (self.eol_rebase) |value| allocator.free(value);
         self.* = undefined;
@@ -315,7 +317,9 @@ pub const Manager = struct {
         errdefer operation_scope.fail();
         var application = (try self.find_installed_flatpak(name_or_id)) orelse return error.FlatpakNotFound;
         defer application.deinit(self.allocator);
-        return self.uninstall_flatpak(application.id, application.scope, remove_unused);
+        const reference = try std.fmt.allocPrintSentinel(self.allocator, "{s}/{s}/{s}/{s}", .{ if (application.kind == 0) "app" else "runtime", application.id, application.arch, application.branch }, 0);
+        defer self.allocator.free(reference);
+        return self.uninstall_flatpak_from_installation(reference, application.scope, application.installation_id, remove_unused);
     }
 
     /// Reinstall an installed Flatpak while preserving its application data.
@@ -375,6 +379,15 @@ pub const Manager = struct {
     }
 
     pub fn uninstall_flatpak(self: Manager, flatpak_id: [:0]const u8, scope: flatpak.Scope, remove_unused: bool) !bool {
+        return self.uninstall_flatpak_from_installation(flatpak_id, scope, null, remove_unused);
+    }
+
+    pub fn uninstall_flatpak_from_installation(self: Manager, flatpak_id: [:0]const u8, scope: flatpak.Scope, installation_id: ?[]const u8, remove_unused: bool) !bool {
+        if (installation_id != null and scope != .SYSTEM) return error.InvalidInstallationScope;
+        if (std.mem.indexOfScalar(u8, flatpak_id, 0) != null) return error.InvalidFlatpakReference;
+        if (installation_id) |id| {
+            if (id.len == 0 or std.mem.indexOfScalar(u8, id, 0) != null) return error.InvalidInstallation;
+        }
         var operation_scope = OperationScope.init(self, .remove, flatpak_id);
         operation_scope.attach();
         defer operation_scope.finish(.success);
@@ -387,7 +400,11 @@ pub const Manager = struct {
         var cancellation_bridge = try CancellationBridge.init(self, cancellable);
         defer cancellation_bridge.deinit();
 
-        const installation = if (scope == flatpak.Scope.SYSTEM)
+        const installation_name = if (installation_id) |id| try self.allocator.dupeSentinel(u8, id, 0) else null;
+        defer if (installation_name) |id| self.allocator.free(id);
+        const installation = if (installation_name) |id|
+            rawflatpak.flatpak_installation_new_system_with_id(id, cancellable, &g_error)
+        else if (scope == flatpak.Scope.SYSTEM)
             rawflatpak.flatpak_installation_new_system(cancellable, &g_error)
         else
             rawflatpak.flatpak_installation_new_user(cancellable, &g_error);
@@ -1483,7 +1500,7 @@ pub const Manager = struct {
         while (index < refs.*.len) : (index += 1) {
             try self.checkCancelled();
             const installed: *rawflatpak.FlatpakInstalledRef = @ptrCast(@alignCast(refs.*.pdata[index]));
-            var application = try self.copyInstalledApplication(installed, scope);
+            var application = try self.copyInstalledApplication(installed, scope, installation);
             applications.append(self.allocator, application) catch |err| {
                 application.deinit(self.allocator);
                 return err;
@@ -1530,8 +1547,10 @@ pub const Manager = struct {
             const id = spanOrEmpty(rawflatpak.flatpak_ref_get_name(ref));
             const appdata_name = spanOrEmpty(rawflatpak.flatpak_installed_ref_get_appdata_name(installed));
             const display_name = if (appdata_name.len == 0) id else appdata_name;
-            if (!matchesInstalled(id, display_name, name_or_id)) continue;
-            return @as(?InstalledApplication, try self.copyInstalledApplication(installed, scope));
+            const reference = try flatpak.refToString(self.allocator, ref);
+            defer self.allocator.free(reference);
+            if (!matchesInstalled(id, display_name, name_or_id) and !std.mem.eql(u8, reference, name_or_id)) continue;
+            return @as(?InstalledApplication, try self.copyInstalledApplication(installed, scope, installation));
         }
         return null;
     }
@@ -1540,6 +1559,7 @@ pub const Manager = struct {
         self: Manager,
         installed: *rawflatpak.FlatpakInstalledRef,
         scope: flatpak.Scope,
+        installation: *rawflatpak.FlatpakInstallation,
     ) !InstalledApplication {
         const ref: *rawflatpak.FlatpakRef = @ptrCast(installed);
         const id = spanOrEmpty(rawflatpak.flatpak_ref_get_name(ref));
@@ -1561,6 +1581,11 @@ pub const Manager = struct {
             .scope = scope,
         };
         errdefer self.allocator.free(result.id);
+        if (scope == .SYSTEM) {
+            if (flatpak.str(rawflatpak.flatpak_installation_get_id(installation))) |installation_name|
+                result.installation_id = try self.allocator.dupeSentinel(u8, installation_name, 0);
+        }
+        errdefer if (result.installation_id) |installation_name| self.allocator.free(installation_name);
         result.name = try self.allocator.dupeSentinel(u8, if (appdata_name.len == 0) id else appdata_name, 0);
         errdefer self.allocator.free(result.name);
         result.arch = try self.allocator.dupeSentinel(u8, spanOrEmpty(rawflatpak.flatpak_ref_get_arch(ref)), 0);
@@ -1596,6 +1621,23 @@ pub const Manager = struct {
         defer if (g_error) |e| rawflatpak.g_error_free(e);
         var cancellation_bridge = try CancellationBridge.init(self, cancellable);
         defer cancellation_bridge.deinit();
+
+        if (std.mem.indexOfScalar(u8, flatpak_id, '/') != null) {
+            const parsed = rawflatpak.flatpak_ref_parse(flatpak_id, &g_error);
+            if (parsed == null or g_error != null) return error.InvalidFlatpakReference;
+            defer rawflatpak.g_object_unref(parsed);
+            const installed = rawflatpak.flatpak_installation_get_installed_ref(
+                installation,
+                rawflatpak.flatpak_ref_get_kind(parsed),
+                rawflatpak.flatpak_ref_get_name(parsed),
+                rawflatpak.flatpak_ref_get_arch(parsed),
+                rawflatpak.flatpak_ref_get_branch(parsed),
+                cancellable,
+                &g_error,
+            );
+            if (installed == null or g_error != null) return error.FlatpakNotFound;
+            return flatpak.Flatpak.new(@ptrCast(installed), flatpak.Scope.SYSTEM);
+        }
 
         const ref_ptrs = rawflatpak.flatpak_installation_list_installed_refs(installation, cancellable, &g_error);
         if (ref_ptrs == null or g_error != null) return error.FlatpakError;

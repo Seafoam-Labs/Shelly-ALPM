@@ -115,6 +115,7 @@ pub const FlatpakItem = struct {
     installed_size: u64 = 0,
     ref: []const u8 = "",
     full_ref: []const u8 = "",
+    installation_id: []const u8 = "",
     eol: []const u8 = "",
     eol_rebase: []const u8 = "",
 };
@@ -316,7 +317,7 @@ fn writeConfiguredRemotesJson(
     for (remotes) |remote| {
         try json.beginObject();
         try field(&json, "Name", remote.name);
-        try field(&json, "Scope", @intFromEnum(remote.scope));
+        try field(&json, "Scope", @backingInt(remote.scope));
         try field(&json, "Url", remote.url);
         try json.endObject();
     }
@@ -521,7 +522,7 @@ fn writeAppstreamAppJson(
     for (remotes) |remote| {
         try json.beginObject();
         try field(json, "Name", remote.name);
-        try field(json, "Scope", @intFromEnum(remote.scope));
+        try field(json, "Scope", @backingInt(remote.scope));
         try field(json, "Url", "");
         try json.endObject();
     }
@@ -727,6 +728,7 @@ fn writeFlatpakJson(json: *std.json.Stringify, item: FlatpakItem) !void {
     try field(json, "InstalledSize", item.installed_size);
     try field(json, "Ref", item.ref);
     try field(json, "FullRef", item.full_ref);
+    try field(json, "InstallationId", item.installation_id);
     try field(json, "Eol", item.eol);
     try field(json, "EolRebase", item.eol_rebase);
     try json.endObject();
@@ -1069,7 +1071,7 @@ fn runAppImage(context: *runtime.RuntimeContext) !Result {
         .raw_update_info = try allocator.dupe(u8, native.raw_update_info),
         .repo_owner = try copyOptionalString(allocator, native.repo_owner),
         .repo_name = try copyOptionalString(allocator, native.repo_name),
-        .update_type = @intCast(@intFromEnum(native.update_type)),
+        .update_type = @intCast(@backingInt(native.update_type)),
         .allow_prerelease = native.allow_prerelease,
         .environment_variables = try PackageManager.appimage.environment.clone(allocator, native.environment_variables),
         .command_line_args = try allocator.dupe(u8, native.command_line_args),
@@ -1158,12 +1160,13 @@ fn runFlatpak(context: *runtime.RuntimeContext) !Result {
             .branch = try allocator.dupe(u8, native.branch),
             .latest_commit = try allocator.dupe(u8, native.latest_commit),
             .summary = try allocator.dupe(u8, native.summary),
-            .kind = @intFromEnum(native.kind),
+            .kind = @backingInt(native.kind),
             .remote = try allocator.dupe(u8, native.origin),
-            .install_level = @intFromEnum(native.scope),
+            .install_level = @backingInt(native.scope),
             .installed_size = native.installed_size,
             .ref = ref,
             .full_ref = try std.fmt.allocPrint(allocator, "{s}:{s}", .{ native.origin, ref }),
+            .installation_id = if (native.installation_id) |id| try allocator.dupe(u8, id) else "",
             .eol = if (native.eol) |value| try allocator.dupe(u8, value) else "",
             .eol_rebase = if (native.eol_rebase) |value| try allocator.dupe(u8, value) else "",
         };

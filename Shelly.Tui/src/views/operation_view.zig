@@ -41,8 +41,8 @@ pub const View = struct {
         }
         if (self.review.len > 0) return std.mem.trim(u8, self.review, "\r\n");
         const target = if (self.target) |value|
-            try std.fmt.allocPrint(arena, "\nScope: {s}\nRemote: {f}\nBranch: {f}\nArchitecture: {f}", .{
-                @tagName(value.scope),                                                          diagnostics.safe(value.remote),
+            try std.fmt.allocPrint(arena, "\nScope: {s}\nInstallation: {f}\nRemote: {f}\nBranch: {f}\nArchitecture: {f}", .{
+                @tagName(value.scope),                                                          diagnostics.safe(if (value.installation_id.len > 0) value.installation_id else "default"), diagnostics.safe(value.remote),
                 diagnostics.safe(if (value.branch.len > 0) value.branch else "remote default"), diagnostics.safe(if (value.arch.len > 0) value.arch else "remote default"),
             })
         else

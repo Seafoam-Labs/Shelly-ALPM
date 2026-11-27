@@ -22,6 +22,7 @@ pub const Flatpak = struct {
     Summary: []const u8 = "",
     Ref: []const u8 = "",
     FullRef: []const u8 = "",
+    InstallationId: []const u8 = "",
     Id: []const u8 = "",
     Name: []const u8 = "",
     Version: []const u8 = "",
