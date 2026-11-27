@@ -3,7 +3,7 @@ msgstr ""
 "Project-Id-Version: shelly-ui 2.2.4.1\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
 "POT-Creation-Date: 2026-11-25 23:30-0500\n"
-"PO-Revision-Date: 2026-11-21 13:28+0100\n"
+"PO-Revision-Date: 2026-11-27 23:05+0100\n"
 "Last-Translator: Roxfr <roxfr-dev@outlook.com>\n"
 "Language-Team: French\n"
 "Language: fr\n"
@@ -150,7 +150,7 @@ msgid "Install AppImage"
 msgstr "Installer l'AppImage"
 
 msgid "Drop AppImage here to install"
-msgstr "Déposez l'AppImage ici pour l'installer"
+msgstr "Déposer l'AppImage ici pour l'installer"
 
 msgid "App Name"
 msgstr "Nom de l'application"
@@ -288,65 +288,57 @@ msgstr ""
 "L'AUR n'a pas d'index consultable. Tapez un nom de paquet pour commencer."
 
 msgid "Firmware"
-msgstr ""
+msgstr "Firmware"
 
-#| msgid "Available updates"
 msgid "Device firmware updates"
-msgstr ""
+msgstr "Mises à jour du firmware des périphériques"
 
 msgid "Refresh metadata and check devices again"
-msgstr ""
+msgstr "Actualiser les métadonnées et rechercher à nouveau les périphériques"
 
 msgid "Check Again"
 msgstr "Vérifier à nouveau"
 
-#| msgid "Checking for updates…"
 msgid "Looking for devices…"
-msgstr ""
+msgstr "Recherche de périphériques…"
 
-#| msgid "Installing AppImage"
 msgid "Installing firmware…"
-msgstr ""
+msgstr "Installation du firmware…"
 
 msgid "Select a device to see its firmware releases"
-msgstr ""
+msgstr "Sélectionnez un périphérique pour afficher ses versions de firmware"
 
-#| msgid "Loading recommendations…"
 msgid "Loading releases…"
-msgstr ""
+msgstr "Chargement des versions…"
 
-#| msgid "Current user"
 msgid "Current version"
-msgstr ""
+msgstr "Version actuelle"
 
 msgid "Minimum version"
-msgstr ""
+msgstr "Version minimale"
 
-#| msgid "Available updates"
 msgid "Latest update"
-msgstr ""
+msgstr "Dernière mise à jour"
 
 msgid "Branch"
-msgstr ""
+msgstr "Branche"
 
-#| msgid "No summary available"
 msgid "No releases available"
-msgstr ""
+msgstr "Aucune version disponible"
 
-#| msgid "No packages found"
 msgid "No devices found"
-msgstr ""
+msgstr "Aucun périphérique détecté"
 
 msgid "Devices that support firmware updates will appear here."
 msgstr ""
+"Les périphériques compatibles avec les mises à jour du firmware apparaîtront "
+"ici."
 
-#| msgid "Could not load the release notes."
 msgid "Could not load firmware devices."
-msgstr ""
+msgstr "Impossible de charger les périphériques compatibles avec le firmware."
 
-#| msgid "Check Again"
 msgid "Try Again"
-msgstr ""
+msgstr "Réessayer"
 
 msgid "Install a local Flatpak"
 msgstr "Installer un Flatpak local"
@@ -590,9 +582,8 @@ msgstr "Recherche Shelly"
 msgid "Search standard repositories, AUR and Flatpak"
 msgstr "Rechercher dans les dépôts standards, l'AUR et Flatpak"
 
-#| msgid "Select Your Sources"
 msgid "Search Sources"
-msgstr ""
+msgstr "Rechercher des sources"
 
 msgid "Source"
 msgstr "Source"
@@ -631,14 +622,16 @@ msgid "Language"
 msgstr "Langue"
 
 msgid "Language for Shelly's menus and messages."
-msgstr ""
+msgstr "Langue des menus et des messages de Shelly."
 
 msgid "Software sources"
-msgstr ""
+msgstr "Sources de logiciels"
 
 msgid ""
 "Choose which kinds of software Shelly shows. You can change this at any time."
 msgstr ""
+"Choisissez les types de logiciels que Shelly doit afficher. Vous pouvez "
+"modifier ce choix à tout moment."
 
 msgid "Enable AUR"
 msgstr "Activer l'AUR"
@@ -659,10 +652,12 @@ msgid "Portable self-contained application bundles"
 msgstr "Applications autonomes et portables"
 
 msgid "Enable Firmware"
-msgstr ""
+msgstr "Activer le firmware"
 
 msgid "Update device firmware such as UEFI/BIOS and peripherals"
 msgstr ""
+"Mettre à jour le firmware des périphériques, notamment l'UEFI/BIOS et les "
+"périphériques externes"
 
 msgid "Enable Recommended"
 msgstr "Activer les recommandations"
@@ -671,45 +666,53 @@ msgid "Curated picks from Shelly"
 msgstr "Sélections recommandées par Shelly"
 
 msgid "Updates & Tray"
-msgstr ""
+msgstr "Mises à jour et zone de notification"
 
 msgid "Update notifications"
-msgstr ""
+msgstr "Notifications de mises à jour"
 
 msgid ""
 "Shelly can check for updates in the background and let you know from the "
 "system tray."
 msgstr ""
+"Shelly peut rechercher automatiquement les mises à jour en arrière-plan et "
+"vous en informer depuis la zone de notification."
 
 msgid "Enable Tray Icon"
 msgstr "Activer l'icône de la zone de notification"
 
 msgid "Show a tray icon that checks for updates in the background."
 msgstr ""
+"Afficher une icône dans la zone de notification pour rechercher les mises à "
+"jour en arrière-plan."
 
 msgid "Add Tray To Auto Start"
 msgstr "Ajouter la zone de notification au démarrage automatique"
 
 msgid "Start the tray icon when you log in."
-msgstr ""
+msgstr "Lancer l'icône dans la zone de notification à l'ouverture de session."
 
 msgid "Tray Check Interval (Hours)"
 msgstr "Intervalle de vérification de la zone de notification (heures)"
 
 msgid "How often the tray looks for updates."
 msgstr ""
+"Fréquence de recherche des mises à jour par l'icône de la zone de "
+"notification."
 
 msgid "Use weekly schedule"
 msgstr "Utiliser une planification hebdomadaire"
 
 msgid "Check on chosen days at a set time instead of every few hours."
 msgstr ""
+"Effectuer les recherches les jours choisis à une heure précise plutôt que "
+"toutes les quelques heures."
 
 msgid "Weekly Schedule"
 msgstr "Planification hebdomadaire"
 
 msgid "Days and time when Shelly checks for updates."
-msgstr ""
+msgstr "Jours et heure de recherche des mises à jour par Shelly."
 
 msgid "Sun"
 msgstr "Dim"
@@ -743,6 +746,8 @@ msgstr "Exécuter la zone de notification via cron"
 
 msgid "Check only at the scheduled time, not when the tray starts."
 msgstr ""
+"Vérifier uniquement à l’heure programmée, et non au démarrage de l’icône "
+"dans la zone de notification."
 
 msgid "Tray update with UI"
 msgstr "Mise à jour de la zone de notification avec l'interface"
@@ -750,12 +755,16 @@ msgstr "Mise à jour de la zone de notification avec l'interface"
 msgid ""
 "Run updates started from the tray in the Shelly window instead of a terminal."
 msgstr ""
+"Exécuter les mises à jour lancées depuis la zone de notification dans la "
+"fenêtre Shelly plutôt que dans un terminal."
 
 msgid "Update terminal"
 msgstr "Mettre à jour le terminal"
 
 msgid "Terminal that runs updates started from the tray."
 msgstr ""
+"Terminal utilisé pour les mises à jour lancées depuis la zone de "
+"notification."
 
 msgid "Terminal command"
 msgstr "Commande du terminal"
@@ -764,7 +773,7 @@ msgid "Custom update terminal command"
 msgstr "Commande personnalisée de mise à jour du terminal"
 
 msgid "Tray icon"
-msgstr ""
+msgstr "Icône dans la zone de notification"
 
 msgid "Use Symbolic Tray Icon"
 msgstr "Utiliser une icône symbolique pour la zone de notification"
@@ -781,6 +790,7 @@ msgstr "Icône de la zone de notification"
 
 msgid "Use your own image for the tray icon."
 msgstr ""
+"Utiliser une image personnalisée pour l’icône de la zone de notification."
 
 msgid "Select File"
 msgstr "Sélectionner un fichier"
@@ -793,24 +803,26 @@ msgstr "Icône des mises à jour de la zone de notification"
 
 msgid "Image the tray shows when updates are available."
 msgstr ""
+"Image affichée dans la zone de notification lorsque des mises à jour sont "
+"disponibles."
 
 msgid "Look & Feel"
 msgstr "Apparence et comportement"
 
 msgid "Appearance"
-msgstr ""
+msgstr "Apparence"
 
 msgid "Theme"
 msgstr "Thème"
 
 msgid "Use Shelly's colors or your desktop's colors."
-msgstr ""
+msgstr "Utilisez les couleurs de Shelly ou celles de votre ordinateur."
 
 msgid "Color variant"
 msgstr "Variante de couleur"
 
 msgid "Light, dark, or follow your system."
-msgstr ""
+msgstr "Clair, sombre ou selon les paramètres de votre système."
 
 msgid "Icons Enabled"
 msgstr "Icônes activées"
@@ -823,71 +835,80 @@ msgstr ""
 "liste des paquets et les pages de détails."
 
 msgid "Layout"
-msgstr ""
+msgstr "Disposition"
 
 msgid "Default page"
 msgstr "Page par défaut"
 
 msgid "The page Shelly opens on."
-msgstr ""
+msgstr "Page affichée à l’ouverture de Shelly."
 
 msgid "Navigation style"
 msgstr "Style de navigation"
 
 msgid "Sidebar on the left, or tabs across the top."
-msgstr ""
+msgstr "Barre latérale à gauche ou onglets en haut."
 
 msgid "Use System Title Bar"
-msgstr ""
+msgstr "Utiliser la barre de titre du système"
 
 msgid ""
 "If enabled, the desktop draws the window title bar and its buttons instead "
 "of Shelly."
 msgstr ""
+"Si cette option est activée, le bureau dessine lui-même la barre de titre de "
+"la fenêtre et ses boutons, à la place de Shelly."
 
 msgid "Applies after restarting Shelly."
-msgstr ""
+msgstr "Prend effet après le redémarrage de Shelly."
 
 msgid "Rounded Window Corners"
-msgstr ""
+msgstr "Arrondir les coins de la fenêtre"
 
 msgid ""
 "If enabled, Shelly rounds the corners of the windows it draws. A desktop "
 "that draws the title bar sets its own corners."
 msgstr ""
+"Si cette option est activée, Shelly arrondit les coins des fenêtres qu’il "
+"dessine. Si le bureau dessine lui-même la barre de titre, il définit ses "
+"propres arrondis."
 
 msgid "Advanced"
 msgstr "Avancé"
 
 msgid "Installing and removing"
-msgstr ""
+msgstr "Installation et désinstallation"
 
 msgid "No Confirm"
 msgstr "Ne pas demander de confirmation"
 
 msgid "Skip confirmation prompts when installing, updating, or removing."
 msgstr ""
+"Ignorer les demandes de confirmation lors de l’installation, de la mise à "
+"jour ou de la désinstallation."
 
 msgid "Remove Configuration on Uninstall"
-msgstr ""
+msgstr "Supprimer la configuration lors de la désinstallation"
 
 msgid "Also delete an app's configuration files when you remove it."
 msgstr ""
+"Supprimer aussi les fichiers de configuration lors de la désinstallation "
+"d’une application."
 
 msgid "Search and AUR"
-msgstr ""
+msgstr "Recherche et AUR"
 
 msgid "Enable Shelly Search"
 msgstr "Activer la recherche Shelly"
 
 msgid "Add a page that searches every source at once."
-msgstr ""
+msgstr "Ajouter une page de recherche dans toutes les sources à la fois."
 
 msgid "Enable Atoll Powered AUR"
 msgstr "Activer l'AUR propulsé par Atoll"
 
 msgid "Browse the AUR through Seafoam Labs' Atoll service."
-msgstr ""
+msgstr "Parcourir l’AUR via le service Atoll de Seafoam Labs."
 
 msgid "Always Recheck AppImage Updates on Upgrade All"
 msgstr ""
@@ -903,7 +924,7 @@ msgid "AppImage Install Path"
 msgstr "Chemin d'installation des AppImages"
 
 msgid "Folder where new AppImages are saved."
-msgstr ""
+msgstr "Dossier dans lequel les nouvelles AppImages sont enregistrées."
 
 msgid "Select Directory"
 msgstr "Sélectionner un répertoire"
@@ -1082,7 +1103,7 @@ msgid ""
 msgstr ""
 "Atoll contient des scripts de compilation appelés PKGBUILDs. Ces scripts "
 "sont publiés par des utilisateurs et ne font l'objet d'aucune vérification "
-"ni validation. Activez cette fonctionnalité uniquement si vous êtes capable "
+"ni validation. Activer cette fonctionnalité uniquement si vous êtes capable "
 "de vérifier vous-même ces scripts de compilation."
 
 msgid ""
@@ -1222,219 +1243,224 @@ msgid "Dismiss"
 msgstr "Ignorer"
 
 msgid "Reset Columns"
-msgstr ""
+msgstr "Réinitialiser les colonnes"
 
 msgid "Internal error"
-msgstr ""
+msgstr "Erreur interne"
 
 msgid "Installed newer firmware version"
-msgstr ""
+msgstr "Une version plus récente du firmware est déjà installée"
 
 msgid "Installed same firmware version"
-msgstr ""
+msgstr "La même version du firmware est déjà installée"
 
 msgid "Already set to be installed offline"
-msgstr ""
+msgstr "L’installation hors ligne est déjà programmée"
 
 msgid "Failed to get authentication"
-msgstr ""
+msgstr "Échec de l’authentification"
 
 msgid "Failed to read from device"
-msgstr ""
+msgstr "Impossible de lire les données du périphérique"
 
 msgid "Failed to write to the device"
-msgstr ""
+msgstr "Impossible d’écrire sur le périphérique"
 
-#| msgid "Install for"
 msgid "Invalid file format"
-msgstr ""
+msgstr "Format de fichier non valide"
 
-#| msgid "No device access"
 msgid "No matching device exists"
-msgstr ""
+msgstr "Aucun périphérique correspondant"
 
 msgid "Nothing to do"
-msgstr ""
+msgstr "Aucune action nécessaire"
 
 msgid "Action was not possible"
-msgstr ""
+msgstr "Impossible d’effectuer l’action"
 
 msgid "Signature was invalid"
-msgstr ""
+msgstr "Signature non valide"
 
-#| msgid "polkit is required"
 msgid "AC power was required"
-msgstr ""
+msgstr "Une alimentation secteur était nécessaire"
 
-#| msgid "Permissions"
 msgid "Permission was denied"
-msgstr ""
+msgstr "Autorisation refusée"
 
 msgid "User has configured their system in a broken way"
-msgstr ""
+msgstr "La configuration du système par l’utilisateur empêche l’opération"
 
 msgid "The system battery level is too low"
-msgstr ""
+msgstr "Le niveau de la batterie du système est trop faible"
 
 msgid "User needs to do an action to complete the update"
 msgstr ""
+"Une intervention de l’utilisateur est nécessaire pour terminer la mise à jour"
 
 msgid "Failed to get authentication: credentials expired"
-msgstr ""
+msgstr "Échec de l’authentification : les identifiants ont expiré"
 
 msgid "The firmware data is invalid"
-msgstr ""
+msgstr "Les données du firmware sont non valides"
 
-#| msgid "Operation failed"
 msgid "The operation timed out"
-msgstr ""
+msgstr "Le délai d’attente de l’opération est dépassé"
 
 msgid "The device is busy; try again in a moment"
-msgstr ""
+msgstr "Le périphérique est occupé. Réessayez dans un instant"
 
 msgid "The device could not be reached"
-msgstr ""
+msgstr "Le périphérique est inaccessible"
 
-#| msgid "Unknown developer"
 msgid "Unknown error"
-msgstr ""
+msgstr "Erreur inconnue"
 
-#| msgid "Unknown"
 msgid "Unknown state"
-msgstr ""
+msgstr "État inconnu"
 
 msgid "Idle"
-msgstr ""
+msgstr "Inactif"
 
-#| msgid "Loading packages"
 msgid "Loading a resource"
-msgstr ""
+msgstr "Chargement d’une ressource"
 
 msgid "Decompressing firmware"
-msgstr ""
+msgstr "Décompression du firmware"
 
 msgid "Restarting the device"
-msgstr ""
+msgstr "Redémarrage du périphérique"
 
 msgid "Writing to a device"
-msgstr ""
+msgstr "Écriture sur un périphérique"
 
 msgid "Verifying (reading) a device"
-msgstr ""
+msgstr "Vérification du périphérique par lecture"
 
 msgid "Scheduling an offline update"
-msgstr ""
+msgstr "Planification d’une mise à jour hors ligne"
 
-#| msgid "Downloading"
 msgid "A file is downloading"
-msgstr ""
+msgstr "Téléchargement d’un fichier"
 
 msgid "Reading from a device"
-msgstr ""
+msgstr "Lecture des données d’un périphérique"
 
 msgid "Erasing a device"
-msgstr ""
+msgstr "Effacement d’un périphérique"
 
 msgid "Waiting for authentication"
-msgstr ""
+msgstr "En attente d’authentification"
 
 msgid "The device is busy"
-msgstr ""
+msgstr "Le périphérique est occupé"
 
 msgid "The daemon is shutting down"
-msgstr ""
+msgstr "Le service est en cours d’arrêt"
 
 msgid "Waiting for user action"
-msgstr ""
+msgstr "En attente d’une intervention de l’utilisateur"
 
-#| msgid "Required By"
 msgid "requires"
-msgstr ""
+msgstr "nécessite"
 
 msgid "The device has a problem that prevents updates"
-msgstr ""
+msgstr "Un problème empêche la mise à jour du périphérique"
 
 msgid "System power is too low to perform the update"
 msgstr ""
+"Le niveau de charge du système est trop faible pour effectuer la mise à jour"
 
 msgid "Device is unreachable, or out of wireless range"
 msgstr ""
+"Le périphérique est inaccessible ou hors de portée de la connexion sans fil"
 
 msgid "Device battery power is too low"
-msgstr ""
+msgstr "Le niveau de la batterie du périphérique est trop faible"
 
 msgid "Device is waiting for the update to be applied"
-msgstr ""
+msgstr "Le périphérique attend l’application de la mise à jour"
 
 msgid "Device requires AC power to be connected"
-msgstr ""
+msgstr "Le périphérique doit être branché sur le secteur"
 
 msgid "Device cannot be used while the lid is closed"
-msgstr ""
+msgstr "Le périphérique est inutilisable lorsque le capot est fermé"
 
 msgid "Device is emulated"
-msgstr ""
+msgstr "Le périphérique est émulé"
 
 msgid "The firmware license is missing"
-msgstr ""
+msgstr "La licence du firmware est manquante"
 
 msgid "Another process is blocking firmware updates"
-msgstr ""
+msgstr "Un autre processus bloque les mises à jour du firmware"
 
-#| msgid "Package is already installed"
 msgid "Device is already being updated"
-msgstr ""
+msgstr "Une mise à jour du périphérique est déjà en cours"
 
-#| msgid "Devices"
 msgid "Device is in use"
-msgstr ""
+msgstr "Le périphérique est en cours d’utilisation"
 
 msgid "Device cannot be used while there are no displays plugged in"
-msgstr ""
+msgstr "Le périphérique nécessite qu’au moins un écran soit connecté"
 
 msgid "A higher-priority connection to this device is in use"
 msgstr ""
+"Une connexion à ce périphérique est en cours d’utilisation avec une priorité "
+"plus élevée"
 
 msgid "The device is signed with an insecure key"
-msgstr ""
+msgstr "Le périphérique est signé avec une clé non sécurisée"
 
 msgid "Device firmware is locked"
-msgstr ""
+msgstr "Le firmware du périphérique est verrouillé"
 
 msgid ""
 "The update will continue when the device USB cable has been unplugged and "
 "then re-inserted."
 msgstr ""
+"La mise à jour reprendra après le débranchement puis le rebranchement du "
+"câble USB du périphérique."
 
 msgid "Press unlock on the device to continue the update process."
 msgstr ""
+"Appuyez sur le bouton de déverrouillage du périphérique pour poursuivre la "
+"mise à jour."
 
 msgid "The update will continue when the device USB cable has been unplugged."
 msgstr ""
+"La mise à jour reprendra après le débranchement du câble USB du périphérique."
 
 msgid ""
 "The update will continue when the device USB cable has been re-inserted."
 msgstr ""
+"La mise à jour reprendra après le rebranchement du câble USB du périphérique."
 
 msgid ""
 "Do not turn off your computer or remove the AC adaptor until you are sure "
 "the update has completed."
 msgstr ""
+"N’éteignez pas votre ordinateur et ne débranchez pas son adaptateur secteur "
+"tant que la mise à jour n’est pas terminée."
 
 msgid "Unplug and replug the device, to continue the update process."
 msgstr ""
+"Débranchez puis rebranchez le périphérique pour poursuivre la mise à jour."
 
 msgid ""
 "The update will continue when the device power cable has been unplugged and "
 "then re-inserted."
 msgstr ""
+"La mise à jour reprendra après le débranchement puis le rebranchement du "
+"câble d’alimentation du périphérique."
 
-#| msgid "Systemd startup service added."
 msgid "Please restart the fwupd service."
-msgstr ""
+msgstr "Redémarrez le service fwupd."
 
 msgid "The device needs your attention to continue the update."
 msgstr ""
+"Une intervention de votre part est nécessaire pour poursuivre la mise à jour "
+"du périphérique."
 
 msgid "None"
 msgstr "Aucun"
@@ -1512,7 +1538,7 @@ msgid ""
 "Use unique KEY=value lines. Keys must start with a letter or underscore and "
 "contain only letters, digits, or underscores."
 msgstr ""
-"Utilisez des lignes CLÉ=valeur uniques. Les clés doivent commencer par une "
+"Utiliser des lignes CLÉ=valeur uniques. Les clés doivent commencer par une "
 "lettre ou un tiret bas et contenir uniquement des lettres, des chiffres ou "
 "des tirets bas."
 
@@ -1550,7 +1576,7 @@ msgid "No packages found"
 msgstr "Aucun paquet trouvé"
 
 msgid "Try a shorter or more general keyword."
-msgstr "Essayez un mot-clé plus court ou plus général."
+msgstr "Essayer un mot-clé plus court ou plus général."
 
 msgid "Could not reach Atoll"
 msgstr "Impossible de joindre Atoll"
@@ -1633,284 +1659,288 @@ msgstr ""
 msgid "Could not search the configured AUR service."
 msgstr "Impossible de rechercher sur le service AUR configuré."
 
-#| msgid "Downloading"
 msgid "Downloading…"
-msgstr ""
+msgstr "Téléchargement…"
 
-#| msgid "Devices"
 msgid "devices"
-msgstr ""
+msgstr "périphériques"
 
-#| msgid "Update Available"
 msgid "updates available"
-msgstr ""
+msgstr "mises à jour disponibles"
 
 msgid "Firmware devices"
-msgstr ""
+msgstr "Périphériques avec firmware"
 
 msgid "Battery too low: connect AC power before updating firmware"
 msgstr ""
+"Batterie trop faible : branchez l’alimentation secteur avant de mettre à "
+"jour le firmware"
 
 msgid "Firmware metadata is out of date. Use {s} to refresh."
 msgstr ""
+"Les métadonnées des firmwares sont obsolètes. Utilisez « {s} » pour les "
+"actualiser."
 
 msgid "The firmware service stopped. Use Check Again to reconnect."
 msgstr ""
+"Le service de mise à jour des firmwares s’est arrêté. Sélectionnez "
+"« Vérifier à nouveau » pour rétablir la connexion."
 
 msgid "Metadata refresh failed"
-msgstr ""
+msgstr "Échec de l’actualisation des métadonnées"
 
-#| msgid "Check your internet connection and try again."
 msgid ""
 "Could not refresh the firmware catalog. Check your network connection and "
 "try again."
 msgstr ""
+"Impossible d’actualiser le catalogue des firmwares. Vérifiez votre connexion "
+"réseau et réessayez."
 
 msgid "View on LVFS"
-msgstr ""
+msgstr "Voir sur LVFS"
 
 msgid "Update {s} to version {s}?"
-msgstr ""
+msgstr "Mettre à jour {s} vers la version {s} ?"
 
 msgid "Downgrade {s} to version {s}?"
-msgstr ""
+msgstr "Rétrograder {s} vers la version {s} ?"
 
 msgid "Reinstall {s} version {s}?"
-msgstr ""
+msgstr "Réinstaller {s} en version {s} ?"
 
 msgid "The device will remain usable for the duration of the update."
-msgstr ""
+msgstr "Le périphérique restera utilisable pendant la mise à jour."
 
 msgid "The device will be unavailable during this action."
-msgstr ""
+msgstr "Le périphérique sera indisponible pendant cette opération."
 
-#| msgid "Download Size"
 msgid "Download size: {s}"
-msgstr ""
+msgstr "Taille du téléchargement : {s}"
 
 msgid "Estimated install time: {s} seconds"
-msgstr ""
+msgstr "Durée d’installation estimée : {s} secondes"
 
-#| msgid "Update Available"
 msgid "Update device"
-msgstr ""
+msgstr "Mettre à jour le périphérique"
 
-#| msgid "Downgraded"
 msgid "Downgrade device"
-msgstr ""
+msgstr "Revenir à une version antérieure du firmware"
 
-#| msgid "Reinstalled"
 msgid "Reinstall device"
-msgstr ""
+msgstr "Réinstaller le firmware du périphérique"
 
-#| msgid "Install for"
 msgid "Install firmware"
-msgstr ""
+msgstr "Installer le firmware"
 
 msgid "Switch firmware branch?"
-msgstr ""
+msgstr "Changer de branche du firmware ?"
 
 msgid ""
 "This firmware is not supplied by {s}. Installing it may damage your hardware "
 "or void your warranty."
 msgstr ""
+"Ce firmware n’est pas fourni par {s}. Son installation peut endommager votre "
+"matériel ou annuler votre garantie."
 
 msgid ""
 "This firmware comes from a different branch. Installing it may damage your "
 "hardware or void your warranty."
 msgstr ""
+"Ce firmware provient d’une autre branche. Son installation peut endommager "
+"votre matériel ou annuler votre garantie."
 
 msgid "Switch Branch"
-msgstr ""
+msgstr "Changer de branche"
 
 msgid "You may lose all your data without recovery keys"
 msgstr ""
+"Sans les clés de récupération, vous risquez de perdre toutes vos données"
 
 msgid ""
 "Updating this firmware may invalidate the secrets that unlock your encrypted "
 "drives. Make sure you have the recovery keys for all your encrypted drives "
 "before continuing."
 msgstr ""
+"La mise à jour de ce firmware peut invalider les secrets qui permettent de "
+"déverrouiller vos disques chiffrés. Assurez-vous de disposer des clés de "
+"récupération de tous vos disques chiffrés avant de continuer."
 
 msgid "I have recovery keys for all my encrypted drives"
-msgstr ""
+msgstr "Je dispose des clés de récupération de tous mes disques chiffrés"
 
 msgid "Continue"
-msgstr ""
+msgstr "Continuer"
 
 msgid "Failed to install firmware"
-msgstr ""
+msgstr "Échec de l’installation du firmware"
 
-#| msgid "Could not start the requested operation."
 msgid "Could not start the installation"
-msgstr ""
+msgstr "Impossible de lancer l’installation"
 
-#| msgid "Could not search the configured AUR service."
 msgid "Could not reach the firmware service"
-msgstr ""
+msgstr "Impossible de joindre le service de mise à jour des firmwares"
 
 msgid "The firmware source for this release is unavailable"
-msgstr ""
+msgstr "La source du firmware est indisponible pour cette version"
 
 msgid "This release has no download location"
-msgstr ""
+msgstr "Cette version ne dispose d’aucune adresse de téléchargement"
 
 msgid "This release provides no checksums, so it cannot be verified"
 msgstr ""
+"Cette version ne fournit aucune somme de contrôle et ne peut donc pas être "
+"vérifiée"
 
 msgid "The release checksum is invalid"
-msgstr ""
+msgstr "La somme de contrôle de cette version est non valide"
 
 msgid "The downloaded firmware failed verification"
-msgstr ""
+msgstr "La vérification du firmware téléchargé a échoué"
 
 msgid "The firmware download failed"
-msgstr ""
+msgstr "Le téléchargement du firmware a échoué"
 
-#| msgid "Could not load the release notes."
 msgid "Could not access the firmware cache"
-msgstr ""
+msgstr "Impossible d’accéder au cache des firmwares"
 
-#| msgid "Updates included"
 msgid "Update complete"
-msgstr ""
+msgstr "Mise à jour terminée"
 
-#| msgid "Devices"
 msgid "Device request"
-msgstr ""
+msgstr "Demande du périphérique"
 
 msgid "OK"
-msgstr ""
+msgstr "OK"
 
-#| msgid "Include this update"
 msgid "Restart to complete this update"
-msgstr ""
+msgstr "Redémarrer pour terminer la mise à jour"
 
-#| msgid "Include this update"
 msgid "Shutdown to complete this update"
-msgstr ""
+msgstr "Éteindre pour terminer la mise à jour"
 
 msgid ""
 "You must restart your device to complete the update. Make sure your device "
 "is plugged in or fully charged. Save your files before you restart to avoid "
 "losing data."
 msgstr ""
+"Vous devez redémarrer votre appareil pour terminer la mise à jour. Assurez-"
+"vous qu’il est branché sur le secteur ou complètement chargé. Enregistrez "
+"vos fichiers avant de redémarrer pour éviter toute perte de données."
 
 msgid ""
 "You must shut down your device to complete the update. Save your files "
 "before you shut down to avoid losing data."
 msgstr ""
+"Vous devez éteindre votre appareil pour terminer la mise à jour. Enregistrez "
+"vos fichiers avant de l’éteindre pour éviter toute perte de données."
 
 msgid "Automatic restart is not available on this system."
-msgstr ""
+msgstr "Le redémarrage automatique est indisponible sur ce système."
 
 msgid "Automatic shutdown is not available on this system."
-msgstr ""
+msgstr "L’arrêt automatique est indisponible sur ce système."
 
 msgid "Restart now"
-msgstr ""
+msgstr "Redémarrer maintenant"
 
 msgid "Shut down now"
-msgstr ""
+msgstr "Éteindre maintenant"
 
 msgid "Restart later"
-msgstr ""
+msgstr "Redémarrer plus tard"
 
 msgid "Shut down later"
-msgstr ""
+msgstr "Éteindre plus tard"
 
-#| msgid "Operation cancelled"
 msgid "Restart cancelled"
-msgstr ""
+msgstr "Redémarrage annulé"
 
-#| msgid "Operation cancelled"
 msgid "Shutdown cancelled"
-msgstr ""
+msgstr "Arrêt annulé"
 
 msgid ""
 "The restart was cancelled. Restart later to complete the firmware update."
 msgstr ""
+"Le redémarrage a été annulé. Redémarrez plus tard pour terminer la mise à "
+"jour du firmware."
 
 msgid ""
 "The shutdown was cancelled. Shut down later to complete the firmware update."
 msgstr ""
+"L’arrêt a été annulé. Éteignez l’appareil plus tard pour terminer la mise à "
+"jour du firmware."
 
-#| msgid "Operation failed"
 msgid "Restart failed"
-msgstr ""
+msgstr "Échec du redémarrage"
 
-#| msgid "Operation failed"
 msgid "Shutdown failed"
-msgstr ""
+msgstr "Échec de l’arrêt"
 
 msgid "The system did not accept the request. You can try again later."
-msgstr ""
+msgstr "Le système a refusé la demande. Vous pouvez réessayer plus tard."
 
 msgid "End of life"
-msgstr ""
+msgstr "Fin de vie"
 
 msgid "Unsigned payload"
-msgstr ""
+msgstr "Contenu non signé"
 
 msgid "Resolve the device problems before updating"
-msgstr ""
+msgstr "Résoudre les problèmes du périphérique avant la mise à jour"
 
-#| msgid "Installation in progress"
 msgid "An update is in progress"
-msgstr ""
+msgstr "Une mise à jour est en cours"
 
 msgid "Locked"
-msgstr ""
+msgstr "Verrouillé"
 
 msgid "Needs bootloader"
-msgstr ""
+msgstr "Chargeur d’amorçage requis"
 
 msgid "Needs restart"
-msgstr ""
+msgstr "Redémarrage requis"
 
 msgid "Needs shutdown"
-msgstr ""
+msgstr "Arrêt requis"
 
 msgid "Needs activation"
-msgstr ""
+msgstr "Activation requise"
 
 msgid "Usable during the update"
-msgstr ""
+msgstr "Utilisable pendant la mise à jour"
 
 msgid "Affects full-disk encryption"
-msgstr ""
+msgstr "Affecte le chiffrement intégral du disque"
 
 msgid "Low priority"
-msgstr ""
+msgstr "Priorité faible"
 
 msgid "Medium priority"
-msgstr ""
+msgstr "Priorité moyenne"
 
 msgid "High priority"
-msgstr ""
+msgstr "Priorité élevée"
 
 msgid "Critical priority"
-msgstr ""
+msgstr "Priorité critique"
 
-#| msgid "Downgraded"
 msgid "Downgrade"
-msgstr ""
+msgstr "Revenir à une version antérieure"
 
 msgid "Blocked"
-msgstr ""
+msgstr "Bloqué"
 
 msgid "This release requires approval before it can be installed"
-msgstr ""
+msgstr "Cette version doit être approuvée avant de pouvoir être installée"
 
 msgid "This version is blocked on this device"
-msgstr ""
+msgstr "Cette version est bloquée sur ce périphérique"
 
-#| msgid "Community fluxer"
 msgid "Community supported"
-msgstr ""
+msgstr "Maintenu par la communauté"
 
 msgid "Alternate branch"
-msgstr ""
+msgstr "Autre branche"
 
 msgid "Choose a Flatpak file"
 msgstr "Choisir un fichier Flatpak"
@@ -2131,10 +2161,10 @@ msgid "Loading..."
 msgstr "Chargement…"
 
 msgid "inferred"
-msgstr ""
+msgstr "déduit"
 
 msgid "Installed From"
-msgstr ""
+msgstr "Installé depuis"
 
 msgid "Build Date"
 msgstr "Date de construction"
@@ -2143,7 +2173,7 @@ msgid "Install Reason"
 msgstr "Motif d'installation"
 
 msgid "Available From"
-msgstr ""
+msgstr "Disponible à partir de"
 
 msgid "Provides"
 msgstr "Fournit"
@@ -2199,7 +2229,7 @@ msgstr "Sélection mixte"
 msgid ""
 "Select only installed packages to remove, or only available ones to install."
 msgstr ""
-"Sélectionnez uniquement les paquets installés à supprimer, ou uniquement les "
+"Sélectionner uniquement les paquets installés à supprimer, ou uniquement les "
 "paquets disponibles à installer."
 
 msgid "Remove the selected packages?"
@@ -2234,13 +2264,13 @@ msgid "Installation in progress"
 msgstr "Installation en cours"
 
 msgid "Search Sources (some sources hidden)"
-msgstr ""
+msgstr "Rechercher des sources (certaines sources sont masquées)"
 
 msgid "No sources selected"
 msgstr "Aucune source sélectionnée"
 
 msgid "Enable at least one source filter above."
-msgstr "Activez au moins un filtre de source ci-dessus."
+msgstr "Activer au moins un filtre de source ci-dessus."
 
 msgid "Install Packages"
 msgstr "Installer les paquets"
@@ -2267,9 +2297,8 @@ msgstr "Installation du support Flatpak"
 msgid "Installing AppImage support"
 msgstr "Installation du support AppImage"
 
-#| msgid "Installing AppImage support"
 msgid "Installing Firmware support"
-msgstr ""
+msgstr "Installation de la prise en charge du firmware"
 
 msgid "Could not start installing Flatpak support."
 msgstr "Impossible de démarrer l'installation du support Flatpak."
@@ -2277,9 +2306,9 @@ msgstr "Impossible de démarrer l'installation du support Flatpak."
 msgid "Could not start installing AppImage support."
 msgstr "Impossible de démarrer l'installation du support AppImage."
 
-#| msgid "Could not start installing AppImage support."
 msgid "Could not start installing Firmware support."
 msgstr ""
+"Impossible de démarrer l'installation de la prise en charge du firmware."
 
 msgid "Could not install Flatpak support."
 msgstr "Impossible d'installer le support Flatpak."
@@ -2287,9 +2316,8 @@ msgstr "Impossible d'installer le support Flatpak."
 msgid "Could not install AppImage support."
 msgstr "Impossible d'installer le support AppImage."
 
-#| msgid "Could not install AppImage support."
 msgid "Could not install Firmware support."
-msgstr ""
+msgstr "Impossible d'installer la prise en charge du firmware."
 
 msgid "Flatpak support enabled"
 msgstr "Support Flatpak activé"
@@ -2297,9 +2325,8 @@ msgstr "Support Flatpak activé"
 msgid "AppImage support enabled"
 msgstr "Support AppImage activé"
 
-#| msgid "AppImage support enabled"
 msgid "Firmware support enabled"
-msgstr ""
+msgstr "Prise en charge du firmware activée"
 
 msgid "No changelog entries found"
 msgstr "Aucune entrée de journal des modifications trouvée"
@@ -2358,9 +2385,8 @@ msgstr "Service de démarrage systemd supprimé."
 msgid "AUR enabled"
 msgstr "AUR activé"
 
-#| msgid "System files"
 msgid "System colors"
-msgstr ""
+msgstr "Couleurs du système"
 
 msgid "Follow system"
 msgstr "Suivre le thème du système"
@@ -2624,20 +2650,17 @@ msgstr ""
 "fonction des logiciels que vous avez installés. Les données des paquets sont "
 "récupérées auprès de sources externes."
 
-#| msgid "Installing Flatpak and AppImage support"
 msgid "Installing Flatpak, AppImage and Firmware support"
-msgstr ""
+msgstr "Installation de la prise en charge de Flatpak, AppImage et du firmware"
 
 msgid "Installing Flatpak and AppImage support"
 msgstr "Installation du support Flatpak et AppImage"
 
-#| msgid "Installing Flatpak and AppImage support"
 msgid "Installing Flatpak and Firmware support"
-msgstr ""
+msgstr "Installation de la prise en charge de Flatpak et du firmware"
 
-#| msgid "Installing AppImage support"
 msgid "Installing AppImage and Firmware support"
-msgstr ""
+msgstr "Installation de la prise en charge d'AppImage et du firmware"
 
 msgid "BROWSE"
 msgstr "PARCOURIR"
