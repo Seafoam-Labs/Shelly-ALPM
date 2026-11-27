@@ -1,17 +1,17 @@
-const pane_focus = @import("pane_focus.zig");
+const pane_focus = @import("components/pane_focus.zig");
 const drawColumn = @import("packages_view.zig").drawColumn;
-const styles = @import("styles.zig");
+const styles = @import("components/styles.zig");
 const std = @import("std");
 const vaxis = @import("vaxis");
 const vxfw = vaxis.vxfw;
-const Border = @import("border.zig");
+const Border = @import("components/border.zig");
 const diagnostics = @import("diagnostics");
 const help_view = @import("help_view.zig");
 const pkgbuild_view = @import("pkgbuild_view.zig");
 const Allocator = std.mem.Allocator;
 const AurPackage = @import("../models/packages.zig").AurPackage;
-const appendDetailList = @import("detail_format.zig").appendDetailList;
-const formatEpoch = @import("detail_format.zig").formatEpoch;
+const appendDetailList = @import("components/detail_format.zig").appendDetailList;
+const formatEpoch = @import("components/detail_format.zig").formatEpoch;
 
 /// Borrows display state and widgets owned by the application.
 /// Query execution and user-action handling remain in Model.
@@ -40,7 +40,7 @@ pub const View = struct {
         const max = ctx.max.size();
         if (max.width < 2 or max.height < 3) return;
         const split = max.width >= 64;
-        const left_w: u16 = if (split) @import("split_layout.zig").listWidth(max.width, self.list_percent) else max.width;
+        const left_w: u16 = if (split) @import("components/split_layout.zig").listWidth(max.width, self.list_percent) else max.width;
         const right_w = if (split) max.width - left_w else max.width;
         const list_width = left_w -| @as(u16, if (split) 1 else 0);
         const search_height: u16 = if (max.width >= 2 and max.height >= 8) 3 else 1;
@@ -71,7 +71,7 @@ pub const View = struct {
             const removable = for (marks) |mark| {
                 if (mark.installed) break true;
             } else false;
-            const action_height = try @import("marked_actions.zig").append(ctx.withConstraints(.{}, .{ .width = list_width, .height = list_height }), children, list_row, self.model, marks.len, removable);
+            const action_height = try @import("components/marked_actions.zig").append(ctx.withConstraints(.{}, .{ .width = list_width, .height = list_height }), children, list_row, self.model, marks.len, removable);
             const remaining = list_height - action_height;
             var border: Border = .{ .child = content, .labels = if (!self.installed_only and self.catalog_page > 0) &page_label else &.{}, .focused = self.list_active and !self.details_active };
             if (remaining > 0) try children.append(arena, .{
@@ -227,7 +227,7 @@ pub fn detailsText(arena: Allocator, pkg: *const AurPackage) Allocator.Error![]c
     return try std.mem.join(arena, "\n", lines.items);
 }
 
-const detail_fields = @import("detail_fields.zig");
+const detail_fields = @import("components/detail_fields.zig");
 
 pub fn packageLink(arena: Allocator, pkg: *const AurPackage) Allocator.Error![]const u8 {
     const base = std.mem.trimEnd(u8, std.mem.trim(u8, pkg.AurBaseUrl, " \t\r\n"), "/");

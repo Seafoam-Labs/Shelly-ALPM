@@ -15,6 +15,19 @@ pub const Action = enum {
     remove,
     upgrade,
     sync,
+    purify,
+    repair_permissions,
+    repair_database,
+    repository_add,
+    repository_remove,
+
+    pub fn isRepair(self: Action) bool {
+        return self == .repair_permissions or self == .repair_database;
+    }
+
+    pub fn isRepositoryMutation(self: Action) bool {
+        return self == .repository_add or self == .repository_remove;
+    }
 
     pub fn verb(self: Action) []const u8 {
         return switch (self) {
@@ -22,6 +35,11 @@ pub const Action = enum {
             .remove => "Remove",
             .upgrade => "Upgrade",
             .sync => "Sync",
+            .purify => "Clean",
+            .repair_permissions => "Repair",
+            .repair_database => "Clear stale",
+            .repository_add => "Add repository",
+            .repository_remove => "Remove repository",
         };
     }
 
@@ -31,6 +49,11 @@ pub const Action = enum {
             .remove => "Removed",
             .upgrade => "Upgraded",
             .sync => "Synchronized",
+            .purify => "Cleaned",
+            .repair_permissions => "Repaired",
+            .repair_database => "Checked",
+            .repository_add => "Added repository",
+            .repository_remove => "Removed repository",
         };
     }
 };
@@ -73,6 +96,9 @@ pub const OperationRequest = struct {
     shelly_bin: []const u8,
     environ_map: *const std.process.Environ.Map,
     name: []const u8,
+    repository_url: ?[]const u8 = null,
+    repository_fingerprint: ?[]const u8 = null,
+    skip_repository_sync: bool = false,
     targets: []const []const u8 = &.{},
     backend: []const u8,
     launcher_bin: ?[]const u8 = null,
@@ -128,9 +154,22 @@ const ProgressStream = struct {
     transaction_done: bool = false,
     transaction_depth: usize = 0,
     transaction_cancelled: bool = false,
+    cleanup_plan: ?std.json.Parsed([][]const u8) = null,
+    cleanup_reviewed: bool = false,
 
     fn deinit(self: *ProgressStream) void {
         self.payload.deinit(std.heap.page_allocator);
+        if (self.cleanup_plan) |*plan| plan.deinit();
+    }
+
+    fn attachCleanupPlan(self: *ProgressStream, message: *OwnedMessage) !void {
+        const plan = self.cleanup_plan orelse return error.MissingCleanupPlan;
+        if (message.value.question != .yes_no or plan.value.len == 0) return error.InvalidCleanupReview;
+        const allocator = message.arena.allocator();
+        const targets = try allocator.alloc([]const u8, plan.value.len);
+        for (plan.value, targets) |target, *copy| copy.* = try allocator.dupe(u8, target);
+        message.value.question.yes_no.arguments = targets;
+        self.cleanup_reviewed = true;
     }
 
     fn feed(self: *ProgressStream, bytes: []const u8, operation: ?*Operation, io: std.Io) void {
@@ -163,7 +202,28 @@ const ProgressStream = struct {
             self.len += 1;
             if (!std.mem.endsWith(u8, self.payload.items, "[/JSON]")) continue;
             self.in_frame = false;
-            var message = decodePayload(std.heap.page_allocator, self.payload.items[0 .. self.len - 7]) catch {
+            const allocator = std.heap.page_allocator;
+            const json = JsonPackFrame.decodeBase64(allocator, self.payload.items[0 .. self.len - 7]) catch {
+                self.failed = true;
+                if (operation) |op| op.closeInput(io);
+                continue;
+            };
+            defer allocator.free(json);
+            const cleanup = if (operation) |op| op.request.action == .purify else false;
+            if (cleanup and std.mem.startsWith(u8, std.mem.trimStart(u8, json, " \t\r\n"), "[")) {
+                if (self.cleanup_plan != null) {
+                    self.failed = true;
+                    operation.?.closeInput(io);
+                    continue;
+                }
+                self.cleanup_plan = std.json.parseFromSlice([][]const u8, allocator, json, .{ .allocate = .alloc_always }) catch {
+                    self.failed = true;
+                    operation.?.closeInput(io);
+                    continue;
+                };
+                continue;
+            }
+            var message = decodeJson(allocator, json) catch {
                 self.failed = true;
                 if (operation) |op| op.closeInput(io);
                 continue;
@@ -173,6 +233,11 @@ const ProgressStream = struct {
             switch (message.value) {
                 .question => {
                     if (operation) |op| {
+                        if (cleanup and !self.cleanup_reviewed) self.attachCleanupPlan(&message) catch {
+                            self.failed = true;
+                            op.closeInput(io);
+                            continue;
+                        };
                         op.queueQuestion(io, message) catch {
                             self.failed = true;
                             op.closeInput(io);
@@ -327,6 +392,9 @@ pub const Operation = struct {
         switch (answer) {
             .yes_no, .transaction, .pkgbuild => |accepted| {
                 if (!accepted) self.user_declined = true;
+                if (self.request.action == .purify) {
+                    self.progress.update(if (accepted) "Applying cleanup…" else "Cancelling cleanup…", null);
+                }
             },
             else => {},
         }
@@ -394,6 +462,8 @@ pub const Operation = struct {
         self.request.sudo_bin = try alloc.dupe(u8, request.sudo_bin);
         self.request.shelly_bin = try alloc.dupe(u8, request.shelly_bin);
         self.request.name = try alloc.dupe(u8, request.name);
+        if (request.repository_url) |url| self.request.repository_url = try alloc.dupe(u8, url);
+        if (request.repository_fingerprint) |fingerprint| self.request.repository_fingerprint = try alloc.dupe(u8, fingerprint);
         const targets = try alloc.alloc([]const u8, request.targets.len);
         for (request.targets, targets) |source, *target| target.* = try alloc.dupe(u8, source);
         self.request.targets = targets;
@@ -444,7 +514,7 @@ pub const OperationResult = struct {
 };
 
 fn interactive(request: OperationRequest) bool {
-    return (request.action == .remove and request.remove_unused_dependencies and (std.mem.eql(u8, request.backend, "standard") or std.mem.eql(u8, request.backend, "aur"))) or
+    return request.action == .purify or (request.action == .remove and request.remove_unused_dependencies and (std.mem.eql(u8, request.backend, "standard") or std.mem.eql(u8, request.backend, "aur"))) or
         (std.mem.eql(u8, request.backend, "aur") and request.action != .remove) or isFlatpak(request) or combined(request);
 }
 
@@ -457,19 +527,37 @@ fn isFlatpak(request: OperationRequest) bool {
 }
 
 fn elevated(request: OperationRequest) bool {
+    if (request.action == .repair_database) return false;
     return !std.mem.eql(u8, request.backend, "appimage") and (!isFlatpak(request) or flatpakNeedsElevation(request.action, request.flatpak));
 }
 
 fn operationArgv(alloc: std.mem.Allocator, request: OperationRequest) ![][]const u8 {
+    if (request.action == .repair_database)
+        return alloc.dupe([]const u8, &.{ request.shelly_bin, "utility", "--repair-db", "--ui-mode" });
+    if (request.action == .repair_permissions)
+        return alloc.dupe([]const u8, &.{ request.sudo_bin, request.shelly_bin, "utility", "--fix-permissions", "--ui-mode" });
+    if (request.action.isRepositoryMutation()) {
+        const adding = request.action == .repository_add;
+        const prefix = [_][]const u8{ request.sudo_bin, request.shelly_bin, "utility", "repository", if (adding) "--add" else "--remove", "--ui-mode" };
+        const options: []const []const u8 = if (request.skip_repository_sync) &.{"--no-sync"} else &.{};
+        const signing: []const []const u8 = if (adding and request.repository_fingerprint != null)
+            &.{ "--signing-key", request.repository_fingerprint.? }
+        else
+            &.{};
+        const target = [_][]const u8{ "--", request.name };
+        const url: []const []const u8 = if (adding) &.{request.repository_url orelse return error.MissingRepositoryUrl} else &.{};
+        return std.mem.concat(alloc, []const u8, &.{ &prefix, options, signing, &target, url });
+    }
     const package_backend = std.mem.eql(u8, request.backend, "standard") or std.mem.eql(u8, request.backend, "aur");
+    if (request.action == .purify and !std.mem.eql(u8, request.backend, "standard") and !isFlatpak(request)) return error.UnsupportedCleanupBackend;
     if (request.action == .sync and !std.mem.eql(u8, request.backend, "standard")) return error.UnsupportedSyncBackend;
-    if (request.targets.len > 0 and (!package_backend or request.action == .upgrade or request.action == .sync))
+    if (request.targets.len > 0 and (!package_backend or request.action == .upgrade or request.action == .sync or request.action == .purify))
         return error.UnsupportedBatchAction;
     if (std.mem.eql(u8, request.backend, "all") and request.action != .upgrade) return error.UnsupportedCombinedAction;
     const native_removal = request.action == .remove and std.mem.eql(u8, request.backend, "standard");
     if (request.action == .upgrade and !std.mem.eql(u8, request.backend, "standard") and !std.mem.eql(u8, request.backend, "aur") and !isFlatpak(request) and !std.mem.eql(u8, request.backend, "appimage") and !combined(request))
         return error.UnsupportedUpgradeSource;
-    if (isFlatpak(request) and request.action != .upgrade) {
+    if (isFlatpak(request) and request.action != .upgrade and request.action != .purify) {
         const target = request.flatpak orelse return error.MissingFlatpakTarget;
         if (request.action == .install and (target.remote.len == 0 or target.arch.len > 0)) return error.UnsupportedFlatpakInstallTarget;
     }
@@ -498,6 +586,7 @@ fn operationArgv(alloc: std.mem.Allocator, request: OperationRequest) ![][]const
     }
     if (request.action != .sync and !interactive(request)) try argv.append(alloc, "--no-confirm");
     try argv.append(alloc, "--ui-mode");
+    if (request.action == .purify and !isFlatpak(request)) try argv.append(alloc, "--orphans");
     if (native_removal) try argv.append(alloc, if (request.remove_unused_dependencies) "--cascade" else "--no-cascade");
     if (request.action == .remove and std.mem.eql(u8, request.backend, "aur") and request.remove_unused_dependencies) try argv.append(alloc, "--cascade");
     return argv.toOwnedSlice(alloc);
@@ -540,16 +629,18 @@ fn runInstall(io: std.Io, alloc: std.mem.Allocator, request: OperationRequest, o
     var owned_session: Session = .{};
     defer owned_session.deinit(io);
     const session = request.session orelse &owned_session;
-    if (elevated(request)) session.acquire() catch {
+    // Database repair starts as the user. Cli will ask in case there is a need to elevate.
+    const use_auth_terminal = elevated(request) or request.action == .repair_database;
+    if (use_auth_terminal) session.acquire() catch {
         result.failed = true;
         result.error_detail = alloc.dupe(u8, "Another operation is using the authorization session.") catch "";
         return result;
     };
-    defer if (elevated(request)) session.release();
+    defer if (use_auth_terminal) session.release();
     var terminal: ?sudo_terminal.Terminal = null;
     var owned_launcher: ?[:0]u8 = null;
     defer if (owned_launcher) |path| alloc.free(path);
-    if (elevated(request)) {
+    if (use_auth_terminal) {
         if (request.launcher_bin == null) {
             owned_launcher = std.process.executablePathAlloc(io, alloc) catch {
                 result.failed = true;
@@ -570,7 +661,7 @@ fn runInstall(io: std.Io, alloc: std.mem.Allocator, request: OperationRequest, o
         result.error_detail = alloc.dupe(u8, "The operation was cancelled before startup.") catch "";
         return result;
     }
-    var child = (if (elevated(request)) session.spawn(io, alloc, argv, &auth_environment, &active.cancel_requested) else sudo_session.Process.spawn(io, .{
+    var child = (if (use_auth_terminal) session.spawn(io, alloc, argv, &auth_environment, &active.cancel_requested) else sudo_session.Process.spawn(io, .{
         .argv = argv,
         .environ_map = &auth_environment,
         .stdin = .pipe,
@@ -664,7 +755,12 @@ fn runInstall(io: std.Io, alloc: std.mem.Allocator, request: OperationRequest, o
         result.declined = op.user_declined;
         if (op.expected_answer != null) stream.failed = true;
     }
-    const missing_completion = (request.action == .upgrade or request.action == .sync or interactive(request)) and (!stream.transaction_done or stream.transaction_depth != 0);
+    if (request.action == .purify) {
+        if (stream.cleanup_plan) |plan| {
+            if (plan.value.len != 0 and !stream.cleanup_reviewed) stream.failed = true;
+        } else stream.failed = true;
+    }
+    const missing_completion = (request.action == .upgrade or request.action == .sync or request.action.isRepositoryMutation() or interactive(request)) and (!stream.transaction_done or stream.transaction_depth != 0);
     if (term != .exited or term.exited != 0 or read_failed or stream.failed or stream.transaction_cancelled or missing_completion or result.declined) {
         const detail = if (stream.transaction_cancelled)
             "The operation was cancelled. Refresh package state before retrying."
@@ -1923,5 +2019,112 @@ test "AppImage upgrade subprocess requires completion and reports failures witho
         const result = op.poll() orelse return error.MissingOperationResult;
         try std.testing.expectEqual(!std.mem.eql(u8, end, "TransactionDone"), result.failed);
         if (result.failed) try std.testing.expect(result.error_detail.len > 0);
+    }
+}
+
+test "cleanup commands preserve confirmation and attach CLI targets to the review" {
+    const allocator = std.testing.allocator;
+    var env: std.process.Environ.Map = .init(allocator);
+    defer env.deinit();
+    var request: OperationRequest = .{ .action = .purify, .shelly_bin = "shelly", .environ_map = &env, .name = "cleanup", .backend = "standard" };
+    const standard = try operationArgv(allocator, request);
+    defer allocator.free(standard);
+    for ([_][]const u8{ "sudo", "shelly", "purify", "standard", "--ui-mode", "--orphans" }, standard) |expected, actual|
+        try std.testing.expectEqualStrings(expected, actual);
+    try std.testing.expect(interactive(request));
+    request.backend = "flatpak";
+    const flatpak = try operationArgv(allocator, request);
+    defer allocator.free(flatpak);
+    for ([_][]const u8{ "shelly", "purify", "flatpak", "--ui-mode" }, flatpak) |expected, actual|
+        try std.testing.expectEqualStrings(expected, actual);
+
+    var operation: Operation = .{
+        .arena = .init(allocator),
+        .request = request,
+        .input = .{ .handle = -1, .flags = .{ .nonblocking = false } },
+    };
+    defer operation.arena.deinit();
+    var stream: ProgressStream = .{};
+    defer stream.deinit();
+    for ([_][]const u8{
+        \\["[user] runtime/demo","[system] runtime/example"]
+        ,
+        \\{"$kind":"q.yesno","QuestionId":"1","QuestionText":"Proceed with purify?"}
+        ,
+    }) |json| {
+        const encoded = try allocator.alloc(u8, std.base64.standard.Encoder.calcSize(json.len));
+        defer allocator.free(encoded);
+        const frame = try std.fmt.allocPrint(allocator, "[JSON]{s}[/JSON]", .{std.base64.standard.Encoder.encode(encoded, json)});
+        defer allocator.free(frame);
+        stream.feed(frame, &operation, std.testing.io);
+    }
+    var message = operation.takeQuestion(std.testing.io) orelse return error.MissingCleanupReview;
+    defer message.deinit();
+    try std.testing.expect(!stream.failed);
+    try std.testing.expectEqualStrings("1", message.value.question.yes_no.question_id);
+    const targets = message.value.question.yes_no.arguments;
+    try std.testing.expectEqual(@as(usize, 2), targets.len);
+    try std.testing.expectEqualStrings("[user] runtime/demo", targets[0]);
+    try std.testing.expectEqualStrings("[system] runtime/example", targets[1]);
+}
+
+test "permission repair starts elevated and database repair delegates elevation to the CLI" {
+    const allocator = std.testing.allocator;
+    var env: std.process.Environ.Map = .init(allocator);
+    defer env.deinit();
+    var request: OperationRequest = .{
+        .shelly_bin = "shelly",
+        .environ_map = &env,
+        .name = "repair",
+        .backend = "standard",
+    };
+    for ([_]Action{ .repair_permissions, .repair_database }, [_][]const u8{ "--fix-permissions", "--repair-db" }) |action, flag| {
+        request.action = action;
+        const argv = try operationArgv(allocator, request);
+        defer allocator.free(argv);
+        const expected_argv: []const []const u8 = if (action == .repair_permissions)
+            &.{ "sudo", "shelly", "utility", flag, "--ui-mode" }
+        else
+            &.{ "shelly", "utility", flag, "--ui-mode" };
+        try std.testing.expectEqual(expected_argv.len, argv.len);
+        for (expected_argv, argv) |expected, actual|
+            try std.testing.expectEqualStrings(expected, actual);
+        try std.testing.expectEqual(action == .repair_permissions, elevated(request));
+        try std.testing.expect(!interactive(request));
+    }
+}
+
+test "repository key setup and refresh options are passed only when applicable" {
+    const allocator = std.testing.allocator;
+    var env: std.process.Environ.Map = .init(allocator);
+    defer env.deinit();
+    var request: OperationRequest = .{
+        .shelly_bin = "shelly",
+        .environ_map = &env,
+        .name = "custom",
+        .backend = "standard",
+        .repository_url = "https://example.invalid/$repo",
+    };
+    for ([_]Action{ .repository_add, .repository_remove }, [_][]const u8{ "--add", "--remove" }) |action, flag| {
+        request.action = action;
+        for ([_]bool{ false, true }) |skip| {
+            request.skip_repository_sync = skip;
+            request.repository_fingerprint = if (skip) "0123456789ABCDEF0123456789ABCDEF01234567" else null;
+            const argv = try operationArgv(allocator, request);
+            defer allocator.free(argv);
+            try std.testing.expectEqualStrings(flag, argv[4]);
+            try std.testing.expectEqualStrings("--ui-mode", argv[5]);
+            if (skip) try std.testing.expectEqualStrings("--no-sync", argv[6]);
+            var separator: usize = if (skip) 7 else 6;
+            if (action == .repository_add and request.repository_fingerprint != null) {
+                try std.testing.expectEqualStrings("--signing-key", argv[separator]);
+                try std.testing.expectEqualStrings(request.repository_fingerprint.?, argv[separator + 1]);
+                separator += 2;
+            }
+            try std.testing.expectEqualStrings("--", argv[separator]);
+            try std.testing.expectEqualStrings(request.name, argv[separator + 1]);
+            if (action == .repository_add) try std.testing.expectEqualStrings(request.repository_url.?, argv[separator + 2]);
+            try std.testing.expectEqual(separator + (if (action == .repository_add) @as(usize, 3) else 2), argv.len);
+        }
     }
 }

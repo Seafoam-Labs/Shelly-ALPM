@@ -19,6 +19,7 @@ pub fn resolve(self: *Model) commands.Context {
         context.scrollable = prompt.panel.scroll.scroll.has_more_vertical or
             prompt.panel.scroll.scroll.top > 0 or prompt.panel.scroll.scroll.vertical_offset != 0;
         context.authenticating = prompt.progress.authenticating;
+        context.repository_confirmation = prompt.state == .entering and prompt.action.isRepositoryMutation();
         context.removal_confirmation = prompt.state == .entering and (prompt.backend == .standard or prompt.backend == .aur) and prompt.action == .remove;
         return context;
     }
@@ -131,6 +132,23 @@ pub fn resolve(self: *Model) commands.Context {
                 context.hidden_files = form.show_hidden;
             }
             context.split_details = self.appimage_state.details_active;
+        },
+        .utilities => {
+            context.mode = .utilities;
+            if (self.utilities_state.selected == .repository) {
+                context.repositories = true;
+                context.repository_editing = self.utilities_state.repositories.editing != null;
+                context.repository_selected = self.utilities_state.repositories.selected() != null;
+                context.utilities_results = self.utilities_state.results_focused;
+                return context;
+            }
+            const state = &self.utilities_state;
+            context.pacfile_preview = state.preview_open;
+            context.source_wrap = state.preview_wrap;
+            context.pacfile_can_compare = state.selected == .pacfiles and state.results_focused and state.message() == null;
+            context.utilities_action = if (context.pacfile_can_compare) "View file" else if (state.selected == .pacfiles) "Browse files" else state.selected.label();
+            context.utilities_has_results = self.utilities_state.selected == .pacfiles;
+            context.utilities_results = self.utilities_state.results_focused;
         },
         .settings => {
             context.mode = .settings;

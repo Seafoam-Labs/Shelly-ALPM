@@ -104,9 +104,9 @@ test "oversized details stay within the vaxis surface cell limit" {
     const allocator = arena.allocator();
     const text = try allocator.alloc(u8, 70_000);
     @memset(text, 'a');
-    var pkg: @import("../models/packages.zig").Package = .{};
+    var pkg: @import("../../models/packages.zig").Package = .{};
     const width: u16 = 256;
-    const surface = try draw(.{ .userdata = &pkg, .drawFn = @import("packages_view.zig").drawDetails }, .{
+    const surface = try draw(.{ .userdata = &pkg, .drawFn = @import("../packages_view.zig").drawDetails }, .{
         .arena = allocator,
         .min = .{},
         .max = .{ .width = width },
@@ -133,9 +133,9 @@ test "homepage hyperlinks survive wrapping and flattening without linking labels
     vxfw.DrawContext.init(.unicode);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    var pkg: @import("../models/packages.zig").Package = .{};
+    var pkg: @import("../../models/packages.zig").Package = .{};
     const url = "https://example.org/project/releases?version=1#details";
-    const surface = try draw(.{ .userdata = &pkg, .drawFn = @import("packages_view.zig").drawDetails }, .{
+    const surface = try draw(.{ .userdata = &pkg, .drawFn = @import("../packages_view.zig").drawDetails }, .{
         .arena = arena.allocator(),
         .min = .{},
         .max = .{ .width = 24, .height = null },

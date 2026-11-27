@@ -16,7 +16,7 @@ const settings_model = @import("../models/settings_model.zig");
 const operation_model = @import("../models/operation_model.zig");
 const flatpak_view = @import("flatpak_view.zig");
 const footer_view = @import("footer_view.zig");
-const split_layout = @import("split_layout.zig");
+const split_layout = @import("components/split_layout.zig");
 
 fn drawNavigation(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
     return .{ .size = ctx.max.size(), .widget = .{ .userdata = ptr, .drawFn = drawNavigation }, .buffer = &.{}, .children = &.{} };
@@ -26,6 +26,7 @@ pub fn draw(self: *Model, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
     const arena = ctx.arena;
     const max = ctx.max.size();
     self.viewport_width = max.width;
+    self.utilities_split_visible = false;
     self.help_button = null;
 
     // Need room for the tab bar, at least one content row and the status bar
@@ -80,7 +81,7 @@ pub fn draw(self: *Model, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
     const framed_help = navigation_height == 3;
     const help_label = if (command_context.settings_capture or command_context.appimage_path) "" else try std.fmt.allocPrint(arena, "{s}{s} {s}{s}", .{ if (framed_help) "" else "[", try @import("../commands.zig").label(arena, .help), if (self.help_open) "Back" else "Help", if (framed_help) "" else "]" });
     const desired_help_width = ctx.stringWidth(help_label) + @as(u16, if (framed_help) 2 else 0);
-    const bar: *@import("tab_bar.zig").TabBar = @ptrCast(@alignCast(tab_bar.userdata));
+    const bar: *@import("components/tab_bar.zig").TabBar = @ptrCast(@alignCast(tab_bar.userdata));
     const active_width = for (bar.tabs, bar.rich.text) |tab, span| {
         if (tab == self.active) break ctx.stringWidth(span.text);
     } else ctx.stringWidth(self.active.title());
@@ -96,8 +97,8 @@ pub fn draw(self: *Model, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
         const col = bar.right_edge + 1;
         self.help_button = .{ .col = col, .width = help_width, .height = navigation_height };
         const help = try arena.create(vxfw.Text);
-        help.* = .{ .text = help_label, .softwrap = false, .style = @import("styles.zig").action };
-        const border = try arena.create(@import("border.zig"));
+        help.* = .{ .text = help_label, .softwrap = false, .style = @import("components/styles.zig").action };
+        const border = try arena.create(@import("components/border.zig"));
         border.* = .{ .child = help.widget() };
         const bounds: vxfw.Size = .{ .width = help_width, .height = navigation_height };
         const help_ctx = ctx.withConstraints(bounds, .{ .width = bounds.width, .height = bounds.height });
@@ -106,7 +107,7 @@ pub fn draw(self: *Model, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
             .surface = if (framed_help) try border.draw(help_ctx) else try help.draw(help_ctx),
         };
         const label_surface = if (framed_help) &navigation[1].surface.children[0].surface else &navigation[1].surface;
-        try @import("styles.zig").hoverLabel(arena, label_surface);
+        try @import("components/styles.zig").hoverLabel(arena, label_surface);
     }
     try children.append(arena, .{
         .origin = .{ .row = 0, .col = 0 },
@@ -137,6 +138,7 @@ pub fn draw(self: *Model, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
         .flatpak => try flatpak_model.flatpakView(self).appendContent(content_ctx, &children),
         .appimage => try appimage_model.appendContent(self, content_ctx, &children),
         .settings => try settings_model.settingsView(self).appendContent(content_ctx, &children),
+        .utilities => try @import("utilities_view.zig").appendContent(self, content_ctx, &children),
     };
 
     for (children.items[content_start..]) |*child| child.origin.row += @intCast(content_offset);
@@ -215,10 +217,10 @@ test "tab views preserve input widgets and render without background work" {
             const input = switch (tab) {
                 .packages => model.packages_state.text_field.widget(),
                 .aur => model.aur_state.aur_field.widget(),
-                .upgrade, .settings, .appimage => model.widget(),
+                .upgrade, .settings, .appimage, .utilities => model.widget(),
                 .flatpak => model.flatpak_state.flatpak_field.widget(),
             };
-            try std.testing.expect(@import("pane_focus.zig").testContainsWidget(surface, input));
+            try std.testing.expect(@import("components/pane_focus.zig").testContainsWidget(surface, input));
         }
     }
 }

@@ -75,6 +75,11 @@ pub const RuntimeContext = struct {
         for (arguments) |argument| {
             if (std.mem.eql(u8, argument, "--user")) return result.toOwnedSlice(allocator);
         }
+        try result.appendSlice(allocator, &.{ try allocator.dupe(u8, "--gpgdir"), try self.packageKeyringDirectory(allocator) });
+        return result.toOwnedSlice(allocator);
+    }
+
+    pub fn packageKeyringDirectory(self: *const RuntimeContext, allocator: std.mem.Allocator) ![]const u8 {
         const Configuration = PackageManager.Manager.configuration.Configuration;
         var config = try (if (self.config_path != null) &Configuration.parseStrict else &Configuration.parse)(
             self.allocator,
@@ -82,8 +87,7 @@ pub const RuntimeContext = struct {
             self.config_path orelse PackageManager.paths.config_file,
         );
         defer config.deinitialize();
-        try result.appendSlice(allocator, &.{ try allocator.dupe(u8, "--gpgdir"), try allocator.dupe(u8, config.gpg_directory) });
-        return result.toOwnedSlice(allocator);
+        return allocator.dupe(u8, config.gpg_directory);
     }
 
     pub fn attachTransactionLog(

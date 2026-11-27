@@ -1,9 +1,9 @@
-const styles = @import("styles.zig");
+const styles = @import("components/styles.zig");
 const std = @import("std");
 const vaxis = @import("vaxis");
 const vxfw = vaxis.vxfw;
 const commands = @import("../commands.zig");
-const Border = @import("border.zig");
+const Border = @import("components/border.zig");
 const Allocator = std.mem.Allocator;
 
 pub const Panel = struct {
@@ -45,6 +45,7 @@ pub const Panel = struct {
             .flatpak => "Flatpak browsing",
             .appimage => "AppImage browsing",
             .updates => "Updates",
+            .utilities => "Utilities",
             .settings => "Settings",
             .authentication => "Authentication",
             .confirmation => "Confirmation",
@@ -58,6 +59,24 @@ pub const Panel = struct {
         };
         try lines.appendSlice(arena, &.{ heading, "" });
         switch (self.context.mode) {
+            .utilities => if (self.context.repositories) {
+                try lines.appendSlice(arena, &.{
+                    "Adding a repository",
+                    "",
+                    "Use a mirror for your distro and architecture. Follow the repository's guide",
+                    "for the full fingerprint and any required keyring package. Leave the",
+                    "fingerprint blank to keep existing trust.",
+                    "",
+                    "After adding",
+                    "",
+                    "Installs and updates still use your signature policy. If refresh fails,",
+                    "the entry may be saved. Fix the error and refresh again.",
+                    "",
+                    "Shelly edits its active config: /etc/shelly.conf by default on Devario",
+                    "or /etc/pacman.conf with the pacman profile.",
+                    "",
+                });
+            },
             .search, .packages, .aur, .flatpak, .details => {
                 try lines.appendSlice(arena, &.{
                     "Vim navigation",

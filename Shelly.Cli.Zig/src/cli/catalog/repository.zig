@@ -21,6 +21,7 @@ pub const variants = [_]types.Variant{
             flag("--list", &.{"-l"}, "List configured repositories"),
             flag("--no-sync", &.{"-n"}, "Skip the final database refresh"),
             stringOption("--lsign-key", &.{"-s"}, "Key to locally sign before adding", false),
+            stringOption("--signing-key", &.{}, "Approved full signing-key fingerprint; import and locally sign only if needed", false),
         },
     },
 };

@@ -33,6 +33,14 @@ pub const Mouse = struct {
 
     pub const SettingsTarget = union(enum) { control: usize, header: usize };
     pub const BindingTarget = union(enum) { binding: usize, scroll_down: bool, save, cancel };
+    pub const closePacfilePreview = @import("models/utilities_model.zig").closePreviewFromMouse;
+    pub const repositoryControl = @import("models/utilities_model.zig").repositoryControl;
+    pub const focusUtilityPane = @import("models/utilities_model.zig").focusPaneFromMouse;
+    pub const selectUtilityResult = @import("models/utilities_model.zig").selectResultFromMouse;
+    pub const retryPacfiles = @import("models/utilities_model.zig").retryPacfilesFromMouse;
+    pub const previewPacfile = @import("models/utilities_model.zig").previewFromMouse;
+    pub const moveUtilityFocus = @import("models/utilities_model.zig").moveActionFromMouse;
+    pub const activateUtility = @import("models/utilities_model.zig").activateFromMouse;
     pub const editBinding = @import("models/settings_model.zig").editBindingFromMouse;
     pub const activateSetting = @import("models/settings_model.zig").onSettingsAction;
     pub const selectTab = @import("model.zig").Model.onTabSelected;
@@ -56,6 +64,7 @@ pub const Mouse = struct {
     pub const sortPackages = @import("models/packages_model.zig").sortBy;
     pub const OperationAction = enum { confirm, cancel, close, approve, decline };
     pub const operationAction = @import("models/operation_model.zig").runMouseOperationAction;
+    pub const toggleRepositorySync = @import("models/operation_model.zig").toggleRepositorySync;
     pub const toggleUnusedDependencies = @import("models/operation_model.zig").toggleUnusedDependencies;
     pub const selectDependency = @import("models/operation_model.zig").selectDependencyFromMouse;
     pub const navigateReview = @import("models/operation_model.zig").handleReviewMouse;
@@ -90,6 +99,7 @@ pub const Id = enum {
     mark,
     clear_selection,
     toggle_wrap,
+    pacfile_compare,
     categories,
     previous_catalog_page,
     next_catalog_page,
@@ -145,6 +155,7 @@ pub const Bindings = struct {
     previous_screenshot: vaxis.Key = .{ .codepoint = '[' },
     next_screenshot: vaxis.Key = .{ .codepoint = ']' },
     categories: vaxis.Key = .{ .codepoint = 'g', .mods = .{ .ctrl = true } },
+    pacfile_compare: vaxis.Key = .{ .codepoint = 'd' },
     toggle_wrap: vaxis.Key = .{ .codepoint = 'w' },
     clear_selection: vaxis.Key = .{ .codepoint = 'x', .mods = .{ .ctrl = true } },
     install: vaxis.Key = .{ .codepoint = 'i' },
@@ -394,9 +405,18 @@ pub fn scrollsOperation(key: vaxis.Key) bool {
     return scrollKey(key) != null;
 }
 
-pub const Mode = enum { appimage, search, packages, details, aur, flatpak, updates, settings, authentication, confirmation, running, result, review, preview_document, answers, choice, help };
+pub const Mode = enum { appimage, search, packages, details, aur, flatpak, updates, utilities, settings, authentication, confirmation, running, result, review, preview_document, answers, choice, help };
 pub const Context = struct {
+    utilities_action: []const u8 = "",
+    repositories: bool = false,
+    repository_editing: bool = false,
+    repository_selected: bool = false,
+    utilities_has_results: bool = false,
+    utilities_results: bool = false,
+    pacfile_preview: bool = false,
+    pacfile_can_compare: bool = false,
     removal_confirmation: bool = false,
+    repository_confirmation: bool = false,
     appimage_source: bool = false,
     appimage_configure_selected: bool = false,
     appimage_path: bool = false,
@@ -534,6 +554,39 @@ pub fn entries(arena: std.mem.Allocator, context: Context) std.mem.Allocator.Err
             try add(arena, &list, .filter, if (context.installed_only) "All" else "Installed", "Toggle browsing / installed packages");
             if (context.mode == .flatpak or context.installed_only or context.catalog_available) try add(arena, &list, .refresh_list, "Refresh", "Refresh the current package list");
         },
+        .utilities => {
+            if (context.repositories) {
+                if (context.repository_editing) {
+                    try add(arena, &list, .confirm, "Continue", "Advance through the repository fields or review the addition");
+                    try add(arena, &list, .cancel_capture, "Cancel", "Back to the repository list");
+                } else if (!context.utilities_results) {
+                    try add(arena, &list, .details, "Repositories", "Focus the repository list");
+                    try add(arena, &list, .previous, "Previous", "Select the previous Utility");
+                    try add(arena, &list, .next, "Next", "Select the next Utility");
+                } else {
+                    try add(arena, &list, .install, "Add", "Add a repository");
+                    if (context.repository_selected) try add(arena, &list, .remove, "Remove", "Review removal of the selected repository");
+                    try add(arena, &list, .refresh_list, "Refresh", "Reload configured repositories");
+                    try add(arena, &list, .back, "Actions", "Focus the Utilities actions");
+                }
+            } else if (context.pacfile_preview) {
+                try add(arena, &list, .close, "Back", "Return to pacfile results");
+                try add(arena, &list, .previous, "Scroll up", "Scroll the diff up");
+                try add(arena, &list, .next, "Scroll down", "Scroll the diff down");
+                try add(arena, &list, .toggle_wrap, if (context.source_wrap) "Unwrap" else "Wrap", "Toggle diff wrapping");
+            } else {
+                try add(arena, &list, .confirm, context.utilities_action, context.utilities_action);
+                if (context.utilities_has_results) try add(arena, &list, .refresh, "Rescan", "Refresh the pacfile list");
+                if (context.pacfile_can_compare) try add(arena, &list, .pacfile_compare, "Diff", "Compare the selected pacfile with the active configuration");
+                try add(arena, &list, .previous, "Previous", "Move up in the active pane");
+                try add(arena, &list, .next, "Next", "Move down in the active pane");
+                if (context.utilities_has_results) try add(arena, &list, if (context.utilities_results) .back else .details, if (context.utilities_results) "Actions" else "Details", "Switch between actions and results");
+            }
+            if (!context.repository_editing and (context.utilities_results or context.pacfile_preview)) {
+                try add(arena, &list, .page_up, "Page up", "Move up by a page");
+                try add(arena, &list, .page_down, "Page down", "Move down by a page");
+            }
+        },
         .updates => {
             if (context.upgrade_all) try add(arena, &list, .upgrade_all, "Update all", "Upgrade all enabled package sources");
             if (context.upgrade_system) try add(arena, &list, .upgrade_system, "System", "Upgrade native system packages");
@@ -580,6 +633,7 @@ pub fn entries(arena: std.mem.Allocator, context: Context) std.mem.Allocator.Err
             }
         },
         .authentication, .confirmation => {
+            if (context.repository_confirmation) try add(arena, &list, .mark, "Toggle refresh", "Toggle skipping the package database refresh");
             if (context.removal_confirmation) try add(arena, &list, .mark, "Toggle", "Toggle removal of unused dependencies");
             try add(arena, &list, .confirm, "Run", "Confirm and run the operation");
             try add(arena, &list, .cancel, "Back", "Dismiss confirmation without starting the operation");

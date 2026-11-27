@@ -1,6 +1,6 @@
-const styles = @import("styles.zig");
+const styles = @import("components/styles.zig");
 const std = @import("std");
-const Border = @import("border.zig");
+const Border = @import("components/border.zig");
 const commands = @import("../commands.zig");
 const diagnostics = @import("diagnostics");
 const operation = @import("../services/shelly_operation.zig");
@@ -21,6 +21,7 @@ pub const View = struct {
     target: ?operation.FlatpakTarget = null,
     action: operation.Action = .install,
     remove_unused_dependencies: bool = false,
+    skip_repository_sync: bool = false,
     state: enum { entering, running, succeeded, failed, declined },
     review: []const u8 = "",
     detail: []const u8 = "",
@@ -39,6 +40,10 @@ pub const View = struct {
                 targets,
             });
         }
+        if (self.action.isRepositoryMutation()) return std.fmt.allocPrint(arena, "[{s}] Skip database refresh\n{s}", .{
+            if (self.skip_repository_sync) "x" else " ",
+            std.mem.trim(u8, self.review, "\r\n"),
+        });
         if (self.review.len > 0) return std.mem.trim(u8, self.review, "\r\n");
         const target = if (self.target) |value|
             try std.fmt.allocPrint(arena, "\nScope: {s}\nRemote: {f}\nBranch: {f}\nArchitecture: {f}", .{
@@ -51,6 +56,12 @@ pub const View = struct {
             if (self.include_aur)
                 if (self.include_flatpak) "System packages, AUR, and system/user Flatpaks. PKGBUILDs require review." else "System packages and AUR. Flatpak disabled or unavailable. PKGBUILDs require review."
             else if (self.include_flatpak) "System packages and system/user Flatpaks. AUR excluded." else "Full system upgrade. AUR and Flatpak excluded."
+        else if (self.action == .repair_permissions)
+            "Restore your ownership of Shelly’s configuration, cache, and data directories. This requires administrator authorization."
+        else if (self.action == .purify)
+            "Authenticate to prepare the cleanup plan. You can review the list before approving removal."
+        else if (self.action == .repair_database)
+            "Continue only if no package manager or update check is running. Removing a system database lock requires administrator authorization."
         else if (self.action == .sync)
             "Refreshes metadata from the configured system repositories."
         else if (self.backend == .appimage and self.action == .upgrade)
@@ -70,10 +81,17 @@ pub const View = struct {
             .entering => unreachable,
             .running => "",
             .succeeded => try std.fmt.allocPrint(arena, "{s} {f} successfully.{s}", .{ self.action.completed(), diagnostics.safe(self.name), if (self.refresh_pending) "\nRefreshing package state…" else "" }),
-            .declined => try std.fmt.allocPrint(arena, "Declined {s} for {f}.\nSome dependency changes may already have completed.", .{ @tagName(self.action), diagnostics.safe(self.name) }),
+            .declined => try std.fmt.allocPrint(arena, "Declined {s} for {f}.\n{s}", .{ @tagName(self.action), diagnostics.safe(self.name), if (self.action == .purify) "Cleanup was cancelled." else "Some dependency changes may already have completed." }),
             .failed => try std.fmt.allocPrint(arena, "Could not {s} {f}.\n\n{f}{s}", .{
-                @tagName(self.action),                                                                           diagnostics.safe(self.name),
-                diagnostics.safe(if (self.detail.len > 0) self.detail else "Shelly returned no error details."), if (self.combined) "\nSome sources may already have completed. Package state will be refreshed." else "",
+                switch (self.action) {
+                    .repair_permissions, .repair_database => "repair",
+                    .repository_add => "add repository",
+                    .repository_remove => "remove repository",
+                    else => @tagName(self.action),
+                },
+                diagnostics.safe(self.name),
+                diagnostics.safe(if (self.detail.len > 0) self.detail else "Shelly returned no error details."),
+                if (self.combined) "\nSome sources may already have completed. Package state will be refreshed." else "",
             }),
         };
         const progress = if (if (self.state == .running) self.progress.percent else null) |reported| blk: {
@@ -178,7 +196,7 @@ pub const Panel = struct {
         const title = if (view.progress.authenticating)
             "Authentication"
         else if (view.state == .entering)
-            (if (view.elevated) "Authentication" else "Confirmation")
+            (if (view.action == .repair_database) "Confirm lock removal" else if (view.action == .purify) "Confirm cleanup" else if (view.elevated) "Authentication" else "Confirmation")
         else
             try std.fmt.allocPrint(ctx.arena, "{s} {f} — {s}", .{
                 view.action.verb(), diagnostics.safe(view.name),
@@ -205,13 +223,15 @@ pub const Panel = struct {
         const width = ctx.max.width orelse ctx.min.width;
         const body = try self.view.body(ctx.arena, width);
         var text: vxfw.Text = .{ .text = body, .softwrap = true };
-        if (self.view.state == .entering and self.view.action == .remove and (self.view.backend == .standard or self.view.backend == .aur)) {
+        if (self.view.state == .entering and (self.view.action.isRepositoryMutation() or
+            (self.view.action == .remove and (self.view.backend == .standard or self.view.backend == .aur))))
+        {
             if (self.view.owner) |owner| {
                 const split = std.mem.indexOfScalar(u8, body, '\n').?;
                 const label: vxfw.Text = .{ .text = body[0..split], .softwrap = true };
                 const children = try ctx.arena.alloc(vxfw.SubSurface, 2);
                 const checkbox_label = try ctx.arena.create(Checkbox);
-                checkbox_label.* = .{ .owner = owner, .label = label };
+                checkbox_label.* = .{ .owner = owner, .label = label, .repository = self.view.action.isRepositoryMutation() };
                 const checkbox = try Checkbox.draw(checkbox_label, ctx.withConstraints(.{}, .{ .width = width, .height = null }));
                 children[0] = .{ .origin = .{ .row = 0, .col = 0 }, .surface = checkbox };
                 text.text = body[split + 1 ..];
@@ -226,6 +246,7 @@ pub const Panel = struct {
     const Checkbox = struct {
         owner: *@import("../model.zig").Model,
         label: vxfw.Text,
+        repository: bool,
 
         fn draw(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
             const self: *Checkbox = @ptrCast(@alignCast(ptr));
@@ -239,8 +260,8 @@ pub const Panel = struct {
     fn checkboxClick(ptr: *anyopaque, ctx: *vxfw.EventContext, event: vxfw.Event) anyerror!void {
         const checkbox: *Checkbox = @ptrCast(@alignCast(ptr));
 
-        if (event == .mouse and commands.Mouse.primaryPress(event.mouse))
-            commands.Mouse.toggleUnusedDependencies(checkbox.owner, ctx);
+        if (event != .mouse or !commands.Mouse.primaryPress(event.mouse)) return;
+        if (checkbox.repository) commands.Mouse.toggleRepositorySync(checkbox.owner, ctx) else commands.Mouse.toggleUnusedDependencies(checkbox.owner, ctx);
     }
 
     fn drawContent(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
@@ -248,7 +269,8 @@ pub const Panel = struct {
         const view = self.view;
         const size = ctx.max.size();
         const entering = view.state == .entering;
-        const actions = if (view.owner) |owner| owner.settings_state.settings.expanded_mouse_support and view.state != .running and size.height >= (if (entering) @as(u16, 2) else 1) else false;
+        const cancel_auth = view.action == .purify and view.state == .running and view.progress.authenticating;
+        const actions = if (view.owner) |owner| owner.settings_state.settings.expanded_mouse_support and (view.state != .running or cancel_auth) and size.height >= (if (entering) @as(u16, 2) else 1) else false;
         const review_height = size.height - @as(u16, @intFromBool(actions));
         if (view.state != .entering) {
             // Upward keyboard or wheel navigation pauses following.
@@ -268,7 +290,7 @@ pub const Panel = struct {
             children[1] = .{ .origin = .{ .row = review_height, .col = 0 }, .surface = try drawActionButton(ctx, view.owner.?, "[Confirm]", .confirm) };
             children[2] = .{ .origin = .{ .row = review_height, .col = 10 }, .surface = try drawActionButton(ctx, view.owner.?, "[Cancel]", .cancel) };
         } else if (actions) {
-            children[1] = .{ .origin = .{ .row = review_height, .col = 0 }, .surface = try drawActionButton(ctx, view.owner.?, "[Close]", .close) };
+            children[1] = .{ .origin = .{ .row = review_height, .col = 0 }, .surface = try drawActionButton(ctx, view.owner.?, if (cancel_auth) "[Cancel]" else "[Close]", if (cancel_auth) .cancel else .close) };
         }
         return .{ .size = size, .widget = .{ .userdata = self, .drawFn = drawContent }, .buffer = &.{}, .children = children };
     }
@@ -281,7 +303,7 @@ const ActionButton = struct {
 
     fn draw(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
         const self: *ActionButton = @ptrCast(@alignCast(ptr));
-        var label: vxfw.Text = .{ .text = self.label, .softwrap = false, .style = @import("styles.zig").action };
+        var label: vxfw.Text = .{ .text = self.label, .softwrap = false, .style = @import("components/styles.zig").action };
         var surface = try label.draw(ctx);
         surface.widget = .{ .userdata = ptr, .drawFn = ActionButton.draw, .eventHandler = click };
         try styles.hoverLabel(ctx.arena, &surface);

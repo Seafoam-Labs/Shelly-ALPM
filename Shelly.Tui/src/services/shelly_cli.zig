@@ -97,6 +97,41 @@ pub const ShellyCli = struct {
         return result;
     }
 
+    fn runPlain(self: ShellyCli, args: []const []const u8) !RunResult {
+        const shelly_bin = self.binary orelse runtime.shellyBin();
+
+        var argv = try self.allocator.alloc([]const u8, args.len + 1);
+        defer self.allocator.free(argv);
+        argv[0] = shelly_bin;
+        @memcpy(argv[1..], args);
+
+        const result = try std.process.run(self.allocator, self.io, .{
+            .argv = argv,
+            .environ_map = self.environment orelse runtime.environ_map,
+        });
+        errdefer self.allocator.free(result.stdout);
+        errdefer self.allocator.free(result.stderr);
+        if (result.term != .exited or result.term.exited != 0) {
+            return error.CommandFailed;
+        }
+
+        return result;
+    }
+
+    pub fn get_pacfiles(self: ShellyCli) !std.json.Parsed([][]const u8) {
+        const result = try self.runPlain(&.{ "utility", "--pacfiles", "--output", "--json" });
+        defer self.allocator.free(result.stdout);
+        defer self.allocator.free(result.stderr);
+        return std.json.parseFromSlice([][]const u8, self.allocator, result.stdout, .{ .allocate = .alloc_always });
+    }
+
+    pub fn getRepositories(self: ShellyCli) !std.json.Parsed([][]const u8) {
+        const result = try self.run(&.{ "utility", "repository", "--list" });
+        defer self.allocator.free(result.stdout);
+        defer self.allocator.free(result.stderr);
+        return decodeQuery([][]const u8, self.allocator, result.stdout, false);
+    }
+
     fn runPreviewQuery(self: ShellyCli, args: []const []const u8) !RunResult {
         preview_query_mutex.lockUncancelable(self.io);
         defer preview_query_mutex.unlock(self.io);
@@ -592,4 +627,32 @@ test "installed status decoding retains names and ignores package metadata" {
     defer parsed.deinit();
     try std.testing.expectEqual(@as(usize, 1), parsed.value.len);
     try std.testing.expectEqualStrings("editor", parsed.value[0].Name);
+}
+
+test "pacfiles parsing accepts populated and empty responses" {
+    const allocator = std.testing.allocator;
+    const populated = try std.json.parseFromSlice([][]const u8, allocator, "[\"/etc/pacnew\",\"/etc/pacsave\"]", .{ .allocate = .alloc_always });
+    defer populated.deinit();
+    try std.testing.expectEqual(@as(usize, 2), populated.value.len);
+    try std.testing.expectEqualStrings("/etc/pacnew", populated.value[0]);
+    try std.testing.expectEqualStrings("/etc/pacsave", populated.value[1]);
+    const empty = try std.json.parseFromSlice([][]const u8, allocator, "[]", .{ .allocate = .alloc_always });
+    defer empty.deinit();
+    try std.testing.expectEqual(@as(usize, 0), empty.value.len);
+}
+
+test "pacfiles parsing rejects malformed responses" {
+    const allocator = std.testing.allocator;
+    try std.testing.expectError(error.UnexpectedEndOfInput, std.json.parseFromSlice([][]const u8, allocator, "[", .{ .allocate = .alloc_always }));
+    try std.testing.expectError(error.UnexpectedToken, std.json.parseFromSlice([][]const u8, allocator, "not json", .{ .allocate = .alloc_always }));
+}
+
+test "get_pacfiles runs the CLI without ui-mode frames" {
+    var env: std.process.Environ.Map = .init(std.testing.allocator);
+    defer env.deinit();
+    const cli: ShellyCli = .{ .allocator = std.testing.allocator, .io = std.testing.io, .binary = "/bin/sh", .environment = &env };
+    const result = try cli.runPlain(&.{ "-c", "printf '[\"/etc/pacnew\"]'" });
+    defer std.testing.allocator.free(result.stdout);
+    defer std.testing.allocator.free(result.stderr);
+    try std.testing.expectEqualStrings("[\"/etc/pacnew\"]", result.stdout);
 }

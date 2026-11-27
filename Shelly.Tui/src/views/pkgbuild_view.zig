@@ -1,12 +1,12 @@
-const styles = @import("styles.zig");
+const styles = @import("components/styles.zig");
 const std = @import("std");
 const Allocator = std.mem.Allocator;
-const Border = @import("border.zig");
+const Border = @import("components/border.zig");
 const vaxis = @import("vaxis");
 const vxfw = vaxis.vxfw;
 const commands = @import("../commands.zig");
 const operation = @import("../services/shelly_operation.zig");
-const highlight = @import("source_highlight.zig");
+const highlight = @import("components/source_highlight.zig");
 const PkgBuild = @import("../models/pkgbuild.zig").PkgBuild;
 
 // Only unwrap the CLI's known diff presentation tags; source files remain literal.
@@ -76,6 +76,25 @@ pub const Document = struct {
             item.* = .{ .prefix = metadata.prefix, .spans = spans };
         }
         return .{ .arena = arena.*, .lines = lines, .rows = rows };
+    }
+
+    pub fn fromDiff(allocator: std.mem.Allocator, text: []const u8) !Document {
+        return fromText(allocator, text, .diff, "The files are identical.");
+    }
+
+    pub fn fromFile(allocator: std.mem.Allocator, text: []const u8) !Document {
+        return fromText(allocator, text, .plain, "This file is empty.");
+    }
+
+    fn fromText(allocator: std.mem.Allocator, text: []const u8, kind: highlight.Kind, empty_message: []const u8) !Document {
+        var arena = std.heap.ArenaAllocator.init(allocator);
+        errdefer arena.deinit();
+        var lines: Builder = .{};
+        var remaining: usize = 8 * 1024 * 1024;
+        if (text.len == 0) {
+            try prose(arena.allocator(), &lines, empty_message, &remaining);
+        } else try sourceStyled(arena.allocator(), &lines, text, &remaining, kind);
+        return finish(&arena, &lines);
     }
 
     pub fn init(allocator: std.mem.Allocator, builds: []const PkgBuild) !Document {
@@ -151,8 +170,13 @@ pub const Document = struct {
                 }
             },
             .yes_no => |request| {
-                try source(alloc, &lines, request.question_text, &remaining);
-                for (request.arguments) |argument| try source(alloc, &lines, argument, &remaining);
+                if (action == .purify) {
+                    try prose(alloc, &lines, request.question_text, &remaining);
+                    for (request.arguments) |target| try prose(alloc, &lines, target, &remaining);
+                } else {
+                    try source(alloc, &lines, request.question_text, &remaining);
+                    for (request.arguments) |argument| try source(alloc, &lines, argument, &remaining);
+                }
             },
             .transaction => |request| {
                 try prose(alloc, &lines, request.question_text, &remaining);
@@ -314,10 +338,12 @@ pub const Action = enum { close, retry, approve, decline, toggle_wrap };
 pub const View = struct {
     back: ?*vxfw.Button = null,
     name: []const u8,
+    title: ?[]const u8 = null,
     scroll: *vxfw.ScrollView,
     loading: bool,
     failure: ?anyerror,
     review: bool = false,
+    cleanup_review: bool = false,
     pkgbuild_review: bool = false,
     transaction_review: bool = false,
     wrap: bool = true,
@@ -329,6 +355,7 @@ pub const View = struct {
     answer_input: []const u8 = "",
     answer_error: []const u8 = "",
     scan_status: []const u8 = "",
+    failure_text: ?[]const u8 = null,
 
     pub fn handleKey(self: View, key: vaxis.Key) ?Action {
         if (!self.choices and commands.matches(key, .toggle_wrap)) return .toggle_wrap;
@@ -337,6 +364,7 @@ pub const View = struct {
                 if (commands.matches(key, .confirm)) return .approve;
                 return null;
             }
+            if (self.cleanup_review and (commands.matches(key, .cancel) or commands.matches(key, .cancel_capture))) return .decline;
             return switch (commands.review(key) orelse return null) {
                 .approve => .approve,
                 .decline => .decline,
@@ -384,7 +412,9 @@ pub const View = struct {
         const note_height: u16 = if (note_text.len > 0) 1 else 0;
         const body_start: u16 = @intFromBool(self.back != null);
         const actions = if (self.choice_owner) |owner| owner.settings_state.settings.expanded_mouse_support and self.review and inner_width >= 10 and inner_height >= 3 else false;
-        const body_height = inner_height - body_start - note_height - @as(u16, @intFromBool(actions));
+        const stack_cleanup_actions = actions and self.cleanup_review and !self.choices and inner_width < 18;
+        const action_height: u16 = if (stack_cleanup_actions) 2 else @intFromBool(actions);
+        const body_height = inner_height -| (body_start + note_height + action_height);
         var children: std.ArrayList(vxfw.SubSurface) = .empty;
         if (self.back) |back| try children.append(ctx.arena, .{
             .origin = .{ .row = 0, .col = 0 },
@@ -392,7 +422,7 @@ pub const View = struct {
         });
         if (self.loading or self.failure != null) {
             var text: vxfw.Text = .{ .text = if (self.failure) |err|
-                try std.fmt.allocPrint(ctx.arena, "Could not load PKGBUILD preview ({s}).", .{@errorName(err)})
+                self.failure_text orelse try std.fmt.allocPrint(ctx.arena, "Could not load PKGBUILD preview ({s}).", .{@errorName(err)})
             else if (self.scan_status.len > 0)
                 self.scan_status
             else
@@ -409,7 +439,7 @@ pub const View = struct {
                 .origin = .{ .row = @intCast(body_start + prompt_surface.size.height), .col = 0 },
                 .surface = try self.drawChoices(ctx.withConstraints(.{}, .{ .width = inner_width, .height = body_height -| prompt_surface.size.height })),
             });
-        } else {
+        } else if (body_height > 0) {
             try children.append(ctx.arena, .{
                 .origin = .{ .row = body_start, .col = 0 },
                 .surface = try self.scroll.draw(ctx.withConstraints(.{}, .{ .width = inner_width, .height = body_height })),
@@ -418,7 +448,7 @@ pub const View = struct {
         if (note_height > 0) {
             var note: vxfw.Text = .{ .text = note_text, .softwrap = false };
             try children.append(ctx.arena, .{
-                .origin = .{ .row = @intCast(body_start + body_height), .col = 0 },
+                .origin = .{ .row = @min(body_start + body_height, inner_height - action_height -| 1), .col = 0 },
                 .surface = try note.draw(ctx.withConstraints(.{}, .{ .width = inner_width, .height = note_height })),
             });
         }
@@ -426,12 +456,12 @@ pub const View = struct {
             const buttons = @import("operation_view.zig");
             const owner = self.choice_owner.?;
             try children.append(ctx.arena, .{
-                .origin = .{ .row = inner_height - 1, .col = 0 },
+                .origin = .{ .row = inner_height - action_height, .col = 0 },
                 .surface = try buttons.drawActionButton(ctx, owner, if (self.choices) "[Confirm]" else "[Approve]", .approve),
             });
-            if (!self.choices and inner_width >= 19) try children.append(ctx.arena, .{
-                .origin = .{ .row = inner_height - 1, .col = 10 },
-                .surface = try buttons.drawActionButton(ctx, owner, "[Decline]", .decline),
+            if (!self.choices and (self.cleanup_review or inner_width >= 19)) try children.append(ctx.arena, .{
+                .origin = .{ .row = inner_height - 1, .col = if (stack_cleanup_actions) 0 else 10 },
+                .surface = try buttons.drawActionButton(ctx, owner, if (self.cleanup_review) "[Cancel]" else "[Decline]", .decline),
             });
         }
         const content: vxfw.Surface = .{
@@ -443,7 +473,7 @@ pub const View = struct {
         const holder = try ctx.arena.create(FixedContent);
         holder.* = .{ .surface = content };
         const labels = [_]Border.BorderLabel{.{
-            .text = if (self.review) (if (self.pkgbuild_review) "PKGBUILD review" else if (self.transaction_review) "Transaction review" else if (self.optional_dependencies) "Optional dependencies" else if (self.choices) "Dependency selection" else "Operation review") else try std.fmt.allocPrint(ctx.arena, "PKGBUILD — {f}", .{@import("diagnostics").safe(self.name)}),
+            .text = if (self.review) (if (self.pkgbuild_review) "PKGBUILD review" else if (self.transaction_review) "Transaction review" else if (self.optional_dependencies) "Optional dependencies" else if (self.choices) "Dependency selection" else "Operation review") else self.title orelse try std.fmt.allocPrint(ctx.arena, "PKGBUILD — {f}", .{@import("diagnostics").safe(self.name)}),
             .alignment = .top_left,
         }};
         const border = try ctx.arena.create(Border);
@@ -952,4 +982,28 @@ test "review distinguishes no findings from unavailable scans without adding sca
     defer preview.deinit();
     try std.testing.expectEqual(@as(usize, 1), preview.lines.len);
     try std.testing.expect(std.mem.startsWith(u8, preview.lines[0], "    1"));
+}
+
+test "narrow cleanup review exposes both mouse buttons" {
+    vxfw.DrawContext.init(.unicode);
+    const model = try @import("../model.zig").Model.init(std.testing.allocator);
+    defer model.deinit();
+    model.settings_state.settings.expanded_mouse_support = true;
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var scroll: vxfw.ScrollView = .{ .children = .{ .slice = &.{} } };
+    const view: View = .{ .name = "cleanup", .scroll = &scroll, .loading = false, .failure = null, .review = true, .cleanup_review = true, .choice_owner = model };
+    const surface = try view.drawInPane(.{ .arena = allocator, .min = .{}, .max = .{ .width = 12, .height = 5 }, .cell_size = .{ .width = 10, .height = 20 } });
+    const content = surface.children[0].surface;
+    const buttons = content.children[content.children.len - 2 ..];
+    for (buttons, [_]u16{ 2, 3 }, [_][]const u8{ "[Approve]", "[Cancel]" }) |button, hit_row, label| {
+        var hits: std.ArrayList(vxfw.HitResult) = .empty;
+        try surface.hitTest(allocator, &hits, .{ .row = hit_row, .col = 1 });
+        const hit = hits.getLast().widget;
+        try std.testing.expect(hit.eventHandler != null);
+        try std.testing.expectEqual(button.surface.widget.userdata, hit.userdata);
+        for (label, button.surface.buffer[0..label.len]) |character, cell|
+            try std.testing.expectEqualSlices(u8, &.{character}, cell.char.grapheme);
+    }
 }

@@ -12,7 +12,7 @@ pub const editable = [_]commands.Id{
     .previous_catalog_page,   .next_catalog_page, .previous_screenshot, .next_screenshot,
     .clear_selection,         .configure_updates, .toggle_wrap,         .narrow_view,
     .widen_view,              .toggle_hidden,     .sync_packages,       .sort_package_name,
-    .sort_package_repository,
+    .sort_package_repository, .pacfile_compare,
 };
 
 fn indexOf(id: commands.Id) ?usize {
@@ -33,6 +33,12 @@ pub const Config = struct {
         var candidate = self;
         candidate.overrides[index] = if (same(key, defaultKey(id))) null else key;
         try candidate.validate();
+        const compare_conflict = switch (id) {
+            .pacfile_compare => same(key, self.get(.narrow_view)) or same(key, self.get(.widen_view)),
+            .narrow_view, .widen_view => same(key, self.get(.pacfile_compare)),
+            else => false,
+        };
+        if (compare_conflict and !same(key, self.get(id))) return error.ConflictingBinding;
         return candidate;
     }
 
@@ -101,6 +107,7 @@ const settings: u16 = 256;
 const preview: u16 = 512;
 const review: u16 = 1024;
 const appimages: u16 = 4096;
+const utilities: u16 = 8192;
 const lists = package_lists | aur_list | flatpak_list;
 const details = package_details | aur_details | flatpak_details;
 
@@ -112,7 +119,8 @@ fn scope(id: commands.Id) u16 {
         .configure_updates => appimages,
         .install, .remove => lists | details | appimages,
         .preview => aur_list | aur_details,
-        .refresh => updates | settings | preview,
+        .refresh => updates | settings | preview | utilities,
+        .pacfile_compare => utilities,
         .refresh_list => lists | searches | flatpak_details | appimages,
         .sync_packages, .sort_package_name, .sort_package_repository => package_lists | searches,
         .filter => lists | searches,
@@ -307,4 +315,31 @@ test "settings reload and panel resizing cannot share a binding" {
     const changed = try config.withBinding(.refresh, try parse("F3"));
     try std.testing.expectError(error.ConflictingBinding, changed.withBinding(.widen_view, try parse("F3")));
     try std.testing.expectError(error.ConflictingBinding, changed.withBinding(.narrow_view, try parse("F3")));
+}
+
+test "pacfile compare and panel resizing cannot be assigned the same key in either order" {
+    const defaults: Config = .{};
+    const key = try parse("F3");
+    const compare = try defaults.withBinding(.pacfile_compare, key);
+    for ([_]commands.Id{ .narrow_view, .widen_view }) |resize| {
+        try std.testing.expectError(error.ConflictingBinding, compare.withBinding(resize, key));
+        const resized = try defaults.withBinding(resize, key);
+        try std.testing.expectError(error.ConflictingBinding, resized.withBinding(.pacfile_compare, key));
+    }
+}
+
+test "saved compare and resize overlaps survive unrelated edits and can be resolved" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const document = try std.json.parseFromSlice(std.json.Value, allocator,
+        \\{"pacfile_compare":"F3","widen_view":"F3"}
+    , .{});
+    const saved = try decode(document.value);
+    const changed = try saved.withBinding(.help, try parse("F2"));
+    const reloaded = try decode(try encode(allocator, changed));
+    try std.testing.expect(same(reloaded.get(.pacfile_compare), try parse("F3")));
+    try std.testing.expect(same(reloaded.get(.widen_view), try parse("F3")));
+    const fixed = try reloaded.withBinding(.widen_view, defaultKey(.widen_view));
+    try std.testing.expectError(error.ConflictingBinding, fixed.withBinding(.widen_view, try parse("F3")));
 }

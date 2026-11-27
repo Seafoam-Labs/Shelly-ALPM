@@ -1,10 +1,11 @@
 const appimage_model = @import("models/appimage_model.zig");
 const command_context = @import("command_context.zig");
 const app_view = @import("views/app_view.zig");
-const tab_bar_view = @import("views/tab_bar.zig");
+const tab_bar_view = @import("views/components/tab_bar.zig");
 const packages_model = @import("models/packages_model.zig");
 const aur_model = @import("models/aur_model.zig");
 const flatpak_model = @import("models/flatpak_model.zig");
+const utilities_model = @import("models/utilities_model.zig");
 const updates_model = @import("models/updates_model.zig");
 const settings_model = @import("models/settings_model.zig");
 const operation_model = @import("models/operation_model.zig");
@@ -24,7 +25,58 @@ const flatpak = @import("models/flatpak.zig");
 
 const Allocator = std.mem.Allocator;
 
-pub const Tab = tab_bar_view.Tab;
+const HeaderIcons = @import("models/settings.zig").HeaderIcons;
+
+pub const Tab = enum {
+    packages,
+    aur,
+    flatpak,
+    appimage,
+    upgrade,
+    settings,
+    utilities,
+
+    pub const always: []const Tab = &.{ .packages, .upgrade,.utilities, .settings};
+
+    pub const all: []const Tab = &.{ .packages, .aur, .flatpak, .appimage, .upgrade, .utilities, .settings };
+
+    pub fn title(self: Tab) []const u8 {
+        return switch (self) {
+            .packages => "Packages",
+            .aur => "AUR",
+            .upgrade => "Updates",
+            .flatpak => "Flatpak",
+            .appimage => "AppImage",
+            .settings => "Settings",
+            .utilities => "Utilities",
+        };
+    }
+    pub fn icon(self: Tab, style: HeaderIcons) []const u8 {
+        return switch (style) {
+            .none => "",
+            // Nerd Fonts mappings: Octicons package/sync/gear, Font Logos Arch,
+            // and Font Awesome cube. See nerd-fonts/bin/scripts/lib upstream.
+            .nerd_font => switch (self) {
+                .packages => "\u{f487}",
+                .aur => "\u{f303}",
+                .flatpak => "\u{f1b2}",
+                .appimage => "\u{f085}",
+                .upgrade => "\u{f46a}",
+                .settings => "\u{f423}",
+                .utilities => "\u{f0ad}",
+            },
+            .ascii => switch (self) {
+                .packages => "[#]",
+                .aur => "[*]",
+                .flatpak => "[F]",
+                .appimage => "[A]",
+                .upgrade => "[^]",
+                .settings => "[=]",
+                .utilities => "[U]",
+            },
+        };
+    }
+};
 
 /// Operation state owned by Model and presented by the reusable panel.
 pub const SudoPrompt = operation_model.SudoPrompt;
@@ -42,6 +94,7 @@ pub const Model = struct {
     gpa: Allocator,
     list_percent: std.enums.EnumFieldStruct(Tab, u8, 40) = .{ .aur = 30 },
     viewport_width: ?u16 = null,
+    utilities_split_visible: bool = false,
 
     active: Tab = .packages,
     visible_tabs: [Tab.all.len]Tab = undefined,
@@ -62,6 +115,7 @@ pub const Model = struct {
     aur_state: aur_model.State,
     flatpak_state: flatpak_model.State,
     updates_state: updates_model.State,
+    utilities_state: utilities_model.State,
     settings_state: settings_model.State = .{},
     operation_state: operation_model.State,
 
@@ -75,6 +129,7 @@ pub const Model = struct {
             .aur_state = aur_model.init(gpa, model),
             .flatpak_state = flatpak_model.init(gpa, model),
             .updates_state = updates_model.init(gpa, model),
+            .utilities_state = utilities_model.State.init(model, gpa),
             .operation_state = operation_model.init(gpa, model),
         };
         return model;
@@ -86,6 +141,7 @@ pub const Model = struct {
         self.appimage_state.deinit(self.gpa);
         flatpak_model.deinit(self);
         updates_model.deinit(self);
+        self.utilities_state.deinit(self.gpa);
         aur_model.deinit(self);
         packages_model.deinit(self);
         settings_model.deinit(self);
@@ -127,6 +183,7 @@ pub const Model = struct {
     pub fn captureEvent(self: *Model, ctx: *vxfw.EventContext, event: vxfw.Event) anyerror!void {
         if (try appimage_model.captureSource(self, ctx, event)) return;
         if (try appimage_model.captureInstall(self, ctx, event)) return;
+        if (event == .paste and try utilities_model.pasteRepository(self, ctx, event.paste)) return;
         switch (event) {
             .key_press => |key| {
                 if (try settings_model.captureBinding(self, ctx, key)) return;
@@ -153,10 +210,11 @@ pub const Model = struct {
                     self.help_open = !self.help_open;
                     return ctx.consumeAndRedraw();
                 }
-                if (!self.help_open and operation_model.operationPrompt(self) == null and self.operation_state.review_prompt == null and (self.active == .packages or self.active == .aur or self.active == .flatpak or self.active == .appimage or self.active == .settings) and (self.overlay == null or self.overlay.? == .package or self.overlay.? == .aur or self.overlay.? == .flatpak)) {
+                if (!self.help_open and operation_model.operationPrompt(self) == null and self.operation_state.review_prompt == null and self.canResizeActiveSplit() and (self.overlay == null or self.overlay.? == .package or self.overlay.? == .aur or self.overlay.? == .flatpak)) {
                     if (commands.matches(key, .narrow_view) or commands.matches(key, .widen_view)) {
+                        if (self.active == .utilities and try utilities_model.handleKey(self, ctx, key)) return;
                         const percent = self.activeListPercent();
-                        percent.* = @import("views/split_layout.zig").resize(self.viewport_width, percent.*, commands.matches(key, .widen_view)) orelse return ctx.consumeEvent();
+                        percent.* = @import("views/components/split_layout.zig").resize(self.viewport_width, percent.*, commands.matches(key, .widen_view)) orelse return ctx.consumeEvent();
                         return ctx.consumeAndRedraw();
                     }
                 }
@@ -188,6 +246,7 @@ pub const Model = struct {
                                     .select_tab => |index| try self.setTab(self.visibleTabs()[index], ctx),
                                 }
                                 try self.focusActiveTab(ctx);
+                                try utilities_model.ensureSelected(self, ctx);
                                 try updates_model.ensureUpdates(self, ctx);
                                 try appimage_model.ensureLoaded(self, ctx);
                                 try aur_model.ensureAur(self, ctx);
@@ -208,6 +267,7 @@ pub const Model = struct {
                     .upgrade => try updates_model.handleKey(self, ctx, key),
                     .appimage => try appimage_model.handleKey(self, ctx, key),
                     .settings => try settings_model.handleKey(self, ctx, key),
+                    .utilities => try utilities_model.handleKey(self, ctx, key),
                 };
                 if (handled) return;
 
@@ -217,6 +277,7 @@ pub const Model = struct {
                         .next_tab, .previous_tab => {
                             self.switchTab(if (action == .next_tab) 1 else -1);
                             try self.focusActiveTab(ctx);
+                            try utilities_model.ensureSelected(self, ctx);
                             try updates_model.ensureUpdates(self, ctx);
                             try appimage_model.ensureLoaded(self, ctx);
                             try aur_model.ensureAur(self, ctx);
@@ -277,6 +338,8 @@ pub const Model = struct {
                 const installing = try operation_model.pollInstall(self);
                 try appimage_model.ensureLoaded(self, ctx);
                 updates_model.pollUpdates(self);
+                self.utilities_state.poll(self.gpa);
+                try utilities_model.pollRepositories(self, ctx);
                 try updates_model.ensureUpdates(self, ctx);
                 try aur_model.ensureAur(self, ctx);
                 try flatpak_model.pollFlatpak(self);
@@ -297,15 +360,15 @@ pub const Model = struct {
                     try flatpak_model.startFlatpak(self, ctx);
                     self.flatpak_state.refresh_flatpak_after_operation = false;
                 }
-                if (self.updates_state.refresh_updates_after_operation and self.updates_state.updates_job == null) {
+                if (!installing and self.updates_state.refresh_updates_after_operation and self.updates_state.updates_job == null) {
                     try updates_model.startUpdates(self, ctx);
                     self.updates_state.refresh_updates_after_operation = false;
                 }
-                if (self.aur_state.refresh_aur_after_operation and self.aur_state.aur_job == null) {
+                if (!installing and self.aur_state.refresh_aur_after_operation and self.aur_state.aur_job == null) {
                     if (aur_model.catalogActive(self) or self.aur_state.aur_installed_only or self.aur_state.aur_query.len > 0) try aur_model.startAurSearch(self, ctx, self.aur_state.aur_query);
                     self.aur_state.refresh_aur_after_operation = false;
                 }
-                if ((self.appimage_state.source_draft != null and self.appimage_state.source_draft.?.save_job != null) or self.appimage_state.install_closing != null or (self.appimage_state.install_form != null and self.appimage_state.install_form.?.job != null) or self.appimage_state.load != null or loading or installing or self.packages_state.loading or self.updates_state.updates_job != null or self.operation_state.pkgbuild_job != null or self.flatpak_state.flatpak_job != null or self.flatpak_state.flatpak_probe_job != null) {
+                if ((self.appimage_state.source_draft != null and self.appimage_state.source_draft.?.save_job != null) or self.appimage_state.install_closing != null or (self.appimage_state.install_form != null and self.appimage_state.install_form.?.job != null) or self.appimage_state.load != null or self.utilities_state.job != null or self.utilities_state.repositories.job != null or utilities_model.previewLoading(&self.utilities_state) or loading or installing or self.packages_state.loading or self.updates_state.updates_job != null or self.operation_state.pkgbuild_job != null or self.flatpak_state.flatpak_job != null or self.flatpak_state.flatpak_probe_job != null) {
                     try ctx.tick(100, self.widget());
                 }
                 return ctx.consumeAndRedraw();
@@ -315,6 +378,7 @@ pub const Model = struct {
                 .aur => aur_model.handleUnhandledKey(self, ctx, key),
                 .flatpak => flatpak_model.handleUnhandledKey(self, ctx, key),
                 .upgrade => updates_model.handleScrollEvent(self, ctx, event),
+                .utilities => utilities_model.handleScroll(self, ctx, event),
                 .appimage => {},
                 .settings => {},
             },
@@ -349,6 +413,14 @@ pub const Model = struct {
     pub fn activeListPercent(self: *Model) *u8 {
         return switch (self.active) {
             inline else => |tab| &@field(self.list_percent, @tagName(tab)),
+        };
+    }
+
+    fn canResizeActiveSplit(self: *const Model) bool {
+        return switch (self.active) {
+            .packages, .aur, .flatpak, .appimage, .settings => true,
+            .utilities => self.utilities_split_visible and !self.utilities_state.preview_open and self.utilities_state.repositories.editing == null,
+            .upgrade => false,
         };
     }
 
@@ -387,6 +459,7 @@ pub const Model = struct {
         self.settings_state.header_open = false;
         self.active = tab;
         try self.focusActiveTab(ctx);
+        try utilities_model.ensureSelected(self, ctx);
         try updates_model.ensureUpdates(self, ctx);
         try appimage_model.ensureLoaded(self, ctx);
         try aur_model.ensureAur(self, ctx);
@@ -415,10 +488,13 @@ pub const Model = struct {
     /// Search and results share the field widget. Preserve their logical focus on dismissal.
     pub fn restoreTabFocus(self: *Model, ctx: *vxfw.EventContext) !void {
         if (self.active == .appimage) if (self.appimage_state.install_form) |form| return ctx.requestFocus(if (form.editing_path) form.field.widget() else self.widget());
+        if (self.active == .utilities and self.utilities_state.selected == .repository) {
+            if (self.utilities_state.repositories.editing) |field| return ctx.requestFocus(self.utilities_state.repositories.field(field).widget());
+        }
         switch (self.active) {
             .packages => try ctx.requestFocus(self.packages_state.text_field.widget()),
             .aur => try ctx.requestFocus(self.aur_state.aur_field.widget()),
-            .upgrade, .settings, .appimage => try ctx.requestFocus(self.widget()),
+            .upgrade, .settings, .appimage, .utilities => try ctx.requestFocus(self.widget()),
             .flatpak => try ctx.requestFocus(self.flatpak_state.flatpak_field.widget()),
         }
     }
@@ -460,7 +536,7 @@ pub const Model = struct {
     pub fn typeErasedDrawFn(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
         const self: *Model = @ptrCast(@alignCast(ptr));
         const surface = try app_view.draw(self, ctx);
-        if (self.hover_point) |point| try @import("views/styles.zig").paintHover(surface, ctx.arena, point);
+        if (self.hover_point) |point| try @import("views/components/styles.zig").paintHover(surface, ctx.arena, point);
         return surface;
     }
 
@@ -491,6 +567,9 @@ pub const Model = struct {
     /// Source loading and query errors belong to their page, not shortcut hints.
     pub fn footerStatus(self: *const Model) ?[]const u8 {
         if (self.quit_blocked_notice and self.operation_state.install_job != null) return "Operation in progress. Wait for it to finish before quitting.  ";
+        if (self.active == .utilities and self.overlay == null and !self.help_open) {
+            if (utilities_model.previewRetryStatus(&self.utilities_state)) |status| return status;
+        }
         return if (self.notice.len > 0) self.notice else null;
     }
 
@@ -504,6 +583,7 @@ pub const Model = struct {
             .flatpak => flatpak_model.flatpakView(self).statusText(arena),
             .appimage => "Installed AppImages",
             .settings => "Settings — source preferences are saved for future sessions",
+            .utilities => "Utilities",
         };
     }
 };
@@ -531,7 +611,7 @@ test "tab switching requests focus on a widget in the active page" {
         const expected = switch (model.active) {
             .packages => model.packages_state.text_field.widget(),
             .aur => model.aur_state.aur_field.widget(),
-            .upgrade, .settings, .appimage => model.widget(),
+            .upgrade, .settings, .appimage, .utilities => model.widget(),
             .flatpak => model.flatpak_state.flatpak_field.widget(),
         };
         try std.testing.expect(ctx.cmds.items[0].request_focus.eql(expected));
@@ -719,6 +799,45 @@ test "panel resizing keeps pages independent, respects bounds, and preserves set
     try std.testing.expectEqual(selected, model.settings_state.settings_selected);
 }
 
+test "Utilities resize shortcuts apply only to a visible split outside repository text entry" {
+    const model = try Model.init(std.testing.allocator);
+    defer model.deinit();
+    model.active = .utilities;
+    var events: vxfw.EventContext = .{ .io = std.testing.io, .alloc = std.testing.allocator, .cmds = .empty };
+    defer events.cmds.deinit(std.testing.allocator);
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const draw: vxfw.DrawContext = .{ .arena = arena.allocator(), .min = .{}, .max = .{ .width = 100, .height = 24 }, .cell_size = .{ .width = 10, .height = 20 } };
+    const widen: vxfw.Event = .{ .key_press = commands.bindings.widen_view };
+    const narrow: vxfw.Event = .{ .key_press = commands.bindings.narrow_view };
+
+    const before = try model.widget().draw(draw);
+    try std.testing.expectEqual(@as(u16, 40), before.children[1].surface.size.width);
+    try model.captureEvent(&events, widen);
+    const after = try model.widget().draw(draw);
+    try std.testing.expectEqual(@as(u16, 45), after.children[1].surface.size.width);
+    try model.captureEvent(&events, narrow);
+    try std.testing.expectEqual(@as(u8, 40), model.list_percent.utilities);
+    try std.testing.expectEqual(@as(u8, 40), model.list_percent.settings);
+
+    model.utilities_state.preview_open = true;
+    try model.captureEvent(&events, widen);
+    try std.testing.expectEqual(@as(u8, 40), model.list_percent.utilities);
+    model.utilities_state.preview_open = false;
+
+    model.utilities_state.selected = .repository;
+    model.utilities_state.repositories.editing = .name;
+    try model.captureEvent(&events, widen);
+    try std.testing.expectEqual(@as(u8, 40), model.list_percent.utilities);
+    model.utilities_state.repositories.editing = null;
+
+    for ([_]vxfw.Size{ .{ .width = 79, .height = 24 }, .{ .width = 100, .height = 12 } }) |size| {
+        _ = try model.widget().draw(draw.withConstraints(.{}, .{ .width = size.width, .height = size.height }));
+        try model.captureEvent(&events, widen);
+        try std.testing.expectEqual(@as(u8, 40), model.list_percent.utilities);
+    }
+}
+
 test "quit is blocked across pages and help until the operation is collected" {
     const model = try Model.init(std.testing.allocator);
     defer model.deinit();
@@ -840,7 +959,7 @@ test "mouse focus transfers from the AUR preview to the results and details pane
     defer arena.deinit();
     const draw: vxfw.DrawContext = .{ .arena = arena.allocator(), .min = .{}, .max = .{ .width = 100, .height = 24 }, .cell_size = .{ .width = 10, .height = 20 } };
     var ctx: vxfw.EventContext = .{ .io = std.testing.io, .alloc = arena.allocator(), .cmds = .empty };
-    const pane = @import("views/pane_focus.zig");
+    const pane = @import("views/components/pane_focus.zig");
     var surface = try model.widget().draw(draw);
     try pane.testClick(surface, &ctx, .results);
     try std.testing.expect(model.overlay == null);

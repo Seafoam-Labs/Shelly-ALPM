@@ -1,10 +1,10 @@
 const keybindings_view = @import("keybindings_view.zig");
-const styles = @import("styles.zig");
+const styles = @import("components/styles.zig");
 const commands = @import("../commands.zig");
 const std = @import("std");
 const vaxis = @import("vaxis");
 const vxfw = vaxis.vxfw;
-const Border = @import("border.zig");
+const Border = @import("components/border.zig");
 const preferences = @import("../models/settings.zig");
 const Settings = preferences.Settings;
 const diagnostics = @import("diagnostics");
@@ -136,7 +136,7 @@ pub const View = struct {
     fn drawSplit(self: *const View, ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
         const size = ctx.max.size();
         const pane_height = size.height;
-        const left_width = @import("split_layout.zig").listWidth(size.width, self.list_percent);
+        const left_width = @import("components/split_layout.zig").listWidth(size.width, self.list_percent);
         var children: std.ArrayList(vxfw.SubSurface) = .empty;
         for ([_]bool{ false, true }) |right| {
             const pane = try ctx.arena.create(View);
@@ -410,7 +410,7 @@ test "settings split resizes both panes and help replaces only the right pane" {
         _ = try LayoutTest.check(surface.children[0].surface);
         const left = surface.children[0];
         const right = surface.children[1];
-        try std.testing.expectEqual(@import("split_layout.zig").listWidth(120, percent), left.surface.size.width);
+        try std.testing.expectEqual(@import("components/split_layout.zig").listWidth(120, percent), left.surface.size.width);
         try std.testing.expectEqual(@as(i17, left.surface.size.width), right.origin.col);
         try std.testing.expectEqual(@as(u16, 120), left.surface.size.width + right.surface.size.width);
         try std.testing.expect(try LayoutTest.contains(left.surface, "Save changes", arena.allocator()));

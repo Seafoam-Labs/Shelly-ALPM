@@ -4,7 +4,7 @@ const vaxis = @import("vaxis");
 const vxfw = vaxis.vxfw;
 const commands = @import("../commands.zig");
 const keybindings = @import("../services/keybindings.zig");
-const styles = @import("styles.zig");
+const styles = @import("components/styles.zig");
 const Allocator = std.mem.Allocator;
 
 pub const row_count = keybindings.editable.len;
@@ -18,6 +18,7 @@ const sections = [_]Section{
     .{ .name = "Flatpak details", .ids = &.{ .categories, .previous_screenshot, .next_screenshot } },
     .{ .name = "PKGBUILD", .ids = &.{ .preview, .toggle_wrap } },
     .{ .name = "AppImages", .ids = &.{.configure_updates} },
+    .{ .name = "Utilities", .ids = &.{.pacfile_compare} },
     .{ .name = "File picker", .ids = &.{.toggle_hidden} },
 };
 
@@ -222,6 +223,7 @@ fn title(id: commands.Id) []const u8 {
         .sync_packages => "Sync package databases",
         .sort_package_name => "Sort by package name",
         .sort_package_repository => "Sort by repository",
+        .pacfile_compare => "Compare pacfile",
         .toggle_wrap => "Toggle source wrapping",
         .narrow_view => "Narrow left panel",
         .widen_view => "Widen left panel",

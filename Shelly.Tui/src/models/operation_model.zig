@@ -65,10 +65,13 @@ pub const SudoPrompt = struct {
     name: []const u8,
     targets: []const []const u8 = &.{},
     review_text: []const u8 = "",
+    repository_url: ?[]const u8 = null,
+    repository_fingerprint: ?[]const u8 = null,
     panel: operation_view.Panel = .{},
     backend: OperationBackend,
     action: shelly_operation.Action = .install,
     remove_unused_dependencies: bool = false,
+    skip_repository_sync: bool = false,
     elevated: bool = true,
     include_flatpak: bool = true,
     include_aur: bool = true,
@@ -86,6 +89,8 @@ pub const SudoPrompt = struct {
         gpa.free(self.name);
         for (self.targets) |target| gpa.free(target);
         if (self.targets.len > 0) gpa.free(self.targets);
+        if (self.repository_url) |url| gpa.free(url);
+        if (self.repository_fingerprint) |fingerprint| gpa.free(fingerprint);
         if (self.review_text.len > 0) gpa.free(self.review_text);
         if (self.flatpak_target) |target| target.deinit(gpa);
         if (self.detail.len > 0) gpa.free(self.detail);
@@ -105,6 +110,7 @@ pub const SudoPrompt = struct {
             .review = self.review_text,
             .action = self.action,
             .remove_unused_dependencies = self.remove_unused_dependencies,
+            .skip_repository_sync = self.skip_repository_sync,
             .detail = self.detail,
             .progress = self.progress,
             .state = switch (self.state) {
@@ -120,7 +126,7 @@ pub const SudoPrompt = struct {
 
 pub fn init(_: Allocator, model: *Model) State {
     return .{
-        .preview_back = .{ .label = "[<]", .userdata = model, .onClick = commands.Mouse.closePkgbuildPreview, .style = @import("../views/styles.zig").action_button },
+        .preview_back = .{ .label = "[<]", .userdata = model, .onClick = commands.Mouse.closePkgbuildPreview, .style = @import("../views/components/styles.zig").action_button },
         .dependency_choices = .{ .item_count = 0, .children = .{ .builder = .{ .userdata = model, .buildFn = buildDependencyChoice } } },
         .pkgbuild_scroll = .{ .children = .{ .builder = .{
             .userdata = model,
@@ -318,6 +324,7 @@ pub fn pkgbuildView(self: *Model) pkgbuild_view.View {
         .loading = self.operation_state.pkgbuild_job != null and self.operation_state.operation_question == null,
         .failure = self.operation_state.pkgbuild_failure,
         .review = self.operation_state.operation_question != null,
+        .cleanup_review = if (self.operation_state.review_prompt) |prompt| prompt.action == .purify else false,
         .pkgbuild_review = if (self.operation_state.operation_question) |message| message.value.question == .pkgbuild else false,
         .transaction_review = if (self.operation_state.operation_question) |message| message.value.question == .transaction else false,
         .optional_dependencies = if (self.operation_state.operation_question) |message| message.value.question == .select_many else false,
@@ -489,7 +496,7 @@ pub fn closeOverlay(self: *Model) void {
     if (self.overlay) |overlay| {
         switch (overlay) {
             .sudo => |prompt| {
-                if (prompt.backend == .standard or prompt.backend == .aur) resetPackageSelection(self);
+                if (prompt.action != .purify and !prompt.action.isRepair() and !prompt.action.isRepositoryMutation() and (prompt.backend == .standard or prompt.backend == .aur)) resetPackageSelection(self);
                 prompt.deinit(self.gpa);
                 if (self.notice.len > 0) self.gpa.free(self.notice);
                 self.notice = "";
@@ -587,7 +594,8 @@ pub fn answerOperationQuestion(self: *Model, approve: bool) !void {
         self.operation_state.answer_error = "Could not send the answer. The operation may have ended.";
         return;
     };
-    if (!approve and (std.mem.eql(u8, job.request.backend, "standard") or std.mem.eql(u8, job.request.backend, "aur"))) resetPackageSelection(self);
+    if (!approve and job.request.action != .purify and (std.mem.eql(u8, job.request.backend, "standard") or std.mem.eql(u8, job.request.backend, "aur"))) resetPackageSelection(self);
+    if (self.operation_state.review_prompt) |prompt| prompt.progress = job.snapshot(runtime.io);
     finishOperationQuestion(self);
 }
 
@@ -611,7 +619,73 @@ fn sendAuthenticationKey(job: *shelly_operation.Operation, key: vaxis.Key) !void
     }
 }
 
+pub fn startCleanup(self: *Model, ctx: *vxfw.EventContext, backend: OperationBackend) !void {
+    if (self.overlay != null or self.operation_state.install_job != null) return ctx.consumeEvent();
+    const name = try self.gpa.dupe(u8, if (backend == .flatpak) "unused Flatpak dependencies" else "standard packages");
+    errdefer self.gpa.free(name);
+    const prompt = try self.gpa.create(SudoPrompt);
+    errdefer self.gpa.destroy(prompt);
+    prompt.* = .{ .name = name, .backend = backend, .action = .purify, .elevated = backend == .standard };
+    try ctx.requestFocus(self.widget());
+    if (backend != .standard) try confirmPrompt(self, ctx, prompt);
+    self.overlay = .{ .sudo = prompt };
+    ctx.consumeAndRedraw();
+}
+
+fn databaseRepairBlocked(self: *Model) !bool {
+    const aur_job = self.aur_state.aur_job;
+    if (self.updates_state.updates_job == null and !(aur_job != null and aur_job.?.installed_only)) return false;
+    try self.setNotice("Lock removal was blocked. Retry after the background database check finishes.");
+    return true;
+}
+
+pub fn openRepair(self: *Model, ctx: *vxfw.EventContext, action: enum { repair_permissions, repair_database }) !void {
+    if (self.overlay != null or self.operation_state.install_job != null) return ctx.consumeEvent();
+    if (action == .repair_database and try databaseRepairBlocked(self)) return ctx.consumeAndRedraw();
+    const prompt = try self.gpa.create(SudoPrompt);
+    errdefer self.gpa.destroy(prompt);
+    prompt.* = .{
+        .name = try self.gpa.dupe(u8, if (action == .repair_permissions) "Shelly directory ownership" else "database locks"),
+        .backend = .standard,
+        .elevated = action == .repair_permissions,
+        .action = if (action == .repair_permissions) .repair_permissions else .repair_database,
+    };
+    self.overlay = .{ .sudo = prompt };
+    ctx.consumeAndRedraw();
+}
+
+pub fn openRepositoryPrompt(self: *Model, ctx: *vxfw.EventContext, name: []const u8, url: ?[]const u8, fingerprint: ?[]const u8) !void {
+    if (self.overlay != null or self.operation_state.install_job != null) return ctx.consumeEvent();
+    const prompt = try self.gpa.create(SudoPrompt);
+    errdefer self.gpa.destroy(prompt);
+    const owned_name = try self.gpa.dupe(u8, name);
+    errdefer self.gpa.free(owned_name);
+    const owned_url = if (url) |server| try self.gpa.dupe(u8, server) else null;
+    errdefer if (owned_url) |server| self.gpa.free(server);
+    const owned_fingerprint = if (fingerprint) |key| try self.gpa.dupe(u8, key) else null;
+    errdefer if (owned_fingerprint) |key| self.gpa.free(key);
+    const safe = @import("diagnostics").safe;
+    const review = if (owned_url) |server|
+        if (owned_fingerprint) |key|
+            try std.fmt.allocPrint(self.gpa, "Add repository {f}?\nServer: {f}\nSigning key: {s}\nConfirm only if this fingerprint matches the repository's official instructions. Shelly will import and locally sign this key if needed. This grants trust in the package keyring.", .{ safe(name), safe(server), key })
+        else
+            try std.fmt.allocPrint(self.gpa, "Add repository {f}?\nServer: {f}\nConfigure only: no signing key will be imported or trusted.", .{ safe(name), safe(server) })
+    else
+        try std.fmt.allocPrint(self.gpa, "Remove repository {f}?\n\nShelly edits the main configuration file. If this repository is defined in an included file, it may remain configured.", .{@import("diagnostics").safe(name)});
+    prompt.* = .{
+        .name = owned_name,
+        .repository_url = owned_url,
+        .repository_fingerprint = owned_fingerprint,
+        .review_text = review,
+        .backend = .standard,
+        .action = if (url != null) .repository_add else .repository_remove,
+    };
+    self.overlay = .{ .sudo = prompt };
+    ctx.consumeAndRedraw();
+}
+
 fn confirmPrompt(self: *Model, ctx: *vxfw.EventContext, prompt: *SudoPrompt) !void {
+    if (prompt.action == .repair_database and try databaseRepairBlocked(self)) return ctx.consumeAndRedraw();
     try startElevatedInstall(self, ctx, prompt);
     prompt.state = .running;
 }
@@ -621,6 +695,14 @@ pub fn runMouseOperationAction(self: *Model, ctx: *vxfw.EventContext, action: co
     switch (action) {
         .confirm, .cancel => {
             const prompt = operationPrompt(self) orelse return;
+            if (action == .cancel and prompt.action == .purify and prompt.state == .running) {
+                const job = self.operation_state.install_job orelse return;
+                if (!job.snapshot(runtime.io).authenticating) return;
+                job.sendAuthentication(runtime.io, "\x03") catch {
+                    try self.setNotice("Could not interrupt sudo authentication.");
+                };
+                return ctx.consumeAndRedraw();
+            }
             if (prompt.state != .entering) return;
             if (action == .cancel) {
                 closeOverlay(self);
@@ -648,6 +730,13 @@ pub fn toggleUnusedDependencies(self: *Model, ctx: *vxfw.EventContext) void {
     ctx.consumeAndRedraw();
 }
 
+pub fn toggleRepositorySync(self: *Model, ctx: *vxfw.EventContext) void {
+    const prompt = operationPrompt(self) orelse return;
+    if (self.help_open or prompt.state != .entering or !prompt.action.isRepositoryMutation()) return;
+    prompt.skip_repository_sync = !prompt.skip_repository_sync;
+    ctx.consumeAndRedraw();
+}
+
 pub fn handleSudoKey(self: *Model, prompt: *SudoPrompt, ctx: *vxfw.EventContext, key: vaxis.Key) anyerror!void {
     if (prompt.state == .running) if (self.operation_state.install_job) |job| {
         if (job.snapshot(runtime.io).authenticating) {
@@ -659,6 +748,9 @@ pub fn handleSudoKey(self: *Model, prompt: *SudoPrompt, ctx: *vxfw.EventContext,
     };
     if (prompt.state == .entering and (prompt.backend == .standard or prompt.backend == .aur) and prompt.action == .remove and commands.matches(key, .mark)) {
         return toggleUnusedDependencies(self, ctx);
+    }
+    if (prompt.state == .entering and prompt.action.isRepositoryMutation() and commands.matches(key, .mark)) {
+        return toggleRepositorySync(self, ctx);
     }
     switch (try prompt.panel.handleKey(promptView(self, prompt), ctx, key)) {
         .none => {},
@@ -697,6 +789,9 @@ pub fn startElevatedInstall(self: *Model, ctx: *vxfw.EventContext, prompt: *Sudo
         .session = &self.operation_state.sudo_session,
         .environ_map = runtime.environ_map,
         .name = prompt.name,
+        .repository_url = prompt.repository_url,
+        .repository_fingerprint = prompt.repository_fingerprint,
+        .skip_repository_sync = prompt.skip_repository_sync,
         .targets = prompt.targets,
         .action = prompt.action,
         .remove_unused_dependencies = prompt.remove_unused_dependencies,
@@ -746,7 +841,7 @@ pub fn pollInstall(self: *Model) !bool {
         @import("updates_model.zig").invalidate(self);
     }
     const is_flatpak = std.mem.eql(u8, job.request.backend, "flatpak");
-    if (!is_flatpak and !is_appimage) {
+    if (!is_flatpak and !is_appimage and !job.request.action.isRepair()) {
         aur_model.invalidateInstalledCache(self);
         if (self.settings_state.settings.aur_enabled) self.aur_state.refresh_aur_after_operation = true;
     }
@@ -759,7 +854,7 @@ pub fn pollInstall(self: *Model) !bool {
         self.updates_state.refresh_updates_after_operation = true;
         if (self.settings_state.settings.aur_enabled) self.aur_state.refresh_aur_after_operation = true;
     }
-    if (package_batch or job.request.action == .sync) {
+    if (package_batch or job.request.action == .sync or (job.request.action == .purify and !is_flatpak and !completed.declined)) {
         self.updates_state.refresh_after_upgrade = true;
         self.updates_state.refresh_updates_after_operation = true;
     }
@@ -783,7 +878,18 @@ pub fn pollInstall(self: *Model) !bool {
             }
         }
     }
-    if (self.packages_state.installed_only) try packages_model.rebuildFilter(self);
+    if (self.packages_state.installed_only and !job.request.action.isRepair()) try packages_model.rebuildFilter(self);
+    if (job.request.action.isRepositoryMutation()) {
+        self.updates_state.refresh_after_upgrade = true;
+        self.updates_state.refresh_updates_after_operation = true;
+        // A refresh can fail after the configuration was written. Reload the list
+        // without expecting a failed transaction to have applied the change.
+        try self.utilities_state.repositories.verifyAfterOperation(
+            self.gpa,
+            job.request.name,
+            if (failed or completed.declined) null else job.request.action == .repository_add,
+        );
+    }
     // Reflect the outcome in the sudo prompt if it is still open
     if (self.overlay) |overlay| {
         switch (overlay) {
@@ -843,6 +949,51 @@ pub fn handleReviewMouse(self: *Model, ctx: *vxfw.EventContext, event: vxfw.Even
         try self.operation_state.dependency_choices.handleEvent(ctx, event);
         syncProviderSelection(self);
     } else try self.operation_state.pkgbuild_scroll.handleEvent(ctx, event);
+}
+
+test "lock removal checks for preview database users when opened and confirmed" {
+    const model = try Model.init(std.testing.allocator);
+    defer model.deinit();
+    var ctx: vxfw.EventContext = .{ .io = std.testing.io, .alloc = model.gpa, .cmds = .empty };
+    defer ctx.cmds.deinit(model.gpa);
+    var updates: @import("updates_model.zig").UpdatesJob = .{};
+    model.updates_state.updates_job = &updates;
+    defer model.updates_state.updates_job = null;
+    try openRepair(model, &ctx, .repair_database);
+    try std.testing.expect(model.overlay == null);
+    try std.testing.expect(model.footerStatus() != null);
+
+    model.updates_state.updates_job = null;
+    try openRepair(model, &ctx, .repair_database);
+    const prompt = operationPrompt(model).?;
+    prompt.panel.ready = true;
+
+    model.updates_state.updates_job = &updates;
+    try handleSudoKey(model, prompt, &ctx, commands.bindings.confirm);
+    try std.testing.expectEqual(SudoPrompt.State.entering, prompt.state);
+    try std.testing.expect(model.operation_state.install_job == null);
+
+    model.updates_state.updates_job = null;
+    var installed_aur: aur_model.AurSearchJob = .{ .installed_only = true };
+    model.aur_state.aur_job = &installed_aur;
+    defer model.aur_state.aur_job = null;
+    try runMouseOperationAction(model, &ctx, .confirm);
+    try std.testing.expectEqual(SudoPrompt.State.entering, prompt.state);
+    try std.testing.expect(model.operation_state.install_job == null);
+}
+
+test "standard cleanup can be cancelled before launching the CLI" {
+    const model = try Model.init(std.testing.allocator);
+    defer model.deinit();
+    var ctx: vxfw.EventContext = .{ .io = std.testing.io, .alloc = model.gpa, .cmds = .empty };
+    defer ctx.cmds.deinit(model.gpa);
+
+    try startCleanup(model, &ctx, .standard);
+    try std.testing.expectEqual(SudoPrompt.State.entering, model.overlay.?.sudo.state);
+    try std.testing.expect(model.operation_state.install_job == null);
+    try runMouseOperationAction(model, &ctx, .cancel);
+    try std.testing.expect(model.overlay == null);
+    try std.testing.expect(model.operation_state.install_job == null);
 }
 
 test "operation panel reserves one third of the terminal across stages" {

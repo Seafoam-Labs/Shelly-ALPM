@@ -1,58 +1,13 @@
 //! Tab labels, centered layout, and mouse hit testing. Navigation policy belongs to the caller.
-const commands = @import("../commands.zig");
+const commands = @import("../../commands.zig");
 const std = @import("std");
 const vaxis = @import("vaxis");
 const vxfw = vaxis.vxfw;
 const styles = @import("styles.zig");
-const HeaderIcons = @import("../models/settings.zig").HeaderIcons;
+const HeaderIcons = @import("../../models/settings.zig").HeaderIcons;
 const Allocator = std.mem.Allocator;
 
-pub const Tab = enum {
-    packages,
-    aur,
-    flatpak,
-    appimage,
-    upgrade,
-    settings,
-
-    pub const always: []const Tab = &.{ .packages, .upgrade, .settings };
-
-    pub const all: []const Tab = &.{ .packages, .aur, .flatpak, .appimage, .upgrade, .settings };
-
-    pub fn title(self: Tab) []const u8 {
-        return switch (self) {
-            .packages => "Packages",
-            .aur => "AUR",
-            .upgrade => "Updates",
-            .flatpak => "Flatpak",
-            .appimage => "AppImage",
-            .settings => "Settings",
-        };
-    }
-    pub fn icon(self: Tab, style: HeaderIcons) []const u8 {
-        return switch (style) {
-            .none => "",
-            // Nerd Fonts mappings: Octicons package/sync/gear, Font Logos Arch,
-            // and Font Awesome cube. See nerd-fonts/bin/scripts/lib upstream.
-            .nerd_font => switch (self) {
-                .packages => "\u{f487}",
-                .aur => "\u{f303}",
-                .flatpak => "\u{f1b2}",
-                .appimage => "\u{f085}",
-                .upgrade => "\u{f46a}",
-                .settings => "\u{f423}",
-            },
-            .ascii => switch (self) {
-                .packages => "[#]",
-                .aur => "[*]",
-                .flatpak => "[F]",
-                .appimage => "[A]",
-                .upgrade => "[^]",
-                .settings => "[=]",
-            },
-        };
-    }
-};
+const Tab = @import("../../model.zig").Tab;
 
 pub const Options = struct {
     tabs: []const Tab,
@@ -259,12 +214,12 @@ test "tab bar centers labels and retains the active tab on narrow terminals" {
             try std.testing.expectEqual(width, surface.size.width);
             try std.testing.expectEqual(@as(u16, 3), surface.size.height);
             const bar: *TabBar = @ptrCast(@alignCast(widget.userdata));
-            try std.testing.expect(bar.first_visible + bar.rich.text.len > 4);
+            const active = std.mem.indexOfScalar(Tab, bar.tabs[bar.first_visible..][0..bar.rich.text.len], model.active) orelse return error.ActiveTabNotVisible;
             var total: usize = bar.rich.text.len -| 1;
             for (bar.label_widths) |label_width| total += label_width;
             const padding: usize = if (width >= 8) 4 else 0;
             try std.testing.expectEqual(@as(i16, @intCast((width - total - padding) / 2 + padding / 2)), bar.start_col);
-            try std.testing.expect(bar.rich.text[bar.rich.text.len - 1].style.reverse);
+            try std.testing.expect(bar.rich.text[active].style.reverse);
             if (width >= 8) {
                 var corners: usize = 0;
                 var caps: usize = 0;
@@ -300,7 +255,7 @@ test "centered tab mouse targets exclude borders and padding" {
         try TabBar.handleEvent(bar, &ctx, .{ .mouse = .{ .button = .left, .type = .press, .col = 0, .row = 1, .mods = .{} } });
         try std.testing.expectEqual(Tab.packages, model.active);
         try TabBar.handleEvent(bar, &ctx, .{ .mouse = .{ .button = .left, .type = .press, .col = @intCast(col), .row = 1, .mods = .{} } });
-        try std.testing.expectEqual(Tab.settings, model.active);
+        try std.testing.expectEqual(model.tabs[model.tabs.len - 1], model.active);
     }
 }
 
@@ -314,13 +269,15 @@ test "header labels default to raw text and use Nerd Font glyphs only when enabl
     const bar: *TabBar = @ptrCast(@alignCast(widget.userdata));
     try std.testing.expectEqualStrings(" Packages ", bar.rich.text[0].text);
     try std.testing.expectEqualStrings(" Updates ", bar.rich.text[1].text);
-    try std.testing.expectEqualStrings(" Settings ", bar.rich.text[2].text);
+    try std.testing.expectEqualStrings(" Utilities ", bar.rich.text[2].text);
+    try std.testing.expectEqualStrings(" Settings ", bar.rich.text[3].text);
     model.header_icons = .nerd_font;
     const icons_widget = try model.drawTabBar(arena.allocator());
     const icons_bar: *TabBar = @ptrCast(@alignCast(icons_widget.userdata));
     try std.testing.expect(std.mem.indexOf(u8, icons_bar.rich.text[0].text, "\u{f487}") != null);
     try std.testing.expect(std.mem.indexOf(u8, icons_bar.rich.text[1].text, "\u{f46a}") != null);
-    try std.testing.expect(std.mem.indexOf(u8, icons_bar.rich.text[2].text, "\u{f423}") != null);
+    try std.testing.expect(std.mem.indexOf(u8, icons_bar.rich.text[2].text, "\u{f0ad}") != null);
+    try std.testing.expect(std.mem.indexOf(u8, icons_bar.rich.text[3].text, "\u{f423}") != null);
 }
 
 test "Nerd Font icons have an explicit spacer on first draw and tab changes" {

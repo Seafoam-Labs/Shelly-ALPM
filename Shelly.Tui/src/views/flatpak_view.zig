@@ -1,13 +1,13 @@
-const pane_focus = @import("pane_focus.zig");
-const styles = @import("styles.zig");
+const pane_focus = @import("components/pane_focus.zig");
+const styles = @import("components/styles.zig");
 const commands = @import("../commands.zig");
 const std = @import("std");
-const Border = @import("border.zig");
+const Border = @import("components/border.zig");
 const diagnostics = @import("diagnostics");
 const vxfw = @import("vaxis").vxfw;
 const data = @import("../models/flatpak.zig");
 const Allocator = std.mem.Allocator;
-const formatSize = @import("detail_format.zig").formatSize;
+const formatSize = @import("components/detail_format.zig").formatSize;
 
 pub const Row = union(enum) {
     catalog: *const data.AppstreamApp,
@@ -103,7 +103,7 @@ pub const View = struct {
         const max = ctx.max.size();
         if (max.width < 2 or max.height < 3) return;
         const split = max.width >= 64;
-        const left_w: u16 = if (split) @import("split_layout.zig").listWidth(max.width, self.list_percent) else max.width;
+        const left_w: u16 = if (split) @import("components/split_layout.zig").listWidth(max.width, self.list_percent) else max.width;
         const right_w = if (split) max.width - left_w else max.width;
         const list_width = left_w -| @as(u16, if (split) 1 else 0);
         const search_height: u16 = if (max.width >= 2 and max.height >= 8) 3 else 1;
@@ -224,7 +224,7 @@ pub fn drawInstallChoices(ctx: vxfw.DrawContext, app: *const data.AppstreamApp, 
     return border.draw(ctx.withConstraints(size, .{ .width = size.width, .height = size.height }));
 }
 
-const detail_fields = @import("detail_fields.zig");
+const detail_fields = @import("components/detail_fields.zig");
 pub fn drawDetails(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
     const row: *const Row = @ptrCast(@alignCast(ptr));
     const arena = ctx.arena;
@@ -314,7 +314,7 @@ const DetailsBody = struct {
     fn draw(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
         const self: *DetailsBody = @ptrCast(@alignCast(ptr));
         const size = ctx.max.size();
-        const image_height: u16 = if (self.images != null and @import("split_layout.zig").imagesFit(size.width, size.height)) @max(4, size.height / 2) else 0;
+        const image_height: u16 = if (self.images != null and @import("components/split_layout.zig").imagesFit(size.width, size.height)) @max(4, size.height / 2) else 0;
         const details_row = if (image_height > 0) image_height + 1 else 0;
         var children: std.ArrayList(vxfw.SubSurface) = .empty;
         if (image_height > 0) try children.append(ctx.arena, .{ .origin = .{ .row = 0, .col = 0 }, .surface = try self.images.?.draw(ctx.withConstraints(.{}, .{ .width = size.width, .height = image_height })) });
