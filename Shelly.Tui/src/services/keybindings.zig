@@ -33,6 +33,12 @@ pub const Config = struct {
         var candidate = self;
         candidate.overrides[index] = if (same(key, defaultKey(id))) null else key;
         try candidate.validate();
+        const compare_conflict = switch (id) {
+            .pacfile_compare => same(key, self.get(.narrow_view)) or same(key, self.get(.widen_view)),
+            .narrow_view, .widen_view => same(key, self.get(.pacfile_compare)),
+            else => false,
+        };
+        if (compare_conflict and !same(key, self.get(id))) return error.ConflictingBinding;
         return candidate;
     }
 
@@ -309,4 +315,31 @@ test "settings reload and panel resizing cannot share a binding" {
     const changed = try config.withBinding(.refresh, try parse("F3"));
     try std.testing.expectError(error.ConflictingBinding, changed.withBinding(.widen_view, try parse("F3")));
     try std.testing.expectError(error.ConflictingBinding, changed.withBinding(.narrow_view, try parse("F3")));
+}
+
+test "pacfile compare and panel resizing cannot be assigned the same key in either order" {
+    const defaults: Config = .{};
+    const key = try parse("F3");
+    const compare = try defaults.withBinding(.pacfile_compare, key);
+    for ([_]commands.Id{ .narrow_view, .widen_view }) |resize| {
+        try std.testing.expectError(error.ConflictingBinding, compare.withBinding(resize, key));
+        const resized = try defaults.withBinding(resize, key);
+        try std.testing.expectError(error.ConflictingBinding, resized.withBinding(.pacfile_compare, key));
+    }
+}
+
+test "saved compare and resize overlaps survive unrelated edits and can be resolved" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const document = try std.json.parseFromSlice(std.json.Value, allocator,
+        \\{"pacfile_compare":"F3","widen_view":"F3"}
+    , .{});
+    const saved = try decode(document.value);
+    const changed = try saved.withBinding(.help, try parse("F2"));
+    const reloaded = try decode(try encode(allocator, changed));
+    try std.testing.expect(same(reloaded.get(.pacfile_compare), try parse("F3")));
+    try std.testing.expect(same(reloaded.get(.widen_view), try parse("F3")));
+    const fixed = try reloaded.withBinding(.widen_view, defaultKey(.widen_view));
+    try std.testing.expectError(error.ConflictingBinding, fixed.withBinding(.widen_view, try parse("F3")));
 }
