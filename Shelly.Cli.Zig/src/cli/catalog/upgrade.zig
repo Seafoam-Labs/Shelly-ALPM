@@ -1,6 +1,7 @@
 const types = @import("types.zig");
 
 const flag = types.flag;
+const stringOption = types.stringOption;
 
 pub const variants = [_]types.Variant{
     .{
@@ -20,6 +21,12 @@ pub const variants = [_]types.Variant{
                 &.{},
                 "Restart affected services automatically; session-critical units are only reported",
             ),
+            stringOption(
+                "--ignore",
+                &.{},
+                "Temporarily ignore one or more packages during upgrade; repeatable or comma-separated",
+                false,
+            ),
         },
     },
     .{
@@ -27,9 +34,23 @@ pub const variants = [_]types.Variant{
         .name = "all",
         .type_code = 'x',
         .bare_action_code = true,
+        .default_for_action = true,
         .description = "Build and confirm an invoking-user upgrade plan, then upgrade every enabled package backend in one coordinated action, continuing through independent backend failures and returning failure if any selected backend fails.",
         .implementation = "Combined Zig coordinator over PackageManager.Manager, AurManager, FlatpakManager, and appimage.UpdateManager",
-        .options = &.{ flag("--no-repo", &.{}, "Skip the standard ALPM backend"), flag("--no-aur", &.{}, "Skip the AUR backend"), flag("--no-flatpak", &.{}, "Skip the Flatpak backend"), flag("--no-appimage", &.{}, "Skip the AppImage backend"), flag("--no-devel", &.{}, "Skip -git aur"), flag("--restart-services", &.{}, "Restart affected services automatically; session-critical units are only reported") },
+        .options = &.{
+            flag("--no-repo", &.{}, "Skip the standard ALPM backend"),
+            flag("--no-aur", &.{}, "Skip the AUR backend"),
+            flag("--no-flatpak", &.{}, "Skip the Flatpak backend"),
+            flag("--no-appimage", &.{}, "Skip the AppImage backend"),
+            flag("--no-devel", &.{}, "Skip -git aur"),
+            flag("--restart-services", &.{}, "Restart affected services automatically; session-critical units are only reported"),
+            stringOption(
+                "--ignore",
+                &.{},
+                "Temporarily ignore one or more packages during upgrade; repeatable or comma-separated",
+                false,
+            ),
+        },
     },
     .{
         .action = .upgrade,
@@ -44,7 +65,20 @@ pub const variants = [_]types.Variant{
         .type_code = 'a',
         .description = "Find installed foreign packages with newer AUR or VCS revisions, then build and install all available upgrades.",
         .implementation = "PackageManager.AurManager.getPackagesNeedingUpdate / updatePackages",
-        .options = &.{ flag("--check", &.{}, "Run each PKGBUILD check() function during AUR upgrade builds"), flag("--no-check", &.{}, "Skip each PKGBUILD check() function during AUR upgrade builds"), flag("--sign", &.{}, "Sign upgraded AUR packages with GPG"), flag("--nosign", &.{}, "Skip signing upgraded AUR packages"), flag("--singlepane", &.{}, "Use single-pane terminal output."), flag("--no-devel", &.{}, "Skip checking -git packages") },
+        .options = &.{
+            flag("--check", &.{}, "Run each PKGBUILD check() function during AUR upgrade builds"),
+            flag("--no-check", &.{}, "Skip each PKGBUILD check() function during AUR upgrade builds"),
+            flag("--sign", &.{}, "Sign upgraded AUR packages with GPG"),
+            flag("--nosign", &.{}, "Skip signing upgraded AUR packages"),
+            flag("--singlepane", &.{}, "Use single-pane terminal output."),
+            flag("--no-devel", &.{}, "Skip checking -git packages"),
+            stringOption(
+                "--ignore",
+                &.{},
+                "Temporarily ignore one or more packages during upgrade; repeatable or comma-separated",
+                false,
+            ),
+        },
     },
     .{
         .action = .upgrade,

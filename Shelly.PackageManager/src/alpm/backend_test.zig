@@ -1202,6 +1202,52 @@ test "native backend combined upgrade resolves explicit repository ABI transitio
     }
 }
 
+test "temporary package ignore isolates dependency conflict and completes upgrade" {
+    for ([_]pm.Manager.Backend{ .libalpm, .rlpm }) |backend| {
+        if (!backend.available()) continue;
+        var fixture = try Fixture.init(backend);
+        defer fixture.deinit();
+        const base_manager = try setupUpgrade(&fixture, true);
+        base_manager.deinit();
+
+        // 1. Without ignore, full system upgrade fails due to ABI conflict:
+        // preferred masks filezilla at 1-1 (requiring libfilezilla.so=59-64),
+        // but extra-testing offers libfilezilla 2-1 (providing libfilezilla.so=64-64).
+        {
+            const failing_mgr = try fixture.manager();
+            defer failing_mgr.deinit();
+            try t.expectError(
+                if (backend == .libalpm) error.PrepareFailed else error.CommitFailed,
+                failing_mgr.sync_system_update(upgrade_flags),
+            );
+        }
+
+        // 2. With temporary ignore of libfilezilla via InitOptions, upgrade succeeds:
+        {
+            var ignored_options = fixture.options;
+            ignored_options.ignore_packages = &.{"libfilezilla"};
+            const isolated_mgr = try pm.Manager.init(t.allocator, t.environ, ignored_options);
+            defer isolated_mgr.deinit();
+
+            var report = try isolated_mgr.sync_system_update(upgrade_flags);
+            defer report.deinit();
+
+            var libfz = (try isolated_mgr.get_single_installed_package("libfilezilla")).?;
+            defer libfz.deinit(t.allocator);
+            try t.expectEqualStrings("1-1", libfz.version_value);
+
+            var unrelated = (try isolated_mgr.get_single_installed_package("unrelated")).?;
+            defer unrelated.deinit(t.allocator);
+            try t.expectEqualStrings("2-1", unrelated.version_value);
+        }
+
+        // Verify pacman.conf on disk was never modified
+        const conf_data = try fixture.temp.dir.readFileAlloc(t.io, "pacman.conf", t.allocator, .limited(4096));
+        defer t.allocator.free(conf_data);
+        try t.expect(std.mem.indexOf(u8, conf_data, "IgnorePkg") == null);
+    }
+}
+
 test "native backend combined upgrade rejects missing or broken targets before changes" {
     for ([_]pm.Manager.Backend{ .libalpm, .rlpm }) |backend| {
         if (!backend.available()) continue;

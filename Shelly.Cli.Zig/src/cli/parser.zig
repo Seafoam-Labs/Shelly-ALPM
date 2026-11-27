@@ -488,3 +488,50 @@ test "global config accepts separate and equals values and rejects missing value
     const missing = try parse(a, &manifest, &.{ "search", "standard", "--config" });
     try std.testing.expect(missing == .failure);
 }
+
+test "upgrade command parses --ignore with repeated flags, comma separation, and defaults bare upgrade to all" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    const manifest = try spec.Manifest.load(a);
+
+    // Bare "upgrade" resolves to "shelly upgrade all"
+    const bare = try parse(a, &manifest, &.{"upgrade"});
+    try std.testing.expect(bare == .dispatch);
+    try std.testing.expectEqualStrings("shelly upgrade all", bare.dispatch.command.path);
+
+    // Bare "upgrade --ignore pkg" resolves to "shelly upgrade all" with option
+    const bare_with_ignore = try parse(a, &manifest, &.{ "upgrade", "--ignore", "spandsp" });
+    try std.testing.expect(bare_with_ignore == .dispatch);
+    try std.testing.expectEqualStrings("shelly upgrade all", bare_with_ignore.dispatch.command.path);
+    try std.testing.expectEqual(@as(usize, 1), bare_with_ignore.dispatch.options.len);
+    try std.testing.expectEqualStrings("--ignore", bare_with_ignore.dispatch.options[0].name);
+    try std.testing.expectEqualStrings("spandsp", bare_with_ignore.dispatch.options[0].value.?);
+
+    // "upgrade standard --ignore a --ignore b" parses repeated flags
+    const repeated = try parse(a, &manifest, &.{ "upgrade", "standard", "--ignore", "pkg-a", "--ignore", "pkg-b" });
+    try std.testing.expect(repeated == .dispatch);
+    try std.testing.expectEqualStrings("shelly upgrade standard", repeated.dispatch.command.path);
+    try std.testing.expectEqual(@as(usize, 2), repeated.dispatch.options.len);
+    try std.testing.expectEqualStrings("pkg-a", repeated.dispatch.options[0].value.?);
+    try std.testing.expectEqualStrings("pkg-b", repeated.dispatch.options[1].value.?);
+
+    // "upgrade aur --ignore a,b" parses comma-separated values
+    const comma = try parse(a, &manifest, &.{ "upgrade", "aur", "--ignore", "aur-a,aur-b" });
+    try std.testing.expect(comma == .dispatch);
+    try std.testing.expectEqualStrings("shelly upgrade aur", comma.dispatch.command.path);
+    try std.testing.expectEqual(@as(usize, 1), comma.dispatch.options.len);
+    try std.testing.expectEqualStrings("aur-a,aur-b", comma.dispatch.options[0].value.?);
+
+    // "upgrade all --ignore=pkg" with equals syntax
+    const equals = try parse(a, &manifest, &.{ "upgrade", "all", "--ignore=my-pkg" });
+    try std.testing.expect(equals == .dispatch);
+    try std.testing.expectEqualStrings("shelly upgrade all", equals.dispatch.command.path);
+    try std.testing.expectEqual(@as(usize, 1), equals.dispatch.options.len);
+    try std.testing.expectEqualStrings("my-pkg", equals.dispatch.options[0].value.?);
+
+    // Missing value for --ignore fails with descriptive message
+    const missing = try parse(a, &manifest, &.{ "upgrade", "standard", "--ignore" });
+    try std.testing.expect(missing == .failure);
+    try std.testing.expect(std.mem.indexOf(u8, missing.failure.message, "Option '--ignore' needs a value") != null);
+}

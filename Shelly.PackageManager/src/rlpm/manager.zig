@@ -343,6 +343,16 @@ pub const Manager = struct {
         defer types.OwnedPackage.deinitSlice(self.allocator, installed);
         for (installed) |pkg| {
             if (try self.owner.findCandidate(self.io(), pkg.name_value, .search) != null) continue;
+            if (!self.show_hidden_packages) {
+                var ignored = false;
+                for (self.config.ignore_package.items) |ignore| {
+                    if (std.mem.eql(u8, pkg.name_value, ignore)) {
+                        ignored = true;
+                        break;
+                    }
+                }
+                if (ignored) continue;
+            }
             const ref = (try self.owner.findPackage(self.owner.localDatabase().?, pkg.name_value)).?;
             var value = try self.snapshot(ref, .{});
             result.append(self.allocator, value) catch |err| {
