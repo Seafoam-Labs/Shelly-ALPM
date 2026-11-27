@@ -28,6 +28,7 @@ const disable_cache_clean_option = "--disable-cache-clean";
 const disable_appimage_update_check_option = "--disable-appimage-update-check";
 const disable_flatpak_update_check_option = "--disable-flatpak-update-check";
 const restart_services_option = "--restart-services";
+const skip_aur_option = "--skip-aur";
 
 const UpgradeError = error{
     BackendFailed,
@@ -249,6 +250,10 @@ fn buildAllUpgradePlan(
             try context.stdout.print("Could not check for {0f} upgrades. {1s}\n\nTechnical details: {2s}\n", .{ diagnostics.safe(backend.displayName()), diagnostics.cause(err), @errorName(err) });
             try context.stdout.flush();
             continue;
+        };
+        dropSkippedAurUpdates(context.allocator, invocation, &result) catch |err| {
+            result.deinit(context.allocator);
+            return err;
         };
         const count = list_updates.resultCount(&result);
         if (count == 0) {
@@ -691,6 +696,12 @@ fn runAur(
         emitStatus(operation_context, .aur, .success, "All AUR packages are up to date.");
         return;
     }
+    const package_names = try selectedAurNames(context.allocator, invocation, updates);
+    defer context.allocator.free(package_names);
+    if (package_names.len == 0) {
+        emitStatus(operation_context, .aur, .success, "Every AUR upgrade was skipped.");
+        return;
+    }
 
     try emitFormattedStatus(
         context,
@@ -698,12 +709,10 @@ fn runAur(
         .aur,
         .information,
         "{d} AUR packages need updates:",
-        .{updates.len},
+        .{package_names.len},
     );
-    const package_names = try context.allocator.alloc([]const u8, updates.len);
-    defer context.allocator.free(package_names);
-    for (updates, package_names) |update, *name| {
-        name.* = update.name;
+    for (updates) |update| {
+        if (skipsAurPackage(invocation, update.name)) continue;
         try emitFormattedStatus(
             context,
             operation_context,
@@ -1085,6 +1094,55 @@ fn failureMessage(invocation: *const parser.Invocation) []const u8 {
         .flatpak => "Could not complete the Flatpak upgrade.",
         .appimage => "Could not complete the AppImage upgrade.",
     };
+}
+
+fn skipsAurPackage(invocation: *const parser.Invocation, name: []const u8) bool {
+    for (invocation.options) |option| {
+        if (!std.mem.eql(u8, option.name, skip_aur_option)) continue;
+        if (std.mem.eql(u8, option.value orelse continue, name)) return true;
+    }
+    return false;
+}
+
+fn selectedAurNames(
+    allocator: std.mem.Allocator,
+    invocation: *const parser.Invocation,
+    updates: anytype,
+) ![]const []const u8 {
+    var names: std.ArrayList([]const u8) = .empty;
+    errdefer names.deinit(allocator);
+    for (updates) |update| {
+        if (!skipsAurPackage(invocation, update.name)) try names.append(allocator, update.name);
+    }
+    return names.toOwnedSlice(allocator);
+}
+
+fn dropSkippedAurUpdates(
+    allocator: std.mem.Allocator,
+    invocation: *const parser.Invocation,
+    result: *list_updates.Result,
+) !void {
+    if (std.meta.activeTag(result.*) != .aur) return;
+    const set = &result.aur;
+    var kept: usize = 0;
+    for (set.items) |update| {
+        if (!skipsAurPackage(invocation, update.name)) kept += 1;
+    }
+    if (kept == set.items.len) return;
+
+    if (set.arena == null) {
+        const arena = try allocator.create(std.heap.ArenaAllocator);
+        arena.* = .init(allocator);
+        set.arena = arena;
+    }
+    const filtered = try set.arena.?.allocator().alloc(list_updates.AurUpdate, kept);
+    var index: usize = 0;
+    for (set.items) |update| {
+        if (skipsAurPackage(invocation, update.name)) continue;
+        filtered[index] = update;
+        index += 1;
+    }
+    set.items = filtered;
 }
 
 fn optionEnabled(invocation: *const parser.Invocation, name: []const u8) bool {
@@ -1818,6 +1876,86 @@ test "combined upgrade plan renders enabled user updates and confirms once" {
         std.mem.count(u8, rendered, "Proceed with all upgrades? (Y/n)"),
     );
     try std.testing.expect(std.mem.indexOf(u8, rendered, "Please answer 'y' or 'n'.") != null);
+}
+
+test "combined upgrade plan leaves out skipped AUR packages" {
+    var tc: test_support.TestContext = .{};
+    tc.init();
+    defer tc.deinit();
+    const manifest = try spec.Manifest.load(tc.arena.allocator());
+
+    const Fixture = struct {
+        fn collect(
+            _: *@This(),
+            _: *runtime.RuntimeContext,
+            _: Backend,
+            _: *const parser.Invocation,
+        ) !list_updates.Result {
+            const update: list_updates.AurUpdate = .{
+                .name = "",
+                .version = "1.0",
+                .new_version = "1.1",
+                .download_size = 0,
+                .url = "",
+                .package_base = "",
+                .description = "fixture",
+            };
+            var kept = update;
+            kept.name = "kept-pkg";
+            var skipped = update;
+            skipped.name = "skipped-pkg";
+            const items = struct {
+                var value: [2]list_updates.AurUpdate = undefined;
+            };
+            items.value = .{ kept, skipped };
+            return .{ .aur = .{ .items = &items.value } };
+        }
+    };
+    var fixture: Fixture = .{};
+
+    const partial = try parser.parse(tc.arena.allocator(), &manifest, &.{
+        "upgrade",    "all",         "--no-repo", "--no-flatpak", "--no-appimage", "--no-confirm",
+        "--skip-aur", "skipped-pkg",
+    });
+    try std.testing.expect(partial == .dispatch);
+    const preview = try prepareAllUpgradePreviewWithCollector(&tc.context, &partial.dispatch, &fixture);
+    try std.testing.expect(preview.has_updates);
+    const rendered = tc.stdout.writer.buffered();
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "AUR (1):") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "kept-pkg: 1.0 -> 1.1") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "skipped-pkg") == null);
+
+    const none = try parser.parse(tc.arena.allocator(), &manifest, &.{
+        "upgrade",    "all",      "--no-repo",  "--no-flatpak", "--no-appimage", "--no-confirm",
+        "--skip-aur", "kept-pkg", "--skip-aur", "skipped-pkg",
+    });
+    try std.testing.expect(none == .dispatch);
+    const empty = try prepareAllUpgradePreviewWithCollector(&tc.context, &none.dispatch, &fixture);
+    try std.testing.expect(!empty.has_updates);
+}
+
+test "aur upgrade builds only the packages that are not skipped" {
+    var tc: test_support.TestContext = .{};
+    tc.init();
+    defer tc.deinit();
+    const manifest = try spec.Manifest.load(tc.arena.allocator());
+    const Update = struct { name: []const u8 };
+    const updates = [_]Update{ .{ .name = "a" }, .{ .name = "b" }, .{ .name = "c" } };
+
+    const outcome = try parser.parse(tc.arena.allocator(), &manifest, &.{
+        "upgrade", "aur", "--skip-aur", "a", "--skip-aur", "c",
+    });
+    try std.testing.expect(outcome == .dispatch);
+    const names = try selectedAurNames(std.testing.allocator, &outcome.dispatch, &updates);
+    defer std.testing.allocator.free(names);
+    try std.testing.expectEqual(@as(usize, 1), names.len);
+    try std.testing.expectEqualStrings("b", names[0]);
+
+    const unfiltered = try parser.parse(tc.arena.allocator(), &manifest, &.{ "upgrade", "aur" });
+    try std.testing.expect(unfiltered == .dispatch);
+    const all_names = try selectedAurNames(std.testing.allocator, &unfiltered.dispatch, &updates);
+    defer std.testing.allocator.free(all_names);
+    try std.testing.expectEqual(@as(usize, 3), all_names.len);
 }
 
 test "combined upgrade plan defaults to approval, supports decline, and no-confirm bypasses the prompt" {
