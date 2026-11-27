@@ -2082,6 +2082,115 @@
                                 </child>
                               </object>
                             </child>
+                            <child>
+                              <object class="GtkBox">
+                                <property name="orientation">vertical</property>
+                                <property name="spacing">8</property>
+                                <style>
+                                  <class name="settings-group"/>
+                                </style>
+                                <child>
+                                  <object class="GtkLabel">
+                                    <property name="label" translatable="yes">GitHub</property>
+                                    <property name="halign">start</property>
+                                    <property name="xalign">0</property>
+                                    <property name="accessible-role">heading</property>
+                                    <accessibility>
+                                      <property name="level">3</property>
+                                    </accessibility>
+                                    <style>
+                                      <class name="settings-group-title"/>
+                                    </style>
+                                  </object>
+                                </child>
+                                <child>
+                                  <object class="GtkBox">
+                                    <property name="orientation">vertical</property>
+                                    <style>
+                                      <class name="settings-card"/>
+                                    </style>
+                                    <child>
+                                      <object class="GtkBox" id="github_token_box">
+                                        <property name="orientation">vertical</property>
+                                        <property name="spacing">8</property>
+                                        <style>
+                                          <class name="settings-form-row"/>
+                                        </style>
+                                        <child>
+                                          <object class="GtkBox">
+                                            <property name="orientation">vertical</property>
+                                            <property name="spacing">2</property>
+                                            <property name="hexpand">true</property>
+                                            <property name="valign">start</property>
+                                            <child>
+                                              <object class="GtkLabel">
+                                                <property name="label" translatable="yes">GitHub API Token</property>
+                                                <property name="halign">start</property>
+                                                <property name="xalign">0</property>
+                                                <property name="wrap">true</property>
+                                                <style>
+                                                  <class name="settings-row-title"/>
+                                                </style>
+                                              </object>
+                                            </child>
+                                            <child>
+                                              <object class="GtkLabel">
+                                                <property name="label" translatable="yes">Lifts GitHub's rate limits for AppImage update checks.</property>
+                                                <property name="halign">start</property>
+                                                <property name="xalign">0</property>
+                                                <property name="wrap">true</property>
+                                                <style>
+                                                  <class name="settings-row-subtitle"/>
+                                                </style>
+                                              </object>
+                                            </child>
+                                          </object>
+                                        </child>
+                                        <child>
+                                          <object class="GtkBox">
+                                            <property name="orientation">horizontal</property>
+                                            <property name="spacing">8</property>
+                                            <child>
+                                              <object class="GtkEntry" id="github_token_entry">
+                                                <property name="visibility">false</property>
+                                                <property name="hexpand">true</property>
+                                                <property name="width-chars">24</property>
+                                                <property name="placeholder-text" translatable="yes">Paste a GitHub token</property>
+                                                <accessibility>
+                                                  <property name="label" translatable="yes">GitHub API Token</property>
+                                                </accessibility>
+                                              </object>
+                                            </child>
+                                            <child>
+                                              <object class="GtkButton" id="github_token_save_button">
+                                                <property name="label" translatable="yes">Save token</property>
+                                                <property name="valign">center</property>
+                                              </object>
+                                            </child>
+                                            <child>
+                                              <object class="GtkButton" id="github_token_clear_button">
+                                                <property name="label" translatable="yes">Remove token</property>
+                                                <property name="valign">center</property>
+                                              </object>
+                                            </child>
+                                          </object>
+                                        </child>
+                                        <child>
+                                          <object class="GtkLabel" id="github_token_status">
+                                            <property name="halign">start</property>
+                                            <property name="xalign">0</property>
+                                            <property name="wrap">true</property>
+                                            <style>
+                                              <class name="settings-row-subtitle"/>
+                                            </style>
+                                          </object>
+                                        </child>
+                                      </object>
+                                    </child>
+                                  </object>
+                                </child>
+                              </object>
+                            </child>
                           </object>
                         </child>
                       </object>

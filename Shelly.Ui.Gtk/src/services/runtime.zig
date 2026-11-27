@@ -9,6 +9,9 @@ const deep_link = @import("../helpers/deep_link.zig");
 pub var io: std.Io = undefined;
 pub var environ_map: *std.process.Environ.Map = undefined;
 pub var data_home: []const u8 = "";
+pub var github_token_from_environment: bool = false;
+pub var github_token_from_secret_store: bool = false;
+pub var github_token_store_load_failed: bool = false;
 
 pub const PendingLocalFile = struct {
     buffer: [deep_link.max_file_path_len + 1]u8,

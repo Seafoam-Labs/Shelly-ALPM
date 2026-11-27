@@ -1171,7 +1171,14 @@ pub const UpdateManager = struct {
             return null;
         };
         if (response.head.status.class() != .success) {
-            self.emitStatusFmt(.warning, "AppImage update provider returned HTTP {d}.", .{@backingInt(response.head.status)});
+            self.emitStatusFmt(
+                .warning,
+                "AppImage update provider returned HTTP {d} (GitHub token available to this process: {s}).",
+                .{
+                    @backingInt(response.head.status),
+                    if (HttpClient.hasDefaultGitHubToken()) "yes" else "no",
+                },
+            );
             return null;
         }
 
