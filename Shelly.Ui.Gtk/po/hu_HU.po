@@ -256,7 +256,7 @@ msgid "Firmware"
 msgstr "Firmware"
 
 msgid "Device firmware updates"
-msgstr "Device firmware updates"
+msgstr "Eszköz firmware-frissítések"
 
 msgid "Refresh metadata and check devices again"
 msgstr "Metaadatok frissítése és az eszközök újbóli ellenőrzése"
