@@ -1626,7 +1626,6 @@ fn hideUnbuiltRows(p: *ShellySettingsPage.Private) void {
         hideSettingsRow(p.appimage_switch);
         hideRow(p.appimage_install_path_box.as(gtk.Widget));
         hideSettingsRow(p.appimage_upgrade_all_recheck_switch);
-        gtk.Widget.setVisible(p.github_token_box.as(gtk.Widget), @intFromBool(false));
     }
     if (!features.builtWithShellySearch) hideSettingsRow(p.shelly_search_switch);
     if (!features.builtWithFwupd) hideSettingsRow(p.fwupd_switch);
@@ -1780,13 +1779,13 @@ fn applyAppImageInstallPath(p: *ShellySettingsPage.Private) void {
 
 fn updateGitHubTokenStatus(p: *ShellySettingsPage.Private) void {
     const message = if (runtime.github_token_from_environment)
-        translations._("Using GITHUB_TOKEN from the desktop environment")
+        translations._("Using GITHUB_TOKEN from the environment")
     else if (runtime.github_token_from_secret_store)
-        translations._("A GitHub token is saved in the system keyring")
+        translations._("Saved in the system keyring")
     else if (runtime.github_token_store_load_failed)
         translations._("Could not read the system keyring")
     else
-        translations._("No GitHub token is saved");
+        translations._("No GitHub token saved");
     gtk.Label.setLabel(p.github_token_status, message);
 }
 

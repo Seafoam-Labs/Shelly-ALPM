@@ -172,12 +172,14 @@ The one-time `shelly upgrade all --no-appimage` flag also skips AppImages.
 
 ### GitHub tokens in the desktop UI
 
+GitHub answers unauthenticated API requests at a low rate limit, which makes
+AppImage update checks fail with HTTP 403 once a few AppImages are tracked.
 The GTK UI can store an optional GitHub API token in the desktop's Secret
-Service keyring. Open **Settings → GitHub API token** to save or remove it.
-Shelly does not write this token to its settings file. A `GITHUB_TOKEN`
-environment variable takes precedence over the keyring value. The desktop
-session must provide a Secret Service implementation with an unlocked default
-keyring to save or retrieve the stored token.
+Service keyring to lift that limit. Open **Settings → GitHub API Token** to
+save or remove it. Shelly does not write this token to its settings file. A
+`GITHUB_TOKEN` environment variable takes precedence over the keyring value.
+The desktop session must provide a Secret Service implementation with an
+unlocked default keyring to save or retrieve the stored token.
 
 ## Flatpak checks during combined upgrades
 
