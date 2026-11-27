@@ -269,13 +269,15 @@ test "header labels default to raw text and use Nerd Font glyphs only when enabl
     const bar: *TabBar = @ptrCast(@alignCast(widget.userdata));
     try std.testing.expectEqualStrings(" Packages ", bar.rich.text[0].text);
     try std.testing.expectEqualStrings(" Updates ", bar.rich.text[1].text);
-    try std.testing.expectEqualStrings(" Settings ", bar.rich.text[2].text);
+    try std.testing.expectEqualStrings(" Utilities ", bar.rich.text[2].text);
+    try std.testing.expectEqualStrings(" Settings ", bar.rich.text[3].text);
     model.header_icons = .nerd_font;
     const icons_widget = try model.drawTabBar(arena.allocator());
     const icons_bar: *TabBar = @ptrCast(@alignCast(icons_widget.userdata));
     try std.testing.expect(std.mem.indexOf(u8, icons_bar.rich.text[0].text, "\u{f487}") != null);
     try std.testing.expect(std.mem.indexOf(u8, icons_bar.rich.text[1].text, "\u{f46a}") != null);
-    try std.testing.expect(std.mem.indexOf(u8, icons_bar.rich.text[2].text, "\u{f423}") != null);
+    try std.testing.expect(std.mem.indexOf(u8, icons_bar.rich.text[2].text, "\u{f0ad}") != null);
+    try std.testing.expect(std.mem.indexOf(u8, icons_bar.rich.text[3].text, "\u{f423}") != null);
 }
 
 test "Nerd Font icons have an explicit spacer on first draw and tab changes" {
