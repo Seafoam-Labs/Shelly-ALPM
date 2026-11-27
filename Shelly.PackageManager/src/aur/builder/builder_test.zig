@@ -8441,3 +8441,603 @@ test "PackageBuilder names the rejected metadata field when a value spans lines"
     defer allocator.free(log);
     try testing.expect(std.mem.indexOf(u8, log, "bad-url: package-assembly: InvalidPackageMetadata (rejected metadata field: url)") != null);
 }
+
+// Git source acquisition: all-SKIP skip decisions, ref probes, and shallow
+// pinned-ref caches. See docs/shellybuild.conf.md ([build] shallow_git).
+
+fn createGitUpstream(allocator: std.mem.Allocator, io: std.Io, directory: std.Io.Dir, path: []const u8) !void {
+    try directory.writeFile(io, .{ .sub_path = "source-marker", .data = "checked out\n" });
+    try runTestCommand(allocator, io, &.{ "git", "init", "-b", "main" }, path);
+    try runTestCommand(allocator, io, &.{ "git", "config", "user.email", "shelly-tests@example.invalid" }, path);
+    try runTestCommand(allocator, io, &.{ "git", "config", "user.name", "Shelly Tests" }, path);
+    try runTestCommand(allocator, io, &.{ "git", "config", "commit.gpgsign", "false" }, path);
+    try runTestCommand(allocator, io, &.{ "git", "config", "tag.gpgsign", "false" }, path);
+    try runTestCommand(allocator, io, &.{ "git", "add", "source-marker" }, path);
+    try runTestCommand(allocator, io, &.{ "git", "commit", "-m", "fixture" }, path);
+    try runTestCommand(allocator, io, &.{ "git", "tag", "v1" }, path);
+}
+
+fn gitQuery(allocator: std.mem.Allocator, io: std.Io, argv: []const []const u8, working_directory: []const u8) ![]u8 {
+    var result = try process_runner.run(allocator, io, argv, working_directory, null);
+    defer result.deinit(allocator);
+    if (result.exit_code != 0) return error.FixtureCommandFailed;
+    return allocator.dupe(u8, std.mem.trim(u8, result.stdout, " \t\r\n"));
+}
+
+/// Deterministic archive digest computed the way acquisition neutralizes
+/// export attributes, for comparing shallow and full checksums.
+fn expectedGitArchiveHash(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    upstream: std.Io.Dir,
+    upstream_path: []const u8,
+    reference: []const u8,
+    comptime Hash: type,
+) ![Hash.digest_length * 2]u8 {
+    try upstream.writeFile(io, .{ .sub_path = ".git/info/attributes", .data = "* -export-subst -export-ignore\n" });
+    var archive_result = try process_runner.run(allocator, io, &.{ "git", "archive", "--format=tar", reference }, upstream_path, null);
+    defer archive_result.deinit(allocator);
+    upstream.deleteFile(io, ".git/info/attributes") catch {};
+    if (archive_result.exit_code != 0) return error.FixtureCommandFailed;
+    var digest: [Hash.digest_length]u8 = undefined;
+    Hash.hash(archive_result.stdout, &digest, .{});
+    return std.fmt.bytesToHex(digest, .lower);
+}
+
+/// Stages the PKGBUILD and review state for updateChecksumsWithOperation.
+/// The caller owns and frees the returned path.
+fn setupChecksumUpdate(fixture: *Fixture, content: []const u8) ![]u8 {
+    const io = testing.io;
+    try fixture.temporary.dir.writeFile(io, .{ .sub_path = "PKGBUILD", .data = content });
+    const path = try std.fs.path.join(fixture.allocator, &.{ fixture.build_dir, "PKGBUILD" });
+    errdefer fixture.allocator.free(path);
+    fixture.builder.options.pkgbuild_path = path;
+    var review = try builder_mod.preparePkgbuildReview(fixture.allocator, io, fixture.build_dir, content, fixture.package_builds);
+    defer review.deinit();
+    fixture.builder.options.reviewed_pkgbuild_digest = review.digest;
+    fixture.builder.options.sources_prepared = false;
+    return path;
+}
+
+fn countOccurrences(haystack: []const u8, needle: []const u8) usize {
+    var count: usize = 0;
+    var offset: usize = 0;
+    while (std.mem.indexOfPos(u8, haystack, offset, needle)) |position| {
+        count += 1;
+        offset = position + needle.len;
+    }
+    return count;
+}
+
+test "PackageBuilder updpkgsums probes skipped git refs without object transfer" {
+    const allocator = testing.allocator;
+    const io = testing.io;
+    var remote = std.testing.tmpDir(.{});
+    defer remote.cleanup();
+    const remote_path = try remote.dir.realPathFileAlloc(io, ".", allocator);
+    defer allocator.free(remote_path);
+    try createGitUpstream(allocator, io, remote.dir, remote_path);
+    const head = try gitQuery(allocator, io, &.{ "git", "rev-parse", "HEAD" }, remote_path);
+    defer allocator.free(head);
+
+    const content = try std.fmt.allocPrint(allocator,
+        \\pkgname=demo
+        \\pkgver=1
+        \\pkgrel=1
+        \\arch=('any')
+        \\source=('moving::git+file://{s}#branch=main' 'pinned-tag::git+file://{s}#tag=v1' 'pinned-commit::git+file://{s}#commit={s}')
+        \\sha256sums=('SKIP'
+        \\            'SKIP'
+        \\            'SKIP')
+        \\package() {{ :; }}
+    , .{ remote_path, remote_path, remote_path, head });
+    defer allocator.free(content);
+    var fixture = try Fixture.create(allocator, content, null, null);
+    defer fixture.destroy();
+    const path = try setupChecksumUpdate(&fixture, content);
+    defer allocator.free(path);
+    const source_cache = try std.fs.path.join(allocator, &.{ fixture.build_dir, "source-cache" });
+    defer allocator.free(source_cache);
+    fixture.builder.options.source_destination = source_cache;
+
+    // A logging git shim proves which commands run: probes only, no clone or
+    // fetch, and no probe at all for the commit pin (the documented gap).
+    try fixture.temporary.dir.createDirPath(io, "tools");
+    const log_path = try std.fs.path.join(allocator, &.{ fixture.build_dir, "git-log" });
+    defer allocator.free(log_path);
+    const shim = try std.fmt.allocPrint(allocator, "#!/bin/sh\nprintf '%s\\n' \"$*\" >> '{s}'\nexec /usr/bin/git \"$@\"\n", .{log_path});
+    defer allocator.free(shim);
+    try fixture.temporary.dir.writeFile(io, .{ .sub_path = "tools/git", .data = shim, .flags = .{ .permissions = .fromMode(0o755) } });
+    const tools_path = try std.fs.path.join(allocator, &.{ fixture.build_dir, "tools" });
+    defer allocator.free(tools_path);
+    fixture.builder.shellybuild_config.build.extra_path = &.{tools_path};
+
+    var operation = fixture.operation_context.begin(.{ .backend = .aur, .kind = .build });
+    defer operation.finish(.success);
+    var output: std.Io.Writer.Allocating = .init(allocator);
+    defer output.deinit();
+    try fixture.builder.updateChecksumsWithOperation(&operation, &output.writer);
+
+    const updated = try fixture.temporary.dir.readFileAlloc(io, "PKGBUILD", allocator, .unlimited);
+    defer allocator.free(updated);
+    try testing.expectEqualStrings(content, updated);
+    const log = try fixture.temporary.dir.readFileAlloc(io, "git-log", allocator, .unlimited);
+    defer allocator.free(log);
+    try testing.expectEqual(@as(usize, 2), countOccurrences(log, "ls-remote --exit-code"));
+    try testing.expectEqual(@as(usize, 1), countOccurrences(log, "ls-remote --exit-code --heads"));
+    try testing.expectEqual(@as(usize, 1), countOccurrences(log, "ls-remote --exit-code --tags"));
+    try testing.expectEqual(@as(usize, 2), countOccurrences(log, "check-ref-format"));
+    try testing.expectEqual(@as(usize, 0), countOccurrences(log, "clone"));
+    try testing.expectEqual(@as(usize, 0), countOccurrences(log, "fetch"));
+    try testing.expectEqual(@as(usize, 0), countOccurrences(log, "remote update"));
+    for ([_][]const u8{ "moving", "pinned-tag", "pinned-commit" }) |name| {
+        const entry = try std.fs.path.join(allocator, &.{ source_cache, name });
+        defer allocator.free(entry);
+        try testing.expectError(error.FileNotFound, fixture.temporary.dir.access(io, entry, .{}));
+    }
+}
+
+test "PackageBuilder updpkgsums fails skipped git sources with missing refs" {
+    const allocator = testing.allocator;
+    const io = testing.io;
+    var remote = std.testing.tmpDir(.{});
+    defer remote.cleanup();
+    const remote_path = try remote.dir.realPathFileAlloc(io, ".", allocator);
+    defer allocator.free(remote_path);
+    try createGitUpstream(allocator, io, remote.dir, remote_path);
+    for ([_][]const u8{ "#branch=absent", "#tag=absent" }) |reference| {
+        const content = try std.fmt.allocPrint(allocator,
+            \\pkgname=demo
+            \\pkgver=1
+            \\pkgrel=1
+            \\arch=('any')
+            \\source=('repo::git+file://{s}{s}')
+            \\sha256sums=('SKIP')
+            \\package() {{ :; }}
+        , .{ remote_path, reference });
+        defer allocator.free(content);
+        var fixture = try Fixture.create(allocator, content, null, null);
+        defer fixture.destroy();
+        const path = try setupChecksumUpdate(&fixture, content);
+        defer allocator.free(path);
+        var operation = fixture.operation_context.begin(.{ .backend = .aur, .kind = .build });
+        defer operation.finish(.success);
+        var output: std.Io.Writer.Allocating = .init(allocator);
+        defer output.deinit();
+        try testing.expectError(error.SourceVcsFailed, fixture.builder.updateChecksumsWithOperation(&operation, &output.writer));
+        const unchanged = try fixture.temporary.dir.readFileAlloc(io, "PKGBUILD", allocator, .unlimited);
+        defer allocator.free(unchanged);
+        try testing.expectEqualStrings(content, unchanged);
+    }
+}
+
+test "PackageBuilder updpkgsums mixed algorithms acquire and hash skipped-family git sources once" {
+    const allocator = testing.allocator;
+    const io = testing.io;
+    var remote = std.testing.tmpDir(.{});
+    defer remote.cleanup();
+    const remote_path = try remote.dir.realPathFileAlloc(io, ".", allocator);
+    defer allocator.free(remote_path);
+    try createGitUpstream(allocator, io, remote.dir, remote_path);
+    const expected_b2 = try expectedGitArchiveHash(allocator, io, remote.dir, remote_path, "v1", std.crypto.hash.blake2.Blake2b512);
+    const placeholder: [128]u8 = @splat('a');
+    const content = try std.fmt.allocPrint(allocator,
+        \\pkgname=demo
+        \\pkgver=1
+        \\pkgrel=1
+        \\arch=('any')
+        \\source=('repo::git+file://{s}#tag=v1')
+        \\sha256sums=('SKIP')
+        \\b2sums=('{s}')
+        \\package() {{ :; }}
+    , .{ remote_path, &placeholder });
+    defer allocator.free(content);
+    var fixture = try Fixture.create(allocator, content, null, null);
+    defer fixture.destroy();
+    const path = try setupChecksumUpdate(&fixture, content);
+    defer allocator.free(path);
+    const source_cache = try std.fs.path.join(allocator, &.{ fixture.build_dir, "source-cache" });
+    defer allocator.free(source_cache);
+    fixture.builder.options.source_destination = source_cache;
+    try fixture.temporary.dir.createDirPath(io, "tools");
+    const log_path = try std.fs.path.join(allocator, &.{ fixture.build_dir, "git-log" });
+    defer allocator.free(log_path);
+    const shim = try std.fmt.allocPrint(allocator, "#!/bin/sh\nprintf '%s\\n' \"$*\" >> '{s}'\nexec /usr/bin/git \"$@\"\n", .{log_path});
+    defer allocator.free(shim);
+    try fixture.temporary.dir.writeFile(io, .{ .sub_path = "tools/git", .data = shim, .flags = .{ .permissions = .fromMode(0o755) } });
+    const tools_path = try std.fs.path.join(allocator, &.{ fixture.build_dir, "tools" });
+    defer allocator.free(tools_path);
+    fixture.builder.shellybuild_config.build.extra_path = &.{tools_path};
+
+    var operation = fixture.operation_context.begin(.{ .backend = .aur, .kind = .build });
+    defer operation.finish(.success);
+    var output: std.Io.Writer.Allocating = .init(allocator);
+    defer output.deinit();
+    try fixture.builder.updateChecksumsWithOperation(&operation, &output.writer);
+
+    const updated = try fixture.temporary.dir.readFileAlloc(io, "PKGBUILD", allocator, .unlimited);
+    defer allocator.free(updated);
+    try testing.expect(std.mem.indexOf(u8, updated, "sha256sums=('SKIP')") != null);
+    const expected_line = try std.fmt.allocPrint(allocator, "b2sums=('{s}')", .{expected_b2});
+    defer allocator.free(expected_line);
+    try testing.expect(std.mem.indexOf(u8, updated, expected_line) != null);
+    const log = try fixture.temporary.dir.readFileAlloc(io, "git-log", allocator, .unlimited);
+    defer allocator.free(log);
+    try testing.expectEqual(@as(usize, 1), countOccurrences(log, "fetch --depth 1"));
+    try testing.expectEqual(@as(usize, 0), countOccurrences(log, "clone --mirror"));
+    try testing.expectEqual(@as(usize, 0), countOccurrences(log, "ls-remote"));
+    const entry = try std.fs.path.join(allocator, &.{ source_cache, "repo" });
+    defer allocator.free(entry);
+    try fixture.temporary.dir.access(io, entry, .{});
+}
+
+test "PackageBuilder shallow pinned tag cache matches full-mirror checksums" {
+    const allocator = testing.allocator;
+    const io = testing.io;
+    var remote = std.testing.tmpDir(.{});
+    defer remote.cleanup();
+    const remote_path = try remote.dir.realPathFileAlloc(io, ".", allocator);
+    defer allocator.free(remote_path);
+    try createGitUpstream(allocator, io, remote.dir, remote_path);
+    const expected_checksum = try expectedGitArchiveHash(allocator, io, remote.dir, remote_path, "v1", std.crypto.hash.sha2.Sha256);
+    const content = try std.fmt.allocPrint(allocator,
+        \\pkgname=shelly-git
+        \\pkgver=1
+        \\pkgrel=1
+        \\arch=('any')
+        \\url='https://github.com/shelly/shelly/wiki'
+        \\makedepends=('git' 'zig')
+        \\source=('shelly-git::git+file://{s}#tag=v1')
+        \\sha256sums=('{s}')
+        \\package() {{
+        \\  cd "$pkgname"
+        \\  mkdir -p "$pkgdir/usr/share/shelly"
+        \\  cp source-marker "$pkgdir/usr/share/shelly/source-marker"
+        \\}}
+    , .{ remote_path, expected_checksum });
+    defer allocator.free(content);
+    var fixture = try Fixture.create(allocator, content, null, null);
+    defer fixture.destroy();
+    const source_cache = try std.fs.path.join(allocator, &.{ fixture.build_dir, "source-cache" });
+    defer allocator.free(source_cache);
+    fixture.builder.options.source_destination = source_cache;
+    fixture.builder.options.sources_prepared = false;
+    const cache_path = try std.fs.path.join(allocator, &.{ source_cache, "shelly-git" });
+    defer allocator.free(cache_path);
+
+    for (0..2) |_| {
+        const artifacts = try fixture.builder.BuildPackage();
+        defer builder_mod.deinitArtifacts(allocator, artifacts);
+        try testing.expectEqual(@as(usize, 1), artifacts.len);
+        const shallow = try gitQuery(allocator, io, &.{ "git", "-C", cache_path, "rev-parse", "--is-shallow-repository" }, fixture.build_dir);
+        defer allocator.free(shallow);
+        try testing.expectEqualStrings("true", shallow);
+        const mode = try gitQuery(allocator, io, &.{ "git", "-C", cache_path, "config", "--get", "shelly.acquisitionMode" }, fixture.build_dir);
+        defer allocator.free(mode);
+        try testing.expectEqualStrings("shallow", mode);
+    }
+    const marker = try fixture.temporary.dir.readFileAlloc(io, "src/shelly-git/source-marker", allocator, .unlimited);
+    defer allocator.free(marker);
+    try testing.expectEqualStrings("checked out\n", marker);
+}
+
+test "PackageBuilder shallow pinned commit cache reuses the synthetic pin" {
+    const allocator = testing.allocator;
+    const io = testing.io;
+    var remote = std.testing.tmpDir(.{});
+    defer remote.cleanup();
+    const remote_path = try remote.dir.realPathFileAlloc(io, ".", allocator);
+    defer allocator.free(remote_path);
+    try createGitUpstream(allocator, io, remote.dir, remote_path);
+    // Local fixture server accepts reachable-sha wants, like GitHub does.
+    try runTestCommand(allocator, io, &.{ "git", "config", "uploadpack.allowReachableSHA1InWant", "true" }, remote_path);
+    const head = try gitQuery(allocator, io, &.{ "git", "rev-parse", "HEAD" }, remote_path);
+    defer allocator.free(head);
+    const expected_checksum = try expectedGitArchiveHash(allocator, io, remote.dir, remote_path, head, std.crypto.hash.sha2.Sha256);
+    const content = try std.fmt.allocPrint(allocator,
+        \\pkgname=shelly-git
+        \\pkgver=1
+        \\pkgrel=1
+        \\arch=('any')
+        \\source=('shelly-git::git+file://{s}#commit={s}')
+        \\sha256sums=('{s}')
+        \\package() {{
+        \\  cd "$pkgname"
+        \\  mkdir -p "$pkgdir/usr/share/shelly"
+        \\  cp source-marker "$pkgdir/usr/share/shelly/source-marker"
+        \\}}
+    , .{ remote_path, head, expected_checksum });
+    defer allocator.free(content);
+    var fixture = try Fixture.create(allocator, content, null, null);
+    defer fixture.destroy();
+    const source_cache = try std.fs.path.join(allocator, &.{ fixture.build_dir, "source-cache" });
+    defer allocator.free(source_cache);
+    fixture.builder.options.source_destination = source_cache;
+    fixture.builder.options.sources_prepared = false;
+    const cache_path = try std.fs.path.join(allocator, &.{ source_cache, "shelly-git" });
+    defer allocator.free(cache_path);
+
+    for (0..2) |_| {
+        const artifacts = try fixture.builder.BuildPackage();
+        defer builder_mod.deinitArtifacts(allocator, artifacts);
+        try testing.expectEqual(@as(usize, 1), artifacts.len);
+        const shallow = try gitQuery(allocator, io, &.{ "git", "-C", cache_path, "rev-parse", "--is-shallow-repository" }, fixture.build_dir);
+        defer allocator.free(shallow);
+        try testing.expectEqualStrings("true", shallow);
+        const pin = try gitQuery(allocator, io, &.{ "git", "-C", cache_path, "rev-parse", "--verify", "refs/heads/shelly-pin" }, fixture.build_dir);
+        defer allocator.free(pin);
+        try testing.expectEqualStrings(head, pin);
+    }
+    const marker = try fixture.temporary.dir.readFileAlloc(io, "src/shelly-git/source-marker", allocator, .unlimited);
+    defer allocator.free(marker);
+    try testing.expectEqualStrings("checked out\n", marker);
+}
+
+test "PackageBuilder history gate keeps full mirrors for git-reading lifecycles" {
+    const allocator = testing.allocator;
+    const io = testing.io;
+    var remote = std.testing.tmpDir(.{});
+    defer remote.cleanup();
+    const remote_path = try remote.dir.realPathFileAlloc(io, ".", allocator);
+    defer allocator.free(remote_path);
+    try createGitUpstream(allocator, io, remote.dir, remote_path);
+
+    // pkgver() reads history: the gate must force a full mirror even though
+    // the source is a pinned tag with SKIP sums.
+    const pkgver_content = try std.fmt.allocPrint(allocator,
+        \\pkgname=demo
+        \\pkgver=0
+        \\pkgrel=1
+        \\arch=('any')
+        \\source=('repo::git+file://{s}#tag=v1')
+        \\sha256sums=('SKIP')
+        \\pkgver() {{
+        \\  cd repo
+        \\  printf 'r%s.g%s' "$(git rev-list --count HEAD)" "$(git rev-parse --short=7 HEAD)"
+        \\}}
+        \\package() {{ :; }}
+    , .{remote_path});
+    defer allocator.free(pkgver_content);
+    var pkgver_fixture = try Fixture.create(allocator, pkgver_content, null, null);
+    defer pkgver_fixture.destroy();
+    const pkgver_path = try setupChecksumUpdate(&pkgver_fixture, pkgver_content);
+    defer allocator.free(pkgver_path);
+    const pkgver_cache = try std.fs.path.join(allocator, &.{ pkgver_fixture.build_dir, "source-cache" });
+    defer allocator.free(pkgver_cache);
+    pkgver_fixture.builder.options.source_destination = pkgver_cache;
+    var operation = pkgver_fixture.operation_context.begin(.{ .backend = .aur, .kind = .build });
+    defer operation.finish(.success);
+    var srcinfo: std.Io.Writer.Allocating = .init(allocator);
+    defer srcinfo.deinit();
+    try pkgver_fixture.builder.writeSrcinfoWithOperation(&operation, &srcinfo.writer);
+    const short_head = try gitQuery(allocator, io, &.{ "git", "rev-parse", "--short=7", "HEAD" }, remote_path);
+    defer allocator.free(short_head);
+    const expected_version = try std.fmt.allocPrint(allocator, "pkgver = r1.g{s}\n", .{short_head});
+    defer allocator.free(expected_version);
+    try testing.expect(std.mem.indexOf(u8, srcinfo.written(), expected_version) != null);
+    const pkgver_cache_path = try std.fs.path.join(allocator, &.{ pkgver_cache, "repo" });
+    defer allocator.free(pkgver_cache_path);
+    const pkgver_shallow = try gitQuery(allocator, io, &.{ "git", "-C", pkgver_cache_path, "rev-parse", "--is-shallow-repository" }, pkgver_fixture.build_dir);
+    defer allocator.free(pkgver_shallow);
+    try testing.expectEqualStrings("false", pkgver_shallow);
+
+    // prepare() invokes git apply: the coarse v1 gate also forces full history.
+    const apply_content = try std.fmt.allocPrint(allocator,
+        \\pkgname=shelly-git
+        \\pkgver=1
+        \\pkgrel=1
+        \\arch=('any')
+        \\source=('repo::git+file://{s}#tag=v1' 'fix.patch')
+        \\sha256sums=('SKIP' 'SKIP')
+        \\prepare() {{
+        \\  cd repo
+        \\  git apply "$srcdir/fix.patch"
+        \\}}
+        \\package() {{
+        \\  mkdir -p "$pkgdir/usr/share/shelly"
+        \\  cp repo/source-marker "$pkgdir/usr/share/shelly/source-marker"
+        \\}}
+    , .{remote_path});
+    defer allocator.free(apply_content);
+    var apply_fixture = try Fixture.create(allocator, apply_content, null, null);
+    defer apply_fixture.destroy();
+    try apply_fixture.temporary.dir.writeFile(io, .{
+        .sub_path = "fix.patch",
+        .data = "--- a/source-marker\n+++ b/source-marker\n@@ -1 +1 @@\n-checked out\n+patched\n",
+    });
+    const apply_cache = try std.fs.path.join(allocator, &.{ apply_fixture.build_dir, "source-cache" });
+    defer allocator.free(apply_cache);
+    apply_fixture.builder.options.source_destination = apply_cache;
+    apply_fixture.builder.options.sources_prepared = false;
+    const artifacts = try apply_fixture.builder.BuildPackage();
+    defer builder_mod.deinitArtifacts(allocator, artifacts);
+    const apply_cache_path = try std.fs.path.join(allocator, &.{ apply_cache, "repo" });
+    defer allocator.free(apply_cache_path);
+    const apply_shallow = try gitQuery(allocator, io, &.{ "git", "-C", apply_cache_path, "rev-parse", "--is-shallow-repository" }, apply_fixture.build_dir);
+    defer allocator.free(apply_shallow);
+    try testing.expectEqualStrings("false", apply_shallow);
+    const patched = try apply_fixture.temporary.dir.readFileAlloc(io, "pkg/shelly-git/usr/share/shelly/source-marker", allocator, .unlimited);
+    defer allocator.free(patched);
+    try testing.expectEqualStrings("patched\n", patched);
+}
+
+test "PackageBuilder never downgrades full mirrors and unshallows shallow caches for branch recipes" {
+    const allocator = testing.allocator;
+    const io = testing.io;
+    var remote = std.testing.tmpDir(.{});
+    defer remote.cleanup();
+    const remote_path = try remote.dir.realPathFileAlloc(io, ".", allocator);
+    defer allocator.free(remote_path);
+    try createGitUpstream(allocator, io, remote.dir, remote_path);
+    const expected_checksum = try expectedGitArchiveHash(allocator, io, remote.dir, remote_path, "v1", std.crypto.hash.sha2.Sha256);
+    const pinned_content = try std.fmt.allocPrint(allocator,
+        \\pkgname=shelly-git
+        \\pkgver=1
+        \\pkgrel=1
+        \\arch=('any')
+        \\source=('shelly-git::git+file://{s}#tag=v1')
+        \\sha256sums=('{s}')
+        \\package() {{
+        \\  cd "$pkgname"
+        \\  mkdir -p "$pkgdir/usr/share/shelly"
+        \\  cp source-marker "$pkgdir/usr/share/shelly/source-marker"
+        \\}}
+    , .{ remote_path, expected_checksum });
+    defer allocator.free(pinned_content);
+
+    // A full mirror created with shallow_git=false stays full when a later
+    // build allows shallow acquisition.
+    var full_fixture = try Fixture.create(allocator, pinned_content, null, null);
+    defer full_fixture.destroy();
+    const full_cache = try std.fs.path.join(allocator, &.{ full_fixture.build_dir, "source-cache" });
+    defer allocator.free(full_cache);
+    full_fixture.builder.options.source_destination = full_cache;
+    full_fixture.builder.options.sources_prepared = false;
+    full_fixture.builder.shellybuild_config.build.shallow_git = false;
+    const full_cache_path = try std.fs.path.join(allocator, &.{ full_cache, "shelly-git" });
+    defer allocator.free(full_cache_path);
+    for ([_]bool{ false, true }) |shallow_git| {
+        full_fixture.builder.shellybuild_config.build.shallow_git = shallow_git;
+        const artifacts = try full_fixture.builder.BuildPackage();
+        defer builder_mod.deinitArtifacts(allocator, artifacts);
+        const shallow = try gitQuery(allocator, io, &.{ "git", "-C", full_cache_path, "rev-parse", "--is-shallow-repository" }, full_fixture.build_dir);
+        defer allocator.free(shallow);
+        try testing.expectEqualStrings("false", shallow);
+    }
+
+    // A shallow cache shared with a branch recipe is unshallowed to full
+    // history before the moving checkout.
+    var shared = std.testing.tmpDir(.{});
+    defer shared.cleanup();
+    const shared_cache = try shared.dir.realPathFileAlloc(io, ".", allocator);
+    defer allocator.free(shared_cache);
+    var shallow_fixture = try Fixture.create(allocator, pinned_content, null, null);
+    defer shallow_fixture.destroy();
+    shallow_fixture.builder.options.source_destination = shared_cache;
+    shallow_fixture.builder.options.sources_prepared = false;
+    {
+        const artifacts = try shallow_fixture.builder.BuildPackage();
+        defer builder_mod.deinitArtifacts(allocator, artifacts);
+    }
+    const shared_cache_path = try std.fs.path.join(allocator, &.{ shared_cache, "shelly-git" });
+    defer allocator.free(shared_cache_path);
+    const before = try gitQuery(allocator, io, &.{ "git", "-C", shared_cache_path, "rev-parse", "--is-shallow-repository" }, shared_cache);
+    defer allocator.free(before);
+    try testing.expectEqualStrings("true", before);
+
+    const branch_content = try std.fmt.allocPrint(allocator,
+        \\pkgname=shelly-git
+        \\pkgver=1
+        \\pkgrel=1
+        \\arch=('any')
+        \\source=('shelly-git::git+file://{s}#branch=main')
+        \\sha256sums=('SKIP')
+        \\package() {{
+        \\  cd "$pkgname"
+        \\  mkdir -p "$pkgdir/usr/share/shelly"
+        \\  cp source-marker "$pkgdir/usr/share/shelly/source-marker"
+        \\}}
+    , .{remote_path});
+    defer allocator.free(branch_content);
+    var branch_fixture = try Fixture.create(allocator, branch_content, null, null);
+    defer branch_fixture.destroy();
+    branch_fixture.builder.options.source_destination = shared_cache;
+    branch_fixture.builder.options.sources_prepared = false;
+    {
+        const artifacts = try branch_fixture.builder.BuildPackage();
+        defer builder_mod.deinitArtifacts(allocator, artifacts);
+    }
+    const after = try gitQuery(allocator, io, &.{ "git", "-C", shared_cache_path, "rev-parse", "--is-shallow-repository" }, shared_cache);
+    defer allocator.free(after);
+    try testing.expectEqualStrings("false", after);
+    const marker = try branch_fixture.temporary.dir.readFileAlloc(io, "src/shelly-git/source-marker", allocator, .unlimited);
+    defer allocator.free(marker);
+    try testing.expectEqualStrings("checked out\n", marker);
+}
+
+test "PackageBuilder shallow_git=false forces full mirrors for pinned sources" {
+    const allocator = testing.allocator;
+    const io = testing.io;
+    var remote = std.testing.tmpDir(.{});
+    defer remote.cleanup();
+    const remote_path = try remote.dir.realPathFileAlloc(io, ".", allocator);
+    defer allocator.free(remote_path);
+    try createGitUpstream(allocator, io, remote.dir, remote_path);
+    const expected_checksum = try expectedGitArchiveHash(allocator, io, remote.dir, remote_path, "v1", std.crypto.hash.sha2.Sha256);
+    const content = try std.fmt.allocPrint(allocator,
+        \\pkgname=shelly-git
+        \\pkgver=1
+        \\pkgrel=1
+        \\arch=('any')
+        \\source=('shelly-git::git+file://{s}#tag=v1')
+        \\sha256sums=('{s}')
+        \\package() {{
+        \\  cd "$pkgname"
+        \\  mkdir -p "$pkgdir/usr/share/shelly"
+        \\  cp source-marker "$pkgdir/usr/share/shelly/source-marker"
+        \\}}
+    , .{ remote_path, expected_checksum });
+    defer allocator.free(content);
+    var fixture = try Fixture.create(allocator, content, null, null);
+    defer fixture.destroy();
+    const source_cache = try std.fs.path.join(allocator, &.{ fixture.build_dir, "source-cache" });
+    defer allocator.free(source_cache);
+    fixture.builder.options.source_destination = source_cache;
+    fixture.builder.options.sources_prepared = false;
+    fixture.builder.shellybuild_config.build.shallow_git = false;
+    const artifacts = try fixture.builder.BuildPackage();
+    defer builder_mod.deinitArtifacts(allocator, artifacts);
+    try testing.expectEqual(@as(usize, 1), artifacts.len);
+    const cache_path = try std.fs.path.join(allocator, &.{ source_cache, "shelly-git" });
+    defer allocator.free(cache_path);
+    const shallow = try gitQuery(allocator, io, &.{ "git", "-C", cache_path, "rev-parse", "--is-shallow-repository" }, fixture.build_dir);
+    defer allocator.free(shallow);
+    try testing.expectEqualStrings("false", shallow);
+    const mode = try gitQuery(allocator, io, &.{ "git", "-C", cache_path, "config", "--get", "shelly.acquisitionMode" }, fixture.build_dir);
+    defer allocator.free(mode);
+    try testing.expectEqualStrings("full", mode);
+}
+
+test "PackageBuilder abbreviated commit pins fall back to full mirrors" {
+    const allocator = testing.allocator;
+    const io = testing.io;
+    var remote = std.testing.tmpDir(.{});
+    defer remote.cleanup();
+    const remote_path = try remote.dir.realPathFileAlloc(io, ".", allocator);
+    defer allocator.free(remote_path);
+    try createGitUpstream(allocator, io, remote.dir, remote_path);
+    const head = try gitQuery(allocator, io, &.{ "git", "rev-parse", "HEAD" }, remote_path);
+    defer allocator.free(head);
+    const expected_checksum = try expectedGitArchiveHash(allocator, io, remote.dir, remote_path, head, std.crypto.hash.sha2.Sha256);
+    const content = try std.fmt.allocPrint(allocator,
+        \\pkgname=shelly-git
+        \\pkgver=1
+        \\pkgrel=1
+        \\arch=('any')
+        \\source=('shelly-git::git+file://{s}#commit={s}')
+        \\sha256sums=('{s}')
+        \\package() {{
+        \\  cd "$pkgname"
+        \\  mkdir -p "$pkgdir/usr/share/shelly"
+        \\  cp source-marker "$pkgdir/usr/share/shelly/source-marker"
+        \\}}
+    , .{ remote_path, head[0..7], expected_checksum });
+    defer allocator.free(content);
+    var fixture = try Fixture.create(allocator, content, null, null);
+    defer fixture.destroy();
+    const source_cache = try std.fs.path.join(allocator, &.{ fixture.build_dir, "source-cache" });
+    defer allocator.free(source_cache);
+    fixture.builder.options.source_destination = source_cache;
+    fixture.builder.options.sources_prepared = false;
+    const artifacts = try fixture.builder.BuildPackage();
+    defer builder_mod.deinitArtifacts(allocator, artifacts);
+    try testing.expectEqual(@as(usize, 1), artifacts.len);
+    const cache_path = try std.fs.path.join(allocator, &.{ source_cache, "shelly-git" });
+    defer allocator.free(cache_path);
+    const shallow = try gitQuery(allocator, io, &.{ "git", "-C", cache_path, "rev-parse", "--is-shallow-repository" }, fixture.build_dir);
+    defer allocator.free(shallow);
+    try testing.expectEqualStrings("false", shallow);
+    const marker = try fixture.temporary.dir.readFileAlloc(io, "src/shelly-git/source-marker", allocator, .unlimited);
+    defer allocator.free(marker);
+    try testing.expectEqualStrings("checked out\n", marker);
+}

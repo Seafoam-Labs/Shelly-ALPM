@@ -22,7 +22,7 @@ pub const PackageDetail = extern struct {
     pub const Parent = gtk.Box;
     const resource_path = "/com/shellyorg/shelly/ui/aur_package_detail.ui";
 
-    const default_link_base = "https://aur.archlinux.org/packages/";
+    pub const default_link_base = "https://aur.archlinux.org/packages/";
 
     const Private = struct {
         content_box: *gtk.Box,
@@ -36,6 +36,8 @@ pub const PackageDetail = extern struct {
         pending_len: usize,
         link_base: [128]u8,
         link_base_len: usize,
+        source_name: [32]u8,
+        source_name_len: usize,
 
         arena: ?*std.heap.ArenaAllocator,
         var offset: c_int = 0;
@@ -68,6 +70,8 @@ pub const PackageDetail = extern struct {
         @memcpy(p.link_base[0..default_link_base.len], default_link_base);
         p.link_base_len = default_link_base.len;
 
+        self.setSourceLabel(features.aur_source_name);
+
         const group = gio.SimpleActionGroup.new();
 
         gtk.Widget.insertActionGroup(self.as(gtk.Widget), "detail", group.as(gio.ActionGroup));
@@ -83,6 +87,14 @@ pub const PackageDetail = extern struct {
         const len = @min(base.len, p.link_base.len);
         @memcpy(p.link_base[0..len], base[0..len]);
         p.link_base_len = len;
+    }
+
+    /// Label for the package page row, which is "Atoll" on the Atoll backend.
+    pub fn setSourceLabel(self: *Self, label: []const u8) void {
+        const p = self.priv();
+        const len = @min(label.len, p.source_name.len);
+        @memcpy(p.source_name[0..len], label[0..len]);
+        p.source_name_len = len;
     }
 
     pub fn showPackage(self: *Self, package: *const AurPackage) void {
@@ -132,7 +144,7 @@ pub const PackageDetail = extern struct {
         const allocator = (p.arena orelse return).allocator();
 
         const combined = std.mem.concat(allocator, u8, &.{ p.link_base[0..p.link_base_len], package.Name }) catch "";
-        addUrlSpecRow(p.spec_box, features.aur_source_name, c_string.cstr(&buf, combined));
+        addUrlSpecRow(p.spec_box, p.source_name[0..p.source_name_len], c_string.cstr(&buf, combined));
 
         const alloc = (p.arena orelse return).allocator();
         addSpecList(p.spec_box, alloc, translations._("Licenses"), if (package.License) |license| license else &.{});

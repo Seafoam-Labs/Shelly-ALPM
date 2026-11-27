@@ -316,6 +316,71 @@ pub fn signatureUrl(alloc: std.mem.Allocator, uri: []const u8) Error![]const u8 
     return std.mem.concat(alloc, u8, &.{ uri, ".jcat" });
 }
 
+/// read limits for a `.jcat`, compressed and inflated.
+const max_jcat_bytes = 1024 * 1024;
+const max_jcat_json_bytes = 8 * 1024 * 1024;
+
+const JcatItem = struct {
+    Id: []const u8 = "",
+    AliasIds: []const []const u8 = &.{},
+};
+
+const JcatFile = struct {
+    Items: []const JcatItem = &.{},
+};
+
+/// metadata file id named by a `.jcat`, or null when it cannot be read.
+/// the remote uri is an alias the cdn can serve out of sync with the `.jcat`;
+/// the versioned file it names always matches. item choice follows
+/// `fwupd_remote_load_signature_jcat`.
+pub fn jcatMetadataId(alloc: std.mem.Allocator, jcat_bytes: []const u8, basename: []const u8) ?[]const u8 {
+    var json: []const u8 = jcat_bytes;
+    var inflated: ?[]u8 = null;
+    defer if (inflated) |bytes| alloc.free(bytes);
+    if (std.mem.startsWith(u8, jcat_bytes, &.{ 0x1f, 0x8b })) {
+        const window = alloc.alloc(u8, std.compress.flate.max_window_len) catch return null;
+        defer alloc.free(window);
+        var input: Io.Reader = .fixed(jcat_bytes);
+        var decompress: std.compress.flate.Decompress = .init(&input, .gzip, window);
+        inflated = decompress.reader.allocRemaining(alloc, .limited(max_jcat_json_bytes)) catch return null;
+        json = inflated.?;
+    }
+    const parsed = std.json.parseFromSlice(JcatFile, alloc, json, .{ .ignore_unknown_fields = true }) catch return null;
+    defer parsed.deinit();
+    const item = findJcatItem(parsed.value.Items, basename) orelse return null;
+    if (item.Id.len == 0) return null;
+    return alloc.dupe(u8, item.Id) catch null;
+}
+
+fn findJcatItem(items: []const JcatItem, basename: []const u8) ?JcatItem {
+    var found: ?JcatItem = null;
+    for (items) |item| {
+        if (!std.mem.eql(u8, item.Id, basename)) continue;
+        if (found != null) return null;
+        found = item;
+    }
+    if (found) |item| return item;
+    for (items) |item| {
+        for (item.AliasIds) |alias| {
+            if (!std.mem.eql(u8, alias, basename)) continue;
+            if (found != null) return null;
+            found = item;
+        }
+    }
+    if (found) |item| return item;
+    if (items.len == 1) return items[0];
+    return null;
+}
+
+/// `uri` with its basename replaced by the id's, or `uri` when the id is unusable.
+pub fn metadataUrlForId(alloc: std.mem.Allocator, uri: []const u8, id: []const u8) Error![]const u8 {
+    const id_base = if (std.mem.lastIndexOfScalar(u8, id, '/')) |i| id[i + 1 ..] else id;
+    if (id_base.len == 0 or std.mem.eql(u8, id_base, ".") or std.mem.eql(u8, id_base, "..")) return uri;
+    const slash = std.mem.lastIndexOfScalar(u8, uri, '/') orelse return uri;
+    if (std.mem.eql(u8, uri[slash + 1 ..], id_base)) return uri;
+    return std.mem.concat(alloc, u8, &.{ uri[0 .. slash + 1], id_base });
+}
+
 pub const MetadataPaths = struct {
     dir: []const u8,
     data_name: []const u8,
@@ -386,7 +451,12 @@ pub fn refreshMetadata(
         outcome.attempted += 1;
         refreshOneRemote(backend, alloc, io, env, remote, user_agent, &outcome) catch |err| {
             outcome.failed += 1;
-            log.warn("Firmware metadata refresh for {0f} failed: {1s}", .{ diagnostics.safe(remote.remote_id), @errorName(err) });
+            const failure = if (err == error.CallFailed) backend.lastFailure() else null;
+            if (failure) |f| {
+                log.warn("Firmware metadata refresh for {0f} failed: {1s}: {2f}", .{ diagnostics.safe(remote.remote_id), @errorName(err), diagnostics.safe(f.message) });
+            } else {
+                log.warn("Firmware metadata refresh for {0f} failed: {1s}", .{ diagnostics.safe(remote.remote_id), @errorName(err) });
+            }
         };
     }
     if (outcome.succeeded > 0) {
@@ -413,9 +483,22 @@ fn refreshOneRemote(
         outcome.skipped += 1;
         return;
     }
-    try fetchToFile(alloc, io, dir, paths.data_name, remote.uri, user_agent, remote);
+    const data_url = try metadataUrl(alloc, io, dir, paths, remote);
+    try fetchToFile(alloc, io, dir, paths.data_name, data_url, user_agent, remote);
     try backend.updateMetadata(alloc, remote.remote_id, paths.data_path, paths.sig_path);
     outcome.succeeded += 1;
+}
+
+/// metadata url from the downloaded `.jcat`, else the remote uri.
+fn metadataUrl(alloc: std.mem.Allocator, io: Io, dir: Io.Dir, paths: MetadataPaths, remote: models.Remote) Error![]const u8 {
+    const jcat = dir.readFileAlloc(io, paths.sig_name, alloc, .limited(max_jcat_bytes)) catch return remote.uri;
+    defer alloc.free(jcat);
+    const id = jcatMetadataId(alloc, jcat, paths.data_name) orelse {
+        log.warn("Firmware metadata signature for {0f} names no metadata file; using the remote URI", .{diagnostics.safe(remote.remote_id)});
+        return remote.uri;
+    };
+    defer alloc.free(id);
+    return metadataUrlForId(alloc, remote.uri, id);
 }
 
 /// Plain GET into `dir/base` with the same `.part` + rename discipline as the
@@ -611,6 +694,13 @@ const TestServer = struct {
     hits: usize = 0,
     payload: []const u8,
     status: []const u8 = "200 OK",
+    /// target of the latest request.
+    target_buf: [256]u8 = undefined,
+    target_len: usize = 0,
+
+    fn target(self: *const TestServer) []const u8 {
+        return self.target_buf[0..self.target_len];
+    }
 
     fn init(io: Io, payload: []const u8) !TestServer {
         var address: Io.net.IpAddress = .{ .ip4 = .loopback(0) };
@@ -636,10 +726,20 @@ const TestServer = struct {
         var read_buf: [4096]u8 = undefined;
         var reader = stream.reader(self.io, &read_buf);
         // Consume the request head.
+        var first = true;
         while (true) {
             const line = reader.interface.takeDelimiter('\n') catch return;
             if (line == null) return;
-            if (std.mem.eql(u8, std.mem.trimEnd(u8, line.?, "\r"), "")) break;
+            const trimmed = std.mem.trimEnd(u8, line.?, "\r");
+            if (first) {
+                first = false;
+                var parts = std.mem.tokenizeScalar(u8, trimmed, ' ');
+                _ = parts.next();
+                const t = parts.next() orelse "";
+                self.target_len = @min(t.len, self.target_buf.len);
+                @memcpy(self.target_buf[0..self.target_len], t[0..self.target_len]);
+            }
+            if (std.mem.eql(u8, trimmed, "")) break;
         }
         // The test thread reads hits only after joining the server thread.
         self.hits += 1;
@@ -1076,4 +1176,92 @@ test "fwupd metadata refresh propagates GetRemotes failures but throttles empty 
     const outcome = try refreshMetadata(fake.backend(), arena.allocator(), io, &fixture.map, "shelly/test");
     try testing.expectEqual(@as(usize, 0), outcome.attempted);
     try testing.expect(readLastRefresh(io, testing.allocator, &fixture.map) != null);
+}
+
+test "fwupd metadata jcat id matches Id, then AliasIds, then the only item" {
+    const alloc = testing.allocator;
+    const by_alias =
+        \\{"JcatVersionMajor":0,"Items":[{"Id":"firmware-0042-stable.xml.zst","AliasIds":["firmware.xml.zst"],"Blobs":[]}]}
+    ;
+    const id = jcatMetadataId(alloc, by_alias, "firmware.xml.zst").?;
+    defer alloc.free(id);
+    try testing.expectEqualStrings("firmware-0042-stable.xml.zst", id);
+
+    // exact id beats another item's alias.
+    const two =
+        \\{"Items":[{"Id":"a.xml.zst","AliasIds":["firmware.xml.zst"]},{"Id":"firmware.xml.zst"}]}
+    ;
+    const exact = jcatMetadataId(alloc, two, "firmware.xml.zst").?;
+    defer alloc.free(exact);
+    try testing.expectEqualStrings("firmware.xml.zst", exact);
+
+    // a single item is the default.
+    const single = jcatMetadataId(alloc, "{\"Items\":[{\"Id\":\"only.xml.zst\"}]}", "firmware.xml.zst").?;
+    defer alloc.free(single);
+    try testing.expectEqualStrings("only.xml.zst", single);
+
+    // no match, duplicate aliases, bad input.
+    try testing.expect(jcatMetadataId(alloc, "{\"Items\":[{\"Id\":\"a\"},{\"Id\":\"b\"}]}", "firmware.xml.zst") == null);
+    try testing.expect(jcatMetadataId(alloc, "{\"Items\":[{\"Id\":\"a\",\"AliasIds\":[\"f\"]},{\"Id\":\"b\",\"AliasIds\":[\"f\"]}]}", "f") == null);
+    try testing.expect(jcatMetadataId(alloc, "{\"Items\":[]}", "firmware.xml.zst") == null);
+    try testing.expect(jcatMetadataId(alloc, "jcat signature bytes", "firmware.xml.zst") == null);
+    try testing.expect(jcatMetadataId(alloc, "\x1f\x8b\x08truncated", "firmware.xml.zst") == null);
+}
+
+test "fwupd metadata jcat id reads gzip with trailing bytes" {
+    // lvfs files have bytes after the gzip member.
+    const gz = "\x1f\x8b\x08\x00\x00\x00\x00\x00\x02\xff\x55\x8c\x3d\x0b\xc2\x30\x14\x45\xff\xcb\x9d\xd3\x12\x8b\x53\x36\xc5\x25\x8a\xab\x4b\xc9\xf0\x6a\x23\x44\xf2\x01\x79\x01\x4b\x4b\xfe\xbb\x2d\x42\xc1\xf5\xdc\x7b\xce\x82\xeb\x93\xca\xc3\x66\x76\x29\xde\xe9\x9d\x32\x94\x14\x7f\xd0\xc5\x0d\x1e\x04\x74\xb1\x81\xa1\xfa\x05\x7a\x84\xc2\xcb\xe5\xf0\xa1\x6c\x1b\x29\x8f\x5d\xc3\x85\x06\x6f\xdb\x29\xf8\x76\xe6\x02\x81\x93\x77\xc4\x7a\xdc\x84\xfd\xba\xcf\x46\xe0\xec\xd3\xf0\xab\xdd\x5c\x5c\x7b\x9d\xc0\x85\x0a\xad\xe1\x09\xd5\x54\x53\xbf\x4b\x4e\x83\x07\x9b\x00\x00\x00";
+    inline for (.{ gz, gz ++ "\x00\x00trailing" }) |bytes| {
+        const id = jcatMetadataId(testing.allocator, bytes, "firmware.xml.zst").?;
+        defer testing.allocator.free(id);
+        try testing.expectEqualStrings("firmware-0042-stable.xml.zst", id);
+    }
+}
+
+test "fwupd metadata url swaps only the basename" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+    const uri = "https://cdn.fwupd.org/downloads/firmware.xml.zst";
+    try testing.expectEqualStrings("https://cdn.fwupd.org/downloads/firmware-0042-stable.xml.zst", try metadataUrlForId(alloc, uri, "firmware-0042-stable.xml.zst"));
+    try testing.expectEqualStrings("https://cdn.fwupd.org/downloads/v.xml.zst", try metadataUrlForId(alloc, uri, "../other/v.xml.zst"));
+    try testing.expectEqualStrings(uri, try metadataUrlForId(alloc, uri, "firmware.xml.zst"));
+    try testing.expectEqualStrings(uri, try metadataUrlForId(alloc, uri, "dir/"));
+    try testing.expectEqualStrings(uri, try metadataUrlForId(alloc, uri, ".."));
+}
+
+test "fwupd metadata refresh downloads the file the jcat names" {
+    var fixture = try RefreshFixture.init();
+    defer fixture.deinit();
+    const io = fixture.threaded.io();
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+
+    const jcat =
+        \\{"Items":[{"Id":"firmware-0042-stable.xml.zst","AliasIds":["firmware.xml.zst"]}]}
+    ;
+    var server = try TestServer.init(io, jcat);
+    defer server.deinit();
+    var url_buf: [96]u8 = undefined;
+    const uri = try std.fmt.bufPrint(&url_buf, "http://127.0.0.1:{d}/downloads/firmware.xml.zst", .{server.port()});
+    var remotes = [_]models.Remote{
+        .{ .remote_id = "lvfs", .kind = .download, .enabled = true, .uri = uri },
+    };
+    var fake = fwupd.FakeBackend{ .remotes = &remotes };
+
+    var call = RefreshCall{ .backend = fake.backend(), .alloc = alloc, .io = io, .env = &fixture.map };
+    const worker = try std.Thread.spawn(.{}, RefreshCall.run, .{&call});
+    server.serveOne();
+    try testing.expectEqualStrings("/downloads/firmware.xml.zst.jcat", server.target());
+    server.payload = "versioned metadata";
+    server.serveOne();
+    worker.join();
+
+    const outcome = try call.result;
+    try testing.expectEqual(@as(usize, 1), outcome.succeeded);
+    try testing.expectEqualStrings("/downloads/firmware-0042-stable.xml.zst", server.target());
+    // the cache keeps the alias name for the skip check.
+    try testing.expectEqual(@as(usize, 1), fake.metadata_call_count);
+    try testing.expect(std.mem.endsWith(u8, fake.metadata_calls[0].data_path, "/shelly/fwupd/metadata/lvfs/firmware.xml.zst"));
 }

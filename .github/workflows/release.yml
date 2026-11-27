@@ -63,6 +63,7 @@ jobs:
           (cd Shelly.Cli.Zig && zig build test)
           install -Dm755 publish/build-cli/bin/shelly publish/shelly-cli/shelly
           # Generate completion scripts from the freshly built binary.
+          publish/shelly-cli/shelly utility --completions bash > publish/shelly-cli/shelly.bash
           publish/shelly-cli/shelly utility --completions fish > publish/shelly-cli/shelly.fish
           publish/shelly-cli/shelly utility --completions zsh  > publish/shelly-cli/_shelly
           tar -czf publish/Shelly-CLI-linux-x64.tar.gz -C publish/shelly-cli .
@@ -78,6 +79,11 @@ jobs:
           cd Shelly.Tui
           zig build
           zig build test
+
+      - name: Publish Shelly.Tui
+        run: |
+          # release builds find the cli on PATH, so pin it
+          (cd Shelly.Tui && zig build --prefix ../publish/build-tui -Dshelly-bin=/usr/bin/shelly -Dcpu=baseline -Doptimize=safe)
 
       - name: Publish Shelly.Gtk
         run: |
@@ -129,6 +135,7 @@ jobs:
           install -Dm755 publish/build-key/bin/shelly-key publish/shelly-key/shelly-key
           # Bundle Key into the UI directory so it ends up in Shelly-ALPM-linux-x64.tar.gz.
           install -m755 publish/shelly-key/shelly-key publish/shelly-ui/
+          install -Dm755 publish/build-tui/bin/Shelly_Tui publish/shelly-ui/shelly-tui
 
       - name: Package Shelly.Key standalone
         run: |
@@ -136,12 +143,14 @@ jobs:
 
       - name: Bundle Shelly-ALPM
         run: |
+          cp publish/shelly-cli/shelly.bash publish/shelly-ui/
           cp publish/shelly-cli/shelly.fish publish/shelly-ui/
           cp publish/shelly-cli/_shelly     publish/shelly-ui/
           tar -czf publish/Shelly-ALPM-linux-x64.tar.gz -C publish/shelly-ui .
 
       - name: Copy standalone release files
         run: |
+          cp publish/shelly-cli/shelly.bash publish/shelly.bash
           cp publish/shelly-cli/shelly.fish publish/shelly.fish
           cp publish/shelly-cli/_shelly     publish/_shelly
           cp shellybuild.conf publish/shellybuild.conf
@@ -154,7 +163,7 @@ jobs:
           curl -sL "https://github.com/ZoeyErinBauer/Shelly-ALPM/archive/${VERSION}.tar.gz" -o "source-${VERSION}.tar.gz"
           sha256sum "source-${VERSION}.tar.gz" | sed "s/source-${VERSION}.tar.gz/${VERSION}.tar.gz/" > SHA256SUMS.txt
           # Add binary tarballs, completions, and builder configuration checksums.
-          sha256sum Shelly-ALPM-linux-x64.tar.gz Shelly-CLI-linux-x64.tar.gz Shelly-Flatpak-Backend-linux-x64.tar.gz Shelly-Key-linux-x64.tar.gz shelly.fish _shelly shellybuild.conf >> SHA256SUMS.txt
+          sha256sum Shelly-ALPM-linux-x64.tar.gz Shelly-CLI-linux-x64.tar.gz Shelly-Flatpak-Backend-linux-x64.tar.gz Shelly-Key-linux-x64.tar.gz shelly.bash shelly.fish _shelly shellybuild.conf >> SHA256SUMS.txt
           rm "source-${VERSION}.tar.gz"
           cat SHA256SUMS.txt
 
@@ -166,6 +175,7 @@ jobs:
             publish/Shelly-CLI-linux-x64.tar.gz
             publish/Shelly-Flatpak-Backend-linux-x64.tar.gz
             publish/Shelly-Key-linux-x64.tar.gz
+            publish/shelly.bash
             publish/shelly.fish
             publish/_shelly
             publish/shellybuild.conf

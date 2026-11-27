@@ -283,7 +283,7 @@ pub fn build(b: *std.Build) void {
     const goose_dep = b.dependency("goose", .{});
     exe.root_module.addImport("goose", goose_dep.module("goose"));
 
-    const xml_dep = b.dependency("zig-xml", .{});
+    const xml_dep = b.dependency("zig-xml", .{ .target = target, .optimize = optimize });
     exe.root_module.addImport("zig-xml", xml_dep.module("xml"));
     mod.addImport("zig-xml", xml_dep.module("xml"));
     test_mod.addImport("zig-xml", xml_dep.module("xml"));
