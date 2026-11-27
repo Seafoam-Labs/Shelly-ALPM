@@ -587,7 +587,7 @@ fn renderZsh(manifest: *const spec.Manifest, writer: *std.Io.Writer) !void {
                     if (!isChildOf(other, action) or other == child) continue;
                     try writer.print(" '{s}'", .{other.name});
                 }
-                try writer.writeAll(" )\n                    _alternative 'commands:command:commands' 'options:option:(");
+                try writer.writeAll(" )\n                    _alternative 'commands:command:compadd -a commands' 'options:option:(");
                 try writeEffectiveOptionWords(manifest, child, writer);
                 try writer.writeAll(
                     \\)'
@@ -1133,6 +1133,10 @@ test "renders Bash Fish and Zsh scripts from the native catalog" {
             // Repeated and single positional arguments are represented.
             try std.testing.expect(std.mem.indexOf(u8, script, "'*:packages:") != null);
             try std.testing.expect(std.mem.indexOf(u8, script, "'1:package:") != null);
+            // _alternative runs a bare action word as a command, so the type
+            // selector must add its array with compadd.
+            try std.testing.expect(std.mem.indexOf(u8, script, "'commands:command:commands'") == null);
+            try std.testing.expect(std.mem.indexOf(u8, script, "'commands:command:compadd -a commands'") != null);
         }
     }
 }
