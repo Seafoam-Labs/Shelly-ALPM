@@ -36,9 +36,9 @@ pub const Tab = enum {
     settings,
     utilities,
 
-    pub const always: []const Tab = &.{ .packages, .upgrade, .settings, .utilities };
+    pub const always: []const Tab = &.{ .packages, .upgrade,.utilities, .settings};
 
-    pub const all: []const Tab = &.{ .packages, .aur, .flatpak, .appimage, .upgrade, .settings, .utilities };
+    pub const all: []const Tab = &.{ .packages, .aur, .flatpak, .appimage, .upgrade, .utilities, .settings };
 
     pub fn title(self: Tab) []const u8 {
         return switch (self) {
