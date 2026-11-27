@@ -3,15 +3,14 @@ msgstr ""
 "Project-Id-Version: Hungarian (Shelly-ALPM)\n"
 "Report-Msgid-Bugs-To: csnyder@seafoam-labs.org\n"
 "POT-Creation-Date: 2026-11-25 23:30-0500\n"
-"PO-Revision-Date: 2026-11-21 20:08+0100\n"
+"PO-Revision-Date: 2026-11-27 10:27+0100\n"
 "Last-Translator: ghostofsparta222\n"
 "Language-Team: Hungarian\n"
 "Language: hu_HU\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Plural-Forms: nplurals=3; plural=n==1 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 "
-"|| n%100>=20) ? 1 : 2;\n"
+"Plural-Forms: nplurals=3; plural=n==1 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2;\n"
 "X-Generator: Poedit 3.10\n"
 
 msgid "No installable addons available"
@@ -23,24 +22,11 @@ msgstr "Bezárás"
 msgid "Enable AUR?"
 msgstr "Engedélyezi az AUR-t?"
 
-msgid ""
-"The Arch User Repository contains build scripts that are known as PKGBUILDs. "
-"Those scripts are uploaded by users, and are not verified or vetted in any "
-"way. Only enable this feature if you are comfortable in verifying the build "
-"scripts."
-msgstr ""
-"Az Arch User Repository (AUR) PKGBUILD néven ismert összeállítási "
-"parancsfájlokat tartalmaz. Ezeket a fájlokat felhasználók töltik fel, és "
-"semmilyen ellenőrzésen vagy hitelesítési eljáráson nem esnek át. Ezt a "
-"funkciót csak akkor engedélyezze, ha vállalja a parancsfájlok saját kezű "
-"ellenőrzését."
+msgid "The Arch User Repository contains build scripts that are known as PKGBUILDs. Those scripts are uploaded by users, and are not verified or vetted in any way. Only enable this feature if you are comfortable in verifying the build scripts."
+msgstr "Az Arch User Repository (AUR) PKGBUILD néven ismert összeállítási parancsfájlokat tartalmaz. Ezeket a fájlokat felhasználók töltik fel, és semmilyen ellenőrzésen vagy hitelesítési eljáráson nem esnek át. Ezt a funkciót csak akkor engedélyezze, ha vállalja a parancsfájlok saját kezű ellenőrzését."
 
-msgid ""
-"<a href=\"https://www.seafoam-labs.org/shelly-alpm/docs/aur-safety/\">AUR "
-"Safety Guide</a>"
-msgstr ""
-"<a href=\"https://www.seafoam-labs.org/shelly-alpm/docs/aur-safety/"
-"\">Útmutató az AUR biztonságos használatához</a>"
+msgid "<a href=\"https://www.seafoam-labs.org/shelly-alpm/docs/aur-safety/\">AUR Safety Guide</a>"
+msgstr "<a href=\"https://www.seafoam-labs.org/shelly-alpm/docs/aur-safety/\">Útmutató az AUR biztonságos használatához</a>"
 
 msgid "Enable"
 msgstr "Engedélyezés"
@@ -81,12 +67,8 @@ msgstr "Változások"
 msgid "Warnings"
 msgstr "Figyelmeztetések"
 
-msgid ""
-"These commands fetch and execute code outside of Shelly and libalpm's "
-"control. Review them before continuing."
-msgstr ""
-"Ezek a parancsok a Shelly és a libalpm felügyeletén kívül eső kódot töltenek "
-"le és hajtanak végre. A folytatás előtt ellenőrizze őket."
+msgid "These commands fetch and execute code outside of Shelly and libalpm's control. Review them before continuing."
+msgstr "Ezek a parancsok a Shelly és a libalpm felügyeletén kívül eső kódot töltenek le és hajtanak végre. A folytatás előtt ellenőrizze őket."
 
 msgid "Source Files"
 msgstr "Forrásfájlok"
@@ -94,23 +76,16 @@ msgstr "Forrásfájlok"
 msgid "polkit is required"
 msgstr "polkit szükséges"
 
-msgid ""
-"Shelly's GUI needs <b>polkit</b> installed and running to authorize "
-"privileged actions, but it wasn't found on the system bus.\n"
+msgid "Shelly's GUI needs <b>polkit</b> installed and running to authorize privileged actions, but it wasn't found on the system bus.\n"
 "\n"
 "Install and enable it, then retry.\n"
 "\n"
-"<a href=\"https://www.seafoam-labs.org/shelly-alpm/docs/polkit/\">seafoam-"
-"labs.org/shelly-alpm/docs/polkit</a>"
-msgstr ""
-"Shelly GUI-jának telepített és futó <b>polkit</b>-re van szüksége a "
-"privilegizált műveletek engedélyezéséhez, de ez nem volt megtalálható a "
-"rendszerbuszon.\n"
+"<a href=\"https://www.seafoam-labs.org/shelly-alpm/docs/polkit/\">seafoam-labs.org/shelly-alpm/docs/polkit</a>"
+msgstr "Shelly GUI-jának telepített és futó <b>polkit</b>-re van szüksége a privilegizált műveletek engedélyezéséhez, de ez nem volt megtalálható a rendszerbuszon.\n"
 "\n"
 "Telepítse és engedélyezze, majd próbálja újra.\n"
 "\n"
-"<a href=\"https://www.seafoam-labs.org/shelly-alpm/docs/polkit/\">seafoam-"
-"labs.org/shelly-alpm/docs/polkit</a>"
+"<a href=\"https://www.seafoam-labs.org/shelly-alpm/docs/polkit/\">seafoam-labs.org/shelly-alpm/docs/polkit</a>"
 
 msgid "Review PKGBUILD"
 msgstr "PKGBUILD áttekintése"
@@ -131,9 +106,7 @@ msgid "Search..."
 msgstr "Keresés..."
 
 msgid "Sync metadata for all AppImages. Useful if AppImage self updated."
-msgstr ""
-"Az összes AppImage metaadatainak szinkronizálása. Hasznos, ha az AppImage "
-"automatikusan frissül."
+msgstr "Az összes AppImage metaadatainak szinkronizálása. Hasznos, ha az AppImage automatikusan frissül."
 
 msgid "Sync All"
 msgstr "Összes szinkronizálása"
@@ -177,11 +150,8 @@ msgstr "További információ a frissítési webcímről és a tároló adatair�
 msgid "e.g. owner/repo or https://..."
 msgstr "pl. tulajdonos/tároló vagy https://..."
 
-msgid ""
-"Enter the repository as owner/repo, for example seafoam-labs/shelly-alpm."
-msgstr ""
-"Adja meg a tárolót tulajdonos/tároló formátumban, például: seafoam-labs/"
-"shelly-alpm."
+msgid "Enter the repository as owner/repo, for example seafoam-labs/shelly-alpm."
+msgstr "Adja meg a tárolót tulajdonos/tároló formátumban, például: seafoam-labs/shelly-alpm."
 
 msgid "Allow Prerelease"
 msgstr "Előzetes kiadás engedélyezése"
@@ -195,11 +165,8 @@ msgstr "Indítási paraméterek"
 msgid "Environment Variables"
 msgstr "Környezeti változók"
 
-msgid ""
-"One KEY=value per line. Remove a line to restore the normal environment."
-msgstr ""
-"Soronkét egy KULCS=ÉRTÉK pár adható meg. Egy sor törlésével visszaállítható "
-"az adott környezeti változó alapértelmezett értéke."
+msgid "One KEY=value per line. Remove a line to restore the normal environment."
+msgstr "Soronkét egy KULCS=ÉRTÉK pár adható meg. Egy sor törlésével visszaállítható az adott környezeti változó alapértelmezett értéke."
 
 msgid "Save Environment"
 msgstr "Környezeti változók mentése"
@@ -283,70 +250,64 @@ msgid "Search the AUR"
 msgstr "Keresés az AUR-ban"
 
 msgid "The AUR has no browsable index. Type a package name to begin."
-msgstr ""
-"Az AUR nem rendelkezik böngészhető indexszel. A kereséshez írja be egy "
-"csomag nevét."
+msgstr "Az AUR nem rendelkezik böngészhető indexszel. A kereséshez írja be egy csomag nevét."
 
 msgid "Firmware"
-msgstr ""
+msgstr "Firmware"
 
 msgid "Device firmware updates"
-msgstr ""
+msgstr "Device firmware updates"
 
 msgid "Refresh metadata and check devices again"
-msgstr ""
+msgstr "Metaadatok frissítése és az eszközök újbóli ellenőrzése"
 
 msgid "Check Again"
 msgstr "Újbóli ellenőrzés"
 
 msgid "Looking for devices…"
-msgstr ""
+msgstr "Eszközök keresése…"
 
 msgid "Installing firmware…"
-msgstr ""
+msgstr "Firmware telepítése…"
 
 msgid "Select a device to see its firmware releases"
-msgstr ""
+msgstr "Válasszon ki egy eszközt a hozzá tartozó firmware-verziók megtekintéséhez"
 
 msgid "Loading releases…"
-msgstr ""
+msgstr "Kiadások betöltése…"
 
 msgid "Current version"
-msgstr ""
+msgstr "Jelenlegi verzió"
 
 msgid "Minimum version"
-msgstr ""
+msgstr "Minimum verzió"
 
 msgid "Latest update"
-msgstr ""
+msgstr "Legutóbbi frissítés"
 
 msgid "Branch"
-msgstr ""
+msgstr "Ág"
 
 msgid "No releases available"
-msgstr ""
+msgstr "Nincs elérhető kiadás"
 
 msgid "No devices found"
-msgstr ""
+msgstr "Nem található eszköz"
 
 msgid "Devices that support firmware updates will appear here."
-msgstr ""
+msgstr "A firmware-frissítést támogató eszközök itt jelennek meg."
 
 msgid "Could not load firmware devices."
-msgstr ""
+msgstr "Nem sikerült betölteni a firmware-eszközöket."
 
 msgid "Try Again"
-msgstr ""
+msgstr "Próbálja újra"
 
 msgid "Install a local Flatpak"
 msgstr "Helyi Flatpak-csomag telepítése"
 
-msgid ""
-"Choose a .flatpak bundle from your system and install it for the current "
-"user or system-wide."
-msgstr ""
-"Válasszon ki egy .flatpak csomagfájlt a rendszeréről, majd telepítse a "
-"jelenlegi felhasználó számára vagy az egész rendszerre."
+msgid "Choose a .flatpak bundle from your system and install it for the current user or system-wide."
+msgstr "Válasszon ki egy .flatpak csomagfájlt a rendszeréről, majd telepítse a jelenlegi felhasználó számára vagy az egész rendszerre."
 
 msgid "Bundle"
 msgstr "Csomag"
@@ -520,9 +481,7 @@ msgid "No matching packages found"
 msgstr "Nem található a keresési feltételeknek megfelelő csomag"
 
 msgid "Had an issue loading your packages. Check if you have a db lock."
-msgstr ""
-"Hiba történt a csomagok betöltésekor. Ellenőrizze, hogy nem maradt-e "
-"zárolási fájl (`db.lck`)."
+msgstr "Hiba történt a csomagok betöltésekor. Ellenőrizze, hogy nem maradt-e zárolási fájl (`db.lck`)."
 
 msgid "Perform Upgrade"
 msgstr "Frissítés végrehajtása"
@@ -579,7 +538,7 @@ msgid "Search standard repositories, AUR and Flatpak"
 msgstr "Keresés az AUR és Flatpak szabványos tárolóiban"
 
 msgid "Search Sources"
-msgstr ""
+msgstr "Keresési források"
 
 msgid "Source"
 msgstr "Forrás"
@@ -587,12 +546,8 @@ msgstr "Forrás"
 msgid "Search everywhere"
 msgstr "Keresés minden forrásban"
 
-msgid ""
-"Search the standard repositories, the AUR, and Flatpak all at once. Type a "
-"name to begin."
-msgstr ""
-"Keresés a hivatalos tárolókban, az AUR-ban és a Flatpak-forrásokban "
-"egyszerre. A kereséshez írjon be egy nevet."
+msgid "Search the standard repositories, the AUR, and Flatpak all at once. Type a name to begin."
+msgstr "Keresés a hivatalos tárolókban, az AUR-ban és a Flatpak-forrásokban egyszerre. A kereséshez írjon be egy nevet."
 
 msgid "Standard"
 msgstr "Alapértelmezett"
@@ -616,14 +571,13 @@ msgid "Language"
 msgstr "Nyelv"
 
 msgid "Language for Shelly's menus and messages."
-msgstr ""
+msgstr "A Shelly menüinek és üzeneteinek nyelve."
 
 msgid "Software sources"
-msgstr ""
+msgstr "Szoftverforrások"
 
-msgid ""
-"Choose which kinds of software Shelly shows. You can change this at any time."
-msgstr ""
+msgid "Choose which kinds of software Shelly shows. You can change this at any time."
+msgstr "Válassza ki, hogy a Shelly milyen típusú szoftvereket jelenítsen meg. A beállítás bármikor módosítható."
 
 msgid "Enable AUR"
 msgstr "AUR engedélyezése"
@@ -644,10 +598,10 @@ msgid "Portable self-contained application bundles"
 msgstr "Hordozható, önálló alkalmazáscsomagok"
 
 msgid "Enable Firmware"
-msgstr ""
+msgstr "Firmware engedélyezése"
 
 msgid "Update device firmware such as UEFI/BIOS and peripherals"
-msgstr ""
+msgstr "Eszközök firmware-ének frissítése, például az UEFI/BIOS és a perifériák esetében"
 
 msgid "Enable Recommended"
 msgstr "Ajánlott csomagok engedélyezése"
@@ -656,45 +610,43 @@ msgid "Curated picks from Shelly"
 msgstr "A Shelly válogatott ajánlásai"
 
 msgid "Updates & Tray"
-msgstr ""
+msgstr "Frissítések és tálca"
 
 msgid "Update notifications"
-msgstr ""
+msgstr "Frissítési értesítések"
 
-msgid ""
-"Shelly can check for updates in the background and let you know from the "
-"system tray."
-msgstr ""
+msgid "Shelly can check for updates in the background and let you know from the system tray."
+msgstr "A Shelly a háttérben is kereshet frissítéseket, és értesítést küldhet azok elérhetőségéről a rendszertálcán keresztül."
 
 msgid "Enable Tray Icon"
 msgstr "Tálcaikon engedélyezése"
 
 msgid "Show a tray icon that checks for updates in the background."
-msgstr ""
+msgstr "Frissítéseket a háttérben kereső tálcaikon megjelenítése."
 
 msgid "Add Tray To Auto Start"
 msgstr "Tálcaikon hozzáadása az automatikus indításhoz"
 
 msgid "Start the tray icon when you log in."
-msgstr ""
+msgstr "Tálcaikon automatikus indítása bejelentkezéskor."
 
 msgid "Tray Check Interval (Hours)"
 msgstr "Tálcaellenőrzési időköz (órákban)"
 
 msgid "How often the tray looks for updates."
-msgstr ""
+msgstr "A tálca frissítéskeresésének gyakorisága."
 
 msgid "Use weekly schedule"
 msgstr "Heti ütemezés használata"
 
 msgid "Check on chosen days at a set time instead of every few hours."
-msgstr ""
+msgstr "Frissítések keresése a kiválasztott napokon, meghatározott időpontban, néhány óránkénti ellenőrzés helyett."
 
 msgid "Weekly Schedule"
 msgstr "Heti ütemezés"
 
 msgid "Days and time when Shelly checks for updates."
-msgstr ""
+msgstr "A frissítések keresésének napjai és időpontja."
 
 msgid "Sun"
 msgstr "Vas"
@@ -727,45 +679,40 @@ msgid "Run Tray as cron"
 msgstr "A tálcaikon futtatása cron-feladatként"
 
 msgid "Check only at the scheduled time, not when the tray starts."
-msgstr ""
+msgstr "Ellenőrzés csak az ütemezett időpontban, ne a tálca indításakor."
 
 msgid "Tray update with UI"
 msgstr "Tálcaikon frissítése grafikus felülettel"
 
-msgid ""
-"Run updates started from the tray in the Shelly window instead of a terminal."
-msgstr ""
+msgid "Run updates started from the tray in the Shelly window instead of a terminal."
+msgstr "A tálcáról indított frissítések futtatása terminál helyett a Shelly ablakában."
 
 msgid "Update terminal"
-msgstr ""
+msgstr "Terminál frissítése"
 
 msgid "Terminal that runs updates started from the tray."
-msgstr ""
+msgstr "A tálcáról indított frissítéseket futtató terminál."
 
 msgid "Terminal command"
-msgstr ""
+msgstr "Terminálparancs"
 
 msgid "Custom update terminal command"
-msgstr ""
+msgstr "Egyéni frissítési terminálparancs"
 
 msgid "Tray icon"
-msgstr ""
+msgstr "Tálcaikon"
 
 msgid "Use Symbolic Tray Icon"
 msgstr "Jelkép tálcaikon használata"
 
-msgid ""
-"If enabled, Shelly will use a symbolic SVG icon instead of the default image "
-"one."
-msgstr ""
-"Ha engedélyezve van, a Shelly egy szimbolikus svg ikont fog használni az "
-"alapértelmezett kép helyett."
+msgid "If enabled, Shelly will use a symbolic SVG icon instead of the default image one."
+msgstr "Ha engedélyezve van, a Shelly egy szimbolikus svg ikont fog használni az alapértelmezett kép helyett."
 
 msgid "Tray Icon"
 msgstr "Tálcaikon"
 
 msgid "Use your own image for the tray icon."
-msgstr ""
+msgstr "Saját kép használata a tálcaikonhoz."
 
 msgid "Select File"
 msgstr "Fájl kiválasztása"
@@ -777,116 +724,106 @@ msgid "Tray Updates Icon"
 msgstr "Tálca frissítési ikonja"
 
 msgid "Image the tray shows when updates are available."
-msgstr ""
+msgstr "A tálcán megjelenő kép, amikor frissítések érhetők el."
 
 msgid "Look & Feel"
 msgstr "Megjelenés és működés"
 
 msgid "Appearance"
-msgstr ""
+msgstr "Megjelenés"
 
 msgid "Theme"
-msgstr ""
+msgstr "Téma"
 
 msgid "Use Shelly's colors or your desktop's colors."
-msgstr ""
+msgstr "A Shelly vagy az asztali környezet színeinek használata."
 
 msgid "Color variant"
-msgstr ""
+msgstr "Színváltozat"
 
 msgid "Light, dark, or follow your system."
-msgstr ""
+msgstr "Világos, sötét vagy a rendszer beállításainak követése."
 
 msgid "Icons Enabled"
 msgstr "Ikonok engedélyezve"
 
-msgid ""
-"If enabled, Shelly will use appstream icons in the package list and details "
-"pages."
-msgstr ""
-"Ha engedélyezve van, a Shelly az appstream ikonokat fogja használni a "
-"csomaglistában és a részletes leírások oldalain."
+msgid "If enabled, Shelly will use appstream icons in the package list and details pages."
+msgstr "Ha engedélyezve van, a Shelly az appstream ikonokat fogja használni a csomaglistában és a részletes leírások oldalain."
 
 msgid "Layout"
-msgstr ""
+msgstr "Elrendezés"
 
 msgid "Default page"
 msgstr "Alapértelmezett lap"
 
 msgid "The page Shelly opens on."
-msgstr ""
+msgstr "A Shelly indításkor megnyíló oldal."
 
 msgid "Navigation style"
 msgstr "Navigációs stílus"
 
 msgid "Sidebar on the left, or tabs across the top."
-msgstr ""
+msgstr "Bal oldali oldalsáv vagy felül elhelyezkedő lapfülek."
 
 msgid "Use System Title Bar"
 msgstr "Rendszercímsor használata"
 
-msgid ""
-"If enabled, the desktop draws the window title bar and its buttons instead "
-"of Shelly."
-msgstr ""
-"Ha engedélyezve van, az asztali környezet a Shelly helyett az ablak címsorát "
-"és annak gombjait jeleníti meg."
+msgid "If enabled, the desktop draws the window title bar and its buttons instead of Shelly."
+msgstr "Ha engedélyezve van, az asztali környezet a Shelly helyett az ablak címsorát és annak gombjait jeleníti meg."
 
 msgid "Applies after restarting Shelly."
 msgstr "A Shelly újraindítása után lép érvénybe."
 
 msgid "Rounded Window Corners"
-msgstr ""
+msgstr "Lekerekített ablaksarkok"
 
-msgid ""
-"If enabled, Shelly rounds the corners of the windows it draws. A desktop "
-"that draws the title bar sets its own corners."
-msgstr ""
+msgid "If enabled, Shelly rounds the corners of the windows it draws. A desktop that draws the title bar sets its own corners."
+msgstr "Ha engedélyezve van, a Shelly lekerekíti az általa megjelenített ablakok sarkait. A címsort megjelenítő asztali környezet saját maga állítja be a sarkok lekerekítését."
 
 msgid "Advanced"
 msgstr "Speciális"
 
 msgid "Installing and removing"
-msgstr ""
+msgstr "Telepítés és eltávolítás"
 
 msgid "No Confirm"
 msgstr "Megerősítés kihagyása"
 
 msgid "Skip confirmation prompts when installing, updating, or removing."
-msgstr ""
+msgstr "Megerősítést kérő párbeszédablakok kihagyása telepítés, frissítés és eltávolítás során."
 
 msgid "Remove Configuration on Uninstall"
-msgstr ""
+msgstr "Beállítások törlése az eltávolítás során"
 
 msgid "Also delete an app's configuration files when you remove it."
-msgstr ""
+msgstr "Az alkalmazás eltávolításakor a hozzá tartozó beállításfájlok is törlődnek."
 
 msgid "Search and AUR"
-msgstr ""
+msgstr "Keresés és AUR"
 
 msgid "Enable Shelly Search"
 msgstr "Shelly-keresés engedélyezése"
 
 msgid "Add a page that searches every source at once."
-msgstr ""
+msgstr "Olyan oldal hozzáadása, amely egyszerre keres az összes forrásban."
 
 msgid "Enable Atoll Powered AUR"
 msgstr "Atoll által biztosított AUR engedélyezése"
 
 msgid "Browse the AUR through Seafoam Labs' Atoll service."
-msgstr ""
+msgstr "Az AUR böngészése a Seafoam Labs Atoll szolgáltatásán keresztül."
 
 msgid "Always Recheck AppImage Updates on Upgrade All"
-msgstr ""
+msgstr "Az AppImage-frissítések újbóli ellenőrzése minden alkalommal az Összes frissítése művelet indításakor"
 
 msgid "When off, Upgrade All runs only when the AppImage page shows updates."
-msgstr ""
+msgstr "Kikapcsolt állapotban az Összes frissítése művelet csak akkor indul el, ha az AppImage oldalon frissítések jelennek meg."
 
 msgid "AppImage Install Path"
 msgstr "AppImage telepítési útvonala"
 
 msgid "Folder where new AppImages are saved."
-msgstr ""
+msgstr "Az új AppImage-fájlok mentési mappája."
 
 msgid "Select Directory"
 msgstr "Könyvtár kiválasztása"
@@ -901,10 +838,10 @@ msgid "Done"
 msgstr "Kész"
 
 msgid "1 · Download"
-msgstr ""
+msgstr "1 · Letöltés"
 
 msgid "2 · Install"
-msgstr ""
+msgstr "2 · Telepítés"
 
 msgid "Update"
 msgstr "Frissítés"
@@ -919,7 +856,7 @@ msgid "Check all enabled sources again"
 msgstr "Az összes engedélyezett forrás újbóli ellenőrzése"
 
 msgid "Available updates"
-msgstr ""
+msgstr "Elérhető frissítések"
 
 msgid "Checking for updates…"
 msgstr "Frissítések keresése…"
@@ -931,7 +868,7 @@ msgid "Could not check for updates."
 msgstr "Nem sikerült ellenőrizni a frissítéseket."
 
 msgid "Upgrading may require administrator authorization."
-msgstr ""
+msgstr "A frissítés rendszergazdai jogosultságot igényelhet."
 
 msgid "Upgrade"
 msgstr "Frissítés"
@@ -954,20 +891,14 @@ msgstr "Futtatás"
 msgid "Remove db.lck"
 msgstr "A db.lck eltávolítása"
 
-msgid ""
-"Removes the db.lck file if it was left behind by an interrupted ALPM process."
-msgstr ""
-"Eltávolítja a db.lck fájlt, ha azt egy megszakadt alpm-folyamat hagyta hátra."
+msgid "Removes the db.lck file if it was left behind by an interrupted ALPM process."
+msgstr "Eltávolítja a db.lck fájlt, ha azt egy megszakadt alpm-folyamat hagyta hátra."
 
 msgid "Fix Permissions"
 msgstr "Jogosultságok javítása"
 
-msgid ""
-"Restores correct user ownership of Shelly configuration and cache folders if "
-"they were accidentally created by root."
-msgstr ""
-"Visszaállítja a Shelly beállításait és gyorsítótárát tároló mappák megfelelő "
-"felhasználói tulajdonjogát, ha véletlenül a root hozta létre."
+msgid "Restores correct user ownership of Shelly configuration and cache folders if they were accidentally created by root."
+msgstr "Visszaállítja a Shelly beállításait és gyorsítótárát tároló mappák megfelelő felhasználói tulajdonjogát, ha véletlenül a root hozta létre."
 
 msgid "Purify Packages"
 msgstr "Csomagok megtisztítása"
@@ -978,53 +909,32 @@ msgstr "Sérült vagy árva csomagok eltávolítása."
 msgid "Clean Package Cache"
 msgstr "Csomaggyorsítótár törlése"
 
-msgid ""
-"Keeps the selected number of repository package versions and clears the "
-"entire Shelly cache, including AUR sources and build directories."
-msgstr ""
-"Megtartja a tárolókból származó csomagverziók megadott számát, és törli a "
-"Shelly teljes gyorsítótárát, beleértve az AUR-forrásokat és az összeállítási "
-"könyvtárakat is."
+msgid "Keeps the selected number of repository package versions and clears the entire Shelly cache, including AUR sources and build directories."
+msgstr "Megtartja a tárolókból származó csomagverziók megadott számát, és törli a Shelly teljes gyorsítótárát, beleértve az AUR-forrásokat és az összeállítási könyvtárakat is."
 
 msgid "Keep"
 msgstr "Megtartás"
 
-msgid ""
-"Number of repository package versions to keep; the Shelly cache is cleared "
-"completely"
-msgstr ""
-"A megtartandó tárolói csomagverziók száma; a Shelly gyorsítótárának teljes "
-"tartalma törlődik"
+msgid "Number of repository package versions to keep; the Shelly cache is cleared completely"
+msgstr "A megtartandó tárolói csomagverziók száma; a Shelly gyorsítótárának teljes tartalma törlődik"
 
 msgid "Welcome to Shelly v3"
 msgstr "Üdvözöljük a Shelly v3-ban"
 
-msgid ""
-"Shelly is a modern package manager for Arch Linux. Configure your sources "
-"and preferences to get started."
-msgstr ""
-"A Shelly egy korszerű csomagkezelő az Arch Linuxhoz. A kezdéshez állítsa be "
-"a csomagforrásokat és a beállításokat."
+msgid "Shelly is a modern package manager for Arch Linux. Configure your sources and preferences to get started."
+msgstr "A Shelly egy korszerű csomagkezelő az Arch Linuxhoz. A kezdéshez állítsa be a csomagforrásokat és a beállításokat."
 
 msgid "Select Your Sources"
 msgstr "Válassza ki a forrásokat"
 
-msgid ""
-"Choose which package sources you want to browse. You can always change this "
-"later in settings."
-msgstr ""
-"Válassza ki, hogy mely csomagforrásokat szeretné böngészni. Ezt később "
-"bármikor megváltoztathatja a beállításokban."
+msgid "Choose which package sources you want to browse. You can always change this later in settings."
+msgstr "Válassza ki, hogy mely csomagforrásokat szeretné böngészni. Ezt később bármikor megváltoztathatja a beállításokban."
 
 msgid "Look and Feel"
 msgstr "Megjelenés és működés"
 
-msgid ""
-"Customize how Shelly looks and behaves. All of these can be changed later in "
-"preferences."
-msgstr ""
-"Szabja testre Shelly megjelenését és viselkedését. Mindezek később a "
-"beállításokban módosíthatók."
+msgid "Customize how Shelly looks and behaves. All of these can be changed later in preferences."
+msgstr "Szabja testre Shelly megjelenését és viselkedését. Mindezek később a beállításokban módosíthatók."
 
 msgid "Navigation Style"
 msgstr "Navigációs stílus"
@@ -1056,22 +966,11 @@ msgstr "Shelly indítása"
 msgid "Enable Atoll?"
 msgstr "Engedélyezi az Atoll használatát?"
 
-msgid ""
-"Atoll contains build scripts that are known as PKGBUILDs. Those scripts are "
-"uploaded by users, and are not verified or vetted in any way. Only enable "
-"this feature if you are comfortable in verifying the build scripts."
-msgstr ""
-"Az Atoll PKGBUILD néven ismert csomag-összeállítási parancsfájlokat "
-"tartalmaz. Ezeket a felhasználók töltik fel, és semmilyen ellenőrzésen vagy "
-"hitelesítési eljáráson nem esnek át. Ezt a funkciót csak akkor engedélyezze, "
-"ha vállalja a parancsfájlok saját kezű ellenőrzését."
+msgid "Atoll contains build scripts that are known as PKGBUILDs. Those scripts are uploaded by users, and are not verified or vetted in any way. Only enable this feature if you are comfortable in verifying the build scripts."
+msgstr "Az Atoll PKGBUILD néven ismert csomag-összeállítási parancsfájlokat tartalmaz. Ezeket a felhasználók töltik fel, és semmilyen ellenőrzésen vagy hitelesítési eljáráson nem esnek át. Ezt a funkciót csak akkor engedélyezze, ha vállalja a parancsfájlok saját kezű ellenőrzését."
 
-msgid ""
-"<a href=\"https://www.seafoam-labs.org/shelly-alpm/docs/aur-safety/\">Atoll "
-"Safety Guide</a>"
-msgstr ""
-"<a href=\"https://www.seafoam-labs.org/shelly-alpm/docs/aur-safety/"
-"\">Útmutató az Atoll biztonságos használatához</a>"
+msgid "<a href=\"https://www.seafoam-labs.org/shelly-alpm/docs/aur-safety/\">Atoll Safety Guide</a>"
+msgstr "<a href=\"https://www.seafoam-labs.org/shelly-alpm/docs/aur-safety/\">Útmutató az Atoll biztonságos használatához</a>"
 
 msgid "System files"
 msgstr "Rendszerfájlok"
@@ -1187,11 +1086,8 @@ msgstr "A biztonsági ellenőrzés nem érhető el."
 msgid "Could not load the PKGBUILD preview."
 msgstr "A PKGBUILD-előnézet betöltése nem sikerült."
 
-msgid ""
-"PKGBUILD changed. Close and reopen the preview to scan the current version."
-msgstr ""
-"A PKGBUILD megváltozott. Zárja be, majd nyissa meg újra az előnézetet a "
-"jelenlegi verzió beolvasásához."
+msgid "PKGBUILD changed. Close and reopen the preview to scan the current version."
+msgstr "A PKGBUILD megváltozott. Zárja be, majd nyissa meg újra az előnézetet a jelenlegi verzió beolvasásához."
 
 msgid "No related files."
 msgstr "Nincsenek kapcsolódó fájlok."
@@ -1203,206 +1099,199 @@ msgid "Dismiss"
 msgstr "Elvetés"
 
 msgid "Reset Columns"
-msgstr ""
+msgstr "Oszlopok alaphelyzetbe állítása"
 
 msgid "Internal error"
-msgstr ""
+msgstr "Belső hiba"
 
 msgid "Installed newer firmware version"
-msgstr ""
+msgstr "Installed newer firmware version"
 
 msgid "Installed same firmware version"
-msgstr ""
+msgstr "Ugyanaz a firmware-verzió van telepítve"
 
 msgid "Already set to be installed offline"
-msgstr ""
+msgstr "Már beállította az offline telepítést"
 
 msgid "Failed to get authentication"
-msgstr ""
+msgstr "Nem sikerült a hitelesítés"
 
 msgid "Failed to read from device"
-msgstr ""
+msgstr "Nem sikerült adatokat beolvasni az eszközről"
 
 msgid "Failed to write to the device"
-msgstr ""
+msgstr "Nem sikerült adatokat írni az eszközre"
 
 msgid "Invalid file format"
-msgstr ""
+msgstr "Érvénytelen fájlformátum"
 
 msgid "No matching device exists"
-msgstr ""
+msgstr "Nem található megfelelő eszköz"
 
 msgid "Nothing to do"
-msgstr ""
+msgstr "Nincs teendő"
 
 msgid "Action was not possible"
-msgstr ""
+msgstr "A művelet nem volt végrehajtható"
 
 msgid "Signature was invalid"
-msgstr ""
+msgstr "Az aláírás érvénytelen volt"
 
 msgid "AC power was required"
-msgstr ""
+msgstr "Hálózati tápellátásra volt szükség"
 
 msgid "Permission was denied"
-msgstr ""
+msgstr "A rendszer megtagadta az engedélyt"
 
 msgid "User has configured their system in a broken way"
-msgstr ""
+msgstr "A felhasználó hibásan állította be a rendszert"
 
 msgid "The system battery level is too low"
-msgstr ""
+msgstr "A rendszer akkumulátorának töltöttsége túl alacsony"
 
 msgid "User needs to do an action to complete the update"
-msgstr ""
+msgstr "A felhasználónak műveletet kell végrehajtania a frissítés befejezéséhez"
 
 msgid "Failed to get authentication: credentials expired"
-msgstr ""
+msgstr "Nem sikerült a hitelesítés: a hitelesítő adatok lejártak"
 
 msgid "The firmware data is invalid"
-msgstr ""
+msgstr "A firmware adatai érvénytelenek"
 
 msgid "The operation timed out"
-msgstr ""
+msgstr "A művelet túllépte az időkorlátot"
 
 msgid "The device is busy; try again in a moment"
-msgstr ""
+msgstr "Az eszköz foglalt, próbálja újra egy kis idő múlva"
 
 msgid "The device could not be reached"
-msgstr ""
+msgstr "Az eszköz nem érhető el"
 
 msgid "Unknown error"
-msgstr ""
+msgstr "Ismeretlen hiba"
 
 msgid "Unknown state"
-msgstr ""
+msgstr "Ismeretlen állapot"
 
 msgid "Idle"
-msgstr ""
+msgstr "Tétlen"
 
 msgid "Loading a resource"
-msgstr ""
+msgstr "Erőforrás betöltése"
 
 msgid "Decompressing firmware"
-msgstr ""
+msgstr "Firmware kicsomagolása"
 
 msgid "Restarting the device"
-msgstr ""
+msgstr "Az eszköz újraindítása"
 
 msgid "Writing to a device"
-msgstr ""
+msgstr "Adatok írása az eszközre"
 
 msgid "Verifying (reading) a device"
-msgstr ""
+msgstr "Az eszköz ellenőrzése (adatainak beolvasása)"
 
 msgid "Scheduling an offline update"
-msgstr ""
+msgstr "Offline frissítés ütemezése"
 
 msgid "A file is downloading"
-msgstr ""
+msgstr "Fájl letöltése folyamatban"
 
 msgid "Reading from a device"
-msgstr ""
+msgstr "Adatok beolvasása az eszközről"
 
 msgid "Erasing a device"
-msgstr ""
+msgstr "Eszköz törlése"
 
 msgid "Waiting for authentication"
-msgstr ""
+msgstr "Hitelesítésre vár"
 
 msgid "The device is busy"
-msgstr ""
+msgstr "Az eszköz foglalt"
 
 msgid "The daemon is shutting down"
-msgstr ""
+msgstr "A háttérszolgáltatás leállítása folyamatban van"
 
 msgid "Waiting for user action"
-msgstr ""
+msgstr "Felhasználói beavatkozásra vár"
 
 msgid "requires"
-msgstr ""
+msgstr "igényli"
 
 msgid "The device has a problem that prevents updates"
-msgstr ""
+msgstr "Az eszköz olyan hibával rendelkezik, amely megakadályozza a frissítést"
 
 msgid "System power is too low to perform the update"
-msgstr ""
+msgstr "A rendszer tápellátása nem elegendő a frissítés végrehajtásához"
 
 msgid "Device is unreachable, or out of wireless range"
-msgstr ""
+msgstr "Az eszköz nem érhető el, vagy kívül esik a vezeték nélküli hálózat hatótávolságán"
 
 msgid "Device battery power is too low"
-msgstr ""
+msgstr "Az eszköz akkumulátorának töltöttsége túl alacsony"
 
 msgid "Device is waiting for the update to be applied"
-msgstr ""
+msgstr "Az eszköz várja a frissítés telepítését"
 
 msgid "Device requires AC power to be connected"
-msgstr ""
+msgstr "Az eszközt hálózati tápegységhez kell csatlakoztatni"
 
 msgid "Device cannot be used while the lid is closed"
-msgstr ""
+msgstr "Az eszköz nem használható, amíg a készülék fedele le van csukva"
 
 msgid "Device is emulated"
-msgstr ""
+msgstr "Az eszköz emulált"
 
 msgid "The firmware license is missing"
-msgstr ""
+msgstr "Hiányzik a firmware licence"
 
 msgid "Another process is blocking firmware updates"
-msgstr ""
+msgstr "Egy másik folyamat akadályozza a firmware frissítését"
 
 msgid "Device is already being updated"
-msgstr ""
+msgstr "Az eszköz frissítése már folyamatban van"
 
 msgid "Device is in use"
-msgstr ""
+msgstr "Az eszköz használatban van"
 
 msgid "Device cannot be used while there are no displays plugged in"
-msgstr ""
+msgstr "Az eszköz nem használható, ha nincs csatlakoztatva kijelző"
 
 msgid "A higher-priority connection to this device is in use"
-msgstr ""
+msgstr "Az eszközt egy magasabb prioritású kapcsolat már használja"
 
 msgid "The device is signed with an insecure key"
-msgstr ""
+msgstr "Az eszköz aláírásához használt kulcs nem biztonságos"
 
 msgid "Device firmware is locked"
-msgstr ""
+msgstr "Az eszköz firmware-e zárolva van"
 
-msgid ""
-"The update will continue when the device USB cable has been unplugged and "
-"then re-inserted."
-msgstr ""
+msgid "The update will continue when the device USB cable has been unplugged and then re-inserted."
+msgstr "A frissítés akkor folytatódik, ha kihúzza, majd újra csatlakoztatja az eszköz USB-kábelét."
 
 msgid "Press unlock on the device to continue the update process."
-msgstr ""
+msgstr "A frissítés folytatásához nyomja meg a feloldás gombot az eszközön."
 
 msgid "The update will continue when the device USB cable has been unplugged."
-msgstr ""
+msgstr "A frissítés akkor folytatódik, ha kihúzza az eszköz USB-kábelét."
 
-msgid ""
-"The update will continue when the device USB cable has been re-inserted."
-msgstr ""
+msgid "The update will continue when the device USB cable has been re-inserted."
+msgstr "A frissítés akkor folytatódik, ha újra csatlakoztatja az eszköz USB-kábelét."
 
-msgid ""
-"Do not turn off your computer or remove the AC adaptor until you are sure "
-"the update has completed."
-msgstr ""
+msgid "Do not turn off your computer or remove the AC adaptor until you are sure the update has completed."
+msgstr "Ne kapcsolja ki a számítógépet, és ne húzza ki a hálózati adaptert, amíg nem biztos abban, hogy a frissítés befejeződött."
 
 msgid "Unplug and replug the device, to continue the update process."
-msgstr ""
+msgstr "A frissítés folytatásához húzza ki, majd csatlakoztassa újra az eszközt."
 
-msgid ""
-"The update will continue when the device power cable has been unplugged and "
-"then re-inserted."
-msgstr ""
+msgid "The update will continue when the device power cable has been unplugged and then re-inserted."
+msgstr "A frissítés akkor folytatódik, ha kihúzza, majd újra csatlakoztatja az eszköz tápkábelét."
 
 msgid "Please restart the fwupd service."
-msgstr ""
+msgstr "Indítsa újra a fwupd szolgáltatást."
 
 msgid "The device needs your attention to continue the update."
-msgstr ""
+msgstr "A frissítés folytatásához beavatkozás szükséges."
 
 msgid "None"
 msgstr "Nincs"
@@ -1429,26 +1318,16 @@ msgid "Update Available"
 msgstr "Frissítés érhető el"
 
 msgid "Version ?"
-msgstr "Verzió?"
+msgstr "Verzió ?"
 
 msgid "Enter a download URL beginning with http:// or https://."
-msgstr ""
-"Adjon meg egy letöltési webcímet, amely http:// vagy https:// előtaggal "
-"kezdődik."
+msgstr "Adjon meg egy letöltési webcímet, amely http:// vagy https:// előtaggal kezdődik."
 
-msgid ""
-"Enter a Forgejo repository URL as http(s)://host/owner/repo or http(s)://"
-"host/owner/repo/releases."
-msgstr ""
-"Adja meg a Forgejo-tároló webcímét a következő formában: http(s)://host/"
-"owner/repo vagy http(s)://host/owner/repo/releases."
+msgid "Enter a Forgejo repository URL as http(s)://host/owner/repo or http(s)://host/owner/repo/releases."
+msgstr "Adja meg a Forgejo-tároló webcímét a következő formában: http(s)://host/owner/repo vagy http(s)://host/owner/repo/releases."
 
-msgid ""
-"Enter the http(s) URL of the .zsync control file, optionally as a zsync|"
-"<url> update information string."
-msgstr ""
-"Adja meg a .zsync vezérlőfájl http(s) webcímét, lehetőség szerint zsync|"
-"<url> formátumú frissítési információs karakterláncként."
+msgid "Enter the http(s) URL of the .zsync control file, optionally as a zsync|<url> update information string."
+msgstr "Adja meg a .zsync vezérlőfájl http(s) webcímét, lehetőség szerint zsync|<url> formátumú frissítési információs karakterláncként."
 
 msgid "Choose an AppImage file"
 msgstr "Válasszon ki egy AppImage-fájlt"
@@ -1463,7 +1342,7 @@ msgid "Installing AppImage"
 msgstr "AppImage telepítése"
 
 msgid "Could not read the AppImage update setting."
-msgstr ""
+msgstr "Nem sikerült beolvasni az AppImage-frissítés beállítását."
 
 msgid "No AppImages need to be upgraded"
 msgstr "Nincs frissítendő AppImage"
@@ -1477,13 +1356,8 @@ msgstr "AppImage-ek szinkronizálása"
 msgid "Syncing AppImage"
 msgstr "AppImage szinkronizálása"
 
-msgid ""
-"Use unique KEY=value lines. Keys must start with a letter or underscore and "
-"contain only letters, digits, or underscores."
-msgstr ""
-"Egyedi KULCS=ÉRTÉK sorokat használjon. A kulcsoknak betűvel vagy aláhúzással "
-"kell kezdődniük, és kizárólag betűket, számokat vagy aláhúzásokat "
-"tartalmazhatnak."
+msgid "Use unique KEY=value lines. Keys must start with a letter or underscore and contain only letters, digits, or underscores."
+msgstr "Egyedi KULCS=ÉRTÉK sorokat használjon. A kulcsoknak betűvel vagy aláhúzással kell kezdődniük, és kizárólag betűket, számokat vagy aláhúzásokat tartalmazhatnak."
 
 msgid "Saving AppImage environment"
 msgstr "Az AppImage-környezet mentése"
@@ -1555,8 +1429,7 @@ msgid "Build from AUR"
 msgstr "Összeállítás AUR-ból"
 
 msgid "Build and install the selected packages? This may take a while."
-msgstr ""
-"Összeállítja és telepíti a kiválasztott csomagokat? Ez eltarthat egy ideig."
+msgstr "Összeállítja és telepíti a kiválasztott csomagokat? Ez eltarthat egy ideig."
 
 msgid "Build"
 msgstr "Összeállítás"
@@ -1595,267 +1468,250 @@ msgid "Section"
 msgstr "Szakasz"
 
 msgid "The AUR has no browsable index — type a package name to begin."
-msgstr ""
-"Az AUR-nak nincs böngészhető indexe — írjon be egy csomagnevet a kezdéshez."
+msgstr "Az AUR-nak nincs böngészhető indexe — írjon be egy csomagnevet a kezdéshez."
 
 msgid "Could not search the configured AUR service."
 msgstr "Nem sikerült keresni a beállított AUR-szolgáltatásban."
 
 msgid "Downloading…"
-msgstr ""
+msgstr "Letöltés…"
 
 msgid "devices"
-msgstr ""
+msgstr "eszközök"
 
 msgid "updates available"
-msgstr ""
+msgstr "elérhető frissítések"
 
 msgid "Firmware devices"
-msgstr ""
+msgstr "Firmware-eszközök"
 
 msgid "Battery too low: connect AC power before updating firmware"
-msgstr ""
+msgstr "Az akkumulátor töltöttsége túl alacsony. A firmware frissítése előtt csatlakoztassa az eszközt a hálózati tápegységhez"
 
 msgid "Firmware metadata is out of date. Use {s} to refresh."
-msgstr ""
+msgstr "A firmware metaadatai elavultak. A frissítéshez használja a(z) {s} parancsot."
 
 msgid "The firmware service stopped. Use Check Again to reconnect."
-msgstr ""
+msgstr "A firmware-szolgáltatás leállt. Az újracsatlakozáshoz válassza az „Ellenőrzés újra” lehetőséget."
 
 msgid "Metadata refresh failed"
-msgstr ""
+msgstr "Nem sikerült frissíteni a metaadatokat"
 
-msgid ""
-"Could not refresh the firmware catalog. Check your network connection and "
-"try again."
-msgstr ""
+msgid "Could not refresh the firmware catalog. Check your network connection and try again."
+msgstr "Nem sikerült frissíteni a firmware-katalógust. Ellenőrizze a hálózati kapcsolatot, majd próbálja újra."
 
 msgid "View on LVFS"
-msgstr ""
+msgstr "Megtekintés az LVFS-en"
 
 msgid "Update {s} to version {s}?"
-msgstr ""
+msgstr "A(z) {s} frissítése a(z) {s} verzióra?"
 
 msgid "Downgrade {s} to version {s}?"
-msgstr ""
+msgstr "A(z) {s} visszaállítása a(z) {s} verzióra?"
 
 msgid "Reinstall {s} version {s}?"
-msgstr ""
+msgstr "A(z) {s} verziójának újratelepítése?"
 
 msgid "The device will remain usable for the duration of the update."
-msgstr ""
+msgstr "A frissítés ideje alatt az eszköz továbbra is használható marad."
 
 msgid "The device will be unavailable during this action."
-msgstr ""
+msgstr "A művelet ideje alatt az eszköz nem lesz elérhető."
 
 msgid "Download size: {s}"
-msgstr ""
+msgstr "Letöltési méret: {s}"
 
 msgid "Estimated install time: {s} seconds"
-msgstr ""
+msgstr "Becsült telepítési idő: {s} másodperc"
 
 msgid "Update device"
-msgstr ""
+msgstr "Eszköz frissítése"
 
 msgid "Downgrade device"
-msgstr ""
+msgstr "Eszköz visszaállítása korábbi verzióra"
 
 msgid "Reinstall device"
-msgstr ""
+msgstr "Eszköz újratelepítése"
 
 msgid "Install firmware"
-msgstr ""
+msgstr "Firmware telepítése"
 
 msgid "Switch firmware branch?"
-msgstr ""
+msgstr "Firmware-ág váltása?"
 
-msgid ""
-"This firmware is not supplied by {s}. Installing it may damage your hardware "
-"or void your warranty."
-msgstr ""
+msgid "This firmware is not supplied by {s}. Installing it may damage your hardware or void your warranty."
+msgstr "Ezt a firmware-t nem a(z) {s} biztosítja. Telepítése károsíthatja a hardvert, vagy érvénytelenítheti a garanciát."
 
-msgid ""
-"This firmware comes from a different branch. Installing it may damage your "
-"hardware or void your warranty."
-msgstr ""
+msgid "This firmware comes from a different branch. Installing it may damage your hardware or void your warranty."
+msgstr "Ez a firmware egy másik fejlesztési ághoz tartozik. Telepítése károsíthatja a hardvert, vagy érvénytelenítheti a garanciát."
 
 msgid "Switch Branch"
-msgstr ""
+msgstr "Átváltás másik ágra"
 
 msgid "You may lose all your data without recovery keys"
-msgstr ""
+msgstr "Helyreállítási kulcsok nélkül az összes adatát elveszítheti"
 
-msgid ""
-"Updating this firmware may invalidate the secrets that unlock your encrypted "
-"drives. Make sure you have the recovery keys for all your encrypted drives "
-"before continuing."
-msgstr ""
+msgid "Updating this firmware may invalidate the secrets that unlock your encrypted drives. Make sure you have the recovery keys for all your encrypted drives before continuing."
+msgstr "A firmware frissítése érvénytelenné teheti a titkosított meghajtók feloldásához szükséges titkos kulcsokat. A folytatás előtt győződjön meg arról, hogy minden titkosított meghajtóhoz rendelkezik helyreállítási kulccsal."
 
 msgid "I have recovery keys for all my encrypted drives"
-msgstr ""
+msgstr "Az összes titkosított meghajtómhoz rendelkezem helyreállítási kulccsal"
 
 msgid "Continue"
-msgstr ""
+msgstr "Folytatás"
 
 msgid "Failed to install firmware"
-msgstr ""
+msgstr "A firmware telepítése nem sikerült"
 
 msgid "Could not start the installation"
-msgstr ""
+msgstr "Nem sikerült elindítani a telepítést"
 
 msgid "Could not reach the firmware service"
-msgstr ""
+msgstr "Nem sikerült kapcsolatot létesíteni a firmware-szolgáltatással"
 
 msgid "The firmware source for this release is unavailable"
-msgstr ""
+msgstr "Ehhez a kiadáshoz nem érhető el firmware-forrás"
 
 msgid "This release has no download location"
-msgstr ""
+msgstr "Ehhez a kiadáshoz nem tartozik letöltési hivatkozás"
 
 msgid "This release provides no checksums, so it cannot be verified"
-msgstr ""
+msgstr "Ehhez a kiadáshoz nem tartozik ellenőrzőösszeg, ezért a hitelessége nem ellenőrizhető"
 
 msgid "The release checksum is invalid"
-msgstr ""
+msgstr "A kiadás ellenőrzőösszege érvénytelen"
 
 msgid "The downloaded firmware failed verification"
-msgstr ""
+msgstr "A letöltött firmware ellenőrzése nem sikerült"
 
 msgid "The firmware download failed"
-msgstr ""
+msgstr "A firmware letöltése nem sikerült"
 
 msgid "Could not access the firmware cache"
-msgstr ""
+msgstr "Nem sikerült hozzáférni a firmware-gyorsítótárhoz"
 
 msgid "Update complete"
-msgstr ""
+msgstr "Frissítés befejezve"
 
 msgid "Device request"
-msgstr ""
+msgstr "Eszközkérés"
 
 msgid "OK"
-msgstr ""
+msgstr "Rendben"
 
 msgid "Restart to complete this update"
-msgstr ""
+msgstr "A frissítés befejezéséhez indítsa újra az eszközt"
 
 msgid "Shutdown to complete this update"
-msgstr ""
+msgstr "A frissítés befejezéséhez állítsa le az eszközt"
 
-msgid ""
-"You must restart your device to complete the update. Make sure your device "
-"is plugged in or fully charged. Save your files before you restart to avoid "
-"losing data."
-msgstr ""
+msgid "You must restart your device to complete the update. Make sure your device is plugged in or fully charged. Save your files before you restart to avoid losing data."
+msgstr "A frissítés befejezéséhez újra kell indítani az eszközt. Győződjön meg arról, hogy az eszköz csatlakozik a hálózati tápegységhez, vagy teljesen fel van töltve. Az adatvesztés elkerülése érdekében az újraindítás előtt mentse a fájlokat."
 
-msgid ""
-"You must shut down your device to complete the update. Save your files "
-"before you shut down to avoid losing data."
-msgstr ""
+msgid "You must shut down your device to complete the update. Save your files before you shut down to avoid losing data."
+msgstr "A frissítés befejezéséhez le kell állítani az eszközt. Az adatvesztés elkerülése érdekében a leállítás előtt mentse a fájlokat."
 
 msgid "Automatic restart is not available on this system."
-msgstr ""
+msgstr "Az automatikus újraindítás nem érhető el ezen a rendszeren."
 
 msgid "Automatic shutdown is not available on this system."
-msgstr ""
+msgstr "Az automatikus leállítás nem érhető el ezen a rendszeren."
 
 msgid "Restart now"
-msgstr ""
+msgstr "Újraindítás most"
 
 msgid "Shut down now"
-msgstr ""
+msgstr "Leállítás most"
 
 msgid "Restart later"
-msgstr ""
+msgstr "Újraindítás később"
 
 msgid "Shut down later"
-msgstr ""
+msgstr "Leállítás később"
 
 msgid "Restart cancelled"
-msgstr ""
+msgstr "Újraindítás megszakítva"
 
 msgid "Shutdown cancelled"
-msgstr ""
+msgstr "Leállítás megszakítva"
 
-msgid ""
-"The restart was cancelled. Restart later to complete the firmware update."
-msgstr ""
+msgid "The restart was cancelled. Restart later to complete the firmware update."
+msgstr "Az újraindítás megszakadt. A firmware-frissítés befejezéséhez később indítsa újra az eszközt."
 
-msgid ""
-"The shutdown was cancelled. Shut down later to complete the firmware update."
-msgstr ""
+msgid "The shutdown was cancelled. Shut down later to complete the firmware update."
+msgstr "A leállítás megszakadt. A firmware-frissítés befejezéséhez később állítsa le az eszközt."
 
 msgid "Restart failed"
-msgstr ""
+msgstr "Az újraindítás nem sikerült"
 
 msgid "Shutdown failed"
-msgstr ""
+msgstr "A leállítás nem sikerült"
 
 msgid "The system did not accept the request. You can try again later."
-msgstr ""
+msgstr "A rendszer nem fogadta el a kérést. Próbálja meg később újra."
 
 msgid "End of life"
-msgstr ""
+msgstr "A fejlesztése megszűnt"
 
 msgid "Unsigned payload"
-msgstr ""
+msgstr "Nem aláírt frissítési csomag"
 
 msgid "Resolve the device problems before updating"
-msgstr ""
+msgstr "A frissítés előtt meg kell oldani az eszköz problémáit"
 
 msgid "An update is in progress"
-msgstr ""
+msgstr "Frissítés van folyamatban"
 
 msgid "Locked"
-msgstr ""
+msgstr "Zárolva"
 
 msgid "Needs bootloader"
-msgstr ""
+msgstr "Rendszerbetöltő szükséges"
 
 msgid "Needs restart"
-msgstr ""
+msgstr "Újraindítás szükséges"
 
 msgid "Needs shutdown"
-msgstr ""
+msgstr "Leállítás szükséges"
 
 msgid "Needs activation"
-msgstr ""
+msgstr "Aktiválás szükséges"
 
 msgid "Usable during the update"
-msgstr ""
+msgstr "A frissítés alatt is használható"
 
 msgid "Affects full-disk encryption"
-msgstr ""
+msgstr "Hatással van a teljes lemezes titkosításra"
 
 msgid "Low priority"
-msgstr ""
+msgstr "Alacsony prioritás"
 
 msgid "Medium priority"
-msgstr ""
+msgstr "Közepes prioritás"
 
 msgid "High priority"
-msgstr ""
+msgstr "Magas prioritás"
 
 msgid "Critical priority"
-msgstr ""
+msgstr "Kritikus prioritás"
 
 msgid "Downgrade"
-msgstr ""
+msgstr "Visszaállítás korábbi verzióra"
 
 msgid "Blocked"
-msgstr ""
+msgstr "Letiltva"
 
 msgid "This release requires approval before it can be installed"
-msgstr ""
+msgstr "A kiadás telepítéséhez előzetes jóváhagyás szükséges"
 
 msgid "This version is blocked on this device"
-msgstr ""
+msgstr "Ez a verzió nem használható ezen az eszközön"
 
 msgid "Community supported"
-msgstr ""
+msgstr "Közösségi támogatással rendelkező"
 
 msgid "Alternate branch"
-msgstr ""
+msgstr "Alternatív ág"
 
 msgid "Choose a Flatpak file"
 msgstr "Válasszon ki egy Flatpak-fájlt"
@@ -1864,9 +1720,7 @@ msgid "Flatpak files"
 msgstr "Flatpak-fájlok"
 
 msgid "Unsupported file type. Choose a.flatpak or.flatpakref file."
-msgstr ""
-"Nem támogatott fájltípus. Válasszon egy .flatpak vagy .flatpakref "
-"kiterjesztésű fájlt."
+msgstr "Nem támogatott fájltípus. Válasszon egy .flatpak vagy .flatpakref kiterjesztésű fájlt."
 
 msgid "Installing local Flatpak"
 msgstr "Helyi Flatpak-csomag telepítése"
@@ -1973,20 +1827,14 @@ msgstr "Kapcsolat"
 msgid "Translate"
 msgstr "Fordítás"
 
-msgid ""
-"Could not load Flatpak applications because Shelly ran out of memory. Close "
-"other applications and try again."
-msgstr ""
-"Nem sikerült betölteni a Flatpak-alkalmazásokat, mert a Shelly memóriája "
-"elfogyott. Zárjon be más alkalmazásokat, majd próbálja újra."
+msgid "Could not load Flatpak applications because Shelly ran out of memory. Close other applications and try again."
+msgstr "Nem sikerült betölteni a Flatpak-alkalmazásokat, mert a Shelly memóriája elfogyott. Zárjon be más alkalmazásokat, majd próbálja újra."
 
 msgid "Could not start loading Flatpak applications."
 msgstr "Nem sikerült elindítani a Flatpak-alkalmazások betöltését."
 
 msgid "Could not load Flatpak applications from the selected remote."
-msgstr ""
-"Nem sikerült betölteni a Flatpak-alkalmazásokat a kiválasztott távoli "
-"tárolóból."
+msgstr "Nem sikerült betölteni a Flatpak-alkalmazásokat a kiválasztott távoli tárolóból."
 
 msgid "No Flatpak applications are available."
 msgstr "Nem érhetők el Flatpak-alkalmazások."
@@ -2076,10 +1924,10 @@ msgid "Loading..."
 msgstr "Betöltés..."
 
 msgid "inferred"
-msgstr ""
+msgstr "kikövetkeztetett"
 
 msgid "Installed From"
-msgstr ""
+msgstr "Telepítve innen"
 
 msgid "Build Date"
 msgstr "Összeállítás dátuma"
@@ -2088,7 +1936,7 @@ msgid "Install Reason"
 msgstr "Telepítés oka"
 
 msgid "Available From"
-msgstr ""
+msgstr "Elérhető innen"
 
 msgid "Provides"
 msgstr "Biztosítja"
@@ -2141,11 +1989,8 @@ msgstr "Kiválasztva"
 msgid "Mixed selection"
 msgstr "Vegyes válogatás"
 
-msgid ""
-"Select only installed packages to remove, or only available ones to install."
-msgstr ""
-"Eltávolításhoz csak telepített, telepítéshez csak elérhető csomagot "
-"válasszon."
+msgid "Select only installed packages to remove, or only available ones to install."
+msgstr "Eltávolításhoz csak telepített, telepítéshez csak elérhető csomagot válasszon."
 
 msgid "Remove the selected packages?"
 msgstr "Eltávolítja a kiválasztott csomagokat?"
@@ -2162,12 +2007,8 @@ msgstr "Válassza ki a kötegelt telepítéshez szükséges csomagot"
 msgid "Could not search the selected sources"
 msgstr "Nem sikerült keresni a kiválasztott forrásokban"
 
-msgid ""
-"Search the standard repositories, Atoll, and Flatpak all at once. Type a "
-"name to begin."
-msgstr ""
-"Keressen egyszerre a hivatalos tárolókban, az Atollban és a Flatpakban. A "
-"keresés megkezdéséhez írjon be egy nevet."
+msgid "Search the standard repositories, Atoll, and Flatpak all at once. Type a name to begin."
+msgstr "Keressen egyszerre a hivatalos tárolókban, az Atollban és a Flatpakban. A keresés megkezdéséhez írjon be egy nevet."
 
 msgid "Search standard repositories, Atoll and Flatpak"
 msgstr "Keresés a hivatalos tárolókban, az Atollban és a Flatpak-tárolókban"
@@ -2179,7 +2020,7 @@ msgid "Installation in progress"
 msgstr "Telepítés folyamatban"
 
 msgid "Search Sources (some sources hidden)"
-msgstr ""
+msgstr "Források keresése (egyes források rejtve)"
 
 msgid "No sources selected"
 msgstr "Nincs kiválasztott forrás"
@@ -2196,12 +2037,8 @@ msgstr "Telepíti a kiválasztott csomagokat?"
 msgid "Enable Atoll"
 msgstr "Atoll engedélyezése"
 
-msgid ""
-"Could not save settings to the configured file. Your latest changes were not "
-"saved."
-msgstr ""
-"Nem sikerült menteni a beállításokat a megadott fájlba. A legutóbbi "
-"módosítások nem lettek mentve."
+msgid "Could not save settings to the configured file. Your latest changes were not saved."
+msgstr "Nem sikerült menteni a beállításokat a megadott fájlba. A legutóbbi módosítások nem lettek mentve."
 
 msgid "Settings saved"
 msgstr "Beállítások mentve"
@@ -2213,7 +2050,7 @@ msgid "Installing AppImage support"
 msgstr "AppImage-támogatás telepítése"
 
 msgid "Installing Firmware support"
-msgstr ""
+msgstr "Firmware-támogatás telepítése"
 
 msgid "Could not start installing Flatpak support."
 msgstr "Nem sikerült elindítani a Flatpak-támogatás telepítését."
@@ -2222,7 +2059,7 @@ msgid "Could not start installing AppImage support."
 msgstr "Nem sikerült elindítani az AppImage-támogatás telepítését."
 
 msgid "Could not start installing Firmware support."
-msgstr ""
+msgstr "A firmware-támogatás telepítésének elindítása nem sikerült."
 
 msgid "Could not install Flatpak support."
 msgstr "Nem sikerült telepíteni a Flatpak-támogatást."
@@ -2231,7 +2068,7 @@ msgid "Could not install AppImage support."
 msgstr "Nem sikerült telepíteni az AppImage-támogatást."
 
 msgid "Could not install Firmware support."
-msgstr ""
+msgstr "Firmware-támogatás telepítése nem sikerült."
 
 msgid "Flatpak support enabled"
 msgstr "Flatpak-támogatás engedélyezve"
@@ -2240,7 +2077,7 @@ msgid "AppImage support enabled"
 msgstr "AppImage-támogatás engedélyezve"
 
 msgid "Firmware support enabled"
-msgstr ""
+msgstr "Firmware-támogatás engedélyezve"
 
 msgid "No changelog entries found"
 msgstr "Nem találhatók változáslista-bejegyzések"
@@ -2269,28 +2106,20 @@ msgstr "AppImage-fájlok telepítési könyvtárának kiválasztása"
 msgid "Tray enabled"
 msgstr "Tálca engedélyezve"
 
-msgid ""
-"The tray is disabled, but its autostart service could not be removed. It may "
-"start again at the next login."
-msgstr ""
-"A tálcaikon le van tiltva, de az automatikus indításért felelős "
-"szolgáltatását nem sikerült eltávolítani. Előfordulhat, hogy a következő "
-"bejelentkezéskor ismét elindul."
+msgid "The tray is disabled, but its autostart service could not be removed. It may start again at the next login."
+msgstr "A tálcaikon le van tiltva, de az automatikus indításért felelős szolgáltatását nem sikerült eltávolítani. Előfordulhat, hogy a következő bejelentkezéskor ismét elindul."
 
 msgid "Tray disabled"
 msgstr "Tálcaikon letiltva"
 
 msgid "Could not enable the tray autostart service."
-msgstr ""
-"Nem sikerült engedélyezni a tálcaikon automatikus indítását végző "
-"szolgáltatást."
+msgstr "Nem sikerült engedélyezni a tálcaikon automatikus indítását végző szolgáltatást."
 
 msgid "Systemd startup service added."
 msgstr "Indítási szolgáltatás hozzáadva a systemd-hez."
 
 msgid "Could not disable the tray autostart service."
-msgstr ""
-"Nem sikerült letiltani a tálcaikon automatikus indítását végző szolgáltatást."
+msgstr "Nem sikerült letiltani a tálcaikon automatikus indítását végző szolgáltatást."
 
 msgid "Systemd startup service removed."
 msgstr "A systemd automatikus indítási szolgáltatása eltávolítva."
@@ -2299,16 +2128,16 @@ msgid "AUR enabled"
 msgstr "AUR engedélyezve"
 
 msgid "System colors"
-msgstr ""
+msgstr "Rendszerszínek"
 
 msgid "Follow system"
-msgstr ""
+msgstr "Rendszer beállításainak követése"
 
 msgid "Dark"
-msgstr ""
+msgstr "Sötét"
 
 msgid "Light"
-msgstr ""
+msgstr "Világos"
 
 msgid "System Default"
 msgstr "Rendszer alapértelmezése"
@@ -2356,10 +2185,10 @@ msgid "中文（简体）"
 msgstr "中文（简体）"
 
 msgid "Default (auto-detect)"
-msgstr ""
+msgstr "Alapértelmezett (automatikus felismerés)"
 
 msgid "Custom…"
-msgstr ""
+msgstr "Egyéni…"
 
 msgid "Packages"
 msgstr "Csomagok"
@@ -2395,7 +2224,7 @@ msgid "Cancelled"
 msgstr "Megszakítva"
 
 msgid "Overall progress"
-msgstr ""
+msgstr "Teljes folyamat előrehaladása"
 
 msgid "Could not start the requested operation."
 msgstr "Nem sikerült elindítani a kért műveletet."
@@ -2443,25 +2272,25 @@ msgid "Checking disk space"
 msgstr "Lemezterület ellenőrzése"
 
 msgid "Preparing transaction"
-msgstr ""
+msgstr "Tranzakció előkészítése"
 
 msgid "Downloading packages"
-msgstr ""
+msgstr "Csomagok letöltése"
 
 msgid "about"
-msgstr ""
+msgstr "névjegy"
 
 msgid "s left"
-msgstr ""
+msgstr "maradt"
 
 msgid "packages downloaded"
-msgstr ""
+msgstr "csomag letöltve"
 
 msgid "packages processed"
-msgstr ""
+msgstr "csomag feldolgozva"
 
 msgid "Completed"
-msgstr ""
+msgstr "Befejezve"
 
 msgid "Transaction Completed"
 msgstr "A tranzakció befejeződött"
@@ -2484,19 +2313,11 @@ msgstr "Művelet megszakítva."
 msgid "All operations finished successfully."
 msgstr "Az összes művelet sikeresen befejeződött."
 
-msgid ""
-"Permission to manage packages was not granted. Try again and approve the "
-"authorization request to continue."
-msgstr ""
-"Nem kapott engedélyt a csomagok kezelésére. Próbálja újra, és hagyja jóvá az "
-"engedélykérést a folytatáshoz."
+msgid "Permission to manage packages was not granted. Try again and approve the authorization request to continue."
+msgstr "Nem kapott engedélyt a csomagok kezelésére. Próbálja újra, és hagyja jóvá az engedélykérést a folytatáshoz."
 
-msgid ""
-"{package_one}-{version_one} conflicts with {package_two}-{version_two}. "
-"Remove {package_to_remove}?"
-msgstr ""
-"A(z) {package_one}-{version_one} ütközik a(z) {package_two}-{version_two} "
-"csomaggal. Eltávolítja a(z) {package_to_remove} csomagot?"
+msgid "{package_one}-{version_one} conflicts with {package_two}-{version_two}. Remove {package_to_remove}?"
+msgstr "A(z) {package_one}-{version_one} ütközik a(z) {package_two}-{version_two} csomaggal. Eltávolítja a(z) {package_to_remove} csomagot?"
 
 msgid "Would you like to remove extra cache entries?"
 msgstr "Szeretné eltávolítani a további gyorsítótár-bejegyzéseket?"
@@ -2511,7 +2332,7 @@ msgid "AUR package update"
 msgstr "AUR-csomag frissítése"
 
 msgid "Include this update"
-msgstr ""
+msgstr "Tartalmazza ezt a frissítést"
 
 msgid "Update this package"
 msgstr "Frissítse ezt a csomagot"
@@ -2523,13 +2344,13 @@ msgid "Updates included"
 msgstr "Frissítéseket tartalmaz"
 
 msgid "No download required"
-msgstr ""
+msgstr "Nincs szükség letöltésre"
 
 msgid "Total download:"
-msgstr ""
+msgstr "Összes letöltés:"
 
 msgid "Upgrade Selected"
-msgstr ""
+msgstr "Frissítés kiválasztva"
 
 msgid "Upgrading packages"
 msgstr "Csomagok frissítése"
@@ -2555,12 +2376,8 @@ msgstr "Üdvözöljük"
 msgid "Enable Recommended?"
 msgstr "Engedélyezi az ajánlott csomagokat?"
 
-msgid ""
-"Recommended shows curated package suggestions based on your installed software. Package "
-"data is fetched from external sources."
-msgstr ""
-"Az Ajánlott funkció a telepített szoftverek alapján válogatott csomagokat javasol. A "
-"csomagadatok külső forrásokból származnak."
+msgid "Recommended shows curated package suggestions based on your installed software. Package data is fetched from external sources."
+msgstr "Az Ajánlott funkció a telepített szoftverek alapján válogatott csomagokat javasol. A csomagadatok külső forrásokból származnak."
 
 msgid "Installing Flatpak and AppImage support"
 msgstr "Flatpak- és AppImage-támogatás telepítése"
@@ -2590,9 +2407,7 @@ msgid "Use System Title Bar"
 msgstr "Rendszercímsor használata"
 
 msgid "If enabled, the desktop draws the window title bar and its buttons instead of Shelly."
-msgstr ""
-"Ha engedélyezve van, az asztali környezet a Shelly helyett az ablak címsorát és annak "
-"gombjait jeleníti meg."
+msgstr "Ha engedélyezve van, az asztali környezet a Shelly helyett az ablak címsorát és annak gombjait jeleníti meg."
 
 msgid "Applies after restarting Shelly."
 msgstr "A Shelly újraindítása után lép érvénybe."
