@@ -94,6 +94,9 @@ fn ResultSet(comptime T: type) type {
     return struct {
         items: []const T,
         arena: ?*std.heap.ArenaAllocator = null,
+        /// Some entries could not be checked, so `items` may be missing
+        /// updates even when it is empty.
+        incomplete: bool = false,
 
         fn deinit(self: *@This(), allocator: std.mem.Allocator) void {
             const arena = self.arena orelse return;
@@ -117,6 +120,12 @@ pub const Result = union(Backend) {
             .aur => |*result| result.deinit(allocator),
             .flatpak => |*result| result.deinit(allocator),
         }
+    }
+
+    fn incomplete(self: *const Result) bool {
+        return switch (self.*) {
+            inline else => |result| result.incomplete,
+        };
     }
 };
 
@@ -207,7 +216,15 @@ fn executeWithRunner(
     } else {
         try writePlain(context, &result);
     }
-    return 0;
+    return incompleteExitCode(invocation, &result);
+}
+
+/// A listing with entries that could not be checked fails in the terminal and
+/// in `--json`, so scripts can tell it from "up to date". UI mode keeps exit 0
+/// because the GUI discards the whole listing on a non-zero exit.
+fn incompleteExitCode(invocation: *const parser.Invocation, result: *const Result) u8 {
+    if (invocation.globals.ui_mode) return 0;
+    return if (result.incomplete()) 1 else 0;
 }
 
 fn executeAllWithRunner(
@@ -238,6 +255,7 @@ fn executeAllWithRunner(
             try writeQueryFailure(context, invocation, backend, err);
             continue;
         };
+        if (incompleteExitCode(invocation, &result) != 0) failed = true;
         results.append(context.allocator, result) catch |err| {
             result.deinit(context.allocator);
             return err;
@@ -513,7 +531,7 @@ fn writePlain(context: *runtime.RuntimeContext, result: *const Result) !void {
     switch (result.*) {
         .standard => |items| try writeStandardPlain(context, items.items),
         .aur => |items| try writeAurPlain(context, items.items),
-        .appimage => |items| try writeAppImagePlain(context, items.items),
+        .appimage => |items| try writeAppImagePlain(context, items.items, items.incomplete),
         .flatpak => |items| try writeFlatpakPlain(context, items.items),
     }
 }
@@ -584,7 +602,12 @@ fn writeAurPlain(context: *runtime.RuntimeContext, updates: []const AurUpdate) !
     try writeColoredLine(context, .warning, message);
 }
 
-fn writeAppImagePlain(context: *runtime.RuntimeContext, updates: []const AppImageUpdate) !void {
+fn writeAppImagePlain(context: *runtime.RuntimeContext, updates: []const AppImageUpdate, incomplete: bool) !void {
+    if (updates.len == 0 and incomplete) return writeColoredLine(
+        context,
+        .warning,
+        "No appimage updates found, but some AppImages could not be checked. See the warnings above.",
+    );
     if (updates.len == 0) return writeColoredLine(context, .warning, "No appimage updates available");
     for (updates) |update| {
         const message = try std.fmt.allocPrint(
@@ -793,6 +816,14 @@ fn runAppImage(context: *runtime.RuntimeContext) !Result {
     );
     defer context.allocator.free(local_db_path);
 
+    // Per-app warnings mean that AppImage could not be checked. Show them on
+    // stderr (stdout carries the JSON and UI frames) and mark the listing
+    // incomplete so an empty list is not reported as "up to date".
+    var warnings = AppImageWarnings{ .context = context };
+    var dispatcher = PackageManager.appimage.events.Dispatcher.init(context.allocator);
+    defer dispatcher.deinit();
+    _ = try dispatcher.addStatusHandler(.{ .function = AppImageWarnings.status, .data = &warnings });
+
     var manager = PackageManager.appimage.UpdateManager{
         .allocator = context.allocator,
         .io = context.io,
@@ -801,6 +832,7 @@ fn runAppImage(context: *runtime.RuntimeContext) !Result {
         .local_db_path = local_db_path,
     };
     defer manager.deinit();
+    manager.setEventDispatcher(&dispatcher);
     var native_updates = try manager.get_updates();
     defer native_updates.deinit();
 
@@ -820,8 +852,22 @@ fn runAppImage(context: *runtime.RuntimeContext) !Result {
             .is_update_available = native.is_update_available,
         };
     }
-    return .{ .appimage = .{ .items = updates, .arena = arena } };
+    return .{ .appimage = .{ .items = updates, .arena = arena, .incomplete = warnings.seen } };
 }
+
+const AppImageWarnings = struct {
+    context: *runtime.RuntimeContext,
+    seen: bool = false,
+
+    fn status(data: ?*anyopaque, args: PackageManager.appimage.events.StatusArgs) void {
+        if (args.kind != .warning) return;
+        const self: *AppImageWarnings = @ptrCast(@alignCast(data.?));
+        self.seen = true;
+        // Flush so the warning appears before the listing written to stdout.
+        output.writeWarning(self.context, args.message) catch {};
+        self.context.stderr.flush() catch {};
+    }
+};
 
 fn runFlatpak(context: *runtime.RuntimeContext) !Result {
     var manager = PackageManager.FlatpakManager{
@@ -1578,6 +1624,53 @@ test "AppImage list-updates preserves order and renders legacy output" {
         try dispatchWithRunner(&tc.context, &outcome.dispatch, EmptyAppImageFixture{}),
     );
     try std.testing.expectEqualStrings("No appimage updates available\n", tc.stdout.writer.buffered());
+}
+
+test "AppImage list-updates fails an incomplete check outside UI mode" {
+    var tc: test_support.TestContext = .{};
+    tc.init();
+    defer tc.deinit();
+    const manifest = try spec.Manifest.load(tc.arena.allocator());
+    const IncompleteFixture = struct {
+        fn collect(
+            _: @This(),
+            _: *runtime.RuntimeContext,
+            _: Backend,
+            _: CheckOptions,
+        ) !Result {
+            return .{ .appimage = .{ .items = &.{}, .incomplete = true } };
+        }
+    };
+
+    var outcome = try parser.parse(tc.arena.allocator(), &manifest, &.{ "list-updates", "appimage" });
+    try std.testing.expect(outcome == .dispatch);
+    try std.testing.expectEqual(
+        @as(?u8, 1),
+        try dispatchWithRunner(&tc.context, &outcome.dispatch, IncompleteFixture{}),
+    );
+    try std.testing.expectEqualStrings(
+        "No appimage updates found, but some AppImages could not be checked. See the warnings above.\n",
+        tc.stdout.writer.buffered(),
+    );
+
+    tc.stdout.writer.end = 0;
+    outcome = try parser.parse(tc.arena.allocator(), &manifest, &.{ "list-updates", "appimage", "--json" });
+    try std.testing.expect(outcome == .dispatch);
+    try std.testing.expectEqual(
+        @as(?u8, 1),
+        try dispatchWithRunner(&tc.context, &outcome.dispatch, IncompleteFixture{}),
+    );
+    try std.testing.expectEqualStrings("[]\n", tc.stdout.writer.buffered());
+
+    // The GUI drops the whole listing on a non-zero exit, so UI mode stays 0.
+    tc.stdout.writer.end = 0;
+    outcome = try parser.parse(tc.arena.allocator(), &manifest, &.{ "list-updates", "appimage", "--ui-mode" });
+    try std.testing.expect(outcome == .dispatch);
+    try std.testing.expectEqual(
+        @as(?u8, 0),
+        try dispatchWithRunner(&tc.context, &outcome.dispatch, IncompleteFixture{}),
+    );
+    try std.testing.expectEqual(@as(usize, 1), std.mem.count(u8, tc.stdout.writer.buffered(), "[JSON]"));
 }
 
 test "Flatpak list-updates sorts compatibility JSON and renders table" {

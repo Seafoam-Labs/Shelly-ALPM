@@ -288,10 +288,10 @@ pub const UpdateManager = struct {
                 // Honor the filename glob from embedded `gh-releases-zsync`
                 // update information when the repository provides it.
                 const asset_pattern = zsync.githubAssetPattern(app.raw_update_info);
-                return self.providerUpdateOrWarn(
+                return self.guardInstalledRelease(app, try self.providerUpdateOrWarn(
                     app.name,
-                    self.guardInstalledRelease(app, try self.check_github_update_pattern(owner, repo, app.name, app.version, app.allow_prerelease, asset_pattern)),
-                );
+                    self.check_github_update_pattern(owner, repo, app.name, app.version, app.allow_prerelease, asset_pattern),
+                ));
             },
             .gitlab => {
                 const owner = app.repo_owner orelse {
@@ -302,10 +302,10 @@ pub const UpdateManager = struct {
                     self.emitMissingRepository(app.name);
                     return null;
                 };
-                return self.providerUpdateOrWarn(
+                return self.guardInstalledRelease(app, try self.providerUpdateOrWarn(
                     app.name,
-                    self.guardInstalledRelease(app, try self.check_gitlab_update(owner, repo, app.name, app.version, app.allow_prerelease)),
-                );
+                    self.check_gitlab_update(owner, repo, app.name, app.version, app.allow_prerelease),
+                ));
             },
             .codeberg => {
                 const owner = app.repo_owner orelse {
@@ -316,20 +316,20 @@ pub const UpdateManager = struct {
                     self.emitMissingRepository(app.name);
                     return null;
                 };
-                return self.providerUpdateOrWarn(
+                return self.guardInstalledRelease(app, try self.providerUpdateOrWarn(
                     app.name,
-                    self.guardInstalledRelease(app, try self.check_codeberg_update(owner, repo, app.name, app.version, app.allow_prerelease)),
-                );
+                    self.check_codeberg_update(owner, repo, app.name, app.version, app.allow_prerelease),
+                ));
             },
             .forgejo => {
                 if (app.update_url.len == 0) {
                     self.emitStatusFmt(.warning, "AppImage {0f} has no Forgejo update URL. Set its Forgejo repository URL in the update settings before checking for updates.", .{diagnostics.safe(app.name)});
                     return null;
                 }
-                return self.providerUpdateOrWarn(
+                return self.guardInstalledRelease(app, try self.providerUpdateOrWarn(
                     app.name,
-                    self.guardInstalledRelease(app, try self.check_forgejo_update(app.update_url, app.name, app.version, app.allow_prerelease)),
-                );
+                    self.check_forgejo_update(app.update_url, app.name, app.version, app.allow_prerelease),
+                ));
             },
             .zsync => {
                 if (app.update_url.len == 0) {
@@ -869,7 +869,7 @@ pub const UpdateManager = struct {
                     url_value.string;
             }
             if (pattern_count == 1) return pattern_url;
-            if (pattern_count > 1) return null;
+            if (pattern_count > 1) return error.AmbiguousReleaseAsset;
         }
 
         const normalized_app_name = try normalizeAppImageStem(allocator, app_name);
@@ -912,10 +912,13 @@ pub const UpdateManager = struct {
         }
 
         if (exact_count == 1) return exact_url;
-        if (exact_count > 1) return null;
+        if (exact_count > 1) return error.AmbiguousReleaseAsset;
         if (normalized_count == 1) return normalized_url;
-        if (normalized_count > 1) return null;
+        if (normalized_count > 1) return error.AmbiguousReleaseAsset;
         if (compatible_count == 1) return compatible_url;
+        // Several assets fit this architecture and none matches the installed
+        // name: no asset can be chosen, which is not the same as "up to date".
+        if (compatible_count > 1) return error.AmbiguousReleaseAsset;
         return null;
     }
 
@@ -1283,15 +1286,30 @@ pub const UpdateManager = struct {
         self.emitStatusFmt(.warning, "AppImage {s} has incomplete repository update configuration.", .{app_name});
     }
 
-    fn providerUpdateOrWarn(self: UpdateManager, app_name: []const u8, result: ?appimage.AppImageUpdate) ?appimage.AppImageUpdate {
-        if (result == null) {
+    /// Turns a provider check into the per-app result: an ambiguous release
+    /// is reported and skipped so the other AppImages are still checked; any
+    /// other error propagates. `result` is the provider's error union, so the
+    /// caller keeps its precise error set.
+    fn providerUpdateOrWarn(self: UpdateManager, app_name: []const u8, result: anytype) @TypeOf(result) {
+        const provider_update = result catch |err| switch (err) {
+            error.AmbiguousReleaseAsset => {
+                self.emitStatusFmt(
+                    .warning,
+                    "Could not check {0f} for updates: the latest release has several AppImage downloads for this system’s architecture and none matches the installed file name. Rename the installed AppImage to match the release download you use, then check again.",
+                    .{diagnostics.safe(app_name)},
+                );
+                return null;
+            },
+            else => return err,
+        };
+        if (provider_update == null) {
             self.emitStatusFmt(
                 .warning,
                 "No compatible AppImage download was found for {0f} on this system’s architecture. Check the provider settings and available release assets.",
                 .{diagnostics.safe(app_name)},
             );
         }
-        return result;
+        return provider_update;
     }
 
     fn emitStatus(self: UpdateManager, kind: events.StatusKind, message: []const u8) void {
@@ -1817,7 +1835,7 @@ test "parse_github_response: asset pattern resolves a zsync asset to its AppImag
     try std.testing.expectEqualStrings("https://example.com/Subsurface-5.0.10-x86_64.AppImage", result.?.download_url);
 }
 
-test "parse_github_response: ambiguous asset pattern matches report no update" {
+test "parse_github_response: ambiguous asset pattern matches are reported as ambiguous" {
     const body =
         \\[{
         \\  "tag_name": "5.0.10",
@@ -1828,15 +1846,14 @@ test "parse_github_response: ambiguous asset pattern matches report no update" {
         \\  ]
         \\}]
     ;
-    const result = try UpdateManager.parse_github_response_pattern(
+    try std.testing.expectError(error.AmbiguousReleaseAsset, UpdateManager.parse_github_response_pattern(
         std.testing.allocator,
         body,
         "Subsurface",
         "5.0.9",
         false,
         "Subsurface-*x86_64*.AppImage",
-    );
-    try std.testing.expect(result == null);
+    ));
 }
 
 test "parse_github_response: unmatched asset pattern falls back to name selection" {
@@ -1945,8 +1962,24 @@ test "parse_github_response: refuses ambiguous compatible AppImage assets" {
         \\  {"name":"editor-portable-x86_64.AppImage","browser_download_url":"https://example.com/editor-portable-x86_64.AppImage"}
         \\]}]
     ;
-    const result = try UpdateManager.parse_github_response(std.testing.allocator, body, "editor", "v1.0.0", false);
-    try std.testing.expectEqual(@as(?appimage.AppImageUpdate, null), result);
+    try std.testing.expectError(
+        error.AmbiguousReleaseAsset,
+        UpdateManager.parse_github_response(std.testing.allocator, body, "editor", "v1.0.0", false),
+    );
+}
+
+test "parse_github_response: renamed AppImage with cli and desktop assets is ambiguous (issue 2115)" {
+    if (!std.mem.eql(u8, UpdateManager.getSystemArchitecture(), "x86_64")) return error.SkipZigTest;
+    const body =
+        \\[{"tag_name":"v2.0.12","prerelease":false,"assets":[
+        \\  {"name":"Raspberry_Pi_Imager-v2.0.12-cli-x86_64.AppImage","browser_download_url":"https://example.com/cli.AppImage"},
+        \\  {"name":"Raspberry_Pi_Imager-v2.0.12-desktop-x86_64.AppImage","browser_download_url":"https://example.com/desktop.AppImage"}
+        \\]}]
+    ;
+    try std.testing.expectError(
+        error.AmbiguousReleaseAsset,
+        UpdateManager.parse_github_response(std.testing.allocator, body, "imager_2.0.12_amd64", "2.0.11", false),
+    );
 }
 
 test "parse_github_response: ignores AppImage assets without a valid download URL" {
@@ -2481,10 +2514,23 @@ test "providerUpdateOrWarn warns only when no provider asset is available" {
     var manager = makeUpdateManager(std.testing.allocator, "unused", "unused");
     manager.setEventDispatcher(&dispatcher);
 
-    try std.testing.expect(manager.providerUpdateOrWarn("Editor", null) == null);
+    const ProviderResult = error{ AmbiguousReleaseAsset, NetworkFailure }!?appimage.AppImageUpdate;
+
+    try std.testing.expect((try manager.providerUpdateOrWarn("Editor", @as(ProviderResult, null))) == null);
     try std.testing.expectEqual(@as(usize, 1), capture.count);
     try std.testing.expectEqual(events.StatusKind.warning, capture.last_status.?);
     try std.testing.expect(capture.message_matches);
+
+    // An ambiguous release is skipped with its own warning, not the
+    // "no compatible download" one, and does not abort the other checks.
+    try std.testing.expect((try manager.providerUpdateOrWarn("Editor", @as(ProviderResult, error.AmbiguousReleaseAsset))) == null);
+    try std.testing.expectEqual(@as(usize, 2), capture.count);
+    try std.testing.expectEqual(events.StatusKind.warning, capture.last_status.?);
+    try std.testing.expect(!capture.message_matches);
+
+    // Other provider errors still propagate.
+    try std.testing.expectError(error.NetworkFailure, manager.providerUpdateOrWarn("Editor", @as(ProviderResult, error.NetworkFailure)));
+    try std.testing.expectEqual(@as(usize, 2), capture.count);
 
     const available = appimage.AppImageUpdate{
         .name = "Editor",
@@ -2492,10 +2538,10 @@ test "providerUpdateOrWarn warns only when no provider asset is available" {
         .download_url = "https://example.com/Editor.AppImage",
         .is_update_available = true,
     };
-    const returned = manager.providerUpdateOrWarn("Editor", available);
+    const returned = try manager.providerUpdateOrWarn("Editor", @as(ProviderResult, available));
     try std.testing.expect(returned != null);
     try std.testing.expectEqualStrings(available.download_url, returned.?.download_url);
-    try std.testing.expectEqual(@as(usize, 1), capture.count);
+    try std.testing.expectEqual(@as(usize, 2), capture.count);
 }
 
 test "get_updates returns an owned update list" {
