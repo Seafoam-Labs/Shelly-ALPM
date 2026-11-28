@@ -481,6 +481,39 @@ test "save persists modifications and survives reload" {
     try testing.expectEqual(@as(i32, 48), cfg.TrayCheckIntervalHours);
 }
 
+test "PageAlignment round-trips and old files default to centered" {
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    {
+        var svc = makeService(&tmp);
+        defer svc.deinit();
+        try svc.load();
+
+        const cfg = try svc.get();
+        cfg.PageAlignment = .top;
+
+        try svc.save();
+    }
+
+    var svc = makeService(&tmp);
+    defer svc.deinit();
+    try svc.load();
+    const saved = try svc.get();
+    try testing.expectEqual(shelly_config.PageAlignment.top, saved.PageAlignment);
+
+    // Settings written before this option existed must still load, with the
+    // centered arrangement as the default.
+    try seedSettings(&tmp, "{\"NavMode\": \"topbar\"}");
+
+    var legacy = makeService(&tmp);
+    defer legacy.deinit();
+    try legacy.load();
+    const lcfg = try legacy.get();
+    try testing.expectEqual(shelly_config.NavMode.topbar, lcfg.NavMode);
+    try testing.expectEqual(shelly_config.PageAlignment.centered, lcfg.PageAlignment);
+}
+
 test "load can be called repeatedly without leaking" {
     var tmp = testing.tmpDir(.{});
     defer tmp.cleanup();

@@ -8,6 +8,16 @@ pub const NavMode = enum(u8) {
     topbar = 1,
 };
 
+/// Vertical arrangement of the settings tabs and the utilities page.
+/// `centered` sizes the settings stack per tab and centers its content;
+/// `balanced` centers the tab group but pins the stack to the tallest tab
+/// so nothing moves when tabs change; `top` aligns every page to the top.
+pub const PageAlignment = enum(u8) {
+    centered = 0,
+    balanced = 1,
+    top = 2,
+};
+
 /// GTK theme colors. `system` takes the desktop's GTK 4 colors.
 pub const ThemeMode = enum(u8) {
     shelly = 0,
@@ -73,6 +83,7 @@ pub const ShellyConfig = struct {
     // Window & View
     DefaultPageDropDown: ShellyTabs = .packages,
     NavMode: NavMode = .sidebar,
+    PageAlignment: PageAlignment = .centered,
     ThemeMode: ThemeMode = .shelly,
     ThemeVariant: ThemeVariant = .follow_system,
     UseSystemTitlebar: bool = false,

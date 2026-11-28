@@ -17,7 +17,7 @@
           <class name="settings-overlay"/>
         </style>
         <child>
-          <object class="GtkBox">
+          <object class="GtkBox" id="page_body_box">
             <property name="orientation">vertical</property>
             <property name="margin-start">30</property>
             <property name="margin-end">30</property>
@@ -49,7 +49,7 @@
                         <property name="propagate-natural-height">true</property>
                         <property name="vexpand">true</property>
                         <child>
-                          <object class="GtkBox">
+                          <object class="GtkBox" id="normal_page_body">
                             <property name="orientation">vertical</property>
                             <property name="hexpand">true</property>
                             <property name="halign">center</property>
@@ -484,7 +484,7 @@
                         <property name="propagate-natural-height">true</property>
                         <property name="vexpand">true</property>
                         <child>
-                          <object class="GtkBox">
+                          <object class="GtkBox" id="updates_page_body">
                             <property name="orientation">vertical</property>
                             <property name="hexpand">true</property>
                             <property name="halign">center</property>
@@ -1245,7 +1245,7 @@
                         <property name="propagate-natural-height">true</property>
                         <property name="vexpand">true</property>
                         <child>
-                          <object class="GtkBox">
+                          <object class="GtkBox" id="look_feel_page_body">
                             <property name="orientation">vertical</property>
                             <property name="hexpand">true</property>
                             <property name="halign">center</property>
@@ -1667,6 +1667,55 @@
                                         </child>
                                       </object>
                                     </child>
+                                    <child>
+                                      <object class="GtkBox" id="page_alignment_box">
+                                        <property name="orientation">horizontal</property>
+                                        <property name="spacing">16</property>
+                                        <style>
+                                          <class name="settings-form-row"/>
+                                        </style>
+                                        <child>
+                                          <object class="GtkBox">
+                                            <property name="orientation">vertical</property>
+                                            <property name="spacing">2</property>
+                                            <property name="hexpand">true</property>
+                                            <property name="valign">center</property>
+                                            <child>
+                                              <object class="GtkLabel">
+                                                <property name="label" translatable="yes">Settings Page Alignment</property>
+                                                <property name="halign">start</property>
+                                                <property name="xalign">0</property>
+                                                <property name="wrap">true</property>
+                                                <style>
+                                                  <class name="settings-row-title"/>
+                                                </style>
+                                              </object>
+                                            </child>
+                                            <child>
+                                              <object class="GtkLabel">
+                                                <property name="label" translatable="yes">How settings and utilities content sits in the window.</property>
+                                                <property name="halign">start</property>
+                                                <property name="xalign">0</property>
+                                                <property name="wrap">true</property>
+                                                <style>
+                                                  <class name="settings-row-subtitle"/>
+                                                </style>
+                                              </object>
+                                            </child>
+                                          </object>
+                                        </child>
+                                        <child>
+                                          <object class="GtkDropDown" id="page_alignment_drop">
+                                            <property name="halign">end</property>
+                                            <property name="valign">center</property>
+                                            <accessibility>
+                                              <property name="label" translatable="yes">Settings Page Alignment</property>
+                                              <property name="description" translatable="yes">How settings and utilities content sits in the window.</property>
+                                            </accessibility>
+                                          </object>
+                                        </child>
+                                      </object>
+                                    </child>
                                   </object>
                                 </child>
                               </object>
@@ -1688,7 +1737,7 @@
                         <property name="propagate-natural-height">true</property>
                         <property name="vexpand">true</property>
                         <child>
-                          <object class="GtkBox">
+                          <object class="GtkBox" id="advanced_page_body">
                             <property name="orientation">vertical</property>
                             <property name="hexpand">true</property>
                             <property name="halign">center</property>
@@ -2141,6 +2190,7 @@
       <widget name="nav_mode_drop"/>
       <widget name="theme_mode_drop"/>
       <widget name="theme_variant_drop"/>
+      <widget name="page_alignment_drop"/>
     </widgets>
   </object>
 </interface>

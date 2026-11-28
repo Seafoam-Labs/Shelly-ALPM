@@ -23,7 +23,7 @@
                 <property name="hscrollbar-policy">never</property>
                 <property name="vexpand">true</property>
                 <child>
-                  <object class="GtkBox">
+                  <object class="GtkBox" id="utilities_body_box">
                     <property name="orientation">vertical</property>
                     <property name="spacing">12</property>
                     <property name="halign">center</property>
