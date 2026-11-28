@@ -88,7 +88,7 @@ pub fn dispatch(
             try context.stderr.print("Could not prepare the upgrade plan across the selected package sources. {0s}\n\nTechnical details: {1s}\n", .{ diagnostics.cause(err), @errorName(err) });
             return 1;
         };
-        if (!preview.proceed or !preview.has_updates) return 0;
+        if (!preview.proceed or !preview.has_updates) return if (preview.failed) 1 else 0;
     }
 
     if (!invocation.globals.ui_mode and requiresElevation(invocation)) {
@@ -114,6 +114,7 @@ pub fn dispatch(
 const PreviewResult = struct {
     has_updates: bool,
     proceed: bool,
+    failed: bool = false,
 };
 
 const RealPlanCollector = struct {
@@ -150,6 +151,7 @@ const InstalledFlatpakProbe = struct {
 
 const UpgradePlan = struct {
     results: std.ArrayList(list_updates.Result) = .empty,
+    failed: bool = false,
 
     fn deinit(self: *UpgradePlan, allocator: std.mem.Allocator) void {
         for (self.results.items) |*result| result.deinit(allocator);
@@ -197,6 +199,7 @@ fn prepareAllUpgradePlanWith(
     defer plan.deinit(context.allocator);
 
     if (plan.isEmpty()) {
+        if (plan.failed) return .{ .has_updates = false, .proceed = false, .failed = true };
         try context.stdout.writeAll("Everything is up to date.\n");
         try context.stdout.flush();
         return .{ .has_updates = false, .proceed = false };
@@ -246,6 +249,7 @@ fn buildAllUpgradePlan(
                     continue;
                 }
             }
+            plan.failed = true;
             try context.stdout.print("Could not check for {0f} upgrades. {1s}\n\nTechnical details: {2s}\n", .{ diagnostics.safe(backend.displayName()), diagnostics.cause(err), @errorName(err) });
             try context.stdout.flush();
             continue;
@@ -1943,6 +1947,53 @@ test "combined upgrade plan silently skips an unavailable Flatpak backend" {
         tc.stdout.writer.buffered(),
         "Everything is up to date.",
     ) != null);
+}
+
+test "combined upgrade plan does not report up to date after a failed source check" {
+    var tc: test_support.TestContext = .{};
+    tc.init();
+    defer tc.deinit();
+    const manifest = try spec.Manifest.load(tc.arena.allocator());
+    const outcome = try parser.parse(tc.arena.allocator(), &manifest, &.{
+        "upgrade",
+        "all",
+        "--no-repo",
+        "--no-flatpak",
+        "--no-appimage",
+        "--no-confirm",
+    });
+    try std.testing.expect(outcome == .dispatch);
+
+    const Failing = struct {
+        fn collect(
+            _: @This(),
+            _: *runtime.RuntimeContext,
+            backend: Backend,
+            _: *const parser.Invocation,
+        ) !list_updates.Result {
+            try std.testing.expectEqual(Backend.aur, backend);
+            return error.QueryFailed;
+        }
+    };
+
+    const preview = try prepareAllUpgradePreviewWithCollector(
+        &tc.context,
+        &outcome.dispatch,
+        Failing{},
+    );
+    try std.testing.expect(!preview.has_updates);
+    try std.testing.expect(!preview.proceed);
+    try std.testing.expect(preview.failed);
+    try std.testing.expect(std.mem.indexOf(
+        u8,
+        tc.stdout.writer.buffered(),
+        "Could not check for AUR upgrades.",
+    ) != null);
+    try std.testing.expect(std.mem.indexOf(
+        u8,
+        tc.stdout.writer.buffered(),
+        "Everything is up to date.",
+    ) == null);
 }
 
 test "combined upgrade plan does not announce Flatpak when the backend is not installed" {
