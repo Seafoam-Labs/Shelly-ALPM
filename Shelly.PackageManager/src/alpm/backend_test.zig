@@ -339,6 +339,67 @@ test "native backend repository queries preserve priority groups versions and ow
     }
 }
 
+fn writeOriginRepositories(fixture: *Fixture) !void {
+    const io = t.io;
+    try fixture.temp.dir.createDirPath(io, "db/sync");
+    try fixture.temp.dir.writeFile(io, .{ .sub_path = "pacman.conf", .data = "[options]\nArchitecture = auto\nSigLevel = Never\nLocalFileSigLevel = Never\n[first]\nSigLevel = Never\nUsage = All\nServer = https://invalid.example/$repo/os/$arch\n[second]\nSigLevel = Never\nUsage = All\nServer = https://invalid.example/$repo/os/$arch\n" });
+    for ([_][2][]const u8{ .{ "first", "1-1" }, .{ "second", "2-1" } }) |repository| {
+        const db_path = try std.fmt.allocPrint(fixture.arena.allocator(), "db/sync/{s}.db", .{repository[0]});
+        var file = try fixture.temp.dir.createFile(io, db_path, .{});
+        defer file.close(io);
+        var out: [4096]u8 = undefined;
+        var writer = file.writer(io, &out);
+        var tar: std.tar.Writer = .{ .underlying_writer = &writer.interface };
+        const entry = try std.fmt.allocPrint(fixture.arena.allocator(), "backend-fixture-{s}/desc", .{repository[1]});
+        const desc = try std.fmt.allocPrint(fixture.arena.allocator(), "%NAME%\nbackend-fixture\n\n%VERSION%\n{s}\n\n%DESC%\nOrigin fixture\n\n%ARCH%\nany\n\n", .{repository[1]});
+        try tar.writeFileBytes(entry, desc, .{ .mode = 0o644 });
+        try tar.finishPedantically();
+        try writer.interface.flush();
+    }
+}
+
+fn expectInstalledFrom(fixture: *Fixture, expected: ?[]const u8) !void {
+    const manager = try fixture.manager();
+    defer manager.deinit();
+    const installed = try manager.get_installed_packages();
+    defer pm.Manager.OwnedPackage.deinitSlice(t.allocator, installed);
+    try t.expectEqual(@as(usize, 1), installed.len);
+    try t.expect(installed[0].installed());
+    try t.expectEqualStrings("local", installed[0].repository().?);
+    if (expected) |value| try t.expectEqualStrings(value, installed[0].installed_from().?) else try t.expect(installed[0].installed_from() == null);
+    var single = (try manager.get_single_installed_package("backend-fixture")).?;
+    defer single.deinit(t.allocator);
+    if (expected) |value| try t.expectEqualStrings(value, single.installed_from().?) else try t.expect(single.installed_from() == null);
+    const available = try manager.get_available_packages();
+    defer pm.Manager.OwnedPackage.deinitSlice(t.allocator, available);
+    for (available) |package| {
+        try t.expect(!package.installed());
+        try t.expect(package.installed_from() == null);
+    }
+}
+
+test "native backend reports the repository an installed package came from" {
+    for ([_]pm.Manager.Backend{ .libalpm, .rlpm }) |backend| {
+        if (!backend.available()) continue;
+        var fixture = try Fixture.init(backend);
+        defer fixture.deinit();
+        {
+            const manager = try fixture.manager();
+            defer manager.deinit();
+            try manager.install_local_packages(&.{fixture.archive}, .{ .nohooks = true, .noscriptlet = true });
+        }
+        // a file install records no origin, even with a matching version.
+        try writeOriginRepositories(&fixture);
+        try expectInstalledFrom(&fixture, null);
+        if (backend == .libalpm and !pm.Manager.libalpm_records_installed_repository) continue;
+        const desc_path = "db/local/backend-fixture-1-1/desc";
+        const desc = try fixture.temp.dir.readFileAlloc(t.io, desc_path, fixture.arena.allocator(), .limited(1 << 16));
+        const recorded = try std.fmt.allocPrint(fixture.arena.allocator(), "{s}%INSTALLED_DB%\nsecond\n\n", .{desc});
+        try fixture.temp.dir.writeFile(t.io, .{ .sub_path = desc_path, .data = recorded });
+        try expectInstalledFrom(&fixture, "second");
+    }
+}
+
 test "native backend needed no-op and declined plan preserve state and release the lock" {
     for ([_]pm.Manager.Backend{ .libalpm, .rlpm }) |backend| {
         if (!backend.available()) continue;

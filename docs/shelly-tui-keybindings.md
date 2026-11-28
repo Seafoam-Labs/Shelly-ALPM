@@ -92,7 +92,7 @@ These groups match the Settings editor:
 
 - **General:** `quit`, `help`, `next_tab`, `previous_tab`, `refresh`,
   `narrow_view`, `widen_view`.
-- **Packages:** `install`, `remove`, `refresh_list`, `filter`, `clear_selection`.
+- **Packages:** `install`, `remove`, `refresh_list`, `sync_packages`, `sort_package_name`, `sort_package_repository`, `filter`, `clear_selection`.
 - **Updates:** `upgrade_all`, `upgrade_system`, `upgrade_aur`, `upgrade_flatpak`,
   `upgrade_appimage` (default: `i`).
 - **AUR catalog:** `previous_catalog_page`, `next_catalog_page`.

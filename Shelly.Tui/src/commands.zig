@@ -2,6 +2,78 @@ const vaxis = @import("vaxis");
 
 const std = @import("std");
 
+// Application mouse operations.
+pub const Mouse = struct {
+    pub fn primaryPress(mouse: vaxis.Mouse) bool {
+        return mouse.button == .left and mouse.type == .press;
+    }
+    pub fn wheelDown(mouse: vaxis.Mouse) ?bool {
+        return switch (mouse.button) {
+            .wheel_up => false,
+            .wheel_down => true,
+            else => null,
+        };
+    }
+
+    pub fn scrollHelp(model: *@import("model.zig").Model, ctx: *vaxis.vxfw.EventContext, event: vaxis.vxfw.Event) !void {
+        try model.help_panel.scroll.handleEvent(ctx, event);
+    }
+
+    pub const FocusTarget = enum { search, results, details };
+    pub fn focusPane(model: *@import("model.zig").Model, ctx: *vaxis.vxfw.EventContext, tab: @import("model.zig").Tab, target: FocusTarget) !void {
+        if (!model.allowsMousePaneFocus(tab, target)) return;
+        switch (tab) {
+            .packages => try @import("models/packages_model.zig").focusPane(model, ctx, target),
+            .aur => try @import("models/aur_model.zig").focusPane(model, ctx, target),
+            .flatpak => try @import("models/flatpak_model.zig").focusPane(model, ctx, target),
+            .appimage => try @import("models/appimage_model.zig").focusPane(model, ctx, target),
+            else => {},
+        }
+    }
+
+    pub const SettingsTarget = union(enum) { control: usize, header: usize };
+    pub const BindingTarget = union(enum) { binding: usize, scroll_down: bool, save, cancel };
+    pub const editBinding = @import("models/settings_model.zig").editBindingFromMouse;
+    pub const activateSetting = @import("models/settings_model.zig").onSettingsAction;
+    pub const selectTab = @import("model.zig").Model.onTabSelected;
+    pub const toggleHelp = @import("model.zig").Model.toggleHelpFromMouse;
+    pub const selectAurRow = @import("models/aur_model.zig").selectRow;
+    pub const selectFlatpakRow = @import("models/flatpak_model.zig").selectRow;
+    pub const selectAppImageRow = @import("models/appimage_model.zig").selectRow;
+    pub const selectPackageRow = @import("models/packages_model.zig").selectPackageRow;
+    pub const markPackageRow = @import("models/packages_model.zig").markRow;
+    pub const markAurRow = @import("models/aur_model.zig").markRow;
+    pub fn markedAction(model: *@import("model.zig").Model, tab: @import("model.zig").Tab, action: PackageAction) !void {
+        if (model.active != tab or model.help_open or model.overlay != null or model.operation_state.review_prompt != null) return;
+        const operation: @import("services/shelly_operation.zig").Action = if (action == .install) .install else .remove;
+        switch (tab) {
+            .packages => if (model.packages_state.selected_packages.items.len > 0) try @import("models/packages_model.zig").openNativePrompt(model, operation),
+            .aur => if (model.aur_state.aur_selection.items.len > 0) try @import("models/aur_model.zig").openAurPrompt(model, operation),
+            else => {},
+        }
+    }
+
+    pub const sortPackages = @import("models/packages_model.zig").sortBy;
+    pub const OperationAction = enum { confirm, cancel, close, approve, decline };
+    pub const operationAction = @import("models/operation_model.zig").runMouseOperationAction;
+    pub const toggleUnusedDependencies = @import("models/operation_model.zig").toggleUnusedDependencies;
+    pub const selectDependency = @import("models/operation_model.zig").selectDependencyFromMouse;
+    pub const navigateReview = @import("models/operation_model.zig").handleReviewMouse;
+    pub const updateAction = @import("models/updates_model.zig").runMouseAction;
+    pub const scrollUpdates = @import("models/updates_model.zig").handleScrollEvent;
+    pub const cancelAppImageSource = @import("models/appimage_model.zig").cancelSourceFromMouse;
+    pub const configureSource = @import("models/appimage_model.zig").onConfigureClick;
+    pub const selectPath = @import("models/appimage_model.zig").activateInstallPath;
+    pub const activateSourceControl = @import("models/appimage_model.zig").activateSourceControl;
+    pub const movePath = @import("models/appimage_model.zig").moveInstallSelection;
+    pub const closePkgbuildPreview = @import("models/operation_model.zig").onPreviewBack;
+    pub const previewPkgbuild = @import("models/aur_model.zig").onAurPreviewClick;
+    pub const previousScreenshot = @import("models/flatpak_model.zig").onPreviousScreenshot;
+    pub const nextScreenshot = @import("models/flatpak_model.zig").onNextScreenshot;
+    pub const toggleCategories = @import("models/flatpak_model.zig").onFlatpakCategoryClick;
+    pub const selectCategory = @import("models/flatpak_model.zig").onFlatpakCategorySelected;
+};
+
 pub const Id = enum {
     quit,
     interrupt,
@@ -31,6 +103,9 @@ pub const Id = enum {
     cancel,
     refresh,
     refresh_list,
+    sync_packages,
+    sort_package_name,
+    sort_package_repository,
     save_settings,
     filter,
     upgrade_all,
@@ -80,6 +155,9 @@ pub const Bindings = struct {
     cancel: vaxis.Key = .{ .codepoint = 'q', .mods = .{ .ctrl = true } },
     refresh: vaxis.Key = .{ .codepoint = 'r' },
     save_settings: vaxis.Key = .{ .codepoint = 's', .mods = .{ .ctrl = true } },
+    sort_package_name: vaxis.Key = .{ .codepoint = 'n', .mods = .{ .alt = true } },
+    sort_package_repository: vaxis.Key = .{ .codepoint = 'o', .mods = .{ .alt = true } },
+    sync_packages: vaxis.Key = .{ .codepoint = 's', .mods = .{ .alt = true } },
     refresh_list: vaxis.Key = .{ .codepoint = 'r', .mods = .{ .ctrl = true } },
     filter: vaxis.Key = .{ .codepoint = 'l', .mods = .{ .ctrl = true } },
     upgrade_all: vaxis.Key = .{ .codepoint = 'g' },
@@ -318,6 +396,7 @@ pub fn scrollsOperation(key: vaxis.Key) bool {
 
 pub const Mode = enum { appimage, search, packages, details, aur, flatpak, updates, settings, authentication, confirmation, running, result, review, preview_document, answers, choice, help };
 pub const Context = struct {
+    removal_confirmation: bool = false,
     appimage_source: bool = false,
     appimage_configure_selected: bool = false,
     appimage_path: bool = false,
@@ -395,6 +474,10 @@ pub fn entries(arena: std.mem.Allocator, context: Context) std.mem.Allocator.Err
     if (context.screenshot_retry) try add(arena, &list, .refresh_list, "Retry image", "Retry loading the Flatpak screenshot");
     switch (context.mode) {
         .search, .packages => {
+            try add(arena, &list, .refresh_list, "Refresh", "Reload available and installed packages");
+            try add(arena, &list, .sync_packages, "Sync", "Synchronize package databases and reload the list");
+            try add(arena, &list, .sort_package_name, "Sort by name", "Sort by package name or reverse the name order");
+            try add(arena, &list, .sort_package_repository, "Sort by repository", "Sort by repository or reverse the repository order");
             if (context.mode == .packages and context.selected_count > 0)
                 try add(arena, &list, .clear_selection, "Clear", "Clear all package selections, including entries hidden by filters");
             if (context.mode == .search) {
@@ -497,6 +580,7 @@ pub fn entries(arena: std.mem.Allocator, context: Context) std.mem.Allocator.Err
             }
         },
         .authentication, .confirmation => {
+            if (context.removal_confirmation) try add(arena, &list, .mark, "Toggle", "Toggle removal of unused dependencies");
             try add(arena, &list, .confirm, "Run", "Confirm and run the operation");
             try add(arena, &list, .cancel, "Back", "Dismiss confirmation without starting the operation");
             if (context.mode == .confirmation) try add(arena, &list, .close, "Back", "Dismiss confirmation without starting the operation");

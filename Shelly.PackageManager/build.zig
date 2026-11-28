@@ -283,7 +283,7 @@ pub fn build(b: *std.Build) void {
     const goose_dep = b.dependency("goose", .{});
     exe.root_module.addImport("goose", goose_dep.module("goose"));
 
-    const xml_dep = b.dependency("zig-xml", .{});
+    const xml_dep = b.dependency("zig-xml", .{ .target = target, .optimize = optimize });
     exe.root_module.addImport("zig-xml", xml_dep.module("xml"));
     mod.addImport("zig-xml", xml_dep.module("xml"));
     test_mod.addImport("zig-xml", xml_dep.module("xml"));
@@ -542,6 +542,26 @@ pub fn build(b: *std.Build) void {
             "fixture checkout cannot invoke fake makepkg before review and integrity gates pass",
             "embedded whitespace does not bypass homograph analysis",
             "risky tool in local_source_contents produces finding",
+            "su article in desktop translation is not flagged",
+            "pipx prose in EXTERNALLY-MANAGED is not flagged",
+            "tool words in xml and license prose are not flagged",
+            "su in shell local source is still critical",
+            "extensionless shell shebang source is still scanned",
+            "risky tool in install local source is still flagged",
+            "is_shell_like_source: extensions and shebangs",
+            "scan_hook: tool words inside quoted file names are not flagged",
+            "scan_hook: sudo inside echoed install message is not flagged",
+            "scan_hook: sudo inside die message is not flagged as obfuscated",
+            "scan_hook: su inside locale-translated echo string is not flagged",
+            "scan_hook: unquoted su invocation is still critical",
+            "scan_hook: bash -c literal is still scanned",
+            "scan_hook: shell -c double-quoted literal is still scanned",
+            "scan_hook: eval literal is still scanned",
+            "scan_hook: intra-word quote splicing stays obfuscated",
+            "scan_hook: command substitution tool is still flagged",
+            "scan_hook: substitution inside double quotes is still code",
+            "validate: pip in shell local source is flagged",
+            "validate: install script produces expected findings",
             "aggregate split-package review includes member-specific files and detects changes",
             "install script discovers every libalpm hook and preserves exact bytes",
             "install script uses the last duplicate hook definition",

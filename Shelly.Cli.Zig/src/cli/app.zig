@@ -161,6 +161,7 @@ pub fn runSandboxExec(
     sandbox.applyPolicy(allocator, .{
         .read_write_paths = read_write_paths,
         .read_only_paths = read_only_paths,
+        .optional_read_only_paths = sandbox.base_optional_read_only_paths,
     }) catch |err| {
         stderr.print("Could not apply the sandbox restrictions for {0f}. {1s}\n\nTechnical details: {2s}\n", .{ diagnostics.safe("the build step"), diagnostics.cause(err), @errorName(err) }) catch {};
         return 1;

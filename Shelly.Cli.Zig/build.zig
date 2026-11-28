@@ -229,6 +229,7 @@ pub fn build(b: *std.Build) void {
             "isolated configuration permissions",
             "runtime dependency parsing",
             "runtime capture collects",
+            "runtime staging covers transitive",
         },
     });
     const isolated_test_step = b.step("isolated-build-test", "Test reviewed staging and integrity under restrictive umasks");

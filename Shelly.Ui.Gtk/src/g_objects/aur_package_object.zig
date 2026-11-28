@@ -202,6 +202,20 @@ pub const AurPackageObject = extern struct {
         self.priv().installed = installed;
     }
 
+    /// whether a fresh answer still describes this row. a new upload changes
+    /// `LastModified`, which covers the fields not compared here.
+    pub fn matches(self: *const Self, package: aur.AurPackage) bool {
+        const own = self.getPackage();
+        return std.mem.eql(u8, own.Name, package.Name) and
+            std.mem.eql(u8, own.Version, package.Version) and
+            std.mem.eql(u8, own.Description orelse "", package.Description orelse "") and
+            std.mem.eql(u8, own.Maintainer orelse "", package.Maintainer orelse "") and
+            own.NumVotes == package.NumVotes and
+            own.Popularity == package.Popularity and
+            own.OutOfDate == package.OutOfDate and
+            own.LastModified == package.LastModified;
+    }
+
     pub fn as(self: *Self, comptime T: type) *T {
         return gobject.ext.as(T, self);
     }
@@ -329,4 +343,39 @@ test "AUR GObject handles absent optional fields" {
     try std.testing.expectEqualStrings("", object.getDescription());
     try std.testing.expect(object.getMaintainer() == null);
     try std.testing.expectEqual(@as(usize, 0), object.getConflicts().len);
+}
+
+test "an aur package object matches an answer with the same values" {
+    const package: aur.AurPackage = .{
+        .Id = 1,
+        .Name = "foo",
+        .PackageBaseId = 1,
+        .PackageBase = "foo",
+        .Version = "1-1",
+        .Description = "text",
+        .UrlPath = "/foo",
+        .NumVotes = 3,
+        .Popularity = 0.5,
+        .Maintainer = "someone",
+        .FirstSubmitted = 1,
+        .LastModified = 2,
+    };
+    const object = try AurPackageObject.new(package);
+    defer object.as(gobject.Object).unref();
+    try std.testing.expect(object.matches(package));
+
+    inline for (.{
+        .{ "Name", "bar" },
+        .{ "Version", "1-2" },
+        .{ "Description", null },
+        .{ "Maintainer", null },
+        .{ "NumVotes", 4 },
+        .{ "Popularity", 0.6 },
+        .{ "OutOfDate", 5 },
+        .{ "LastModified", 3 },
+    }) |change| {
+        var changed = package;
+        @field(changed, change[0]) = change[1];
+        try std.testing.expect(!object.matches(changed));
+    }
 }

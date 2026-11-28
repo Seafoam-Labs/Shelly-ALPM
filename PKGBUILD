@@ -2,12 +2,12 @@
 # Maintainer: Caroline Snyder <hirpeng@gmail.com>
 pkgbase=shelly
 pkgname=('shelly' 'shelly-flatpak-backend')
-pkgver=3.4.0
+pkgver=3.4.2
 pkgrel=1
 arch=('x86_64' 'aarch64')
 url="https://github.com/Seafoam-Labs/Shelly-ALPM"
 license=('GPL-3.0-only')
-makedepends=('libarchive' 'curl' 'sqlite' 'gnupg' 'git' 'pkgconf' 'gtk4' 'zig=0.17.1' 'clang' 'gettext' 'flatpak' 'ripgrep' 'go-md2man')
+makedepends=('libarchive' 'curl' 'sqlite' 'gnupg' 'git' 'pkgconf' 'gtk4' 'zig>=0.17.1' 'gettext' 'flatpak' 'go-md2man')
 
 # Keep package metadata tied to the compiled native backend variant.
 _shelly_libalpm=${SHELLY_LIBALPM:-true}
@@ -23,15 +23,28 @@ source=("${pkgname}-${pkgver}.tar.gz::https://github.com/Seafoam-Labs/Shelly-ALP
         'shellybuild.conf'
         'com.shellyorg.shelly.desktop'
         'com.shellyorg.shelly-notifications.desktop'
-        'shelly-flatpak-integrate')
+        'shelly-flatpak-integrate'
+        'com.shellyorg.shelly.policy')
 
-sha256sums=('842ff4d16bddf3dff33c85bf078c72a58c4653278192b7546c4a03597ef4e0f9'
+sha256sums=('9f0041713d366610efb66d16fc2717dd5a655c1fc688617731187425f904be01'
             '4126da205e91a3ba3b15453c2aeade92f67e16e3386a52aae32fbd3f2e4af9cc'
             '4b7cb0e42eb322de9eb616d22ca05823f91d178db5b8b67497d497ed495aca9c'
             'cf0dc0a6d1865b9010054b36941e7bf4d445c3e7549219889f07ab08283c5c0f'
-            '07bca40395c180578450c523ea052b036aa8197d8a871efcce55f937c101c323')
+            '07bca40395c180578450c523ea052b036aa8197d8a871efcce55f937c101c323'
+            '17ce8b6518c7141c0ff4089756bffe72ba51071bcac8addcb56170c206dc570d')
 # GitHub replaces "+" with "-" in archive top-level directory names.
 _source_dir="Shelly-ALPM-${pkgver//+/-}"
+
+prepare() {
+  cd "$srcdir/${_source_dir}"
+
+  # fetch zig deps here so build() and check() run offline
+  local dir
+  for dir in Shelly.Flatpak.Backend Shelly.Ui.Gtk Shelly.Cli.Zig Shelly.Key Shelly.Tui Shelly.Notifications.Zig Shelly.PackageManager; do
+    (cd "$dir" && ZIG_GLOBAL_CACHE_DIR="${srcdir}/zig-global-cache" zig build --fetch=all \
+      --cache-dir "${srcdir}/zig-cache")
+  done
+}
 
 build() {
   cd "$srcdir/${_source_dir}"
@@ -129,9 +142,9 @@ package_shelly() {
     'curl'
     'sqlite'
       'dconf'
+      'polkit'
       'gnupg'
       'zstd'
-      'json-glib'
   )
   optdepends=(
       "${_shelly_native_optdepends[@]}"
@@ -169,30 +182,9 @@ package_shelly() {
   install -Dm644 "$srcdir/com.shellyorg.shelly-notifications.desktop" \
     "$pkgdir/usr/share/applications/com.shellyorg.shelly-notifications.desktop"
 
-  # Ensure the polkit directory exists
-  install -m0755 -d "${pkgdir}"/usr/share/polkit-1/actions
-
   # Install Polkit policy for privileged Shelly CLI execution via pkexec
-  cat <<'EOF' | install -Dm644 /dev/stdin "$pkgdir/usr/share/polkit-1/actions/com.shellyorg.shelly.policy"
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE policyconfig PUBLIC "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
- "http://www.freedesktop.org/standards/PolicyKit/1.0/policyconfig.dtd">
-<policyconfig>
-  <vendor>Shelly</vendor>
-  <vendor_url>https://github.com/Seafoam-Labs/Shelly-ALPM</vendor_url>
-  <action id="com.shellyorg.shelly.pkexec.cli">
-    <description>Run Shelly CLI as administrator</description>
-    <message>Run Shelly CLI with administrator privileges.</message>
-    <icon_name>shelly</icon_name>
-    <defaults>
-      <allow_any>auth_admin</allow_any>
-      <allow_inactive>auth_admin</allow_inactive>
-      <allow_active>auth_admin_keep</allow_active>
-    </defaults>
-    <annotate key="org.freedesktop.policykit.exec.path">/usr/bin/shelly</annotate>
-  </action>
-</policyconfig>
-EOF
+  install -Dm644 "$srcdir/com.shellyorg.shelly.policy" \
+    "$pkgdir/usr/share/polkit-1/actions/com.shellyorg.shelly.policy"
 
   # Install icon
   install -Dm644 assets/shellylogo.png "$pkgdir/usr/share/icons/hicolor/256x256/apps/shelly.png"

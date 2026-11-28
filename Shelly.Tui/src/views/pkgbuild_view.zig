@@ -312,6 +312,7 @@ pub const Document = struct {
 pub const Action = enum { close, retry, approve, decline, toggle_wrap };
 
 pub const View = struct {
+    back: ?*vxfw.Button = null,
     name: []const u8,
     scroll: *vxfw.ScrollView,
     loading: bool,
@@ -321,6 +322,7 @@ pub const View = struct {
     transaction_review: bool = false,
     wrap: bool = true,
     choices: bool = false,
+    choice_owner: ?*@import("../model.zig").Model = null,
     choice_list: ?*vxfw.ListView = null,
     choice_prompt: []const u8 = "",
     optional_dependencies: bool = false,
@@ -357,12 +359,22 @@ pub const View = struct {
         };
     }
 
+    fn drawChoices(self: View, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
+        const list = self.choice_list.?;
+        const surface = try list.draw(ctx);
+        const owner = self.choice_owner orelse return surface;
+        const rows = try ctx.arena.create(ChoiceRows);
+        rows.* = .{ .owner = owner, .top = list.scroll.top, .child = .{.{ .origin = .{ .row = 0, .col = 0 }, .surface = surface }} };
+        return ChoiceRows.draw(rows, ctx);
+    }
+
     /// Shared preview/review renderer; the caller owns placement and size.
     pub fn drawInPane(self: View, ctx: vxfw.DrawContext) std.mem.Allocator.Error!vxfw.Surface {
         const size = ctx.max.size();
         const width = size.width;
         const height = size.height;
         if (width < 12 or height < 5) {
+            if (self.back) |back| return drawBack(back, ctx);
             var small: vxfw.Text = .{ .text = "Enlarge the pane to view this content." };
             return small.draw(ctx);
         }
@@ -370,8 +382,14 @@ pub const View = struct {
         const inner_height = height - 2;
         const note_text = if (self.loading) "" else if (self.answer_error.len > 0) self.answer_error else self.scan_status;
         const note_height: u16 = if (note_text.len > 0) 1 else 0;
-        const body_height = inner_height -| note_height;
+        const body_start: u16 = @intFromBool(self.back != null);
+        const actions = if (self.choice_owner) |owner| owner.settings_state.settings.expanded_mouse_support and self.review and inner_width >= 10 and inner_height >= 3 else false;
+        const body_height = inner_height - body_start - note_height - @as(u16, @intFromBool(actions));
         var children: std.ArrayList(vxfw.SubSurface) = .empty;
+        if (self.back) |back| try children.append(ctx.arena, .{
+            .origin = .{ .row = 0, .col = 0 },
+            .surface = try drawBack(back, ctx.withConstraints(.{}, .{ .width = inner_width, .height = 1 })),
+        });
         if (self.loading or self.failure != null) {
             var text: vxfw.Text = .{ .text = if (self.failure) |err|
                 try std.fmt.allocPrint(ctx.arena, "Could not load PKGBUILD preview ({s}).", .{@errorName(err)})
@@ -380,28 +398,40 @@ pub const View = struct {
             else
                 try std.fmt.allocPrint(ctx.arena, "Fetching PKGBUILD for {f}…", .{@import("diagnostics").safe(self.name)}) };
             try children.append(ctx.arena, .{
-                .origin = .{ .row = 0, .col = 0 },
+                .origin = .{ .row = body_start, .col = 0 },
                 .surface = try text.draw(ctx.withConstraints(.{}, .{ .width = inner_width, .height = body_height })),
             });
         } else if (self.choices and self.choice_list != null) {
             var prompt: vxfw.Text = .{ .text = try std.fmt.allocPrint(ctx.arena, "{f}", .{@import("diagnostics").safe(self.choice_prompt)}), .softwrap = true };
             const prompt_surface = try prompt.draw(ctx.withConstraints(.{}, .{ .width = inner_width, .height = body_height -| 1 }));
-            try children.append(ctx.arena, .{ .origin = .{ .row = 0, .col = 0 }, .surface = prompt_surface });
+            try children.append(ctx.arena, .{ .origin = .{ .row = body_start, .col = 0 }, .surface = prompt_surface });
             try children.append(ctx.arena, .{
-                .origin = .{ .row = @intCast(prompt_surface.size.height), .col = 0 },
-                .surface = try self.choice_list.?.draw(ctx.withConstraints(.{}, .{ .width = inner_width, .height = body_height -| prompt_surface.size.height })),
+                .origin = .{ .row = @intCast(body_start + prompt_surface.size.height), .col = 0 },
+                .surface = try self.drawChoices(ctx.withConstraints(.{}, .{ .width = inner_width, .height = body_height -| prompt_surface.size.height })),
             });
         } else {
             try children.append(ctx.arena, .{
-                .origin = .{ .row = 0, .col = 0 },
+                .origin = .{ .row = body_start, .col = 0 },
                 .surface = try self.scroll.draw(ctx.withConstraints(.{}, .{ .width = inner_width, .height = body_height })),
             });
         }
         if (note_height > 0) {
             var note: vxfw.Text = .{ .text = note_text, .softwrap = false };
             try children.append(ctx.arena, .{
-                .origin = .{ .row = @intCast(body_height), .col = 0 },
+                .origin = .{ .row = @intCast(body_start + body_height), .col = 0 },
                 .surface = try note.draw(ctx.withConstraints(.{}, .{ .width = inner_width, .height = note_height })),
+            });
+        }
+        if (actions) {
+            const buttons = @import("operation_view.zig");
+            const owner = self.choice_owner.?;
+            try children.append(ctx.arena, .{
+                .origin = .{ .row = inner_height - 1, .col = 0 },
+                .surface = try buttons.drawActionButton(ctx, owner, if (self.choices) "[Confirm]" else "[Approve]", .approve),
+            });
+            if (!self.choices and inner_width >= 19) try children.append(ctx.arena, .{
+                .origin = .{ .row = inner_height - 1, .col = 10 },
+                .surface = try buttons.drawActionButton(ctx, owner, "[Decline]", .decline),
             });
         }
         const content: vxfw.Surface = .{
@@ -425,6 +455,22 @@ pub const View = struct {
         return surface;
     }
 };
+
+fn drawBack(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
+    const button: *vxfw.Button = @ptrCast(@alignCast(ptr));
+    const bounds: vxfw.Size = .{ .width = @min(ctx.max.size().width, @as(u16, @intCast(ctx.stringWidth(button.label)))), .height = @min(ctx.max.size().height, 1) };
+    var surface = try button.draw(ctx.withConstraints(bounds, .{ .width = bounds.width, .height = bounds.height }));
+    surface.widget = .{ .userdata = button, .drawFn = drawBack, .eventHandler = backEvent };
+    return surface;
+}
+
+fn backEvent(ptr: *anyopaque, ctx: *vxfw.EventContext, event: vxfw.Event) anyerror!void {
+    const button: *vxfw.Button = @ptrCast(@alignCast(ptr));
+    const consumed = ctx.consume_event;
+    try button.handleEvent(ctx, event);
+    // vxfw delivers hover and press in the same dispatch.
+    if (event == .mouse_enter) ctx.consume_event = consumed;
+}
 
 const FixedContent = struct {
     surface: vxfw.Surface,
@@ -818,6 +864,28 @@ test "dependency choices preserve answer indices without source line numbers" {
     }
 }
 
+const ChoiceRows = struct {
+    owner: *@import("../model.zig").Model,
+    top: usize,
+    child: [1]vxfw.SubSurface,
+
+    fn draw(ptr: *anyopaque, _: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
+        const self: *ChoiceRows = @ptrCast(@alignCast(ptr));
+        return .{ .size = self.child[0].surface.size, .buffer = &.{}, .children = &self.child, .widget = .{ .userdata = ptr, .drawFn = draw, .eventHandler = click } };
+    }
+
+    fn click(ptr: *anyopaque, ctx: *vxfw.EventContext, event: vxfw.Event) anyerror!void {
+        if (event != .mouse or !commands.Mouse.primaryPress(event.mouse)) return;
+        const self: *ChoiceRows = @ptrCast(@alignCast(ptr));
+        // Descriptions can wrap, so use each rendered option's actual height.
+        for (self.child[0].surface.children, self.top..) |item, index| {
+            const offset = @as(i32, event.mouse.row) - item.origin.row;
+            if (offset >= 0 and offset < item.surface.size.height)
+                return commands.Mouse.selectDependency(self.owner, ctx, index);
+        }
+    }
+};
+
 pub fn drawChoice(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.Surface {
     const option: *const operation.Option = @ptrCast(@alignCast(ptr));
     const width = ctx.max.width orelse ctx.min.width;
@@ -826,7 +894,9 @@ pub fn drawChoice(ptr: *anyopaque, ctx: vxfw.DrawContext) Allocator.Error!vxfw.S
     spans[1] = .{ .text = if (option.description.len > 0) try std.fmt.allocPrint(ctx.arena, "\n    {f}", .{@import("diagnostics").safe(option.description)}) else "", .style = styles.secondary };
     const rich = try ctx.arena.create(vxfw.RichText);
     rich.* = .{ .text = spans, .softwrap = true };
-    return rich.draw(ctx.withConstraints(.{ .width = width }, .{ .width = width, .height = null }));
+    var surface = try rich.draw(ctx.withConstraints(.{ .width = width }, .{ .width = width, .height = null }));
+    try styles.hoverLabel(ctx.arena, &surface);
+    return surface;
 }
 
 test "install review presents owned colored scan findings before source and keeps attachments" {

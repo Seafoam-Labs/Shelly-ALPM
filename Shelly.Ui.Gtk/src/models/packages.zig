@@ -25,9 +25,99 @@ pub const Package = struct {
     OptionalFor: []const []const u8 = &.{},
     Installed: bool = false,
     Explicit: bool = false,
+    InstalledFrom: ?[]const u8 = null,
+    InstalledFromInferred: bool = false,
+    AvailableFrom: []const RepositoryVersion = &.{},
+};
+
+/// the part of a listed package the pages read. `package` fills the rest in.
+pub const PackageRow = struct {
+    Name: []const u8 = "",
+    Version: []const u8 = "",
+    Description: []const u8 = "",
+    Repository: []const u8 = "",
+    Groups: []const []const u8 = &.{},
+    InstallReason: []const u8 = "",
+    InstallDate: ?[]const u8 = null,
+    InstalledSize: i64 = 0,
+    InstalledFrom: ?[]const u8 = null,
+    InstalledFromInferred: bool = false,
+
+    pub fn package(self: PackageRow) Package {
+        return .{
+            .Name = self.Name,
+            .Version = self.Version,
+            .Description = self.Description,
+            .Repository = self.Repository,
+            .Groups = self.Groups,
+            .InstallReason = self.InstallReason,
+            .InstallDate = self.InstallDate,
+            .InstalledSize = self.InstalledSize,
+            .InstalledFrom = self.InstalledFrom,
+            .InstalledFromInferred = self.InstalledFromInferred,
+        };
+    }
+};
+
+pub const RepositoryVersion = struct {
+    Repository: []const u8 = "",
+    Version: []const u8 = "",
 };
 
 const FileNode = struct { Name: []const u8, Files: []const FileNode };
+
+pub const RepositoryCopy = struct {
+    repository: []const u8,
+    version: []const u8,
+};
+
+pub const InstalledCopy = struct {
+    index: usize,
+    /// false when the origin is unknown; the row then shows as `local`.
+    known: bool,
+};
+
+/// recorded or inferred origin, else the only copy with the installed version,
+/// else the first copy, marked unknown.
+pub fn installedCopy(copies: []const RepositoryCopy, installed: Package) ?InstalledCopy {
+    if (copies.len == 0) return null;
+    if (installed.InstalledFrom) |origin| {
+        for (copies, 0..) |copy, index| {
+            if (std.mem.eql(u8, copy.repository, origin)) return .{ .index = index, .known = true };
+        }
+        return .{ .index = 0, .known = false };
+    }
+    if (installed.Version.len == 0) return .{ .index = 0, .known = false };
+    var match: ?usize = null;
+    for (copies, 0..) |copy, index| {
+        if (!std.mem.eql(u8, copy.version, installed.Version)) continue;
+        if (match != null) return .{ .index = 0, .known = false };
+        match = index;
+    }
+    if (match) |index| return .{ .index = index, .known = true };
+    return .{ .index = 0, .known = false };
+}
+
+/// `repo/name`, or the bare name when the repository is unknown.
+pub fn packageTarget(allocator: std.mem.Allocator, name: []const u8, repository: []const u8) ![:0]u8 {
+    if (repository.len == 0 or std.mem.eql(u8, repository, "local"))
+        return allocator.dupeSentinel(u8, name, 0);
+    return std.fmt.allocPrintSentinel(allocator, "{s}/{s}", .{ repository, name }, 0);
+}
+
+/// the package name of a `repo/name` target. file paths and archives are
+/// returned unchanged.
+pub fn packageName(value: []const u8) []const u8 {
+    if (value.len == 0 or value[0] == '/' or value[0] == '.' or value[0] == '~') return value;
+    const slash = std.mem.indexOfScalar(u8, value, '/') orelse return value;
+    if (slash == 0 or std.mem.indexOfScalarPos(u8, value, slash + 1, '/') != null) return value;
+    const name = value[slash + 1 ..];
+    if (name.len == 0 or std.ascii.findIgnoreCase(name, ".pkg.tar") != null) return value;
+    inline for (.{ ".tar", ".tar.gz", ".tgz", ".tar.zst", ".tzst" }) |suffix| {
+        if (std.ascii.endsWithIgnoreCase(name, suffix)) return value;
+    }
+    return name;
+}
 
 /// Build the Packages tab from repository results, prioritizing installed package
 /// metadata over sync repository metadata. The returned slice borrows strings from both inputs.
@@ -36,16 +126,42 @@ pub fn repositoryPackageList(allocator: std.mem.Allocator, available: []const Pa
     errdefer allocator.free(packages);
 
     if (installed) |local| {
-        var map: std.StringHashMapUnmanaged(*const Package) = .empty;
-        defer map.deinit(allocator);
-        try map.ensureTotalCapacity(allocator, @intCast(local.len));
-        for (local) |*pkg| map.putAssumeCapacity(pkg.Name, pkg);
+        var rows: std.StringHashMapUnmanaged(std.ArrayListUnmanaged(usize)) = .empty;
+        defer {
+            var it = rows.valueIterator();
+            while (it.next()) |list| list.deinit(allocator);
+            rows.deinit(allocator);
+        }
+        for (packages, 0..) |pkg, index| {
+            const entry = try rows.getOrPut(allocator, pkg.Name);
+            if (!entry.found_existing) entry.value_ptr.* = .empty;
+            try entry.value_ptr.append(allocator, index);
+        }
+        var owners: std.AutoHashMapUnmanaged(usize, struct { pkg: *const Package, known: bool }) = .empty;
+        defer owners.deinit(allocator);
+        var copies: std.ArrayListUnmanaged(RepositoryCopy) = .empty;
+        defer copies.deinit(allocator);
+        for (local) |*ipkg| {
+            const indexes = rows.get(ipkg.Name) orelse continue;
+            copies.clearRetainingCapacity();
+            for (indexes.items) |index| try copies.append(allocator, .{ .repository = packages[index].Repository, .version = packages[index].Version });
+            const choice = installedCopy(copies.items, ipkg.*) orelse continue;
+            try owners.put(allocator, indexes.items[choice.index], .{ .pkg = ipkg, .known = choice.known });
+        }
 
-        for (packages) |*pkg| {
-            if (map.get(pkg.Name)) |ipkg| {
+        for (packages, 0..) |*pkg, index| {
+            if (owners.get(index)) |owner| {
+                const ipkg = owner.pkg;
                 pkg.Installed = true;
                 pkg.Version = ipkg.Version;
-                pkg.Repository = ipkg.Repository;
+                // keeps the target a bare name; details still show the origin.
+                if (!owner.known) pkg.Repository = ipkg.Repository;
+                pkg.InstalledFrom = ipkg.InstalledFrom;
+                pkg.InstalledFromInferred = ipkg.InstalledFromInferred;
+                if (owner.known and ipkg.InstalledFrom == null) {
+                    pkg.InstalledFrom = pkg.Repository;
+                    pkg.InstalledFromInferred = true;
+                }
                 pkg.InstallDate = ipkg.InstallDate;
                 pkg.InstalledSize = ipkg.InstalledSize;
                 pkg.InstallReason = ipkg.InstallReason;
@@ -62,6 +178,84 @@ pub fn repositoryPackageList(allocator: std.mem.Allocator, available: []const Pa
     }
 
     return packages;
+}
+
+test "repository package list marks only the repository copy a package was installed from" {
+    const available = [_]Package{
+        .{ .Name = "foo", .Repository = "first", .Version = "1-1" },
+        .{ .Name = "foo", .Repository = "second", .Version = "1-1" },
+        .{ .Name = "bar", .Repository = "first", .Version = "2-1" },
+        .{ .Name = "bar", .Repository = "second", .Version = "2-2" },
+        .{ .Name = "baz", .Repository = "first", .Version = "3-1" },
+        .{ .Name = "baz", .Repository = "second", .Version = "3-1" },
+    };
+    const installed = [_]Package{
+        .{ .Name = "foo", .Repository = "local", .Version = "1-1", .InstalledFrom = "second" },
+        .{ .Name = "bar", .Repository = "local", .Version = "2-2" },
+        .{ .Name = "baz", .Repository = "local", .Version = "3-1" },
+    };
+    const packages = try repositoryPackageList(std.testing.allocator, &available, &installed);
+    defer std.testing.allocator.free(packages);
+
+    try std.testing.expect(!packages[0].Installed);
+    try std.testing.expect(packages[1].Installed);
+    try std.testing.expectEqualStrings("second", packages[1].Repository);
+    try std.testing.expectEqualStrings("second", packages[1].InstalledFrom.?);
+    try std.testing.expect(!packages[2].Installed);
+    try std.testing.expect(packages[3].Installed);
+    try std.testing.expectEqualStrings("second", packages[3].Repository);
+    try std.testing.expect(packages[3].InstalledFromInferred);
+    try std.testing.expect(packages[4].Installed);
+    try std.testing.expectEqualStrings("local", packages[4].Repository);
+    try std.testing.expect(!packages[5].Installed);
+}
+
+test "installedCopy keeps an origin outside the listed repositories" {
+    const copies = [_]RepositoryCopy{ .{ .repository = "first", .version = "1-1" }, .{ .repository = "second", .version = "1-1" } };
+    const disabled = installedCopy(&copies, .{ .Name = "foo", .Version = "1-1", .InstalledFrom = "testing" }).?;
+    try std.testing.expectEqual(@as(usize, 0), disabled.index);
+    try std.testing.expect(!disabled.known);
+    try std.testing.expect(installedCopy(&.{}, .{ .Name = "foo" }) == null);
+}
+
+test "repository package list keeps an unlisted origin out of the install target" {
+    const available = [_]Package{
+        .{ .Name = "foo", .Repository = "extra", .Version = "1-1" },
+    };
+    const installed = [_]Package{
+        .{ .Name = "foo", .Repository = "local", .Version = "1-1", .InstalledFrom = "testing" },
+    };
+    const packages = try repositoryPackageList(std.testing.allocator, &available, &installed);
+    defer std.testing.allocator.free(packages);
+    try std.testing.expect(packages[0].Installed);
+    try std.testing.expectEqualStrings("local", packages[0].Repository);
+    try std.testing.expectEqualStrings("testing", packages[0].InstalledFrom.?);
+    const target = try packageTarget(std.testing.allocator, packages[0].Name, packages[0].Repository);
+    defer std.testing.allocator.free(target);
+    try std.testing.expectEqualStrings("foo", target);
+}
+
+test "packageTarget names the repository unless it is unknown" {
+    const allocator = std.testing.allocator;
+    const qualified = try packageTarget(allocator, "foo", "extra");
+    defer allocator.free(qualified);
+    try std.testing.expectEqualStrings("extra/foo", qualified);
+    const local = try packageTarget(allocator, "foo", "local");
+    defer allocator.free(local);
+    try std.testing.expectEqualStrings("foo", local);
+    const empty = try packageTarget(allocator, "foo", "");
+    defer allocator.free(empty);
+    try std.testing.expectEqualStrings("foo", empty);
+}
+
+test "packageName strips the repository but keeps file paths" {
+    try std.testing.expectEqualStrings("foo", packageName("extra/foo"));
+    try std.testing.expectEqualStrings("python-zope.interface", packageName("extra/python-zope.interface"));
+    try std.testing.expectEqualStrings("foo", packageName("foo"));
+    try std.testing.expectEqualStrings("build/demo-1-1-any.pkg.tar.zst", packageName("build/demo-1-1-any.pkg.tar.zst"));
+    try std.testing.expectEqualStrings("build/Demo-1-1-any.PKG.TAR.XZ", packageName("build/Demo-1-1-any.PKG.TAR.XZ"));
+    try std.testing.expectEqualStrings("/tmp/demo.pkg.tar.zst", packageName("/tmp/demo.pkg.tar.zst"));
+    try std.testing.expectEqualStrings("org.example.App", packageName("org.example.App"));
 }
 
 test "repository package list excludes foreign and hidden installed packages" {
@@ -165,4 +359,23 @@ test "package model preserves optional dependency installation state" {
 
     try std.testing.expectEqual(@as(usize, 2), parsed.value.OptDepends.len);
     try std.testing.expectEqualSlices(bool, &.{ true, false }, parsed.value.OptDependsInstalled);
+}
+
+test "a package row keeps every field the pages read" {
+    const row: PackageRow = .{
+        .Name = "foo",
+        .Version = "1-1",
+        .Description = "text",
+        .Repository = "core",
+        .Groups = &.{"base"},
+        .InstallReason = "Explicit",
+        .InstallDate = "2026-11-25",
+        .InstalledSize = 7,
+        .InstalledFrom = "core",
+        .InstalledFromInferred = true,
+    };
+    const pkg = row.package();
+    inline for (comptime std.meta.fieldNames(PackageRow)) |name| {
+        try std.testing.expectEqualDeep(@field(row, name), @field(pkg, name));
+    }
 }

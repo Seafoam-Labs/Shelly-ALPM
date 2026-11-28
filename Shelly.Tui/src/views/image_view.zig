@@ -32,7 +32,7 @@ pub const View = struct {
     fn drawBody(ptr: *anyopaque, ctx: vxfw.DrawContext) std.mem.Allocator.Error!vxfw.Surface {
         const self: *const View = @ptrCast(@alignCast(ptr));
         const size = ctx.max.size();
-        var surface = try vxfw.Surface.init(ctx.arena, .{ .userdata = ptr, .drawFn = drawBody }, size);
+        var surface = try vxfw.Surface.init(ctx.arena, .{ .userdata = ptr, .drawFn = drawBody, .eventHandler = imageEvent }, size);
         @memset(surface.buffer, .{});
         var caption: vxfw.Text = .{ .text = try std.fmt.allocPrint(ctx.arena, "{f}", .{diagnostics.safe(self.caption)}), .softwrap = false, .overflow = .ellipsis };
         const children = try ctx.arena.alloc(vxfw.SubSurface, 1);
@@ -62,6 +62,8 @@ pub const View = struct {
     }
 };
 
+fn imageEvent(_: *anyopaque, _: *vxfw.EventContext, _: vxfw.Event) anyerror!void {}
+
 test "screenshot placement fits its pane on resize and preserves caption" {
     vxfw.DrawContext.init(.unicode);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
@@ -80,6 +82,11 @@ test "screenshot placement fits its pane on resize and preserves caption" {
             try std.testing.expect(i % body.size.width + img.options.size.?.cols.? <= body.size.width);
         };
         try std.testing.expectEqual(@as(usize, 1), placements);
+        var hits: std.ArrayList(vxfw.HitResult) = .empty;
+        const body_row: u16 = if (size.height >= 2 and size.width >= 8) 1 else 0;
+        try surface.hitTest(arena.allocator(), &hits, .{ .row = body_row + 1, .col = size.width / 2 });
+        try std.testing.expectEqual(@as(usize, 1), hits.items.len);
+        try std.testing.expect(hits.items[0].widget.eventHandler == imageEvent);
     }
 }
 

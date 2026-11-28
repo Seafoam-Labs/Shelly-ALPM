@@ -67,73 +67,90 @@
       </object>
     </child>
     <child>
-      <object class="GtkStack" id="recommend_stack">
+      <object class="GtkOverlay" id="page_overlay">
         <property name="vexpand">true</property>
-        <property name="transition-type">crossfade</property>
         <child>
-          <object class="GtkBox" id="loading_page">
-            <property name="orientation">vertical</property>
-            <property name="spacing">12</property>
-            <property name="halign">center</property>
-            <property name="valign">center</property>
-            <child>
-              <object class="GtkSpinner" id="loading_spinner">
-                <property name="width-request">48</property>
-                <property name="height-request">48</property>
-              </object>
-            </child>
-            <child>
-              <object class="GtkLabel">
-                <property name="label" translatable="yes">Loading Recommended Packages...</property>
-                <style>
-                  <class name="title-4"/>
-                </style>
-              </object>
-            </child>
-          </object>
-        </child>
-        <child>
-          <object class="GtkScrolledWindow" id="list_page">
-            <property name="overlay-scrolling">false</property>
-            <style>
-              <class name="page-body"/>
-            </style>
+          <object class="GtkStack" id="recommend_stack">
             <property name="vexpand">true</property>
-            <property name="hexpand">true</property>
-            <property name="hscrollbar-policy">never</property>
+            <property name="transition-type">crossfade</property>
             <child>
-              <object class="GtkBox" id="content_box">
+              <object class="GtkBox" id="loading_page">
                 <property name="orientation">vertical</property>
-                <property name="spacing">24</property>
-                <property name="margin-start">1</property>
-                <property name="margin-end">1</property>
-                <property name="margin-top">1</property>
-                <property name="margin-bottom">8</property>
-              </object>
-            </child>
-          </object>
-        </child>
-        <child>
-          <object class="GtkBox" id="empty_page">
-            <property name="orientation">vertical</property>
-            <property name="spacing">10</property>
-            <property name="halign">center</property>
-            <property name="valign">center</property>
-            <child>
-              <object class="GtkImage">
-                <property name="accessible-role">presentation</property>
-                <property name="icon-name">search-none-symbolic</property>
-                <property name="pixel-size">64</property>
+                <property name="spacing">12</property>
+                <property name="halign">center</property>
+                <property name="valign">center</property>
+                <child>
+                  <object class="GtkSpinner" id="loading_spinner">
+                    <property name="width-request">48</property>
+                    <property name="height-request">48</property>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkLabel">
+                    <property name="label" translatable="yes">Loading recommendations…</property>
+                    <style>
+                      <class name="title-3"/>
+                    </style>
+                  </object>
+                </child>
               </object>
             </child>
             <child>
-              <object class="GtkLabel">
-                <property name="label" translatable="yes">No recommendations found. Please check your internet connection and try again.</property>
-                <property name="wrap">true</property>
-                <property name="justify">center</property>
+              <object class="GtkScrolledWindow" id="list_page">
+                <property name="overlay-scrolling">false</property>
                 <style>
-                  <class name="title-2"/>
+                  <class name="page-body"/>
                 </style>
+                <property name="vexpand">true</property>
+                <property name="hexpand">true</property>
+                <property name="hscrollbar-policy">never</property>
+                <child>
+                  <object class="GtkBox" id="content_box">
+                    <property name="orientation">vertical</property>
+                    <property name="spacing">24</property>
+                    <property name="margin-start">1</property>
+                    <property name="margin-end">1</property>
+                    <property name="margin-top">1</property>
+                    <property name="margin-bottom">8</property>
+                  </object>
+                </child>
+              </object>
+            </child>
+            <child>
+              <object class="GtkBox" id="empty_page">
+                <property name="orientation">vertical</property>
+                <property name="spacing">10</property>
+                <property name="halign">center</property>
+                <property name="valign">center</property>
+                <child>
+                  <object class="GtkImage">
+                    <property name="accessible-role">presentation</property>
+                    <property name="icon-name">search-none-symbolic</property>
+                    <property name="pixel-size">48</property>
+                    <style>
+                      <class name="dim-label"/>
+                    </style>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkLabel">
+                    <property name="label" translatable="yes">No recommendations found</property>
+                    <style>
+                      <class name="title-3"/>
+                    </style>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkLabel">
+                    <property name="label" translatable="yes">Check your internet connection and try again.</property>
+                    <property name="wrap">true</property>
+                    <property name="justify">center</property>
+                    <property name="max-width-chars">40</property>
+                    <style>
+                      <class name="dim-label"/>
+                    </style>
+                  </object>
+                </child>
               </object>
             </child>
           </object>

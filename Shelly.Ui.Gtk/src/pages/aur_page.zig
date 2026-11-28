@@ -1,4 +1,5 @@
 const std = @import("std");
+const aur_rows = @import("aur_rows.zig");
 const diagnostics = @import("diagnostics");
 const bindings = @import("Shelly_Ui_Gtk");
 const gtk = bindings.gtk;
@@ -6,6 +7,7 @@ const gio = bindings.gio;
 const glib = bindings.glib;
 const gobject = bindings.gobject;
 const support = @import("support.zig");
+const Toast = @import("../helpers/custom_ui_comps/toast.zig").Toast;
 const AurPackageObject = @import("../g_objects/aur_package_object.zig").AurPackageObject;
 const ConfirmDialog = @import("../dialog/page/yn_dialog.zig").ConfirmDialog;
 const ShellyWindow = @import("../shelly_window.zig").ShellyWindow;
@@ -17,6 +19,8 @@ const AurPackageDetail = @import("aur_package_detail.zig").PackageDetail;
 const translations = @import("../helpers/translations.zig");
 const a11y = @import("../helpers/a11y.zig");
 const sorters = @import("../helpers/sorters.zig");
+const appendAurInstalledNames = @import("../helpers/installed.zig").appendAurInstalledNames;
+const aurInstalledContains = @import("../helpers/installed.zig").aurInstalledContains;
 const table_columns = @import("../helpers/table_columns.zig");
 
 pub const AurPage = extern struct {
@@ -36,6 +40,7 @@ pub const AurPage = extern struct {
         installed_toggle: *gtk.CheckButton,
         install_button: *gtk.Button,
         grid_overlay: *gtk.Overlay,
+        toast: *Toast,
         loading_box: *gtk.Box,
         loading_spinner: *gtk.Spinner,
         placeholder_box: *gtk.Box,
@@ -56,6 +61,8 @@ pub const AurPage = extern struct {
         show_detail_pane: bool,
         arena: ?*std.heap.ArenaAllocator,
         generation: u64,
+        // every row of the current view is in the list.
+        rows_complete: bool,
         loaded: bool,
         applying_config: bool,
         installed_mode: bool,
@@ -74,6 +81,9 @@ pub const AurPage = extern struct {
         generation: u64,
         index: usize = 0,
         failed: bool = false,
+        installed_names: []const []const u8 = &.{},
+        all_installed: bool = false,
+        keep_rows: bool = false,
     };
 
     pub const getGObjectType = gobject.ext.defineClass(Self, .{
@@ -103,6 +113,7 @@ pub const AurPage = extern struct {
         p.applying_config = false;
         p.arena = null;
         p.generation = 0;
+        p.rows_complete = false;
         p.installed_mode = false;
         p.last_query_len = 0;
         p.check_map = .empty;
@@ -159,6 +170,10 @@ pub const AurPage = extern struct {
         gtk.Widget.insertActionGroup(self.as(gtk.Widget), "search", group.as(gio.ActionGroup));
 
         self.update_selection_ui();
+        const toast = Toast.new();
+        gtk.Overlay.addOverlay(p.grid_overlay, toast.as(gtk.Widget));
+        p.toast = toast;
+
         support.connectLifecycle(Self, self);
     }
 
@@ -362,7 +377,7 @@ pub const AurPage = extern struct {
                 const desc_label = gobject.ext.cast(gtk.Label, desc_w) orelse return;
 
                 var buf: [256]u8 = undefined;
-                const markup = std.fmt.bufPrintSentinel(&buf, "<b>{s}</b>", .{pkg.getName()}, 0) catch pkg.getName();
+                const markup = std.fmt.bufPrintSentinel(&buf, "<span weight=\"semibold\">{s}</span>", .{pkg.getName()}, 0) catch pkg.getName();
                 gtk.Label.setMarkup(name_label, markup);
                 gtk.Widget.setVisible(ood_w, @intFromBool(pkg.isOutOfDate()));
                 gtk.Widget.setVisible(installed_w, @intFromBool(pkg.isInstalled()));
@@ -530,7 +545,7 @@ pub const AurPage = extern struct {
         // The page is the focus stop, so a page switch lands on its group name
         // and Tab reaches the search entry from there.
         _ = a11y.focusFirst(self.as(gtk.Widget));
-        restore_current_view(self);
+        restore_current_view(self, true);
     }
 
     fn applyOptionsFromConfig(self: *Self) void {
@@ -569,7 +584,8 @@ pub const AurPage = extern struct {
         p.loaded = false;
 
         p.generation += 1;
-        gio.ListStore.removeAll(p.list_store);
+        self.clear_selection();
+        if (!p.rows_complete) gio.ListStore.removeAll(p.list_store);
 
         if (p.arena) |a| {
             a.deinit();
@@ -580,21 +596,25 @@ pub const AurPage = extern struct {
         _ = malloc_trim(0);
     }
 
-    fn start_load(self: *Self, mode: Mode) void {
+    fn start_load(self: *Self, mode: Mode, keep_rows: bool) void {
         const p = self.priv();
         p.generation += 1;
-        gio.ListStore.removeAll(p.list_store);
+        const keep = keep_rows and p.rows_complete;
+        if (!keep) {
+            p.rows_complete = false;
+            gio.ListStore.removeAll(p.list_store);
+        }
         self.update_selection_ui();
-        self.set_state(.loading);
+        if (!keep) self.set_state(.loading);
 
-        const thread = std.Thread.spawn(.{}, load_worker, .{ self, p.generation, mode }) catch {
-            self.set_state(.err);
+        const thread = std.Thread.spawn(.{}, load_worker, .{ self, p.generation, mode, keep }) catch {
+            if (!keep) self.set_state(.err);
             return;
         };
         thread.detach();
     }
 
-    fn load_worker(page: *Self, generation: u64, mode: Mode) void {
+    fn load_worker(page: *Self, generation: u64, mode: Mode, keep_rows: bool) void {
         const arena_ptr = std.heap.c_allocator.create(std.heap.ArenaAllocator) catch return;
         arena_ptr.* = std.heap.ArenaAllocator.init(std.heap.c_allocator);
         const alloc = arena_ptr.allocator();
@@ -608,26 +628,45 @@ pub const AurPage = extern struct {
             .search => blk: {
                 const p = page.priv();
                 const query = alloc.dupe(u8, p.last_query[0..p.last_query_len]) catch {
-                    post_failure(page, arena_ptr, generation);
+                    post_failure(page, arena_ptr, generation, keep_rows);
                     return;
                 };
                 break :blk cli.search_aur(query) catch |err| {
                     std.debug.print("Could not search the AUR. {0s}\n\nTechnical details: {1s}\n", .{ diagnostics.cause(err), @errorName(err) });
-                    post_failure(page, arena_ptr, generation);
+                    post_failure(page, arena_ptr, generation, keep_rows);
                     return;
                 };
             },
             .installed => cli.list_aur_installed() catch |err| {
                 std.debug.print("Could not load the installed AUR-package list. {0s}\n\nTechnical details: {1s}\n", .{ diagnostics.cause(err), @errorName(err) });
-                post_failure(page, arena_ptr, generation);
+                post_failure(page, arena_ptr, generation, keep_rows);
                 return;
             },
         };
 
-        post_result(page, parsed.value, arena_ptr, generation);
+        post_result(page, parsed.value, arena_ptr, generation, keep_rows, if (mode == .installed) &.{} else fetchInstalledNames(alloc, cli), mode == .installed);
     }
 
-    fn post_result(page: *Self, packages: []AurPackage, arena: *std.heap.ArenaAllocator, generation: u64) void {
+    fn fetchInstalledNames(alloc: std.mem.Allocator, cli: ShellyCli) []const []const u8 {
+        const parsed = cli.list_aur_installed() catch |err| {
+            std.debug.print("Could not load the installed AUR-package list. {0s}\n\nTechnical details: {1s}\n", .{ diagnostics.cause(err), @errorName(err) });
+            return &.{};
+        };
+        defer parsed.deinit();
+        var names: std.ArrayListUnmanaged([:0]const u8) = .empty;
+        appendAurInstalledNames(alloc, parsed.value, &names) catch {};
+        return names.items;
+    }
+
+    fn post_result(
+        page: *Self,
+        packages: []AurPackage,
+        arena: *std.heap.ArenaAllocator,
+        generation: u64,
+        keep_rows: bool,
+        installed_names: []const []const u8,
+        all_installed: bool,
+    ) void {
         const result = std.heap.c_allocator.create(LoadResult) catch {
             arena.deinit();
             std.heap.c_allocator.destroy(arena);
@@ -638,11 +677,14 @@ pub const AurPage = extern struct {
             .packages = packages,
             .arena = arena,
             .generation = generation,
+            .keep_rows = keep_rows,
+            .installed_names = installed_names,
+            .all_installed = all_installed,
         };
         _ = glib.idleAdd(&onLoadComplete, result);
     }
 
-    fn post_failure(page: *Self, arena: *std.heap.ArenaAllocator, generation: u64) void {
+    fn post_failure(page: *Self, arena: *std.heap.ArenaAllocator, generation: u64, keep_rows: bool) void {
         const result = std.heap.c_allocator.create(LoadResult) catch {
             arena.deinit();
             std.heap.c_allocator.destroy(arena);
@@ -653,6 +695,7 @@ pub const AurPage = extern struct {
             .packages = &.{},
             .arena = arena,
             .generation = generation,
+            .keep_rows = keep_rows,
             .failed = true,
         };
         _ = glib.idleAdd(&onLoadComplete, result);
@@ -675,6 +718,12 @@ pub const AurPage = extern struct {
         }
 
         if (result.failed) {
+            // the rows on screen are better than an error in their place.
+            if (result.keep_rows) {
+                p.toast.show(.warning, translations._("Could not search the configured AUR service."));
+                finish(result);
+                return 0;
+            }
             page.set_state(.err);
             page.update_selection_ui();
             finish(result);
@@ -682,7 +731,26 @@ pub const AurPage = extern struct {
         }
 
         if (result.packages.len == 0) {
+            p.rows_complete = false;
+            gio.ListStore.removeAll(p.list_store);
             page.set_state(.empty);
+            page.update_selection_ui();
+            finish(result);
+            return 0;
+        }
+
+        if (result.keep_rows) {
+            aur_rows.update(p.list_store, p.selection, result.packages);
+            // Rows the diff rebuilt still need the marks the loader would have given them.
+            const model = p.list_store.as(gio.ListModel);
+            const n = gio.ListModel.getNItems(model);
+            var row: c_uint = 0;
+            while (row < n) : (row += 1) {
+                const object = gio.ListModel.getObject(model, row) orelse continue;
+                defer object.unref();
+                const pkg = gobject.ext.cast(AurPackageObject, object) orelse continue;
+                pkg.setInstalled(result.all_installed or aurInstalledContains(result.installed_names, pkg.getName()));
+            }
             page.update_selection_ui();
             finish(result);
             return 0;
@@ -695,6 +763,7 @@ pub const AurPage = extern struct {
         var i: usize = 0;
         for (result.packages[result.index..end]) |d| {
             const pkg = AurPackageObject.new(d) catch continue;
+            pkg.setInstalled(result.all_installed or aurInstalledContains(result.installed_names, d.Name));
             batch[i] = pkg.as(gobject.Object);
             i += 1;
         }
@@ -704,6 +773,7 @@ pub const AurPage = extern struct {
 
         result.index = end;
         if (result.index < result.packages.len) return 1;
+        p.rows_complete = true;
 
         page.set_state(.results);
         page.update_selection_ui();
@@ -736,6 +806,8 @@ pub const AurPage = extern struct {
         const text = self.search_text();
         if (text.len == 0) {
             p.last_query_len = 0;
+            p.generation += 1;
+            p.rows_complete = false;
             gio.ListStore.removeAll(p.list_store);
             self.update_selection_ui();
             self.set_state(.prompt);
@@ -746,17 +818,19 @@ pub const AurPage = extern struct {
         @memcpy(p.last_query[0..len], text[0..len]);
         p.last_query_len = len;
 
-        self.start_load(.search);
+        self.start_load(.search, false);
     }
 
-    fn restore_current_view(self: *Self) void {
+    fn restore_current_view(self: *Self, keep_rows: bool) void {
         const p = self.priv();
 
         if (p.installed_mode) {
-            self.start_load(.installed);
+            self.start_load(.installed, keep_rows);
         } else if (p.last_query_len > 0) {
-            self.start_load(.search);
+            self.start_load(.search, keep_rows);
         } else {
+            p.generation += 1;
+            p.rows_complete = false;
             gio.ListStore.removeAll(p.list_store);
             self.update_selection_ui();
             self.set_state(.prompt);
@@ -766,7 +840,7 @@ pub const AurPage = extern struct {
     fn on_installed_toggled(self: *Self) callconv(.c) void {
         const p = self.priv();
         p.installed_mode = gtk.CheckButton.getActive(p.installed_toggle) != 0;
-        restore_current_view(self);
+        restore_current_view(self, false);
     }
 
     fn on_install_clicked(self: *Self) callconv(.c) void {
@@ -876,7 +950,7 @@ pub const AurPage = extern struct {
         const self: *AurPage = @ptrCast(@alignCast(ctx));
         if (!success) return;
         self.clear_selection();
-        restore_current_view(self);
+        restore_current_view(self, true);
     }
 
     const template_children = .{

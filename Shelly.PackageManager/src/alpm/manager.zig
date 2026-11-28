@@ -36,6 +36,11 @@ pub const Manager = struct {
     pub const Backend = @import("backend.zig").Backend;
     pub const default_backend = @import("backend.zig").default_backend;
     pub const libalpm_enabled = @import("backend.zig").libalpm_enabled;
+    /// whether libalpm reads the origin CachyOS's pacman records. RLPM always does.
+    pub const libalpm_records_installed_repository = if (selection.libalpm_enabled)
+        @import("bindings.zig").libalpm.Package.records_installed_repository
+    else
+        false;
     pub const events = @import("events.zig");
     pub const configuration = @import("configuration.zig");
     pub const cache_manager = @import("cache_manager.zig");

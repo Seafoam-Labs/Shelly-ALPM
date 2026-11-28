@@ -232,6 +232,7 @@ test {
     _ = @import("services/icon_resolver.zig");
     _ = @import("services/ui_config_resolver.zig");
     _ = @import("services/desktop_palette.zig");
+    _ = @import("services/theme.zig");
     _ = @import("services/shelly_cli.zig");
     _ = @import("services/tray_service.zig");
     _ = @import("helpers/a11y.zig");
@@ -239,7 +240,13 @@ test {
     _ = @import("helpers/custom_ui_comps/carousel.zig");
     _ = @import("helpers/custom_ui_comps/carousel_indicator_dots.zig");
     _ = @import("pages/flatpak/flatpak_install_view.zig");
+    _ = @import("pages/flatpak/installed_marks.zig");
     _ = @import("helpers/ui_decode.zig");
+    _ = @import("helpers/saved_list.zig");
+    _ = @import("helpers/row_diff.zig");
+    _ = @import("services/package_lists.zig");
+    _ = @import("helpers/flatpak_catalog_stamp.zig");
+    _ = @import("helpers/flathub_collections.zig");
     _ = @import("helpers/ansi.zig");
     _ = @import("helpers/datetime.zig");
     _ = @import("helpers/deep_link.zig");
@@ -250,6 +257,7 @@ test {
     _ = @import("g_objects/aur_package_object.zig");
     _ = @import("models/search_result.zig");
     _ = @import("g_objects/search_result_object.zig");
+    _ = @import("pages/package_page.zig");
     _ = @import("pages/transaction_page.zig");
     _ = @import("services/fwupd_enums.zig");
     _ = @import("models/fwupd.zig");

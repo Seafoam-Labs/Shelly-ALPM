@@ -80,7 +80,11 @@ missing libraries or libalpm linkage. Private runtime DSOs that the clean root's
 package profile cannot provide, such as the vendored `libarchive-shelly` library,
 are copied from the host coordinator's resolved closure into the guest's
 `/usr/lib` before the guest check, matching the packaged layout so no guest
-environment changes are needed. No sibling worker files are required.
+environment changes are needed. Staging repeats until a guest pass stages nothing
+new: a missing DSO hides its own dependencies from `ldd`, so each staged library
+can reveal further missing sonames that the next pass copies from the host
+closure. Sonames the host cannot resolve are left for the guest check to reject.
+No sibling worker files are required.
 These checks apply to the staged Shelly executable, not the recipe's tools or
 outputs, which may link to libalpm.
 The guest receives a local-database-only package configuration after provisioning;
