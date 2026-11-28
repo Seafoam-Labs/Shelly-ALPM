@@ -739,6 +739,9 @@ Document any known issues that are being tracked:
   keeps its design and uses the scheme's window, text, view, header and selection colors
   (read from `~/.config/gtk-4.0/colors.css`). Changing the Plasma color scheme while Shelly
   is open updates Shelly within a second.
+- [ ] System colors with `shelly_`-prefixed names (e.g. `shelly_sidebar_bg_color`) in
+  `~/.config/gtk-4.0/gtk.css` next to the libadwaita names: Shelly's surfaces take the
+  prefixed colors, and changing one while Shelly is open updates Shelly within a second.
 - [ ] System colors with a palette generator (matugen, Noctalia, or similar) that writes
   libadwaita names to `~/.config/gtk-4.0/`: Shelly uses those colors, including the accent,
   and follows regenerated palettes live.
