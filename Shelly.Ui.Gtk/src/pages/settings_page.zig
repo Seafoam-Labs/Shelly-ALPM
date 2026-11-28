@@ -9,6 +9,7 @@ const ShellyConfig = @import("../models/shelly_config.zig").ShellyConfig;
 const ShellyTabs = @import("../models/shelly_config.zig").ShellyTabs;
 const DayOfWeek = @import("../models/shelly_config.zig").DayOfWeek;
 const NavMode = @import("../models/shelly_config.zig").NavMode;
+const PageAlignment = @import("../models/shelly_config.zig").PageAlignment;
 const ThemeMode = @import("../models/shelly_config.zig").ThemeMode;
 const ThemeVariant = @import("../models/shelly_config.zig").ThemeVariant;
 const ConfigResolver = @import("../services/ui_config_resolver.zig").ConfigResolver;
@@ -53,6 +54,11 @@ pub const ShellySettingsPage = extern struct {
     const Private = struct {
         page_overlay: *gtk.Overlay,
         settings_stack: *gtk.Stack,
+        page_body_box: *gtk.Box,
+        normal_page_body: *gtk.Box,
+        updates_page_body: *gtk.Box,
+        look_feel_page_body: *gtk.Box,
+        advanced_page_body: *gtk.Box,
 
         // General
         aur_switch: *gtk.Switch,
@@ -102,6 +108,8 @@ pub const ShellySettingsPage = extern struct {
         default_page_box: *gtk.Box,
         default_page_drop: *gtk.DropDown,
         nav_mode_drop: *gtk.DropDown,
+        page_alignment_box: *gtk.Box,
+        page_alignment_drop: *gtk.DropDown,
         theme_mode_drop: *gtk.DropDown,
         theme_variant_drop: *gtk.DropDown,
         system_titlebar_switch: *gtk.Switch,
@@ -228,6 +236,13 @@ pub const ShellySettingsPage = extern struct {
             p.nav_mode_drop.as(gobject.Object),
             *Self,
             &onNavModeChanged,
+            self,
+            .{ .detail = "selected" },
+        );
+        _ = gobject.Object.signals.notify.connect(
+            p.page_alignment_drop.as(gobject.Object),
+            *Self,
+            &onPageAlignmentChanged,
             self,
             .{ .detail = "selected" },
         );
@@ -1180,6 +1195,17 @@ pub const ShellySettingsPage = extern struct {
         }
     }
 
+    fn onPageAlignmentChanged(obj: *gobject.Object, _: *gobject.ParamSpec, self: *Self) callconv(.c) void {
+        const dd: *gtk.DropDown = @ptrCast(@alignCast(obj));
+        const idx = gtk.DropDown.getSelected(dd);
+        if (idx >= page_alignment_entries.len) return;
+        const mode = page_alignment_entries[idx].value;
+        applyPageAlignment(self.priv(), mode);
+        if (support.getWindow(ShellyWindow, self)) |win| {
+            win.requestPageAlignment(mode);
+        }
+    }
+
     fn onThemeModeChanged(obj: *gobject.Object, _: *gobject.ParamSpec, self: *Self) callconv(.c) void {
         const p = self.priv();
         const dd: *gtk.DropDown = @ptrCast(@alignCast(obj));
@@ -1220,6 +1246,11 @@ pub const ShellySettingsPage = extern struct {
     const template_children = .{
         .{ "page_overlay", @offsetOf(Private, "page_overlay") },
         .{ "settings_stack", @offsetOf(Private, "settings_stack") },
+        .{ "page_body_box", @offsetOf(Private, "page_body_box") },
+        .{ "normal_page_body", @offsetOf(Private, "normal_page_body") },
+        .{ "updates_page_body", @offsetOf(Private, "updates_page_body") },
+        .{ "look_feel_page_body", @offsetOf(Private, "look_feel_page_body") },
+        .{ "advanced_page_body", @offsetOf(Private, "advanced_page_body") },
 
         // General
         .{ "aur_switch", @offsetOf(Private, "aur_switch") },
@@ -1267,6 +1298,8 @@ pub const ShellySettingsPage = extern struct {
         .{ "default_page_box", @offsetOf(Private, "default_page_box") },
         .{ "default_page_drop", @offsetOf(Private, "default_page_drop") },
         .{ "nav_mode_drop", @offsetOf(Private, "nav_mode_drop") },
+        .{ "page_alignment_box", @offsetOf(Private, "page_alignment_box") },
+        .{ "page_alignment_drop", @offsetOf(Private, "page_alignment_drop") },
         .{ "theme_mode_drop", @offsetOf(Private, "theme_mode_drop") },
         .{ "theme_variant_drop", @offsetOf(Private, "theme_variant_drop") },
         .{ "system_titlebar_switch", @offsetOf(Private, "system_titlebar_switch") },
@@ -1350,6 +1383,17 @@ const NavModeEntry = struct {
 const nav_mode_entries = [_]NavModeEntry{
     .{ .label = "Sidebar", .value = .sidebar },
     .{ .label = "Topbar", .value = .topbar },
+};
+
+const PageAlignmentEntry = struct {
+    label: [:0]const u8,
+    value: PageAlignment,
+};
+
+const page_alignment_entries = [_]PageAlignmentEntry{
+    .{ .label = "Centered", .value = .centered },
+    .{ .label = "Balanced", .value = .balanced },
+    .{ .label = "Top", .value = .top },
 };
 
 const ThemeModeEntry = struct {
@@ -1441,6 +1485,12 @@ fn populateDropdowns(p: *ShellySettingsPage.Private) void {
         gtk.StringList.append(nav_strings, entry.label);
     }
     gtk.DropDown.setModel(p.nav_mode_drop, nav_strings.as(gio.ListModel));
+
+    const page_alignment_strings = gtk.StringList.new(null);
+    inline for (page_alignment_entries) |entry| {
+        gtk.StringList.append(page_alignment_strings, translations._(entry.label));
+    }
+    gtk.DropDown.setModel(p.page_alignment_drop, page_alignment_strings.as(gio.ListModel));
 
     const theme_mode_strings = gtk.StringList.new(null);
     inline for (theme_mode_entries, 0..) |_, index| {
@@ -1681,6 +1731,8 @@ fn applyConfig(p: *ShellySettingsPage.Private, cfg: *ShellyConfig) void {
     setSwitch(p.symbolic_tray_switch, cfg.UseSymbolicTray);
 
     gtk.DropDown.setSelected(p.nav_mode_drop, navModeIndex(cfg.NavMode));
+    gtk.DropDown.setSelected(p.page_alignment_drop, pageAlignmentIndex(cfg.PageAlignment));
+    applyPageAlignment(p, cfg.PageAlignment);
     gtk.DropDown.setSelected(p.theme_mode_drop, themeModeIndex(cfg.ThemeMode));
     gtk.DropDown.setSelected(p.theme_variant_drop, themeVariantIndex(cfg.ThemeVariant));
     setSwitch(p.system_titlebar_switch, cfg.UseSystemTitlebar);
@@ -1771,6 +1823,11 @@ fn collectIntoConfig(p: *ShellySettingsPage.Private, allocator: std.mem.Allocato
     const nav_idx = gtk.DropDown.getSelected(p.nav_mode_drop);
     if (nav_idx != std.math.maxInt(u32) and nav_idx < nav_mode_entries.len) {
         cfg.NavMode = nav_mode_entries[nav_idx].value;
+    }
+
+    const align_idx = gtk.DropDown.getSelected(p.page_alignment_drop);
+    if (align_idx != std.math.maxInt(u32) and align_idx < page_alignment_entries.len) {
+        cfg.PageAlignment = page_alignment_entries[align_idx].value;
     }
 
     const theme_mode_idx = gtk.DropDown.getSelected(p.theme_mode_drop);
@@ -1988,6 +2045,36 @@ fn navModeIndex(mode: NavMode) c_uint {
         if (entry.value == mode) return @intCast(i);
     }
     return 0;
+}
+
+fn pageAlignmentIndex(mode: PageAlignment) c_uint {
+    inline for (page_alignment_entries, 0..) |entry, i| {
+        if (entry.value == mode) return @intCast(i);
+    }
+    return 0;
+}
+
+/// Reshapes the settings tabs to the chosen vertical mode: `centered`
+/// resizes the stack per tab, `balanced` pins it to the tallest tab, and
+/// `top` drops the centering entirely.
+fn applyPageAlignment(p: *ShellySettingsPage.Private, mode: PageAlignment) void {
+    const centered = mode == .centered;
+    gtk.Stack.setVhomogeneous(p.settings_stack, if (centered) 0 else 1);
+    gtk.Stack.setInterpolateSize(p.settings_stack, if (centered) 1 else 0);
+
+    const page_valign: gtk.Align = if (centered) .center else .fill;
+    const page_boxes = [4]*gtk.Box{
+        p.normal_page_body,
+        p.updates_page_body,
+        p.look_feel_page_body,
+        p.advanced_page_body,
+    };
+    for (page_boxes) |box| {
+        gtk.Widget.setValign(box.as(gtk.Widget), page_valign);
+    }
+
+    const column_valign: gtk.Align = if (mode == .top) .fill else .center;
+    gtk.Widget.setValign(p.page_body_box.as(gtk.Widget), column_valign);
 }
 
 fn themeModeIndex(mode: ThemeMode) c_uint {

@@ -34,6 +34,7 @@ const theme = @import("services/theme.zig");
 const ShellyCli = @import("services/shelly_cli.zig").ShellyCli;
 const AtollApiService = @import("services/atoll_api.zig").AtollApiService;
 const NavMode = @import("models/shelly_config.zig").NavMode;
+const PageAlignment = @import("models/shelly_config.zig").PageAlignment;
 const ShellyTabs = @import("models/shelly_config.zig").ShellyTabs;
 const translations = @import("helpers/translations.zig");
 const a11y = @import("helpers/a11y.zig");
@@ -75,6 +76,7 @@ pub const ShellyWindow = extern struct {
         collapsed: bool,
         nav_mode: NavMode,
         pending_nav: NavMode,
+        utilities_page: ?*UtilitiesPage,
         flatpak_page: FlatpakSlot,
         appimage_page: AppImageSlot,
         aur_slot_atoll: bool,
@@ -113,6 +115,7 @@ pub const ShellyWindow = extern struct {
         p.collapsed = false;
         p.nav_mode = .sidebar;
         p.pending_nav = .sidebar;
+        p.utilities_page = null;
         p.aur_slot_atoll = false;
         build_shell(self);
         populate_stack(self);
@@ -143,6 +146,7 @@ pub const ShellyWindow = extern struct {
         setNavEnabled(self, "firmware", cfg.FirmwareEnabled);
 
         self.changeNav(cfg.NavMode);
+        self.applyPageAlignment(cfg.PageAlignment);
 
         if (cfg.WindowLastWidth > 0 and cfg.WindowLastHeight > 0) {
             gtk.Window.setDefaultSize(
@@ -307,6 +311,19 @@ pub const ShellyWindow = extern struct {
     pub fn requestNav(self: *ShellyWindow, mode: NavMode) void {
         self.private().pending_nav = mode;
         _ = glib.idleAdd(&apply_pending_nav, self);
+    }
+
+    /// Live preview of the Settings Page Alignment choice: the settings page
+    /// reshapes itself, and the utilities column follows through here. The
+    /// choice is only stored when Save is pressed.
+    pub fn requestPageAlignment(self: *ShellyWindow, mode: PageAlignment) void {
+        self.applyPageAlignment(mode);
+    }
+
+    fn applyPageAlignment(self: *ShellyWindow, mode: PageAlignment) void {
+        if (self.private().utilities_page) |utils| {
+            utils.applyAlignment(mode);
+        }
     }
 
     fn apply_pending_nav(data: ?*anyopaque) callconv(.c) c_int {
@@ -675,6 +692,7 @@ pub const ShellyWindow = extern struct {
         gtk.StackPage.setIconName(sp_page, SettingsPage.icon_name);
 
         const up_utils = UtilitiesPage.new();
+        self.private().utilities_page = up_utils;
         const up_utils_page = gtk.Stack.addTitled(stack, up_utils.as(gtk.Widget), "utilities", translations._("Utilities"));
         gtk.StackPage.setIconName(up_utils_page, UtilitiesPage.icon_name);
     }

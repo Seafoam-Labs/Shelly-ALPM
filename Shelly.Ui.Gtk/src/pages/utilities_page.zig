@@ -4,6 +4,7 @@ const gtk = bindings.gtk;
 const gobject = bindings.gobject;
 const glib = bindings.glib;
 const ShellyCommands = @import("../services/shelly_operation.zig").ShellyCommands;
+const PageAlignment = @import("../models/shelly_config.zig").PageAlignment;
 const support = @import("support.zig");
 const ShellyWindow = @import("../shelly_window.zig").ShellyWindow;
 const Toast = @import("../helpers/custom_ui_comps/toast.zig").Toast;
@@ -23,6 +24,7 @@ pub const ShellyUtilitiesPage = extern struct {
 
     const Private = struct {
         page_overlay: *gtk.Overlay,
+        utilities_body_box: *gtk.Box,
         sync_button: *gtk.Button,
         rm_db_lock_button: *gtk.Button,
         fix_permissions_button: *gtk.Button,
@@ -73,6 +75,14 @@ pub const ShellyUtilitiesPage = extern struct {
     }
 
     pub fn onMap(_: *Self) void {}
+
+    /// `top` aligns the card column to the top of the page; the other modes
+    /// keep it centered as designed.
+    pub fn applyAlignment(self: *Self, mode: PageAlignment) void {
+        const p = self.priv();
+        const valign: gtk.Align = if (mode == .top) .fill else .center;
+        gtk.Widget.setValign(p.utilities_body_box.as(gtk.Widget), valign);
+    }
 
     pub fn onUnmap(_: *Self) void {}
 
@@ -166,6 +176,7 @@ pub const ShellyUtilitiesPage = extern struct {
 
     const template_children = .{
         .{ "page_overlay", @offsetOf(Private, "page_overlay") },
+        .{ "utilities_body_box", @offsetOf(Private, "utilities_body_box") },
         .{ "sync_button", @offsetOf(Private, "sync_button") },
         .{ "rm_db_lock_button", @offsetOf(Private, "rm_db_lock_button") },
         .{ "fix_permissions_button", @offsetOf(Private, "fix_permissions_button") },
